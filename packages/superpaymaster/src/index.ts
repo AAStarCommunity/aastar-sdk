@@ -13,7 +13,7 @@ export const getPaymasterMiddleware = (config: SuperPaymasterConfig) => {
     const verificationGasLimit = config.verificationGasLimit || 160000n;
     const postOpGasLimit = config.postOpGasLimit || 10000n;
 
-    const getPaymasterAndData = async (userOp: any): Promise<{ paymasterAndData: Hex, preVerificationGas?: bigint, verificationGasLimit?: bigint, callGasLimit?: bigint }> => {
+    const getPaymasterAndData = async (_userOp: any): Promise<{ paymasterAndData: Hex, preVerificationGas?: bigint, verificationGasLimit?: bigint, callGasLimit?: bigint }> => {
         // SuperPaymaster V3 Packed Format:
         // [0:20] Paymaster Address
         // [20:36] VerificationGasLimit (uint128)

@@ -1,7 +1,20 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure we look up to the root 'projects/env/.env'
+const envPath = path.resolve(__dirname, '../../env/.env');
+console.log(`Loading .env from: ${envPath}`);
+dotenv.config({ path: envPath });
+
 import { createObjectCsvWriter } from 'csv-writer';
 import { http } from 'viem';
 import { sepolia } from 'viem/chains';
+// @ts-ignore
+import { contracts } from '@aastar/shared-config';
 
 // Configuration
 const RUNS = 30;
@@ -9,6 +22,9 @@ const OUTPUT_FILE = 'real_tx_data.csv';
 
 const main = async () => {
     console.log("Starting SuperPaymaster Experiment...");
+    console.log("RPC URL Present:", !!process.env.ALCHEMY_BUNDLER_RPC_URL);
+    
+    // ... code ...
     
     const csvWriter = createObjectCsvWriter({
         path: OUTPUT_FILE,
@@ -57,11 +73,17 @@ const main = async () => {
 
 
     const superPaymasterConfig = {
-        paymasterAddress: process.env.SUPER_PAYMASTER_ADDRESS as `0x${string}`,
-        operatorAddress: process.env.OPERATOR_ADDRESS as `0x${string}` || '0x411BD567E46C0781248dbB6a9211891C032885e5', // Default from script
-        sbtAddress: process.env.MYSBT_ADDRESS as `0x${string}`,
-        tokenAddress: process.env.GAS_TOKEN_ADDRESS as `0x${string}`
+        paymasterAddress: contracts.superPaymasterSepolia as `0x${string}`,
+        operatorAddress: process.env.OPERATOR_ADDRESS as `0x${string}` || '0x411BD567E46C0781248dbB6a9211891C032885e5', 
+        sbtAddress: contracts.mySBT as `0x${string}`,
+        tokenAddress: contracts.gToken as `0x${string}`
     };
+    
+    // Fallback if shared-config structure is different (debugging safe)
+    if (!superPaymasterConfig.paymasterAddress) {
+         console.warn("⚠️ shared-config contracts.superPaymasterSepolia missing, trying env...");
+         superPaymasterConfig.paymasterAddress = process.env.SUPER_PAYMASTER_ADDRESS as `0x${string}`;
+    }
 
     // Import from our new package
     const { createAAStarPublicClient } = await import('@aastar/core');
