@@ -1,0 +1,17 @@
+{
+  "name": "@aastar/core",
+  "version": "0.12.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "viem": "^2.7.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

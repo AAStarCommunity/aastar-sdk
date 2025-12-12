@@ -1,0 +1,21 @@
+{
+  "name": "aastar-sdk-monorepo",
+  "private": true,
+  "description": "AAStar SDK Monorepo",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^17.2.3",
+    "prettier": "^3.2.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.3",
+    "viem": "^2.7.1",
+    "vitest": "^1.2.1"
+  },
+  "packageManager": "pnpm@10.6.3+sha512.bb45e34d50a9a76e858a95837301bfb6bd6d35aea2c5d52094fa497a467c43f5c440103ce2511e9e0a2f89c3d6071baac3358fc68ac6fb75e2ceb3d2736065e6"
+}
