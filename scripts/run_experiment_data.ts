@@ -5,16 +5,30 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import fs from 'fs';
+
 // Ensure we look up to the root 'projects/env/.env'
 const envPath = path.resolve(__dirname, '../../env/.env');
 console.log(`Loading .env from: ${envPath}`);
-dotenv.config({ path: envPath });
+
+if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    console.log("✅ .env file found and loaded.");
+} else {
+    console.warn(`❌ .env file NOT found at ${envPath}`);
+}
+
+// Fallback: If ALCHEMY_BUNDLER_RPC_URL is missing, try SEPOLIA_RPC_URL
+if (!process.env.ALCHEMY_BUNDLER_RPC_URL && process.env.SEPOLIA_RPC_URL) {
+    console.log("⚠️ ALCHEMY_BUNDLER_RPC_URL missing, falling back to SEPOLIA_RPC_URL");
+    process.env.ALCHEMY_BUNDLER_RPC_URL = process.env.SEPOLIA_RPC_URL;
+}
 
 import { createObjectCsvWriter } from 'csv-writer';
 import { http } from 'viem';
 import { sepolia } from 'viem/chains';
 // @ts-ignore
-import { contracts } from '@aastar/shared-config';
+import * as SharedConfig from '@aastar/shared-config';
 
 // Configuration
 const RUNS = 30;
@@ -24,8 +38,24 @@ const main = async () => {
     console.log("Starting SuperPaymaster Experiment...");
     console.log("RPC URL Present:", !!process.env.ALCHEMY_BUNDLER_RPC_URL);
     
-    // ... code ...
+    // Safely access contracts from shared-config
+    // @ts-ignore
+    const contracts = SharedConfig.default?.contracts || SharedConfig.contracts || SharedConfig.CONTRACTS || SharedConfig.default?.CONTRACTS || {};
+    console.log("Shared Config Loaded:", !!(contracts.superPaymasterSepolia || contracts.superPaymaster));
+
+    const superPaymasterConfig = {
+        paymasterAddress: (contracts.superPaymasterSepolia || contracts.superPaymaster || process.env.SUPER_PAYMASTER_ADDRESS) as `0x${string}`,
+        operatorAddress: (process.env.OPERATOR_ADDRESS as `0x${string}`) || '0x411BD567E46C0781248dbB6a9211891C032885e5', 
+        sbtAddress: (contracts.mySBT || contracts.SBT || process.env.MYSBT_ADDRESS) as `0x${string}`,
+        tokenAddress: (contracts.gToken || contracts.GTOKEN || process.env.GAS_TOKEN_ADDRESS) as `0x${string}`
+    };
     
+    if (!superPaymasterConfig.paymasterAddress) {
+         console.warn("⚠️ CRITICAL: SuperPaymaster Address missing from both shared-config and .env!");
+    } else {
+         console.log(`Using SuperPaymaster: ${superPaymasterConfig.paymasterAddress}`);
+    }
+
     const csvWriter = createObjectCsvWriter({
         path: OUTPUT_FILE,
         header: [
@@ -40,7 +70,7 @@ const main = async () => {
         ]
     });
 
-    const records = [];
+    const records: any[] = [];
 
     // 1. Group A: Traditional EOA
     console.log("Running Group A: Traditional EOA");
@@ -70,20 +100,6 @@ const main = async () => {
 
     // 3. Group C: SuperPaymaster
     console.log("Running Group C: SuperPaymaster");
-
-
-    const superPaymasterConfig = {
-        paymasterAddress: contracts.superPaymasterSepolia as `0x${string}`,
-        operatorAddress: process.env.OPERATOR_ADDRESS as `0x${string}` || '0x411BD567E46C0781248dbB6a9211891C032885e5', 
-        sbtAddress: contracts.mySBT as `0x${string}`,
-        tokenAddress: contracts.gToken as `0x${string}`
-    };
-    
-    // Fallback if shared-config structure is different (debugging safe)
-    if (!superPaymasterConfig.paymasterAddress) {
-         console.warn("⚠️ shared-config contracts.superPaymasterSepolia missing, trying env...");
-         superPaymasterConfig.paymasterAddress = process.env.SUPER_PAYMASTER_ADDRESS as `0x${string}`;
-    }
 
     // Import from our new package
     const { createAAStarPublicClient } = await import('@aastar/core');
