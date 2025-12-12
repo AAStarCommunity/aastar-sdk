@@ -9,13 +9,7 @@
   ],
   "dependencies": {
     "@aastar/core": "workspace:*",
-    "@aastar/superpaymaster": "workspace:*",
-    "@aastar/airaccount": "workspace:^",
-    "@aastar/cometens": "workspace:^",
-    "@aastar/openpnts": "workspace:^",
-    "@aastar/opencards": "workspace:^",
-    "@aastar/arcadia": "workspace:^",
-    "@aastar/cos72": "workspace:^"
+    "@aastar/superpaymaster": "workspace:*"
   },
   "devDependencies": {
      "typescript": "^5.3.3"

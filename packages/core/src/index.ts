@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, type Chain, type Transport, type Account } from 'viem';
+import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, type Chain, type Account } from 'viem';
 import { sepolia, optimismSepolia, optimism } from 'viem/chains';
 
 // In the future, this comes from @aastar/shared-config

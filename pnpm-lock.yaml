@@ -47,6 +47,19 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  packages/sdk:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      '@aastar/superpaymaster':
+        specifier: workspace:*
+        version: link:../superpaymaster
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   packages/superpaymaster:
     dependencies:
       '@aastar/core':

@@ -13,6 +13,10 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@aastar/core": ["./packages/core/src"],
+      "@aastar/superpaymaster": ["./packages/superpaymaster/src"]
+    }
   }
 }

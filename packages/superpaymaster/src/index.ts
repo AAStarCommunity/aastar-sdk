@@ -1,36 +1,64 @@
-import { type Address, type Hex, encodePacked } from 'viem';
-import { createAAStarPublicClient, SHARED_CONFIG_MOCK } from '@aastar/core';
+import { type Address, type Hex, concat, pad, createPublicClient, http } from 'viem';
+import { sepolia } from 'viem/chains';
 
 export interface SuperPaymasterConfig {
-    paymasterAddress?: Address; // Optional, defaults to shared-config
-    tokenAddress?: Address; // Optional, if paying with specific token
+    paymasterAddress: Address;
+    operatorAddress: Address;
+    verificationGasLimit?: bigint; // Default 160000
+    postOpGasLimit?: bigint;     // Default 10000
 }
 
-export const getPaymasterMiddleware = (config: SuperPaymasterConfig = {}) => {
-    const paymasterAddress = config.paymasterAddress || SHARED_CONFIG_MOCK.contracts.superPaymaster as Address;
-    
-    // Asset-based Paymaster usually just needs the address. 
-    // If token is specified, it might be encoded in paymasterAndData. 
-    // For V1 MVP, assuming simple address concatenation.
-    // Format: [Paymaster Address (20 bytes)] + [Unused/Data (0 bytes or Token Info)]
-    
+export const getPaymasterMiddleware = (config: SuperPaymasterConfig) => {
+    const { paymasterAddress, operatorAddress } = config;
+    const verificationGasLimit = config.verificationGasLimit || 160000n;
+    const postOpGasLimit = config.postOpGasLimit || 10000n;
+
     const getPaymasterAndData = async (userOp: any): Promise<{ paymasterAndData: Hex, preVerificationGas?: bigint, verificationGasLimit?: bigint, callGasLimit?: bigint }> => {
-        // In a real asset-based scenario, we might need to verify balances here or just construct the field.
-        // Assuming no off-chain signature required (Mode: Asset).
+        // SuperPaymaster V3 Packed Format:
+        // [0:20] Paymaster Address
+        // [20:36] VerificationGasLimit (uint128)
+        // [36:52] PostOpGasLimit (uint128)
+        // [52:72] Operator Address
         
-        let paymasterAndData: Hex = paymasterAddress;
-        
-        if (config.tokenAddress) {
-             // Example: If contracts expect token address appended
-             paymasterAndData = encodePacked(['address', 'address'], [paymasterAddress, config.tokenAddress]);
-        }
+        const paymasterAndData = concat([
+            paymasterAddress,
+            pad(`0x${verificationGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
+            pad(`0x${postOpGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
+            operatorAddress
+        ]);
 
         return {
-            paymasterAndData
+            paymasterAndData,
+            verificationGasLimit, // We can return these to override userOp if needed, but usually PM middleware just returns pmData
         };
     };
 
     return {
         getPaymasterAndData
+    };
+};
+
+export const checkEligibility = async (account: Address, sbtAddress: Address, tokenAddress: Address, rpcUrl: string) => {
+    const client = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+    
+    // Check SBT Balance
+    const sbtBalance = await client.readContract({
+        address: sbtAddress,
+        abi: [{ type: 'function', name: 'balanceOf', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+        functionName: 'balanceOf',
+        args: [account]
+    }) as bigint;
+
+    // Check Token Balance
+    const tokenBalance = await client.readContract({
+        address: tokenAddress,
+        abi: [{ type: 'function', name: 'balanceOf', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+        functionName: 'balanceOf',
+        args: [account]
+    }) as bigint;
+
+    return {
+        hasSBT: sbtBalance > 0n,
+        tokenBalance
     };
 };
