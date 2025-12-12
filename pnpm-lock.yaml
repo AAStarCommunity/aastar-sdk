@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@aastar/shared-config':
+        specifier: ^0.3.8
+        version: 0.3.8
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
@@ -57,6 +61,9 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@aastar/shared-config@0.3.8':
+    resolution: {integrity: sha512-CmjvbX2zC6uHbZLme4/Lqnk2avi90yrSfgZF/2/7dvixJKEDfwpx1oQiweQyRiF5tQxuwaz0P2W1BbhxdszzOg==}
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
@@ -894,6 +901,8 @@ packages:
     engines: {node: '>=12.20'}
 
 snapshots:
+
+  '@aastar/shared-config@0.3.8': {}
 
   '@adraffy/ens-normalize@1.11.1': {}
 
