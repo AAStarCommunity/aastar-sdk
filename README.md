@@ -1,4 +1,13 @@
-# aastar-sdk
+# AAStar SDK
+
+完成以下目标：
+1. 基于测试文档完成测试计划
+2. 配合测试计划，完成SDK 0.15版开发和发布NPM包
+
+
+
+--------------------
+
 A nodejs sdk for all developers to integrate AAStar's power abilities.
 
 AAStar npm packages collection:
