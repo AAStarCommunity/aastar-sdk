@@ -1,42 +1,44 @@
-import { type Address, type Hex, concat, pad, createPublicClient, http } from 'viem';
+import { type Address, type Hex, concat, pad, createPublicClient, http, toHex } from 'viem';
 import { sepolia } from 'viem/chains';
 
 export interface SuperPaymasterConfig {
     paymasterAddress: Address;
-    operatorAddress: Address;
+    communityAddress: Address; // Was operatorAddress
+    xPNTsAddress: Address;     // New field
     verificationGasLimit?: bigint; // Default 160000
     postOpGasLimit?: bigint;     // Default 10000
 }
 
-export const getPaymasterMiddleware = (config: SuperPaymasterConfig) => {
-    const { paymasterAddress, operatorAddress } = config;
+/**
+ * Returns the construction of the paymasterAndData field for SuperPaymaster V3.
+ * Format: [Paymaster (20)][VerifGas (16)][PostOpGas (16)][Community (20)][xPNTs (20)]
+ */
+export const getPaymasterAndData = (config: SuperPaymasterConfig): Hex => {
+    const { paymasterAddress, communityAddress, xPNTsAddress } = config;
     const verificationGasLimit = config.verificationGasLimit || 160000n;
     const postOpGasLimit = config.postOpGasLimit || 10000n;
 
-    const getPaymasterAndData = async (_userOp: any): Promise<{ paymasterAndData: Hex, preVerificationGas?: bigint, verificationGasLimit?: bigint, callGasLimit?: bigint }> => {
-        // SuperPaymaster V3 Packed Format:
-        // [0:20] Paymaster Address
-        // [20:36] VerificationGasLimit (uint128)
-        // [36:52] PostOpGasLimit (uint128)
-        // [52:72] Operator Address
-        
-        const paymasterAndData = concat([
-            paymasterAddress,
-            pad(`0x${verificationGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
-            pad(`0x${postOpGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
-            operatorAddress
-        ]);
-
-        return {
-            paymasterAndData,
-            verificationGasLimit, // We can return these to override userOp if needed, but usually PM middleware just returns pmData
-        };
-    };
-
-    return {
-        getPaymasterAndData
-    };
+    // SuperPaymaster V3 Packed Format:
+    // [0:20] Paymaster Address
+    // [20:36] VerificationGasLimit (uint128)
+    // [36:52] PostOpGasLimit (uint128)
+    // [52:72] Community/Operator Address
+    // [72:92] xPNTs/Token Address
+    
+    return concat([
+        paymasterAddress,
+        pad(toHex(verificationGasLimit), { dir: 'left', size: 16 }),
+        pad(toHex(postOpGasLimit), { dir: 'left', size: 16 }),
+        communityAddress,
+        xPNTsAddress
+    ]);
 };
+
+// Deprecated or alias helper if they still want the middleware object format?
+// User asked for "getPaymasterAndData" to return the data directly in their example.
+// But for "middleware" usage in viem smart accounts, one usually needs a function.
+// I will export this helper.
+
 
 export const checkEligibility = async (account: Address, sbtAddress: Address, tokenAddress: Address, rpcUrl: string) => {
     const client = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });

@@ -1,6 +1,9 @@
 # AAStar SDK (v0.12)
 
-The all-in-one SDK for the Mycelium Network.
+
+The all-in-one SDK for the AAStar Infra to create your own Mycelium Network.
+
+[中文文档](#中文文档)
 
 ## Features
 *   **`@aastar/core`**: Base configurations and wrappers for `viem`.
@@ -61,3 +64,80 @@ For Group C (SuperPaymaster) tests:
 1. Account must own a **MySBT** (Soulbound Token).
 2. Account must have sufficient **xPNTs** (or GToken) balance.
 *Use `scripts/setup_account.ts` (coming soon) or `mint-sbt-for-aa.js` reference logic to prepare accounts.*
+
+---
+
+## 中文文档
+
+AAStar Infra 的一体化 SDK，用于构建你自己的 Mycelium Network。
+
+### 功能特性
+*   **`@aastar/core`**: `viem` 的基础配置和封装。
+*   **`@aastar/superpaymaster`**: SuperPaymaster V3 (基于资产的 Gas 赞助) 的中间件。
+
+### 安装
+
+```bash
+pnpm install aastar
+```
+
+### 快速开始
+
+#### 1. 初始化客户端
+```typescript
+import { createAAStarPublicClient, sepolia } from '@aastar/core';
+
+const client = createAAStarPublicClient({
+    chain: sepolia,
+    rpcUrl: process.env.SEPOLIA_RPC_URL
+});
+
+
+import { createAAStarWalletClient, sepolia, http } from '@aastar/core';
+import { privateKeyToAccount } from '@aastar/core'; // 也是从 viem 导出的
+
+// 1. 初始化
+const account = privateKeyToAccount('0xPrivateKey...'); 
+const client = createAAStarWalletClient({ chain: sepolia, account });
+
+// 2. 提交交易 (transfer ETH)
+const hash = await client.sendTransaction({
+  to: '0xRecipient...',
+  value: 1000000000000000000n // 1 ETH
+});
+
+// 3. 提交交易 (transfer ERC20 - 使用 writeContract)
+// const hash = await client.writeContract({ ... });
+
+import { createAAStarBundlerClient } from '@aastar/core';
+
+const bundler = createAAStarBundlerClient({
+    chain: sepolia,
+    rpcUrl: BUNDLER_RPC_URL
+});
+
+// 现在就有 sendUserOperation 方法了
+const hash = await bundler.sendUserOperation({
+    userOperation: userOp,
+    entryPoint: ENTRY_POINT_ADDRESS
+});
+```
+
+#### 2. SuperPaymaster 配置
+```typescript
+import { getPaymasterAndData, checkEligibility } from '@aastar/superpaymaster';
+
+const paymasterAndData = getPaymasterAndData({
+    paymasterAddress: "0x...", //独立部署的V4地址或者公共合约SuperPaymaster地址
+    communityAddress: "0x...", // 你的社区Operator或者多签账户地址
+    xPNTsAddress: "0x...", // 你的社区发行的xPNTs地址
+    verificationGasLimit: 160000n,
+    postOpGasLimit: 10000n
+});
+
+// 在你的智能账户发起UserOperation交易时配置
+const userOp = await client.makeUserOperation({
+    ...,
+    paymasterAndData
+});
+```
