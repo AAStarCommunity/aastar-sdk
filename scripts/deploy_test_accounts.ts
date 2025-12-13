@@ -86,6 +86,9 @@ async function main() {
     const labels = ['Baseline (A)', 'Standard (B)', 'SuperPaymaster (C)'];
 
     for (let i = 0; i < 3; i++) {
+        // Pace ourselves to avoid Rate Limits / In-flight limits
+        await sleep(5000);
+
         const salt = salts[i];
         const label = labels[i];
         console.log(`\n--------------------------------------------`);
@@ -143,31 +146,49 @@ async function main() {
         }
 
         // 3. Fund if needed
-        if (balance < parseEther("0.01")) {
-             console.log("   ⚠️  Insufficient funds (< 0.01 ETH).");
+        // Requirement is ~0.034 ETH for the generous gas limits, so we check/fund up to 0.05
+        if (balance < parseEther("0.05")) {
+             console.log("   ⚠️  Insufficient funds (< 0.05 ETH).");
              if (supplierKey) {
                  try {
                      const supplier = privateKeyToAccount(supplierKey);
                      const supplierWallet = createWalletClient({ chain: sepolia, transport: http(rpcUrl), account: supplier });
                      
+                     
                      // Check supplier balance
                      const supBal = await publicClient.getBalance({ address: supplier.address });
-                     if (supBal < parseEther("0.02")) {
+                     if (supBal < parseEther("0.05")) {
                          console.log(`   ❌ Supplier ${supplier.address} also poor (${formatEther(supBal)} ETH). Manual funding required.`);
                      } else {
-                        console.log("   💸 Funding 0.02 ETH from Supplier...");
-                        const tx = await supplierWallet.sendTransaction({
-                            to: senderAddress as Hex,
-                            value: parseEther("0.02"),
-                            chain: sepolia, 
-                            account: supplier
-                        });
-                        console.log(`      Tx: ${tx}`);
-                        await publicClient.waitForTransactionReceipt({ hash: tx });
-                        console.log("      ✅ Funded.");
+                        console.log("   💸 Funding 0.05 ETH from Supplier...");
+                        
+                        // Retry loop for funding
+                        let funded = false;
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            try {
+                                const tx = await supplierWallet.sendTransaction({
+                                    to: senderAddress as Hex,
+                                    value: parseEther("0.05"),
+                                    chain: sepolia, 
+                                    account: supplier
+                                });
+                                console.log(`      Tx: ${tx}`);
+                                await publicClient.waitForTransactionReceipt({ hash: tx });
+                                console.log("      ✅ Funded.");
+                                funded = true;
+                                break; // Success
+                            } catch (err: any) {
+                                console.warn(`      ⚠️ Funding Attempt ${attempt} failed: ${err.message || err}`);
+                                if (attempt < 3) {
+                                    console.log("      ⏳ Waiting 15s before retry...");
+                                    await sleep(15000);
+                                }
+                            }
+                        }
+                        if (!funded) console.error("   ❌ Funding failed after 3 attempts.");
                      }
                  } catch(e: any) {
-                     console.error("   ❌ Funding failed:", e.message);
+                     console.error("   ❌ Supplier setup failed:", e.message);
                  }
              } else {
                  console.log("   ❌ No Supplier Key. Please fund manually.");
@@ -196,30 +217,27 @@ async function main() {
             args: [senderAddress as Hex, 0n]
         });
 
-        const partialUserOp = {
-            sender: senderAddress as Hex,
-            nonce: toHex(nonce), // Must be hex
-            initCode: initCode, 
-            callData: callData,
-            accountGasLimits: "0x" as Hex, // Alchemy might prefer valid placeholder or Just 0x
-            preVerificationGas: "0x0" as Hex, // Hex 0, not decimal "0"
-            gasFees: "0x" as Hex,
-            paymasterAndData: "0x" as Hex,
-            signature: "0x" as Hex
-        };
 
         // 5. Estimate Gas
-        let userOp: any;
+        let finalUserOp: any; // Use explicit any to avoid TS type strictness on 'nonce' BigInt vs String
+        
         try {
-            // Alchemy requires valid hex for all fields even in dummy op
-            const dummyOp = {
-                ...partialUserOp,
+            // Alchemy requires valid hex for all fields
+            const estimateOp = {
+                sender: senderAddress as Hex,
+                nonce: toHex(nonce), 
+                initCode: initCode,
+                callData: callData,
+                accountGasLimits: "0x" as Hex,
+                preVerificationGas: "0x0" as Hex,
+                gasFees: "0x" as Hex,
+                paymasterAndData: "0x" as Hex,
                 signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
             };
 
             const gasEstimate: any = await client.request({
                 method: 'eth_estimateUserOperationGas' as any,
-                params: [dummyOp, ENTRY_POINT_ADDRESS]
+                params: [estimateOp, ENTRY_POINT_ADDRESS]
             });
             
             // Extract gas limits
@@ -244,44 +262,130 @@ async function main() {
                 pad(toBytes(maxFeePerGas), { size: 16 })
             ]);
 
-            userOp = {
-                ...partialUserOp,
-                accountGasLimits: toHex(accountGasLimits), // Ensure Hex String
-                preVerificationGas: toHex(preVerificationGas), // Ensure Hex String
-                gasFees: toHex(gasFees) // Ensure Hex String
+            finalUserOp = {
+                sender: senderAddress as Hex,
+                nonce: toHex(nonce),
+                initCode: initCode,
+                callData: callData,
+                accountGasLimits: toHex(accountGasLimits), 
+                preVerificationGas: toHex(preVerificationGas), 
+                gasFees: toHex(gasFees),
+                paymasterAndData: "0x" as Hex,
+                signature: "0x" as Hex
             };
 
         } catch (estParamsError: any) {
-             console.log("      ⚠️ Estimation failed, using fallback...");
-             // console.error(estParamsError);
-             const accountGasLimits = toHex(concat([pad(toBytes(1500000n), { size: 16 }), pad(toBytes(100000n), { size: 16 })]));
-             const gasFees = toHex(concat([pad(toBytes(parseEther("2", "gwei")), { size: 16 }), pad(toBytes(parseEther("20", "gwei")), { size: 16 })]));
-             userOp = {
-                ...partialUserOp,
-                accountGasLimits,
-                preVerificationGas: toHex(100000n),
-                gasFees
-            };
-        }
+             console.log("      ⚠️ Estimation failed, using fallback (Unpacked Fields)...");
+             
+             // Define Gas Limits & Fees for Fallback
+             // Adjusted to fit within balance AND meet Efficiency > 0.4 (Goldilocks zone)
+             const fallbackVerifGas = 400000n; // 200k < Required < 600k
+             const fallbackCallGas = 60000n;
+             const fallbackPreVerifGas = 60000n;
+             const fallbackMaxFee = parseEther("20", "gwei");
+             const fallbackMaxPriority = parseEther("2", "gwei");
 
-        // 6. Sign
+
+            // Calculate Hash (Requires PACKED structure for 4337 v0.7)
+            // Fix: concat returns Uint8Array, we must convert to Hex string
+            const accountGasLimits = toHex(concat([pad(toBytes(fallbackVerifGas), { size: 16 }), pad(toBytes(fallbackCallGas), { size: 16 })]));
+            const gasFeesPacked = toHex(concat([pad(toBytes(fallbackMaxPriority), { size: 16 }), pad(toBytes(fallbackMaxFee), { size: 16 })]));
+            
+            // Construct Packed UserOp for Hashing (Contract expects this)
+            // Note: readContract ABI expects native types (BigInt used for uint256), while raw Hex is used for bytes
+            const packedUserOpForHashing = {
+                sender: (senderAddress as Hex).toLowerCase() as Hex,
+                nonce: nonce, // BigInt for ABI
+                initCode: initCode.toLowerCase() as Hex,
+                callData: callData.toLowerCase() as Hex,
+                accountGasLimits: accountGasLimits,
+                preVerificationGas: fallbackPreVerifGas, // BigInt for ABI
+                gasFees: gasFeesPacked,
+                paymasterAndData: "0x" as Hex,
+                signature: "0x" as Hex
+            };
+            
+            // Split initCode for Alchemy RPC (which expects factory/factoryData)
+            const initCodeHex = packedUserOpForHashing.initCode;
+            let factory: Hex | undefined;
+            let factoryData: Hex | undefined;
+            
+            if (initCodeHex && initCodeHex.length > 2) {
+                factory = initCodeHex.slice(0, 42) as Hex;
+                factoryData = ("0x" + initCodeHex.slice(42)) as Hex;
+            }
+
+            // Construct Unpacked UserOp for Sending (Alchemy Bundler expects fields matching the provided schema)
+            const unpackedUserOpForSending = {
+                sender: packedUserOpForHashing.sender,
+                nonce: toHex(packedUserOpForHashing.nonce), // Convert to Hex for JSON-RPC
+                // initCode REMOVED in favor of factory/factoryData
+                factory: factory,
+                factoryData: factoryData,
+                callData: packedUserOpForHashing.callData,
+                callGasLimit: toHex(fallbackCallGas),
+                verificationGasLimit: toHex(fallbackVerifGas),
+                preVerificationGas: toHex(packedUserOpForHashing.preVerificationGas), // Convert to Hex
+                maxFeePerGas: toHex(fallbackMaxFee),
+                maxPriorityFeePerGas: toHex(fallbackMaxPriority),
+                paymasterAndData: packedUserOpForHashing.paymasterAndData,
+                signature: packedUserOpForHashing.signature
+            };
+            
+    
+            const userOpHash = await client.readContract({
+                address: ENTRY_POINT_ADDRESS,
+                abi: [{ inputs: [{ components: [{name:"sender",type:"address"},{name:"nonce",type:"uint256"},{name:"initCode",type:"bytes"},{name:"callData",type:"bytes"},{name:"accountGasLimits",type:"bytes32"},{name:"preVerificationGas",type:"uint256"},{name:"gasFees",type:"bytes32"},{name:"paymasterAndData",type:"bytes"},{name:"signature",type:"bytes"}], name: "userOp", type: "tuple" }], name: "getUserOpHash", outputs: [{ name: "", type: "bytes32" }], stateMutability: "view", type: "function" }] as const,
+                functionName: 'getUserOpHash',
+                args: [packedUserOpForHashing]
+            });
+            console.log(`   🔑 Hash: ${userOpHash}`);
+    
+            const fallbackSignature = await ownerAccount.signMessage({ message: { raw: userOpHash } });
+            packedUserOpForHashing.signature = fallbackSignature;
+            unpackedUserOpForSending.signature = fallbackSignature;
+            
+            // Send Unpacked
+            try {
+                 console.log("   📨 Sending (Fallback Unpacked)...");
+                 const txHash = await client.request({
+                     method: 'eth_sendUserOperation' as any,
+                     params: [unpackedUserOpForSending, ENTRY_POINT_ADDRESS]
+                 });
+                 console.log(`   ✅ Sent! https://jiffyscan.xyz/userOpHash/${txHash}?network=sepolia`);
+                 await sleep(5000);
+            } catch (e: any) {
+                console.error("   ❌ Execution Failed:", e.message || e);
+                // Last Resort: Try Packed just in case (we did this before, but good to have toggle if unpacked fails)
+            }
+             
+            // Skip the rest of the main loop logic for this iteration to avoid duplicate sending
+            continue; 
+        }
+        // ---------------------------------------------------------
+        // Happy Path (Estimation Succeeded) Logic
+        // ---------------------------------------------------------
+        
+        // If we reached here, Estimation Succeeded and finalUserOp is set with PACKED fields
+        // We need to calculcate hash, sign, and send.
+        
         const userOpHash = await client.readContract({
             address: ENTRY_POINT_ADDRESS,
             abi: [{ inputs: [{ components: [{name:"sender",type:"address"},{name:"nonce",type:"uint256"},{name:"initCode",type:"bytes"},{name:"callData",type:"bytes"},{name:"accountGasLimits",type:"bytes32"},{name:"preVerificationGas",type:"uint256"},{name:"gasFees",type:"bytes32"},{name:"paymasterAndData",type:"bytes"},{name:"signature",type:"bytes"}], name: "userOp", type: "tuple" }], name: "getUserOpHash", outputs: [{ name: "", type: "bytes32" }], stateMutability: "view", type: "function" }] as const,
             functionName: 'getUserOpHash',
-            args: [userOp]
+            args: [finalUserOp]
         });
         console.log(`   🔑 Hash: ${userOpHash}`);
 
         const signature = await ownerAccount.signMessage({ message: { raw: userOpHash } });
-        userOp.signature = signature;
+        finalUserOp.signature = signature;
 
         // 7. Send
-        console.log("   📨 Sending...");
+        console.log("   📨 Sending (Estimation Succeeded)...");
         try {
             const txHash = await client.request({
                 method: 'eth_sendUserOperation' as any,
-                params: [userOp, ENTRY_POINT_ADDRESS]
+                params: [finalUserOp, ENTRY_POINT_ADDRESS]
             });
             console.log(`   ✅ Sent! https://jiffyscan.xyz/userOpHash/${txHash}?network=sepolia`);
 
@@ -289,6 +393,7 @@ async function main() {
 
         } catch (e: any) {
             console.error("   ❌ Execution Failed:", e.message || e);
+            if(e.details) console.error("      Details:", e.details);
         }
     }
 }
