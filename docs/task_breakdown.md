@@ -17,20 +17,12 @@ Based on the PhD research requirements and the "Three-Step" (Prepare, Test, Anal
 
 ## Phase 1: Preparation (The "Ammo")
 
-- [ ] **1.1. Account Discovery & Funding Script (`scripts/01_prepare_accounts.ts`)**
-    - [ ] Load all keys.
-    - [ ] **Supplier Check**: Ensure Vault has ETH and GTokens.
-    - [ ] **Operator Check**: Ensure Admins have ETH (for minting SBTs).
-    - [ ] **Compute Addresses**: Calculate `SimpleAccount` addresses for:
-        - `AA_Jason` (SuperPaymaster V3 User)
-        - `AA_Anni` (Standard Paymaster User)
-        - `AA_Baseline` (Self-Pay User)
-    - [ ] **Fund ETH**: Supplier -> All Accounts (small amount for safety/deployment).
-    - [ ] **Fund GTokens**: Supplier -> `AA_Jason` (xPNTs).
-
-- [ ] **1.2. Identity Initialization (SBT Minting)**
-    - [ ] Check if `AA_Jason` has `MySBT`.
-    - [ ] If no: `Operator_Jason` calls `Registry` to mint SBT for `AA_Jason`.
+- [ ] **1.1. Automated Preparation (The "Ammo") (`scripts/01_prepare_all.ts`)**
+    - [ ] **Unified Script**: Runs all checks below.
+    - [ ] **Account Check**: Computes addresses for A, B, C.
+    - [ ] **ETH Check**: Funds 0.05 ETH from Supplier if low.
+    - [ ] **Identity Check**: Checks MySBT balance for SuperPaymaster User (C). Mints if missing.
+    - [ ] **Asset Check**: Checks xPNTs (GToken) balance for SuperPaymaster User (C). Transfers if low.
 
 ## Phase 2: Testing (The Execution)
 

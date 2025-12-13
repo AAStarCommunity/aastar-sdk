@@ -122,6 +122,10 @@ const hash = await bundler.sendUserOperation({
     entryPoint: ENTRY_POINT_ADDRESS
 });
 ```
+BUNDLER_RPC_URL本质上它还是一个 RPC：它像普通的以太坊节点一样接收 JSON-RPC 请求。
+增强了功能：普通的以太坊节点（比如 Geth）只认识 eth_sendTransaction 等标准方法，不仅不认识 eth_sendUserOperation，甚至会因为无法解析而报错。
+Bundler 的作用：Bundler RPC 实现了 ERC-4337 定义的特殊方法（比如 eth_sendUserOperation、eth_estimateUserOperationGas）。
+当你调用 sendUserOperation 时，Bundler 会接收这个操作，先在自己的“替代内存池”（Alt Mempool）里验证，验证通过后，Bundler 会把它打包成一笔普通的交易（Transaction），再发送给普通的节点去上链。
 
 #### 2. SuperPaymaster 配置
 ```typescript
@@ -141,3 +145,4 @@ const userOp = await client.makeUserOperation({
     paymasterAndData
 });
 ```
+
