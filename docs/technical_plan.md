@@ -433,3 +433,78 @@ Bundler:
 往这个地址转 0.01 Sepolia ETH。
 
 再次运行代码，你应该能看到 发送成功 并在 Jiffyscan 上查到这笔 UserOp。
+
+------
+
+npx tsx scripts/deploy_test_accounts.ts
+[dotenv@17.2.3] injecting env (18) from ../env/.env.v3 -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Using RPC: https://eth-sepolia.g.alchemy.com/v2/Bx4W1-vUePAAD7N
+Owner: 0xb5600060e6de5E11D3636731964218E53caadf0E
+
+--------------------------------------------
+🚀 Processing Baseline (A) [Salt 0]
+--------------------------------------------
+📝 Address: 0xECD9C07f648B09CFb78906302822Ec52Ab87dd70
+   Deployed: ❌ NO
+   Balance: 0.07 ETH
+   🛠  Constructing UserOp...
+      ⚠️ Estimation failed, using fallback (Unpacked Fields)...
+   🔑 Hash: 0xe109d637d5788faa3a56ac82c33dd63de744ab0b624b8f215f89c264bc687a87
+   📨 Sending (Fallback Unpacked)...
+   ✅ Sent! https://jiffyscan.xyz/userOpHash/0xe109d637d5788faa3a56ac82c33dd63de744ab0b624b8f215f89c264bc687a87?network=sepolia
+
+--------------------------------------------
+🚀 Processing Standard (B) [Salt 1]
+--------------------------------------------
+📝 Address: 0x179Faf25600c01DBFcEf7971f15DcFa3FbE5d31C
+   Deployed: ❌ NO
+   Balance: 0.07 ETH
+   🛠  Constructing UserOp...
+      ⚠️ Estimation failed, using fallback (Unpacked Fields)...
+   🔑 Hash: 0xf096878c6389d56d71450e00e5149ff943f012fb3e6fdd2eb1e4d7a61588ff06
+   📨 Sending (Fallback Unpacked)...
+   ✅ Sent! https://jiffyscan.xyz/userOpHash/0xf096878c6389d56d71450e00e5149ff943f012fb3e6fdd2eb1e4d7a61588ff06?network=sepolia
+
+--------------------------------------------
+🚀 Processing SuperPaymaster (C) [Salt 2]
+--------------------------------------------
+📝 Address: 0xb78ef5C8DD059ABa48b65c8069641f30BBf0A1ED
+   Deployed: ❌ NO
+   Balance: 0.07 ETH
+   🛠  Constructing UserOp...
+      ⚠️ Estimation failed, using fallback (Unpacked Fields)...
+   🔑 Hash: 0xd82fea49a60b4f8c1ced70192a4f43965b6f5b35ea9c343805977c55fa538497
+   📨 Sending (Fallback Unpacked)...
+   ✅ Sent! https://jiffyscan.xyz/userOpHash/0xd82fea49a60b4f8c1ced70192a4f43965b6f5b35ea9c343805977c55fa538497?network=sepolia
+(base) XBOX at ~/Dev/mycelium/my-exploration/projects/aastar-sdk ±(main) ✗ ❯                                     ruby-3.3.2
+
+---------
+
+$ npx tsx scripts/deploy_test_accounts.ts
+[dotenv@17.2.3] injecting env (18) from ../env/.env.v3 -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+Using RPC: https://eth-sepolia.g.alchemy.com/v2/Bx41-vnwAAD7N
+Owner: 0xb5600060e6de5E11D3636731964218E53caadf0E
+
+--------------------------------------------
+🚀 Processing Baseline (A) [Salt 0]
+--------------------------------------------
+📝 Address: 0xECD9C07f648B09CFb78906302822Ec52Ab87dd70
+   Deployed: ✅ YES
+   Balance: 0.0596 ETH
+   ✅ Already deployed. Skipping.
+
+--------------------------------------------
+🚀 Processing Standard (B) [Salt 1]
+--------------------------------------------
+📝 Address: 0x179Faf25600c01DBFcEf7971f15DcFa3FbE5d31C
+   Deployed: ✅ YES
+   Balance: 0.0596 ETH
+   ✅ Already deployed. Skipping.
+
+--------------------------------------------
+🚀 Processing SuperPaymaster (C) [Salt 2]
+--------------------------------------------
+📝 Address: 0xb78ef5C8DD059ABa48b65c8069641f30BBf0A1ED
+   Deployed: ✅ YES
+   Balance: 0.0596 ETH
+   ✅ Already deployed. Skipping.

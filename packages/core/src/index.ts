@@ -32,3 +32,4 @@ export const createAAStarWalletClient = (config: AAStarClientConfig): WalletClie
 
 export * from 'viem';
 export { sepolia, optimismSepolia, optimism };
+export * from './utils';

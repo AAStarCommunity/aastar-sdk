@@ -4,20 +4,16 @@ Based on the PhD research requirements and the "Three-Step" (Prepare, Test, Anal
 
 ## Phase 0: Foundation & Configuration
 
-- [ ] **0.1. Environment Setup (`.env.v3`)**
-    - [ ] Create `projects/env/.env.v3`.
-    - [ ] Populate RPC variables (`SEPOLIA_RPC_URL`, `ALCHEMY_BUNDLER_RPC_URL`).
-    - [ ] Populate Account Keys:
-        - `SUPPLIER_KEY` (Vault)
-        - `OPERATOR_JASON_KEY` (AAStar Admin)
-        - `OPERATOR_ANNI_KEY` (Bread Admin)
-        - `RELAYER_KEY` (Baseline Tester)
-    - [ ] Populate Contract Addresses (Superseding `.env` if needed, but prioritizing `shared-config`).
+- [x] **0.1. Environment Setup (`.env.v3`)**
+    - [x] Create `projects/env/.env.v3`.
+    - [x] Populate RPC variables (`SEPOLIA_RPC_URL`, `ALCHEMY_BUNDLER_RPC_URL`).
+    - [x] Populate Account Key in .env.v3
+    - [x] Populate Contract Addresses (Superseding `.env` if needed, but prioritizing `@aastar/shared-config`).
 
-- [ ] **0.2. SDK Architecture Refinement**
-    - [ ] Validate `@aastar/shared-config` integration for addresses (`SuperPaymaster`, `MySBT`, `GToken`).
-    - [ ] Ensure `@aastar/core` exports `viem` clients configured for Sepolia.
-    - [ ] Ensure `@aastar/superpaymaster` exports correct V3 middleware (`paymasterAndData` encoding).
+- [x] **0.2. SDK Architecture Refinement**
+    - [x] Validate `@aastar/shared-config` integration for addresses (`SuperPaymaster`, `MySBT`, `GToken`).
+    - [x] Ensure `@aastar/core` exports `viem` clients configured for Sepolia and all networks.
+    - [x] Ensure `@aastar/superpaymaster` exports correct V3 middleware (`paymasterAndData` encoding).
 
 ## Phase 1: Preparation (The "Ammo")
 
