@@ -39,6 +39,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@aastar/shared-config':
+        specifier: ^0.3.8
+        version: 0.3.8
       viem:
         specifier: ^2.7.1
         version: 2.41.2(typescript@5.9.3)

@@ -1,13 +1,8 @@
 import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, type Chain, type Account } from 'viem';
 import { sepolia, optimismSepolia, optimism } from 'viem/chains';
 
-// In the future, this comes from @aastar/shared-config
-export const SHARED_CONFIG_MOCK = {
-    contracts: {
-        superPaymaster: "0xSuperPaymasterAddress",
-        entryPoint: "0xEntryPointAddress"
-    }
-};
+// Re-export contracts from shared-config
+export { contracts } from '@aastar/shared-config';
 
 export type AAStarClientConfig = {
     chain: Chain;
