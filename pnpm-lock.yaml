@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@aastar/shared-config':
-        specifier: ^0.3.8
-        version: 0.3.8
+        specifier: 0.3.6
+        version: 0.3.6
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
@@ -40,8 +40,8 @@ importers:
   packages/core:
     dependencies:
       '@aastar/shared-config':
-        specifier: ^0.3.8
-        version: 0.3.8
+        specifier: 0.3.6
+        version: 0.3.6
       viem:
         specifier: ^2.7.1
         version: 2.41.2(typescript@5.9.3)
@@ -78,8 +78,8 @@ importers:
 
 packages:
 
-  '@aastar/shared-config@0.3.8':
-    resolution: {integrity: sha512-CmjvbX2zC6uHbZLme4/Lqnk2avi90yrSfgZF/2/7dvixJKEDfwpx1oQiweQyRiF5tQxuwaz0P2W1BbhxdszzOg==}
+  '@aastar/shared-config@0.3.6':
+    resolution: {integrity: sha512-89tLaNuUBCinD33KNTK9aC1E02Ne9d+ZKsvyI6FAwv5LJdOVaHF3MoVZ/3NH8W/jrsPgMhUBBtfKCthoXcBiIA==}
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
@@ -918,7 +918,7 @@ packages:
 
 snapshots:
 
-  '@aastar/shared-config@0.3.8': {}
+  '@aastar/shared-config@0.3.6': {}
 
   '@adraffy/ens-normalize@1.11.1': {}
 
