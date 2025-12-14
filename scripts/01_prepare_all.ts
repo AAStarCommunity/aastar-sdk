@@ -26,7 +26,7 @@ dotenv.config({ path: envPath });
 
 // --- Config ---
 const ENTRY_POINT_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
-const FACTORY_ADDRESS = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985'; // v0.7
+const FACTORY_ADDRESS = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985'; 
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
 const PUBLIC_RPC = process.env.SEPOLIA_RPC_URL;
 
@@ -40,12 +40,12 @@ if (contracts && contracts.sepolia) {
     if (contracts.sepolia.testTokens) console.log("   TestTokens:", Object.keys(contracts.sepolia.testTokens));
 }
 
-// Resolve Contract Addresses
-// Priority: Env Var > Shared Config > Hardcoded Fallback
 const MYSBT_ADDRESS = (process.env.MYSBT_ADDRESS || contracts?.sepolia?.tokens?.mySBT || contracts?.sepolia?.core?.MySBT || "") as Hex;
 const GTOKEN_ADDRESS = (process.env.GTOKEN_ADDRESS || contracts?.sepolia?.core?.gToken || "") as Hex;
 const APNTS_ADDRESS = (process.env.APNTS_ADDRESS || contracts?.sepolia?.testTokens?.aPNTs || contracts?.sepolia?.testTokens?.xPNTs_A || "") as Hex;
 const BPNTS_ADDRESS = (process.env.BPNTS_ADDRESS || contracts?.sepolia?.testTokens?.bPNTs || contracts?.sepolia?.testTokens?.xPNTs_B || "") as Hex;
+const PIM_ADDRESS = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751";
+const PAYMASTER_FACTORY_ADDRESS = (process.env.PAYMASTER_FACTORY_ADDRESS || contracts?.sepolia?.core?.paymasterFactory || "0x65Cf6C4ab3d40f9227A6C3d348039E8c50B2022C") as Hex;
 
 // --- ABIs ---
 const factoryAbi = [
@@ -66,7 +66,7 @@ const erc20Abi = [
 const sbtAbi = [
     { inputs: [{ name: "owner", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" },
     { inputs: [{ name: "to", type: "address" }], name: "mint", outputs: [], stateMutability: "nonpayable", type: "function" },
-    { inputs: [{ name: "to", type: "address" }], name: "safeMint", outputs: [], stateMutability: "nonpayable", type: "function" } // Fallback
+    { inputs: [{ name: "to", type: "address" }], name: "safeMint", outputs: [], stateMutability: "nonpayable", type: "function" } 
 ] as const;
 
 // --- Helpers ---
@@ -89,27 +89,27 @@ async function main() {
     // 1. Setup Clients
     if (!PUBLIC_RPC) throw new Error("Missing SEPOLIA_RPC_URL");
     const publicClient = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
-    const client = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC || PUBLIC_RPC) }); // For UserOp simulation if needed
+    const client = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC || PUBLIC_RPC) }); 
 
     // 2. Setup Operators
     const supplierKey = process.env.PRIVATE_KEY_SUPPLIER;
-    const operatorKey = process.env.PRIVATE_KEY_JASON; // AAStar Admin
+    const operatorKey = process.env.PRIVATE_KEY_JASON; 
     
-    if (!supplierKey || !operatorKey) {
-        throw new Error("Missing PRIVATE_KEY_SUPPLIER or PRIVATE_KEY_JASON in .env.v3");
-    }
+    if (!supplierKey || !operatorKey) throw new Error("Missing Keys");
 
     const supplierAccount = privateKeyToAccount(parseKey(supplierKey));
-    const operatorAccount = privateKeyToAccount(parseKey(operatorKey)); // For Minting SBT
+    const operatorAccount = privateKeyToAccount(parseKey(operatorKey));
     
     const supplierWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: supplierAccount });
     const operatorWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: operatorAccount });
 
     console.log(`\n📋 Configuration (SharedConfig 0.3.6 Verification):`);
-    console.log(`   MySBT:  ${MYSBT_ADDRESS ? MYSBT_ADDRESS : "❌ Not Found"}`);
-    console.log(`   GToken: ${GTOKEN_ADDRESS ? GTOKEN_ADDRESS : "❌ Not Found"}`);
-    console.log(`   aPNTs:  ${APNTS_ADDRESS ? APNTS_ADDRESS : "❌ Not Found"}`);
-    console.log(`   bPNTs:  ${BPNTS_ADDRESS ? BPNTS_ADDRESS : "❌ Not Found"}`);
+    console.log(`   MySBT:   ${MYSBT_ADDRESS ? MYSBT_ADDRESS : "❌ Not Found"}`);
+    console.log(`   GToken:  ${GTOKEN_ADDRESS ? GTOKEN_ADDRESS : "❌ Not Found"}`);
+    console.log(`   aPNTs:   ${APNTS_ADDRESS ? APNTS_ADDRESS : "❌ Not Found"}`);
+    console.log(`   bPNTs:   ${BPNTS_ADDRESS ? BPNTS_ADDRESS : "❌ Not Found"}`);
+    console.log(`   PIM:     ${PIM_ADDRESS}`);
+    console.log(`   Factory: ${PAYMASTER_FACTORY_ADDRESS}`);
     console.log(`   Supplier: ${supplierAccount.address}`);
     console.log(`   Operator: ${operatorAccount.address}`);
 
@@ -117,17 +117,17 @@ async function main() {
         console.warn("⚠️  Core addresses missing. Some checks might be skipped.");
     }
     
-    // ... (Targets definition) ...
     const ownerKey = process.env.PRIVATE_KEY_JASON; 
     const ownerAccount = privateKeyToAccount(parseKey(ownerKey));
 
     const targets = [
         { 
-            label: 'Baseline (A)', 
+            label: 'Baseline (A - Pimlico)', 
             address: process.env.TEST_SIMPLE_ACCOUNT_A as Hex,
             salt: 0n, 
             requireMySBT: false, 
-            requireGToken: false 
+            requireGToken: false,
+            requirePIM: true
         },
         { 
             label: 'Standard (B)', 
@@ -157,7 +157,6 @@ async function main() {
 
         if (!senderAddress) {
              console.warn(`   ⚠️  Address not found in .env for ${target.label}. Attempting calculation...`);
-             // ... calculation logic ...
              const factoryData = encodeFunctionData({
                 abi: factoryAbi,
                 functionName: 'createAccount',
@@ -227,8 +226,6 @@ async function main() {
 
                 if (sbtBal === 0n) {
                     console.log("   📉 No SBT. Minting...");
-                    // Try 'mint' first, then 'safeMint' if 'mint' fails or doesn't exist (handled by try/catch usually, 
-                    // but here we just try one standard. Assuming 'mint(address)' exists on MySBT)
                     try {
                         const { request } = await publicClient.simulateContract({
                             account: operatorAccount,
@@ -241,8 +238,7 @@ async function main() {
                         console.log(`      ✅ Minted SBT. Hash: ${tx}`);
                         await publicClient.waitForTransactionReceipt({ hash: tx });
                     } catch (mintErr: any) {
-                         console.warn(`      ⚠️ Mint failed: ${mintErr.shortMessage || mintErr.message}. Trying safeMint...`);
-                         // Fallback logic could go here
+                         console.warn(`      ⚠️ Mint failed: ${mintErr.shortMessage || mintErr.message}.`);
                     }
                 } else {
                     console.log("      ✅ SBT Owned.");
@@ -254,7 +250,6 @@ async function main() {
 
         // --- D. Check GToken (If Required) ---
         if (target.requireGToken && GTOKEN_ADDRESS) {
-            // ... (existing GToken logic) ...
             try {
                 const tokenBal = await publicClient.readContract({
                     address: GTOKEN_ADDRESS,
@@ -327,6 +322,88 @@ async function main() {
 
             await checkPNT("aPNTs", APNTS_ADDRESS);
             await checkPNT("bPNTs", BPNTS_ADDRESS);
+        }
+
+        // --- F. Check PIM (For Pimlico Paymaster) ---
+        if ((target as any).requirePIM) {
+             try {
+                const bal = await publicClient.readContract({
+                    address: PIM_ADDRESS,
+                    abi: erc20Abi,
+                    functionName: 'balanceOf',
+                    args: [senderAddress!]
+                });
+                console.log(`   ⛽ PIM Balance: ${formatEther(bal as bigint)}`);
+
+                if ((bal as bigint) < parseEther("0.1")) { // Assume we need some PIM
+                     console.log("   📉 Low PIM. Transferring 1.0...");
+                     try {
+                        const { request } = await publicClient.simulateContract({
+                            account: supplierAccount,
+                            address: PIM_ADDRESS,
+                            abi: erc20Abi,
+                            functionName: 'transfer',
+                            args: [senderAddress!, parseEther("1.0")]
+                        });
+                        const tx = await supplierWallet.writeContract(request);
+                        console.log(`      ✅ Sent 1.0 PIM. Hash: ${tx}`);
+                        await publicClient.waitForTransactionReceipt({ hash: tx });
+                     } catch (transferErr: any) {
+                         console.error(`      ❌ PIM Transfer Failed: ${transferErr.message}`);
+                     }
+                } else {
+                    console.log("      ✅ PIM Sufficient.");
+                }
+            } catch (e: any) {
+                console.error(`      ❌ PIM Check Error: ${e.message}`);
+            }
+        }
+    }
+
+    // 4. Verify/Deploy Paymaster V4.1 (For Group B)
+    console.log(`\n--------------------------------------------`);
+    console.log(`🏭 Verifying Paymaster V4.1 (For Standard AA)...`);
+    
+    // Check Config first
+    let paymasterV4Address: Hex | undefined = (process.env.PAYMASTER_V4_ADDRESS || contracts?.sepolia?.paymaster?.v4_1) as Hex;
+
+    if (paymasterV4Address) {
+        console.log(`   ✅ Configured: ${paymasterV4Address}`);
+    } else {
+        console.log(`   ⚠️ Not found in config/env. Checking Factory...`);
+        try {
+            // Predict address (simulate)
+            const salt = 0n; 
+            const { result } = await publicClient.simulateContract({
+                address: PAYMASTER_FACTORY_ADDRESS,
+                abi: [{ inputs: [{ name: "owner", type: "address" }, { name: "salt", type: "uint256" }], name: "createPaymaster", outputs: [{ name: "", type: "address" }], stateMutability: "nonpayable", type: "function" }] as const,
+                functionName: 'createPaymaster',
+                args: [operatorAccount.address, salt],
+                account: operatorAccount
+            });
+            paymasterV4Address = result;
+            console.log(`   📍 Predicted Address: ${paymasterV4Address}`);
+            
+            // Check deployment
+            const code = await publicClient.getBytecode({ address: paymasterV4Address });
+            if (code && code.length > 2) {
+                console.log(`   ✅ Already Deployed.`);
+            } else {
+                console.log(`   🏗️  Deploying Paymaster V4.1...`);
+                // Note: If simulate works but deployment isn't there, we deploy.
+                const tx = await operatorWallet.writeContract({
+                    address: PAYMASTER_FACTORY_ADDRESS,
+                    abi: [{ inputs: [{ name: "owner", type: "address" }, { name: "salt", type: "uint256" }], name: "createPaymaster", outputs: [{ name: "", type: "address" }], stateMutability: "nonpayable", type: "function" }] as const,
+                    functionName: 'createPaymaster',
+                    args: [operatorAccount.address, salt],
+                    chain: sepolia,
+                    account: operatorAccount
+                });
+                console.log(`      ✅ Deployed. Hash: ${tx}`);
+                await publicClient.waitForTransactionReceipt({ hash: tx });
+            }
+        } catch (e: any) {
+             console.error(`      ❌ Paymaster Check/Deploy Failed: ${e.message}`);
         }
     }
 
