@@ -37,12 +37,15 @@ if (contracts && contracts.sepolia) {
     console.log("🔍 SharedConfig Keys (sepolia):", Object.keys(contracts.sepolia));
     if (contracts.sepolia.core) console.log("   Core:", Object.keys(contracts.sepolia.core));
     if (contracts.sepolia.tokens) console.log("   Tokens:", Object.keys(contracts.sepolia.tokens));
+    if (contracts.sepolia.testTokens) console.log("   TestTokens:", Object.keys(contracts.sepolia.testTokens));
 }
 
 // Resolve Contract Addresses
 // Priority: Env Var > Shared Config > Hardcoded Fallback
-const MYSBT_ADDRESS = (process.env.MYSBT_ADDRESS || contracts?.sepolia?.core?.mySBT || contracts?.sepolia?.MySBT || contracts?.MySBT || contracts?.sepolia?.tokens?.MySBT || "") as Hex;
-const GTOKEN_ADDRESS = (process.env.GTOKEN_ADDRESS || contracts?.sepolia?.core?.gToken || contracts?.sepolia?.GToken || contracts?.GToken || "") as Hex;
+const MYSBT_ADDRESS = (process.env.MYSBT_ADDRESS || contracts?.sepolia?.tokens?.mySBT || contracts?.sepolia?.core?.MySBT || "") as Hex;
+const GTOKEN_ADDRESS = (process.env.GTOKEN_ADDRESS || contracts?.sepolia?.core?.gToken || "") as Hex;
+const APNTS_ADDRESS = (process.env.APNTS_ADDRESS || contracts?.sepolia?.testTokens?.aPNTs || contracts?.sepolia?.testTokens?.xPNTs_A || "") as Hex;
+const BPNTS_ADDRESS = (process.env.BPNTS_ADDRESS || contracts?.sepolia?.testTokens?.bPNTs || contracts?.sepolia?.testTokens?.xPNTs_B || "") as Hex;
 
 // --- ABIs ---
 const factoryAbi = [
@@ -102,17 +105,19 @@ async function main() {
     const supplierWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: supplierAccount });
     const operatorWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: operatorAccount });
 
-    console.log(`\n📋 Configuration:`);
-    console.log(`   MySBT:  ${MYSBT_ADDRESS ? MYSBT_ADDRESS : "❌ Not Found (Check SharedConfig or Env)"}`);
-    console.log(`   GToken: ${GTOKEN_ADDRESS ? GTOKEN_ADDRESS : "❌ Not Found (Check SharedConfig or Env)"}`);
+    console.log(`\n📋 Configuration (SharedConfig 0.3.6 Verification):`);
+    console.log(`   MySBT:  ${MYSBT_ADDRESS ? MYSBT_ADDRESS : "❌ Not Found"}`);
+    console.log(`   GToken: ${GTOKEN_ADDRESS ? GTOKEN_ADDRESS : "❌ Not Found"}`);
+    console.log(`   aPNTs:  ${APNTS_ADDRESS ? APNTS_ADDRESS : "❌ Not Found"}`);
+    console.log(`   bPNTs:  ${BPNTS_ADDRESS ? BPNTS_ADDRESS : "❌ Not Found"}`);
     console.log(`   Supplier: ${supplierAccount.address}`);
     console.log(`   Operator: ${operatorAccount.address}`);
 
     if (!MYSBT_ADDRESS || !GTOKEN_ADDRESS) {
-        console.warn("⚠️  Contract addresses missing. Skipping Token/SBT steps.");
+        console.warn("⚠️  Core addresses missing. Some checks might be skipped.");
     }
-
-    // 3. Define Targets
+    
+    // ... (Targets definition) ...
     const ownerKey = process.env.PRIVATE_KEY_JASON; 
     const ownerAccount = privateKeyToAccount(parseKey(ownerKey));
 
@@ -136,7 +141,8 @@ async function main() {
             address: process.env.TEST_SIMPLE_ACCOUNT_C as Hex,
             salt: 2n, 
             requireMySBT: true, 
-            requireGToken: true 
+            requireGToken: true,
+            requirePNTs: true 
         }
     ];
 
@@ -248,6 +254,7 @@ async function main() {
 
         // --- D. Check GToken (If Required) ---
         if (target.requireGToken && GTOKEN_ADDRESS) {
+            // ... (existing GToken logic) ...
             try {
                 const tokenBal = await publicClient.readContract({
                     address: GTOKEN_ADDRESS,
@@ -255,12 +262,11 @@ async function main() {
                     functionName: 'balanceOf',
                     args: [senderAddress]
                 });
-                console.log(`   🪙 GToken Balance: ${formatEther(tokenBal)}`);
+                console.log(`   🪙 GToken Balance: ${formatEther(tokenBal as bigint)}`);
 
-                if (tokenBal < parseEther("50")) { // Assume we need 50 Tokens
+                if ((tokenBal as bigint) < parseEther("50")) { 
                      console.log("   📉 Low GToken. Transferring 100...");
                      try {
-                        // Supplier sends Tokens
                         const { request } = await publicClient.simulateContract({
                             account: supplierAccount,
                             address: GTOKEN_ADDRESS,
@@ -280,6 +286,47 @@ async function main() {
             } catch (e: any) {
                 console.error(`      ❌ GToken Check Error: ${e.message}`);
             }
+        }
+
+        // --- E. Check PNTs (If Required) ---
+        if ((target as any).requirePNTs) {
+            const checkPNT = async (name: string, address: Hex) => {
+                if (!address) return;
+                try {
+                    const bal = await publicClient.readContract({
+                        address: address,
+                        abi: erc20Abi,
+                        functionName: 'balanceOf',
+                        args: [senderAddress!]
+                    });
+                    console.log(`   🔵 ${name} Balance: ${formatEther(bal as bigint)}`);
+                    
+                    if ((bal as bigint) < parseEther("10")) {
+                        console.log(`   📉 Low ${name}. Transferring 20...`);
+                         try {
+                            const { request } = await publicClient.simulateContract({
+                                account: supplierAccount,
+                                address: address,
+                                abi: erc20Abi,
+                                functionName: 'transfer',
+                                args: [senderAddress!, parseEther("20")]
+                            });
+                            const tx = await supplierWallet.writeContract(request);
+                            console.log(`      ✅ Sent 20 ${name}. Hash: ${tx}`);
+                            await publicClient.waitForTransactionReceipt({ hash: tx });
+                         } catch (tErr: any) {
+                             console.error(`      ❌ ${name} Transfer Failed: ${tErr.message}`);
+                         }
+                    } else {
+                        console.log(`      ✅ ${name} Sufficient.`);
+                    }
+                } catch(e: any) {
+                    console.error(`      ❌ ${name} Check Failed: ${e.message}`);
+                }
+            }
+
+            await checkPNT("aPNTs", APNTS_ADDRESS);
+            await checkPNT("bPNTs", BPNTS_ADDRESS);
         }
     }
 
