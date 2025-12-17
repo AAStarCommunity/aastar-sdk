@@ -130,11 +130,10 @@ async function main() {
         },
         { 
             label: 'Standard (B - Paymaster V4/AOA)', 
-            // Needs bPNTs and MySBT for AOA mode
             address: process.env.TEST_SIMPLE_ACCOUNT_B as Hex,
             salt: 1n, 
             requireMySBT: true, 
-            requireBPNTs: true // B needs B-Points
+            requireBPNTs: true 
         },
         { 
             label: 'SuperPaymaster (C)', 
@@ -142,7 +141,7 @@ async function main() {
             salt: 2n, 
             requireMySBT: true, 
             requireGToken: true,
-            requireAPNTs: true // C needs A-Points (Community A)
+            requireAPNTs: true 
         }
     ];
 
@@ -154,22 +153,8 @@ async function main() {
         console.log(`👤 Target: ${target.label}`);
 
         let senderAddress = target.address;
-
-        if (!senderAddress) {
-             const factoryData = encodeFunctionData({
-                abi: factoryAbi,
-                functionName: 'createAccount',
-                args: [ownerAccount.address, target.salt]
-            });
-            const initCode = concat([FACTORY_ADDRESS as Hex, factoryData]); // Use FactoryAddr const if imported or hardcoded '0x91...' defined earlier? 
-            // WAIT: I removed FACTORY_ADDRESS const in this file draft above. I need to adding it back or use the one from imports.
-            // I'll add '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985' (SimpleAccountFactory)
-            // Re-adding it to top of file logic.
-        }
-        
-        // ... (Skipping full address calc logic to keep it simple, assume addresses exist or use calc if needed.
-        // Actually I should include the calc logic to be safe, but I'll use the hardcoded Factory Address for now)
         const ACCOUNT_FACTORY = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985';
+
         if (!senderAddress) {
              console.warn(`   ⚠️  Address missing. Calculating...`);
              const factoryData = encodeFunctionData({ abi: factoryAbi, functionName: 'createAccount', args: [ownerAccount.address, target.salt] });
@@ -215,47 +200,55 @@ async function main() {
         if (senderAddress) {
             // MySBT
             if (target.requireMySBT && MYSBT_ADDRESS) {
-                 const sbtBal = await publicClient.readContract({ address: MYSBT_ADDRESS, abi: sbtAbi, functionName: 'balanceOf', args: [senderAddress] });
-                 if (sbtBal === 0n) {
-                     console.log("   📉 Minting MySBT...");
-                     const { request } = await publicClient.simulateContract({ account: operatorAccount, address: MYSBT_ADDRESS, abi: sbtAbi, functionName: 'mint', args: [senderAddress] });
-                     const tx = await operatorWallet.writeContract(request);
-                     await publicClient.waitForTransactionReceipt({ hash: tx });
-                     console.log(`      ✅ Minted`);
-                 }
+                 try {
+                     const sbtBal = await publicClient.readContract({ address: MYSBT_ADDRESS, abi: sbtAbi, functionName: 'balanceOf', args: [senderAddress] });
+                     if (sbtBal === 0n) {
+                         console.log("   📉 Minting MySBT...");
+                         const { request } = await publicClient.simulateContract({ account: operatorAccount, address: MYSBT_ADDRESS, abi: sbtAbi, functionName: 'mint', args: [senderAddress] });
+                         const tx = await operatorWallet.writeContract(request);
+                         await publicClient.waitForTransactionReceipt({ hash: tx });
+                         console.log(`      ✅ Minted`);
+                     }
+                 } catch (e: any) { console.error(`      ⚠️ SBT Error: ${e.message}`); }
             }
             
             // aPNTs
             if ((target as any).requireAPNTs && APNTS_ADDRESS) {
-                const bal = await publicClient.readContract({ address: APNTS_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [senderAddress] });
-                if ((bal as bigint) < parseEther("10")) {
-                    console.log("   📉 Transferring aPNTs...");
-                    const { request } = await publicClient.simulateContract({ account: supplierAccount, address: APNTS_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [senderAddress, parseEther("50")] });
-                    await supplierWallet.writeContract(request);
-                    console.log(`      ✅ Sent aPNTs`);
-                }
+                try {
+                    const bal = await publicClient.readContract({ address: APNTS_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [senderAddress] });
+                    if ((bal as bigint) < parseEther("10")) {
+                        console.log("   📉 Transferring aPNTs...");
+                        const { request } = await publicClient.simulateContract({ account: supplierAccount, address: APNTS_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [senderAddress, parseEther("50")] });
+                        await supplierWallet.writeContract(request);
+                        console.log(`      ✅ Sent aPNTs`);
+                    }
+                } catch(e: any) { console.error(`      ⚠️ aPNTs Error: ${e.message}`); }
             }
 
              // bPNTs
             if ((target as any).requireBPNTs && BPNTS_ADDRESS) {
-                const bal = await publicClient.readContract({ address: BPNTS_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [senderAddress] });
-                if ((bal as bigint) < parseEther("10")) {
-                     console.log("   📉 Transferring bPNTs...");
-                    const { request } = await publicClient.simulateContract({ account: supplierAccount, address: BPNTS_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [senderAddress, parseEther("50")] });
-                    await supplierWallet.writeContract(request);
-                    console.log(`      ✅ Sent bPNTs`);
-                }
+                try {
+                    const bal = await publicClient.readContract({ address: BPNTS_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [senderAddress] });
+                    if ((bal as bigint) < parseEther("10")) {
+                         console.log("   📉 Transferring bPNTs...");
+                        const { request } = await publicClient.simulateContract({ account: supplierAccount, address: BPNTS_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [senderAddress, parseEther("50")] });
+                        await supplierWallet.writeContract(request);
+                        console.log(`      ✅ Sent bPNTs`);
+                    }
+                } catch(e:any) { console.error(`      ⚠️ bPNTs Error: ${e.message}`); }
             }
 
             // PIM
             if ((target as any).requirePIM && PIM_ADDRESS) {
-                const bal = await publicClient.readContract({ address: PIM_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [senderAddress] });
-                if ((bal as bigint) < parseEther("0.1")) {
-                     console.log("   📉 Transferring PIM...");
-                    const { request } = await publicClient.simulateContract({ account: supplierAccount, address: PIM_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [senderAddress, parseEther("1.0")] });
-                    await supplierWallet.writeContract(request);
-                    console.log(`      ✅ Sent PIM`);
-                }
+                try {
+                    const bal = await publicClient.readContract({ address: PIM_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [senderAddress] });
+                    if ((bal as bigint) < parseEther("0.1")) {
+                         console.log("   📉 Transferring PIM...");
+                        const { request } = await publicClient.simulateContract({ account: supplierAccount, address: PIM_ADDRESS, abi: erc20Abi, functionName: 'transfer', args: [senderAddress, parseEther("1.0")] });
+                        await supplierWallet.writeContract(request);
+                        console.log(`      ✅ Sent PIM`);
+                    }
+                } catch(e:any) { console.error(`      ⚠️ PIM Error (Ignored): ${e.message}`); }
             }
         }
     }
@@ -264,81 +257,83 @@ async function main() {
     console.log(`\n--------------------------------------------`);
     console.log(`🏭 Verifying Paymaster V4.1 (Group B / AOA)...`);
     
-    // We want a Paymaster linked to bPNTs
-    if (!BPNTS_ADDRESS) console.error("❌ Stats: Missing bPNTs Address! Cannot deploy Paymaster V4 properly.");
-    
-    let paymasterV4Address: Hex | undefined;
+    if (!BPNTS_ADDRESS) {
+        console.error("❌ Stats: Missing bPNTs Address! Cannot deploy Paymaster V4 properly.");
+    } else {
+        let paymasterV4Address: Hex | undefined;
 
-    // We can't rely on the 'generic' Paymaster V4 config because we need one specific to bPNTs.
-    // So we try to predict/deploy based on bPNTs.
-    try {
-        const { result } = await publicClient.simulateContract({
-            address: PAYMASTER_FACTORY_ADDRESS,
-            abi: paymasterFactoryAbi,
-            functionName: 'deployPaymaster',
-            args: [
-                BPNTS_ADDRESS || "0x0000000000000000000000000000000000000000", // Token
-                MYSBT_ADDRESS || "0x0000000000000000000000000000000000000000", // SBT
-                supplierAccount.address, // Treasury
-                200n // Fee Rate 2%
-            ],
-            account: operatorAccount
-        });
-        paymasterV4Address = result;
-        console.log(`   📍 Paymaster Address (for bPNTs): ${paymasterV4Address}`);
-
-        const code = await publicClient.getBytecode({ address: paymasterV4Address });
-        if (code && code.length > 2) {
-            console.log("   ✅ Contract Deployed");
-        } else {
-            console.log("   🏗️  Deploying Paymaster...");
-            const tx = await operatorWallet.writeContract({
+        try {
+            // Predict address
+            const { result } = await publicClient.simulateContract({
                 address: PAYMASTER_FACTORY_ADDRESS,
                 abi: paymasterFactoryAbi,
                 functionName: 'deployPaymaster',
-                args: [BPNTS_ADDRESS!, MYSBT_ADDRESS!, supplierAccount.address, 200n],
-                chain: sepolia,
+                args: [
+                    BPNTS_ADDRESS, 
+                    MYSBT_ADDRESS || "0x0000000000000000000000000000000000000000", 
+                    supplierAccount.address, 
+                    200n
+                ],
                 account: operatorAccount
             });
-            console.log(`      ✅ Deployed. Hash: ${tx}`);
-            await publicClient.waitForTransactionReceipt({ hash: tx });
-        }
+            paymasterV4Address = result;
+            console.log(`   📍 Paymaster Address (for bPNTs): ${paymasterV4Address}`);
 
-        // 5. Deposit ETH to EntryPoint for this Paymaster
-        const epBal = await publicClient.readContract({
-            address: ENTRY_POINT_ADDRESS,
-            abi: entryPointAbi,
-            functionName: 'balanceOf',
-            args: [paymasterV4Address]
-        });
-        console.log(`   💰 EntryPoint Deposit: ${formatEther(epBal)} ETH`);
-        
-        if (epBal < parseEther("0.1")) {
-            console.log("   📉 Low Deposit. Depositing 0.2 ETH...");
-            const tx = await supplierWallet.writeContract({
+            const code = await publicClient.getBytecode({ address: paymasterV4Address });
+            if (code && code.length > 2) {
+                console.log("   ✅ Contract Deployed");
+            } else {
+                console.log("   🏗️  Deploying Paymaster...");
+                const tx = await operatorWallet.writeContract({
+                    address: PAYMASTER_FACTORY_ADDRESS,
+                    abi: paymasterFactoryAbi,
+                    functionName: 'deployPaymaster',
+                    args: [BPNTS_ADDRESS, MYSBT_ADDRESS!, supplierAccount.address, 200n],
+                    chain: sepolia,
+                    account: operatorAccount
+                });
+                console.log(`      ✅ Deployed. Hash: ${tx}`);
+                // await publicClient.waitForTransactionReceipt({ hash: tx }); // Skip wait to prevent timeout if slow
+                console.log("      (Check explorer if pending)");
+            }
+
+            // 5. Deposit ETH
+            const epBal = await publicClient.readContract({
                 address: ENTRY_POINT_ADDRESS,
                 abi: entryPointAbi,
-                functionName: 'depositTo',
-                args: [paymasterV4Address],
-                value: parseEther("0.2")
+                functionName: 'balanceOf',
+                args: [paymasterV4Address]
             });
-            console.log(`      ✅ Deposited. Hash: ${tx}`);
-            await publicClient.waitForTransactionReceipt({ hash: tx });
-        } else {
-            console.log("      ✅ Deposit Sufficient");
+            console.log(`   💰 EntryPoint Deposit: ${formatEther(epBal)} ETH`);
+            
+            if (epBal < parseEther("0.1")) {
+                console.log("   📉 Low Deposit. Depositing 0.2 ETH...");
+                try {
+                const tx = await supplierWallet.writeContract({
+                    address: ENTRY_POINT_ADDRESS,
+                    abi: entryPointAbi,
+                    functionName: 'depositTo',
+                    args: [paymasterV4Address],
+                    value: parseEther("0.2")
+                });
+                console.log(`      ✅ Deposited. Hash: ${tx}`);
+                } catch(e:any) { console.error("      ❌ Deposit Error:", e.message); }
+            } else {
+                console.log("      ✅ Deposit Sufficient");
+            }
+
+        } catch (e: any) {
+            console.error("   ❌ Paymaster Init Failed:", e.message);
         }
 
-    } catch (e: any) {
-        console.error("   ❌ Paymaster Init Failed:", e.message);
+        console.log("\n============================================");
+        console.log("✅ SUMMARY OF PAYMASTERS");
+        console.log("============================================");
+        console.log(`1. Pimlico (Group A):        ${PIM_ADDRESS} (Token) via RPC`);
+        console.log(`2. Paymaster V4 (Group B):   ${paymasterV4Address}`);
+        console.log(`3. SuperPaymaster (Group C): ${SUPER_PAYMASTER_ADDRESS}`);
+        console.log("============================================");
     }
-
-    console.log("\n============================================");
-    console.log("✅ SUMMARY OF PAYMASTERS");
-    console.log("============================================");
-    console.log(`1. Pimlico (Group A):        ${PIM_ADDRESS} (Token) via RPC`);
-    console.log(`2. Paymaster V4 (Group B):   ${paymasterV4Address}`);
-    console.log(`3. SuperPaymaster (Group C): ${SUPER_PAYMASTER_ADDRESS}`);
-    console.log("============================================");
 }
 
 main().catch(console.error);
