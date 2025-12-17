@@ -45,7 +45,7 @@ const ABI = {
     ]),
     SBT: parseAbi([
         'function balanceOf(address) view returns (uint256)',
-        'function registry() view returns (address)',
+        'function REGISTRY() view returns (address)',
     ]),
     SUPER_PAYMASTER: parseAbi([
         'function operators(address) view returns (address token, address treasury, uint256 exchangeRate)',
@@ -98,7 +98,7 @@ async function main() {
     // 4. Verify Identity (SBT)
     try {
         const sbt = getContract({ address: ADDR.MYSBT, abi: ABI.SBT, client });
-        const regPtr = await sbt.read.registry();
+        const regPtr = await sbt.read.REGISTRY();
         const isLinked = regPtr.toLowerCase() === ADDR.REGISTRY.toLowerCase();
         report.push(`| **MySBT** | \`${ADDR.MYSBT}\` | Linked to Registry | ${isLinked ? '✅' : '❌'} |`);
     } catch (e) { report.push(`| **MySBT** | \`${ADDR.MYSBT}\` | Error | ❌ |`); }

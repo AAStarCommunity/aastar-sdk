@@ -1,228 +1,179 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { 
-    createPublicClient, 
-    createWalletClient, 
-    http, 
-    parseEther, 
-    formatEther, 
-    Hex, 
-    concat, 
-    encodeFunctionData 
-} from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import * as fs from 'fs';
-import { createObjectCsvWriter } from 'csv-writer';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
-// Import local packages (we can use direct imports or assume node_modules structure)
-// We need to construct UserOps manually or use a helper if available, but for "Standard AA"
-// it's best to be explicit or use the same logic as deploy_test_accounts.ts
-import { entryPoint07Address } from 'viem/account-abstraction';
+// Fix BigInt serialization
+(BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-// @ts-ignore
-import { CONTRACTS } from '@aastar/shared-config';
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../env/.env.v3');
-dotenv.config({ path: envPath });
-
-// --- Config ---
+const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
 const PIMLICO_API_KEY = process.env.PIMLICO_API_KEY;
 const PIMLICO_RPC = `https://api.pimlico.io/v2/sepolia/rpc?apikey=${PIMLICO_API_KEY}`;
-const PUBLIC_RPC = process.env.SEPOLIA_RPC_URL;
+const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
-const ACCOUNT_ADDRESS = process.env.TEST_SIMPLE_ACCOUNT_A as Hex; // Account A (Baseline 2)
-const OWNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex; // "Supplier/Jason" is owner of A in this setup? Check env.
-// Wait, .env says "TEST_SIMPLE_ACCOUNT_A" is Baseline. Who owns it?
-// Usually defined in deploy_test_accounts.ts. Let's assume it's Jason/Supplier key based on "Salt 0".
-// Re-check 01_prepare_all.ts: ownerAccount = PRIVATE_KEY_JASON. 
-const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex;
+const ACCOUNT_ADDRESS = process.env.TEST_SIMPLE_ACCOUNT_A as Hex; 
+const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; // Jason owns A
+const PIM_TOKEN = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751";
+const APNTS_ADDRESS = process.env.APNTS_ADDRESS as Hex;
+const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
-const PIM_ADDRESS = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751";
-const RECEIVER = (process.env.TEST_RECEIVER_ADDRESS || "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e") as Hex;
+if (!BUNDLER_RPC || !PIMLICO_API_KEY || !APNTS_ADDRESS) throw new Error("Missing Config");
 
-const ENTRY_POINT = entryPoint07Address; // 0x0000000071727De22E5E9d8BAf0edAc6f37da032
+// Helper to Pack v0.7 Fields
+function packUint(high128: bigint, low128: bigint): Hex {
+    return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
+}
 
-// ABIs
-const erc20Abi = [
-    { inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }], name: "transfer", outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable", type: "function" }
-] as const;
+async function main() {
+    console.log("🚀 Starting Standard AA Test (Pimlico ERC20)...");
 
-const userOpAbi = [
-    { inputs: [{ name: "sender", type: "address" }, { name: "nonce", type: "uint256" }, { name: "initCode", type: "bytes" }, { name: "callData", type: "bytes" }, { name: "accountGasLimits", type: "bytes32" }, { name: "preVerificationGas", type: "uint256" }, { name: "gasFees", type: "bytes32" }, { name: "paymasterAndData", type: "bytes" }, { name: "signature", type: "bytes" }], name: "UserOperation", type: "tuple" }
-] as const; // Packed UserOp struct for encoding if needed, but we use bundler actions usually.
-
-// --- CSV Setup ---
-const csvPath = path.resolve(__dirname, '../data/experiment_data.csv');
-const csvWriter = createObjectCsvWriter({
-    path: csvPath,
-    header: [
-        { id: 'timestamp', title: 'TIMESTAMP' },
-        { id: 'group', title: 'GROUP' },
-        { id: 'type', title: 'TYPE' },
-        { id: 'txHash', title: 'TX_HASH' },
-        { id: 'gasUsed', title: 'GAS_USED' },
-        { id: 'gasPrice', title: 'GAS_PRICE' },
-        { id: 'l1Fee', title: 'L1_FEE_ETH' },
-        { id: 'status', title: 'STATUS' },
-    ],
-    append: true
-});
-
-async function runStandardAATest() {
-    console.log("🚀 Starting Baseline 2: Standard AA (Pimlico ERC20 Paymaster)");
-
-    if (!BUNDLER_RPC || !PIMLICO_API_KEY || !ACCOUNT_ADDRESS || !SIGNER_KEY) {
-        throw new Error("Missing Env Config for Baseline 2");
-    }
-
-    // Clients
-    // 1. Alchemy Client (Validator/Submitter)
-    // We can't easily mix 'bundlerActions' with a different paymaster RPC in standard viem without custom middleware.
-    // So we will build the UserOp manually-ish or use two clients.
+    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const pimlicoClient = createPublicClient({ chain: sepolia, transport: http(PIMLICO_RPC) });
+    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
     
-    // We need a specific Pimlico Paymaster Client to get the sponsorship.
-    const pimlicoPaymasterClient = createPublicClient({ 
-        chain: sepolia, 
-        transport: http(PIMLICO_RPC) 
-    });
+    // Check PIM Balance
+    const erc20Abi = parseAbi([
+        'function balanceOf(address) view returns (uint256)',
+        'function transfer(address, uint256) returns (bool)',
+        'function approve(address, uint256) returns (bool)'
+    ]);
+    
+    const pimBal = await publicClient.readContract({ address: PIM_TOKEN, abi: erc20Abi, functionName: 'balanceOf', args: [ACCOUNT_ADDRESS] });
+    console.log(`   ⛽ PIM Balance (A): ${formatEther(pimBal)}`);
+    if (pimBal < parseEther("1")) console.log("   ⚠️  Low PIM Balance! Test might fail.");
 
-    // Bundler Client (Alchemy)
-    const bundlerClient = createPublicClient({
-        chain: sepolia,
-        transport: http(BUNDLER_RPC)
-    }); // We'd add bundlerActions here usually
+    // Check aPNTs Balance
+    const apntsBal = await publicClient.readContract({ address: APNTS_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [ACCOUNT_ADDRESS] });
+    console.log(`   💎 aPNTs Balance (A): ${formatEther(apntsBal)}`);
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
 
-    console.log(`   👤 AA Account: ${ACCOUNT_ADDRESS}`);
-    console.log(`   ⛽ Gas Token: PIM (${PIM_ADDRESS})`);
-    console.log(`   🏭 Paymaster: Pimlico ERC20`);
+    // 1. Prepare CallData: Transfer aPNTs
+    const innerCallData = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [RECEIVER, parseEther("1")]
+    });
 
+    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
+    const userOpCallData = encodeFunctionData({
+        abi: executeAbi,
+        functionName: 'execute',
+        args: [APNTS_ADDRESS, 0n, innerCallData]
+    });
+
+    // 2. Get Nonce
+    const nonce = await publicClient.readContract({
+        address: ENTRY_POINT,
+        abi: parseAbi(['function getNonce(address, uint192) view returns (uint256)']),
+        functionName: 'getNonce',
+        args: [ACCOUNT_ADDRESS, 0n]
+    });
+    console.log(`   🔢 Nonce: ${nonce}`);
+
+    // 3. Construct UserOp
+    const userOp = {
+        sender: ACCOUNT_ADDRESS,
+        nonce: toHex(nonce),
+        factory: undefined,
+        factoryData: undefined,
+        callData: userOpCallData,
+        callGasLimit: "0x1",
+        verificationGasLimit: "0x1",
+        preVerificationGas: "0x1", 
+        maxFeePerGas: "0x1",
+        maxPriorityFeePerGas: "0x1",
+        signature: "0x"
+    };
+
+    // 4. Request Sponsorship
+    console.log("   ☁️  Requesting Sponsorship (PIM)...");
     try {
-        // 1. Prepare CallData (Transfer aPNTs - same as EOA for comparison)
-        // Wait, User said "use PIM as erc20 gas token". 
-        // The *action* (execution) should probably be the same as Baseline 1 (Transfer aPNTs).
-        // Let's stick to transferring the SAME token as Baseline 1 if possible, or PIM if we only have PIM funded?
-        // Phase 1 script said "requirePIM: true" for Account A. It didn't say "requirePNTs".
-        // So Account A might only have PIM.
-        // Let's use PIM for the transfer too OR checking 01_prepare_ts...
-        // Ah, 01_prepare_all.ts only checks PIM for A.
-        // So let's transfer 0.001 PIM to Receiver as the "action".
-        
-        const callData = encodeFunctionData({
-            abi: erc20Abi,
-            functionName: 'transfer',
-            args: [RECEIVER, parseEther("0.001")]
-        });
-
-        // 2. Get Nonce
-        // We can Read Contract on EntryPoint 'getNonce(sender, 0)'
-        const nonce = await publicClient.readContract({
-            address: ENTRY_POINT,
-            abi: [{ inputs: [{name: "sender", type: "address"}, {name: "key", type: "uint192"}], name: "getNonce", outputs: [{name: "nonce", type: "uint256"}], stateMutability: "view", type: "function"}],
-            functionName: 'getNonce',
-            args: [ACCOUNT_ADDRESS, 0n]
-        });
-
-        console.log(`   🔢 Nonce: ${nonce}`);
-
-        // 3. Estimate UserOp (Partial)
-        // We construct a partial UserOp to send to Pimlico for gas estimation + paymaster data
-        // Pimlico needs: sender, nonce, initCode, callData...
-        
-        // We use 'viem' createClient with bundlerActions to make this easier?
-        // But we need to switch RPCs.
-        
-        // Let's assume standard 0.7 structure
-        const partialUserOp = {
-            sender: ACCOUNT_ADDRESS,
-            nonce: nonce,
-            initCode: "0x", // Already deployed
-            callData: callData,
-            // Dummy values for estimation
-            maxFeePerGas: parseEther("0.000000020"), // 20 gwei
-            maxPriorityFeePerGas: parseEther("0.000000002"), // 2 gwei
-            preVerificationGas: 100000n,
-            verificationGasLimit: 1000000n,
-            callGasLimit: 100000n,
-            signature: "0x" 
-        };
-
-        // 4. Request Paymaster Data (pm_sponsorUserOperation)
-        // Docs: pm_sponsorUserOperation(userOp, { type: "erc20token", token: "..." })
-        console.log("   ☁️  Requesting Paymaster Data from Pimlico...");
-        
-        const sponsorResult: any = await pimlicoPaymasterClient.request({
+        const sponsorship: any = await pimlicoClient.request({
             method: 'pm_sponsorUserOperation',
             params: [
-                partialUserOp,
-                { 
+                userOp,
+                {
                     entryPoint: ENTRY_POINT,
-                    sponsorshipPolicyId: "erc20-token", // Not sure if ID needed or just token
-                    // Pimlico specific: 
-                    token: PIM_ADDRESS
+                    sponsorshipPolicyId: "erc20-token",
+                    token: PIM_TOKEN
                 }
             ]
         });
-        
-        // Pimlico returns the valid paymasterAndData AND gas limits
-        const { paymasterAndData, preVerificationGas, verificationGasLimit, callGasLimit, maxFeePerGas, maxPriorityFeePerGas } = sponsorResult;
-        
-        console.log(`   ✅ Paymaster Data Recv! Length: ${paymasterAndData.length}`);
 
-        // 5. Sign
-        // We need to hash execution of UserOp (v0.7)
-        // For simplicity, using viem's signUserOperationHash if available or manual
-        // Let's use `viem/account-abstraction` utils if we can, or just rely on the fact that we have the fields.
-        
-        // Re-construct UserOp with new values
+        const { paymaster, paymasterData, preVerificationGas, verificationGasLimit, callGasLimit, paymasterVerificationGasLimit, paymasterPostOpGasLimit, maxFeePerGas, maxPriorityFeePerGas } = sponsorship;
+        console.log(`   ✅ Sponsored! Paymaster: ${paymaster}`);
+
+        // 5. Pack & Sign
+        const accountGasLimits = packUint(BigInt(verificationGasLimit), BigInt(callGasLimit));
+        const gasFees = packUint(BigInt(maxFeePerGas), BigInt(maxPriorityFeePerGas || maxFeePerGas));
+        const paymasterGasLimits = packUint(BigInt(paymasterVerificationGasLimit), BigInt(paymasterPostOpGasLimit));
+        const paymasterAndData = concat([paymaster, paymasterGasLimits, paymasterData]);
+
         const finalUserOp = {
-            ...partialUserOp,
-            preVerificationGas: BigInt(preVerificationGas),
-            verificationGasLimit: BigInt(verificationGasLimit),
-            callGasLimit: BigInt(callGasLimit),
-            maxFeePerGas: BigInt(maxFeePerGas),
-            maxPriorityFeePerGas: BigInt(maxPriorityFeePerGas),
-            paymasterAndData: paymasterAndData
+            ...userOp,
+            preVerificationGas,
+            accountGasLimits,
+            gasFees,
+            paymasterAndData
         };
-        
-        // Helper to get hash
-        // (Assuming we might need a helper function here or import getUserOperationHash)
-        // Since we are in executing mode and can't easily import 'viem/account-abstraction' specific exports if not set up in package.json (wait, core has it).
-        // Let's use `signer.signMessage` on the hash.
-        // We need to compute the hash manually or use a helper. 
-        // TIP: To avoid complexity, we can use the `bundlerActions` client to `signUserOperation` if we just override the paymaster fields? 
-        // But `signUserOperation` usually requires the client to know the bundler.
-        
-        // Let's try to assume we can use `walletClient` extended with bundlerActions?
-        // But we want to use Alchemy Bundler for submission, Pimlico for PM.
-        // Manual signing is safer for "Split RPC".
-        
-        // ... (Skipping complex hashing code writing, I'll rely on the fact that I can import `getUserOperationHash` from viem/account-abstraction in the file)
-        
-        // Wait, standard viem exports `getUserOperationHash`?
-        // Check imports in top: `import { ... } from 'viem/account-abstraction'`
 
-        // 6. Submit to Alchemy
-        // eth_sendUserOperation
-        console.log("   🚀 Submitting to Alchemy...");
-        // We need "PackedUserOp" format for v0.7 submission?
-        // Alchemy v0.7 bundler expects 'packedUserOp' { sender, nonce, initCode, callData, accountGasLimits, preVerificationGas, gasFees, paymasterAndData, signature }
+        const hash = await entryPointGetUserOpHash(publicClient, finalUserOp, ENTRY_POINT, sepolia.id);
+        finalUserOp.signature = await signer.signMessage({ message: { raw: hash } });
+
+        // 6. Submit
+        console.log("   🚀 Submitting...");
+        const uoHash = await bundlerClient.request({
+            method: 'eth_sendUserOperation',
+            params: [finalUserOp, ENTRY_POINT]
+        });
+        console.log(`   ✅ Sent! UserOpHash: ${uoHash}`);
         
-        // We need to pack the gas limits into bytes32
-        // accountGasLimits = (verificationGasLimit << 128) | callGasLimit
-        // gasFees = (maxFeePerGas << 128) | maxPriorityFeePerGas
-        
-        // ... (Implementation detail: I will include a helper to pack these)
+        // Wait
+        console.log("   ⏳ Waiting for receipt...");
+        await waitForUserOp(bundlerClient, uoHash as Hex);
 
     } catch (e: any) {
-        console.error(`   ❌ Failed: ${e.message}`);
+        console.log(`   ❌ Failed: ${e.message}`);
+        // If AA23, it might be lack of approval. We log it and move on as per standard procedure debugging.
     }
 }
-// ...
+
+async function entryPointGetUserOpHash(client: any, op: any, ep: Address, chainId: number): Promise<Hex> {
+    const packed = encodeAbiParameters(
+        [
+            { type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' },
+            { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }
+        ],
+        [
+            op.sender, BigInt(op.nonce), 
+            keccak256(op.factory ? concat([op.factory, op.factoryData]) : '0x'), 
+            keccak256(op.callData),
+            op.accountGasLimits, BigInt(op.preVerificationGas), op.gasFees,
+            keccak256(op.paymasterAndData)
+        ]
+    );
+    const enc = encodeAbiParameters(
+        [{ type: 'bytes32' }, { type: 'address' }, { type: 'uint256' }],
+        [keccak256(packed), ep, BigInt(chainId)]
+    );
+    return keccak256(enc);
+}
+
+async function waitForUserOp(client: any, hash: Hex) {
+    for(let i=0; i<30; i++) {
+        const res = await client.request({ method: 'eth_getUserOperationReceipt', params: [hash] });
+        if (res) {
+            console.log(`   ✅ Mined! Tx: ${(res as any).receipt.transactionHash}`);
+            return;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+    }
+    console.log("   ⚠️  Timeout waiting.");
+}
+
+main().catch(console.error);

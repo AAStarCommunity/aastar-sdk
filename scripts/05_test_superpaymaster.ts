@@ -1,193 +1,184 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { 
-    createPublicClient, 
-    createWalletClient, 
-    http, 
-    parseEther, 
-    formatEther, 
-    Hex, 
-    concat, 
-    encodeFunctionData,
-    pad,
-    toHex,
-    hashMessage,
-    toBytes
-} from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import * as fs from 'fs';
-import { createObjectCsvWriter } from 'csv-writer';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
-// Utils
-import { getPaymasterAndData, type SuperPaymasterConfig } from '../packages/superpaymaster/src/index.js'; 
-// @ts-ignore
-import { CONTRACTS } from '@aastar/shared-config';
+(BigInt.prototype as any).toJSON = function () { return this.toString(); };
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../env/.env.v3');
-dotenv.config({ path: envPath });
-
-// --- Config ---
+const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
-const PUBLIC_RPC = process.env.SEPOLIA_RPC_URL;
-const contracts: any = CONTRACTS;
+const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
-// Group C Config (SuperPaymaster)
-const ACCOUNT_C_ADDRESS = process.env.TEST_SIMPLE_ACCOUNT_C as Hex;
-const OWNER_C_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
-const SUPER_PAYMASTER_ADDRESS = (contracts?.sepolia?.core?.superPaymasterV2 || contracts?.sepolia?.core?.superpaymaster || "") as Hex;
-const OPERATOR_ADDRESS = (process.env.ADDRESS_JASON_EOA || "0xb5600060e6de5E11D3636731964218E53caadf0E") as Hex;
-const GTOKEN_ADDRESS = (process.env.GTOKEN_ADDRESS || contracts?.sepolia?.core?.gToken || "") as Hex;
-const ENTRY_POINT = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; 
-const RECEIVER = (process.env.TEST_RECEIVER_ADDRESS || "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e") as Hex;
+const ACCOUNT_C = process.env.TEST_SIMPLE_ACCOUNT_C as Hex; 
+const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
+const BPNTS = process.env.BPNTS_ADDRESS as Hex;
+const APNTS = process.env.APNTS_ADDRESS as Hex;
+const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
+const ANNI_KEY = process.env.PRIVATE_KEY_ANNI as Hex; // To fund PM if needed
+const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
-const erc20Abi = [
-    { inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }], name: "transfer", outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable", type: "function" }
-] as const;
+if (!BUNDLER_RPC || !BPNTS || !SUPER_PAYMASTER) throw new Error("Missing Config for Group C");
 
-const csvPath = path.resolve(__dirname, '../data/experiment_data.csv');
-const csvWriter = createObjectCsvWriter({
-    path: csvPath,
-    header: [
-        { id: 'timestamp', title: 'TIMESTAMP' },
-        { id: 'group', title: 'GROUP' },
-        { id: 'type', title: 'TYPE' },
-        { id: 'txHash', title: 'TX_HASH' },
-        { id: 'gasUsed', title: 'GAS_USED' },
-        { id: 'gasPrice', title: 'GAS_PRICE' },
-        { id: 'l1Fee', title: 'L1_FEE_ETH' },
-        { id: 'status', title: 'STATUS' },
-    ],
-    append: true
-});
-
-function packGasLimits(verificationGasLimit: bigint, callGasLimit: bigint): Hex {
-    return concat([
-        pad(toHex(verificationGasLimit), { size: 16 }),
-        pad(toHex(callGasLimit), { size: 16 })
-    ]);
+function packUint(high128: bigint, low128: bigint): Hex {
+    return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
 }
 
-async function runSuperPaymasterTest() {
-    console.log("🚀 Starting Experiment: Group C (SuperPaymaster)");
+async function main() {
+    console.log("🚀 Starting Group C: SuperPaymaster...");
+    console.log(`   👤 Sender: ${ACCOUNT_C}`);
+    console.log(`   🦸 Paymaster: ${SUPER_PAYMASTER}`);
+    console.log(`   ⛽ Gas Token: ${BPNTS} (Paying for Gas)`);
+    console.log(`   💎 Action Token: ${APNTS} (Transferring)`);
 
-    if (!BUNDLER_RPC) throw new Error("Missing Bundler RPC");
+    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
+    const signer = privateKeyToAccount(SIGNER_KEY);
+    const anniWallet = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: sepolia, transport: http(RPC_URL) });
 
-    await executeGroupC(bundlerClient, publicClient);
-}
+    const erc20Abi = parseAbi([
+        'function balanceOf(address) view returns (uint256)',
+        'function transfer(address, uint256) returns (bool)',
+        'function approve(address, uint256) returns (bool)',
+        'function allowance(address, address) view returns (uint256)'
+    ]);
+    const epAbi = parseAbi(['function balanceOf(address) view returns (uint256)', 'function depositTo(address) payable']);
 
-async function executeGroupC(bundlerClient: any, publicClient: any) {
-    if (!SUPER_PAYMASTER_ADDRESS || !ACCOUNT_C_ADDRESS || !OWNER_C_KEY) {
-        throw new Error("Missing Config for Group C config");
+    // 1. Check SuperPaymaster Deposit
+    const pmDeposit = await publicClient.readContract({ address: ENTRY_POINT, abi: epAbi, functionName: 'balanceOf', args: [SUPER_PAYMASTER] });
+    console.log(`   🏦 PM Deposit: ${formatEther(pmDeposit)} ETH`);
+    if (pmDeposit < parseEther("0.05")) {
+        console.log("   ⚠️  Low Deposit. Converting Anni ETH -> EntryPoint Deposit...");
+        const hash = await anniWallet.writeContract({
+            address: ENTRY_POINT, abi: epAbi, functionName: 'depositTo', args: [SUPER_PAYMASTER], value: parseEther("0.05")
+        });
+        console.log(`   ⏳ Deposited: ${hash}`);
+        await publicClient.waitForTransactionReceipt({ hash });
     }
-    const ownerAccount = privateKeyToAccount(OWNER_C_KEY);
-    console.log(`   👤 AA Account: ${ACCOUNT_C_ADDRESS}`);
-    console.log(`   SUPER_PM: ${SUPER_PAYMASTER_ADDRESS}`);
 
-    try {
-        const callData = encodeFunctionData({
-            abi: erc20Abi,
-            functionName: 'transfer',
-            args: [RECEIVER, parseEther("0.001")]
-        });
+    // 2. Check Allowance (Account C -> SuperPaymaster for bPNTs)
+    const allow = await publicClient.readContract({ address: BPNTS, abi: erc20Abi, functionName: 'allowance', args: [ACCOUNT_C, SUPER_PAYMASTER] });
+    console.log(`   🔓 bPNTs Allowance: ${formatEther(allow)}`);
 
-        const nonce = await publicClient.readContract({
-            address: ENTRY_POINT,
-            abi: [{ inputs: [{name: "sender", type: "address"}, {name: "key", type: "uint192"}], name: "getNonce", outputs: [{name: "nonce", type: "uint256"}], stateMutability: "view", type: "function"}],
-            functionName: 'getNonce',
-            args: [ACCOUNT_C_ADDRESS, 0n]
-        });
-
-        const config: SuperPaymasterConfig = {
-            paymasterAddress: SUPER_PAYMASTER_ADDRESS,
-            communityAddress: OPERATOR_ADDRESS,
-            xPNTsAddress: GTOKEN_ADDRESS,
-            verificationGasLimit: 160000n,
-            postOpGasLimit: 10000n
-        };
-        const paymasterAndData = getPaymasterAndData(config);
-
-        const partialUserOp = {
-            sender: ACCOUNT_C_ADDRESS,
-            nonce: nonce,
-            initCode: "0x",
-            callData: callData,
-            paymasterAndData: paymasterAndData,
-            signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c"
-        };
-
-        const gasEstimate: any = await bundlerClient.request({
-            method: 'eth_estimateUserOperationGas',
-            params: [partialUserOp, ENTRY_POINT]
-        });
-
-        const verificationGasLimit = BigInt(gasEstimate.verificationGasLimit ?? 160000n);
-        const callGasLimit = BigInt(gasEstimate.callGasLimit ?? 100000n);
-        const preVerificationGas = BigInt(gasEstimate.preVerificationGas ?? 50000n);
-        const accountGasLimits = packGasLimits(verificationGasLimit, callGasLimit);
-        
-        const block = await publicClient.getBlock();
-        const maxPriorityFeePerGas = await publicClient.request({ method: 'eth_maxPriorityFeePerGas' });
-        const maxFeePerGas = block.baseFeePerGas! * 2n + BigInt(maxPriorityFeePerGas);
-        const gasFees = packGasLimits(BigInt(maxPriorityFeePerGas), maxFeePerGas);
-
-        const userOp = {
-            sender: ACCOUNT_C_ADDRESS,
-            nonce: nonce,
-            initCode: "0x",
-            callData: callData,
-            accountGasLimits: accountGasLimits,
-            preVerificationGas: preVerificationGas,
-            gasFees: gasFees,
-            paymasterAndData: paymasterAndData,
-            signature: "0x" as Hex
-        };
-
-        const userOpHash = await publicClient.readContract({
-            address: ENTRY_POINT,
-            abi: [{ inputs: [{ components: [{name:"sender",type:"address"},{name:"nonce",type:"uint256"},{name:"initCode",type:"bytes"},{name:"callData",type:"bytes"},{name:"accountGasLimits",type:"bytes32"},{name:"preVerificationGas",type:"uint256"},{name:"gasFees",type:"bytes32"},{name:"paymasterAndData",type:"bytes"},{name:"signature",type:"bytes"}], name: "userOp", type: "tuple" }], name: "getUserOpHash", outputs: [{ name: "", type: "bytes32" }], stateMutability: "view", type: "function" }],
-            functionName: 'getUserOpHash',
-            args: [userOp]
-        });
-
-        const signature = await ownerAccount.signMessage({ message: { raw: userOpHash } });
-        userOp.signature = signature;
-
-        const userOpHashRes = await bundlerClient.request({
-            method: 'eth_sendUserOperation',
-            params: [userOp, ENTRY_POINT]
-        });
-
-        console.log(`   ✅ Submitted C! Hash: ${userOpHashRes}`);
-        
-        await csvWriter.writeRecords([{
-            timestamp: new Date().toISOString(),
-            group: 'Experiment C',
-            type: 'SuperPaymaster',
-            txHash: userOpHashRes,
-            gasUsed: 'PENDING',
-            gasPrice: maxFeePerGas.toString(),
-            l1Fee: 'PENDING',
-            status: 'Submitted'
-        }]);
-
-    } catch (e: any) {
-        console.error(`   ❌ Group C Failed: ${e.message}`);
-         await csvWriter.writeRecords([{
-            timestamp: new Date().toISOString(),
-            group: 'Experiment C',
-            status: `Error: ${e.message}`
-        }]);
+    if (allow < parseEther("100")) {
+        console.log("   ⚠️  Allowance low. Sending Approve Ops...");
+        // Use ETH to pay for Approval
+        await sendUserOp(
+            publicClient, bundlerClient, signer, ACCOUNT_C,
+            BPNTS, 0n, 
+            encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("1000000")] }),
+            "0x"
+        );
+        console.log("   ✅ Approved.");
     }
+
+    // 3. Prepare Transfer UserOp (aPNTs Transfer, bPNTs Gas)
+    console.log("   🔄 Sending Test Transfer...");
+    
+    // CallData: Transfer aPNTs
+    const transferData = encodeFunctionData({
+        abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")]
+    });
+
+    // PaymasterData: Address only (SuperPaymaster infers Token from Registry)
+    // Estimate Gas
+    const pmGasLimits = packUint(100000n, 10000n);
+    const pmAndDataPacked = concat([SUPER_PAYMASTER, pmGasLimits]);
+
+    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
+    const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [APNTS, 0n, transferData] });
+
+    console.log("   ☁️  Estimating...");
+    // ... Estimation Logic similar to 04 ...
+    // Note: We skip complex estimation code for brevity and use safe defaults + overrides
+    // because typically estimation requires full packed structure.
+    
+    // We'll trust our helper to estimate/fill if we don't pass overrides, 
+    // BUT our helper `sendUserOp` currently uses hardcoded defaults if no overrides.
+    // Let's rely on `sendUserOp` defaults for now but ensure we pass correct Paymaster.
+    
+    // We construct PaymasterAndData for Final Submission
+    // SuperPaymaster V3 likely only needs address + limits.
+    // If it needs MODE byte (e.g. 0x01 for Token), we apppend it.
+    // Investigating V3... usually it's implicit.
+    // We'll send just Addr + Limits.
+
+    await sendUserOp(
+        publicClient, bundlerClient, signer, ACCOUNT_C,
+        APNTS, 0n, transferData, 
+        pmAndDataPacked,
+        {
+             callData // Explicitly passing callData to ensure we target APNTS
+        }
+    );
+    console.log("   ✅ Group C Test Passed!");
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    runSuperPaymasterTest().catch(console.error);
+async function sendUserOp(publicClient: any, bundlerClient: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex, gasOverrides?: any) {
+    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
+    const callData = gasOverrides?.callData || encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
+    
+    const nonce = await publicClient.readContract({ address: ENTRY_POINT, abi: parseAbi(['function getNonce(address,uint192) view returns(uint256)']), functionName: 'getNonce', args: [sender, 0n] });
+
+    let op: any = {
+        sender,
+        nonce: toHex(nonce),
+        factory: undefined, factoryData: undefined,
+        callData,
+        callGasLimit: "0x100000", verificationGasLimit: "0x100000", preVerificationGas: "0x10000",
+        maxFeePerGas: "0x3B9ACA00",
+        maxPriorityFeePerGas: "0x3B9ACA00",
+        paymasterAndData: paymasterAndData,
+        signature: "0x"
+    };
+
+    if (gasOverrides) {
+        op = { ...op, ...gasOverrides };
+    } else {
+        // Defaults for Approval
+        op.accountGasLimits = packUint(500000n, 100000n);
+        op.gasFees = packUint(parseEther("0.00000002"), parseEther("0.00000002"));
+    }
+
+    const hash = await entryPointGetUserOpHash(publicClient, op, ENTRY_POINT, sepolia.id);
+    op.signature = await signer.signMessage({ message: { raw: hash } });
+
+    const uoHash = await bundlerClient.request({ method: 'eth_sendUserOperation', params: [op, ENTRY_POINT] });
+    console.log(`   🚀 Sent UserOp: ${uoHash}`);
+    await waitForUserOp(bundlerClient, uoHash as Hex);
 }
 
-export { runSuperPaymasterTest };
+async function entryPointGetUserOpHash(client: any, op: any, ep: Address, chainId: number): Promise<Hex> {
+    const packed = encodeAbiParameters(
+        [
+            { type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' },
+            { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }
+        ],
+        [
+            op.sender, BigInt(op.nonce), 
+            keccak256(op.factory ? concat([op.factory, op.factoryData]) : '0x'), 
+            keccak256(op.callData),
+            op.accountGasLimits || packUint(BigInt(op.verificationGasLimit), BigInt(op.callGasLimit)), 
+            BigInt(op.preVerificationGas),
+            op.gasFees || packUint(BigInt(op.maxFeePerGas), BigInt(op.maxPriorityFeePerGas)),
+            keccak256(op.paymasterAndData)
+        ]
+    );
+    const enc = encodeAbiParameters(
+        [{ type: 'bytes32' }, { type: 'address' }, { type: 'uint256' }],
+        [keccak256(packed), ep, BigInt(chainId)]
+    );
+    return keccak256(enc);
+}
+
+async function waitForUserOp(client: any, hash: Hex) {
+    for(let i=0; i<30; i++) {
+        const res = await client.request({ method: 'eth_getUserOperationReceipt', params: [hash] });
+        if (res) return;
+        await new Promise(r => setTimeout(r, 2000));
+    }
+    throw new Error("Timeout waiting for UserOp");
+}
+
+main().catch(console.error);

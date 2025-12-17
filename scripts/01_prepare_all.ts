@@ -1,44 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { 
-  createPublicClient, 
-  createWalletClient, 
-  http, 
-  encodeFunctionData, 
-  concat, 
-  Hex, 
-  parseEther,
-  formatEther,
-  decodeErrorResult
-} from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, parseEther, formatEther, getContract, maxUint256, Hex, Address, encodeAbiParameters, keccak256, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 
-// @ts-ignore
-import { CONTRACTS } from '@aastar/shared-config';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../env/.env.v3');
-dotenv.config({ path: envPath });
-
-// --- Config ---
-const ENTRY_POINT_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
-const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
-const PUBLIC_RPC = process.env.SEPOLIA_RPC_URL;
-
-const contracts: any = CONTRACTS;
-
-// Addresses
-const MYSBT_ADDRESS = (process.env.MYSBT_ADDRESS || contracts?.sepolia?.tokens?.mySBT || contracts?.sepolia?.core?.MySBT || "") as Hex;
-const GTOKEN_ADDRESS = (process.env.GTOKEN_ADDRESS || contracts?.sepolia?.core?.gToken || "") as Hex;
-const APNTS_ADDRESS = (process.env.APNTS_ADDRESS || contracts?.sepolia?.testTokens?.aPNTs || contracts?.sepolia?.testTokens?.xPNTs_A || "") as Hex;
-const BPNTS_ADDRESS = (process.env.BPNTS_ADDRESS || contracts?.sepolia?.testTokens?.bPNTs || contracts?.sepolia?.testTokens?.xPNTs_B || "") as Hex;
-const PIM_ADDRESS = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751";
-const PAYMASTER_FACTORY_ADDRESS = (process.env.PAYMASTER_FACTORY_ADDRESS || contracts?.sepolia?.core?.paymasterFactory || "0x65Cf6C4ab3d40f9227A6C3d348039E8c50B2022C") as Hex;
-const SUPER_PAYMASTER_ADDRESS = (contracts?.sepolia?.core?.superPaymasterV2 || contracts?.sepolia?.core?.superpaymaster || "") as Hex;
-
 // ABIs
 const factoryAbi = [
   { inputs: [{ name: "owner", type: "address" }, { name: "salt", type: "uint256" }], name: "createAccount", outputs: [{ name: "ret", type: "address" }], stateMutability: "nonpayable", type: "function" }
@@ -91,10 +59,15 @@ async function sleep(ms: number) {
 async function main() {
     console.log("🚀 Starting Phase 1 Preparation: The Ammo (Deposits & setup)");
     
-    // 1. Setup Clients
-    if (!PUBLIC_RPC) throw new Error("Missing SEPOLIA_RPC_URL");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
-    const client = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC || PUBLIC_RPC) }); 
+    // --- Setup Clients ---
+    const rpcUrl = process.env.SEPOLIA_RPC_URL;
+    console.log(`🔌 Connecting to RPC: ${rpcUrl}`);
+    if (!rpcUrl) throw new Error("Missing SEPOLIA_RPC_URL");
+    const client = createPublicClient({ 
+        chain: CHAIN,
+        transport: http(rpcUrl)
+    });
+    const client = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC || RPC_URL) }); 
 
     // 2. Setup Operators
     const supplierKey = process.env.PRIVATE_KEY_SUPPLIER;
