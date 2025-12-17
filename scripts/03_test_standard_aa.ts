@@ -1,12 +1,10 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// Fix BigInt serialization
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-
 dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
@@ -16,14 +14,14 @@ const PIMLICO_RPC = `https://api.pimlico.io/v2/sepolia/rpc?apikey=${PIMLICO_API_
 const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
 const ACCOUNT_ADDRESS = process.env.TEST_SIMPLE_ACCOUNT_A as Hex; 
-const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; // Jason owns A
+const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
 const PIM_TOKEN = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751";
 const APNTS_ADDRESS = process.env.APNTS_ADDRESS as Hex;
 const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
 if (!BUNDLER_RPC || !PIMLICO_API_KEY || !APNTS_ADDRESS) throw new Error("Missing Config");
 
-// Helper to Pack v0.7 Fields
+// Fix: Ensure standard hex serialization without double encoding
 function packUint(high128: bigint, low128: bigint): Hex {
     return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
 }
@@ -34,55 +32,31 @@ async function main() {
     const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const pimlicoClient = createPublicClient({ chain: sepolia, transport: http(PIMLICO_RPC) });
     const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
-    
-    // Check PIM Balance
-    const erc20Abi = parseAbi([
-        'function balanceOf(address) view returns (uint256)',
-        'function transfer(address, uint256) returns (bool)',
-        'function approve(address, uint256) returns (bool)'
-    ]);
-    
-    const pimBal = await publicClient.readContract({ address: PIM_TOKEN, abi: erc20Abi, functionName: 'balanceOf', args: [ACCOUNT_ADDRESS] });
-    console.log(`   ⛽ PIM Balance (A): ${formatEther(pimBal)}`);
-    if (pimBal < parseEther("1")) console.log("   ⚠️  Low PIM Balance! Test might fail.");
-
-    // Check aPNTs Balance
-    const apntsBal = await publicClient.readContract({ address: APNTS_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [ACCOUNT_ADDRESS] });
-    console.log(`   💎 aPNTs Balance (A): ${formatEther(apntsBal)}`);
-
     const signer = privateKeyToAccount(SIGNER_KEY);
 
-    // 1. Prepare CallData: Transfer aPNTs
-    const innerCallData = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [RECEIVER, parseEther("1")]
-    });
-
+    // ABIs
+    const erc20Abi = parseAbi(['function transfer(address, uint256) returns (bool)', 'function approve(address, uint256) returns (bool)', 'function allowance(address, address) view returns (uint256)']);
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
-    const userOpCallData = encodeFunctionData({
-        abi: executeAbi,
-        functionName: 'execute',
-        args: [APNTS_ADDRESS, 0n, innerCallData]
-    });
+
+    // 1. Prepare CallData: Transfer aPNTs
+    const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")] });
+    const userOpCallData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [APNTS_ADDRESS, 0n, transferData] });
 
     // 2. Get Nonce
     const nonce = await publicClient.readContract({
-        address: ENTRY_POINT,
-        abi: parseAbi(['function getNonce(address, uint192) view returns (uint256)']),
-        functionName: 'getNonce',
-        args: [ACCOUNT_ADDRESS, 0n]
+        address: ENTRY_POINT, abi: parseAbi(['function getNonce(address, uint192) view returns (uint256)']),
+        functionName: 'getNonce', args: [ACCOUNT_ADDRESS, 0n]
     });
     console.log(`   🔢 Nonce: ${nonce}`);
 
-    // 3. Construct UserOp
-    const userOp = {
+    // 3. Construct Estimate Op
+    const estimateOp = {
         sender: ACCOUNT_ADDRESS,
         nonce: toHex(nonce),
         factory: undefined,
         factoryData: undefined,
         callData: userOpCallData,
-        callGasLimit: "0x1",
+        callGasLimit: "0x1", // Dummy
         verificationGasLimit: "0x1",
         preVerificationGas: "0x1", 
         maxFeePerGas: "0x1",
@@ -96,7 +70,7 @@ async function main() {
         const sponsorship: any = await pimlicoClient.request({
             method: 'pm_sponsorUserOperation',
             params: [
-                userOp,
+                estimateOp,
                 {
                     entryPoint: ENTRY_POINT,
                     sponsorshipPolicyId: "erc20-token",
@@ -106,40 +80,58 @@ async function main() {
         });
 
         const { paymaster, paymasterData, preVerificationGas, verificationGasLimit, callGasLimit, paymasterVerificationGasLimit, paymasterPostOpGasLimit, maxFeePerGas, maxPriorityFeePerGas } = sponsorship;
-        console.log(`   ✅ Sponsored! Paymaster: ${paymaster}`);
+        console.log(`   ✅ Sponsored! PM: ${paymaster}`);
 
         // 5. Pack & Sign
         const accountGasLimits = packUint(BigInt(verificationGasLimit), BigInt(callGasLimit));
-        const gasFees = packUint(BigInt(maxFeePerGas), BigInt(maxPriorityFeePerGas || maxFeePerGas));
+        const gasFees = packUint(BigInt(maxFeePerGas), BigInt(maxPriorityFeePerGas));
         const paymasterGasLimits = packUint(BigInt(paymasterVerificationGasLimit), BigInt(paymasterPostOpGasLimit));
         const paymasterAndData = concat([paymaster, paymasterGasLimits, paymasterData]);
 
-        const finalUserOp = {
-            ...userOp,
-            preVerificationGas,
+        // Construct Typed UserOp for Hashing (Packed)
+        const packedUserOp = {
+            sender: ACCOUNT_ADDRESS,
+            nonce: nonce,
+            initCode: "0x" as Hex,
+            callData: userOpCallData,
             accountGasLimits,
+            preVerificationGas: BigInt(preVerificationGas),
             gasFees,
-            paymasterAndData
+            paymasterAndData,
+            signature: "0x" as Hex
         };
 
-        const hash = await entryPointGetUserOpHash(publicClient, finalUserOp, ENTRY_POINT, sepolia.id);
-        finalUserOp.signature = await signer.signMessage({ message: { raw: hash } });
+        const hash = await entryPointGetUserOpHash(publicClient, packedUserOp, ENTRY_POINT, sepolia.id);
+        const sig = await signer.signMessage({ message: { raw: hash } });
 
-        // 6. Submit
+        // 6. Send Unpacked (Alchemy V0.7 Format)
+        // Ensure strictly NO double hex encoding
+        const msg = {
+            sender: ACCOUNT_ADDRESS,
+            nonce: toHex(nonce),
+            factory: undefined, factoryData: undefined,
+            callData: userOpCallData,
+            callGasLimit: toHex(BigInt(callGasLimit)),
+            verificationGasLimit: toHex(BigInt(verificationGasLimit)),
+            preVerificationGas: toHex(BigInt(preVerificationGas)),
+            maxFeePerGas: toHex(BigInt(maxFeePerGas)),
+            maxPriorityFeePerGas: toHex(BigInt(maxPriorityFeePerGas)),
+            paymaster: paymaster,
+            paymasterVerificationGasLimit: toHex(BigInt(paymasterVerificationGasLimit)),
+            paymasterPostOpGasLimit: toHex(BigInt(paymasterPostOpGasLimit)),
+            paymasterData: paymasterData,
+            signature: sig
+        };
+
         console.log("   🚀 Submitting...");
-        const uoHash = await bundlerClient.request({
-            method: 'eth_sendUserOperation',
-            params: [finalUserOp, ENTRY_POINT]
-        });
-        console.log(`   ✅ Sent! UserOpHash: ${uoHash}`);
+        const uoHash = await bundlerClient.request({ method: 'eth_sendUserOperation', params: [msg, ENTRY_POINT] });
+        console.log(`   ✅ Sent! Hash: ${uoHash}`);
         
-        // Wait
-        console.log("   ⏳ Waiting for receipt...");
         await waitForUserOp(bundlerClient, uoHash as Hex);
 
     } catch (e: any) {
         console.log(`   ❌ Failed: ${e.message}`);
-        // If AA23, it might be lack of approval. We log it and move on as per standard procedure debugging.
+        if(e.cause) console.log(e.cause);
     }
 }
 
@@ -151,7 +143,7 @@ async function entryPointGetUserOpHash(client: any, op: any, ep: Address, chainI
         ],
         [
             op.sender, BigInt(op.nonce), 
-            keccak256(op.factory ? concat([op.factory, op.factoryData]) : '0x'), 
+            keccak256(op.initCode && op.initCode !== "0x" ? op.initCode : '0x'), 
             keccak256(op.callData),
             op.accountGasLimits, BigInt(op.preVerificationGas), op.gasFees,
             keccak256(op.paymasterAndData)
@@ -166,11 +158,13 @@ async function entryPointGetUserOpHash(client: any, op: any, ep: Address, chainI
 
 async function waitForUserOp(client: any, hash: Hex) {
     for(let i=0; i<30; i++) {
-        const res = await client.request({ method: 'eth_getUserOperationReceipt', params: [hash] });
-        if (res) {
-            console.log(`   ✅ Mined! Tx: ${(res as any).receipt.transactionHash}`);
-            return;
-        }
+        try {
+            const res = await client.request({ method: 'eth_getUserOperationReceipt', params: [hash] });
+            if (res) {
+                console.log(`   ✅ Mined! Tx: ${(res as any).receipt.transactionHash}`);
+                return;
+            }
+        } catch {}
         await new Promise(r => setTimeout(r, 2000));
     }
     console.log("   ⚠️  Timeout waiting.");

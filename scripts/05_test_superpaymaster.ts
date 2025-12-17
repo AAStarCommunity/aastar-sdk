@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -16,7 +16,7 @@ const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex;
 const BPNTS = process.env.BPNTS_ADDRESS as Hex;
 const APNTS = process.env.APNTS_ADDRESS as Hex;
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
-const ANNI_KEY = process.env.PRIVATE_KEY_ANNI as Hex; // To fund PM if needed
+const ANNI_KEY = process.env.PRIVATE_KEY_ANNI as Hex; 
 const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
 if (!BUNDLER_RPC || !BPNTS || !SUPER_PAYMASTER) throw new Error("Missing Config for Group C");
@@ -27,11 +27,6 @@ function packUint(high128: bigint, low128: bigint): Hex {
 
 async function main() {
     console.log("🚀 Starting Group C: SuperPaymaster...");
-    console.log(`   👤 Sender: ${ACCOUNT_C}`);
-    console.log(`   🦸 Paymaster: ${SUPER_PAYMASTER}`);
-    console.log(`   ⛽ Gas Token: ${BPNTS} (Paying for Gas)`);
-    console.log(`   💎 Action Token: ${APNTS} (Transferring)`);
-
     const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
@@ -57,13 +52,12 @@ async function main() {
         await publicClient.waitForTransactionReceipt({ hash });
     }
 
-    // 2. Check Allowance (Account C -> SuperPaymaster for bPNTs)
+    // 2. Check Allowance
     const allow = await publicClient.readContract({ address: BPNTS, abi: erc20Abi, functionName: 'allowance', args: [ACCOUNT_C, SUPER_PAYMASTER] });
     console.log(`   🔓 bPNTs Allowance: ${formatEther(allow)}`);
 
     if (allow < parseEther("100")) {
         console.log("   ⚠️  Allowance low. Sending Approve Ops...");
-        // Use ETH to pay for Approval
         await sendUserOp(
             publicClient, bundlerClient, signer, ACCOUNT_C,
             BPNTS, 0n, 
@@ -76,109 +70,130 @@ async function main() {
     // 3. Prepare Transfer UserOp (aPNTs Transfer, bPNTs Gas)
     console.log("   🔄 Sending Test Transfer...");
     
-    // CallData: Transfer aPNTs
-    const transferData = encodeFunctionData({
-        abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")]
-    });
-
-    // PaymasterData: Address only (SuperPaymaster infers Token from Registry)
-    // Estimate Gas
-    const pmGasLimits = packUint(100000n, 10000n);
-    const pmAndDataPacked = concat([SUPER_PAYMASTER, pmGasLimits]);
-
-    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
-    const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [APNTS, 0n, transferData] });
-
-    console.log("   ☁️  Estimating...");
-    // ... Estimation Logic similar to 04 ...
-    // Note: We skip complex estimation code for brevity and use safe defaults + overrides
-    // because typically estimation requires full packed structure.
+    const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")] });
     
-    // We'll trust our helper to estimate/fill if we don't pass overrides, 
-    // BUT our helper `sendUserOp` currently uses hardcoded defaults if no overrides.
-    // Let's rely on `sendUserOp` defaults for now but ensure we pass correct Paymaster.
-    
-    // We construct PaymasterAndData for Final Submission
-    // SuperPaymaster V3 likely only needs address + limits.
-    // If it needs MODE byte (e.g. 0x01 for Token), we apppend it.
-    // Investigating V3... usually it's implicit.
-    // We'll send just Addr + Limits.
+    // SuperPaymaster: Address + Limits + (Optional) Mode
+    const pmGasLimitsPlaceholder = packUint(300000n, 10000n);
+    const pmAndDataForEst = concat([SUPER_PAYMASTER, pmGasLimitsPlaceholder, "0x" as Hex]);
 
     await sendUserOp(
         publicClient, bundlerClient, signer, ACCOUNT_C,
         APNTS, 0n, transferData, 
-        pmAndDataPacked,
-        {
-             callData // Explicitly passing callData to ensure we target APNTS
-        }
+        pmAndDataForEst
     );
     console.log("   ✅ Group C Test Passed!");
 }
 
-async function sendUserOp(publicClient: any, bundlerClient: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex, gasOverrides?: any) {
+async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex) {
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
-    const callData = gasOverrides?.callData || encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
+    const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
     
-    const nonce = await publicClient.readContract({ address: ENTRY_POINT, abi: parseAbi(['function getNonce(address,uint192) view returns(uint256)']), functionName: 'getNonce', args: [sender, 0n] });
+    const nonce = await client.readContract({
+        address: ENTRY_POINT, 
+        abi: [{ inputs: [{ name: "sender", type: "address" }, { name: "key", type: "uint192" }], name: "getNonce", outputs: [{ name: "nonce", type: "uint256" }], stateMutability: "view", type: "function" }],
+        functionName: 'getNonce', args: [sender, 0n]
+    });
 
-    let op: any = {
+    // 1. Estimation (Using Object Structure)
+    const estOp = {
         sender,
         nonce: toHex(nonce),
-        factory: undefined, factoryData: undefined,
+        initCode: "0x" as Hex,
         callData,
-        callGasLimit: "0x100000", verificationGasLimit: "0x100000", preVerificationGas: "0x10000",
-        maxFeePerGas: "0x3B9ACA00",
-        maxPriorityFeePerGas: "0x3B9ACA00",
+        // Crucial Fix: Send hex strings, NOT raw packUint output if it was misinterpreted, 
+        // BUT packUint ALREADY returns `0x...`.
+        // The issue was that in `toHex(packUint(...))` -> packUint returns string "0x...", toHex converts that string to bytes!
+        // So we strictly remove `toHex` wrapper for things that are already Hex strings.
+        accountGasLimits: packUint(1000000n, 500000n), 
+        preVerificationGas: toHex(100000n),
+        gasFees: packUint(parseEther("50", "gwei"), parseEther("60", "gwei")),
         paymasterAndData: paymasterAndData,
-        signature: "0x"
+        signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
     };
 
-    if (gasOverrides) {
-        op = { ...op, ...gasOverrides };
-    } else {
-        // Defaults for Approval
-        op.accountGasLimits = packUint(500000n, 100000n);
-        op.gasFees = packUint(parseEther("0.00000002"), parseEther("0.00000002"));
+    console.log("   ☁️  Estimating...");
+    const estRes: any = await bundler.request({
+        method: 'eth_estimateUserOperationGas',
+        params: [estOp, ENTRY_POINT]
+    });
+
+    const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? estRes.verificationGas ?? 500000n);
+    const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n);
+    const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
+    const pmVerif = BigInt(estRes.paymasterVerificationGasLimit ?? 100000n);
+    const pmPost = BigInt(estRes.paymasterPostOpGasLimit ?? 10000n);
+
+    const block = await client.getBlock();
+    const priority = parseEther("5", "gwei");
+    const maxFee = block.baseFeePerGas! * 2n + priority;
+
+    // 2. Pack Final UserOp (For Hashing)
+    const accountGasLimits = packUint(verificationGasLimit + 50000n, callGasLimit + 20000n);
+    const gasFees = packUint(maxFee, priority);
+    const pmGasLimits = packUint(pmVerif + 50000n, pmPost + 10000n);
+    
+    let finalPMAndData = "0x" as Hex;
+    if (paymasterAndData !== "0x") {
+        const pmAddr = paymasterAndData.slice(0, 42) as Hex;
+        const pmData = ("0x" + paymasterAndData.slice(106)) as Hex;
+        finalPMAndData = concat([pmAddr, pmGasLimits, pmData.length > 2 ? pmData : "0x" as Hex]);
     }
 
-    const hash = await entryPointGetUserOpHash(publicClient, op, ENTRY_POINT, sepolia.id);
-    op.signature = await signer.signMessage({ message: { raw: hash } });
+    const packedUserOp = {
+        sender,
+        nonce, // BigInt ok for ABI encoding
+        initCode: "0x" as Hex,
+        callData,
+        accountGasLimits,
+        preVerificationGas,
+        gasFees,
+        paymasterAndData: finalPMAndData,
+        signature: "0x" as Hex
+    };
 
-    const uoHash = await bundlerClient.request({ method: 'eth_sendUserOperation', params: [op, ENTRY_POINT] });
-    console.log(`   🚀 Sent UserOp: ${uoHash}`);
-    await waitForUserOp(bundlerClient, uoHash as Hex);
-}
+    const userOpHash = await client.readContract({
+        address: ENTRY_POINT,
+        abi: [{ inputs: [{ components: [{name:"sender",type:"address"},{name:"nonce",type:"uint256"},{name:"initCode",type:"bytes"},{name:"callData",type:"bytes"},{name:"accountGasLimits",type:"bytes32"},{name:"preVerificationGas",type:"uint256"},{name:"gasFees",type:"bytes32"},{name:"paymasterAndData",type:"bytes"},{name:"signature",type:"bytes"}], name: "userOp", type: "tuple" }], name: "getUserOpHash", outputs: [{ name: "", type: "bytes32" }], stateMutability: "view", type: "function" }] as const,
+        functionName: 'getUserOpHash',
+        args: [packedUserOp]
+    });
 
-async function entryPointGetUserOpHash(client: any, op: any, ep: Address, chainId: number): Promise<Hex> {
-    const packed = encodeAbiParameters(
-        [
-            { type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' },
-            { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }
-        ],
-        [
-            op.sender, BigInt(op.nonce), 
-            keccak256(op.factory ? concat([op.factory, op.factoryData]) : '0x'), 
-            keccak256(op.callData),
-            op.accountGasLimits || packUint(BigInt(op.verificationGasLimit), BigInt(op.callGasLimit)), 
-            BigInt(op.preVerificationGas),
-            op.gasFees || packUint(BigInt(op.maxFeePerGas), BigInt(op.maxPriorityFeePerGas)),
-            keccak256(op.paymasterAndData)
-        ]
-    );
-    const enc = encodeAbiParameters(
-        [{ type: 'bytes32' }, { type: 'address' }, { type: 'uint256' }],
-        [keccak256(packed), ep, BigInt(chainId)]
-    );
-    return keccak256(enc);
-}
+    const sig = await signer.signMessage({ message: { raw: userOpHash } });
+    
+    // 3. Send Unpacked (Alchemy Format)
+    // NOTE: For 'Unpacked' Alchemy format, we must separate Paymaster fields
+    const unpackedUserOp = {
+        sender,
+        nonce: toHex(nonce),
+        // factory/factoryData undefined for existing account
+        callData,
+        callGasLimit: toHex(callGasLimit + 20000n),
+        verificationGasLimit: toHex(verificationGasLimit + 50000n),
+        preVerificationGas: toHex(preVerificationGas),
+        maxFeePerGas: toHex(maxFee),
+        maxPriorityFeePerGas: toHex(priority),
+        paymaster: finalPMAndData === "0x" ? undefined : finalPMAndData.slice(0, 42) as Hex,
+        paymasterVerificationGasLimit: finalPMAndData === "0x" ? undefined : toHex(pmVerif + 50000n),
+        paymasterPostOpGasLimit: finalPMAndData === "0x" ? undefined : toHex(pmPost + 10000n),
+        paymasterData: finalPMAndData === "0x" ? undefined : ("0x" + finalPMAndData.slice(106)) as Hex,
+        signature: sig
+    };
 
-async function waitForUserOp(client: any, hash: Hex) {
-    for(let i=0; i<30; i++) {
-        const res = await client.request({ method: 'eth_getUserOperationReceipt', params: [hash] });
-        if (res) return;
-        await new Promise(r => setTimeout(r, 2000));
+    console.log("   🚀 Sending Unpacked...");
+    const finalRes = await bundler.request({
+        method: 'eth_sendUserOperation',
+        params: [unpackedUserOp, ENTRY_POINT]
+    });
+    console.log(`   ✅ Sent: ${finalRes}`);
+    
+    for(let i=0; i<60; i++) { // Increased Wait
+        const r = await bundler.request({ method: 'eth_getUserOperationReceipt', params: [finalRes] });
+        if(r) {
+            console.log(`   ✅ Mined: ${(r as any).receipt.transactionHash}`);
+            return;
+        }
+        await new Promise(res => setTimeout(res, 2000));
     }
-    throw new Error("Timeout waiting for UserOp");
 }
 
 main().catch(console.error);
