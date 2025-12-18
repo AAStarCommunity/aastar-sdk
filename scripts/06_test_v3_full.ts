@@ -60,8 +60,23 @@ async function runFullV3Test() {
     console.log("\n🧪 1. Testing Admin Functions...");
     
     // Check Config
+    // 0: token, 1: treasury, 2: isConfigured, 3: isPaused, 4: exRate, 5: exRateFull, 6: balance, 7: spent, 8: txSponsored (approx)
+    // Actually, solidity test `v6` was balance. So index 6. 
+    // `v9` was Rep. Actually wait, Solidity Tuple 9 items:
+    // (token, treasury, isConf, isPaused, exRate, exFull, balance, spent, rep) -> This has 9 items?
+    // Let's assume this order based on Solidity struct fields if packed:
+    // But Solidity test printed v6=Balance.
+    // If indices are 0-based: v6 is index 5? No, destructuring v1..v9 usually maps 1-to-1.
+    // So v6 is 6th item. Index 5. 
+    // Wait. In Solidity: `(v1, v2...)`. v1 is first component.
+    // `v6` is 6th component.
+    // In Array access opData[5] is 6th component.
+    // So `opData[5]` in TS might be the correct index for balance if order matches?
+    // Let's log all of them to be safe.
+    
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    console.log(`   Initial State: Configured=${opData[2]}, Paused=${opData[3]}, Balance=${formatEther(opData[5] as bigint)}, Rep=${opData[8]}`);
+    console.log(`   Initial State: Conf=${opData[2]}, Paused=${opData[3]}, Balance=${formatEther(opData[6])}, Rep=${opData[8]}`); // Using 6 and 8
+
 
     if (!opData[2]) {
          console.log("   ⚙️ Configuring Operator...");
@@ -120,7 +135,7 @@ async function runFullV3Test() {
     await publicClient.waitForTransactionReceipt({ hash });
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    const balanceAfterDeposit = opData[5] as bigint;
+    const balanceAfterDeposit = opData[6] as bigint;
     console.log(`   ✅ New Balance: ${formatEther(balanceAfterDeposit)}`);
 
     // Test Withdraw
@@ -130,7 +145,7 @@ async function runFullV3Test() {
     await publicClient.waitForTransactionReceipt({ hash });
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (balanceAfterDeposit - (opData[5] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch");
+    if (balanceAfterDeposit - (opData[6] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch");
     console.log("   ✅ Withdrawn.");
 
 

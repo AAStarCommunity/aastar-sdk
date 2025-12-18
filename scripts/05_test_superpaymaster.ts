@@ -116,7 +116,7 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
     const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(process.env.SEPOLIA_RPC_URL) });
     
     const pmAbi = parseAbi([
-        'function operators(address) view returns (address, address, bool, uint256, uint256, uint256, uint256)',
+        'function operators(address) view returns (address, address, bool, bool, uint256, uint256, uint256, uint256, uint256)',
         'function configureOperator(address, address, uint256)',
         'function deposit(uint256)',
         'function notifyDeposit(uint256)',
@@ -137,8 +137,12 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
 
     // 2. Check Config
     const opData = await publicClient.readContract({ address: pm, abi: pmAbi, functionName: 'operators', args: [signer.address] });
+    // struct OperatorData { token, isConfigured, reserved, treasury, exchangeRate, exchangeRateFull, aPNTsBalance, totalSpent, txSponsored }
+    // Returned as tuple by view function IF it's packed.
+    // If it's returning (addr, addr, bool, bool, uint, uint, uint, uint, uint)
+    // 0: token, 1: treasury, 2: isConfigured, 3: isPaused, 4: exRate, 5: exRateFull, 6: balance, 7: spent, 8: txSponsored
     const isConfigured = opData[2];
-    const balance = opData[4];
+    const balance = opData[6];
 
     if (!isConfigured) {
         console.log("   ⚙️  Configuring Operator...");
