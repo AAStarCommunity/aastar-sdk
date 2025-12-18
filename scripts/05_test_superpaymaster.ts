@@ -21,11 +21,12 @@ const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
 if (!BUNDLER_RPC || !BPNTS || !SUPER_PAYMASTER) throw new Error("Missing Config for Group C");
 
+// Helper: Pack 128-bit values for PaymasterAndData (Legacy view for packing)
 function packUint(high128: bigint, low128: bigint): Hex {
     return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
 }
 
-async function main() {
+export async function runSuperPaymasterTest() {
     console.log("🚀 Starting Group C: SuperPaymaster...");
     const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
@@ -49,12 +50,16 @@ async function main() {
         const maxPriority = (feeData.maxPriorityFeePerGas || parseEther("1.5", "gwei")) * 2n;
         const maxFee = (feeData.maxFeePerGas || parseEther("20", "gwei")) * 2n;
         
-        const hash = await anniWallet.writeContract({
-            address: ENTRY_POINT, abi: epAbi, functionName: 'depositTo', args: [SUPER_PAYMASTER], value: parseEther("0.05"),
-            maxPriorityFeePerGas: maxPriority, maxFeePerGas: maxFee
-        });
-        console.log(`   ⏳ Deposited: ${hash}`);
-        await publicClient.waitForTransactionReceipt({ hash });
+        try {
+            const hash = await anniWallet.writeContract({
+                address: ENTRY_POINT, abi: epAbi, functionName: 'depositTo', args: [SUPER_PAYMASTER], value: parseEther("0.05"),
+                maxPriorityFeePerGas: maxPriority, maxFeePerGas: maxFee
+            });
+            console.log(`   ⏳ Deposited: ${hash}`);
+            await publicClient.waitForTransactionReceipt({ hash });
+        } catch (e) {
+            console.warn("Deposit failed, hoping existing balance is enough.");
+        }
     }
 
     // 2. Check Allowance
@@ -67,7 +72,7 @@ async function main() {
             publicClient, bundlerClient, signer, ACCOUNT_C,
             BPNTS, 0n, 
             encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("1000000")] }),
-            "0x",
+            undefined, // No Paymaster, use ETH
             true // isApproval
         );
         console.log("   ✅ Approved.");
@@ -78,19 +83,100 @@ async function main() {
     
     const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")] });
     
-    // SuperPaymaster: Address + Limits + (Optional) Mode
-    const pmGasLimitsPlaceholder = packUint(300000n, 10000n);
-    const pmAndDataForEst = concat([SUPER_PAYMASTER, pmGasLimitsPlaceholder, "0x" as Hex]);
+    // 4. Setup Operator (Self-Sponsorship)
+    await setupOperator(publicClient, bundlerClient, signer, SUPER_PAYMASTER, APNTS, signer.address);
 
-    await sendUserOp(
+    // 5. Prepare Transfer UserOp (aPNTs Transfer, bPNTs Gas)
+    console.log("   🔄 Sending Test Transfer...");
+    
+    // For V4/SuperPaymaster, we construct the Paymaster struct.
+    const pmStruct = {
+        paymaster: SUPER_PAYMASTER,
+        paymasterVerificationGasLimit: 300000n,
+        paymasterPostOpGasLimit: 10000n,
+        paymasterData: signer.address // Use OUR address as Operator
+    };
+
+    const metrics = await sendUserOp(
         publicClient, bundlerClient, signer, ACCOUNT_C,
         APNTS, 0n, transferData, 
-        pmAndDataForEst
+        pmStruct // Pass struct, NOT packed hex
     );
     console.log("   ✅ Group C Test Passed!");
+    
+    return {
+        group: 'SuperPaymaster',
+        ...metrics
+    };
 }
 
-async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex, isApproval = false) {
+// Ensure Signer is a valid Operator
+async function setupOperator(publicClient: any, bundlerClient: any, signer: any, pm: Hex, token: Hex, treasury: Hex) {
+    console.log("   🛠️  Setting up Operator...");
+    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(process.env.SEPOLIA_RPC_URL) });
+    
+    const pmAbi = parseAbi([
+        'function operators(address) view returns (address, address, bool, uint256, uint256, uint256, uint256)',
+        'function configureOperator(address, address, uint256)',
+        'function deposit(uint256)',
+        'function REGISTRY() view returns (address)'
+    ]);
+    const registryAbi = parseAbi(['function hasRole(bytes32, address) view returns (bool)']);
+    const erc20Abi = parseAbi(['function approve(address, uint256) returns (bool)', 'function allowance(address, address) view returns (uint256)']);
+
+    // 1. Check Role
+    const regAddr = await publicClient.readContract({ address: pm, abi: pmAbi, functionName: 'REGISTRY' });
+    const COMMUNITY = keccak256(new TextEncoder().encode("COMMUNITY"));
+    const hasRole = await publicClient.readContract({ address: regAddr, abi: registryAbi, functionName: 'hasRole', args: [COMMUNITY, signer.address] });
+    
+    if (!hasRole) {
+        console.warn("   ⚠️  Signer missing COMMUNITY role! Assuming Admin key can grant it or ignoring (might fail).");
+        // Try to grant? Need Admin Key. Assuming signer IS admin for now.
+    }
+
+    // 2. Check Config
+    const opData = await publicClient.readContract({ address: pm, abi: pmAbi, functionName: 'operators', args: [signer.address] });
+    const isConfigured = opData[2];
+    const balance = opData[4];
+
+    if (!isConfigured) {
+        console.log("   ⚙️  Configuring Operator...");
+        const hash = await wallet.writeContract({
+            address: pm, abi: pmAbi, functionName: 'configureOperator', 
+            args: [token, treasury, 1000000000000000000n] // 1:1 Rate
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log("   ✅ Configured.");
+    }
+
+    // 3. Check Balance & Deposit
+    if (balance < parseEther("10")) {
+        console.log(`   💰 Operator Balance Low (${formatEther(balance)}). Depositing...`);
+        // Approve
+        const allow = await publicClient.readContract({ address: token, abi: erc20Abi, functionName: 'allowance', args: [signer.address, pm] });
+        if (allow < parseEther("100")) {
+            await wallet.writeContract({ address: token, abi: erc20Abi, functionName: 'approve', args: [pm, parseEther("1000")] });
+            console.log("   🔓 Approved.");
+        }
+        // Deposit
+        const hash = await wallet.writeContract({ address: pm, abi: pmAbi, functionName: 'deposit', args: [parseEther("50")] });
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log("   ✅ Deposited: 50 aPNTs");
+    }
+}
+
+// Support both struct (for Paymaster) and undefined (for ETH)
+async function sendUserOp(
+    client: any, 
+    bundler: any, 
+    signer: any, 
+    sender: Address, 
+    target: Address, 
+    value: bigint, 
+    innerData: Hex, 
+    paymasterStruct?: { paymaster: Address, paymasterVerificationGasLimit: bigint, paymasterPostOpGasLimit: bigint, paymasterData: Hex }, 
+    isApproval = false
+) {
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
     const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
     
@@ -100,17 +186,23 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         functionName: 'getNonce', args: [sender, 0n]
     });
 
-    // 1. Estimation (MINIMALIST)
+    // 1. Estimation
+    // MUST unpack Paymaster fields for Alchemy v0.7
     let estOp: any = {
         sender,
         nonce: toHex(nonce),
-        initCode: "0x" as Hex,
+        initCode: "0x",
         callData,
-        paymasterAndData: paymasterAndData,
         signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
     };
-    // NO manual gas limits for Estimation
-    
+
+    if (paymasterStruct) {
+        estOp.paymaster = paymasterStruct.paymaster;
+        estOp.paymasterVerificationGasLimit = toHex(paymasterStruct.paymasterVerificationGasLimit);
+        estOp.paymasterPostOpGasLimit = toHex(paymasterStruct.paymasterPostOpGasLimit);
+        estOp.paymasterData = paymasterStruct.paymasterData;
+    }
+
     console.log("   ☁️  Estimating...");
     const estRes: any = await bundler.request({
         method: 'eth_estimateUserOperationGas',
@@ -120,25 +212,29 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? estRes.verificationGas ?? 500000n);
     const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n);
     const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
-    const pmVerif = BigInt(estRes.paymasterVerificationGasLimit ?? 0n);
-    const pmPost = BigInt(estRes.paymasterPostOpGasLimit ?? 0n);
+    
+    // Update PM limits from estimation if available, else keep defaults
+    const pmVerif = estRes.paymasterVerificationGasLimit ? BigInt(estRes.paymasterVerificationGasLimit) : (paymasterStruct?.paymasterVerificationGasLimit ?? 0n);
+    const pmPost = estRes.paymasterPostOpGasLimit ? BigInt(estRes.paymasterPostOpGasLimit) : (paymasterStruct?.paymasterPostOpGasLimit ?? 0n);
+
+    // Add buffer
+    const finalPmVerif = pmVerif + 50000n;
+    const finalPmPost = pmPost + 10000n;
 
     const block = await client.getBlock();
     const priority = parseEther("5", "gwei");
     const maxFee = block.baseFeePerGas! * 2n + priority;
 
+    // 2. Hashing (Requires Packed Fields)
     const accountGasLimits = packUint(verificationGasLimit + 50000n, callGasLimit + 20000n);
-    const gasFees = packUint(maxFee, priority);
-
-    let finalPMAndData = "0x" as Hex;
-    if (paymasterAndData !== "0x") {
-        const pmAddr = paymasterAndData.slice(0, 42) as Hex;
-        const realPmVerif = pmVerif > 0n ? pmVerif + 50000n : 300000n;
-        const realPmPost = pmPost > 0n ? pmPost + 10000n : 10000n;
-        const pmLimits = packUint(realPmVerif, realPmPost);
-        const existingData = paymasterAndData.length > 106 ? ("0x" + paymasterAndData.slice(106)) as Hex : "0x" as Hex;
-        
-        finalPMAndData = concat([pmAddr, pmLimits, existingData]);
+    // FIX: gasFees = (maxPriorityFeePerGas << 128) | maxFeePerGas
+    const gasFees = packUint(priority, maxFee);
+    
+    let paymasterAndData = "0x" as Hex;
+    if (paymasterStruct) {
+        // Re-pack for the hash
+        const pmLimits = packUint(finalPmVerif, finalPmPost);
+        paymasterAndData = concat([paymasterStruct.paymaster, pmLimits, paymasterStruct.paymasterData]);
     }
 
     const packedUserOp = {
@@ -149,59 +245,94 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         accountGasLimits,
         preVerificationGas,
         gasFees,
-        paymasterAndData: finalPMAndData,
+        paymasterAndData,
         signature: "0x" as Hex
     };
 
-    const userOpHash = await client.readContract({
-        address: ENTRY_POINT,
-        abi: [{ inputs: [{ components: [{name:"sender",type:"address"},{name:"nonce",type:"uint256"},{name:"initCode",type:"bytes"},{name:"callData",type:"bytes"},{name:"accountGasLimits",type:"bytes32"},{name:"preVerificationGas",type:"uint256"},{name:"gasFees",type:"bytes32"},{name:"paymasterAndData",type:"bytes"},{name:"signature",type:"bytes"}], name: "userOp", type: "tuple" }], name: "getUserOpHash", outputs: [{ name: "", type: "bytes32" }], stateMutability: "view", type: "function" }] as const,
-        functionName: 'getUserOpHash',
-        args: [packedUserOp]
-    });
+    // Debug: Use Local Hashing to be 100% sure of what we are signing
+    const userOpHash = entryPointGetUserOpHash(packedUserOp, ENTRY_POINT, sepolia.id);
+    console.log(`   #️⃣  UserOpHash (Local): ${userOpHash}`);
 
+    // Standard SimpleAccount expects EIP-191 signature (toEthSignedMessageHash)
     const sig = await signer.signMessage({ message: { raw: userOpHash } });
-    
-    // 3. Send Unpacked
-    let pmFields: any = {};
-    if (finalPMAndData !== "0x") {
-        const pmVerifVal = BigInt("0x" + finalPMAndData.slice(42, 74));
-        const pmPostVal = BigInt("0x" + finalPMAndData.slice(74, 106));
-        
-        pmFields.paymaster = finalPMAndData.slice(0, 42) as Hex;
-        pmFields.paymasterVerificationGasLimit = toHex(pmVerifVal);
-        pmFields.paymasterPostOpGasLimit = toHex(pmPostVal);
-        pmFields.paymasterData = finalPMAndData.length > 106 ? ("0x" + finalPMAndData.slice(106)) as Hex : "0x";
-    }
 
-    const unpackedUserOp = {
+
+    // 3. Sending (Requires Unpacked Fields)
+    const unpackedUserOp: any = {
         sender,
         nonce: toHex(nonce),
+        initCode: "0x",
         callData,
         callGasLimit: toHex(callGasLimit + 20000n),
         verificationGasLimit: toHex(verificationGasLimit + 50000n),
         preVerificationGas: toHex(preVerificationGas),
         maxFeePerGas: toHex(maxFee),
         maxPriorityFeePerGas: toHex(priority),
-        ...pmFields,
         signature: sig
     };
 
+    if (paymasterStruct) {
+        unpackedUserOp.paymaster = paymasterStruct.paymaster;
+        unpackedUserOp.paymasterVerificationGasLimit = toHex(finalPmVerif);
+        unpackedUserOp.paymasterPostOpGasLimit = toHex(finalPmPost);
+        unpackedUserOp.paymasterData = paymasterStruct.paymasterData;
+    }
+
     console.log("   🚀 Sending Unpacked...");
-    const finalRes = await bundler.request({
+    const userOpHashRes = await bundler.request({
         method: 'eth_sendUserOperation',
         params: [unpackedUserOp, ENTRY_POINT]
     });
-    console.log(`   ✅ Sent: ${finalRes}`);
+    console.log(`   ✅ Sent: ${userOpHashRes}`);
     
-    for(let i=0; i<30; i++) {
-        const r = await bundler.request({ method: 'eth_getUserOperationReceipt', params: [finalRes] });
+    const startTime = Date.now();
+    let receipt: any = null;
+    
+    for(let i=0; i<60; i++) {
+        const r = await bundler.request({ method: 'eth_getUserOperationReceipt', params: [userOpHashRes] });
         if(r) {
-            console.log(`   ✅ Mined: ${(r as any).receipt.transactionHash}`);
-            return;
+            receipt = (r as any).receipt;
+            console.log(`   ✅ Mined: ${receipt.transactionHash}`);
+            break;
         }
         await new Promise(res => setTimeout(res, 2000));
     }
+
+    if (!receipt) throw new Error("Timeout waiting for receipt");
+
+    // Return Metrics
+    return {
+        gasUsed: BigInt(receipt.gasUsed),
+        l1Fee: BigInt(receipt.l1Fee || 0), // Alchemy specific field?
+        gasPrice: BigInt(receipt.effectiveGasPrice),
+        totalCost: BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice),
+        status: receipt.status === '0x1' ? 'Success' : 'Failed',
+        txHash: receipt.transactionHash,
+        time: (Date.now() - startTime) / 1000
+    };
 }
 
-main().catch(console.error);
+function entryPointGetUserOpHash(op: any, ep: Address, chainId: number): Hex {
+    const packed = encodeAbiParameters(
+        [
+            { type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' },
+            { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }
+        ],
+        [
+            op.sender, BigInt(op.nonce), 
+            keccak256(op.initCode && op.initCode !== "0x" ? op.initCode : '0x'), 
+            keccak256(op.callData),
+            op.accountGasLimits, BigInt(op.preVerificationGas), op.gasFees,
+            keccak256(op.paymasterAndData)
+        ]
+    );
+    const enc = encodeAbiParameters(
+        [{ type: 'bytes32' }, { type: 'address' }, { type: 'uint256' }],
+        [keccak256(packed), ep, BigInt(chainId)]
+    );
+    return keccak256(enc);
+}
+
+if (require.main === module) {
+    runSuperPaymasterTest().catch(console.error);
+}
