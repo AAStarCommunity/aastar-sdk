@@ -119,10 +119,11 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
         'function operators(address) view returns (address, address, bool, uint256, uint256, uint256, uint256)',
         'function configureOperator(address, address, uint256)',
         'function deposit(uint256)',
+        'function notifyDeposit(uint256)',
         'function REGISTRY() view returns (address)'
     ]);
     const registryAbi = parseAbi(['function hasRole(bytes32, address) view returns (bool)']);
-    const erc20Abi = parseAbi(['function approve(address, uint256) returns (bool)', 'function allowance(address, address) view returns (uint256)']);
+    const erc20Abi = parseAbi(['function approve(address, uint256) returns (bool)', 'function allowance(address, address) view returns (uint256)', 'function transfer(address, uint256) returns (bool)']);
 
     // 1. Check Role
     const regAddr = await publicClient.readContract({ address: pm, abi: pmAbi, functionName: 'REGISTRY' });
@@ -150,18 +151,41 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
     }
 
     // 3. Check Balance & Deposit
-    if (balance < parseEther("10")) {
+    if (balance < parseEther("75")) {
         console.log(`   💰 Operator Balance Low (${formatEther(balance)}). Depositing...`);
         // Approve
         const allow = await publicClient.readContract({ address: token, abi: erc20Abi, functionName: 'allowance', args: [signer.address, pm] });
         if (allow < parseEther("100")) {
-            await wallet.writeContract({ address: token, abi: erc20Abi, functionName: 'approve', args: [pm, parseEther("1000")] });
+            const tx = await wallet.writeContract({ address: token, abi: erc20Abi, functionName: 'approve', args: [pm, parseEther("1000")] });
+            await publicClient.waitForTransactionReceipt({ hash: tx });
             console.log("   🔓 Approved.");
         }
-        // Deposit
-        const hash = await wallet.writeContract({ address: pm, abi: pmAbi, functionName: 'deposit', args: [parseEther("50")] });
-        await publicClient.waitForTransactionReceipt({ hash });
-        console.log("   ✅ Deposited: 50 aPNTs");
+        
+        // Try Legacy Deposit first
+        try {
+            const hash = await wallet.writeContract({ address: pm, abi: pmAbi, functionName: 'deposit', args: [parseEther("100")] });
+            await publicClient.waitForTransactionReceipt({ hash });
+            console.log("   ✅ Deposited (Legacy): 100 aPNTs");
+        } catch (e: any) {
+            console.warn(`   ⚠️ Legacy Deposit failed (Likely blocked by Token). Switching to Push Mode...`);
+            
+            // Push Mode: Transfer + Notify
+            // 1. Transfer
+            const txTrans = await wallet.writeContract({ 
+                address: token, abi: erc20Abi, functionName: 'transfer', 
+                args: [pm, parseEther("100")] 
+            });
+            await publicClient.waitForTransactionReceipt({ hash: txTrans });
+            console.log("   ➡ Transferred tokens.");
+
+            // 2. Notify
+            const txNotify = await wallet.writeContract({
+                address: pm, abi: pmAbi, functionName: 'notifyDeposit',
+                args: [parseEther("100")]
+            });
+            await publicClient.waitForTransactionReceipt({ hash: txNotify });
+            console.log("   ✅ Deposited (Push + Notify): 100 aPNTs");
+        }
     }
 }
 
