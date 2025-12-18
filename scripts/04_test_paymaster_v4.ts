@@ -19,7 +19,6 @@ const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
 if (!BUNDLER_RPC || !BPNTS || !PAYMASTER_V4) throw new Error("Missing Config for Group B");
 
-// Fix: Ensure standard hex serialization without double encoding
 function packUint(high128: bigint, low128: bigint): Hex {
     return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
 }
@@ -36,8 +35,7 @@ async function main() {
         'function approve(address, uint256) returns (bool)',
         'function allowance(address, address) view returns (uint256)'
     ]);
-    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
-
+    
     // 1. Check Allowance
     const allow = await publicClient.readContract({ address: BPNTS, abi: erc20Abi, functionName: 'allowance', args: [ACCOUNT_B, PAYMASTER_V4] });
     console.log(`   🔓 Allowance: ${formatEther(allow)}`);
@@ -58,9 +56,19 @@ async function main() {
     console.log("   🔄 Sending Test Transfer (Paid by Paymaster)...");
     const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")] });
     
-    // Construct PaymasterAndData for V4
+    // Construct Minimal PaymasterAndData for V4 Estimation
+    // V4 AOA Mode: Only Paymaster address is strictly needed for routing, 
+    // but some Paymasters verify data length.
+    // For Estimation, 0x + Address + DummyLimits usually works if logic handles it.
+    // Let's use clean Paymaster Address first.
+    
+    // NOTE: Alchemy v0.7 Expects paymasterAndData to be valid.
+    // We pass "0x" + PaymasterAddress + DummyGas(32bytes) + DummyData?
+    // Or just PaymasterAddress?
+    // UserOp v0.7 paymasterAndData = [paymaster (20)] [gasLimits (32)] [data (?)]
+    // We pre-pack a placeholder
     const pmGasLimitsPlaceholder = packUint(300000n, 10000n);
-    const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder, "0x" as Hex]);
+    const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder]);
 
     await sendUserOp(
         publicClient, bundlerClient, signer, ACCOUNT_B,
@@ -74,36 +82,24 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
     const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
     
-    // Get Nonce
     const nonce = await client.readContract({
         address: ENTRY_POINT, 
         abi: [{ inputs: [{ name: "sender", type: "address" }, { name: "key", type: "uint192" }], name: "getNonce", outputs: [{ name: "nonce", type: "uint256" }], stateMutability: "view", type: "function" }],
         functionName: 'getNonce', args: [sender, 0n]
     });
 
-    // 1. Estimate
-    // Fix: Don't double-hex encode `accountGasLimits` or `gasFees`
+    // 1. Estimation (MINIMALIST)
     let estOp: any = {
         sender,
-        nonce: toHex(nonce), // Hex needed for RPC
-        initCode: "0x" as Hex,
+        nonce: toHex(nonce),
         callData,
         paymasterAndData: paymasterAndData,
         signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
     };
-
-    if (isApproval) {
-        // For Approve (ETH paid), we try to supply standard limits to avoid Paymaster check if estimation is confused
-        estOp.accountGasLimits = packUint(200000n, 100000n);
-        estOp.gasFees = packUint(parseEther("10", "gwei"), parseEther("2", "gwei"));
-        estOp.preVerificationGas = toHex(50000n);
-        // Alchemy sometimes prefers Unpacked for estimation if Paymaster is empty
-    } else {
-        // For Paymaster op, we can use placeholders
-        estOp.accountGasLimits = packUint(1000000n, 500000n);
-        estOp.gasFees = packUint(parseEther("100", "gwei"), parseEther("50", "gwei"));
-        estOp.preVerificationGas = toHex(100000n);
-    }
+    
+    // ONLY add explicit gas limits if absolutely necessary (e.g. for Eth paid op to force valid limit)
+    // But for Estimation, usually less is more with Alchemy v0.7.
+    // Let's TRY minimal.
 
     console.log("   ☁️  Estimating...");
     const estRes: any = await bundler.request({
@@ -111,11 +107,12 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         params: [estOp, ENTRY_POINT]
     });
 
+    // Parse Response
     const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? estRes.verificationGas ?? 500000n);
     const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n);
     const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
-    const pmVerif = BigInt(estRes.paymasterVerificationGasLimit ?? 100000n);
-    const pmPost = BigInt(estRes.paymasterPostOpGasLimit ?? 10000n);
+    const pmVerif = BigInt(estRes.paymasterVerificationGasLimit ?? 0n);
+    const pmPost = BigInt(estRes.paymasterPostOpGasLimit ?? 0n);
 
     const block = await client.getBlock();
     const priority = parseEther("5", "gwei");
@@ -124,13 +121,21 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     // 2. Pack Final UserOp (For Hashing)
     const accountGasLimits = packUint(verificationGasLimit + 50000n, callGasLimit + 20000n);
     const gasFees = packUint(maxFee, priority);
-    const pmGasLimits = packUint(pmVerif + 50000n, pmPost + 10000n);
     
+    // Handle Paymaster Data Packing
     let finalPMAndData = "0x" as Hex;
     if (paymasterAndData !== "0x") {
+        // Replace the placeholder limits with ESTIMATED limits
         const pmAddr = paymasterAndData.slice(0, 42) as Hex;
-        const pmData = ("0x" + paymasterAndData.slice(106)) as Hex;
-        finalPMAndData = concat([pmAddr, pmGasLimits, pmData.length > 2 ? pmData : "0x" as Hex]);
+        // If estimation returned 0 for PM liits, use defaults
+        const realPmVerif = pmVerif > 0n ? pmVerif + 50000n : 300000n;
+        const realPmPost = pmPost > 0n ? pmPost + 10000n : 10000n;
+        const pmLimits = packUint(realPmVerif, realPmPost);
+        
+        // Preserve any existing data after the limits (index 2+40+64 = 106)
+        const existingData = paymasterAndData.length > 106 ? ("0x" + paymasterAndData.slice(106)) as Hex : "0x" as Hex;
+        
+        finalPMAndData = concat([pmAddr, pmLimits, existingData]);
     }
 
     const packedUserOp = {
@@ -155,6 +160,27 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     const sig = await signer.signMessage({ message: { raw: userOpHash } });
     
     // 3. Send Unpacked
+    // Extract PM fields for Alchemy
+    let pmFields: any = {};
+    if (finalPMAndData !== "0x") {
+        pmFields.paymaster = finalPMAndData.slice(0, 42) as Hex;
+        pmFields.paymasterVerificationGasLimit = "0x" + finalPMAndData.slice(42, 74); // High 128
+        pmFields.paymasterPostOpGasLimit = "0x" + finalPMAndData.slice(74, 106); // Low 128
+        // Fix: Ensure we correctly slice the 128-bit chunks. 
+        // Hex string chars: 2 (0x) + 40 (addr) + 32 (high) + 32 (low) -- wait, 128 bits is 16 bytes = 32 hex chars.
+        // packUint structure: High(128b/32hex) | Low(128b/32hex). Total 64 chars.
+        // So offset 42 (end of addr) -> 42+32=74 (end of high) -> 74+32=106 (end of low/limits)
+        
+        // BUT wait! Alchemy expects `paymasterVerificationGasLimit` as a quantity (uint256 hex string), not a packed chunk.
+        // We unpack it back to clean hex for RPC.
+        const pmVerifVal = BigInt("0x" + finalPMAndData.slice(42, 74));
+        const pmPostVal = BigInt("0x" + finalPMAndData.slice(74, 106));
+        
+        pmFields.paymasterVerificationGasLimit = toHex(pmVerifVal);
+        pmFields.paymasterPostOpGasLimit = toHex(pmPostVal);
+        pmFields.paymasterData = finalPMAndData.length > 106 ? ("0x" + finalPMAndData.slice(106)) as Hex : "0x";
+    }
+
     const unpackedUserOp = {
         sender,
         nonce: toHex(nonce),
@@ -164,15 +190,7 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         preVerificationGas: toHex(preVerificationGas),
         maxFeePerGas: toHex(maxFee),
         maxPriorityFeePerGas: toHex(priority),
-        paymaster: finalPMAndData === "0x" ? undefined : finalPMAndData.slice(0, 42) as Hex,
-        paymasterVerificationGasLimit: finalPMAndData === "0x" ? undefined : toHex(pmVerif + 50000n),
-        paymasterPostOpGasLimit: finalPMAndData === "0x" ? undefined : toHex(pmPost + 10000n),
-        paymasterData: finalPMAndData === "0x" ? undefined : ("0x" + finalPMAndData.slice(106)) as Hex,
-        // IF Paymaster is undefined, ENSURE paymasterAndData is NOT sent to Alchemy if they don't want it,
-        // OR Alchemy v0.7 accepts 'paymasterAndData' as well?
-        // Alchemy v0.7 doc says: Prefer Unpacked. Standard says: One or other.
-        // Let's send Unpacked fields only.
-        
+        ...pmFields,
         signature: sig
     };
 

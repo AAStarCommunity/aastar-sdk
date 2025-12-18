@@ -45,8 +45,13 @@ async function main() {
     console.log(`   🏦 PM Deposit: ${formatEther(pmDeposit)} ETH`);
     if (pmDeposit < parseEther("0.05")) {
         console.log("   ⚠️  Low Deposit. Converting Anni ETH -> EntryPoint Deposit...");
+        const feeData = await publicClient.estimateFeesPerGas();
+        const maxPriority = (feeData.maxPriorityFeePerGas || parseEther("1.5", "gwei")) * 2n;
+        const maxFee = (feeData.maxFeePerGas || parseEther("20", "gwei")) * 2n;
+        
         const hash = await anniWallet.writeContract({
-            address: ENTRY_POINT, abi: epAbi, functionName: 'depositTo', args: [SUPER_PAYMASTER], value: parseEther("0.05")
+            address: ENTRY_POINT, abi: epAbi, functionName: 'depositTo', args: [SUPER_PAYMASTER], value: parseEther("0.05"),
+            maxPriorityFeePerGas: maxPriority, maxFeePerGas: maxFee
         });
         console.log(`   ⏳ Deposited: ${hash}`);
         await publicClient.waitForTransactionReceipt({ hash });
@@ -62,7 +67,8 @@ async function main() {
             publicClient, bundlerClient, signer, ACCOUNT_C,
             BPNTS, 0n, 
             encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("1000000")] }),
-            "0x"
+            "0x",
+            true // isApproval
         );
         console.log("   ✅ Approved.");
     }
@@ -84,7 +90,7 @@ async function main() {
     console.log("   ✅ Group C Test Passed!");
 }
 
-async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex) {
+async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex, isApproval = false) {
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
     const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
     
@@ -94,23 +100,17 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         functionName: 'getNonce', args: [sender, 0n]
     });
 
-    // 1. Estimation (Using Object Structure)
-    const estOp = {
+    // 1. Estimation (MINIMALIST)
+    let estOp: any = {
         sender,
         nonce: toHex(nonce),
         initCode: "0x" as Hex,
         callData,
-        // Crucial Fix: Send hex strings, NOT raw packUint output if it was misinterpreted, 
-        // BUT packUint ALREADY returns `0x...`.
-        // The issue was that in `toHex(packUint(...))` -> packUint returns string "0x...", toHex converts that string to bytes!
-        // So we strictly remove `toHex` wrapper for things that are already Hex strings.
-        accountGasLimits: packUint(1000000n, 500000n), 
-        preVerificationGas: toHex(100000n),
-        gasFees: packUint(parseEther("50", "gwei"), parseEther("60", "gwei")),
         paymasterAndData: paymasterAndData,
         signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
     };
-
+    // NO manual gas limits for Estimation
+    
     console.log("   ☁️  Estimating...");
     const estRes: any = await bundler.request({
         method: 'eth_estimateUserOperationGas',
@@ -120,28 +120,30 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? estRes.verificationGas ?? 500000n);
     const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n);
     const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
-    const pmVerif = BigInt(estRes.paymasterVerificationGasLimit ?? 100000n);
-    const pmPost = BigInt(estRes.paymasterPostOpGasLimit ?? 10000n);
+    const pmVerif = BigInt(estRes.paymasterVerificationGasLimit ?? 0n);
+    const pmPost = BigInt(estRes.paymasterPostOpGasLimit ?? 0n);
 
     const block = await client.getBlock();
     const priority = parseEther("5", "gwei");
     const maxFee = block.baseFeePerGas! * 2n + priority;
 
-    // 2. Pack Final UserOp (For Hashing)
     const accountGasLimits = packUint(verificationGasLimit + 50000n, callGasLimit + 20000n);
     const gasFees = packUint(maxFee, priority);
-    const pmGasLimits = packUint(pmVerif + 50000n, pmPost + 10000n);
-    
+
     let finalPMAndData = "0x" as Hex;
     if (paymasterAndData !== "0x") {
         const pmAddr = paymasterAndData.slice(0, 42) as Hex;
-        const pmData = ("0x" + paymasterAndData.slice(106)) as Hex;
-        finalPMAndData = concat([pmAddr, pmGasLimits, pmData.length > 2 ? pmData : "0x" as Hex]);
+        const realPmVerif = pmVerif > 0n ? pmVerif + 50000n : 300000n;
+        const realPmPost = pmPost > 0n ? pmPost + 10000n : 10000n;
+        const pmLimits = packUint(realPmVerif, realPmPost);
+        const existingData = paymasterAndData.length > 106 ? ("0x" + paymasterAndData.slice(106)) as Hex : "0x" as Hex;
+        
+        finalPMAndData = concat([pmAddr, pmLimits, existingData]);
     }
 
     const packedUserOp = {
         sender,
-        nonce, // BigInt ok for ABI encoding
+        nonce, 
         initCode: "0x" as Hex,
         callData,
         accountGasLimits,
@@ -160,22 +162,28 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
 
     const sig = await signer.signMessage({ message: { raw: userOpHash } });
     
-    // 3. Send Unpacked (Alchemy Format)
-    // NOTE: For 'Unpacked' Alchemy format, we must separate Paymaster fields
+    // 3. Send Unpacked
+    let pmFields: any = {};
+    if (finalPMAndData !== "0x") {
+        const pmVerifVal = BigInt("0x" + finalPMAndData.slice(42, 74));
+        const pmPostVal = BigInt("0x" + finalPMAndData.slice(74, 106));
+        
+        pmFields.paymaster = finalPMAndData.slice(0, 42) as Hex;
+        pmFields.paymasterVerificationGasLimit = toHex(pmVerifVal);
+        pmFields.paymasterPostOpGasLimit = toHex(pmPostVal);
+        pmFields.paymasterData = finalPMAndData.length > 106 ? ("0x" + finalPMAndData.slice(106)) as Hex : "0x";
+    }
+
     const unpackedUserOp = {
         sender,
         nonce: toHex(nonce),
-        // factory/factoryData undefined for existing account
         callData,
         callGasLimit: toHex(callGasLimit + 20000n),
         verificationGasLimit: toHex(verificationGasLimit + 50000n),
         preVerificationGas: toHex(preVerificationGas),
         maxFeePerGas: toHex(maxFee),
         maxPriorityFeePerGas: toHex(priority),
-        paymaster: finalPMAndData === "0x" ? undefined : finalPMAndData.slice(0, 42) as Hex,
-        paymasterVerificationGasLimit: finalPMAndData === "0x" ? undefined : toHex(pmVerif + 50000n),
-        paymasterPostOpGasLimit: finalPMAndData === "0x" ? undefined : toHex(pmPost + 10000n),
-        paymasterData: finalPMAndData === "0x" ? undefined : ("0x" + finalPMAndData.slice(106)) as Hex,
+        ...pmFields,
         signature: sig
     };
 
@@ -186,7 +194,7 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     });
     console.log(`   ✅ Sent: ${finalRes}`);
     
-    for(let i=0; i<60; i++) { // Increased Wait
+    for(let i=0; i<30; i++) {
         const r = await bundler.request({ method: 'eth_getUserOperationReceipt', params: [finalRes] });
         if(r) {
             console.log(`   ✅ Mined: ${(r as any).receipt.transactionHash}`);
