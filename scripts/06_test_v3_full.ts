@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -14,7 +14,7 @@ const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
 const ACCOUNT_C = process.env.TEST_SIMPLE_ACCOUNT_C as Hex; 
 const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
-const BPNTS = process.env.BPNTS_ADDRESS as Hex;
+// const BPNTS = process.env.BPNTS_ADDRESS as Hex; // Unused variable removed
 const APNTS = process.env.APNTS_ADDRESS as Hex;
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
 const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
