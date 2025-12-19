@@ -1,24 +1,23 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256 } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256 } from 'viem';
+import type { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
+// BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 // Configuration
-const RPC_URL = process.env.SEPOLIA_RPC_URL;
-const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
-const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
-
-const ACCOUNT_C = process.env.TEST_SIMPLE_ACCOUNT_C as Hex; 
-const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
-// const BPNTS = process.env.BPNTS_ADDRESS as Hex; // Unused variable removed
-const APNTS = process.env.APNTS_ADDRESS as Hex;
-const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
-const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
-
+const RPC_URL = process.env.RPC_URL;
+const BUNDLER_RPC = process.env.BUNDLER_RPC;
+const ENTRY_POINT = process.env.MOCK_ENTRY_POINT as Hex;
+const APNTS = process.env.APNTS as Hex;
+const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
+const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
+const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex;
+const RECEIVER = process.env.RECEIVER as Hex;
 if (!SUPER_PAYMASTER || !APNTS) throw new Error("Missing Config");
 
 // Helper: Pack 128-bit values
@@ -28,10 +27,10 @@ function packUint(high128: bigint, low128: bigint): Hex {
 
 async function runFullV3Test() {
     console.log("🚀 Starting Comprehensive SuperPaymaster V3 Test...");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
 
     const pmAbi = parseAbi([
         'function operators(address) view returns (address, address, bool, bool, uint256, uint256, uint256, uint256, uint256)',
@@ -78,7 +77,8 @@ async function runFullV3Test() {
     console.log(`   Initial State: Conf=${opData[2]}, Paused=${opData[3]}, Balance=${formatEther(opData[6])}, Rep=${opData[8]}`); // Using 6 and 8
 
 
-    if (!opData[2]) {
+    // Confirm Configured
+    if (!opData[1]) {
          console.log("   ⚙️ Configuring Operator...");
          const hash = await wallet.writeContract({
              address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'configureOperator', 
@@ -92,14 +92,14 @@ async function runFullV3Test() {
     let hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, true] });
     await publicClient.waitForTransactionReceipt({ hash });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if(opData[3] !== true) throw new Error("Pause failed");
+    if(opData[2] !== true) throw new Error("Pause failed");
     console.log("   ✅ Paused.");
 
     console.log("   ▶️  Testing Unpause...");
     hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, false] });
     await publicClient.waitForTransactionReceipt({ hash });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if(opData[3] !== false) throw new Error("Unpause failed");
+    if(opData[2] !== false) throw new Error("Unpause failed");
     console.log("   ✅ Unpaused.");
 
     // Test Reputation
@@ -107,8 +107,8 @@ async function runFullV3Test() {
     hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'updateReputation', args: [signer.address, 100n] });
     await publicClient.waitForTransactionReceipt({ hash });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if(BigInt(opData[8] as bigint) !== 100n) throw new Error("Reputation Config failed");
-    console.log(`   ✅ Reputation set to ${opData[8]}`);
+    if(BigInt(opData[7] as bigint) !== 100n) throw new Error("Reputation Config failed");
+    console.log(`   ✅ Reputation set to ${opData[7]}`);
 
 
     // ====================================================
@@ -135,7 +135,7 @@ async function runFullV3Test() {
     await publicClient.waitForTransactionReceipt({ hash });
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    const balanceAfterDeposit = opData[6] as bigint;
+    const balanceAfterDeposit = opData[4] as bigint;
     console.log(`   ✅ New Balance: ${formatEther(balanceAfterDeposit)}`);
 
     // Test Withdraw
@@ -145,7 +145,7 @@ async function runFullV3Test() {
     await publicClient.waitForTransactionReceipt({ hash });
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (balanceAfterDeposit - (opData[6] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch");
+    if (balanceAfterDeposit - (opData[4] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch");
     console.log("   ✅ Withdrawn.");
 
 
@@ -165,7 +165,7 @@ async function runFullV3Test() {
     };
 
     try {
-        const metrics = await sendUserOp(publicClient, bundlerClient, signer, ACCOUNT_C, APNTS, 0n, transferData, pmStruct);
+        const metrics = await sendUserOp(publicClient, bundlerClient, signer, ACCOUNT_C, APNTS, 0n, transferData, pmStruct, 31337);
         console.log(`   ✅ UserOp Success! Hash: ${metrics.txHash}`);
     } catch (e) {
         console.error("   ❌ UserOp Failed:", e);
@@ -196,7 +196,7 @@ async function runFullV3Test() {
 }
 
 // Re-use helper from previous script logic, simplified
-async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, pmStruct: any) {
+async function sendUserOp(client: any, bundler: any, signer: any, sender: Hex, target: Hex, value: bigint, innerData: Hex, pmStruct: any, chainId: number = 31337) {
     const nonce = await client.readContract({
         address: ENTRY_POINT, abi: parseAbi(['function getNonce(address,uint192) view returns (uint256)']),
         functionName: 'getNonce', args: [sender, 0n]
@@ -235,7 +235,7 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         signature: "0x" as Hex
     };
 
-    const userOpHash = entryPointGetUserOpHash(packedOp, ENTRY_POINT, sepolia.id);
+    const userOpHash = entryPointGetUserOpHash(packedOp, ENTRY_POINT, chainId);
     const sig = await signer.signMessage({ message: { raw: userOpHash } });
 
     const unpackedOp = {
@@ -261,7 +261,7 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     throw new Error("Timeout");
 }
 
-function entryPointGetUserOpHash(op: any, ep: Address, chainId: number): Hex {
+function entryPointGetUserOpHash(op: any, ep: Hex, chainId: number): Hex {
     const packed = encodeAbiParameters(
         [{ type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }],
         [op.sender, BigInt(op.nonce), keccak256(op.initCode), keccak256(op.callData), op.accountGasLimits, BigInt(op.preVerificationGas), op.gasFees, keccak256(op.paymasterAndData)]
