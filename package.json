@@ -5,6 +5,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:local": "ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_reputation.ts && ts-node scripts/06_local_test_v3_execution.ts",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {

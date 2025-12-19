@@ -65,6 +65,10 @@ For Group C (SuperPaymaster) tests:
 2. Account must have sufficient **xPNTs** (or GToken) balance.
 *Use `scripts/setup_account.ts` (coming soon) or `mint-sbt-for-aa.js` reference logic to prepare accounts.*
 
+### Local Verification & Coverage
+- **[Getting Started with Local Testing](./docs/Local_Test_Guide.md)**
+- **[Coverage Audit & Multi-role Matrix](./docs/Coverage_and_Scenario_Matrix.md)**
+
 ---
 
 ## 中文文档
@@ -145,4 +149,8 @@ const userOp = await client.makeUserOperation({
     paymasterAndData
 });
 ```
+
+### 本地验证与覆盖率
+- **[本地测试新手指南](./docs/Local_Test_Guide.md)**
+- **[覆盖率核查与多角色场景矩阵](./docs/Coverage_and_Scenario_Matrix.md)**
 

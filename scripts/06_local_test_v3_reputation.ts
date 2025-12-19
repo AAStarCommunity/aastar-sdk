@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, parseAbi, keccak256, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, http, formatEther, parseAbi, keccak256, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
