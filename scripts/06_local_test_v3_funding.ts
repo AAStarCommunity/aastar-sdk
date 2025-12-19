@@ -17,7 +17,7 @@ const APNTS = process.env.APNTS as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !APNTS) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (address, address, bool, bool, uint256, uint256, uint256, uint256, uint256)',
+    'function operators(address) view returns (address xPNTsToken, address treasury, bool isConfigured, bool isPaused, uint256 reserved, uint256 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
     'function deposit(uint256)',
     'function notifyDeposit(uint256)',
     'function withdraw(uint256)',
@@ -52,8 +52,8 @@ async function runFundingTest() {
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);
     
-    // index 5 is balance
-    const initialBalance = BigInt(opData[5]);
+    // ABI returns: xPNTsToken(0), treasury(1), isConfigured(2), isPaused(3), reserved(4), exchangeRate(5), aPNTsBalance(6), totalSpent(7), totalTxSponsored(8), reputation(9)
+    const initialBalance = BigInt(opData[6]);
     console.log(`   Initial Operator Balance: ${formatEther(initialBalance)} aPNTs`);
 
     // 2. Test Deposit (The official way)
@@ -86,12 +86,15 @@ async function runFundingTest() {
     // 3. Test Withdraw
     console.log("   🏧 Testing withdraw...");
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    const currentBalance = BigInt(opData[5]);
+    const currentBalance = BigInt(opData[6]);
     
     if (currentBalance >= parseEther("0.1")) {
         const withdrawAmount = parseEther("0.1");
+        const hashWith = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'withdraw', args: [withdrawAmount] });
+        await publicClient.waitForTransactionReceipt({ hash: hashWith });
+        
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        const newBalance = BigInt(opData[5]);
+        const newBalance = BigInt(opData[6]);
         const diff = currentBalance - newBalance;
         // Use tolerance for potential fee/rounding issues (1000 wei)
         if (diff < withdrawAmount || diff > withdrawAmount + 1000n) {
