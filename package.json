@@ -5,11 +5,12 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "test:local": "ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_reputation.ts && ts-node scripts/06_local_test_v3_execution.ts",
+    "test:local": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_reputation.ts && ts-node scripts/06_local_test_v3_execution.ts' | tee local_regression.log",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
+    "cross-env": "^10.1.0",
     "csv-writer": "^1.6.0",
     "dotenv": "^17.2.3",
     "prettier": "^3.2.4",
