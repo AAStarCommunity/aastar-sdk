@@ -1,4 +1,3 @@
-
 import { 
     createPublicClient, 
     createWalletClient, 
@@ -6,7 +5,8 @@ import {
     keccak256, 
     toBytes, 
     encodeAbiParameters, 
-    type Hex
+    type Hex,
+    decodeErrorResult
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -45,10 +45,10 @@ async function main() {
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
     // NEW DEPLOYMENT ADDRESSES (Step 4171)
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0x01E21d7B8c39dc4C764c19b308Bd8b14B1ba139E';
-    const MYSBT_ADDR = process.env.MYSBT_ADDRESS as Hex || '0x3C1Cb427D20F15563aDa8C249E71db76d7183B6c';
-    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0x193521C8934bCF3473453AF4321911E7A89E0E12'; 
-    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0x9Fcca440F19c62CDF7f973eB6DDF218B15d4C71D';
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0xf5c4a909455C00B99A90d93b48736F3196DB5621';
+    const MYSBT_ADDR = process.env.MYSBT_ADDRESS as Hex || '0xFD2Cf3b56a73c75A7535fFe44EBABe7723c64719';
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0xCa1D199b6F53Af7387ac543Af8e8a34455BBe5E0'; 
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xdF46e54aAadC1d55198A4a8b4674D7a4c927097A';
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
@@ -86,10 +86,18 @@ async function main() {
         });
         await waitForTx(publicClient, txConfig);
     }
+    const targetComm = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as Hex;
+
+    // Pre-flight check: Is community active?
+    const isCommActive = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'checkRole', args: [keccak256(toBytes('COMMUNITY')), targetComm]
+    });
+    console.log(`   🔍 Community ${targetComm} active: ${isCommActive}`);
+
     console.log(`   📝 Registering Eve to get SBT...`);
     const eveRoleData = { 
         account: eveAccount.address, 
-        community: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as Hex, // C-Community Admin
+        community: targetComm, 
         avatarURI: "ipfs://eve", 
         ensName: "eve.c", 
         stakeAmount: 100n 
@@ -105,14 +113,68 @@ async function main() {
         ]}],
         [eveRoleData]
     );
+    console.log(`   📦 Encoded data length: ${eveData.length}`);
+
+    // Final sanity checks for Eve
+    const eveGTokenBalance = await publicClient.readContract({
+        address: GTOKEN_ADDR, abi: loadAbi('GToken'), functionName: 'balanceOf', args: [eveAccount.address]
+    }) as bigint;
+    const eveAllowance = await publicClient.readContract({
+        address: GTOKEN_ADDR, abi: loadAbi('GToken'), functionName: 'allowance', args: [eveAccount.address, STAKING_ADDR]
+    }) as bigint;
+    console.log(`   💰 Eve GToken Balance: ${eveGTokenBalance}, Allowance: ${eveAllowance}`);
 
     console.log(`   📝 Encoded Data: ${eveData}`);
 
-    const txReg = await eveWallet.writeContract({
-        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
-        args: [ROLE_ENDUSER, eveData]
-    });
-    await waitForTx(publicClient, txReg);
+    try {
+        console.log(`   🔍 Simulating registration...`);
+        await publicClient.simulateContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
+            account: eveAccount.address,
+            args: [ROLE_ENDUSER, eveData]
+        });
+
+        const txReg = await eveWallet.writeContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
+            args: [ROLE_ENDUSER, eveData]
+        });
+        await waitForTx(publicClient, txReg);
+    } catch (err: any) {
+        console.error(`❌ registerRoleSelf failed:`, err.message);
+        
+        let errorData = err.data;
+        // Walk the error object to find data
+        let current = err;
+        while (current && !errorData) {
+            if (current.data) {
+                errorData = current.data;
+            }
+            current = current.cause || current.walk?.() || current.error;
+        }
+
+        if (errorData) {
+            console.log(`📡 Raw Error Data Found: ${errorData}`);
+            const selector = errorData.slice(0, 10);
+            console.log(`   Selector: ${selector}`);
+
+            try {
+                const decoded = decodeErrorResult({ abi: RegistryABI, data: errorData });
+                console.error(`   Registry Error: ${decoded.errorName} (${JSON.stringify(decoded.args, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`);
+            } catch {
+                try {
+                    const StakingABI = loadAbi('GTokenStaking');
+                    const decoded = decodeErrorResult({ abi: StakingABI, data: errorData });
+                    console.error(`   Staking Error: ${decoded.errorName} (${JSON.stringify(decoded.args, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`);
+                } catch {
+                    console.error(`   Could not decode error with Registry or Staking ABIs.`);
+                }
+            }
+        } else {
+            console.log(`🔍 Full Error Object for inspection:`, JSON.stringify(err, (_, value) => 
+                typeof value === 'bigint' ? value.toString() : value, 2));
+        }
+        process.exit(1);
+    }
     
     const tokenId = await publicClient.readContract({
         address: MYSBT_ADDR, abi: MySBTABI, functionName: 'userToSBT', args: [eveAccount.address]
@@ -138,7 +200,6 @@ async function main() {
     console.log(`   🔍 userToSBT after burn: ${existsAfterBurn}`);
 
     // 4. Test Role Exit Linkage
-    const targetComm = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
     if (existsAfterBurn === 0n) {
         console.log(`\n🔄 Re-registering Eve for Linkage Test...`);
         const txReg2 = await eveWallet.writeContract({
