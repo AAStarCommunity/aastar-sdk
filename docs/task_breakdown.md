@@ -63,6 +63,53 @@ Based on the PhD research requirements and the "Three-Step" (Prepare, Test, Anal
     - [ ] Compare Time vs Baseline.
     - [ ] Generate Markdown Table for Thesis.
 
+## Phase 4: 特性验证与联动测试 [/]
+
+### Phase 5: Staking 退出与 Slash 测试 (12_*.ts) [⚠️ Debugging]
+- [ ] unlock → withdraw 正常流程 (Fixed: Slash deduction bug)
+- [ ] Slash 参数验证（罚没、国库、退款）
+- [ ] 时间锁测试（提前退出拒绝）
+  - [ ] 在 Registry 中增加 roleLockDurations 映射
+- [ ] Debug Registry.sol registration logic (RoleNotGranted)
+- [ ] Fix syntax errors and add raw error logging in 13_test_sbt_burn_linkage.ts
+- [ ] Verify active SBT burn and exit linkage
+
+### Phase 6: MySBT Burn & Linkage Integration (Active Debugging)
+- [ ] 实现 Registry.exitRole 与 MySBT 销毁/停用联动
+  - [ ] 在 IMySBTV3 中添加 deactivateMembership 接口
+  - [ ] 在 MySBT 中实现权限受控的 deactivateMembership
+  - [ ] 在 Registry.exitRole 中增加对 ROLE_ENDUSER 的 SBT 联动调用
+- [ ] 验证 `13_test_sbt_burn_linkage.ts`
+  - [ ] 完整流程 (正在解决 Anvil Revert)
+  - [ ] 同步最新合约 ABI 到 SDK
+- [ ] 解决 registerRoleSelf 报错 (正在排查 Eve 地址与角色状态)
+- [ ] 确保 getMemberships 在角色退出后返回 isActive: false
+
+### Phase 7: 集成与覆盖率报告
+- [ ] 更新 test:local 脚本包含所有新测试
+- [ ] 生成覆盖率报告（目标 80%+）
+- [ ] 执行完整回归并验证通过
+
+## Phase 8: SDK 架构演进与对齐 [⚠️ 暂停]
+
+> **WARNING**: 优先级调整：在达到 80% 测试覆盖率之前，暂停以下工作：
+> - SDK 标准化封装（SuperPaymasterClient）
+> - 链上数据采集与基准测试
+
+### 阶段一：架构标准化 (v0.4.x)
+- [ ] 基于 viem 与 AirAccount (Permissionless-style) 的架构重构
+- [ ] 定义 SuperPaymasterClient 与语义化 Error Mapper
+
+### 阶段二：生产力工具 (v0.5.x)
+- [ ] UserOp Factory 与基线/对比测试数据导出 (CSV)
+
+### 阶段三：UI 集成 (v0.6.x)
+- [ ] React Hooks 与评价面板组件
+
+## Phase 9: 论文量化评估准备 [⚠️ 暂停]
+- [ ] 搭建基线测试 (EOA vs Pimlico) 脚本
+- [ ] 自动化 CSV 采集与绘图数据预处理
+
 ## Appendix: Account Roles & Keys
 
 | Role | Variable | Purpose |

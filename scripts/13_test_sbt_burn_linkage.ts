@@ -45,10 +45,10 @@ async function main() {
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
     // NEW DEPLOYMENT ADDRESSES (Step 4171)
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0xf5c4a909455C00B99A90d93b48736F3196DB5621';
-    const MYSBT_ADDR = process.env.MYSBT_ADDRESS as Hex || '0xFD2Cf3b56a73c75A7535fFe44EBABe7723c64719';
-    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0xCa1D199b6F53Af7387ac543Af8e8a34455BBe5E0'; 
-    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xdF46e54aAadC1d55198A4a8b4674D7a4c927097A';
+    const REGISTRY_ADDR = (process.env.REGISTRY_ADDR || '0xd710a67624Ad831683C86a48291c597adE30F787') as Hex;
+    const MYSBT_ADDR = (process.env.MYSBT_ADDR || '0xd30bF3219A0416602bE8D482E0396eF332b0494E') as Hex;
+    const GTOKEN_ADDR = (process.env.GTOKEN_ADDR || '0x10e38eE9dd4C549b61400Fc19347D00eD3edAfC4') as Hex;
+    const STAKING_ADDR = (process.env.STAKING_ADDR || '0xd753c12650c280383Ce873Cc3a898F6f53973d16') as Hex;
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
