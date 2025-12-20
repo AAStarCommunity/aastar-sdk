@@ -139,44 +139,6 @@
   },
   {
     "type": "function",
-    "name": "convertToAssets",
-    "inputs": [
-      {
-        "name": "shares",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "convertToShares",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
     "name": "getLockedStake",
     "inputs": [
       {
@@ -222,11 +184,6 @@
         "components": [
           {
             "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "stGTokenShares",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -532,25 +489,6 @@
   },
   {
     "type": "function",
-    "name": "sharesOf",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "slash",
     "inputs": [
       {
@@ -623,11 +561,6 @@
         "internalType": "uint256"
       },
       {
-        "name": "stGTokenShares",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "slashedAmount",
         "type": "uint256",
         "internalType": "uint256"
@@ -639,19 +572,6 @@
       },
       {
         "name": "unstakeRequestedAt",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "totalShares",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }

@@ -652,6 +652,11 @@
   },
   {
     "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "VersionAlreadyExists",
     "inputs": [
       {
