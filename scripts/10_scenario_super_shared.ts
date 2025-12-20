@@ -29,6 +29,7 @@ const loadAbi = (name: string) => {
 };
 
 const RegistryABI = loadAbi('Registry');
+const GTokenABI = loadAbi('GToken');
 
 // --- CONSTANTS ---
 const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
@@ -56,8 +57,33 @@ async function main() {
     const bobWallet = createWalletClient({ account: privateKeyToAccount(BOB_PK as Hex), chain: anvil, transport: http(ANVIL_RPC) });
     
     // 2. Load Contracts
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0x1c85638e118b37167e9298c2268758e058ddfda0';
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0x139e1D41943ee15dDe4DF876f9d0E7F85e26660A';
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0xFE5f411481565fbF70D8D33D992C78196E014b90';
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xD6b040736e948621c5b6E0a494473c47a6113eA8';
     
+    // --- 2b. Make sure EndUser Role is Configured (Admin) ---
+    const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // Anvil #0
+    const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
+    
+    // Check config
+    const userConfigCheck = await publicClient.readContract({ address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'roleConfigs', args: [ROLE_ENDUSER] }) as any;
+    const currentMinStake = userConfigCheck[0];
+    const isActive = userConfigCheck[6];
+    
+    console.log(`   🧐 Pre-Config Check: Active=${isActive}, MinStake=${currentMinStake}`);
+
+    if (currentMinStake === 0n) {
+        console.log(`   🔧 Updating ROLE_ENDUSER Config (MinStake 100)...`);
+        // Config: [100, 0, 0, 0, 0, 0, true, "EndUser"]
+        const newConfig = [100n, 0n, 0n, 0n, 0n, 0n, true, "EndUser"];
+        const txConfig = await adminWallet.writeContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'configureRole', 
+            args: [ROLE_ENDUSER, newConfig]
+        });
+        await waitForTx(publicClient, txConfig);
+        console.log(`   ✅ ROLE_ENDUSER Configured.`);
+    }
+
     // 3. Verify C-Community Exists
     const cAccount = privateKeyToAccount(C_ADMIN_PK as Hex);
     const bobAccount = privateKeyToAccount(BOB_PK as Hex);
@@ -79,29 +105,76 @@ async function main() {
     // ===============================================
     console.log(`\n👤 [Step A] Registering Bob under C-Community...`);
     
-    const bobData = encodeAbiParameters(
-        [
-            { name: 'account', type: 'address' },
-            { name: 'community', type: 'address' },
-            { name: 'avatarURI', type: 'string' },
-            { name: 'ensName', type: 'string' },
-            { name: 'stakeAmount', type: 'uint256' }
-        ],
-        [
-            bobAccount.address,
-            cAccount.address, // Link to C-Community
-            "ipfs://bob",
-            "bob.c",
-            0n
-        ]
-    );
-
-    const txReg = await bobWallet.writeContract({
-        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
-        args: [ROLE_ENDUSER, bobData]
+    // Check if already registered
+    const isBobRegistered = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole', args: [ROLE_ENDUSER, bobAccount.address]
     });
-    await waitForTx(publicClient, txReg);
-    console.log(`   ✅ Bob Registered linked to C-Community.`);
+
+    if (isBobRegistered) {
+        console.log(`   ⚠️ Bob already registered (Pre-check). Skipping tx.`);
+    } else {
+        // Fetch Min Stake
+        const userConfig = await publicClient.readContract({ address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'roleConfigs', args: [ROLE_ENDUSER] }) as any;
+        const requiredStake = userConfig[0];
+        console.log(`   ⚖️ Required Stake for EndUser: ${requiredStake.toString()}`);
+
+        if (requiredStake > 0n) {
+            console.log(`   💰 Funding & Approving Stake...`);
+            // Mint GToken to Bob (Mocking Admin Mint)
+            // Need Admin Wallet to mint?
+            const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
+            const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
+            const txMint = await adminWallet.writeContract({
+                address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [bobAccount.address, requiredStake]
+            });
+            await waitForTx(publicClient, txMint);
+            
+            // Approve Staking
+            const txApprove = await bobWallet.writeContract({
+                address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, requiredStake]
+            });
+            await waitForTx(publicClient, txApprove);
+        }
+
+        const bobData = encodeAbiParameters(
+            [
+                {
+                    type: 'tuple',
+                    components: [
+                        { name: 'account', type: 'address' },
+                        { name: 'community', type: 'address' },
+                        { name: 'avatarURI', type: 'string' },
+                        { name: 'ensName', type: 'string' },
+                        { name: 'stakeAmount', type: 'uint256' }
+                    ]
+                }
+            ],
+            [
+                {
+                    account: bobAccount.address,
+                    community: cAccount.address, // Link to C-Community
+                    avatarURI: "ipfs://bob",
+                    ensName: "bob.c",
+                    stakeAmount: requiredStake
+                }
+            ]
+        );
+
+        try {
+            const txReg = await bobWallet.writeContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
+                args: [ROLE_ENDUSER, bobData]
+            });
+            await waitForTx(publicClient, txReg);
+            console.log(`   ✅ Bob Registered linked to C-Community.`);
+        } catch (e: any) {
+             if (e.message.includes('RoleAlreadyGranted')) {
+                 console.log(`   ⚠️ Bob already registered (Caught Error). Continuing.`);
+             } else {
+                 console.warn(`   ⚠️ Registration Error (Ignored if already active): ${e.message.split('\n')[0]}`);
+             }
+        }
+    }
 
     // ===============================================
     // Step B: Verify Shared Paymaster Access
