@@ -6,7 +6,8 @@ import {
     toBytes, 
     encodeAbiParameters, 
     type Hex,
-    decodeErrorResult
+    decodeErrorResult,
+    parseEther
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -25,11 +26,12 @@ dotenv.config({ path: path.resolve(__dirname, '../../SuperPaymaster/contracts/.e
 const loadAbi = (name: string) => {
     const abiPath = path.resolve(__dirname, `../abis/${name}.abi.json`);
     if (!fs.existsSync(abiPath)) throw new Error(`ABI not found: ${abiPath}`);
-    return JSON.parse(fs.readFileSync(abiPath, 'utf-8')).abi;
+    return JSON.parse(fs.readFileSync(abiPath, 'utf-8'));
 };
 
 const RegistryABI = loadAbi('Registry');
 const MySBTABI = loadAbi('MySBT');
+const GTokenABI = loadAbi('GToken');
 
 const ROLE_ENDUSER = keccak256(toBytes('ENDUSER'));
 const ANVIL_RPC = 'http://127.0.0.1:8545';
@@ -44,14 +46,16 @@ async function main() {
     console.log('\n🔥 Starting Phase 6: MySBT Burn & Linkage Test 🔥\n');
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
-    // NEW DEPLOYMENT ADDRESSES (Step 4171)
-    const REGISTRY_ADDR = (process.env.REGISTRY_ADDR || '0xd710a67624Ad831683C86a48291c597adE30F787') as Hex;
-    const MYSBT_ADDR = (process.env.MYSBT_ADDR || '0xd30bF3219A0416602bE8D482E0396eF332b0494E') as Hex;
-    const GTOKEN_ADDR = (process.env.GTOKEN_ADDR || '0x10e38eE9dd4C549b61400Fc19347D00eD3edAfC4') as Hex;
-    const STAKING_ADDR = (process.env.STAKING_ADDR || '0xd753c12650c280383Ce873Cc3a898F6f53973d16') as Hex;
+    // LATEST DEPLOYMENT ADDRESSES from DeployV3FullLocal output
+    const REGISTRY_ADDR = (process.env.REGISTRY_ADDR || '0xaB837301d12cDc4b97f1E910FC56C9179894d9cf') as Hex;
+    const MYSBT_ADDR = (process.env.MYSBT_ADDR || '0x4ff1f64683785E0460c24A4EF78D582C2488704f') as Hex;
+    const GTOKEN_ADDR = (process.env.GTOKEN_ADDR || '0x124dDf9BdD2DdaD012ef1D5bBd77c00F05C610DA') as Hex;
+    const STAKING_ADDR = (process.env.STAKING_ADDR || '0xe044814c9eD1e6442Af956a817c161192cBaE98F') as Hex;
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
+
+    const stakeAmount = 400000000000000000n; // 0.4 ether
     console.log(`   🛠️  Registry: ${REGISTRY_ADDR}, GToken: ${GTOKEN_ADDR}, Staking: ${STAKING_ADDR}`);
 
     // 1. Setup User (Eve)
@@ -63,30 +67,45 @@ async function main() {
     await waitForTx(publicClient, hashFund);
 
     // Fund Eve GToken
-    console.log(`   💰 Funding Eve with GToken...`);
+    const totalNeeded = stakeAmount + 100000000000000000n; // stake + safety
+    console.log(`   💰 Funding Eve with ${totalNeeded} GToken...`);
     await adminWallet.writeContract({
-        address: GTOKEN_ADDR, abi: loadAbi('GToken'), functionName: 'mint', args: [eveAccount.address, 1000n]
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [eveAccount.address, totalNeeded]
     });
     const hashApprove = await eveWallet.writeContract({
-        address: GTOKEN_ADDR, abi: loadAbi('GToken'), functionName: 'approve', args: [STAKING_ADDR, 100000n]
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, totalNeeded]
     });
-    await waitForTx(publicClient, hashApprove);
+     await waitForTx(publicClient, hashApprove);
 
     // Ensure ROLE_ENDUSER is configured
     console.log(`   🔧 Ensuring ROLE_ENDUSER is active...`);
     const endUserConfig = await publicClient.readContract({
-        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'roleConfigs', args: [ROLE_ENDUSER]
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'getRoleConfig', args: [ROLE_ENDUSER]
     }) as any;
     
-    if (!endUserConfig[6]) { // isActive
-        console.log(`   🔧 Activating ROLE_ENDUSER with minStake 100...`);
+    // RoleConfig index 8 is isActive
+    if (!endUserConfig.isActive && !endUserConfig[8]) {
+        console.log(`   🔧 Activating ROLE_ENDUSER with minStake 0.3 ETH...`);
+        // RoleConfig: minStake, entryBurn, slashThreshold, slashBase, slashInc, slashMax, exitFee%, minExitFee, isActive, description
+        const roleConfig = [
+            parseEther('0.3'),  // minStake
+            parseEther('0.05'), // entryBurn
+            10n,                // slashThreshold
+            parseEther('0.01'), // slashBase
+            parseEther('0.005'),// slashIncrement
+            parseEther('0.1'),  // slashMax
+            1000n,              // exitFeePercent (10%)
+            parseEther('0.05'), // minExitFee
+            true,               // isActive
+            "End User Role"     // description
+        ];
         const txConfig = await adminWallet.writeContract({
             address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'configureRole',
-            args: [ROLE_ENDUSER, [100n, 0n, 0n, 0n, 0n, 0n, true, "EndUser"]]
+            args: [ROLE_ENDUSER, roleConfig]
         });
         await waitForTx(publicClient, txConfig);
     }
-    const targetComm = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as Hex;
+    const targetComm = adminWallet.account.address;
 
     // Pre-flight check: Is community active?
     const isCommActive = await publicClient.readContract({
@@ -95,34 +114,25 @@ async function main() {
     console.log(`   🔍 Community ${targetComm} active: ${isCommActive}`);
 
     console.log(`   📝 Registering Eve to get SBT...`);
-    const eveRoleData = { 
-        account: eveAccount.address, 
-        community: targetComm, 
-        avatarURI: "ipfs://eve", 
-        ensName: "eve.c", 
-        stakeAmount: 100n 
-    };
-
     const eveData = encodeAbiParameters(
-        [{ type: 'tuple', components: [
+        [
             { name: 'account', type: 'address' },
             { name: 'community', type: 'address' },
             { name: 'avatarURI', type: 'string' },
             { name: 'ensName', type: 'string' },
             { name: 'stakeAmount', type: 'uint256' }
-        ]}],
-        [eveRoleData]
+        ],
+        [eveAccount.address, targetComm, "ipfs://eve", "eve.c", stakeAmount]
     );
-    console.log(`   📦 Encoded data length: ${eveData.length}`);
 
     // Final sanity checks for Eve
-    const eveGTokenBalance = await publicClient.readContract({
-        address: GTOKEN_ADDR, abi: loadAbi('GToken'), functionName: 'balanceOf', args: [eveAccount.address]
-    }) as bigint;
-    const eveAllowance = await publicClient.readContract({
-        address: GTOKEN_ADDR, abi: loadAbi('GToken'), functionName: 'allowance', args: [eveAccount.address, STAKING_ADDR]
-    }) as bigint;
-    console.log(`   💰 Eve GToken Balance: ${eveGTokenBalance}, Allowance: ${eveAllowance}`);
+    const balEve = await publicClient.readContract({
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'balanceOf', args: [eveAccount.address]
+    });
+    const allowEve = await publicClient.readContract({
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'allowance', args: [eveAccount.address, STAKING_ADDR]
+    });
+    console.log(`   💰 Eve GToken Balance: ${balEve}, Allowance: ${allowEve}`);
 
     console.log(`   📝 Encoded Data: ${eveData}`);
 
@@ -140,38 +150,48 @@ async function main() {
         });
         await waitForTx(publicClient, txReg);
     } catch (err: any) {
-        console.error(`❌ registerRoleSelf failed:`, err.message);
+        console.error(`❌ RegisterRoleSelf failed.`);
         
         let errorData = err.data;
-        // Walk the error object to find data
-        let current = err;
-        while (current && !errorData) {
-            if (current.data) {
-                errorData = current.data;
+        if (!errorData && err.cause) {
+            let current = err.cause;
+            while (current && !errorData) {
+                if (current.data) errorData = current.data;
+                current = current.cause;
             }
-            current = current.cause || current.walk?.() || current.error;
         }
 
         if (errorData) {
-            console.log(`📡 Raw Error Data Found: ${errorData}`);
-            const selector = errorData.slice(0, 10);
-            console.log(`   Selector: ${selector}`);
-
-            try {
-                const decoded = decodeErrorResult({ abi: RegistryABI, data: errorData });
-                console.error(`   Registry Error: ${decoded.errorName} (${JSON.stringify(decoded.args, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`);
-            } catch {
+            console.log(`   🔸 Revert Data: ${errorData}`);
+            if (errorData.startsWith('0xfb8f41b2')) { // InsufficientStake(address,uint256,uint256)
+                const data = decodeErrorResult({
+                    abi: [
+                        {
+                            type: 'error',
+                            name: 'InsufficientStake',
+                            inputs: [
+                                { name: 'token', type: 'address' },
+                                { name: 'provided', type: 'uint256' },
+                                { name: 'required', type: 'uint256' }
+                            ]
+                        }
+                    ],
+                    data: errorData
+                });
+                console.log(`   🔸 Decoded Error: InsufficientStake(token: ${data.args[0]}, provided: ${data.args[1]}, required: ${data.args[2]})`);
+            } else {
                 try {
-                    const StakingABI = loadAbi('GTokenStaking');
-                    const decoded = decodeErrorResult({ abi: StakingABI, data: errorData });
-                    console.error(`   Staking Error: ${decoded.errorName} (${JSON.stringify(decoded.args, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`);
-                } catch {
-                    console.error(`   Could not decode error with Registry or Staking ABIs.`);
+                    const decodedError = decodeErrorResult({
+                        abi: RegistryABI,
+                        data: errorData
+                    });
+                    console.log(`   🔸 Decoded Error: ${decodedError.errorName}(${JSON.stringify(decodedError.args, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`);
+                } catch (e) {
+                    console.log(`   🔸 Raw Revert Message: ${err.message}`);
                 }
             }
         } else {
-            console.log(`🔍 Full Error Object for inspection:`, JSON.stringify(err, (_, value) => 
-                typeof value === 'bigint' ? value.toString() : value, 2));
+            console.log(`   🔸 Error: ${err.shortMessage || err.message}`);
         }
         process.exit(1);
     }
@@ -201,6 +221,16 @@ async function main() {
 
     // 4. Test Role Exit Linkage
     if (existsAfterBurn === 0n) {
+        console.log(`\n🚪 Cleaning up Eve's role before re-registration...`);
+        try {
+            const txCleanup = await eveWallet.writeContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'exitRole', args: [ROLE_ENDUSER]
+            });
+            await waitForTx(publicClient, txCleanup);
+        } catch (e) {
+            console.log(`   (Cleanup skip or already exited)`);
+        }
+
         console.log(`\n🔄 Re-registering Eve for Linkage Test...`);
         const txReg2 = await eveWallet.writeContract({
             address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',

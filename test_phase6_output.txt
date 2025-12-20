@@ -1,0 +1,19 @@
+(node:61641) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/scripts/13_test_sbt_burn_linkage.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[dotenv@17.2.3] injecting env (4) from ../SuperPaymaster/contracts/.env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+
+🔥 Starting Phase 6: MySBT Burn & Linkage Test 🔥
+
+   🛠️  Registry: 0xaB837301d12cDc4b97f1E910FC56C9179894d9cf, GToken: 0x124dDf9BdD2DdaD012ef1D5bBd77c00F05C610DA, Staking: 0xe044814c9eD1e6442Af956a817c161192cBaE98F
+👤 Eve (Test User): 0xB9ee4128cd728D75C55A8d2e895CB50E31d1781A
+   💰 Funding Eve with 500000000000000000 GToken...
+   🔧 Ensuring ROLE_ENDUSER is active...
+   🔍 Community 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 active: true
+   📝 Registering Eve to get SBT...
+   💰 Eve GToken Balance: 500000000000000000, Allowance: 500000000000000000
+   📝 Encoded Data: 0x000000000000000000000000b9ee4128cd728d75c55a8d2e895cb50e31d1781a000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb9226600000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000058d15e176280000000000000000000000000000000000000000000000000000000000000000000a697066733a2f2f6576650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000056576652e63000000000000000000000000000000000000000000000000000000
+   🔍 Simulating registration...
+❌ RegisterRoleSelf failed.
+   🔸 Error: The contract function "registerRoleSelf" reverted.

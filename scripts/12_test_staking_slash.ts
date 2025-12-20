@@ -48,10 +48,10 @@ async function main() {
     console.log('\n🛡️ Starting Phase 5: Staking & Slash Test 🛡️\n');
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
-    // VERIFIED DEPLOYMENT ADDRESSES (Step 4000)
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0xaB7B4c595d3cE8C85e16DA86630f2fc223B05057';
-    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0xddE78e6202518FF4936b5302cC2891ec180E8bFf';
-    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xB06c856C8eaBd1d8321b687E188204C1018BC4E5';
+    // LATEST DEPLOYMENT ADDRESSES from DeployV3FullLocal output
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0xaB837301d12cDc4b97f1E910FC56C9179894d9cf';
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0x124dDf9BdD2DdaD012ef1D5bBd77c00F05C610DA';
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xe044814c9eD1e6442Af956a817c161192cBaE98F';
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
@@ -66,8 +66,8 @@ async function main() {
     await adminWallet.sendTransaction({ to: daveAccount.address, value: 1000000000000000000n });
 
     // 2. Fund Dave GToken
-    const stakeAmount = 500n;
-    const mintAmount = 1000n; // Mint extra to cover any diagnostic costs
+    const stakeAmount = 400000000000000000n; // 0.4 ether (minStake is 0.3)
+    const mintAmount = 1000000000000000000n; // 1.0 ether
     console.log(`   💰 Minting ${mintAmount} GToken to Dave...`);
     const txMint = await adminWallet.writeContract({
         address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [daveAccount.address, mintAmount]
@@ -75,8 +75,7 @@ async function main() {
     await waitForTx(publicClient, txMint);
 
     const txApprove = await daveWallet.writeContract({
-        // Approve a large amount
-        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, 100000n]
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, mintAmount]
     });
     await waitForTx(publicClient, txApprove);
 
@@ -228,8 +227,8 @@ async function main() {
     });
 
     const txSlash = await adminWallet.writeContract({
-        address: STAKING_ADDR, abi: GTokenStakingABI, functionName: 'slash',
-        args: [daveAccount.address, slashAmount, "Test Slash"]
+        address: STAKING_ADDR, abi: GTokenStakingABI, functionName: 'slashByDVT',
+        args: [daveAccount.address, ROLE_ENDUSER, slashAmount, "Test Slash"]
     });
     await waitForTx(publicClient, txSlash);
     console.log(`   ✅ Dave Slashed for ${slashAmount}.`);

@@ -1,26 +1,22 @@
 {
-  "name": "aastar-sdk-monorepo",
+  "name": "aastar-sdk",
+  "version": "0.3.0",
   "private": true,
-  "description": "AAStar SDK Monorepo",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:local": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_reputation.ts && ts-node scripts/06_local_test_v3_execution.ts' | tee local_regression.log",
+    "test:phase5-7": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/12_test_staking_exit.ts && ts-node scripts/12_test_slash_mechanism.ts && ts-node scripts/12_test_slash_queries.ts && ts-node scripts/13_test_sbt_burn_linkage.ts' | tee phase5-7_test.log",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
     "cross-env": "^10.1.0",
-    "csv-writer": "^1.6.0",
     "dotenv": "^17.2.3",
-    "prettier": "^3.2.4",
-    "tsx": "^4.21.0",
-    "typescript": "^5.3.3",
-    "viem": "^2.7.1",
-    "vitest": "^1.2.1"
-  },
-  "packageManager": "pnpm@10.6.3+sha512.bb45e34d50a9a76e858a95837301bfb6bd6d35aea2c5d52094fa497a467c43f5c440103ce2511e9e0a2f89c3d6071baac3358fc68ac6fb75e2ceb3d2736065e6",
-  "dependencies": {
-    "@aastar/shared-config": "0.3.6"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

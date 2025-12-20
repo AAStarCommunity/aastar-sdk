@@ -1,0 +1,23 @@
+/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:859
+    return new TSError(diagnosticText, diagnosticCodes, diagnostics);
+           ^
+TSError: ⨯ Unable to compile TypeScript:
+scripts/13_test_sbt_burn_linkage.ts(90,13): error TS2304: Cannot find name 'parseEther'.
+scripts/13_test_sbt_burn_linkage.ts(91,13): error TS2304: Cannot find name 'parseEther'.
+scripts/13_test_sbt_burn_linkage.ts(93,13): error TS2304: Cannot find name 'parseEther'.
+scripts/13_test_sbt_burn_linkage.ts(94,13): error TS2304: Cannot find name 'parseEther'.
+scripts/13_test_sbt_burn_linkage.ts(95,13): error TS2304: Cannot find name 'parseEther'.
+scripts/13_test_sbt_burn_linkage.ts(97,13): error TS2304: Cannot find name 'parseEther'.
+
+    at createTSError (/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:859:12)
+    at reportTSError (/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:863:19)
+    at getOutput (/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:1077:36)
+    at Object.compile (/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:1433:41)
+    at Module.m._compile (/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:1617:30)
+    at node:internal/modules/cjs/loader:1893:10
+    at Object.require.extensions.<computed> [as .ts] (/Users/jason/Library/pnpm/global/5/.pnpm/ts-node@10.9.1_@types+node@22.13.8_typescript@4.9.5/node_modules/ts-node/src/index.ts:1621:12)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {
+  diagnosticCodes: [ 2304, 2304, 2304, 2304, 2304, 2304 ]
+}
