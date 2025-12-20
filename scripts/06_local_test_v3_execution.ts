@@ -10,14 +10,14 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
-const ENTRY_POINT = process.env.MOCK_ENTRY_POINT as Hex;
-const APNTS = process.env.APNTS as Hex;
-const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
-const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
-const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex;
-const RECEIVER = process.env.RECEIVER as Hex;
+const ENTRY_POINT = process.env.ENTRY_POINT_ADDR as Hex;
+const APNTS = process.env.XPNTS_ADDR as Hex;
+const SUPER_PAYMASTER = process.env.SUPERPAYMASTER_ADDR as Hex;
+const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
+const ACCOUNT_C = (process.env.ALICE_AA_ACCOUNT || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8') as Hex; // Fallback
+const RECEIVER = (process.env.RECEIVER || '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC') as Hex; // Anvil #2
 
-if (!SUPER_PAYMASTER || !APNTS) throw new Error("Missing Config");
+if (!SUPER_PAYMASTER || !APNTS || !ENTRY_POINT) throw new Error("Missing Config");
 
 const erc20Abi = parseAbi(['function transfer(address, uint256) returns (bool)']);
 

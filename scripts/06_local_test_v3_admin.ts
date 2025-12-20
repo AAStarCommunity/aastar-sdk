@@ -10,9 +10,9 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
-const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
-const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
-const APNTS = process.env.APNTS as Hex;
+const SUPER_PAYMASTER = process.env.SUPERPAYMASTER_ADDR as Hex;
+const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
+const APNTS = process.env.XPNTS_ADDR as Hex;
 
 if (!SUPER_PAYMASTER || !SIGNER_KEY) throw new Error("Missing Config");
 

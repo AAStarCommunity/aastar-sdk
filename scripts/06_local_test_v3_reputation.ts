@@ -10,12 +10,13 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
-const REGISTRY = process.env.REGISTRY as Hex;
-const REPUTATION_SYSTEM = process.env.REPUTATION_SYSTEM as Hex;
-const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
-const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex;
+const REGISTRY = process.env.REGISTRY_ADDR as Hex;
+const REPUTATION_SYSTEM = process.env.REPUTATION_SYSTEM_ADDR as Hex;
+const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
+// Use a random address if ALICE is missing, sufficient for reputation updates (registry doesn't checks if it's a contract for score updates)
+const ACCOUNT_C = (process.env.ALICE_AA_ACCOUNT || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8') as Hex; // Default to Anvil #1
 
-if (!REGISTRY || !REPUTATION_SYSTEM) throw new Error("Missing Config");
+if (!REGISTRY || !REPUTATION_SYSTEM || !SIGNER_KEY) throw new Error("Missing Config");
 
 const regAbi = parseAbi([
     'function globalReputation(address) view returns (uint256)',
