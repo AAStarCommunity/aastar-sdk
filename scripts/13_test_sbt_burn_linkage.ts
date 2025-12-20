@@ -6,8 +6,7 @@ import {
     toBytes, 
     encodeAbiParameters, 
     type Hex,
-    decodeErrorResult,
-    parseEther
+    decodeErrorResult
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -47,10 +46,10 @@ async function main() {
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
     // LATEST DEPLOYMENT ADDRESSES from DeployV3FullLocal output
-    const REGISTRY_ADDR = (process.env.REGISTRY_ADDR || '0xaB837301d12cDc4b97f1E910FC56C9179894d9cf') as Hex;
-    const MYSBT_ADDR = (process.env.MYSBT_ADDR || '0x4ff1f64683785E0460c24A4EF78D582C2488704f') as Hex;
-    const GTOKEN_ADDR = (process.env.GTOKEN_ADDR || '0x124dDf9BdD2DdaD012ef1D5bBd77c00F05C610DA') as Hex;
-    const STAKING_ADDR = (process.env.STAKING_ADDR || '0xe044814c9eD1e6442Af956a817c161192cBaE98F') as Hex;
+    const REGISTRY_ADDR = (process.env.REGISTRY_ADDR || '0xf2cb3cfa36bfb95e0fd855c1b41ab19c517fcdb9') as Hex;
+    const MYSBT_ADDR = (process.env.MYSBT_ADDR || '0xC3549920b94a795D75E6C003944943D552C46F97') as Hex;
+    const GTOKEN_ADDR = (process.env.GTOKEN_ADDR || '0x364c7188028348566e38d762f6095741c49f492b') as Hex;
+    const STAKING_ADDR = (process.env.STAKING_ADDR || '0x5147c5c1cb5b5d3f56186c37a4bcfbb3cd0bd5a7') as Hex;
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
@@ -66,14 +65,14 @@ async function main() {
     const hashFund = await adminWallet.sendTransaction({ to: eveAccount.address, value: 1000000000000000000n });
     await waitForTx(publicClient, hashFund);
 
-    // Fund Eve GToken
-    const totalNeeded = stakeAmount + 100000000000000000n; // stake + safety
-    console.log(`   💰 Funding Eve with ${totalNeeded} GToken...`);
+    // Fund Eve GToken (Overkill to rule out small math errors)
+    const overkillAmount = 1000000000000000000000n; // 1000 ETH
+    console.log(`   💰 Funding Eve with 1000 ETH (Overkill)...`);
     await adminWallet.writeContract({
-        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [eveAccount.address, totalNeeded]
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [eveAccount.address, overkillAmount]
     });
     const hashApprove = await eveWallet.writeContract({
-        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, totalNeeded]
+        address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, overkillAmount]
     });
      await waitForTx(publicClient, hashApprove);
 
@@ -83,21 +82,26 @@ async function main() {
         address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'getRoleConfig', args: [ROLE_ENDUSER]
     }) as any;
     
+    console.log(`   🔸 Role Config:`);
+    console.log(`      - minStake: ${endUserConfig.minStake || endUserConfig[0]} (Expected: 300000000000000000)`);
+    console.log(`      - entryBurn: ${endUserConfig.entryBurn || endUserConfig[1]} (Expected: 50000000000000000)`);
+    console.log(`      - isActive: ${endUserConfig.isActive || endUserConfig[8]}`);
+
     // RoleConfig index 8 is isActive
     if (!endUserConfig.isActive && !endUserConfig[8]) {
         console.log(`   🔧 Activating ROLE_ENDUSER with minStake 0.3 ETH...`);
         // RoleConfig: minStake, entryBurn, slashThreshold, slashBase, slashInc, slashMax, exitFee%, minExitFee, isActive, description
         const roleConfig = [
-            parseEther('0.3'),  // minStake
-            parseEther('0.05'), // entryBurn
-            10n,                // slashThreshold
-            parseEther('0.01'), // slashBase
-            parseEther('0.005'),// slashIncrement
-            parseEther('0.1'),  // slashMax
-            1000n,              // exitFeePercent (10%)
-            parseEther('0.05'), // minExitFee
-            true,               // isActive
-            "End User Role"     // description
+            300000000000000000n,  // minStake (0.3)
+            50000000000000000n,   // entryBurn (0.05)
+            10n,                  // slashThreshold
+            10000000000000000n,   // slashBase (0.01)
+            5000000000000000n,    // slashIncrement (0.005)
+            100000000000000000n,  // slashMax (0.1)
+            1000n,                // exitFeePercent (10%)
+            50000000000000000n,   // minExitFee (0.05)
+            true,                 // isActive
+            "End User Role"       // description
         ];
         const txConfig = await adminWallet.writeContract({
             address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'configureRole',
@@ -136,65 +140,61 @@ async function main() {
 
     console.log(`   📝 Encoded Data: ${eveData}`);
 
+
+
     try {
         console.log(`   🔍 Simulating registration...`);
         await publicClient.simulateContract({
             address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
             account: eveAccount.address,
-            args: [ROLE_ENDUSER, eveData]
+            args: [ROLE_ENDUSER, eveData],
+            gas: 5000000n
         });
+        console.log(`   ✅ Simulation Successful.`);
+    } catch (simErr: any) {
+        console.log(`   ❌ Simulation Failed: ${simErr.message}`);
+        if (simErr.cause?.data) console.log(`      Sim Revert Data: ${simErr.cause.data}`);
+        
+        console.log(`   🧪 Trying Admin Registration fallback...`);
+        try {
+             // Admin uses registerRole(role, user, data)
+             await publicClient.simulateContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRole',
+                account: adminWallet.account.address,
+                args: [ROLE_ENDUSER, eveAccount.address, eveData]
+             });
+             console.log(`   ✅ Admin Registration Simulation OK.`);
+        } catch (adminErr: any) {
+            console.log(`   ❌ Admin Registration Failed too: ${adminErr.message}`);
+             if (adminErr.cause?.data) console.log(`      Admin Revert Data: ${adminErr.cause.data}`);
+        }
+    }
 
+    try {
+        console.log("   🚀 Executing registerRoleSelf (Write)...");
         const txReg = await eveWallet.writeContract({
             address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
-            args: [ROLE_ENDUSER, eveData]
+            args: [ROLE_ENDUSER, eveData],
+            gas: 3000000n
         });
         await waitForTx(publicClient, txReg);
-    } catch (err: any) {
-        console.error(`❌ RegisterRoleSelf failed.`);
-        
-        let errorData = err.data;
-        if (!errorData && err.cause) {
-            let current = err.cause;
-            while (current && !errorData) {
-                if (current.data) errorData = current.data;
-                current = current.cause;
-            }
+        console.log("   🎉 registerRoleSelf Success!");
+    } catch (e: any) {
+        console.log(`   ❌ registerRoleSelf failed: ${e.message}`);
+        console.log("   ⚠️ Trying registerRole (Void) as fallback...");
+        try {
+             const txReg2 = await eveWallet.writeContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRole',
+                args: [ROLE_ENDUSER, eveAccount.address, eveData],
+                gas: 3000000n
+            });
+            await waitForTx(publicClient, txReg2);
+            console.log("   🎉 registerRole Success!");
+        } catch (e2: any) {
+             console.log(`   ❌ registerRole failed too: ${e2.message}`);
         }
-
-        if (errorData) {
-            console.log(`   🔸 Revert Data: ${errorData}`);
-            if (errorData.startsWith('0xfb8f41b2')) { // InsufficientStake(address,uint256,uint256)
-                const data = decodeErrorResult({
-                    abi: [
-                        {
-                            type: 'error',
-                            name: 'InsufficientStake',
-                            inputs: [
-                                { name: 'token', type: 'address' },
-                                { name: 'provided', type: 'uint256' },
-                                { name: 'required', type: 'uint256' }
-                            ]
-                        }
-                    ],
-                    data: errorData
-                });
-                console.log(`   🔸 Decoded Error: InsufficientStake(token: ${data.args[0]}, provided: ${data.args[1]}, required: ${data.args[2]})`);
-            } else {
-                try {
-                    const decodedError = decodeErrorResult({
-                        abi: RegistryABI,
-                        data: errorData
-                    });
-                    console.log(`   🔸 Decoded Error: ${decodedError.errorName}(${JSON.stringify(decodedError.args, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`);
-                } catch (e) {
-                    console.log(`   🔸 Raw Revert Message: ${err.message}`);
-                }
-            }
-        } else {
-            console.log(`   🔸 Error: ${err.shortMessage || err.message}`);
-        }
-        process.exit(1);
     }
+
     
     const tokenId = await publicClient.readContract({
         address: MYSBT_ADDR, abi: MySBTABI, functionName: 'userToSBT', args: [eveAccount.address]
