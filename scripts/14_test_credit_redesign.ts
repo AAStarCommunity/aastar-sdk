@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseAbi, parseEther, formatEther, type Hex, encodeAbiParameters, keccak256, toBytes, zeroAddress } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Hex, encodeAbiParameters, keccak256, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -21,9 +21,8 @@ if (!SUPERPAYMASTER_ADDR || !REGISTRY_ADDR || !ADMIN_KEY || !XPNTS_ADDR) {
 }
 
 // Load ABIs
-// We can use parseAbi for simple interfaces, or load JSON for full contracts. Use JSON for accuracy.
-const REGISTRY_ABI = JSON.parse(readFileSync("../../SuperPaymaster/contracts/out/Registry.sol/Registry.json", "utf-8")).abi;
-const XPNTS_ABI = JSON.parse(readFileSync("../../SuperPaymaster/contracts/out/xPNTsToken.sol/xPNTsToken.json", "utf-8")).abi;
+const REGISTRY_ABI = JSON.parse(readFileSync("./abis/Registry.abi.json", "utf-8")).abi;
+const XPNTS_ABI = JSON.parse(readFileSync("./abis/xPNTsToken.abi.json", "utf-8")).abi;
 
 async function runCreditTest() {
     console.log("🧪 Running Credit System Redesign Verification (Viem)...");
@@ -44,29 +43,69 @@ async function runCreditTest() {
     console.log(`\n1️⃣ Registering User for Credit...`);
     const ENDUSER_ROLE = keccak256(toBytes("ENDUSER"));
     
-    // Encode Role Data: (address, address, string, string, uint256)
+    // Create User Wallet
+    const userWallet = createWalletClient({ account: userAccount, chain: foundry, transport: http(RPC_URL) });
+    
+    // Fund User FIRST and HEAVILY
+    console.log(`   Funding User with 10 ETH...`);
+    const hashFund = await adminWallet.sendTransaction({ to: userAddr, value: parseEther("10.0") });
+    await publicClient.waitForTransactionReceipt({ hash: hashFund });
+
+    // Mint GTokens for registration
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex;
+    const GTOKEN_ABI = JSON.parse(readFileSync("./abis/GToken.abi.json", "utf-8")).abi;
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex;
+    
+    await adminWallet.writeContract({
+        address: GTOKEN_ADDR,
+        abi: GTOKEN_ABI,
+        functionName: 'mint',
+        args: [userAddr, parseEther("100")]
+    });
+    const hashApprove = await userWallet.writeContract({
+        address: GTOKEN_ADDR,
+        abi: GTOKEN_ABI,
+        functionName: 'approve',
+        args: [STAKING_ADDR, parseEther("100")]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: hashApprove });
+
+    // Encode Role Data (TUPLE matches Registry.sol struct decoding)
     const roleData = encodeAbiParameters(
         [
-            { name: 'account', type: 'address' },
-            { name: 'community', type: 'address' },
-            { name: 'avatar', type: 'string' },
-            { name: 'ens', type: 'string' },
-            { name: 'stake', type: 'uint256' }
+            {
+                type: 'tuple',
+                components: [
+                    { name: 'account', type: 'address' },
+                    { name: 'community', type: 'address' },
+                    { name: 'avatarURI', type: 'string' },
+                    { name: 'ensName', type: 'string' },
+                    { name: 'stakeAmount', type: 'uint256' }
+                ]
+            }
         ],
-        [userAddr, zeroAddress, "ipfs://avatar", "user.eth", 0n]
+        [
+            {
+                account: userAddr,
+                community: privateKeyToAccount(ADMIN_KEY).address,
+                avatarURI: "ipfs://avatar",
+                ensName: "user.eth",
+                stakeAmount: 0n
+            }
+        ]
     );
 
     try {
-        const hash = await adminWallet.writeContract({
+        const hash = await userWallet.writeContract({
             address: REGISTRY_ADDR,
             abi: REGISTRY_ABI,
-            functionName: 'registerRole',
-            args: [ENDUSER_ROLE, userAddr, roleData]
+            functionName: 'registerRoleSelf',
+            args: [ENDUSER_ROLE, roleData]
         });
         await publicClient.waitForTransactionReceipt({ hash });
-        console.log("   ✅ User Registered");
+        console.log("   ✅ User Registered via registerRoleSelf");
     } catch (e: any) {
-        console.log("   ⚠️ Registration warning:", e.message?.split('\n')[0]);
+        console.log("   ⚠️ Registration error:", e.message?.split('\n')[0]);
     }
 
     // Check Credit Limit
@@ -129,6 +168,7 @@ async function runCreditTest() {
         address: XPNTS_ADDR,
         abi: XPNTS_ABI,
         functionName: 'communityOwner',
+        args: []
     }) as Hex;
     console.log(`   Token Owner: ${tokenOwner}`);
     
