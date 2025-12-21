@@ -214,6 +214,25 @@
   },
   {
     "type": "function",
+    "name": "getActiveMemberships",
+    "inputs": [
+      {
+        "name": "tid",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "active",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getApproved",
     "inputs": [
       {
