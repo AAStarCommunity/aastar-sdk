@@ -57,13 +57,23 @@ if [ "$SKIP_DEPLOY" = false ]; then
         export PRIVATE_KEY_JASON=$ADMIN_KEY
     fi
 
+    # Remove old config to ensure fresh generation
+    rm -f script/v3/config.json
+    
     # Clear cache and attempt deployment
     rm -rf broadcast cache
     if ! forge script script/v3/SetupV3.s.sol:SetupV3 --rpc-url http://127.0.0.1:8545 --broadcast --quiet --slow; then
-        echo -e "${RED}❌ Deployment failed (possibly 'nonce too low').${NC}"
-        echo -e "${CYAN}💡 Recommendation: Restart your Anvil node ('killall anvil && anvil') to clear state.${NC}"
-        echo -e "${YELLOW}⚠️  Attempting to proceed with existing deployment...${NC}"
+        echo -e "${RED}❌ Deployment failed.${NC}"
+        # Since we just restarted Anvil, failure is critical
+        exit 1
     fi
+    
+    # Verify config generation
+    if [ ! -f script/v3/config.json ]; then
+        echo -e "${RED}❌ config.json was NOT generated! Address sync will fail.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ config.json generated with fresh addresses.${NC}"
 
     # 3. Extract ABIs
     echo -e "${YELLOW}📝 Extracting ABIs...${NC}"
