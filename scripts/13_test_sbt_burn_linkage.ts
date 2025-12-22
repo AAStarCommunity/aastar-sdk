@@ -150,7 +150,11 @@ async function main() {
         args: [ROLE_ENDUSER, eveAccount.address]
     });
 
-    if (isRegistered) {
+    const hasRole = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole', args: [ROLE_ENDUSER, eveAccount.address]
+    });
+
+    if (isRegistered || hasRole) {
         console.log(`   ⚠️ Already registered. Skipping registration.`);
     } else {
         try {

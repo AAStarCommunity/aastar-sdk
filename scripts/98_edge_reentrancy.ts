@@ -115,13 +115,16 @@ async function runReentrancyTest() {
 
     // 2.5 Reset SuperPaymaster State (withdraw existing GToken deposits to clear totalTracked)
     console.log('🧹 Clearing existing deposits to reset accounting...');
-    // SuperPaymaster.deposits(account)
-    const adminDeposit = await publicClient.readContract({
+    // SuperPaymaster.deposits(account) returns (deposit, staked, stake, unstakeDelaySec, withdrawTime)
+    const depositData = await publicClient.readContract({
         address: SUPER_PAYMASTER,
-        abi: parseAbi(['function deposits(address) view returns (uint256)']),
+        abi: parseAbi(['function deposits(address) view returns (uint112, bool, uint112, uint32, uint48)']),
         functionName: 'deposits',
         args: [admin.address]
-    }) as bigint;
+    }) as [bigint, boolean, bigint, number, number];
+    
+    // Use deposit amount (index 0)
+    const adminDeposit = depositData[0];
 
     if (adminDeposit > 0n) {
         console.log(`   Withdraw ${formatEther(adminDeposit)} ETH/GToken...`);
