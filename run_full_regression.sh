@@ -62,7 +62,7 @@ if [ "$SKIP_DEPLOY" = false ]; then
     
     # Clear cache and attempt deployment
     rm -rf broadcast cache
-    if ! forge script script/v3/SetupV3.s.sol:SetupV3 --rpc-url http://127.0.0.1:8545 --broadcast --quiet --slow; then
+    if ! forge script script/v3/SetupV3.s.sol:SetupV3 --rpc-url http://127.0.0.1:8545 --broadcast --slow; then
         echo -e "${RED}❌ Deployment failed.${NC}"
         # Since we just restarted Anvil, failure is critical
         exit 1
@@ -74,6 +74,23 @@ if [ "$SKIP_DEPLOY" = false ]; then
         exit 1
     fi
     echo -e "${GREEN}✅ config.json generated with fresh addresses.${NC}"
+    
+    # Extract Registry Address from config
+    REGISTRY_ADDR=$(grep -o '"registry": *"[^"]*"' script/v3/config.json | cut -d'"' -f4)
+    echo -e "${YELLOW}🔍 Verifying deployment at $REGISTRY_ADDR...${NC}"
+    
+    # Check code existence (requires cast)
+    if ! command -v cast &> /dev/null; then
+        echo -e "${YELLOW}⚠️ 'cast' not found. Skipping code verification.${NC}"
+    else
+        CODE_SIZE=$(cast code "$REGISTRY_ADDR" --rpc-url http://127.0.0.1:8545 | wc -c)
+        if [ "$CODE_SIZE" -lt 10 ]; then
+            echo -e "${RED}❌ Deployment verification failed: No code at Registry address!${NC}"
+            echo -e "${RED}🔍 Possible cause: Forge simulation succeeded (writing config) but Broadcast failed.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✅ Deployment verified (Code exists).${NC}"
+    fi
 
     # 3. Extract ABIs
     echo -e "${YELLOW}📝 Extracting ABIs...${NC}"
