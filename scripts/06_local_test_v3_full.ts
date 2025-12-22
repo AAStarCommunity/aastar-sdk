@@ -1,5 +1,5 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256 } from 'viem';
-import type { Hex } from 'viem';
+import type { Hex, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -18,8 +18,8 @@ const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const ROLE_COMMUNITY = keccak256(toHex('COMMUNITY'));
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
-const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex;
-const RECEIVER = process.env.RECEIVER as Hex;
+const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Fallback to Anvil #0 if missing
+const RECEIVER = process.env.RECEIVER as Hex || '0x3F4B8CB8E84A84939dE85592F524f4651Ddbc2e7';
 if (!SUPER_PAYMASTER || !APNTS || !REGISTRY_ADDR) throw new Error("Missing Config");
 
 // Helper: Pack 128-bit values
@@ -43,15 +43,52 @@ async function runFullV3Test() {
         args: [ROLE_COMMUNITY, signer.address]
     });
 
+    const waitForTx = async (hash: Hex) => {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status !== 'success') throw new Error(`Tx Failed: ${hash}`);
+        return receipt;
+    };
+
     if (!hasRole) {
         console.log("   Registering Community...");
+        
+        // Fix: Use proper encoded data for registration
+        const roleData = encodeAbiParameters(
+            [{ type: 'tuple', components: [
+                { type: 'string', name: 'name' },
+                { type: 'string', name: 'ensName' },
+                { type: 'string', name: 'website' },
+                { type: 'string', name: 'description' },
+                { type: 'string', name: 'logoURI' },
+                { type: 'uint256', name: 'stakeAmount' }
+            ]}],
+            [{ name: 'AdminCommunity', ensName: '', website: '', description: '', logoURI: '', stakeAmount: parseEther('500') }]
+        );
+
+        // Fund with GTokens first (required for 500 stake)
+        const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex; // Ensure this is loaded
+        const mintTx = await wallet.writeContract({ 
+            address: GTOKEN_ADDR, 
+            abi: parseAbi(['function mint(address, uint256)', 'function approve(address, uint256)']), 
+            functionName: 'mint', 
+            args: [signer.address, parseEther('1000')] 
+        });
+        await waitForTx(mintTx);
+        const approveTx = await wallet.writeContract({
+            address: GTOKEN_ADDR,
+            abi: parseAbi(['function mint(address, uint256)', 'function approve(address, uint256)']), 
+            functionName: 'approve', 
+            args: [process.env.STAKING_ADDR as Hex, parseEther('1000')] 
+        });
+        await waitForTx(approveTx);
+
         const registerTx = await wallet.writeContract({
             address: REGISTRY_ADDR,
-            abi: parseAbi(['function registerRole(bytes32, address, bytes) external']),
-            functionName: 'registerRole',
-            args: [ROLE_COMMUNITY, signer.address, '0x']
+            abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+            functionName: 'registerRoleSelf',
+            args: [ROLE_COMMUNITY, roleData]
         });
-        await publicClient.waitForTransactionReceipt({ hash: registerTx });
+        await waitForTx(registerTx);
     }
 
     const pmAbi = parseAbi([
@@ -138,10 +175,31 @@ async function runFullV3Test() {
     // ====================================================
     console.log("\n🧪 2. Testing Funding Cycle...");
     
+    // Ensure Balance
+    const balance = await publicClient.readContract({ address: APNTS, abi: erc20Abi, functionName: 'balanceOf', args: [signer.address] }) as bigint;
+    if (balance < parseEther("100")) {
+         console.log("   💰 Minting xPNTs...");
+         const tokenOwner = await publicClient.readContract({ address: APNTS, abi: parseAbi(['function communityOwner() view returns (address)']), functionName: 'communityOwner' }) as Address;
+         await (wallet as any).request({ method: 'anvil_impersonateAccount', params: [tokenOwner] });
+         await (wallet as any).request({ method: 'anvil_setBalance', params: [tokenOwner, '0x1000000000000000000'] }); // Fund gas
+         
+         const mintWallet = createWalletClient({ account: tokenOwner, chain: foundry, transport: http(RPC_URL) });
+         const mintHash = await mintWallet.writeContract({
+             address: APNTS, 
+             abi: parseAbi(['function mint(address, uint256)']), 
+             functionName: 'mint', 
+             args: [signer.address, parseEther("1000")],
+             account: tokenOwner
+         });
+         await publicClient.waitForTransactionReceipt({ hash: mintHash });
+         await (wallet as any).request({ method: 'anvil_stopImpersonatingAccount', params: [tokenOwner] });
+    }
+
     // Ensure Approved
     const allow = await publicClient.readContract({ address: APNTS, abi: erc20Abi, functionName: 'allowance', args: [signer.address, SUPER_PAYMASTER] });
     if (allow < parseEther("1000")) {
-        await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("10000")] });
+        const hash = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("10000")] });
+        await waitForTx(hash);
     }
 
     // Test Push Deposit (Transfer + Notify) - Since we know Pull might fail

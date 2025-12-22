@@ -188,14 +188,22 @@ async function main() {
     if (alreadyRegistered) {
         console.log(`   ⚠️ Already registered. Skipping registration tx.`);
     } else {
-        const txReg = await pmWallet.writeContract({
-            address: REGISTRY_ADDR,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [ROLE_PAYMASTER_AOA, pmData]
-        });
-        await waitForTx(publicClient, txReg);
-        console.log(`   ✅ Registered.`);
+        try {
+            const txReg = await pmWallet.writeContract({
+                address: REGISTRY_ADDR,
+                abi: RegistryABI,
+                functionName: 'registerRoleSelf',
+                args: [ROLE_PAYMASTER_AOA, pmData]
+            });
+            await waitForTx(publicClient, txReg);
+            console.log(`   ✅ Registered.`);
+        } catch (e: any) {
+             if (e.message.includes('RoleAlreadyGranted') || e.message.includes('AlreadyRegistered')) {
+                 console.log(`   ⚠️ Already registered (caught exception).`);
+             } else {
+                 throw e;
+             }
+        }
     }
 
     // 1.4 Verification
@@ -216,14 +224,16 @@ async function main() {
     // Increase Min Stake for AOA
     const newMinStake = requiredStake + parseEther('1');
     const roleConfigStruct = [
-        newMinStake,
-        roleConfig[1],
-        roleConfig[2],
-        roleConfig[3],
-        roleConfig[4],
-        roleConfig[5],
-        true,
-        "Updated AOA Paymaster"
+        newMinStake,      // minStake
+        roleConfig[1],    // entryBurn
+        roleConfig[2],    // slashThreshold
+        roleConfig[3],    // slashBase
+        roleConfig[4],    // slashIncrement
+        roleConfig[5],    // slashMax
+        roleConfig[6],    // exitFeePercent
+        roleConfig[7],    // minExitFee
+        true,             // isActive
+        "Updated AOA Paymaster" // description
     ];
 
     console.log(`   Updating MinStake to ${formatEther(newMinStake)}...`);
@@ -256,7 +266,9 @@ async function main() {
         roleConfig[4],
         roleConfig[5],
         roleConfig[6],
-        roleConfig[7]
+        roleConfig[7],
+        roleConfig[8],
+        roleConfig[9]
     ];
      const txRestore = await adminWallet.writeContract({
         address: REGISTRY_ADDR,

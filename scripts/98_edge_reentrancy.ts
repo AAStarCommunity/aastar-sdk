@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, type Hex, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, keccak256, toBytes, parseAbi, encodeAbiParameters, type Hex, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -59,6 +59,48 @@ async function runReentrancyTest() {
         account: admin
     });
     console.log('   ✅ Malicious Token Configured');
+
+    // 2.5 Register as Community to satisfy SuperPaymaster check
+    console.log('📝 Registering Attacker as Community...');
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
+    const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
+    const roleData = encodeAbiParameters(
+        [{ type: 'tuple', components: [
+            { type: 'string', name: 'name' },
+            { type: 'string', name: 'ensName' },
+            { type: 'string', name: 'website' },
+            { type: 'string', name: 'description' },
+            { type: 'string', name: 'logoURI' },
+            { type: 'uint256', name: 'stakeAmount' }
+        ]}],
+        [{ name: 'AttackerCommunity', ensName: '', website: '', description: '', logoURI: '', stakeAmount: parseEther('30') }]
+    );
+    
+    // Fund Admin with GToken for registration
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex;
+    const GTokenABI = [{"inputs":[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"mint","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"}];
+    await walletClient.writeContract({ address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [admin.address, parseEther('100')] });
+    await walletClient.writeContract({ address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [process.env.STAKING_ADDR as Hex, parseEther('100')] });
+
+    // Check if already registered
+    const isRegistered = await publicClient.readContract({
+        address: REGISTRY_ADDR,
+        abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
+        functionName: 'hasRole',
+        args: [ROLE_COMMUNITY, admin.address]
+    });
+
+    if (isRegistered) {
+        console.log('   ⚠️ Attacker already registered. Skipping registration tx.');
+    } else {
+        await walletClient.writeContract({
+            address: REGISTRY_ADDR,
+            abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+            functionName: 'registerRoleSelf',
+            args: [ROLE_COMMUNITY, roleData]
+        });
+        console.log('   ✅ Attacker Registered.');
+    }
 
     // 3. Switch SuperPaymaster to use Malicious Token (Simulating a hack/mistake)
     console.log('⚙️  Switching SuperPaymaster to Malicious Token...');

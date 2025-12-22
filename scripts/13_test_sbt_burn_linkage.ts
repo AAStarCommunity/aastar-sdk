@@ -5,6 +5,8 @@ import {
     keccak256, 
     toBytes, 
     encodeAbiParameters, 
+    parseEther,
+    toHex,
     type Hex
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
@@ -61,8 +63,9 @@ async function main() {
     const eveAccount = privateKeyToAccount(eveKey);
     const eveWallet = createWalletClient({ account: eveAccount, chain: anvil, transport: http(ANVIL_RPC) });
     console.log(`👤 Eve (Test User): ${eveAccount.address}`);
-    const hashFund = await adminWallet.sendTransaction({ to: eveAccount.address, value: 1000000000000000000n });
-    await waitForTx(publicClient, hashFund);
+    // Fund Eve via setBalance for absolute reliability
+    await (adminWallet as any).request({ method: 'anvil_setBalance', params: [eveAccount.address, toHex(parseEther("100.0"))] });
+    console.log(`   ✅ Eve funded with 100 ETH`);
 
     // Fund Eve GToken (Overkill to rule out small math errors)
     const overkillAmount = 1000000000000000000000n; // 1000 ETH
@@ -112,7 +115,7 @@ async function main() {
 
     // Pre-flight check: Is community active?
     const isCommActive = await publicClient.readContract({
-        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'checkRole', args: [keccak256(toBytes('COMMUNITY')), targetComm]
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole', args: [keccak256(toBytes('COMMUNITY')), targetComm]
     });
     console.log(`   🔍 Community ${targetComm} active: ${isCommActive}`);
 
@@ -141,56 +144,27 @@ async function main() {
 
 
 
-    try {
-        console.log(`   🔍 Simulating registration...`);
-        await publicClient.simulateContract({
-            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
-            account: eveAccount.address,
-            args: [ROLE_ENDUSER, eveData],
-            gas: 5000000n
-        });
-        console.log(`   ✅ Simulation Successful.`);
-    } catch (simErr: any) {
-        console.log(`   ❌ Simulation Failed: ${simErr.message}`);
-        if (simErr.cause?.data) console.log(`      Sim Revert Data: ${simErr.cause.data}`);
-        
-        console.log(`   🧪 Trying Admin Registration fallback...`);
-        try {
-             // Admin uses registerRole(role, user, data)
-             await publicClient.simulateContract({
-                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRole',
-                account: adminWallet.account.address,
-                args: [ROLE_ENDUSER, eveAccount.address, eveData]
-             });
-             console.log(`   ✅ Admin Registration Simulation OK.`);
-        } catch (adminErr: any) {
-            console.log(`   ❌ Admin Registration Failed too: ${adminErr.message}`);
-             if (adminErr.cause?.data) console.log(`      Admin Revert Data: ${adminErr.cause.data}`);
-        }
-    }
+    // Check if already registered
+    const isRegistered = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole',
+        args: [ROLE_ENDUSER, eveAccount.address]
+    });
 
-    try {
-        console.log("   🚀 Executing registerRoleSelf (Write)...");
-        const txReg = await eveWallet.writeContract({
-            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
-            args: [ROLE_ENDUSER, eveData],
-            gas: 3000000n
-        });
-        await waitForTx(publicClient, txReg);
-        console.log("   🎉 registerRoleSelf Success!");
-    } catch (e: any) {
-        console.log(`   ❌ registerRoleSelf failed: ${e.message}`);
-        console.log("   ⚠️ Trying registerRole (Void) as fallback...");
+    if (isRegistered) {
+        console.log(`   ⚠️ Already registered. Skipping registration.`);
+    } else {
         try {
-             const txReg2 = await eveWallet.writeContract({
-                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRole',
-                args: [ROLE_ENDUSER, eveAccount.address, eveData],
+            console.log("   🚀 Executing registerRoleSelf (Write)...");
+            const txReg = await eveWallet.writeContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
+                args: [ROLE_ENDUSER, eveData],
                 gas: 3000000n
             });
-            await waitForTx(publicClient, txReg2);
-            console.log("   🎉 registerRole Success!");
-        } catch (e2: any) {
-             console.log(`   ❌ registerRole failed too: ${e2.message}`);
+            await waitForTx(publicClient, txReg);
+            console.log("   🎉 registerRoleSelf Success!");
+        } catch (e: any) {
+            console.log(`   ❌ registerRoleSelf failed: ${e.message}`);
+            throw e;
         }
     }
 

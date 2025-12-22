@@ -6,7 +6,9 @@ import {
     keccak256, 
     toBytes, 
     encodeAbiParameters, 
-    type Hex
+    type Hex,
+    toHex,
+    parseEther
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -58,7 +60,9 @@ async function main() {
     const aliceWallet = createWalletClient({ account: aliceAccount, chain: anvil, transport: http(ANVIL_RPC) });
     console.log(`👤 Alice (Test User): ${aliceAccount.address}`);
 
-    await adminWallet.sendTransaction({ to: aliceAccount.address, value: 2000000000000000000n });
+    // Fund Alice via setBalance for absolute reliability
+    await (adminWallet as any).request({ method: 'anvil_setBalance', params: [aliceAccount.address, toHex(parseEther("100.0"))] });
+    console.log(`   ✅ Alice funded with 100 ETH via setBalance`);
 
     // 2. Fund Alice GToken
     const stakeAmount = 400000000000000000n; // 0.4 ether

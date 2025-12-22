@@ -26,6 +26,7 @@ if (!REGISTRY_ADDR || !GTOKEN_ADDR || !STAKING_ADDR || !SBT_ADDR || !ADMIN_KEY) 
 const registryAbi = parseAbi([
     'function ROLE_COMMUNITY() view returns (bytes32)',
     'function registerRole(bytes32, address, bytes) external',
+    'function registerRoleSelf(bytes32, bytes) external',
     'function exitRole(bytes32) external',
     'function hasRole(bytes32, address) view returns (bool)',
     'function roleStakes(bytes32, address) view returns (uint256)',
@@ -46,6 +47,7 @@ const stakingAbi = parseAbi([
 
 const sbtAbi = parseAbi([
     'function balanceOf(address) view returns (uint256)',
+    'function userToSBT(address) view returns (uint256)',
     'function tokenOfOwnerByIndex(address, uint256) view returns (uint256)',
     'function sbtData(uint256) view returns (address user, address community, uint256 mintedAt, uint256 version)'
 ]);
@@ -145,14 +147,25 @@ async function runCommunityLifecycleTest() {
 
         // Register Community (using empty bytes for Anvil bypass)
         console.log('   Registering Community...');
-        const registerTx = await walletClient.writeContract({
+        const isRegistered = await publicClient.readContract({
             address: REGISTRY_ADDR,
             abi: registryAbi,
-            functionName: 'registerRole',
-            args: [ROLE_COMMUNITY, admin.address, '0x']
+            functionName: 'hasRole',
+            args: [ROLE_COMMUNITY, admin.address]
         });
-        await publicClient.waitForTransactionReceipt({ hash: registerTx });
-        console.log('   ✅ Community registered');
+
+        if (!isRegistered) {
+            const registerTx = await walletClient.writeContract({
+                address: REGISTRY_ADDR,
+                abi: registryAbi,
+                functionName: 'registerRoleSelf',
+                args: [ROLE_COMMUNITY, '0x']
+            });
+            await publicClient.waitForTransactionReceipt({ hash: registerTx });
+            console.log('   ✅ Community registered');
+        } else {
+             console.log('   ⚠️ Community already registered (skipping)');
+        }
     }
 
     // Verify registration
@@ -194,8 +207,8 @@ async function runCommunityLifecycleTest() {
         const tokenId = await publicClient.readContract({
             address: SBT_ADDR,
             abi: sbtAbi,
-            functionName: 'tokenOfOwnerByIndex',
-            args: [admin.address, 0n]
+            functionName: 'userToSBT',
+            args: [admin.address]
         });
         console.log(`   Token ID: ${tokenId}`);
 

@@ -59,9 +59,9 @@ async function runCreditTest() {
     const userWallet = createWalletClient({ account: userAccount, chain: foundry, transport: http(RPC_URL) });
     
     // Fund User FIRST
-    console.log(`   Funding User with 5 ETH...`);
-    const hashFund = await adminWallet.sendTransaction({ to: userAddr, value: parseEther("5.0") });
-    await publicClient.waitForTransactionReceipt({ hash: hashFund });
+    // Fund User via setBalance for absolute reliability
+    await (adminWallet as any).request({ method: 'anvil_setBalance', params: [userAddr, toHex(parseEther("100.0"))] });
+    console.log(`   ✅ User funded with 100 ETH via setBalance`);
 
     // Mint GTokens for registration
     console.log(`   Minting GTokens...`);

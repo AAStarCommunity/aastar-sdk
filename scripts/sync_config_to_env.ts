@@ -49,7 +49,9 @@ function sync() {
         'REGISTRY_ADDRESS': config.registry,
         'MYSBT_ADDRESS': config.sbt,
         'PAYMASTER_ADDRESS': config.superPaymaster,
-        'RECEIVER': '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' 
+        'RECEIVER': '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', 
+        'ALICE_AA_ACCOUNT': '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Anvil #0
+        'ACCOUNT_C': '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
     };
 
     const lines = envContent.split('\n');

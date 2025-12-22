@@ -6,7 +6,9 @@ import {
     keccak256, 
     toBytes, 
     encodeAbiParameters, 
-    type Hex
+    type Hex,
+    toHex,
+    parseEther
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -106,7 +108,9 @@ async function main() {
     const daveAccount = privateKeyToAccount(daveKey);
     const daveWallet = createWalletClient({ account: daveAccount, chain: anvil, transport: http(ANVIL_RPC) });
     console.log(`👤 Dave (Operator): ${daveAccount.address}`);
-    await adminWallet.sendTransaction({ to: daveAccount.address, value: 1000000000000000000n });
+    // Fund Dave via setBalance for absolute reliability
+    await (adminWallet as any).request({ method: 'anvil_setBalance', params: [daveAccount.address, toHex(parseEther("100.0"))] });
+    console.log(`   ✅ Dave funded with 100 ETH via setBalance`);
     
     const stakeAmount = 400000000000000000n; // 0.4 ether
     await waitForTx(publicClient, await adminWallet.writeContract({

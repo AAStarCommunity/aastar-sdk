@@ -6,7 +6,9 @@ import {
     keccak256, 
     toBytes, 
     encodeAbiParameters, 
-    type Hex
+    type Hex,
+    toHex,
+    parseEther
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -49,9 +51,13 @@ async function main() {
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
     // LATEST DEPLOYMENT ADDRESSES from DeployV3FullLocal output
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0xaB837301d12cDc4b97f1E910FC56C9179894d9cf';
-    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0x124dDf9BdD2DdaD012ef1D5bBd77c00F05C610DA';
-    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xe044814c9eD1e6442Af956a817c161192cBaE98F';
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex;
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex;
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex;
+
+    if (!REGISTRY_ADDR || !GTOKEN_ADDR || !STAKING_ADDR) {
+        throw new Error("Missing Registry or Staking Config in .env.v3");
+    }
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
@@ -62,8 +68,8 @@ async function main() {
     const daveWallet = createWalletClient({ account: daveAccount, chain: anvil, transport: http(ANVIL_RPC) });
     console.log(`👤 Dave (Test User): ${daveAccount.address}`);
 
-    // Fund Dave ETH
-    await adminWallet.sendTransaction({ to: daveAccount.address, value: 1000000000000000000n });
+    // Fund Dave via setBalance for absolute reliability
+    await (adminWallet as any).request({ method: 'anvil_setBalance', params: [daveAccount.address, toHex(parseEther("100.0"))] });
 
     // 2. Fund Dave GToken
     const stakeAmount = 400000000000000000n; // 0.4 ether (minStake is 0.3)

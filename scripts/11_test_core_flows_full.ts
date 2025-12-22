@@ -82,21 +82,24 @@ async function runCoreFlowsTest() {
         args: []
     }) as Hex;
 
-    try {
+    // Check if already registered
+    const isRegistered = await publicClient.readContract({
+        address: REGISTRY_ADDR,
+        abi: RegistryABI,
+        functionName: 'hasRole',
+        args: [ROLE_COMMUNITY, commAccount.address]
+    });
+
+    if (!isRegistered) {
         const roleData = encodeAbiParameters(
-            [
-                {
-                    type: 'tuple',
-                    components: [
-                        { type: 'string', name: 'name' },
-                        { type: 'string', name: 'ensName' },
-                        { type: 'string', name: 'website' },
-                        { type: 'string', name: 'description' },
-                        { type: 'string', name: 'logoURI' },
-                        { type: 'uint256', name: 'stakeAmount' }
-                    ]
-                }
-            ],
+            [{ type: 'tuple', components: [
+                { type: 'string', name: 'name' },
+                { type: 'string', name: 'ensName' },
+                { type: 'string', name: 'website' },
+                { type: 'string', name: 'description' },
+                { type: 'string', name: 'logoURI' },
+                { type: 'uint256', name: 'stakeAmount' }
+            ]}],
             [{
                 name: 'MyTestCommunity',
                 ensName: '',
@@ -114,12 +117,8 @@ async function runCoreFlowsTest() {
         });
         await publicClient.waitForTransactionReceipt({ hash: registerTx });
         console.log('   ✅ Registered Community "MyTestCommunity" with 600 GToken stake');
-    } catch (e: any) {
-        if (e.message.includes('AlreadyRegistered')) {
-            console.log('   ⚠️  Community already registered');
-        } else {
-            throw e;
-        }
+    } else {
+        console.log('   ⚠️  Community already registered (skipping)');
     }
 
     // ========================================
