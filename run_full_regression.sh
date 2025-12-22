@@ -26,6 +26,8 @@ fi
 
 # 1. Restart Anvil for Clean State
 echo -e "${YELLOW}🔄 Restarting Anvil for Clean State...${NC}"
+# Clear ts-node cache
+rm -rf node_modules/.cache
 pkill -f anvil || true
 sleep 2
 anvil --block-time 1 > /dev/null 2>&1 &
