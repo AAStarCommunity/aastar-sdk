@@ -85,14 +85,26 @@ async function runCoreFlowsTest() {
     try {
         const roleData = encodeAbiParameters(
             [
-                { type: 'string', name: 'name' },
-                { type: 'string', name: 'ensName' },
-                { type: 'string', name: 'website' },
-                { type: 'string', name: 'description' },
-                { type: 'string', name: 'logoURI' },
-                { type: 'uint256', name: 'stakeAmount' }
+                {
+                    type: 'tuple',
+                    components: [
+                        { type: 'string', name: 'name' },
+                        { type: 'string', name: 'ensName' },
+                        { type: 'string', name: 'website' },
+                        { type: 'string', name: 'description' },
+                        { type: 'string', name: 'logoURI' },
+                        { type: 'uint256', name: 'stakeAmount' }
+                    ]
+                }
             ],
-            ['MyTestCommunity', '', '', '', '', parseEther('600')]
+            [{
+                name: 'MyTestCommunity',
+                ensName: '',
+                website: '',
+                description: '',
+                logoURI: '',
+                stakeAmount: parseEther('600')
+            }]
         );
         const registerTx = await commClient.writeContract({
             address: REGISTRY_ADDR,

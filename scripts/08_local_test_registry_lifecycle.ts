@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 };
 
 // Load environment variables
-dotenv.config({ path: path.resolve(__dirname, '../../SuperPaymaster/contracts/.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 // Load ABIs
 const loadAbi = (name: string) => {

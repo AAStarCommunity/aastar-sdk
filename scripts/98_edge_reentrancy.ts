@@ -73,6 +73,16 @@ async function runReentrancyTest() {
 
     // 4. Configure Operator (Admin) to have some balance in Malicious Token
     console.log('💰 Setting Up Operator Balance...');
+    
+    // Transfer tokens to SuperPaymaster first to pass notifyDeposit check
+    await walletClient.writeContract({
+        address: maliciousTokenAddr,
+        abi: MaliciousABI.abi,
+        functionName: 'transfer',
+        args: [SUPER_PAYMASTER, parseEther('10')],
+        account: admin
+    });
+
     await walletClient.writeContract({
         address: SUPER_PAYMASTER,
         abi: SuperPaymasterABI,

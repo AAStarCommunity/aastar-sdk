@@ -9,9 +9,11 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
-    "test:local": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_execution.ts && ts-node scripts/10_test_protocol_admin_full.ts && ts-node scripts/11_test_core_flows_full.ts'",
-    "test:full": "./run_full_regression.sh",
+    "test:init": "./run_full_regression.sh --init-only",
+    "test:admin": "ts-node scripts/10_test_protocol_admin_full.ts",
+    "test:credit": "ts-node scripts/14_test_credit_redesign.ts",
     "test:reentrancy": "ts-node scripts/98_edge_reentrancy.ts",
+    "test:full": "./run_full_regression.sh",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {

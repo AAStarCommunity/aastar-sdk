@@ -117,13 +117,13 @@ async function runCreditTest() {
         console.log("   ⚠️ Registration error:", e.message?.split('\n')[0]);
     }
 
-    // 1.1 Set Credit Tier 0 Limit (to ensure test user has some limit)
-    console.log(`   Admin setting Tier 0 limit to 100 aPNTs...`);
+    // 1.1 Set Credit Tier 1 Limit (Default level for 0 reputation)
+    console.log(`   Admin setting Tier 1 limit to 100 aPNTs...`);
     const tierTx = await adminWallet.writeContract({
         address: REGISTRY_ADDR,
         abi: REGISTRY_ABI,
         functionName: 'setCreditTier',
-        args: [0n, parseEther("100")],
+        args: [1n, parseEther("100")],
         account: adminAccount
     });
     await publicClient.waitForTransactionReceipt({ hash: tierTx });
@@ -137,6 +137,27 @@ async function runCreditTest() {
     }) as bigint;
     console.log(`   Credit Limit: ${formatEther(creditLimit)} aPNTs`);
 
+
+    // 1.2 Wire SuperPaymaster in xPNTsToken (if not wired by setup)
+    console.log(`   Wiring SuperPaymaster in xPNTsToken...`);
+    let tokenOwner = await publicClient.readContract({
+        address: XPNTS_ADDR,
+        abi: XPNTS_ABI,
+        functionName: 'communityOwner',
+        args: []
+    }) as Address;
+
+    await (adminWallet as any).request({ method: 'anvil_impersonateAccount', params: [tokenOwner] });
+    await (adminWallet as any).request({ method: 'anvil_setBalance', params: [tokenOwner, toHex(parseEther("1.0"))] });
+    
+    let ownerWallet = createWalletClient({ account: tokenOwner, chain: foundry, transport: http(RPC_URL) });
+    await ownerWallet.writeContract({
+        address: XPNTS_ADDR,
+        abi: XPNTS_ABI,
+        functionName: 'setSuperPaymasterAddress',
+        args: [SUPER_PAYMASTER]
+    });
+    await (adminWallet as any).request({ method: 'anvil_stopImpersonatingAccount', params: [tokenOwner] });
 
     // 2. Simulate Debt Recording
     console.log(`\n2️⃣ Simulating Debt Recording (Impersonating SuperPaymaster)...`);
@@ -182,7 +203,7 @@ async function runCreditTest() {
     // 3. Auto-Repayment Verification
     console.log(`\n3️⃣ Verifying Auto-Repayment (Minting xPNTs to User)...`);
     
-    const tokenOwner = await publicClient.readContract({
+    tokenOwner = await publicClient.readContract({
         address: XPNTS_ADDR,
         abi: XPNTS_ABI,
         functionName: 'communityOwner',
@@ -195,7 +216,7 @@ async function runCreditTest() {
         params: [tokenOwner, toHex(parseEther("10.0"))] 
     });
 
-    const ownerWallet = createWalletClient({
+    ownerWallet = createWalletClient({
         account: tokenOwner,
         chain: foundry,
         transport: http(RPC_URL)
