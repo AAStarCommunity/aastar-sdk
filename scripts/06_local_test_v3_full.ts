@@ -392,11 +392,11 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Hex, t
              // IEntryPoint handleOps
              // IEntryPoint handleOps
              const txHash = await signer.writeContract({
-                 account: signer.account,
+                 account: unpackedOp.sender, // Use sender address directly (robustness)
                  address: ENTRY_POINT,
                  abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes)[], address)']),
                  functionName: 'handleOps',
-                 args: [[userOpTuple], signer.account.address]
+                 args: [[userOpTuple], unpackedOp.sender]
              });
              return { txHash, status: 'Success' };
          }

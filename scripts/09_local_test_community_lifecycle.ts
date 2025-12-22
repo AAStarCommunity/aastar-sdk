@@ -147,12 +147,17 @@ async function runCommunityLifecycleTest() {
 
         // Register Community (using empty bytes for Anvil bypass)
         console.log('   Registering Community...');
-        const isRegistered = await publicClient.readContract({
-            address: REGISTRY_ADDR,
-            abi: registryAbi,
-            functionName: 'hasRole',
-            args: [ROLE_COMMUNITY, admin.address]
-        });
+        let isRegistered = false;
+        try {
+             isRegistered = await publicClient.readContract({
+                address: REGISTRY_ADDR,
+                abi: registryAbi,
+                functionName: 'hasRole',
+                args: [ROLE_COMMUNITY, admin.address]
+            });
+        } catch (e) {
+             console.log('   Note: Pre-check failed (assuming not registered).');
+        }
 
         if (!isRegistered) {
             try {

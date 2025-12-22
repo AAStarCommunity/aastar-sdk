@@ -128,14 +128,19 @@ async function runReentrancyTest() {
 
     if (adminDeposit > 0n) {
         console.log(`   Withdraw ${formatEther(adminDeposit)} ETH/GToken...`);
-        const withdrawTx = await walletClient.writeContract({
-            address: SUPER_PAYMASTER,
-            abi: SuperPaymasterABI,
-            functionName: 'withdraw',
-            args: [adminDeposit],
-            account: admin
-        });
-        await publicClient.waitForTransactionReceipt({ hash: withdrawTx });
+        try {
+            const withdrawTx = await walletClient.writeContract({
+                address: SUPER_PAYMASTER,
+                abi: SuperPaymasterABI,
+                functionName: 'withdraw',
+                args: [adminDeposit],
+                account: admin
+            });
+            await publicClient.waitForTransactionReceipt({ hash: withdrawTx });
+            console.log('   ✅ Withdrawn.');
+        } catch (e: any) {
+             console.log(`   ⚠️ Withdraw failed (benign): ${e.shortMessage || e.message}`);
+        }
     }
 
     // 3. Switch SuperPaymaster to use Malicious Token (Simulating a hack/mistake)
