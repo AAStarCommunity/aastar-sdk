@@ -25,17 +25,19 @@ pnpm install @aastar/sdk viem
 npm install @aastar/sdk viem
 ```
 
-### 🎯 Role-Based Usage Guide
+### 🎯 Role-Based Usage Guide (For Developers)
 
-#### 1. 👤 For DApp Users & Developers
-*Goal: Build gasless applications with one-line integration.*
+The SDK enables developers to build tools for the following roles:
 
-We provide **React Hooks** and **Middleware** to connect your DApp to the SuperPaymaster network effortlessly.
+#### 1. 👤 Building for DApp Users (Ordinary Users)
+*Scenario: A user wants to use a DApp without gas or technical friction.*
 
-**Capabilities:**
-*   **Gas Sponsorship**: Access the `SuperPaymaster` to sponsor transactions.
-*   **Credit Check**: View your current real-time credit limit.
-*   **Identity**: Mint and manage your Soulbound Token (SBT).
+**Developer Goal**: Integrate `useSuperPaymaster` to make transactions gasless and invisible.
+
+**Capabilities Exposed:**
+*   **Gas Sponsorship**: Access the `SuperPaymaster`.
+*   **Credit Check**: Display user's real-time credit.
+*   **Identity**: Mint SBTs for users.
 
 ```typescript
 // React Component Example
@@ -43,59 +45,36 @@ import { useSuperPaymaster, checkEligibility } from '@aastar/react';
 
 function App() {
   const { generatePaymasterAndData } = useSuperPaymaster(config);
-
-  const sendTx = async () => {
-    // 1. Check if user has SBT/Credit
-    const eligible = await checkEligibility(userAddr);
-    
-    // 2. Generate Sponsorship Data (Under the hood: calling SuperPaymasterV3)
-    const paymasterAndData = await generatePaymasterAndData(userOp);
-    
-    // 3. Send UserOp...
-  }
+  // ...
 }
 ```
 
-#### 2. 🏛️ For Community Managers
-*Goal: Manage your DAO's operational capabilities on-chain.*
+#### 2. 🏛️ Building for Community Managers
+*Scenario: A DAO Admin needs a dashboard to manage roles and funds.*
 
-Use the **Registry** and **Finance** modules to manage roles and fund your operations.
+**Developer Goal**: Use `@aastar/registry` and `@aastar/finance` to build an Admin Dashboard.
 
-**Capabilities:**
-*   **Role Management**: Register members, assign admins.
-*   **Treasury Management**: Deposit funds into the Paymaster to sponsor your community's users.
+**Capabilities Exposed:**
+*   **Role Management**: Register members/admins.
+*   **Treasury Management**: Deposit Paymaster funds.
 
 ```typescript
 import { RegistryClient } from '@aastar/registry';
-import { FinanceClient } from '@aastar/finance';
-
-// 1. Manage Roles
-await RegistryClient.registerRole(wallet, registryAddr, ROLE_COMMUNITY, userAddr, proof);
-
-// 2. Fund Your Paymaster (Sponsor Gas)
-// Supports 'Push Pattern' for tokens like xPNTs
-await FinanceClient.depositViaTransferAndCall(wallet, tokenAddr, paymasterAddr, amount);
+// ...
 ```
 
-#### 3. 🛡️ For Node Operators & Validators
-*Goal: Participate in network security and consensus.*
+#### 3. 🛡️ Building for Node Operators
+*Scenario: A Node Operator needs a CLI or Script to manage their validator.*
 
-Use the **DVT** and **Reputation** modules to register your node and participate in slashing consensus.
+**Developer Goal**: specific automation scripts using `@aastar/dvt`.
 
-**Capabilities:**
-*   **Validator Registration**: Register your BLS Public Key.
-*   **Slash Proposals**: Submit evidence of malicious behavior.
-*   **Reputation Sync**: Update off-chain scores to the on-chain Registry.
+**Capabilities Exposed:**
+*   **Validator Registration**: Register BLS Keys.
+*   **Slash Proposals**: Submit evidence.
 
 ```typescript
 import { DVTClient } from '@aastar/dvt';
-import { ReputationClient } from '@aastar/reputation';
-
-// 1. Register as a Validator
-await DVTClient.registerValidator(wallet, dvtAddr, blsPublicKey);
-
-// 2. Sync Reputation Scores
-await ReputationClient.syncToRegistry(wallet, reputationAddr, users, scores);
+// ...
 ```
 
 ### 🔬 Research & Internal Tools
@@ -127,61 +106,52 @@ npx tsx scripts/19_sdk_experiment_runner.ts
 pnpm install @aastar/sdk viem
 ```
 
-### 🎯 基于角色的使用指南
+### 🎯 基于角色的使用指南 (开发者向)
 
-#### 1. 👤 普通用户与 DApp 开发者
-*目标：通过一行代码集成实现无 Gas 应用。*
+SDK 旨在赋能开发者为以下角色构建工具：
 
-我们提供 **React Hooks** 和 **Middleware**，帮助您的 DApp 轻松连接到 SuperPaymaster 网络。
+#### 1. 👤 为用户开发 DApp (Ordinary Users)
+*场景：普通用户希望无感知地使用 DApp，无需持有 Gas。*
+
+**开发者目标**：集成 `useSuperPaymaster` 实现无 Gas 交易。
 
 **核心能力：**
-*   **Gas 代付 (Sponsorship)**：访问 `SuperPaymaster` 赞助交易。
-*   **信用检查 (Credit Check)**：查看用户当前的实时信用额度。
-*   **身份管理 (Identity)**：铸造和管理您的灵魂绑定代币 (SBT)。
+*   **Gas 代付**：调用 `SuperPaymaster`。
+*   **信用检查**：展示用户额度。
+*   **身份管理**：SBT 铸造。
 
 ```typescript
 // React 组件示例
 import { useSuperPaymaster } from '@aastar/react';
-
-// 一键获取 Paymaster 签名数据，无需关心底层 ABI
-const { generatePaymasterAndData } = useSuperPaymaster(config);
+// ...
 ```
 
-#### 2. 🏛️ 社区运营者 (Community Manager)
-*目标：在链上管理您 DAO 的运营能力。*
+#### 2. 🏛️ 为社区管理者开发后台 (Community Managers)
+*场景：DAO 管理员需要一个 Dashboard 来管理成员和资金。*
 
-使用 **Registry (注册表)** 和 **Finance (金融)** 模块来管理角色并为您的运营提供资金。
+**开发者目标**：使用 `@aastar/registry` 和 `@aastar/finance` 构建管理后台。
 
 **核心能力：**
-*   **角色管理**：注册成员，分配管理员权限。
-*   **国库管理**：向 Paymaster 存入资金，为您的社区用户提供 Gas 赞助支持。
+*   **角色管理**：注册成员/管理员。
+*   **国库管理**：存入代付资金。
 
 ```typescript
 import { RegistryClient } from '@aastar/registry';
-import { FinanceClient } from '@aastar/finance';
-
-// 1. 注册角色 (例如：添加新成员)
-await RegistryClient.registerRole(wallet, registryAddr, ROLE_COMMUNITY, userAddr, proof);
-
-// 2. 存入代付资金 (支持 xPNTs 等需要 Push 模式的代币)
-await FinanceClient.depositViaTransferAndCall(wallet, tokenAddr, paymasterAddr, amount);
+// ...
 ```
 
-#### 3. 🛡️ 节点运营商与验证者 (Validators)
-*目标：参与网络安全和共识。*
+#### 3. 🛡️ 为节点运营者开发工具 (Node Operators)
+*场景：节点运营者需要脚本来自动化注册和维护节点。*
 
-使用 **DVT** 和 **Reputation (声誉)** 模块注册您的节点并参与罚没共识。
+**开发者目标**：使用 `@aastar/dvt` 编写运维脚本。
 
 **核心能力：**
-*   **验证者注册**：注册您的 BLS 公钥。
-*   **罚没提案 (Slash)**：提交恶意行为证据。
-*   **声誉同步**：将链下计算的信誉分同步到链上注册表。
+*   **验证者注册**：注册 BLS 公钥。
+*   **罚没提案**：提交证据。
 
 ```typescript
 import { DVTClient } from '@aastar/dvt';
-
-// 1. 注册为 DVT 验证者
-await DVTClient.registerValidator(wallet, dvtAddr, blsPublicKey);
+// ...
 ```
 
 ### 🔬 研究与内部工具
