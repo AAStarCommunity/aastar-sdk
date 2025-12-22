@@ -48,7 +48,7 @@ async function main() {
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
     // LATEST DEPLOYMENT ADDRESSES from DeployV3FullLocal output
     const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
-    const MYSBT_ADDR = process.env.MYSBT_ADDR as Hex;
+    const MYSBT_ADDR = (process.env.SBT_ADDR || process.env.MYSBT_ADDRESS) as Hex;
     const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex;
     const STAKING_ADDR = process.env.STAKING_ADDR as Hex;
 

@@ -122,10 +122,15 @@ async function runCoreFlowsTest() {
             await publicClient.waitForTransactionReceipt({ hash: registerTx });
             console.log('   ✅ Registered Community "MyTestCommunity" with 600 GToken stake');
         } catch (e: any) {
-            if (e.message.includes('RoleAlreadyGranted') || (e.cause && (e.cause as any).data && (e.cause as any).data.errorName === 'RoleAlreadyGranted')) {
+            const isRoleError = e.message?.includes('RoleAlreadyGranted') || 
+                                (e.cause as any)?.data?.errorName === 'RoleAlreadyGranted' ||
+                                (e as any).name === 'RoleAlreadyGranted' || 
+                                JSON.stringify(e).includes('RoleAlreadyGranted');
+
+            if (isRoleError) {
                  console.log("   ⚠️ Already registered (caught simulation error).");
             } else {
-                 console.log(`   ❌ Registration simulation/write failed: ${e.message}`);
+                 console.log(`   ❌ Registration simulation/write failed.`);
                  throw e;
             }
         }

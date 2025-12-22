@@ -168,13 +168,15 @@ async function runCommunityLifecycleTest() {
                 await publicClient.waitForTransactionReceipt({ hash: registerTx });
                 console.log('   ✅ Community registered');
             } catch (e: any) {
-                if (e.message.includes('RoleAlreadyGranted') || (e.cause && (e.cause as any).data && (e.cause as any).data.errorName === 'RoleAlreadyGranted')) {
+                const isRoleError = e.message?.includes('RoleAlreadyGranted') || 
+                                    (e.cause as any)?.data?.errorName === 'RoleAlreadyGranted' ||
+                                    (e as any).name === 'RoleAlreadyGranted' || 
+                                    JSON.stringify(e).includes('RoleAlreadyGranted');
+                                    
+                if (isRoleError) {
                      console.log("   ⚠️ Already registered (caught simulation error).");
                 } else {
                      console.log(`   ❌ Registration simulation/write failed.`);
-                     console.log(`      Error Name: ${(e as any).name}`);
-                     console.log(`      Short Message: ${(e as any).shortMessage}`);
-                     // Only throw if critical
                      throw e;
                 }
             }

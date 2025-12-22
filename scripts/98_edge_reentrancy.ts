@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, keccak256, toBytes, parseAbi, encodeAbiParameters, type Hex, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, keccak256, toBytes, parseAbi, encodeAbiParameters, type Hex, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -111,6 +111,28 @@ async function runReentrancyTest() {
                  throw e;
              }
         }
+    }
+
+    // 2.5 Reset SuperPaymaster State (withdraw existing GToken deposits to clear totalTracked)
+    console.log('🧹 Clearing existing deposits to reset accounting...');
+    // SuperPaymaster.deposits(account)
+    const adminDeposit = await publicClient.readContract({
+        address: SUPER_PAYMASTER,
+        abi: parseAbi(['function deposits(address) view returns (uint256)']),
+        functionName: 'deposits',
+        args: [admin.address]
+    }) as bigint;
+
+    if (adminDeposit > 0n) {
+        console.log(`   Withdraw ${formatEther(adminDeposit)} ETH/GToken...`);
+        const withdrawTx = await walletClient.writeContract({
+            address: SUPER_PAYMASTER,
+            abi: SuperPaymasterABI,
+            functionName: 'withdraw',
+            args: [adminDeposit],
+            account: admin
+        });
+        await publicClient.waitForTransactionReceipt({ hash: withdrawTx });
     }
 
     // 3. Switch SuperPaymaster to use Malicious Token (Simulating a hack/mistake)
