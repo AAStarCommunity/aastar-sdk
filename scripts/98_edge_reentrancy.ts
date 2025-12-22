@@ -128,13 +128,14 @@ async function runReentrancyTest() {
     console.log('💰 Setting Up Operator Balance...');
     
     // Transfer tokens to SuperPaymaster first to pass notifyDeposit check
-    await walletClient.writeContract({
+    const transferTx = await walletClient.writeContract({
         address: maliciousTokenAddr,
         abi: MaliciousABI.abi,
         functionName: 'transfer',
         args: [SUPER_PAYMASTER, parseEther('10')],
         account: admin
     });
+    await publicClient.waitForTransactionReceipt({ hash: transferTx });
 
     try {
         await walletClient.writeContract({

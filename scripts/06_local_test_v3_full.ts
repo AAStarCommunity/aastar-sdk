@@ -320,7 +320,18 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Hex, t
         estOp.paymasterData = pmStruct.paymasterData;
     }
 
-    const estRes: any = await bundler.request({ method: 'eth_estimateUserOperationGas', params: [estOp, ENTRY_POINT] });
+    let estRes: any;
+    try {
+        estRes = await bundler.request({ method: 'eth_estimateUserOperationGas', params: [estOp, ENTRY_POINT] });
+    } catch (e) {
+        // Fallback for Anvil (no bundler)
+        console.warn('   ⚠️ eth_estimateUserOperationGas failed (using defaults):', (e as any).shortMessage || (e as any).message);
+        estRes = {
+            verificationGasLimit: 500000n,
+            callGasLimit: 300000n,
+            preVerificationGas: 100000n
+        };
+    }
     
     const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? 500000n) + 50000n;
     const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n) + 20000n;
