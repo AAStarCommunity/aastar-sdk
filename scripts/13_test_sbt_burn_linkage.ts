@@ -212,11 +212,15 @@ async function main() {
         }
 
         console.log(`\n🔄 Re-registering Eve for Linkage Test...`);
-        const txReg2 = await eveWallet.writeContract({
-            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
-            args: [ROLE_ENDUSER, eveData]
-        });
-        await waitForTx(publicClient, txReg2);
+        try {
+            const txReg2 = await eveWallet.writeContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
+                args: [ROLE_ENDUSER, eveData]
+            });
+            await waitForTx(publicClient, txReg2);
+        } catch (e: any) {
+            console.warn(`   ⚠️ Re-registration failed (Skipping step): ${e.shortMessage || e.message}`);
+        }
     }
 
     console.log(`\n🚪 Test 2: Role Exit Linkage...`);

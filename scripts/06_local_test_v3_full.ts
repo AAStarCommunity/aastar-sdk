@@ -143,21 +143,21 @@ async function runFullV3Test() {
              address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'configureOperator', 
              args: [APNTS, signer.address, 1000000000000000000n] 
          });
-         await publicClient.waitForTransactionReceipt({ hash });
+          await publicClient.waitForTransactionReceipt({ hash });
     }
 
     // Test Pause/Unpause
     console.log("   ⏸️  Testing Pause...");
-    let hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, true] });
-    await publicClient.waitForTransactionReceipt({ hash });
+    let pauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, true] });
+    await publicClient.waitForTransactionReceipt({ hash: pauseHash });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     if(opData[2] !== true) throw new Error("Pause failed");
     console.log("   ✅ Paused.");
 
     console.log("   ▶️  Testing Unpause...");
     try {
-        hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, false] });
-        await publicClient.waitForTransactionReceipt({ hash });
+        let unpauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, false] });
+        await publicClient.waitForTransactionReceipt({ hash: unpauseHash });
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
         if(opData[3] !== false) throw new Error("Unpause failed"); // Corrected index to 3 for isPaused
         console.log("   ✅ Unpaused.");
@@ -168,8 +168,8 @@ async function runFullV3Test() {
     // Test Reputation
     console.log("   ⭐ Testing Reputation Update...");
     try {
-        hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'updateReputation', args: [signer.address, 100n] });
-        await publicClient.waitForTransactionReceipt({ hash });
+        let repHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'updateReputation', args: [signer.address, 100n] });
+        await publicClient.waitForTransactionReceipt({ hash: repHash });
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
         if(BigInt(opData[8] as bigint) !== 100n) throw new Error(`Reputation Config failed: expected 100, got ${opData[8]}`);
         console.log(`   ✅ Reputation set to ${opData[8]}`);
@@ -211,8 +211,8 @@ async function runFullV3Test() {
     let allow = await publicClient.readContract({ address: APNTS, abi: erc20Abi, functionName: 'allowance', args: [signer.address, SUPER_PAYMASTER] });
     if (allow < parseEther("1000")) {
         try {
-            const hash = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("10000")] });
-            await waitForTx(hash);
+            const approveHash = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("10000")] });
+            await waitForTx(approveHash);
         } catch (e: any) {
             console.warn(`   ⚠️ Token approval failed (Skipping step): ${e.shortMessage || e.message}`);
         }
@@ -223,15 +223,15 @@ async function runFullV3Test() {
     console.log("   💸 Testing Push Deposit (10 aPNTs)...");
     
     // 1. Transfer
-    let hash;
+    // hash is already declared above
     try {
-        hash = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'transfer', args: [SUPER_PAYMASTER, depositAmount] });
-        await publicClient.waitForTransactionReceipt({ hash });
+        let depositHash = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'transfer', args: [SUPER_PAYMASTER, depositAmount] });
+        await publicClient.waitForTransactionReceipt({ hash: depositHash });
         
         // 2. Notify
         try {
-            hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'notifyDeposit', args: [depositAmount] });
-            await publicClient.waitForTransactionReceipt({ hash });
+            let notifyHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'notifyDeposit', args: [depositAmount] });
+            await publicClient.waitForTransactionReceipt({ hash: notifyHash });
         } catch (e: any) {
             console.warn(`   ⚠️ notifyDeposit failed (may be benign if balance updated): ${e.shortMessage || e.message}`);
         }
@@ -247,8 +247,8 @@ async function runFullV3Test() {
     const withdrawAmount = parseEther("1");
     console.log("   🏧 Testing Withdraw (1 aPNTs)...");
     try {
-        hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'withdraw', args: [withdrawAmount] });
-        await publicClient.waitForTransactionReceipt({ hash });
+        let withdrawHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'withdraw', args: [withdrawAmount] });
+        await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
         
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
         if (balanceAfterDeposit - (opData[6] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch"); // Corrected index to 6
