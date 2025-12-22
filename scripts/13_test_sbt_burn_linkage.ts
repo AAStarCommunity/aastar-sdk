@@ -154,26 +154,28 @@ async function main() {
         console.log(`   ⚠️ Already registered. Skipping registration.`);
     } else {
         try {
-            console.log("   🚀 Executing registerRoleSelf (Write)...");
-            const txReg = await eveWallet.writeContract({
-                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf',
+            console.log("   🚀 Executing registerRoleSelf (Simulating first)...");
+            const { request } = await publicClient.simulateContract({
+                account: eveAccount,
+                address: REGISTRY_ADDR, 
+                abi: RegistryABI, 
+                functionName: 'registerRoleSelf',
                 args: [ROLE_ENDUSER, eveData],
                 gas: 3000000n
             });
+            const txReg = await eveWallet.writeContract(request);
             await waitForTx(publicClient, txReg);
             console.log("   🎉 registerRoleSelf Success!");
         } catch (e: any) {
-             const doubleCheck = await publicClient.readContract({
-                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole',
-                args: [ROLE_ENDUSER, eveAccount.address]
-            });
-            if (doubleCheck) {
-                console.log("   ⚠️ Already registered (caught tx failure).");
+            if (e.message.includes('RoleAlreadyGranted') || (e.cause && (e.cause as any).data && (e.cause as any).data.errorName === 'RoleAlreadyGranted')) {
+                 console.log("   ⚠️ Already registered (caught simulation error).");
             } else {
-                console.log(`   ❌ registerRoleSelf failed: ${e.message}`);
-                throw e;
+                 console.log(`   ❌ registerRoleSelf simulation/write failed: ${e.message}`);
+                 if (e.cause) console.log(`      Cause: ${e.cause}`);
+                 throw e;
             }
         }
+    }
     }
 
     

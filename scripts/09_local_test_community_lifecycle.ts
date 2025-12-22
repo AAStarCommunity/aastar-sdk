@@ -156,25 +156,23 @@ async function runCommunityLifecycleTest() {
 
         if (!isRegistered) {
             try {
-                const registerTx = await walletClient.writeContract({
+                console.log("   🚀 Simulating Community Registration...");
+                const { request } = await publicClient.simulateContract({
+                    account: admin,
                     address: REGISTRY_ADDR,
                     abi: registryAbi,
                     functionName: 'registerRoleSelf',
                     args: [ROLE_COMMUNITY, '0x']
                 });
+                const registerTx = await walletClient.writeContract(request);
                 await publicClient.waitForTransactionReceipt({ hash: registerTx });
                 console.log('   ✅ Community registered');
             } catch (e: any) {
-                const doubleCheck = await publicClient.readContract({
-                    address: REGISTRY_ADDR,
-                    abi: registryAbi,
-                    functionName: 'hasRole',
-                    args: [ROLE_COMMUNITY, admin.address]
-                });
-                if (doubleCheck) {
-                    console.log('   ⚠️ Community already registered (caught tx failure).');
+                if (e.message.includes('RoleAlreadyGranted') || (e.cause && (e.cause as any).data && (e.cause as any).data.errorName === 'RoleAlreadyGranted')) {
+                     console.log("   ⚠️ Already registered (caught simulation error).");
                 } else {
-                    throw e;
+                     console.log(`   ❌ Registration simulation/write failed: ${e.message}`);
+                     throw e;
                 }
             }
         } else {

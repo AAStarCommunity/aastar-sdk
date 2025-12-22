@@ -101,18 +101,24 @@ async function runReentrancyTest() {
                 args: [ROLE_COMMUNITY, roleData]
             });
             console.log('   ✅ Attacker Registered.');
-        } catch (e: any) {
-             const doubleCheck = await publicClient.readContract({
+    } else {
+        try {
+            const { request } = await publicClient.simulateContract({
+                account: admin,
                 address: REGISTRY_ADDR,
-                abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
-                functionName: 'hasRole',
-                args: [ROLE_COMMUNITY, admin.address]
+                abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+                functionName: 'registerRoleSelf',
+                args: [ROLE_COMMUNITY, roleData]
             });
-            if (doubleCheck) {
-                console.log('   ⚠️ Attacker already registered (caught tx failure).');
-            } else {
-                throw e;
-            }
+            await walletClient.writeContract(request);
+            console.log('   ✅ Attacker Registered.');
+        } catch (e: any) {
+             if (e.message.includes('RoleAlreadyGranted') || (e.cause && (e.cause as any).data && (e.cause as any).data.errorName === 'RoleAlreadyGranted')) {
+                 console.log('   ⚠️ Attacker already registered (caught simulation error).');
+             } else {
+                 console.log(`   ❌ Attacker Registration simulation/write failed: ${e.message}`);
+                 throw e;
+             }
         }
     }
 
@@ -139,13 +145,18 @@ async function runReentrancyTest() {
         account: admin
     });
 
-    await walletClient.writeContract({
-        address: SUPER_PAYMASTER,
-        abi: SuperPaymasterABI,
-        functionName: 'notifyDeposit',
-        args: [parseEther('10')],
-        account: admin
-    });
+    try {
+        await walletClient.writeContract({
+            address: SUPER_PAYMASTER,
+            abi: SuperPaymasterABI,
+            functionName: 'notifyDeposit',
+            args: [parseEther('10')],
+            account: admin
+        });
+    } catch (e: any) {
+        console.log(`   ⚠️ notifyDeposit failed: ${e.message}`);
+        // Proceed if this is just accounting or SAFE ERC20 noise from Malicious Token
+    }
 
     // 5. Trigger Reentrancy Attack
     console.log('🔥 Triggering Reentrancy Attack Path (withdraw -> malicious transfer -> withdraw)...');

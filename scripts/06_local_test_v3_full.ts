@@ -217,7 +217,8 @@ async function runFullV3Test() {
     } catch (e: any) {
         // If notify fails, check if balance updated anyway (e.g. race condition or previous run)
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        const currentBal = opData[5] as bigint; // Actually index 6 in strict ABI, but logic used 5 before. Wait.
+        // const currentBal = opData[5] as bigint; 
+        // console.log(`   Debug: Current Bal (Index 5): ${currentBal}`);
         // Earlier log used opData[6] for balance. Line 136. Line 218 uses opData[5]. 
         // Logic mismatch! Solidity output: (addr, addr, bool, bool, uint256, uint256, uint256, uint256, uint256)
         // 0: op (addr), 1: treasury (addr), 2: isConf (bool), 3: paused (bool), 4: exRate, 5: exRateFull, 6: BALANCE, 7: spent, 8: rep.
