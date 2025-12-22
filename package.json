@@ -8,8 +8,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "test:local": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_reputation.ts && ts-node scripts/06_local_test_v3_execution.ts' | tee local_regression.log",
-    "test:phase5-7": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/12_test_staking_exit.ts && ts-node scripts/12_test_slash_mechanism.ts && ts-node scripts/12_test_slash_queries.ts && ts-node scripts/13_test_sbt_burn_linkage.ts' | tee phase5-7_test.log",
+    "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
+    "test:local": "cross-env FORCE_COLOR=1 sh -c 'ts-node scripts/06_local_test_v3_admin.ts && ts-node scripts/06_local_test_v3_funding.ts && ts-node scripts/06_local_test_v3_execution.ts && ts-node scripts/10_test_protocol_admin_full.ts && ts-node scripts/11_test_core_flows_full.ts'",
+    "test:full": "./run_full_regression.sh",
+    "test:reentrancy": "ts-node scripts/98_edge_reentrancy.ts",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
