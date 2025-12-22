@@ -107,8 +107,8 @@ async function runFullV3Test() {
     hash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'updateReputation', args: [signer.address, 100n] });
     await publicClient.waitForTransactionReceipt({ hash });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if(BigInt(opData[7] as bigint) !== 100n) throw new Error("Reputation Config failed");
-    console.log(`   ✅ Reputation set to ${opData[7]}`);
+    if(BigInt(opData[8] as bigint) !== 100n) throw new Error(`Reputation Config failed: expected 100, got ${opData[8]}`);
+    console.log(`   ✅ Reputation set to ${opData[8]}`);
 
 
     // ====================================================

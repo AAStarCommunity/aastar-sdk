@@ -17,7 +17,7 @@ const APNTS = process.env.XPNTS_ADDR as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (address xPNTsToken, address treasury, bool isConfigured, bool isPaused, uint256 reserved, uint256 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
+    'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
     'function configureOperator(address, address, uint256)',
     'function setOperatorPause(address, bool)',
     'function updateReputation(address, uint256)',
@@ -35,10 +35,10 @@ async function runAdminTest() {
     console.log(`   Paymaster: ${SUPER_PAYMASTER}`);
 
     // 1. Initial State Check
-    // ABI returns: xPNTsToken(0), treasury(1), isConfigured(2), isPaused(3), reserved(4), exchangeRate(5), aPNTsBalance(6), totalSpent(7), totalTxSponsored(8), reputation(9)
+    // ABI returns: xPNTsToken(0), isConfigured(1), isPaused(2), treasury(3), exchangeRate(4), aPNTsBalance(5), totalSpent(6), totalTxSponsored(7), reputation(8)
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);
-    console.log(`   Initial State: Configured=${opData[2]}, Paused=${opData[3]}`);
+    console.log(`   Initial State: Configured=${opData[1]}, Paused=${opData[2]}`);
 
     // 2. Test configureOperator
     console.log("   ⚙️ Testing configureOperator...");
@@ -81,11 +81,11 @@ async function runAdminTest() {
     await publicClient.waitForTransactionReceipt({ hash: hashRep });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData (After Update):", opData);
-    // Index 9 is Reputation
-    if (BigInt(opData[9]) !== 500n) {
-        console.warn(`   ⚠️ Reputation Update verification failed. Expected 500, got ${opData[9]}. Check if Registry state is inconsistent.`);
+    // Index 8 is Reputation (9-field ABI)
+    if (BigInt(opData[8]) !== 500n) {
+        console.warn(`   ⚠️ Reputation Update verification failed. Expected 500, got ${opData[8]}. Check if Registry state is inconsistent.`);
     } else {
-        console.log(`   ✅ Reputation updated to ${opData[9]}.`);
+        console.log(`   ✅ Reputation updated to ${opData[8]}.`);
     }
 
     // 5. Test setAPNTsToken (Requires Owner)

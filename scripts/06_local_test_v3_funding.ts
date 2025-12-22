@@ -17,7 +17,7 @@ const APNTS = process.env.XPNTS_ADDR as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !APNTS) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (address xPNTsToken, address treasury, bool isConfigured, bool isPaused, uint256 reserved, uint256 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
+    'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
     'function deposit(uint256)',
     'function notifyDeposit(uint256)',
     'function withdraw(uint256)',
@@ -52,8 +52,8 @@ async function runFundingTest() {
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);
     
-    // ABI returns: xPNTsToken(0), treasury(1), isConfigured(2), isPaused(3), reserved(4), exchangeRate(5), aPNTsBalance(6), totalSpent(7), totalTxSponsored(8), reputation(9)
-    const initialBalance = BigInt(opData[6]);
+    // ABI returns: xPNTsToken(0), isConfigured(1), isPaused(2), treasury(3), exchangeRate(4), aPNTsBalance(5), totalSpent(6), totalTxSponsored(7), reputation(8)
+    const initialBalance = BigInt(opData[5]);
     console.log(`   Initial Operator Balance: ${formatEther(initialBalance)} aPNTs`);
 
     // 2. Test Deposit (The official way)
@@ -86,7 +86,7 @@ async function runFundingTest() {
     // 3. Test Withdraw
     console.log("   🏧 Testing withdraw...");
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    const currentBalance = BigInt(opData[6]);
+    const currentBalance = BigInt(opData[5]);
     
     if (currentBalance >= parseEther("0.1")) {
         const withdrawAmount = parseEther("0.1");
@@ -94,7 +94,7 @@ async function runFundingTest() {
         await publicClient.waitForTransactionReceipt({ hash: hashWith });
         
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        const newBalance = BigInt(opData[6]);
+        const newBalance = BigInt(opData[5]);
         const diff = currentBalance - newBalance;
         // Use tolerance for potential fee/rounding issues (1000 wei)
         if (diff < withdrawAmount || diff > withdrawAmount + 1000n) {
