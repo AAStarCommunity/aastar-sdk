@@ -177,7 +177,7 @@ async function runCoreFlowsTest() {
     await commClient.writeContract({
         address: PAYMASTER_FACTORY_ADDR,
         abi: PaymasterFactoryABI,
-        functionName: 'createPaymaster',
+        functionName: 'deployPaymaster',
         args: [COMMUNITY_ADDR, toHex('salt123', { size: 32 })]
     });
     console.log('   ✅ Community deployed PaymasterV4 instance');
