@@ -87,25 +87,6 @@
   },
   {
     "type": "function",
-    "name": "deployPaymasterDefault",
-    "inputs": [
-      {
-        "name": "initData",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "paymaster",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "deployPaymasterDeterministic",
     "inputs": [
       {
