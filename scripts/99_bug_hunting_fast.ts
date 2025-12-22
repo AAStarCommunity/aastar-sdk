@@ -177,11 +177,12 @@ async function runBugHuntingTests() {
     console.log('========================================');
 
     await test('Community can deploy their own PaymasterV4 via Factory', async () => {
+        const randomSalt = keccak256(toHex(`salt_${Math.random()}`, { size: 32 }));
         const tx = await attackerClient.writeContract({
             address: PAYMASTER_FACTORY_ADDR,
             abi: PaymasterFactoryABI,
             functionName: 'deployPaymasterDeterministic',
-            args: ['v4.1i', keccak256(toHex('salt999', { size: 32 })), '0x'],
+            args: ['v4.1i', randomSalt, '0x'],
             account: attacker
         });
         const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
