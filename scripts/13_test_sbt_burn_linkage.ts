@@ -176,7 +176,6 @@ async function main() {
             }
         }
     }
-    }
 
     
     const tokenId = await publicClient.readContract({

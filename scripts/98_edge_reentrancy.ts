@@ -94,15 +94,6 @@ async function runReentrancyTest() {
         console.log('   ⚠️ Attacker already registered. Skipping registration tx.');
     } else {
         try {
-            await walletClient.writeContract({
-                address: REGISTRY_ADDR,
-                abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
-                functionName: 'registerRoleSelf',
-                args: [ROLE_COMMUNITY, roleData]
-            });
-            console.log('   ✅ Attacker Registered.');
-    } else {
-        try {
             const { request } = await publicClient.simulateContract({
                 account: admin,
                 address: REGISTRY_ADDR,

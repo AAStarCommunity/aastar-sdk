@@ -24,13 +24,26 @@ if [[ "$*" == *"--skip-deploy"* ]]; then
     SKIP_DEPLOY=true
 fi
 
-# 1. Ensure Anvil is running
-if ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8545 > /dev/null; then
-    echo -e "${RED}❌ Anvil is not running at http://127.0.0.1:8545${NC}"
-    echo -e "${CYAN}💡 Try running 'anvil' in a separate terminal first.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✅ Anvil is running.${NC}"
+# 1. Restart Anvil for Clean State
+echo -e "${YELLOW}🔄 Restarting Anvil for Clean State...${NC}"
+pkill -f anvil || true
+sleep 2
+anvil --block-time 1 > /dev/null 2>&1 &
+ANVIL_PID=$!
+echo -e "${GREEN}✅ Anvil started (PID: $ANVIL_PID). Waiting for RPC...${NC}"
+
+# Wait for Anvil
+MAX_RETRIES=10
+COUNT=0
+while ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8545 > /dev/null; do
+    sleep 1
+    COUNT=$((COUNT+1))
+    if [ $COUNT -ge $MAX_RETRIES ]; then
+        echo -e "${RED}❌ Failed to start Anvil.${NC}"
+        exit 1
+    fi
+done
+echo -e "${GREEN}✅ Anvil is ready.${NC}"
 
 # 2. Deploy Contracts (Optional)
 if [ "$SKIP_DEPLOY" = false ]; then
