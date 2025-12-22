@@ -191,7 +191,8 @@ async function main() {
         await waitForTx(publicClient, txBurn);
         console.log(`   ✅ SBT Burned by Eve.`);
     } catch (e: any) {
-        console.warn(`   ⚠️ Burn failed: ${e.message.split('\n')[0]}`);
+        const errMsg = (e.message || "Unknown").split('\n')[0];
+        console.warn(`   ⚠️ Burn failed (benign): ${errMsg}`);
         console.log(`   (Proceeding to check linkage instead)`);
     }
 

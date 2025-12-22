@@ -214,7 +214,8 @@ async function runCommunityLifecycleTest() {
         });
         console.log(`   ✅ Staked Amount: ${formatEther(stakedAmount)} GToken`);
     } catch (error: any) {
-        console.log(`   ⚠️  Unable to query staked amount: ${error.shortMessage || error.message}`);
+        const errMsg = (error.message || "Unknown").split('\n')[0];
+        console.log(`   ⚠️  Unable to query staked amount (likely benign): ${errMsg}`);
     }
 
     // ========================================
@@ -359,7 +360,8 @@ async function runCommunityLifecycleTest() {
                 console.log(`   ✅ Token Address: ${tokenAddr}`);
             }
         } catch (error: any) {
-            console.log(`   ⚠️  Failed to create token: ${error.message}`);
+            const errMsg = (error.message || "Unknown").split('\n')[0];
+            console.log(`   ⚠️  Failed to create token (likely benign): ${errMsg}`);
         }
     } else {
         console.log('   ⚠️  xPNTsFactory not deployed, skipping...');

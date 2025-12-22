@@ -141,6 +141,9 @@ for script in "${TEST_SCRIPTS[@]}"; do
         # Specifically excluding "expected" reverts if any script uses them loosely
         if grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" | grep -v "Skipping step" | grep -v "benign" | grep -v "InsufficientBalance" | grep -v "DepositNotVerified" > /dev/null; then
             echo -e "${RED}❌ FAILED (Internal Error): $script${NC}"
+            echo -e "${YELLOW}🔍 Failure Report (Triggered by log scan):${NC}"
+            grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" | grep -v "Skipping step" | grep -v "benign" | grep -v "InsufficientBalance" | grep -v "DepositNotVerified"
+            echo -e "${YELLOW}----------------------------------------${NC}"
             cat "$TMP_OUT" | tail -n 15
             FAILED_LIST+=("$script")
         else
