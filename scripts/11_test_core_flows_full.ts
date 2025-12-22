@@ -109,8 +109,8 @@ async function runCoreFlowsTest() {
         const registerTx = await commClient.writeContract({
             address: REGISTRY_ADDR,
             abi: RegistryABI,
-            functionName: 'registerRole',
-            args: [ROLE_COMMUNITY, COMMUNITY_ADDR, roleData]
+            functionName: 'registerRoleSelf',
+            args: [ROLE_COMMUNITY, roleData]
         });
         await publicClient.waitForTransactionReceipt({ hash: registerTx });
         console.log('   ✅ Registered Community "MyTestCommunity" with 600 GToken stake');
