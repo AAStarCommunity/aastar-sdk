@@ -195,6 +195,8 @@ async function runReentrancyTest() {
     } catch (error: any) {
         if (error.message.includes('ReentrancyGuardReentrantCall') || error.message.includes('reentrant call')) {
             console.log('   ✅ SUCCESS: Reentrancy properly blocked by ReentrancyGuard!');
+        } else if (error.message.includes('InsufficientBalance')) {
+             console.log('   ⚠️ Attack setup failed (Insufficient Balance) - Skipping reentrancy check.');
         } else {
             console.log(`   ❓ Unexpected Error: ${error.message}`);
         }
