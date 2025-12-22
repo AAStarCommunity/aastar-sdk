@@ -113,6 +113,7 @@ async function runCreditTest() {
         });
         await publicClient.waitForTransactionReceipt({ hash });
         console.log("   ✅ User Registered");
+
     } catch (e: any) {
         console.log("   ⚠️ Registration error:", e.message?.split('\n')[0]);
     }

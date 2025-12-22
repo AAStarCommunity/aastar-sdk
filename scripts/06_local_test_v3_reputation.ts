@@ -46,6 +46,16 @@ async function runReputationTest() {
     });
     await publicClient.waitForTransactionReceipt({ hash: hashRule });
 
+    // 1.5 Register ReputationSystem as trusted source in Registry BEFORE sync
+    console.log("   🔑 Configuring trusted reputation source...");
+    const abiRegSet = parseAbi(['function setReputationSource(address, bool)']);
+    const hashAuth = await wallet.writeContract({
+        address: REGISTRY, abi: abiRegSet, functionName: 'setReputationSource',
+        args: [REPUTATION_SYSTEM, true]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: hashAuth });
+    console.log("   ✅ ReputationSystem Authorized");
+
     // 2. Set Entropy Factor
     console.log("   🌀 Setting Entropy Factor (0.8x)...");
     const hashEntropy = await wallet.writeContract({ 

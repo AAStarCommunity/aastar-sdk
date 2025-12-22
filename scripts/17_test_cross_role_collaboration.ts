@@ -12,7 +12,6 @@ const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
 const REGISTRY = process.env.REGISTRY_ADDR as Hex;
 const SUPER_PAYMASTER = process.env.SUPERPAYMASTER_ADDR as Hex;
-const GTOKEN = process.env.GTOKEN_ADDR as Hex;
 
 if (!REGISTRY || !SUPER_PAYMASTER) throw new Error("Missing Config");
 

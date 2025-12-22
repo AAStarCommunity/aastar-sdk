@@ -1,5 +1,5 @@
 
-import { createPublicClient, createWalletClient, http, parseAbi, keccak256, toBytes, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -14,7 +14,6 @@ const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
 const DVT_VALIDATOR = process.env.DVT_VALIDATOR_ADDR as Hex;
 const BLS_AGGREGATOR = process.env.BLS_AGGREGATOR_ADDR as Hex;
-const SUPER_PAYMASTER = process.env.SUPERPAYMASTER_ADDR as Hex;
 
 if (!DVT_VALIDATOR || !BLS_AGGREGATOR) throw new Error("Missing DVT/BLS Config");
 
@@ -32,10 +31,6 @@ const blsAbi = parseAbi([
     'function getSlashCount(address) view returns (uint256)'
 ]);
 
-const spmAbi = parseAbi([
-    'function getSlashCount(address) view returns (uint256)',
-    'function operators(address) view returns (address, address, uint96, uint256, uint256, bool, uint256)'
-]);
 
 async function runDVTBLSTest() {
     console.log("🛡️ Running SuperPaymaster V3 DVT & BLS Integration Test...");
@@ -77,7 +72,7 @@ async function runDVTBLSTest() {
         address: DVT_VALIDATOR, abi: dvtAbi, functionName: 'createProposal',
         args: [targetOperator, 0, "Test Slash Warning"] // Level 0 = Warning
     });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: hashProp });
+    await publicClient.waitForTransactionReceipt({ hash: hashProp });
     
     // Extract ID (simplified, assuming nextProposalId was 1 -> 2)
     // In real test we should parse logs, but for regression checks hardcoding execution flow is often enough if sequence is guaranteed
