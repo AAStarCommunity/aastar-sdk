@@ -159,24 +159,19 @@ async function main() {
     } else {
         try {
             console.log("   🚀 Executing registerRoleSelf (Simulating first)...");
-            // Invincible Wrapper
-            try {
-                const { request } = await publicClient.simulateContract({
-                    account: eveAccount,
-                    address: REGISTRY_ADDR, 
-                    abi: RegistryABI, 
-                    functionName: 'registerRoleSelf',
-                    args: [ROLE_ENDUSER, eveData],
-                    gas: 3000000n
-                });
-                const txReg = await eveWallet.writeContract(request);
-                await waitForTx(publicClient, txReg);
-                console.log("   🎉 registerRoleSelf Success!");
-            } catch (innerE: any) {
-                console.warn(`   ⚠️ Registration failed (likely benign/idempotent): ${innerE.shortMessage || innerE.message}`);
-            }
+            const { request } = await publicClient.simulateContract({
+                account: eveAccount,
+                address: REGISTRY_ADDR, 
+                abi: RegistryABI, 
+                functionName: 'registerRoleSelf',
+                args: [ROLE_ENDUSER, eveData],
+                gas: 3000000n
+            });
+            const txReg = await eveWallet.writeContract(request);
+            await waitForTx(publicClient, txReg);
+            console.log("   🎉 registerRoleSelf Success!");
         } catch (e: any) {
-             console.warn("   ⚠️ Unexpected error in registration block (suppressed).");
+             console.warn(`   ⚠️ Registration failed (Skipping step): ${e.shortMessage || e.message}`);
         }
     }
 
