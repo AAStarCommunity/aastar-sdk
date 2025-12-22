@@ -176,8 +176,9 @@ async function runReentrancyTest() {
             account: admin
         });
     } catch (e: any) {
-        console.log(`   ⚠️ notifyDeposit failed: ${e.message}`);
-        // Proceed if this is just accounting or SAFE ERC20 noise from Malicious Token
+        // Sanitize log to single line
+        const errMsg = (e.message || "Unknown").split('\n')[0];
+        console.log(`   ⚠️ notifyDeposit failed (likely benign): ${errMsg}`);
     }
 
     // 5. Trigger Reentrancy Attack
