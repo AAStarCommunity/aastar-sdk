@@ -24,7 +24,7 @@ const regAbi = parseAbi([
 
 const spmAbi = parseAbi([
     'function deposit(uint256)',
-    'function operators(address) view returns (address, address, uint96, uint256, uint256, bool, uint256)'
+    'function operators(address) view returns (address, bool, bool, address, uint96, uint256, uint256, uint256, uint256)'
 ]);
 
 async function runCrossRoleTest() {
@@ -62,7 +62,7 @@ async function runCrossRoleTest() {
     const opData = await client.readContract({
         address: SUPER_PAYMASTER, abi: spmAbi, functionName: 'operators', args: [admin.address]
     });
-    console.log(`   ✅ Operator Balance: ${opData[4]}`);
+    console.log(`   ✅ Operator Balance: ${opData[5]}`);
 
     // 3. Simulated User Interaction
     // In a full e2e, this would be a UserOp.
