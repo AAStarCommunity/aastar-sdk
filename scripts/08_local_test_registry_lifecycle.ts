@@ -198,11 +198,18 @@ async function main() {
             await waitForTx(publicClient, txReg);
             console.log(`   ✅ Registered.`);
         } catch (e: any) {
-             if (e.message.includes('RoleAlreadyGranted') || e.message.includes('AlreadyRegistered')) {
-                 console.log(`   ⚠️ Already registered (caught exception).`);
-             } else {
+             const isNowRegistered = await publicClient.readContract({
+                address: REGISTRY_ADDR,
+                abi: RegistryABI,
+                functionName: 'hasRole',
+                args: [ROLE_PAYMASTER_AOA, paymasterUser.address]
+            });
+            if (isNowRegistered) {
+                 console.log(`   ⚠️ Already registered (caught tx failure).`);
+            } else {
+                 console.error(`   ❌ Registration failed and not registered: ${e.message}`);
                  throw e;
-             }
+            }
         }
     }
 

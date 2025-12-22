@@ -93,13 +93,27 @@ async function runReentrancyTest() {
     if (isRegistered) {
         console.log('   ⚠️ Attacker already registered. Skipping registration tx.');
     } else {
-        await walletClient.writeContract({
-            address: REGISTRY_ADDR,
-            abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
-            functionName: 'registerRoleSelf',
-            args: [ROLE_COMMUNITY, roleData]
-        });
-        console.log('   ✅ Attacker Registered.');
+        try {
+            await walletClient.writeContract({
+                address: REGISTRY_ADDR,
+                abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+                functionName: 'registerRoleSelf',
+                args: [ROLE_COMMUNITY, roleData]
+            });
+            console.log('   ✅ Attacker Registered.');
+        } catch (e: any) {
+             const doubleCheck = await publicClient.readContract({
+                address: REGISTRY_ADDR,
+                abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
+                functionName: 'hasRole',
+                args: [ROLE_COMMUNITY, admin.address]
+            });
+            if (doubleCheck) {
+                console.log('   ⚠️ Attacker already registered (caught tx failure).');
+            } else {
+                throw e;
+            }
+        }
     }
 
     // 3. Switch SuperPaymaster to use Malicious Token (Simulating a hack/mistake)

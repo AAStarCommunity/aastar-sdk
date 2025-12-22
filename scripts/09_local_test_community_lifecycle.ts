@@ -155,14 +155,28 @@ async function runCommunityLifecycleTest() {
         });
 
         if (!isRegistered) {
-            const registerTx = await walletClient.writeContract({
-                address: REGISTRY_ADDR,
-                abi: registryAbi,
-                functionName: 'registerRoleSelf',
-                args: [ROLE_COMMUNITY, '0x']
-            });
-            await publicClient.waitForTransactionReceipt({ hash: registerTx });
-            console.log('   ✅ Community registered');
+            try {
+                const registerTx = await walletClient.writeContract({
+                    address: REGISTRY_ADDR,
+                    abi: registryAbi,
+                    functionName: 'registerRoleSelf',
+                    args: [ROLE_COMMUNITY, '0x']
+                });
+                await publicClient.waitForTransactionReceipt({ hash: registerTx });
+                console.log('   ✅ Community registered');
+            } catch (e: any) {
+                const doubleCheck = await publicClient.readContract({
+                    address: REGISTRY_ADDR,
+                    abi: registryAbi,
+                    functionName: 'hasRole',
+                    args: [ROLE_COMMUNITY, admin.address]
+                });
+                if (doubleCheck) {
+                    console.log('   ⚠️ Community already registered (caught tx failure).');
+                } else {
+                    throw e;
+                }
+            }
         } else {
              console.log('   ⚠️ Community already registered (skipping)');
         }

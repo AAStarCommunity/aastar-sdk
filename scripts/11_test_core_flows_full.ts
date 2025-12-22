@@ -109,14 +109,28 @@ async function runCoreFlowsTest() {
                 stakeAmount: parseEther('600')
             }]
         );
-        const registerTx = await commClient.writeContract({
-            address: REGISTRY_ADDR,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [ROLE_COMMUNITY, roleData]
-        });
-        await publicClient.waitForTransactionReceipt({ hash: registerTx });
-        console.log('   ✅ Registered Community "MyTestCommunity" with 600 GToken stake');
+        try {
+            const registerTx = await commClient.writeContract({
+                address: REGISTRY_ADDR,
+                abi: RegistryABI,
+                functionName: 'registerRoleSelf',
+                args: [ROLE_COMMUNITY, roleData]
+            });
+            await publicClient.waitForTransactionReceipt({ hash: registerTx });
+            console.log('   ✅ Registered Community "MyTestCommunity" with 600 GToken stake');
+        } catch (e: any) {
+             const doubleCheck = await publicClient.readContract({
+                address: REGISTRY_ADDR,
+                abi: RegistryABI,
+                functionName: 'hasRole',
+                args: [ROLE_COMMUNITY, commAccount.address]
+            });
+            if (doubleCheck) {
+                 console.log('   ⚠️ Community already registered (caught tx failure).');
+            } else {
+                throw e;
+            }
+        }
     } else {
         console.log('   ⚠️  Community already registered (skipping)');
     }

@@ -163,8 +163,16 @@ async function main() {
             await waitForTx(publicClient, txReg);
             console.log("   🎉 registerRoleSelf Success!");
         } catch (e: any) {
-            console.log(`   ❌ registerRoleSelf failed: ${e.message}`);
-            throw e;
+             const doubleCheck = await publicClient.readContract({
+                address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole',
+                args: [ROLE_ENDUSER, eveAccount.address]
+            });
+            if (doubleCheck) {
+                console.log("   ⚠️ Already registered (caught tx failure).");
+            } else {
+                console.log(`   ❌ registerRoleSelf failed: ${e.message}`);
+                throw e;
+            }
         }
     }
 
