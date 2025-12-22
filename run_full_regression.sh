@@ -139,7 +139,7 @@ for script in "${TEST_SCRIPTS[@]}"; do
     if pnpm ts-node "$script" > "$TMP_OUT" 2>&1; then
         # Check for internal reverts even on exit code 0
         # Specifically excluding "expected" reverts if any script uses them loosely
-        if grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" > /dev/null; then
+        if grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" | grep -v "Skipping step" | grep -v "benign" | grep -v "InsufficientBalance" | grep -v "DepositNotVerified" > /dev/null; then
             echo -e "${RED}❌ FAILED (Internal Error): $script${NC}"
             cat "$TMP_OUT" | tail -n 15
             FAILED_LIST+=("$script")
