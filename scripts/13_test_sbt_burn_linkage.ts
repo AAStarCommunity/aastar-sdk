@@ -5,8 +5,7 @@ import {
     keccak256, 
     toBytes, 
     encodeAbiParameters, 
-    type Hex,
-    decodeErrorResult
+    type Hex
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -20,7 +19,7 @@ const __dirname = path.dirname(__filename);
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(__dirname, '../../SuperPaymaster/contracts/.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 const loadAbi = (name: string) => {
     const abiPath = path.resolve(__dirname, `../abis/${name}.abi.json`);
@@ -46,10 +45,10 @@ async function main() {
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
     // LATEST DEPLOYMENT ADDRESSES from DeployV3FullLocal output
-    const REGISTRY_ADDR = (process.env.REGISTRY_ADDR || '0xf2cb3cfa36bfb95e0fd855c1b41ab19c517fcdb9') as Hex;
-    const MYSBT_ADDR = (process.env.MYSBT_ADDR || '0xC3549920b94a795D75E6C003944943D552C46F97') as Hex;
-    const GTOKEN_ADDR = (process.env.GTOKEN_ADDR || '0x364c7188028348566e38d762f6095741c49f492b') as Hex;
-    const STAKING_ADDR = (process.env.STAKING_ADDR || '0x5147c5c1cb5b5d3f56186c37a4bcfbb3cd0bd5a7') as Hex;
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
+    const MYSBT_ADDR = process.env.MYSBT_ADDR as Hex;
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex;
+    const STAKING_ADDR = process.env.STAKING_ADDR as Hex;
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });

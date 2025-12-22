@@ -20,7 +20,7 @@ const __dirname = path.dirname(__filename);
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(__dirname, '../../SuperPaymaster/contracts/.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 const loadAbi = (name: string) => {
     const abiPath = path.resolve(__dirname, `../abis/${name}.abi.json`);
@@ -46,10 +46,10 @@ async function main() {
     console.log('\n⚔️  Starting Phase 5: Slash Mechanism Test (Tier 1 & 2) ⚔️\n');
 
     const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC) });
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex || '0xaB837301d12cDc4b97f1E910FC56C9179894d9cf';
-    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex || '0x124dDf9BdD2DdaD012ef1D5bBd77c00F05C610DA';
-    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex || '0xe044814c9eD1e6442Af956a817c161192cBaE98F';
-    const PAYMASTER_ADDR = process.env.PAYMASTER_ADDRESS as Hex || '0x9C85258d9A00C01d00ded98065ea3840dF06f09c';
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as Hex;
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as Hex;
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex;
+    const PAYMASTER_ADDR = process.env.PAYMASTER_ADDRESS as Hex;
 
     const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });

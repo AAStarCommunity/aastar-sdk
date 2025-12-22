@@ -84,10 +84,10 @@ async function main() {
 
     // 2. Resolve Contract Addresses
     // Try environment variables first, else fallback to hardcoded (Fresh Local Deployment)
-    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as `0x${string}` || '0x1c85638e118b37167e9298c2268758e058ddfda0';
-    const STAKING_ADDR = process.env.GTOKEN_STAKING as `0x${string}` || '0xc9a43158891282a2b1475592d5719c001986aaec';
-    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as `0x${string}` || '0x46b142dd1e924fab83ecc3c08e4d46e82f005e0e';
-    const MYSBT_ADDR = process.env.MYSBT_ADDRESS as `0x${string}` || '0x367761085bf3c12e5da2df99ac6e1a824612b8fb'; 
+    const REGISTRY_ADDR = process.env.REGISTRY_ADDRESS as `0x${string}`;
+    const STAKING_ADDR = process.env.GTOKEN_STAKING as `0x${string}`;
+    const GTOKEN_ADDR = process.env.GTOKEN_ADDRESS as `0x${string}`;
+    const MYSBT_ADDR = process.env.MYSBT_ADDRESS as `0x${string}`; 
 
     if (!REGISTRY_ADDR || !STAKING_ADDR || !GTOKEN_ADDR) {
         throw new Error('Missing contract addresses in .env (REGISTRY_ADDRESS, GTOKEN_STAKING, GTOKEN_ADDRESS)');

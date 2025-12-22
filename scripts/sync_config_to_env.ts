@@ -46,6 +46,9 @@ function sync() {
         'PRIVATE_KEY_SUPPLIER': '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
         'GTOKEN_ADDRESS': config.gToken,
         'GTOKEN_STAKING': config.staking,
+        'REGISTRY_ADDRESS': config.registry,
+        'MYSBT_ADDRESS': config.sbt,
+        'PAYMASTER_ADDRESS': config.superPaymaster,
         'RECEIVER': '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' 
     };
 

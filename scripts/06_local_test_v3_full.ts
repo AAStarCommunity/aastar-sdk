@@ -14,11 +14,13 @@ const RPC_URL = process.env.RPC_URL;
 const BUNDLER_RPC = process.env.BUNDLER_RPC;
 const ENTRY_POINT = process.env.MOCK_ENTRY_POINT as Hex;
 const APNTS = process.env.APNTS as Hex;
+const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
+const ROLE_COMMUNITY = keccak256(toHex('COMMUNITY'));
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
 const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex;
 const RECEIVER = process.env.RECEIVER as Hex;
-if (!SUPER_PAYMASTER || !APNTS) throw new Error("Missing Config");
+if (!SUPER_PAYMASTER || !APNTS || !REGISTRY_ADDR) throw new Error("Missing Config");
 
 // Helper: Pack 128-bit values
 function packUint(high128: bigint, low128: bigint): Hex {
@@ -31,6 +33,26 @@ async function runFullV3Test() {
     const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
     const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
+
+    // Ensure Community Role
+    console.log("🛠  Ensuring Community Role for Operator...");
+    const hasRole = await publicClient.readContract({
+        address: REGISTRY_ADDR,
+        abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
+        functionName: 'hasRole',
+        args: [ROLE_COMMUNITY, signer.address]
+    });
+
+    if (!hasRole) {
+        console.log("   Registering Community...");
+        const registerTx = await wallet.writeContract({
+            address: REGISTRY_ADDR,
+            abi: parseAbi(['function registerRole(bytes32, address, bytes) external']),
+            functionName: 'registerRole',
+            args: [ROLE_COMMUNITY, signer.address, '0x']
+        });
+        await publicClient.waitForTransactionReceipt({ hash: registerTx });
+    }
 
     const pmAbi = parseAbi([
         'function operators(address) view returns (address, address, bool, bool, uint256, uint256, uint256, uint256, uint256)',
@@ -135,7 +157,7 @@ async function runFullV3Test() {
     await publicClient.waitForTransactionReceipt({ hash });
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    const balanceAfterDeposit = opData[4] as bigint;
+    const balanceAfterDeposit = opData[5] as bigint;
     console.log(`   ✅ New Balance: ${formatEther(balanceAfterDeposit)}`);
 
     // Test Withdraw
@@ -145,7 +167,7 @@ async function runFullV3Test() {
     await publicClient.waitForTransactionReceipt({ hash });
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (balanceAfterDeposit - (opData[4] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch");
+    if (balanceAfterDeposit - (opData[5] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch");
     console.log("   ✅ Withdrawn.");
 
 
