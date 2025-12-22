@@ -171,7 +171,8 @@ async function main() {
             await waitForTx(publicClient, txReg);
             console.log("   🎉 registerRoleSelf Success!");
         } catch (e: any) {
-             console.warn(`   ⚠️ Registration failed (Skipping step): ${e.shortMessage || e.message}`);
+             const errMsg = (e.shortMessage || e.message || "Unknown").split('\n')[0];
+             console.warn(`   ⚠️ Registration failed (Skipping step): ${errMsg}`);
         }
     }
 
@@ -219,7 +220,8 @@ async function main() {
             });
             await waitForTx(publicClient, txReg2);
         } catch (e: any) {
-            console.warn(`   ⚠️ Re-registration failed (Skipping step): ${e.shortMessage || e.message}`);
+            const errMsg = (e.shortMessage || e.message || "Unknown").split('\n')[0];
+            console.warn(`   ⚠️ Re-registration failed (Skipping step): ${errMsg}`);
         }
     }
 
@@ -231,7 +233,8 @@ async function main() {
         });
         await waitForTx(publicClient, txExit);
     } catch (e: any) {
-        console.warn(`   ⚠️ ExitRole failed (Skipping step): ${e.shortMessage || e.message}`);
+        const errMsg = (e.shortMessage || e.message || "Unknown").split('\n')[0];
+        console.warn(`   ⚠️ ExitRole failed (Skipping step): ${errMsg}`);
     }
     
     // In V3, exitRole might NOT burn the SBT automatically, but mark membership as inactive.

@@ -198,7 +198,8 @@ async function runReentrancyTest() {
         } else if (error.message.includes('InsufficientBalance')) {
              console.log('   ⚠️ Attack setup failed (Insufficient Balance) - Skipping reentrancy check.');
         } else {
-            console.log(`   ❓ Unexpected Error: ${error.message}`);
+            const errMsg = (error.message || "Unknown").split('\n')[0];
+            console.log(`   ❓ Unexpected Error: ${errMsg}`);
         }
     }
 

@@ -214,7 +214,8 @@ async function runFullV3Test() {
             const approveHash = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("10000")] });
             await waitForTx(approveHash);
         } catch (e: any) {
-            console.warn(`   ⚠️ Token approval failed (Skipping step): ${e.shortMessage || e.message}`);
+            const errMsg = (e.shortMessage || e.message || "Unknown").split('\n')[0];
+            console.warn(`   ⚠️ Token approval failed (Skipping step): ${errMsg}`);
         }
     }
 
@@ -277,7 +278,8 @@ async function runFullV3Test() {
         const metrics = await sendUserOp(publicClient, bundlerClient, signer, ACCOUNT_C, APNTS, 0n, transferData, pmStruct, 31337);
         console.log(`   ✅ UserOp Success! Hash: ${metrics.txHash}`);
     } catch (e) {
-        console.warn("   ⚠️ UserOp execution failed (Skipping step):", (e as any).shortMessage || (e as any).message);
+        const errMsg = ((e as any).shortMessage || (e as any).message || "Unknown").split('\n')[0];
+        console.warn(`   ⚠️ UserOp execution failed (Skipping step): ${errMsg}`);
         // Don't kill process, check revenue anyway
     }
 
