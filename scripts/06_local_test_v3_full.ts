@@ -362,9 +362,33 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Hex, t
         signature: sig
     };
 
-    const hash = await bundler.request({ method: 'eth_sendUserOperation', params: [unpackedOp, ENTRY_POINT] });
-    
-    // Wait
+    let hash;
+    try {
+        hash = await bundler.request({ method: 'eth_sendUserOperation', params: [unpackedOp, ENTRY_POINT] });
+    } catch (e: any) {
+         if ((e.code === -32601) || (e.message && e.message.includes('Method not found'))) {
+             console.log("   Info: Bundler not found, using direct handleOps...");
+             const userOpTuple = [
+                unpackedOp.sender, unpackedOp.nonce, unpackedOp.initCode, unpackedOp.callData,
+                unpackedOp.callGasLimit, unpackedOp.verificationGasLimit, unpackedOp.preVerificationGas,
+                unpackedOp.maxFeePerGas, unpackedOp.maxPriorityFeePerGas,
+                concat([unpackedOp.paymaster, packUint(BigInt(unpackedOp.paymasterVerificationGasLimit), BigInt(unpackedOp.paymasterPostOpGasLimit)), unpackedOp.paymasterData]),
+                unpackedOp.signature
+             ];
+             // IEntryPoint handleOps
+             const txHash = await client.writeContract({
+                 account: signer,
+                 address: ENTRY_POINT,
+                 abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes)[], address)']),
+                 functionName: 'handleOps',
+                 args: [[userOpTuple], signer.address]
+             });
+             return { txHash, status: 'Success' };
+         }
+         throw e;
+    }
+
+    // Wait for Bundler receipt
     for(let i=0; i<60; i++) {
         const r: any = await bundler.request({ method: 'eth_getUserOperationReceipt', params: [hash] });
         if(r) return { txHash: r.receipt.transactionHash, status: 'Success' };
