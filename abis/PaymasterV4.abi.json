@@ -59,6 +59,19 @@
   },
   {
     "type": "function",
+    "name": "MAX_PRICE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_SBTS",
     "inputs": [],
     "outputs": [
@@ -79,6 +92,19 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_PRICE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "int256",
+        "internalType": "int256"
       }
     ],
     "stateMutability": "view"
@@ -1091,7 +1117,22 @@
   },
   {
     "type": "error",
+    "name": "PaymasterV4__InvalidCap",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymasterV4__InvalidGasToken",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "PaymasterV4__InvalidPaymasterData",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymasterV4__InvalidSBT",
     "inputs": []
   },
   {
@@ -1126,12 +1167,22 @@
   },
   {
     "type": "error",
+    "name": "PaymasterV4__OraclePriceInvalid",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "PaymasterV4__Paused",
     "inputs": []
   },
   {
     "type": "error",
     "name": "PaymasterV4__ZeroAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymasterV4__ZeroPrice",
     "inputs": []
   },
   {
