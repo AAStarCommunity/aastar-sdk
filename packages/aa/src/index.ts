@@ -1,11 +1,10 @@
-
-import { type Hex, type Address, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, packUint } from 'viem';
+import { type Hex, type Address, encodeAbiParameters, keccak256 } from 'viem';
 
 /**
  * Common Pack Logic for v0.7 UserOperations
  */
 export function packUserOpLimits(high: bigint, low: bigint): Hex {
-    return packUint({ high, low });
+    return `0x${((high << 128n) | low).toString(16).padStart(64, '0')}` as Hex;
 }
 
 /**
