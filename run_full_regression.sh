@@ -115,8 +115,10 @@ echo -e "${YELLOW}🧪 Running Full Test Suite...${NC}"
 # Detailed Script List to cover all user-requested areas
 TEST_SCRIPTS=(
     "scripts/99_bug_hunting_fast.ts"
+    "scripts/06_local_test_v3_admin.ts"
     "scripts/06_local_test_v3_funding.ts"
     "scripts/06_local_test_v3_reputation.ts"
+    "scripts/06_local_test_v3_execution.ts"
     "scripts/08_local_test_registry_lifecycle.ts"
     "scripts/09_local_test_community_lifecycle.ts"
     "scripts/10_test_protocol_admin_full.ts"

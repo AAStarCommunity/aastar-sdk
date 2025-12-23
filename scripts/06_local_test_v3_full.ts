@@ -100,7 +100,7 @@ async function runFullV3Test() {
         'function withdrawProtocolRevenue(address, uint256)',
         'function slashOperator(address, uint8, uint256, string)',
         'function updateReputation(address, uint256)',
-        'function setOperatorPause(address, bool)',
+        'function setOperatorPaused(address, bool)',
         'function totalTrackedBalance() view returns (uint256)',
         'function protocolRevenue() view returns (uint256)',
         'function setAPNTsToken(address)'
@@ -148,7 +148,7 @@ async function runFullV3Test() {
 
     // Test Pause/Unpause
     console.log("   ⏸️  Testing Pause...");
-    let pauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, true] });
+    let pauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPaused', args: [signer.address, true] });
     await publicClient.waitForTransactionReceipt({ hash: pauseHash });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     if(opData[2] !== true) throw new Error("Pause failed");
@@ -156,10 +156,10 @@ async function runFullV3Test() {
 
     console.log("   ▶️  Testing Unpause...");
     try {
-        let unpauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', args: [signer.address, false] });
+        let unpauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPaused', args: [signer.address, false] });
         await publicClient.waitForTransactionReceipt({ hash: unpauseHash });
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        if(opData[3] !== false) throw new Error("Unpause failed"); // Corrected index to 3 for isPaused
+        if(opData[2] !== false) throw new Error("Unpause failed"); 
         console.log("   ✅ Unpaused.");
     } catch (e: any) {
         console.warn(`   ⚠️ Unpause failed (Skipping step): ${e.shortMessage || e.message}`);

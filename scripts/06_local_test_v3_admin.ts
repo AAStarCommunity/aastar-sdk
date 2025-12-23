@@ -19,7 +19,7 @@ if (!SUPER_PAYMASTER || !SIGNER_KEY) throw new Error("Missing Config");
 const pmAbi = parseAbi([
     'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
     'function configureOperator(address, address, uint256)',
-    'function setOperatorPause(address, bool)',
+    'function setOperatorPaused(address, bool)',
     'function updateReputation(address, uint256)',
     'function setAPNTsToken(address)',
     'function owner() view returns (address)'
@@ -51,10 +51,10 @@ async function runAdminTest() {
     if (!opData[1]) throw new Error("configureOperator failed");
     console.log("   ✅ Operator Configured.");
 
-    // 3. Test setOperatorPause
-    console.log("   ⏸️ Testing setOperatorPause (true)...");
+    // 3. Test setOperatorPaused
+    console.log("   ⏸️ Testing setOperatorPaused (true)...");
     const hashPause = await wallet.writeContract({ 
-        address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', 
+        address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPaused', 
         args: [signer.address, true] 
     });
     await publicClient.waitForTransactionReceipt({ hash: hashPause });
@@ -62,9 +62,9 @@ async function runAdminTest() {
     if (opData[2] !== true) throw new Error("Pause failed");
     console.log("   ✅ Operator Paused.");
 
-    console.log("   ▶️ Testing setOperatorPause (false)...");
+    console.log("   ▶️ Testing setOperatorPaused (false)...");
     const hashUnpause = await wallet.writeContract({ 
-        address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPause', 
+        address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPaused', 
         args: [signer.address, false] 
     });
     await publicClient.waitForTransactionReceipt({ hash: hashUnpause });
@@ -100,7 +100,7 @@ async function runAdminTest() {
         console.log("   ✅ APNTs Token set.");
     }
 
-    console.log("\n🏁 Admin Module Test Passed (Coverage: setOperatorPause, configureOperator, updateReputation, setAPNTsToken)");
+    console.log("\n🏁 Admin Module Test Passed (Coverage: setOperatorPaused, configureOperator, updateReputation, setAPNTsToken)");
 }
 
 runAdminTest().catch(console.error);

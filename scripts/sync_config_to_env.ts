@@ -35,7 +35,7 @@ function sync() {
         'XPNTS_ADDR': config.aPNTs,
         'XPNTS_FACTORY_ADDR': config.xPNTsFactory,
         'PAYMASTER_FACTORY_ADDR': config.paymasterFactory,
-        'ENTRYpoint_ADDR': config.entryPoint,
+        'ENTRY_POINT_ADDR': config.entryPoint,
         'REPUTATION_SYSTEM_ADDR': config.reputationSystem,
         'DVT_VALIDATOR_ADDR': config.dvtValidator,
         'BLS_AGGREGATOR_ADDR': config.blsAggregator,
