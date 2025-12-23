@@ -55,4 +55,50 @@ export class FinanceClient {
             chain: wallet.chain
         } as any);
     }
+
+    /**
+     * @notice Handle EntryPoint deposits for Paymasters
+     */
+    static async depositToEntryPoint(wallet: WalletClient, entryPoint: Address, paymaster: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: entryPoint,
+            abi: parseAbi(['function depositTo(address) payable']),
+            functionName: 'depositTo',
+            args: [paymaster],
+            value: amount,
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async getEntryPointBalance(client: any, entryPoint: Address, account: Address): Promise<bigint> {
+        return client.readContract({
+            address: entryPoint,
+            abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+            functionName: 'balanceOf',
+            args: [account]
+        });
+    }
+
+    /**
+     * @notice SuperPaymaster Operator Balance Management
+     */
+    static async operatorDeposit(wallet: WalletClient, paymaster: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'deposit',
+            args: [amount],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async operatorNotifyDeposit(wallet: WalletClient, paymaster: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'notifyDeposit',
+            args: [amount],
+            chain: wallet.chain
+        } as any);
+    }
 }

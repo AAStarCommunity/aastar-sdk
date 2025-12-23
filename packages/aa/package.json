@@ -1,0 +1,16 @@
+{
+  "name": "@aastar/aa",
+  "version": "0.1.0",
+  "description": "Account Abstraction utilities for SuperPaymaster",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aastar/core": "workspace:*",
+    "viem": "^2.x"
+  }
+}

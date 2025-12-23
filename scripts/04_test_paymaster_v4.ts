@@ -1,15 +1,16 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
+import { createPublicClient, http, parseEther, formatEther, type Hex, toHex, encodeFunctionData, parseAbi, concat, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { ERC20Client } from '../packages/tokens/src/index.ts';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
-const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+const ENTRY_POINT = "0x0000000071727DE22E5E9d8BAf0edAc6f37da032";
 
 const ACCOUNT_B = process.env.TEST_SIMPLE_ACCOUNT_B as Hex; 
 const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
@@ -19,55 +20,44 @@ const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
 if (!BUNDLER_RPC || !BPNTS || !PAYMASTER_V4) throw new Error("Missing Config for Group B");
 
-function packUint(high128: bigint, low128: bigint): Hex {
-    return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
+function packUint(args: { high: bigint; low: bigint }): Hex {
+    return `0x${((args.high << 128n) | args.low).toString(16).padStart(64, '0')}` as Hex;
 }
 
 async function main() {
-    console.log("🚀 Starting Group B: Paymaster V4 (AOA Mode)...");
+    console.log("🚀 Starting Group B: Paymaster V4 (AOA Mode) - Refactored...");
     const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-
-    const erc20Abi = parseAbi([
-        'function balanceOf(address) view returns (uint256)',
-        'function transfer(address, uint256) returns (bool)',
-        'function approve(address, uint256) returns (bool)',
-        'function allowance(address, address) view returns (uint256)'
-    ]);
     
-    // 1. Check Allowance
-    const allow = await publicClient.readContract({ address: BPNTS, abi: erc20Abi, functionName: 'allowance', args: [ACCOUNT_B, PAYMASTER_V4] });
-    console.log(`   🔓 Allowance: ${formatEther(allow)}`);
+    // 1. Check Allowance using ERC20Client
+    const allowance = await ERC20Client.allowance(publicClient, BPNTS, ACCOUNT_B, PAYMASTER_V4);
+    console.log(`   🔓 Allowance: ${formatEther(allowance)}`);
 
-    if (allow < parseEther("100")) {
+    if (allowance < parseEther("100")) {
         console.log("   ⚠️  Allowance too low. Sending 'Approve' UserOp (ETH paid)...");
         await sendUserOp(
             publicClient, bundlerClient, signer, ACCOUNT_B,
             BPNTS, 0n, 
-            encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [PAYMASTER_V4, parseEther("1000000")] }),
-            "0x", // No Paymaster
-            true // isApproval
+            encodeFunctionData({ 
+                abi: parseAbi(['function approve(address, uint256) returns (bool)']), 
+                functionName: 'approve', 
+                args: [PAYMASTER_V4, parseEther("1000000")] 
+            }),
+            "0x" // No Paymaster
         );
         console.log("   ✅ Approved.");
     }
 
     // 2. Prepare Test Transfer UserOp (Paid by Paymaster)
     console.log("   🔄 Sending Test Transfer (Paid by Paymaster)...");
-    const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")] });
+    const transferData = encodeFunctionData({ 
+        abi: parseAbi(['function transfer(address, uint256) returns (bool)']), 
+        functionName: 'transfer', 
+        args: [RECEIVER, parseEther("1")] 
+    });
     
-    // Construct Minimal PaymasterAndData for V4 Estimation
-    // V4 AOA Mode: Only Paymaster address is strictly needed for routing, 
-    // but some Paymasters verify data length.
-    // For Estimation, 0x + Address + DummyLimits usually works if logic handles it.
-    // Let's use clean Paymaster Address first.
-    
-    // NOTE: Alchemy v0.7 Expects paymasterAndData to be valid.
-    // We pass "0x" + PaymasterAddress + DummyGas(32bytes) + DummyData?
-    // Or just PaymasterAddress?
-    // UserOp v0.7 paymasterAndData = [paymaster (20)] [gasLimits (32)] [data (?)]
-    // We pre-pack a placeholder
-    const pmGasLimitsPlaceholder = packUint(300000n, 10000n);
+    const pmGasLimitsPlaceholder = packUint({ high: 300000n, low: 10000n });
     const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder]);
 
     await sendUserOp(
@@ -78,7 +68,7 @@ async function main() {
     console.log("   ✅ Group B Test Passed!");
 }
 
-async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex, isApproval = false) {
+async function sendUserOp(client: any, bundler: any, signer: any, sender: Address, target: Address, value: bigint, innerData: Hex, paymasterAndData: Hex = "0x") {
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
     const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
     
@@ -88,7 +78,6 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         functionName: 'getNonce', args: [sender, 0n]
     });
 
-    // 1. Estimation (MINIMALIST)
     let estOp: any = {
         sender,
         nonce: toHex(nonce),
@@ -97,17 +86,12 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
         signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
     };
     
-    // ONLY add explicit gas limits if absolutely necessary (e.g. for Eth paid op to force valid limit)
-    // But for Estimation, usually less is more with Alchemy v0.7.
-    // Let's TRY minimal.
-
     console.log("   ☁️  Estimating...");
     const estRes: any = await bundler.request({
         method: 'eth_estimateUserOperationGas',
         params: [estOp, ENTRY_POINT]
     });
 
-    // Parse Response
     const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? estRes.verificationGas ?? 500000n);
     const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n);
     const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
@@ -118,36 +102,21 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
     const priority = parseEther("5", "gwei");
     const maxFee = block.baseFeePerGas! * 2n + priority;
 
-    // 2. Pack Final UserOp (For Hashing)
-    const accountGasLimits = packUint(verificationGasLimit + 50000n, callGasLimit + 20000n);
-    const gasFees = packUint(maxFee, priority);
+    const accountGasLimits = packUint({ high: verificationGasLimit + 50000n, low: callGasLimit + 20000n });
+    const gasFees = packUint({ high: maxFee, low: priority });
     
-    // Handle Paymaster Data Packing
     let finalPMAndData = "0x" as Hex;
     if (paymasterAndData !== "0x") {
-        // Replace the placeholder limits with ESTIMATED limits
         const pmAddr = paymasterAndData.slice(0, 42) as Hex;
-        // If estimation returned 0 for PM liits, use defaults
-        const realPmVerif = pmVerif > 0n ? pmVerif + 50000n : 300000n;
+        const realPmVerif = pmVerif > 0n ? pmVerif + 50000n : 30000n;
         const realPmPost = pmPost > 0n ? pmPost + 10000n : 10000n;
-        const pmLimits = packUint(realPmVerif, realPmPost);
-        
-        // Preserve any existing data after the limits (index 2+40+64 = 106)
+        const pmLimits = packUint({ high: realPmVerif, low: realPmPost });
         const existingData = paymasterAndData.length > 106 ? ("0x" + paymasterAndData.slice(106)) as Hex : "0x" as Hex;
-        
         finalPMAndData = concat([pmAddr, pmLimits, existingData]);
     }
 
     const packedUserOp = {
-        sender,
-        nonce, 
-        initCode: "0x" as Hex,
-        callData,
-        accountGasLimits,
-        preVerificationGas,
-        gasFees,
-        paymasterAndData: finalPMAndData,
-        signature: "0x" as Hex
+        sender, nonce, initCode: "0x" as Hex, callData, accountGasLimits, preVerificationGas, gasFees, paymasterAndData: finalPMAndData, signature: "0x" as Hex
     };
 
     const userOpHash = await client.readContract({
@@ -159,39 +128,18 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Addres
 
     const sig = await signer.signMessage({ message: { raw: userOpHash } });
     
-    // 3. Send Unpacked
-    // Extract PM fields for Alchemy
     let pmFields: any = {};
     if (finalPMAndData !== "0x") {
         pmFields.paymaster = finalPMAndData.slice(0, 42) as Hex;
-        pmFields.paymasterVerificationGasLimit = "0x" + finalPMAndData.slice(42, 74); // High 128
-        pmFields.paymasterPostOpGasLimit = "0x" + finalPMAndData.slice(74, 106); // Low 128
-        // Fix: Ensure we correctly slice the 128-bit chunks. 
-        // Hex string chars: 2 (0x) + 40 (addr) + 32 (high) + 32 (low) -- wait, 128 bits is 16 bytes = 32 hex chars.
-        // packUint structure: High(128b/32hex) | Low(128b/32hex). Total 64 chars.
-        // So offset 42 (end of addr) -> 42+32=74 (end of high) -> 74+32=106 (end of low/limits)
-        
-        // BUT wait! Alchemy expects `paymasterVerificationGasLimit` as a quantity (uint256 hex string), not a packed chunk.
-        // We unpack it back to clean hex for RPC.
         const pmVerifVal = BigInt("0x" + finalPMAndData.slice(42, 74));
         const pmPostVal = BigInt("0x" + finalPMAndData.slice(74, 106));
-        
         pmFields.paymasterVerificationGasLimit = toHex(pmVerifVal);
         pmFields.paymasterPostOpGasLimit = toHex(pmPostVal);
         pmFields.paymasterData = finalPMAndData.length > 106 ? ("0x" + finalPMAndData.slice(106)) as Hex : "0x";
     }
 
     const unpackedUserOp = {
-        sender,
-        nonce: toHex(nonce),
-        callData,
-        callGasLimit: toHex(callGasLimit + 20000n),
-        verificationGasLimit: toHex(verificationGasLimit + 50000n),
-        preVerificationGas: toHex(preVerificationGas),
-        maxFeePerGas: toHex(maxFee),
-        maxPriorityFeePerGas: toHex(priority),
-        ...pmFields,
-        signature: sig
+        sender, nonce: toHex(nonce), callData, callGasLimit: toHex(callGasLimit + 20000n), verificationGasLimit: toHex(verificationGasLimit + 50000n), preVerificationGas: toHex(preVerificationGas), maxFeePerGas: toHex(maxFee), maxPriorityFeePerGas: toHex(priority), ...pmFields, signature: sig
     };
 
     console.log("   🚀 Sending Unpacked...");

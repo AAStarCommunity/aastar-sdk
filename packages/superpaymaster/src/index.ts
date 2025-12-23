@@ -1,7 +1,5 @@
-
-import { type Hex, type Address, concat, pad, toHex } from 'viem';
+import { type Address, concat, pad, toHex } from 'viem';
 import { SUPERPAYMASTER_ABI } from '@aastar/core';
-import { createPublicClient, http } from 'viem';
 
 export type PaymasterConfig = {
     paymasterAddress: Address;
@@ -64,5 +62,66 @@ export async function checkEligibility(
         return (data as bigint) > 0n;
     } catch (e) {
         return false;
+    }
+}
+/**
+ * Admin Client for SuperPaymaster V3
+ */
+export class SuperPaymasterClient {
+    constructor(private client: any, private paymasterAddress: Address) {}
+
+    async getOperator(operator: Address) {
+        return this.client.readContract({
+            address: this.paymasterAddress,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'operators',
+            args: [operator]
+        });
+    }
+
+    static async configureOperator(
+        wallet: any, 
+        paymaster: Address, 
+        token: Address, 
+        treasury: Address, 
+        exchangeRate: bigint
+    ) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'configureOperator',
+            args: [token, treasury, exchangeRate],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async setOperatorPaused(wallet: any, paymaster: Address, operator: Address, paused: boolean) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'setOperatorPaused',
+            args: [operator, paused],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async updateReputation(wallet: any, paymaster: Address, operator: Address, score: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'updateReputation',
+            args: [operator, score],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async setAPNTsToken(wallet: any, paymaster: Address, token: Address) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'setAPNTsToken',
+            args: [token],
+            chain: wallet.chain
+        } as any);
     }
 }
