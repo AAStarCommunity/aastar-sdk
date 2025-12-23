@@ -1,5 +1,4 @@
-
-import { type Address, type WalletClient, parseAbi } from 'viem';
+import { type Address, type WalletClient, type Hex, parseAbi } from 'viem';
 
 const XPNTS_ABI = parseAbi([
     'function mint(address, uint256)',
@@ -40,6 +39,16 @@ export class TokensClient {
             functionName: 'isTokenActive',
             args: [user]
         });
+    }
+
+    static async mintSBT(wallet: WalletClient, sbt: Address, to: Address, data: { role: Hex, metadataURI: string }) {
+        return wallet.writeContract({
+            address: sbt,
+            abi: SBT_ABI,
+            functionName: 'mint',
+            args: [to, data.role, data.metadataURI],
+            chain: wallet.chain
+        } as any);
     }
 }
 

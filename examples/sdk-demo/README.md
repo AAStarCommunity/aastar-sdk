@@ -4,6 +4,7 @@ This folder contains a comprehensive demonstration of the **AAStar SDK** modular
 
 ## 📁 Folder Structure
 - `usage.ts`: The main demo script with detailed comments for each module.
+- `DEVELOPER_GUIDE.md`: **[New]** Comprehensive "How-To" patterns for 72+ business scenarios (Bilingual).
 
 ## 🚀 How to Use
 This demo assumes you are in a TypeScript environment with the AAStar SDK installed (or referenced via workspace).

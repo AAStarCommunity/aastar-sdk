@@ -101,4 +101,18 @@ export class FinanceClient {
             chain: wallet.chain
         } as any);
     }
+
+    /**
+     * @notice Self-service GToken to xPNTs conversion
+     * @dev Usually consumes GToken and mints xPNTs via a dedicated converter
+     */
+    static async wrapGTokenToXPNTs(wallet: WalletClient, converter: Address, gtoken: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: converter,
+            abi: parseAbi(['function wrap(address, uint256) returns (bool)']),
+            functionName: 'wrap',
+            args: [gtoken, amount],
+            chain: wallet.chain
+        } as any);
+    }
 }
