@@ -2,6 +2,7 @@
   "name": "aastar-sdk",
   "version": "0.3.0",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],
@@ -22,5 +23,8 @@
     "dotenv": "^17.2.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "viem": "^2.41.2"
   }
 }
