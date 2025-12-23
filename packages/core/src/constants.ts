@@ -5,14 +5,17 @@ export const SUPERPAYMASTER_ABI = parseAbi([
     'function deposit(uint256)',
     'function operators(address) view returns (address, bool, bool, address, uint96, uint256, uint256, uint256, uint256)',
     'function getAvailableCredit(address, address) view returns (uint256)',
-    'function postOp(uint8,bytes,uint256,uint256)'
+    'function postOp(uint8,bytes,uint256,uint256)',
+    'function withdrawProtocolRevenue(address, uint256)',
+    'function setOperatorPaused(address, bool)'
 ]);
 
 export const REGISTRY_ABI = parseAbi([
     'function hasRole(bytes32, address) view returns (bool)',
     'function getCreditLimit(address) view returns (uint256)',
     'function registerRole(bytes32, address, bytes)',
-    'function setCreditLimit(address, uint256)'
+    'function setCreditLimit(address, uint256)',
+    'function createNewRole(bytes32, (uint256,uint256,address,bool), address)'
 ]);
 
 export const XPNT_ABI = parseAbi([

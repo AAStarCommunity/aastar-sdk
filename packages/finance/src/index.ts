@@ -13,8 +13,9 @@ export class FinanceClient {
             address: paymaster,
             abi: SUPERPAYMASTER_ABI,
             functionName: 'deposit',
-            args: [amount]
-        });
+            args: [amount],
+            chain: wallet.chain
+        } as any);
     }
 
     static async depositViaTransferAndCall(wallet: WalletClient, token: Address, paymaster: Address, amount: bigint) {
@@ -30,8 +31,9 @@ export class FinanceClient {
             address: token,
             abi: ERC1363_ABI,
             functionName: 'transferAndCall',
-            args: [paymaster, amount]
-        });
+            args: [paymaster, amount],
+            chain: wallet.chain
+        } as any);
     }
 
     static async stakeGToken(wallet: WalletClient, stakingAddr: Address, amount: bigint) {
@@ -39,7 +41,18 @@ export class FinanceClient {
             address: stakingAddr,
             abi: STAKING_ABI,
             functionName: 'stake',
-            args: [amount]
-        });
+            args: [amount],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async withdrawProtocolRevenue(wallet: WalletClient, paymaster: Address, to: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'withdrawProtocolRevenue',
+            args: [to, amount],
+            chain: wallet.chain
+        } as any);
     }
 }

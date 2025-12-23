@@ -1,5 +1,5 @@
 
-import { createAAStarPublicClient, REGISTRY_ABI } from '@aastar/core';
+import { REGISTRY_ABI } from '@aastar/core';
 import { type Address, type PublicClient, type WalletClient, type Hex } from 'viem';
 
 export class RegistryClient {
@@ -29,7 +29,24 @@ export class RegistryClient {
             address: registry,
             abi: REGISTRY_ABI,
             functionName: 'registerRole',
-            args: [role, user, proof]
-        });
+            args: [role, user, proof],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async createNewRole(
+        wallet: WalletClient, 
+        registry: Address, 
+        role: Hex, 
+        config: { minStake: bigint; exitFeeBps: bigint; roleOwner: Address; isActive: boolean },
+        owner: Address
+    ) {
+        return wallet.writeContract({
+            address: registry,
+            abi: REGISTRY_ABI,
+            functionName: 'createNewRole',
+            args: [role, [config.minStake, config.exitFeeBps, config.roleOwner, config.isActive], owner],
+            chain: wallet.chain
+        } as any);
     }
 }
