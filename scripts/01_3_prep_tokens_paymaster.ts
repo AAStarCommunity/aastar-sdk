@@ -1,10 +1,8 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Hex, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, parseEther, formatEther, getContract, Hex, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { ERC20Client } from '../packages/tokens/src/index.ts';
-import { FinanceClient } from '../packages/finance/src/index.ts';
 
 dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
@@ -21,6 +19,17 @@ const ADDR = {
     ENTRY_POINT: process.env.ENTRY_POINT_V07 as Address,
 };
 
+const ABI = {
+    ERC20: parseAbi([
+        'function balanceOf(address) view returns (uint256)',
+        'function transfer(address, uint256) returns (bool)',
+    ]),
+    ENTRY_POINT: parseAbi([
+        'function depositTo(address account) payable',
+        'function balanceOf(address account) view returns (uint256)',
+    ]),
+};
+
 const publicClient = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
 const anni = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: CHAIN, transport: http(RPC_URL) });
 const jason = createWalletClient({ account: privateKeyToAccount(JASON_KEY), chain: CHAIN, transport: http(RPC_URL) });
@@ -32,7 +41,7 @@ const targets = [
 ];
 
 async function main() {
-    console.log("🚀 [01.3] Distributing Tokens & Funding Paymaster (Refactored)...\n");
+    console.log("🚀 [01.3] Distributing Tokens & Funding Paymaster...\n");
 
     // 1. Tokens
     for (const t of targets) {
@@ -47,14 +56,18 @@ async function main() {
     }
 
     // 2. Paymaster Deposit
-    if (ADDR.PAYMASTER_V4 && ADDR.ENTRY_POINT) {
+    if (ADDR.PAYMASTER_V4) {
         console.log("\n🏦 Checking Paymaster Deposit...");
-        const deposit = await FinanceClient.getEntryPointBalance(publicClient, ADDR.ENTRY_POINT, ADDR.PAYMASTER_V4);
+        const ep = getContract({ address: ADDR.ENTRY_POINT, abi: ABI.ENTRY_POINT, client: publicClient });
+        const deposit = await ep.read.balanceOf([ADDR.PAYMASTER_V4]);
         console.log(`   Deposit: ${formatEther(deposit)} ETH`);
 
         if (deposit < parseEther("0.05")) {
              console.log(`   Depositing 0.1 ETH from Anni...`);
-             const hash = await FinanceClient.depositToEntryPoint(anni, ADDR.ENTRY_POINT, ADDR.PAYMASTER_V4, parseEther("0.1"));
+             const hash = await anni.writeContract({
+                 address: ADDR.ENTRY_POINT, abi: ABI.ENTRY_POINT, functionName: 'depositTo', 
+                 args: [ADDR.PAYMASTER_V4], value: parseEther("0.1")
+             });
              console.log(`   ⏳ Sent: ${hash}`);
              await publicClient.waitForTransactionReceipt({ hash });
              console.log(`   ✅ Deposited`);
@@ -67,11 +80,14 @@ async function main() {
 async function checkAndTransfer(tokenAddr: Address, senderWallet: any, to: Address, amount: bigint, label: string) {
     if (!tokenAddr) { console.log(`   ⚠️ Skipping ${label} (No Address)`); return; }
     try {
-        const bal = await ERC20Client.balanceOf(publicClient, tokenAddr, to);
+        const token = getContract({ address: tokenAddr, abi: ABI.ERC20, client: publicClient });
+        const bal = await token.read.balanceOf([to]);
         
         if (bal < amount) {
             console.log(`   Sending ${formatEther(amount)} ${label} to ${to}...`);
-            const hash = await ERC20Client.transfer(senderWallet, tokenAddr, to, amount);
+            const hash = await senderWallet.writeContract({
+                address: tokenAddr, abi: ABI.ERC20, functionName: 'transfer', args: [to, amount]
+            });
             console.log(`   ⏳ Tx: ${hash}`);
             await publicClient.waitForTransactionReceipt({ hash });
             console.log(`   ✅ Sent`);

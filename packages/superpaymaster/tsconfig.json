@@ -4,7 +4,6 @@
     "moduleResolution": "node",
     "allowImportingTsExtensions": false,
     "outDir": "dist",
-    "rootDir": "src",
     "noEmit": false,
     "declaration": true
   },
