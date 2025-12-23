@@ -41,27 +41,81 @@ export function getPaymasterMiddleware(config: PaymasterConfig) {
 }
 
 /**
- * Simple eligibility check (off-chain) using Viem.
+ * Enhanced eligibility check for SuperPaymaster V3.
+ * Validates that user has sufficient credit with the given operator.
  */
 export async function checkEligibility(
     client: any, 
     paymaster: Address, 
     user: Address, 
     operator: Address
-): Promise<boolean> {
+): Promise<{ eligible: boolean; credit?: bigint; token?: Address }> {
     try {
-        // We can check credit or operator status here
-        const data = await client.readContract({
+        // 1. Fetch operator's configured token
+        const operatorData = await client.readContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'operators',
+            args: [operator]
+        });
+        
+        // operatorData structure: [token, treasury, isConfigured, isPaused, exchangeRate, ...]
+        const token = operatorData[0] as Address;
+        const isConfigured = operatorData[2] as boolean;
+        const isPaused = operatorData[3] as boolean;
+        
+        if (!isConfigured || isPaused) {
+            return { eligible: false };
+        }
+        
+        // 2. Check available credit
+        const credit = await client.readContract({
             address: paymaster,
             abi: SUPERPAYMASTER_ABI,
             functionName: 'getAvailableCredit',
-            args: [user, operator] // Assuming token is derived or passed? SDK might need improvement here.
-            // Wait, getAvailableCredit takes (user, token). 
-            // We need to fetch the operator's token first.
+            args: [user, token]
         });
-        return (data as bigint) > 0n;
+        
+        return { 
+            eligible: (credit as bigint) > 0n, 
+            credit: credit as bigint,
+            token
+        };
     } catch (e) {
-        return false;
+        console.warn('Eligibility check failed:', e);
+        return { eligible: false };
+    }
+}
+
+/**
+ * Check if user holds MySBT token (identity verification).
+ */
+export async function checkMySBT(
+    client: any,
+    sbtAddress: Address,
+    user: Address
+): Promise<{ hasSBT: boolean; balance?: bigint }> {
+    try {
+        const balance = await client.readContract({
+            address: sbtAddress,
+            abi: [{ 
+                inputs: [{ name: 'owner', type: 'address' }], 
+                name: 'balanceOf', 
+                outputs: [{ name: '', type: 'uint256' }], 
+                stateMutability: 'view', 
+                type: 'function' 
+            }],
+            functionName: 'balanceOf',
+            args: [user]
+        });
+        
+        return { 
+            hasSBT: (balance as bigint) > 0n,
+            balance: balance as bigint
+        };
+    } catch (e) {
+        console.warn('MySBT check failed:', e);
+        return { hasSBT: false };
     }
 }
 /**

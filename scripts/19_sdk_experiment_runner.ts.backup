@@ -1,40 +1,12 @@
 import { createObjectCsvWriter } from 'csv-writer';
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia, optimism } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import * as fs from 'fs';
 import { checkEligibility, checkMySBT } from '../packages/superpaymaster/src/index';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
-
-interface IndustryBaseline {
-    timestamp: string;
-    averages: {
-        costUSD: number;
-        costGwei: number;
-        gasUsed: number;
-    };
-}
-
-// Load industry baseline data
-function loadIndustryBaseline(): IndustryBaseline | null {
-    try {
-        const baselinePath = path.resolve(process.cwd(), 'data/industry_baseline_latest.json');
-        if (fs.existsSync(baselinePath)) {
-            const data = JSON.parse(fs.readFileSync(baselinePath, 'utf-8'));
-            return {
-                timestamp: data.timestamp,
-                averages: data.averages
-            };
-        }
-    } catch (e) {
-        console.warn('⚠️  Failed to load industry baseline. Run: npx ts-node scripts/collect_industry_baseline.ts');
-    }
-    return null;
-}
-
 
 const OUTPUT_FILE = 'sdk_experiment_data.csv';
 const RUNS = parseInt(process.env.EXPERIMENT_RUNS || '30');
@@ -50,20 +22,20 @@ const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 // Accounts
 const EOA_KEY = process.env.PRIVATE_KEY_JASON as Hex;
 const AA_OWNER_KEY = process.env.OWNER_PRIVATE_KEY as Hex;
-const V4_OWNER_KEY = process.env.OWNER_PRIVATE_KEY as Hex;
+const V4_OWNER_KEY = process.env.OWNER_PRIVATE_KEY as Hex; // Group D uses same owner as Group B
 const SUPER_OWNER_KEY = process.env.OWNER2_PRIVATE_KEY as Hex;
 
 // Contracts
 const ACCOUNT_B = process.env.TEST_SIMPLE_ACCOUNT_A as Hex; // Standard AA
 const ACCOUNT_D = process.env.TEST_SIMPLE_ACCOUNT_B as Hex; // PaymasterV4 AOA
 const ACCOUNT_C = process.env.TEST_SIMPLE_ACCOUNT_C as Hex; // SuperPaymaster AOA+
-const PAYMASTER_V4 = process.env.PAYMASTER_V4_ADDRESS as Hex;
+const PAYMASTER_V4 = process.env.PAYMASTER_V4_ADDRESS as Hex; // Group D
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
 const MYSBT_ADDRESS = process.env.MYSBT_ADDRESS as Hex;
 const APNTS_ADDRESS = process.env.APNTS_ADDRESS as Hex;
 const BPNTS_ADDRESS = process.env.BPNTS_ADDRESS as Hex; // PaymasterV4 token
 const OPERATOR_ADDRESS = process.env.OPERATOR_ADDRESS as Hex;
-const PIM_TOKEN = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751";
+const PIM_TOKEN = "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751"; // Pimlico test token
 
 const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
@@ -81,20 +53,11 @@ interface ExperimentResult {
     status: 'Success' | 'Failed';
     txHash: string;
     timestamp: string;
-    // Comparison with industry baseline
-    industryBaselineCostUSD?: number;
-    costVsIndustryPercent?: string; // e.g., "-45%" means 45% cheaper than industry average
 }
+
 
 async function main() {
     console.log(`🧪 Starting PhD Experiment Runner (Network: ${NETWORK}, Runs: ${RUNS})...`);
-    
-    // Load industry baseline
-    const baseline = loadIndustryBaseline();
-    if (baseline) {
-        console.log(`📊 Industry Baseline Loaded (${new Date(baseline.timestamp).toLocaleDateString()}):`);
-        console.log(`   Avg Cost: $${baseline.averages.costUSD} | Avg Gas: ${baseline.averages.gasUsed}`);
-    }
     
     const chain = NETWORK === 'optimism' ? optimism : sepolia;
     const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
@@ -103,7 +66,6 @@ async function main() {
     
     const eoaAccount = privateKeyToAccount(EOA_KEY);
     const aaOwner = privateKeyToAccount(AA_OWNER_KEY);
-    const v4Owner = privateKeyToAccount(V4_OWNER_KEY);
     const superOwner = privateKeyToAccount(SUPER_OWNER_KEY);
     
     // Pre-flight Checks
@@ -124,8 +86,6 @@ async function main() {
             {id: 'failoverLatencyMs', title: 'Failover Latency (ms)'},
             {id: 'interactionSteps', title: 'Interaction Steps'},
             {id: 'cognitiveLoad', title: 'Cognitive Load'},
-            {id: 'industryBaselineCostUSD', title: 'Industry Baseline Cost (USD)'},
-            {id: 'costVsIndustryPercent', title: 'Cost vs Industry (%)'},
             {id: 'status', title: 'Status'},
             {id: 'txHash', title: 'Transaction Hash'},
             {id: 'timestamp', title: 'Timestamp'}
@@ -139,8 +99,8 @@ async function main() {
         // Group A: EOA
         try {
             const result = await runGroupA_EOA(publicClient, eoaAccount, i + 1);
-            results.push(enrichWithBaseline(result, baseline));
-            console.log(`   ✅ Group A (EOA): ${result.status} (${result.latencyMs}ms, ${result.gasUsed} gas)`);
+            results.push(result);
+            console.log(`   ✅ Group A: ${result.status} (${result.latencyMs}ms, ${formatEther(result.gasUsed)} gas)`);
         } catch (e: any) {
             console.error(`   ❌ Group A Failed: ${e.message}`);
         }
@@ -148,32 +108,23 @@ async function main() {
         // Group B: Standard AA (Pimlico)
         try {
             const result = await runGroupB_StandardAA(publicClient, bundlerClient, pimlicoClient, aaOwner, ACCOUNT_B, i + 1);
-            results.push(enrichWithBaseline(result, baseline));
-            console.log(`   ✅ Group B (Pimlico AA): ${result.status} (${result.latencyMs}ms, ${result.gasUsed} gas)`);
+            results.push(result);
+            console.log(`   ✅ Group B: ${result.status} (${result.latencyMs}ms, ${formatEther(result.gasUsed)} gas)`);
         } catch (e: any) {
             console.error(`   ❌ Group B Failed: ${e.message}`);
         }
 
-        // Group D: PaymasterV4 (AOA)
-        try {
-            const result = await runGroupD_PaymasterV4(publicClient, bundlerClient, v4Owner, ACCOUNT_D, i + 1);
-            results.push(enrichWithBaseline(result, baseline));
-            console.log(`   ✅ Group D (PaymasterV4 AOA): ${result.status} (${result.latencyMs}ms, ${result.gasUsed} gas)`);
-        } catch (e: any) {
-            console.error(`   ❌ Group D Failed: ${e.message}`);
-        }
-
-        // Group C: SuperPaymaster (AOA+)
+        // Group C: SuperPaymaster
         try {
             const result = await runGroupC_SuperPaymaster(publicClient, bundlerClient, superOwner, ACCOUNT_C, i + 1);
-            results.push(enrichWithBaseline(result, baseline));
-            console.log(`   ✅ Group C (SuperPaymaster AOA+): ${result.status} (${result.latencyMs}ms, ${result.gasUsed} gas)`);
+            results.push(result);
+            console.log(`   ✅ Group C: ${result.status} (${result.latencyMs}ms, ${formatEther(result.gasUsed)} gas)`);
         } catch (e: any) {
             console.error(`   ❌ Group C Failed: ${e.message}`);
         }
 
         // Wait between runs to avoid rate limits
-        if (i < RUNS - 1) await new Promise(r => setTimeout(r, 3000));
+        if (i < RUNS - 1) await new Promise(r => setTimeout(r, 2000));
     }
 
     // Export Results
@@ -184,32 +135,16 @@ async function main() {
     // Summary Statistics
     const groupA = results.filter(r => r.group === 'EOA');
     const groupB = results.filter(r => r.group === 'Standard-AA');
-    const groupD = results.filter(r => r.group === 'PaymasterV4-AOA');
-    const groupC = results.filter(r => r.group === 'SuperPaymaster-AOA+');
+    const groupC = results.filter(r => r.group === 'SuperPaymaster-AOA');
     
     console.log(`\n📈 Summary:`);
     console.log(`   Group A (EOA): Avg Gas: ${avgGas(groupA)}, Avg Latency: ${avgLatency(groupA)}ms`);
-    console.log(`   Group B (Pimlico): Avg Gas: ${avgGas(groupB)}, Avg Latency: ${avgLatency(groupB)}ms`);
-    console.log(`   Group D (PaymasterV4): Avg Gas: ${avgGas(groupD)}, Avg Latency: ${avgLatency(groupD)}ms`);
-    console.log(`   Group C (SuperPaymaster): Avg Gas: ${avgGas(groupC)}, Avg Latency: ${avgLatency(groupC)}ms`);
-}
-
-// Helper function to add baseline comparison
-function enrichWithBaseline(result: ExperimentResult, baseline: IndustryBaseline | null): ExperimentResult {
-    if (!baseline) return result;
-    
-    const costUSD = parseFloat(result.totalCostUSD);
-    const baselineCostUSD = baseline.averages.costUSD;
-    const vsIndustry = ((costUSD - baselineCostUSD) / baselineCostUSD) * 100;
-    
-    return {
-        ...result,
-        industryBaselineCostUSD: baselineCostUSD,
-        costVsIndustryPercent: vsIndustry.toFixed(2) + '%'
-    };
+    console.log(`   Group B (AA): Avg Gas: ${avgGas(groupB)}, Avg Latency: ${avgLatency(groupB)}ms`);
+    console.log(`   Group C (SPM): Avg Gas: ${avgGas(groupC)}, Avg Latency: ${avgLatency(groupC)}ms`);
 }
 
 async function preFlightChecks(client: any, account: Address, owner: Address) {
+    // Check Group C Eligibility
     const eligibility = await checkEligibility(client, SUPER_PAYMASTER, account, OPERATOR_ADDRESS);
     console.log(`   Group C Eligibility: ${eligibility.eligible}, Credit: ${eligibility.credit || 0n}`);
     
@@ -242,7 +177,7 @@ async function runGroupA_EOA(client: any, account: any, runId: number): Promise<
         totalCostUSD: calculateUSD(receipt.gasUsed * receipt.effectiveGasPrice),
         latencyMs: latency,
         interactionSteps: 1,
-        cognitiveLoad: 'High',
+        cognitiveLoad: 'High', // GOMS: User must manage ETH balance
         status: receipt.status === '0x1' ? 'Success' : 'Failed',
         txHash: receipt.transactionHash,
         timestamp: new Date().toISOString()
@@ -265,6 +200,7 @@ async function runGroupB_StandardAA(publicClient: any, bundler: any, pimlico: an
         args: [account, 0n]
     });
     
+    // Request Pimlico Sponsorship
     const sponsorship: any = await pimlico.request({
         method: 'pm_sponsorUserOperation',
         params: [{
@@ -281,6 +217,7 @@ async function runGroupB_StandardAA(publicClient: any, bundler: any, pimlico: an
     
     const { paymaster, paymasterData, verificationGasLimit, callGasLimit, preVerificationGas, maxFeePerGas, maxPriorityFeePerGas, paymasterVerificationGasLimit, paymasterPostOpGasLimit } = sponsorship;
     
+    // Sign & Submit
     const accountGasLimits = packUint(BigInt(verificationGasLimit), BigInt(callGasLimit));
     const gasFees = packUint(BigInt(maxPriorityFeePerGas), BigInt(maxFeePerGas));
     const paymasterGasLimits = packUint(BigInt(paymasterVerificationGasLimit), BigInt(paymasterPostOpGasLimit));
@@ -317,82 +254,8 @@ async function runGroupB_StandardAA(publicClient: any, bundler: any, pimlico: an
         totalCostWei: BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice),
         totalCostUSD: calculateUSD(BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice)),
         latencyMs: Date.now() - start,
-        interactionSteps: 2,
+        interactionSteps: 2, // Approve Paymaster + Execute
         cognitiveLoad: 'Medium',
-        status: receipt.status === '0x1' ? 'Success' : 'Failed',
-        txHash: receipt.transactionHash,
-        timestamp: new Date().toISOString()
-    };
-}
-
-async function runGroupD_PaymasterV4(publicClient: any, bundler: any, owner: any, account: Address, runId: number): Promise<ExperimentResult> {
-    const start = Date.now();
-    
-    const erc20Abi = parseAbi(['function transfer(address, uint256) returns (bool)']);
-    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
-    
-    const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("0.0001")] });
-    const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [BPNTS_ADDRESS, 0n, transferData] });
-    
-    const nonce = await publicClient.readContract({
-        address: ENTRY_POINT,
-        abi: parseAbi(['function getNonce(address, uint192) view returns (uint256)']),
-        functionName: 'getNonce',
-        args: [account, 0n]
-    });
-    
-    // PaymasterV4: Independent AOA mode
-    const verificationGasLimit = 300000n;
-    const callGasLimit = 100000n;
-    const preVerificationGas = 50000n;
-    
-    const block = await publicClient.getBlock();
-    const priority = parseEther("5", "gwei");
-    const maxFee = block.baseFeePerGas! * 2n + priority;
-    
-    const accountGasLimits = packUint(verificationGasLimit, callGasLimit);
-    const gasFees = packUint(priority, maxFee);
-    
-    const pmVerif = 300000n;
-    const pmPost = 10000n;
-    const pmLimits = packUint(pmVerif, pmPost);
-    const paymasterAndData = concat([PAYMASTER_V4, pmLimits, "0x"]);
-    
-    const packedUserOp = {
-        sender: account, nonce, initCode: "0x" as Hex, callData,
-        accountGasLimits, preVerificationGas, gasFees, paymasterAndData, signature: "0x" as Hex
-    };
-    
-    const hash = await entryPointGetUserOpHash(publicClient, packedUserOp, ENTRY_POINT, publicClient.chain.id);
-    const sig = await owner.signMessage({ message: { raw: hash } });
-    
-    const msg = {
-        sender: account, nonce: toHex(nonce), callData,
-        callGasLimit: toHex(callGasLimit),
-        verificationGasLimit: toHex(verificationGasLimit),
-        preVerificationGas: toHex(preVerificationGas),
-        maxFeePerGas: toHex(maxFee),
-        maxPriorityFeePerGas: toHex(priority),
-        paymaster: PAYMASTER_V4,
-        paymasterVerificationGasLimit: toHex(pmVerif),
-        paymasterPostOpGasLimit: toHex(pmPost),
-        paymasterData: "0x",
-        signature: sig
-    };
-    
-    const uoHash = await bundler.request({ method: 'eth_sendUserOperation', params: [msg, ENTRY_POINT] });
-    const receipt = await waitForUserOp(bundler, uoHash as Hex);
-    
-    return {
-        runId,
-        group: 'PaymasterV4-AOA',
-        gasUsed: BigInt(receipt.gasUsed),
-        effectiveGasPrice: BigInt(receipt.effectiveGasPrice),
-        totalCostWei: BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice),
-        totalCostUSD: calculateUSD(BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice)),
-        latencyMs: Date.now() - start,
-        interactionSteps: 2, // Approve token + Execute (similar to Standard AA)
-        cognitiveLoad: 'Medium', // Manages token allowance
         status: receipt.status === '0x1' ? 'Success' : 'Failed',
         txHash: receipt.transactionHash,
         timestamp: new Date().toISOString()
@@ -459,7 +322,7 @@ async function runGroupC_SuperPaymaster(publicClient: any, bundler: any, owner: 
     
     return {
         runId,
-        group: 'SuperPaymaster-AOA+',
+        group: 'SuperPaymaster-AOA',
         gasUsed: BigInt(receipt.gasUsed),
         effectiveGasPrice: BigInt(receipt.effectiveGasPrice),
         totalCostWei: BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice),
@@ -522,7 +385,7 @@ function avgGas(results: ExperimentResult[]): string {
 
 function avgLatency(results: ExperimentResult[]): number {
     if (results.length === 0) return 0;
-    return Math.round(results.reduce((sum, r) => sum + r.latencyMs, 0) / results.length);
+    return results.reduce((sum, r) => sum + r.latencyMs, 0) / results.length;
 }
 
 main().catch(console.error);
