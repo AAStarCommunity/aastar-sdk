@@ -28,11 +28,12 @@ build_paths=(
   "contracts/src/tokens"
   "contracts/src/paymasters/superpaymaster/v3"
   "contracts/src/paymasters/v4"
-  "contracts/src/accounts"
+  "lib/account-abstraction/contracts/accounts"
+  "lib/account-abstraction/contracts/core"
 )
 
 echo "🧱 Building selected contracts in SuperPaymaster..."
-(cd "$FOUNDRY_DIR" && forge build --force --skip test --skip script --skip paymasters/v2 --skip paymasters/v3 --skip PNTs.sol "${build_paths[@]}" >/dev/null)
+(cd "$FOUNDRY_DIR" && forge build --force --skip test --skip script --skip paymasters/v2 --skip paymasters/v3 --skip PNTs.sol "${build_paths[@]}")
 echo "✅ Build completed."
 
 # Allowed prefixes for filtering final artifacts
@@ -42,7 +43,8 @@ allowed_sources_prefixes=(
   "contracts/src/tokens/"
   "contracts/src/paymasters/superpaymaster/v3/"
   "contracts/src/paymasters/v4/"
-  "contracts/src/accounts/"
+  "lib/account-abstraction/contracts/accounts/"
+  "lib/account-abstraction/contracts/core/"
 )
 
 extracted=0

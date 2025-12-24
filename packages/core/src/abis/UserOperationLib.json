@@ -37,5 +37,21 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "InvalidPaymasterSignatureLength",
+    "inputs": [
+      {
+        "name": "dataLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pmSignatureLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   }
 ]

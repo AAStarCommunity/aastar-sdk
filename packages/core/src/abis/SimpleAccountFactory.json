@@ -70,5 +70,39 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "senderCreator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ISenderCreator"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "NotSenderCreator",
+    "inputs": [
+      {
+        "name": "msgSender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "entity",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "senderCreator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   }
 ]

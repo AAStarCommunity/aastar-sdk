@@ -10,9 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load ABIs
-const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/Registry.abi.json'), 'utf-8'));
-const SuperPaymasterABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/SuperPaymasterV3.abi.json'), 'utf-8'));
-const PaymasterFactoryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/PaymasterFactory.abi.json'), 'utf-8'));
+const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/Registry.json'), 'utf-8'));
+const SuperPaymasterABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/SuperPaymaster.json'), 'utf-8'));
+const PaymasterFactoryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/PaymasterFactory.json'), 'utf-8'));
 
 // BigInt serialization
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };

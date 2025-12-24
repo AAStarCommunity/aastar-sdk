@@ -52,7 +52,7 @@
     "name": "execute",
     "inputs": [
       {
-        "name": "dest",
+        "name": "target",
         "type": "address",
         "internalType": "address"
       },
@@ -62,7 +62,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "func",
+        "name": "data",
         "type": "bytes",
         "internalType": "bytes"
       }
@@ -75,19 +75,26 @@
     "name": "executeBatch",
     "inputs": [
       {
-        "name": "dest",
-        "type": "address[]",
-        "internalType": "address[]"
-      },
-      {
-        "name": "value",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      },
-      {
-        "name": "func",
-        "type": "bytes[]",
-        "internalType": "bytes[]"
+        "name": "calls",
+        "type": "tuple[]",
+        "internalType": "struct BaseAccount.Call[]",
+        "components": [
+          {
+            "name": "target",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "value",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
       }
     ],
     "outputs": [],
@@ -502,6 +509,22 @@
   },
   {
     "type": "error",
+    "name": "ExecuteError",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "error",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "FailedCall",
     "inputs": []
   },
@@ -512,8 +535,76 @@
   },
   {
     "type": "error",
+    "name": "NotFromEntryPoint",
+    "inputs": [
+      {
+        "name": "msgSender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "entity",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "entryPoint",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "NotInitializing",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOwner",
+    "inputs": [
+      {
+        "name": "msgSender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "entity",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotOwnerOrEntryPoint",
+    "inputs": [
+      {
+        "name": "msgSender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "entity",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "entryPoint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   },
   {
     "type": "error",

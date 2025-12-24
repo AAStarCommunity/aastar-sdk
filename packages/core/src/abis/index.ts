@@ -8,6 +8,7 @@ import GTokenABIData from './GToken.json';
 import GTokenStakingABIData from './GTokenStaking.json';
 import SuperPaymasterABIData from './SuperPaymaster.json';
 import PaymasterFactoryABIData from './PaymasterFactory.json';
+import EntryPointABIData from './EntryPoint.json';
 
 // Token System
 import xPNTsTokenABIData from './xPNTsToken.json';
@@ -32,6 +33,7 @@ export const GTokenABI = GTokenABIData;
 export const GTokenStakingABI = GTokenStakingABIData;
 export const SuperPaymasterABI = SuperPaymasterABIData;
 export const PaymasterFactoryABI = PaymasterFactoryABIData;
+export const EntryPointABI = EntryPointABIData;
 
 // Re-export ABIs - Token System
 export const xPNTsTokenABI = xPNTsTokenABIData;
