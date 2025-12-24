@@ -9,18 +9,19 @@
     "dist"
   ],
   "dependencies": {
-    "@aastar/core": "workspace:*",
     "@aastar/account": "workspace:*",
-    "@aastar/paymaster": "workspace:*",
-    "@aastar/identity": "workspace:*",
-    "@aastar/tokens": "workspace:*",
+    "@aastar/core": "workspace:*",
     "@aastar/dapp": "workspace:*",
+    "@aastar/identity": "workspace:*",
+    "@aastar/paymaster": "workspace:*",
+    "@aastar/tokens": "workspace:*",
     "viem": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "example:local": "tsx examples/regression_test.ts"
   }
 }

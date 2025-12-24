@@ -28,6 +28,8 @@ build_paths=(
   "contracts/src/tokens"
   "contracts/src/paymasters/superpaymaster/v3"
   "contracts/src/paymasters/v4"
+  "contracts/src/accounts"
+  "contracts/src/accounts/v08"
   "lib/account-abstraction/contracts/accounts"
   "lib/account-abstraction/contracts/core"
 )
@@ -43,6 +45,8 @@ allowed_sources_prefixes=(
   "contracts/src/tokens/"
   "contracts/src/paymasters/superpaymaster/v3/"
   "contracts/src/paymasters/v4/"
+  "contracts/src/accounts/"
+  "contracts/src/accounts/v08/"
   "lib/account-abstraction/contracts/accounts/"
   "lib/account-abstraction/contracts/core/"
 )

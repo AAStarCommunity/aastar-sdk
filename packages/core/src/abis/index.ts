@@ -27,6 +27,11 @@ import PaymasterABIData from './Paymaster.json';
 import SimpleAccountABIData from './SimpleAccount.json';
 import SimpleAccountFactoryABIData from './SimpleAccountFactory.json';
 
+// New Versions & Extensions
+import SimpleAccountV08ABIData from './SimpleAccountV08.json';
+import SimpleAccountFactoryV08ABIData from './SimpleAccountFactoryV08.json';
+import Simple7702AccountABIData from './Simple7702Account.json';
+
 // Re-export ABIs - Core System
 export const RegistryABI = RegistryABIData;
 export const GTokenABI = GTokenABIData;
@@ -51,6 +56,11 @@ export const BLSAggregatorABI = BLSAggregatorABIData;
 export const PaymasterABI = PaymasterABIData;
 export const SimpleAccountABI = SimpleAccountABIData;
 export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData;
+
+// Re-export ABIs - New Versions & Extensions
+export const SimpleAccountV08ABI = SimpleAccountV08ABIData;
+export const SimpleAccountFactoryV08ABI = SimpleAccountFactoryV08ABIData;
+export const Simple7702AccountABI = Simple7702AccountABIData;
 
 // Legacy Aliases for compatibility (if needed)
 export const SuperPaymasterV3ABI = SuperPaymasterABIData;
