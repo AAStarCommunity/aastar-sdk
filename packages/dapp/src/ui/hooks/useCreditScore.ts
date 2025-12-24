@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { createAAStarPublicClient, REGISTRY_ABI } from '@aastar/core';
+import { createAAStarPublicClient, RegistryABI } from '@aastar/core';
 import { type Address, type Chain, type Transport } from 'viem';
 
 type UseCreditScoreConfig = {
@@ -11,24 +11,24 @@ type UseCreditScoreConfig = {
     transport?: Transport;
 };
 
-export function useCreditScore({ chain, rpcUrl, registryAddress, userAddress, transport }: UseCreditScoreConfig) {
+export function useCreditScore({ chain, rpcUrl, registryAddress, userAddress }: UseCreditScoreConfig) {
     const [creditLimit, setCreditLimit] = useState<bigint | null>(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (!registryAddress || !userAddress) return;
+        if (!registryAddress || !userAddress || !rpcUrl) return;
 
         const fetchCredit = async () => {
             setLoading(true);
             try {
-                const client = createAAStarPublicClient({ chain, rpcUrl, transport });
+                const client = createAAStarPublicClient(rpcUrl, chain);
                 const limit = await client.readContract({
                     address: registryAddress,
-                    abi: REGISTRY_ABI,
+                    abi: RegistryABI as any,
                     functionName: 'getCreditLimit',
                     args: [userAddress]
                 });
-                setCreditLimit(limit);
+                setCreditLimit(limit as bigint);
             } catch (e) {
                 console.error("Failed to fetch credit limit:", e);
                 setCreditLimit(0n);

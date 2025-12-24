@@ -4,9 +4,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
-    "moduleResolution": "node",
     "declaration": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "skipLibCheck": true
   },
   "include": ["src", "src/abis/*.json"]
 }

@@ -16,8 +16,8 @@ mkdir -p "$DEST_DIR"
 
 echo "📂 Extracting ABIs from $OUT_DIR to $DEST_DIR..."
 
-# Clean old ABIs to ensure consistency
-rm -rf "$DEST_DIR"/*.json
+# Clean only versioned ABIs to ensure consistency while keeping static ones (like SimpleAccount)
+# rm -rf "$DEST_DIR"/*V3.json "$DEST_DIR"/*V4.json
 
 # Optimization: Forge build can be slow, but we need the latest artifacts.
 # We explicitly list the core directories to build to speed up, 

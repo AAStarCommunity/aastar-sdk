@@ -4,10 +4,10 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
-    "moduleResolution": "node",
     "declaration": true,
-    "resolveJsonModule": true
-    "jsx": "react",
-    "esModuleInterop": true  },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "jsx": "react"
+  },
   "include": ["src", "src/abis/*.json"]
 }

@@ -13,6 +13,6 @@ export class ReputationClient {
             abi: ReputationSystemV3ABI as any,
             functionName: 'computeScore',
             args: [user, communities, ruleIds, activities]
-        });
+        }) as Promise<bigint>;
     }
 }

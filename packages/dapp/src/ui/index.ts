@@ -13,8 +13,9 @@ export class DVTClient {
             address: dvtAddr,
             abi: DVT_ABI,
             functionName: 'registerValidator',
-            args: [blsPublicKey]
-        });
+            args: [blsPublicKey],
+            chain: wallet.chain
+        } as any);
     }
     
     // Additional methods for proposal creation/signing would go here
