@@ -52,7 +52,7 @@
     "name": "execute",
     "inputs": [
       {
-        "name": "target",
+        "name": "dest",
         "type": "address",
         "internalType": "address"
       },
@@ -62,7 +62,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "data",
+        "name": "func",
         "type": "bytes",
         "internalType": "bytes"
       }
@@ -75,26 +75,19 @@
     "name": "executeBatch",
     "inputs": [
       {
-        "name": "calls",
-        "type": "tuple[]",
-        "internalType": "struct BaseAccount.Call[]",
-        "components": [
-          {
-            "name": "target",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "value",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "data",
-            "type": "bytes",
-            "internalType": "bytes"
-          }
-        ]
+        "name": "dest",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "value",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "func",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
       }
     ],
     "outputs": [],
@@ -506,22 +499,6 @@
     "type": "error",
     "name": "ERC1967NonPayable",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExecuteError",
-    "inputs": [
-      {
-        "name": "index",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "error",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ]
   },
   {
     "type": "error",

@@ -16,8 +16,8 @@ mkdir -p "$DEST_DIR"
 
 echo "📂 Extracting ABIs from $OUT_DIR to $DEST_DIR..."
 
-# Clean only versioned ABIs to ensure consistency while keeping static ones (like SimpleAccount)
-# rm -rf "$DEST_DIR"/*V3.json "$DEST_DIR"/*V4.json
+# Clean only JSON ABIs to ensure consistency while keeping index.ts and index.js
+rm -rf "$DEST_DIR"/*.json
 
 # Optimization: Forge build can be slow, but we need the latest artifacts.
 # We explicitly list the core directories to build to speed up, 
@@ -28,6 +28,7 @@ build_paths=(
   "contracts/src/tokens"
   "contracts/src/paymasters/superpaymaster/v3"
   "contracts/src/paymasters/v4"
+  "contracts/src/accounts"
 )
 
 echo "🧱 Building selected contracts in SuperPaymaster..."
@@ -41,6 +42,7 @@ allowed_sources_prefixes=(
   "contracts/src/tokens/"
   "contracts/src/paymasters/superpaymaster/v3/"
   "contracts/src/paymasters/v4/"
+  "contracts/src/accounts/"
 )
 
 extracted=0
