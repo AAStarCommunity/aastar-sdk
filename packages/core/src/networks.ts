@@ -6,11 +6,21 @@ export const NETWORKS = {
   sepolia: {
     chainId: 11155111,
     name: 'Sepolia',
-    /** Public RPC URL - users should use their own RPC providers in production */
     rpcUrl: 'https://rpc.sepolia.org',
     blockExplorer: 'https://sepolia.etherscan.io',
     nativeCurrency: {
       name: 'Sepolia ETH',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
+  anvil: {
+    chainId: 31337,
+    name: 'Anvil',
+    rpcUrl: 'http://127.0.0.1:8545',
+    blockExplorer: '',
+    nativeCurrency: {
+      name: 'ETH',
       symbol: 'ETH',
       decimals: 18,
     },

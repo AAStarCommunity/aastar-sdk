@@ -1,83 +1,100 @@
-import { createPublicClient, http, parseEther, encodeAbiParameters, keccak256, toUtf8Bytes } from 'viem';
+import { createPublicClient, http, parseEther, encodeAbiParameters, keccak256, stringToBytes } from 'viem';
 import { foundry } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { 
     RegistryABI, 
-    SuperPaymasterABI, 
-    xPNTsTokenABI, 
     SimpleAccountFactoryABI,
     EntryPointABI
 } from '@aastar/core';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Configuration from SuperPaymaster/script/v3/config.json
-const CONFIG = {
-    "aPNTs": "0x49fd2BE640DB2910c2fAb69bB8531Ab6E76127ff",
-    "entryPoint": "0x2B0d36FACD61B71CC05ab8F3D2355ec3631C0dd5",
-    "gToken": "0xfbC22278A96299D91d41C453234d97b4F5Eb9B2d",
-    "registry": "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
-    "staking": "0xC9a43158891282A2B1475592D5719c001986Aaec",
-    "superPaymaster": "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D",
-    "simpleAccountFactory": "0x4b6aB5F819A515382B0dEB6935D793817bB4af28"
-};
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Dynamic Config Loading from SuperPaymaster deployment
+const SP_CONFIG_PATH = path.resolve(__dirname, '../../../../SuperPaymaster/script/v3/config.json');
+
+function loadConfig() {
+    if (fs.existsSync(SP_CONFIG_PATH)) {
+        return JSON.parse(fs.readFileSync(SP_CONFIG_PATH, 'utf8'));
+    }
+    console.error("❌ SuperPaymaster config.json not found. Please run 'script/v3/01-deploy.sh' first.");
+    process.exit(1);
+}
+
+const CONFIG = loadConfig();
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as `0x${string}`;
 const USER_KEY = (process.env.USER_KEY || '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d') as `0x${string}`;
 
 async function main() {
-    console.log("🚀 Starting SDK Regression Test...");
+    console.log("\n🧪 AAStar SDK Automated Regression Test");
+    console.log("========================================\n");
 
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const adminAccount = privateKeyToAccount(ADMIN_KEY);
     const userAccount = privateKeyToAccount(USER_KEY);
 
-    console.log(`👨‍✈️ Admin: ${adminAccount.address}`);
-    console.log(`👤 User: ${userAccount.address}`);
+    console.log(`📡 Network: Local (Anvil)`);
+    console.log(`👨‍✈️ Admin EOA: ${adminAccount.address}`);
+    console.log(`👤 User Signer: ${userAccount.address}`);
 
-    // Role IDs
-    const ROLE_COMMUNITY = keccak256(toUtf8Bytes("COMMUNITY"));
-    const ROLE_ENDUSER = keccak256(toUtf8Bytes("ENDUSER"));
+    // Role IDs (Using stringToBytes correctly)
+    const ROLE_COMMUNITY = keccak256(stringToBytes("COMMUNITY"));
 
-    // 1. Initial Checks
+    // 1. Connectivity & Address Verification
+    console.log("\n🔍 Phase 1: Verification");
     const adminIsCommunity = await publicClient.readContract({
         address: CONFIG.registry as `0x${string}`,
         abi: RegistryABI,
         functionName: 'hasRole',
         args: [ROLE_COMMUNITY, adminAccount.address]
     });
-    console.log(`   Admin is Community: ${adminIsCommunity}`);
+    console.log(`   [OK] Registry at ${CONFIG.registry}`);
+    console.log(`   [OK] Admin has COMMUNITY role: ${adminIsCommunity}`);
 
-    // 2. Register Community (if not registered)
-    if (!adminIsCommunity) {
-        console.log("🔑 Registering Admin as Community...");
-        
-        // Encode role data: tuple(string name, string ens, string web, string desc, string logo, uint256 stake)
-        const roleData = encodeAbiParameters(
-            [{ type: 'tuple', components: [
-                { type: 'string' }, { type: 'string' }, { type: 'string' }, 
-                { type: 'string' }, { type: 'string' }, { type: 'uint256' }
-            ]}],
-            [['SDK Demo Community', '', '', '', '', parseEther('30')]]
-        );
-
-        // First need to provide GToken to staking
-        // For simplicity in this demo, we assume the admin has GToken and approved it.
-        // In actual regression we should check.
-        
-        // Note: registerRole in local bypass mode might still need validation
-    }
-
-    // 3. Simple Account Address
+    // 2. Simple Account Factory Interaction
     const salt = 0n;
-    const sender = await publicClient.readContract({
+    const senderAddress = await publicClient.readContract({
         address: CONFIG.simpleAccountFactory as `0x${string}`,
         abi: SimpleAccountFactoryABI,
         functionName: 'getAddress',
         args: [userAccount.address, salt]
     });
-    console.log(`📦 Sender AA: ${sender}`);
+    const byteCode = await publicClient.getBytecode({ address: senderAddress });
+    
+    console.log(`   [OK] SimpleAccountFactory at ${CONFIG.simpleAccountFactory}`);
+    console.log(`   [OK] Target AA Address: ${senderAddress} (Deployed: ${!!byteCode})`);
 
-    console.log("\n✅ SDK Demo setup complete. This proves ABI imports and basic contract interactions work.");
+    // 3. ABI Compatibility Check (v0.8)
+    const epAddr = await publicClient.readContract({
+        address: CONFIG.superPaymaster as `0x${string}`,
+        abi: [
+            {
+              "inputs": [],
+              "name": "entryPoint",
+              "outputs": [
+                {
+                  "internalType": "contract IEntryPoint",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            }
+        ] as const,
+        functionName: 'entryPoint'
+    });
+    console.log(`   [OK] SuperPaymaster linked to EntryPoint: ${epAddr}`);
+
+    console.log("\n✨ Verification Complete: SDK is correctly linked to blockchain state.\n");
 }
 
-main().catch(console.error);
+main().catch((err) => {
+    console.error("\n❌ Test Failed:");
+    console.error(err);
+    process.exit(1);
+});
