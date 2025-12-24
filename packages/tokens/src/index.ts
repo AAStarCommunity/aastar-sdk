@@ -1,95 +1,117 @@
-import { type Address, type WalletClient, type Hex, parseAbi } from 'viem';
 
-const XPNTS_ABI = parseAbi([
-    'function mint(address, uint256)',
-    'function burn(address, uint256)',
-    'function recordDebt(address, uint256)',
-    'function getDebt(address) view returns (uint256)',
-    'function setSuperPaymasterAddress(address)'
+import { type Address, parseAbi, type WalletClient } from 'viem';
+import { SUPERPAYMASTER_ABI } from '@aastar/core';
+
+const STAKING_ABI = parseAbi([
+    'function stake(uint256)',
+    'function withdraw(uint256)'
 ]);
 
-const SBT_ABI = parseAbi([
-    'function mint(address, bytes32, string)',
-    'function burn(address)',
-    'function isTokenActive(address) view returns (bool)'
-]);
+export class FinanceClient {
+    static async depositToPaymaster(wallet: WalletClient, paymaster: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'deposit',
+            args: [amount],
+            chain: wallet.chain
+        } as any);
+    }
 
-export class TokensClient {
-    /**
-     * @notice Handle xPNTs (Community tokens)
-     */
-    static async mintXPNTs(wallet: WalletClient, token: Address, to: Address, amount: bigint) {
+    static async depositViaTransferAndCall(wallet: WalletClient, token: Address, paymaster: Address, amount: bigint) {
+        const ERC1363_ABI = [{
+            name: 'transferAndCall',
+            type: 'function',
+            stateMutability: 'nonpayable',
+            inputs: [{ type: 'address', name: 'to' }, { type: 'uint256', name: 'value' }],
+            outputs: [{ type: 'bool' }]
+        }] as const;
+
         return wallet.writeContract({
             address: token,
-            abi: XPNTS_ABI,
-            functionName: 'mint',
+            abi: ERC1363_ABI,
+            functionName: 'transferAndCall',
+            args: [paymaster, amount],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async stakeGToken(wallet: WalletClient, stakingAddr: Address, amount: bigint) {
+         return wallet.writeContract({
+            address: stakingAddr,
+            abi: STAKING_ABI,
+            functionName: 'stake',
+            args: [amount],
+            chain: wallet.chain
+        } as any);
+    }
+
+    static async withdrawProtocolRevenue(wallet: WalletClient, paymaster: Address, to: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'withdrawProtocolRevenue',
             args: [to, amount],
             chain: wallet.chain
         } as any);
     }
 
     /**
-     * @notice Handle MySBT (Identity tokens)
-     * @dev In V3, MySBT is usually minted as part of Registry.registerRole
+     * @notice Handle EntryPoint deposits for Paymasters
      */
-    static async isSBTActive(client: any, sbt: Address, user: Address): Promise<boolean> {
-        return client.readContract({
-            address: sbt,
-            abi: SBT_ABI,
-            functionName: 'isTokenActive',
-            args: [user]
-        });
-    }
-
-    static async mintSBT(wallet: WalletClient, sbt: Address, to: Address, data: { role: Hex, metadataURI: string }) {
+    static async depositToEntryPoint(wallet: WalletClient, entryPoint: Address, paymaster: Address, amount: bigint) {
         return wallet.writeContract({
-            address: sbt,
-            abi: SBT_ABI,
-            functionName: 'mint',
-            args: [to, data.role, data.metadataURI],
+            address: entryPoint,
+            abi: parseAbi(['function depositTo(address) payable']),
+            functionName: 'depositTo',
+            args: [paymaster],
+            value: amount,
             chain: wallet.chain
         } as any);
     }
-}
 
-/**
- * Generic ERC20 Client for PNTs and other assets
- */
-export class ERC20Client {
-    static async balanceOf(client: any, token: Address, user: Address): Promise<bigint> {
+    static async getEntryPointBalance(client: any, entryPoint: Address, account: Address): Promise<bigint> {
         return client.readContract({
-            address: token,
+            address: entryPoint,
             abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
             functionName: 'balanceOf',
-            args: [user]
+            args: [account]
         });
     }
 
-    static async transfer(wallet: any, token: Address, to: Address, amount: bigint) {
+    /**
+     * @notice SuperPaymaster Operator Balance Management
+     */
+    static async operatorDeposit(wallet: WalletClient, paymaster: Address, amount: bigint) {
         return wallet.writeContract({
-            address: token,
-            abi: parseAbi(['function transfer(address, uint256) returns (bool)']),
-            functionName: 'transfer',
-            args: [to, amount],
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'deposit',
+            args: [amount],
             chain: wallet.chain
         } as any);
     }
 
-    static async allowance(client: any, token: Address, owner: Address, spender: Address): Promise<bigint> {
-        return client.readContract({
-            address: token,
-            abi: parseAbi(['function allowance(address, address) view returns (uint256)']),
-            functionName: 'allowance',
-            args: [owner, spender]
-        });
+    static async operatorNotifyDeposit(wallet: WalletClient, paymaster: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'notifyDeposit',
+            args: [amount],
+            chain: wallet.chain
+        } as any);
     }
 
-    static async approve(wallet: any, token: Address, spender: Address, amount: bigint) {
+    /**
+     * @notice Self-service GToken to xPNTs conversion
+     * @dev Usually consumes GToken and mints xPNTs via a dedicated converter
+     */
+    static async wrapGTokenToXPNTs(wallet: WalletClient, converter: Address, gtoken: Address, amount: bigint) {
         return wallet.writeContract({
-            address: token,
-            abi: parseAbi(['function approve(address, uint256) returns (bool)']),
-            functionName: 'approve',
-            args: [spender, amount],
+            address: converter,
+            abi: parseAbi(['function wrap(address, uint256) returns (bool)']),
+            functionName: 'wrap',
+            args: [gtoken, amount],
             chain: wallet.chain
         } as any);
     }

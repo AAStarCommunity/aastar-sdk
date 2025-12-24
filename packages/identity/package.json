@@ -1,5 +1,5 @@
 {
-  "name": "@aastar/tokens",
+  "name": "@aastar/identity",
   "version": "0.12.0",
   "type": "module",
   "main": "dist/index.js",
