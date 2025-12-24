@@ -56,7 +56,7 @@ if [ "$SKIP_DEPLOY" = false ]; then
     # Export keys if .env.v3 exists
     if [ -f ../aastar-sdk/.env.v3 ]; then
         export $(grep -v '^#' ../aastar-sdk/.env.v3 | grep -v ' ' | xargs)
-        export PRIVATE_KEY_JASON=$ADMIN_KEY
+        # PRIVATE_KEY_JASON is already in .env.v3, no need to override
     fi
 
     # Remove old config to ensure fresh generation
@@ -96,7 +96,7 @@ if [ "$SKIP_DEPLOY" = false ]; then
 
     # 3. Extract ABIs
     echo -e "${YELLOW}📝 Extracting ABIs...${NC}"
-    ./extract_abis.sh --dest ../aastar-sdk/abis
+    ./extract_abis.sh --dest ../aastar-sdk/packages/core/src/abis
     cd ../aastar-sdk
 fi
 

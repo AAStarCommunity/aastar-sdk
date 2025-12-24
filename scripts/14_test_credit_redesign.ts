@@ -28,7 +28,7 @@ if (!SUPER_PAYMASTER || !REGISTRY_ADDR || !ADMIN_KEY || !XPNTS_ADDR) {
 
 // Load ABIs
 const loadAbi = (name: string) => {
-    const p = path.resolve(__dirname, `../abis/${name}.abi.json`);
+    const p = path.resolve(__dirname, `../packages/core/src/abis/${name}.json`);
     if (!existsSync(p)) throw new Error(`ABI not found: ${p}`);
     return JSON.parse(readFileSync(p, "utf-8"));
 };
