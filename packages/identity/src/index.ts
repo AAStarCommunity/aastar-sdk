@@ -1,11 +1,8 @@
 
-import { createAAStarPublicClient } from '@aastar/core';
-import { type Address, type PublicClient, parseAbi } from 'viem';
+export * from './mysbt';
 
-const REPUTATION_ABI = parseAbi([
-    'function computeScore(address, address[], bytes32[][], uint256[][]) view returns (uint256)',
-    'function syncToRegistry(address, address[], bytes32[][], uint256[][], uint256)'
-]);
+import { createAAStarPublicClient, ReputationSystemV3ABI } from '@aastar/core';
+import { type Address, type PublicClient } from 'viem';
 
 export class ReputationClient {
     constructor(private client: PublicClient, private reputationAddress: Address) {}
@@ -13,7 +10,7 @@ export class ReputationClient {
     async computeScore(user: Address, communities: Address[], ruleIds: `0x${string}`[][], activities: bigint[][]): Promise<bigint> {
         return this.client.readContract({
             address: this.reputationAddress,
-            abi: REPUTATION_ABI,
+            abi: ReputationSystemV3ABI as any,
             functionName: 'computeScore',
             args: [user, communities, ruleIds, activities]
         });

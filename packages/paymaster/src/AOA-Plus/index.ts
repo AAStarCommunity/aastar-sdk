@@ -1,5 +1,5 @@
 import { type Address, concat, pad, toHex } from 'viem';
-import { SUPERPAYMASTER_ABI } from '@aastar/core';
+import { SuperPaymasterV3ABI as SUPERPAYMASTER_ABI } from '@aastar/core';
 
 export type PaymasterConfig = {
     paymasterAddress: Address;
@@ -87,37 +87,6 @@ export async function checkEligibility(
     }
 }
 
-/**
- * Check if user holds MySBT token (identity verification).
- */
-export async function checkMySBT(
-    client: any,
-    sbtAddress: Address,
-    user: Address
-): Promise<{ hasSBT: boolean; balance?: bigint }> {
-    try {
-        const balance = await client.readContract({
-            address: sbtAddress,
-            abi: [{ 
-                inputs: [{ name: 'owner', type: 'address' }], 
-                name: 'balanceOf', 
-                outputs: [{ name: '', type: 'uint256' }], 
-                stateMutability: 'view', 
-                type: 'function' 
-            }],
-            functionName: 'balanceOf',
-            args: [user]
-        });
-        
-        return { 
-            hasSBT: (balance as bigint) > 0n,
-            balance: balance as bigint
-        };
-    } catch (e) {
-        console.warn('MySBT check failed:', e);
-        return { hasSBT: false };
-    }
-}
 /**
  * Admin Client for SuperPaymaster V3
  */

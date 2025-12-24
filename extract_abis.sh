@@ -9,7 +9,7 @@ SP_ROOT="../SuperPaymaster"
 FOUNDRY_DIR="$SP_ROOT"
 OUT_DIR="$FOUNDRY_DIR/out"
 CACHE_DIR="$FOUNDRY_DIR/cache"
-DEST_DIR="./abis"
+DEST_DIR="./packages/core/src/abis"
 
 # Ensure destination exists
 mkdir -p "$DEST_DIR"
@@ -17,7 +17,7 @@ mkdir -p "$DEST_DIR"
 echo "📂 Extracting ABIs from $OUT_DIR to $DEST_DIR..."
 
 # Clean old ABIs to ensure consistency
-rm -rf "$DEST_DIR/*.abi.json"
+rm -rf "$DEST_DIR"/*.json
 
 # Optimization: Forge build can be slow, but we need the latest artifacts.
 # We explicitly list the core directories to build to speed up, 
@@ -93,7 +93,7 @@ while IFS= read -r json_file; do
   fi
 
   # Extract and save ABI
-  dest_file="$DEST_DIR/$contract_name.abi.json"
+  dest_file="$DEST_DIR/$contract_name.json"
   if jq -e '.abi' "$json_file" >/dev/null 2>&1; then
     jq '.abi' "$json_file" > "$dest_file"
     if [ -s "$dest_file" ] && jq -e 'type=="array"' "$dest_file" >/dev/null 2>&1; then
