@@ -47,6 +47,16 @@ while ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"
 done
 echo -e "${GREEN}✅ Anvil is ready.${NC}"
 
+# 1.5. Run Security Audit (Pre-Test)
+echo -e "${YELLOW}🔒 Running Security Audit (Pre-Test)...${NC}"
+if [ -f "scripts/security_audit.sh" ]; then
+    bash scripts/security_audit.sh || {
+        echo -e "${RED}⚠️  Security audit found issues. Continuing with tests...${NC}"
+    }
+else
+    echo -e "${YELLOW}⚠️  Security audit script not found, skipping...${NC}"
+fi
+
 # 2. Deploy Contracts (Optional)
 if [ "$SKIP_DEPLOY" = false ]; then
     echo -e "${YELLOW}📦 Deploying contracts to Anvil...${NC}"
@@ -181,6 +191,16 @@ echo -e "Failed: ${RED} $((TOTAL_SCRIPTS - PASSED_COUNT)) ${NC}"
 
 if [ $PASSED_COUNT -eq $TOTAL_SCRIPTS ]; then
     echo -e "\n${GREEN}🎉 All local regression tests passed!${NC}"
+    
+    # Post-Test Security Audit
+    echo -e "\n${YELLOW}🔒 Running Security Audit (Post-Test)...${NC}"
+    if [ -f "scripts/security_audit.sh" ]; then
+        bash scripts/security_audit.sh || {
+            echo -e "${RED}⚠️  Security audit found issues after tests.${NC}"
+            echo -e "${YELLOW}Please review security findings before deployment.${NC}"
+        }
+    fi
+    
     exit 0
 else
     echo -e "\n${RED}❌ Regression failed with $((TOTAL_SCRIPTS - PASSED_COUNT)) errors.${NC}"
