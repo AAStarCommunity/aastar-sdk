@@ -33,7 +33,7 @@ const loadAbi = (name: string) => {
 const RegistryABI = loadAbi('Registry');
 const GTokenABI = loadAbi('GToken');
 const GTokenStakingABI = loadAbi('GTokenStaking');
-const SuperPaymasterABI = loadAbi('SuperPaymasterV3');
+const SuperPaymasterABI = loadAbi('SuperPaymaster');
 
 const ROLE_ENDUSER = keccak256(toBytes('ENDUSER'));
 const ANVIL_RPC = 'http://127.0.0.1:8545';

@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 // Load ABIs
 const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/Registry.json'), 'utf-8'));
 const GTokenABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/GToken.json'), 'utf-8'));
-const ReputationABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/ReputationSystemV3.json'), 'utf-8'));
+const ReputationABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/ReputationSystem.json'), 'utf-8'));
 const PaymasterFactoryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/PaymasterFactory.json'), 'utf-8'));
 
 // BigInt serialization
