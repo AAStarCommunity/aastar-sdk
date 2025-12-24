@@ -1,5 +1,8 @@
 import { type Hex, type Address, encodeAbiParameters, keccak256 } from 'viem';
 
+export * from './eoa.js';
+export * from './accounts/simple.js';
+
 /**
  * Common Pack Logic for v0.7 UserOperations
  */

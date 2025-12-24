@@ -15,10 +15,10 @@
     "@aastar/identity": "workspace:*",
     "@aastar/paymaster": "workspace:*",
     "@aastar/tokens": "workspace:*",
-    "viem": "^2.0.0"
+    "viem": "2.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "5.9.3"
   },
   "scripts": {
     "build": "tsc",

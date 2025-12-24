@@ -15,23 +15,24 @@
     "test:credit": "ts-node scripts/14_test_credit_redesign.ts",
     "test:reentrancy": "ts-node scripts/98_edge_reentrancy.ts",
     "test:full": "./run_full_regression.sh",
+    "test:full_v2": "pnpm audit && ts-node scripts/99_final_v2_regression.ts",
     "example:local": "pnpm --filter @aastar/sdk run example:local",
     "sync-config": "cp ../SuperPaymaster/script/v3/config.json ./packages/sdk/examples/config.json",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
-    "@types/node": "^20.11.5",
-    "cross-env": "^10.1.0",
-    "dotenv": "^17.2.3",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "@types/node": "20.11.5",
+    "cross-env": "10.1.0",
+    "dotenv": "17.2.3",
+    "ts-node": "10.9.2",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
   },
   "dependencies": {
-    "@types/cheerio": "^1.0.0",
-    "axios": "^1.13.2",
-    "cheerio": "^1.1.2",
-    "csv-writer": "^1.6.0",
-    "viem": "^2.41.2"
+    "@types/cheerio": "1.0.0",
+    "axios": "1.13.2",
+    "cheerio": "1.1.2",
+    "csv-writer": "1.6.0",
+    "viem": "2.41.2"
   }
 }

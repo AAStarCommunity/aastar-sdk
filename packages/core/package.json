@@ -11,10 +11,10 @@
     "build": "tsc"
   },
   "dependencies": {
-    "viem": "^2.7.1",
+    "viem": "2.7.1",
     "@aastar/shared-config": "0.3.6"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "5.9.3"
   }
 }
