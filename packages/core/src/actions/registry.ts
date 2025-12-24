@@ -1,45 +1,82 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 
+export type RoleConfig = {
+    minStake: bigint;
+    entryBurn: bigint;
+    slashThreshold: bigint;
+    slashBase: bigint;
+    slashIncrement: bigint;
+    slashMax: bigint;
+    exitFeePercent: bigint;
+    minExitFee: bigint;
+    isActive: boolean;
+    description: string;
+};
+
 export type RegistryActions = {
-    registerRole: (args: { roleId: Hex, user: Address, roleData: Hex, account?: Address }) => Promise<Hash>;
-    registerRoleSelf: (args: { roleId: Hex, roleData: Hex, account?: Address }) => Promise<Hash>;
-    hasRole: (args: { roleId: Hex, user: Address }) => Promise<boolean>;
+    configureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
+    registerRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
+    registerRoleSelf: (args: { roleId: Hex, data: Hex, account?: Account | Address }) => Promise<Hash>;
+    hasRole: (args: { user: Address, roleId: Hex }) => Promise<boolean>;
+    unRegisterRole: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
     getGlobalReputation: (args: { user: Address }) => Promise<bigint>;
     getRoleConfig: (args: { roleId: Hex }) => Promise<any>;
 };
 
 export const registryActions = (address: Address) => (client: PublicClient | WalletClient): RegistryActions => ({
-    async registerRole({ roleId, user, roleData, account }) {
+    async configureRole({ roleId, config, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'configureRole',
+            args: [roleId, config],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async registerRole({ roleId, user, data, account }) {
         return (client as any).writeContract({
             address,
             abi: RegistryABI,
             functionName: 'registerRole',
-            args: [roleId, user, roleData],
+            args: [roleId, user, data],
             account: account as any,
             chain: (client as any).chain
         });
     },
 
-    async registerRoleSelf({ roleId, roleData, account }) {
+    async registerRoleSelf({ roleId, data, account }) {
         return (client as any).writeContract({
             address,
             abi: RegistryABI,
             functionName: 'registerRoleSelf',
-            args: [roleId, roleData],
+            args: [roleId, data],
             account: account as any,
             chain: (client as any).chain
         });
     },
 
-    async hasRole({ roleId, user }) {
+    async hasRole({ user, roleId }) {
         return (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
             functionName: 'hasRole',
             args: [roleId, user]
         }) as Promise<boolean>;
+    },
+
+    async unRegisterRole({ user, roleId, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'unregisterRole',
+            args: [user, roleId],
+            account: account as any,
+            chain: (client as any).chain
+        });
     },
 
     async getCreditLimit({ user }) {

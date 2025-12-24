@@ -1,4 +1,4 @@
-import { createClient, type Client, type Transport, type Chain, type Account } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
 import { 
     registryActions, 
     paymasterActions, 
@@ -6,26 +6,37 @@ import {
     sbtActions,
     type RegistryActions, 
     type PaymasterActions, 
-    type StakingActions,
+    type StakingActions, 
     type SBTActions,
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES 
 } from '@aastar/core';
 
-export type AdminClient = Client<Transport, Chain, Account | undefined> & RegistryActions & PaymasterActions & StakingActions & SBTActions;
+export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & PaymasterActions & StakingActions & SBTActions;
 
 export function createAdminClient({ 
     chain, 
     transport, 
-    account 
+    account,
+    addresses
 }: { 
     chain: Chain, 
     transport: Transport,
-    account?: Account 
+    account?: Account,
+    addresses?: { [key: string]: Address }
 }): AdminClient {
-    return createClient({ chain, transport, account })
-        .extend(registryActions(CORE_ADDRESSES.registry))
-        .extend(paymasterActions(CORE_ADDRESSES.superPaymasterV2))
-        .extend(stakingActions(CORE_ADDRESSES.gTokenStaking))
-        .extend(sbtActions(TOKEN_ADDRESSES.mySBT)) as AdminClient;
+    const baseClient = createClient({ chain, transport, account })
+        .extend(publicActions)
+        .extend(walletActions);
+        
+    const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...addresses };
+
+    const actions = {
+        ...registryActions(usedAddresses.registry)(baseClient as any),
+        ...paymasterActions(usedAddresses.superPaymasterV2)(baseClient as any),
+        ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
+        ...sbtActions(usedAddresses.mySBT)(baseClient as any),
+    };
+
+    return Object.assign(baseClient, actions) as AdminClient;
 }

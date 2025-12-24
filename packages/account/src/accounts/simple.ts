@@ -9,11 +9,15 @@ import {
     encodeFunctionData, 
     keccak256,
 } from 'viem';
-import { type SmartAccount } from 'viem/accounts';
 import { SimpleAccountFactoryABI } from '@aastar/core';
 import { getUserOpHash } from '../index.js';
 
-export type SimpleSmartAccount = SmartAccount;
+export type SimpleSmartAccount = LocalAccount & {
+    signUserOperation: (userOp: any) => Promise<Hex>;
+    getInitCode: () => Promise<Hex>;
+    getDummySignature: () => Promise<Hex>;
+    entryPoint: Address;
+};
 
 export async function toSimpleSmartAccount(parameters: {
     client: any;

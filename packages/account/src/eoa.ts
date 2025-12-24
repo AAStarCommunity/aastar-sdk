@@ -1,4 +1,4 @@
-import { type WalletClient, type PublicClient, type Address, type Chain, type Transport, type Hash, createWalletClient, http } from 'viem';
+import { type WalletClient, type PublicClient, type Address, type Chain, type Transport, type Hash, type Hex, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 export type EOAWalletClient = WalletClient & {

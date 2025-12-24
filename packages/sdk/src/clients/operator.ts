@@ -1,4 +1,4 @@
-import { createClient, type Client, type Transport, type Chain, type Account, type Hash, erc20Abi } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, type Hash, type Hex, erc20Abi, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
 import { 
     stakingActions, 
     paymasterActions, 
@@ -10,71 +10,83 @@ import {
     TEST_TOKEN_ADDRESSES
 } from '@aastar/core';
 
-export type OperatorClient = Client<Transport, Chain, Account | undefined> & StakingActions & PaymasterActions & RegistryActions & {
+export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & StakingActions & PaymasterActions & RegistryActions & {
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
 };
 
 export function createOperatorClient({ 
     chain, 
     transport, 
-    account 
+    account,
+    addresses
 }: { 
     chain: Chain, 
     transport: Transport,
-    account?: Account 
+    account?: Account,
+    addresses?: { [key: string]: Address }
 }): OperatorClient {
     const client = createClient({ 
         chain, 
         transport,
         account
-    });
+    })
+    .extend(publicActions)
+    .extend(walletActions);
 
-    const baseClient = client
-        .extend(stakingActions(CORE_ADDRESSES.gTokenStaking))
-        .extend(paymasterActions(CORE_ADDRESSES.superPaymasterV2))
-        .extend(registryActions(CORE_ADDRESSES.registry));
+    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...addresses };
 
-    return Object.assign(baseClient, {
-        async onboardToSuperPaymaster({ stakeAmount, depositAmount, roleId }) {
+    const actions = {
+        ...stakingActions(usedAddresses.gTokenStaking)(client as any),
+        ...paymasterActions(usedAddresses.superPaymasterV2)(client as any),
+        ...registryActions(usedAddresses.registry)(client as any),
+    };
+
+    return Object.assign(client, actions, {
+        async onboardToSuperPaymaster({ stakeAmount, depositAmount, roleId }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) {
             const txs: Hash[] = [];
             
             // 1. Approve GToken needed for staking
-            const approveGToken = await (baseClient as any).writeContract({
-                address: CORE_ADDRESSES.gToken,
+            const approveGToken = await (client as any).writeContract({
+                address: usedAddresses.gToken,
                 abi: erc20Abi,
                 functionName: 'approve',
-                args: [CORE_ADDRESSES.gTokenStaking, stakeAmount],
+                args: [usedAddresses.gTokenStaking, stakeAmount],
                 account,
                 chain
             });
+            await (client as any).waitForTransactionReceipt({ hash: approveGToken });
             txs.push(approveGToken);
-
-            // 2. Lock Stake
-            const stakeTx = await baseClient.lockStake({
-                user: account!.address,
+            
+            // ... (rest uses actions which capture usedAddresses)
+            // But we need to update steps 2 and 3 and 4 to use usedAddresses too if they use raw calls? 
+            // Step 2 is actions.lockStake.
+            // Step 3 is approve APNTs.
+            
+            // 2. Register Role (locks stake)
+            const registerTx = await actions.registerRoleSelf({
                 roleId,
-                stakeAmount,
-                entryBurn: 0n, // Assuming 0 for now or fetch from config
-                payer: account!.address,
-                account: account?.address
+                data: '0x',
+                account: account
             });
-            txs.push(stakeTx);
+            await (client as any).waitForTransactionReceipt({ hash: registerTx });
+            txs.push(registerTx);
 
             // 3. Approve APNTs needed for deposit
-            const approveAPNTs = await (baseClient as any).writeContract({
-                address: TEST_TOKEN_ADDRESSES.aPNTs, // Note: Should dynamic fetch this ideally
+            const approveAPNTs = await (client as any).writeContract({
+                address: usedAddresses.aPNTs!,
                 abi: erc20Abi,
                 functionName: 'approve',
-                args: [CORE_ADDRESSES.superPaymasterV2, depositAmount],
+                args: [usedAddresses.superPaymasterV2, depositAmount],
                 account,
                 chain
             });
+            await (client as any).waitForTransactionReceipt({ hash: approveAPNTs });
             txs.push(approveAPNTs);
 
             // 4. Deposit APNTs
-            const depositTx = await baseClient.depositAPNTs({
+            const depositTx = await actions.depositAPNTs({
                 amount: depositAmount,
-                account: account?.address
+                account: account
             });
             txs.push(depositTx);
 

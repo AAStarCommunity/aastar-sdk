@@ -1,9 +1,10 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
 
 export type PaymasterActions = {
-    depositAPNTs: (args: { amount: bigint, account?: Address }) => Promise<Hash>;
-    withdrawAPNTs: (args: { amount: bigint, account?: Address }) => Promise<Hash>;
+    depositAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    withdrawAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    requestSponsorship: (args: { userOp: any, operator: Address, account?: Account | Address }) => Promise<Hash>;
     depositETH: (args: { value: bigint, account?: Address }) => Promise<Hash>;
     withdrawETHStake: (args: { to: Address, account?: Address }) => Promise<Hash>;
     getETHDeposit: () => Promise<bigint>;
@@ -32,6 +33,15 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async requestSponsorship({ userOp, operator, account }) {
+        // This is likely off-chain or a signature request, but if it's on-chain (e.g. self-sponsorship or something):
+        // Actually requestSponsorship usually involves signing.
+        // For regression script, if we need it, we implement it.
+        // Assuming it's a write for now or just a placeholder if not used in regression.
+        // But to satisfy types:
+        throw new Error("requestSponsorship Not Implemented fully for regression");
     },
 
     async depositETH({ value, account }) {

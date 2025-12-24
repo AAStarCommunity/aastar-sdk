@@ -1,4 +1,4 @@
-import { createClient, type Client, type Transport, type Chain, type Account } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
 import { 
     registryActions, 
     sbtActions, 
@@ -8,24 +8,33 @@ import {
     TOKEN_ADDRESSES 
 } from '@aastar/core';
 
-export type CommunityClient = Client<Transport, Chain, Account | undefined> & RegistryActions & SBTActions;
+export type CommunityClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions;
 
 export function createCommunityClient({ 
     chain, 
     transport, 
-    account 
+    account,
+    addresses
 }: { 
     chain: Chain, 
     transport: Transport,
-    account?: Account 
+    account?: Account,
+    addresses?: { [key: string]: Address }
 }): CommunityClient {
     const client = createClient({ 
         chain, 
         transport,
         account
-    });
+    })
+    .extend(publicActions)
+    .extend(walletActions);
 
-    return client
-        .extend(registryActions(CORE_ADDRESSES.registry))
-        .extend(sbtActions(TOKEN_ADDRESSES.mySBT)) as CommunityClient;
+    const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...addresses };
+
+    const actions = {
+        ...registryActions(usedAddresses.registry)(client as any),
+        ...sbtActions(usedAddresses.mySBT)(client as any),
+    };
+
+    return Object.assign(client, actions) as CommunityClient;
 }

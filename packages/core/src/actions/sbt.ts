@@ -1,12 +1,12 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { MySBTABI } from '../abis/index.js';
 
 export type SBTActions = {
     getUserSBTId: (args: { user: Address }) => Promise<bigint>;
     getSBTData: (args: { tokenId: bigint }) => Promise<any>;
     getCommunityMembership: (args: { tokenId: bigint, community: Address }) => Promise<any>;
-    mintForRole: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Address }) => Promise<Hash>;
-    airdropMint: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Address }) => Promise<Hash>;
+    mintForRole: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Account | Address }) => Promise<Hash>;
+    airdropMint: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Account | Address }) => Promise<Hash>;
 };
 
 export const sbtActions = (address: Address) => (client: PublicClient | WalletClient): SBTActions => ({
