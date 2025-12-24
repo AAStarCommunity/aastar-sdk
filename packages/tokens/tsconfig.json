@@ -1,12 +1,12 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "moduleResolution": "node",
-    "allowImportingTsExtensions": false,
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
-    "declaration": true
+    "moduleResolution": "node",
+    "declaration": true,
+    "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src", "src/abis/*.json"]
 }

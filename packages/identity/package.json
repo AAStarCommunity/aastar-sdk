@@ -4,15 +4,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
-  "scripts": {
-    "build": "tsc"
-  },
+  "files": [
+    "dist"
+  ],
   "dependencies": {
-    "viem": "^2.7.1",
-    "@aastar/shared-config": "0.3.6"
+    "@aastar/core": "workspace:*",
+    "viem": "^2.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+     "typescript": "^5.3.3"
   }
 }

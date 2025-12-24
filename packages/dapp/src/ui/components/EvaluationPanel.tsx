@@ -2,7 +2,7 @@
 import React from 'react';
 import { useCreditScore } from '../hooks/useCreditScore';
 // Note: We use type import for PaymasterConfig
-import { type PaymasterConfig } from '@aastar/superpaymaster';
+import { type PaymasterConfig } from '@aastar/paymaster';
 import { type Chain, type Address } from 'viem';
 
 type EvaluationPanelProps = {

@@ -1,23 +1,13 @@
 
-import { createPublicClient, createWalletClient, http, type Chain, type Transport, type PublicClient, type WalletClient, type Account } from 'viem';
+import { createPublicClient, http, type Chain, type PublicClient } from 'viem';
+import { sepolia, optimism } from 'viem/chains';
 
-export type AAStarClientConfig = {
-    chain: Chain;
-    rpcUrl?: string; // Optional override, defaults to chain.rpc
-    transport?: Transport; // Optional override
-};
-
-export function createAAStarPublicClient(config: AAStarClientConfig): PublicClient {
+/**
+ * Creates a standard AAStar public client for any given chain.
+ */
+export function createAAStarPublicClient(rpcUrl: string, chain: Chain = sepolia): PublicClient {
     return createPublicClient({
-        chain: config.chain,
-        transport: config.transport || http(config.rpcUrl)
-    });
-}
-
-export function createAAStarWalletClient(config: AAStarClientConfig & { account: Account }): WalletClient {
-    return createWalletClient({
-        account: config.account,
-        chain: config.chain,
-        transport: config.transport || http(config.rpcUrl)
+        chain,
+        transport: http(rpcUrl)
     });
 }

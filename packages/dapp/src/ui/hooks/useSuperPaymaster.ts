@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { getPaymasterMiddleware, type PaymasterConfig } from '@aastar/superpaymaster';
+import { getPaymasterMiddleware, type PaymasterConfig } from '@aastar/paymaster';
 
 type UseSuperPaymasterResult = {
     generatePaymasterAndData: (userOp: any) => Promise<string>;
