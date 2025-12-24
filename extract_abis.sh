@@ -93,7 +93,14 @@ while IFS= read -r json_file; do
   fi
 
   # Extract and save ABI
-  dest_file="$DEST_DIR/$contract_name.json"
+  # Normalize contract name: remove V3, V4, etc. suffixes for cleaner SDK imports
+  file_name="$contract_name"
+  file_name="${file_name%V3}"
+  file_name="${file_name%V4}"
+  file_name="${file_name%V4_1}"
+  file_name="${file_name%V4_1i}"
+  
+  dest_file="$DEST_DIR/$file_name.json"
   if jq -e '.abi' "$json_file" >/dev/null 2>&1; then
     jq '.abi' "$json_file" > "$dest_file"
     if [ -s "$dest_file" ] && jq -e 'type=="array"' "$dest_file" >/dev/null 2>&1; then
