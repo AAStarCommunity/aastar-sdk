@@ -21,9 +21,9 @@ const SUPER_PAYMASTER_ADDR = process.env.SUPER_PAYMASTER as Hex;
 const REPUTATION_SYSTEM_ADDR = process.env.REPUTATION_SYSTEM_ADDR as Hex;
 
 // Load ABIs
-const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/Registry.json'), 'utf-8'));
-const SuperPaymasterABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/SuperPaymasterV3.json'), 'utf-8'));
-const ReputationABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/ReputationSystemV3.json'), 'utf-8'));
+const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/Registry.json'), 'utf-8'));
+const SuperPaymasterABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/SuperPaymasterV3.json'), 'utf-8'));
+const ReputationABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../abis/ReputationSystemV3.json'), 'utf-8'));
 
 // Branch coverage tracking
 let totalBranches = 0;

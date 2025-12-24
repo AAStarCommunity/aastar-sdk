@@ -24,7 +24,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 const loadAbi = (name: string) => {
-    const abiPath = path.resolve(__dirname, `../packages/core/src/abis/${name}.json`);
+    const abiPath = path.resolve(__dirname, `../abis/${name}.json`);
     if (!fs.existsSync(abiPath)) throw new Error(`ABI not found: ${abiPath}`);
     return JSON.parse(fs.readFileSync(abiPath, 'utf-8'));
 };

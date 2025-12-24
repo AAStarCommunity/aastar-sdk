@@ -94,9 +94,15 @@ if [ "$SKIP_DEPLOY" = false ]; then
         echo -e "${GREEN}✅ Deployment verified (Code exists).${NC}"
     fi
 
-    # 3. Extract ABIs
+    # 3. Extract ABIs (dual extraction for SDK and legacy tests)
     echo -e "${YELLOW}📝 Extracting ABIs...${NC}"
+    
+    # For SDK (packages/core/src/abis/)
     ./extract_abis.sh --dest ../aastar-sdk/packages/core/src/abis
+    
+    # For legacy non-SDK tests (abis/ at root)
+    ./extract_abis_legacy.sh
+    
     cd ../aastar-sdk
 fi
 
