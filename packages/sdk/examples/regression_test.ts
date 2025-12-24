@@ -13,14 +13,20 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Dynamic Config Loading from SuperPaymaster deployment
+// Dynamic Config Loading: Try local synced config first, fallback to bridge project
+const LOCAL_CONFIG_PATH = path.resolve(__dirname, './config.json');
 const SP_CONFIG_PATH = path.resolve(__dirname, '../../../../SuperPaymaster/script/v3/config.json');
 
 function loadConfig() {
+    if (fs.existsSync(LOCAL_CONFIG_PATH)) {
+        console.log("📂 Loading local config from examples/config.json");
+        return JSON.parse(fs.readFileSync(LOCAL_CONFIG_PATH, 'utf8'));
+    }
     if (fs.existsSync(SP_CONFIG_PATH)) {
+        console.log("📂 Loading synced config from SuperPaymaster project");
         return JSON.parse(fs.readFileSync(SP_CONFIG_PATH, 'utf8'));
     }
-    console.error("❌ SuperPaymaster config.json not found. Please run 'script/v3/01-deploy.sh' first.");
+    console.error("❌ config.json not found in examples/ or SuperPaymaster project.");
     process.exit(1);
 }
 

@@ -15,6 +15,8 @@
     "test:credit": "ts-node scripts/14_test_credit_redesign.ts",
     "test:reentrancy": "ts-node scripts/98_edge_reentrancy.ts",
     "test:full": "./run_full_regression.sh",
+    "example:local": "pnpm --filter @aastar/sdk run example:local",
+    "sync-config": "cp ../SuperPaymaster/script/v3/config.json ./packages/sdk/examples/config.json",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
