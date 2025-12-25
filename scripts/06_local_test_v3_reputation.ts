@@ -26,7 +26,7 @@ const regAbi = parseAbi([
 
 const repAbi = parseAbi([
     'function computeScore(address, address[], bytes32[][], uint256[][]) view returns (uint256)',
-    'function syncToRegistry(address, address[], bytes32[][], uint256[][], uint256)',
+    'function syncToRegistry(address, address[], bytes32[][], uint256[][], uint256, bytes)',
     'function setEntropyFactor(address, uint256)',
     'function setRule(bytes32, uint256, uint256, uint256, string)'
 ]);
@@ -78,11 +78,36 @@ async function runReputationTest() {
     console.log(`   ✅ Computed Score: ${score}`);
     if (score !== 80n) throw new Error(`Score mismatch: expected 80, got ${score}`);
 
-    // 4. Sync to Registry
+    // 4. Sync to Registry (with dummy BLS proof)
     console.log("   🔄 Syncing to Registry...");
+    // Dummy proof: (bytes pkG1, bytes sigG2, bytes msgG2, uint256 signerMask)
+    // pkG1: 96 bytes, sigG2: 192 bytes, msgG2: 192 bytes, signerMask: uint256
+    const dummyPk = "0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb" + "00".repeat(48); // 96 bytes total
+    const dummySig = "0x" + "00".repeat(192);
+    const dummyMsg = "0x" + "00".repeat(192);
+    const signerMask = 0xFFFFn;
+    
+    // ABI encode the proof
+    const proof = publicClient.readContract({ 
+        address: REGISTRY, // Dummy address for encoding helper if existed, but we encode manually
+        abi: parseAbi(['function encodeProof(bytes,bytes,bytes,uint256) pure returns (bytes)']),
+        functionName: 'encodeProof',
+        args: [dummyPk as Hex, dummySig as Hex, dummyMsg as Hex, signerMask]
+    }).catch(() => {
+        // Fallback for manual encoding if helper not present
+        return "0x" + "dummy"; 
+    });
+
+    // Actually, Registry.sol doesn't have encodeProof helper. We use viem's encodeAbiParameters
+    const { encodeAbiParameters, parseAbiParameters } = await import('viem');
+    const encodedProof = encodeAbiParameters(
+        parseAbiParameters('bytes, bytes, bytes, uint256'),
+        [dummyPk as Hex, dummySig as Hex, dummyMsg as Hex, signerMask]
+    );
+
     const hashSync = await wallet.writeContract({ 
         address: REPUTATION_SYSTEM, abi: repAbi, functionName: 'syncToRegistry', 
-        args: [ACCOUNT_C, communities, ruleIds, activities, 1n] 
+        args: [ACCOUNT_C, communities, ruleIds, activities, 1n, encodedProof] 
     });
     await publicClient.waitForTransactionReceipt({ hash: hashSync });
 

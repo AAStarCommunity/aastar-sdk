@@ -23,6 +23,8 @@ export type RegistryActions = {
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
     getGlobalReputation: (args: { user: Address }) => Promise<bigint>;
     getRoleConfig: (args: { roleId: Hex }) => Promise<any>;
+    setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
+    batchUpdateGlobalReputation: (args: { users: Address[], scores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
 };
 
 export const registryActions = (address: Address) => (client: PublicClient | WalletClient): RegistryActions => ({
@@ -103,6 +105,28 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             abi: RegistryABI,
             functionName: 'getRoleConfig',
             args: [roleId]
+        });
+    },
+
+    async setBLSAggregator({ aggregator, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setBLSAggregator',
+            args: [aggregator],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async batchUpdateGlobalReputation({ users, scores, epoch, proof, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'batchUpdateGlobalReputation',
+            args: [users, scores, epoch, proof],
+            account: account as any,
+            chain: (client as any).chain
         });
     }
 });

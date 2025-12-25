@@ -146,6 +146,7 @@ TEST_SCRIPTS=(
     "scripts/14_test_credit_redesign.ts"
     "scripts/15_test_dvt_bls_full.ts"
     "scripts/17_test_cross_role_collaboration.ts"
+    "scripts/18_test_dvt_sdk_flow.ts"
     "scripts/98_edge_reentrancy.ts"
 )
 
