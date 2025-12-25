@@ -56,7 +56,7 @@ const localAddresses = {
     registry: process.env.REGISTRY_ADDRESS as Address,
     gToken: process.env.GTOKEN_ADDRESS as Address,
     gTokenStaking: process.env.GTOKEN_STAKING_ADDRESS as Address,
-    superPaymasterV2: process.env.SUPER_PAYMASTER_ADDRESS as Address,
+    superPaymasterV2: process.env.SUPER_PAYMASTER as Address,
     paymasterFactory: '0x0000000000000000000000000000000000000000' as Address, // Unused in this test
     aPNTs: (process.env.APNTS_ADDRESS || '0xBD0710596010a157B88cd141d797E8Ad4bb2306b') as Address, // Fallback if missing
     mySBT: process.env.MYSBT_ADDRESS as Address
