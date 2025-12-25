@@ -1,4 +1,4 @@
-Defined in: [packages/paymaster/src/AOA/index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/9b0a93af912c0a13b6340209fddaa3c55af271d0/packages/paymaster/src/AOA/index.ts#L17)
+Defined in: [packages/paymaster/src/AOA/index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA/index.ts#L17)
 
 ## Constructors
 
@@ -16,7 +16,7 @@ Defined in: [packages/paymaster/src/AOA/index.ts:17](https://github.com/AAStarCo
 
 > `static` **deployStandalone**(`wallet`, `factory`, `version`, `initData`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/paymaster/src/AOA/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/9b0a93af912c0a13b6340209fddaa3c55af271d0/packages/paymaster/src/AOA/index.ts#L21)
+Defined in: [packages/paymaster/src/AOA/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA/index.ts#L21)
 
 #### Parameters
 
@@ -1097,7 +1097,7 @@ Deploy a standalone V4 Paymaster
 
 > `static` **setSigner**(`wallet`, `paymaster`, `signer`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/paymaster/src/AOA/index.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/9b0a93af912c0a13b6340209fddaa3c55af271d0/packages/paymaster/src/AOA/index.ts#L34)
+Defined in: [packages/paymaster/src/AOA/index.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA/index.ts#L34)
 
 #### Parameters
 

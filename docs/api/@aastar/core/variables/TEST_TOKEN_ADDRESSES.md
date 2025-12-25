@@ -1,6 +1,6 @@
 > `const` **TEST\_TOKEN\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/9b0a93af912c0a13b6340209fddaa3c55af271d0/packages/core/src/contract-addresses.ts#L31)
+Defined in: [packages/core/src/contract-addresses.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-addresses.ts#L31)
 
 Test Token Addresses (For Development & Testing)
 
