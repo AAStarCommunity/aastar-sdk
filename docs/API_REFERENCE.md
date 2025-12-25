@@ -2,7 +2,7 @@
 
 ## Overview
 
-AAStar SDK is a comprehensive TypeScript SDK for interacting with the AAStar protocol, providing Account Abstraction (ERC-4337) capabilities with advanced features like SuperPaymaster, community management, and reputation systems.
+AAStar SDK is a comprehensive TypeScript SDK for interacting with the AAStar Public Goods Infrastructure and create Your Own Protocol (YOP), providing Account Abstraction (ERC-4337) capabilities with advanced features like gasless SuperPaymaster(AOA+), EOA RainBow Bridge and community management, and reputation systems.
 
 **Version**: 0.14.0  
 **License**: MIT  
