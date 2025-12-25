@@ -54,21 +54,26 @@ function sync() {
         'ACCOUNT_C': '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
     };
 
-    const lines = envContent.split('\n');
-    const newLines = [...lines];
+    const keysToRemove = new Set(Object.keys(updates));
+    // Also remove known variants/stale keys
+    const variants = ['SUPERPAYMASTER_ADDR', 'SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_ADDRESS', 'APNTS_ADDRESS', 'GTOKEN_ADDRESS', 'STAKING_ADDRESS', 'REGISTRY_ADDRESS', 'MYSBT_ADDRESS', 'ENTRYPOINT_ADDRESS'];
+    variants.forEach(k => keysToRemove.add(k));
 
+    const lines = envContent.split('\n');
+    const filteredLines = lines.filter(line => {
+        if (!line.trim()) return true; // Keep empty lines
+        const key = line.split('=')[0].trim();
+        return !keysToRemove.has(key);
+    });
+
+    const newLines = [...filteredLines];
     for (const [key, value] of Object.entries(updates)) {
         if (!value) continue;
-        const index = newLines.findIndex(line => line.startsWith(`${key}=`));
-        if (index !== -1) {
-            newLines[index] = `${key}=${value}`;
-        } else {
-            newLines.push(`${key}=${value}`);
-        }
+        newLines.push(`${key}=${value}`);
     }
 
     fs.writeFileSync(ENV_PATH, newLines.join('\n').trim() + '\n');
-    console.log('✅ .env.v3 updated successfully.');
+    console.log('✅ .env.v3 updated successfully (Stale keys cleared).');
 }
 
 sync();
