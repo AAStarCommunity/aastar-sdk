@@ -1,6 +1,6 @@
 > **RoleConfig** = `object`
 
-Defined in: [packages/core/src/actions/registry.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L4)
+Defined in: [packages/core/src/actions/registry.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L4)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/registry.ts:4](https://github.com/AAStarC
 
 > **description**: `string`
 
-Defined in: [packages/core/src/actions/registry.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L14)
+Defined in: [packages/core/src/actions/registry.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L14)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/registry.ts:14](https://github.com/AAStar
 
 > **entryBurn**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L6)
+Defined in: [packages/core/src/actions/registry.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L6)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/registry.ts:6](https://github.com/AAStarC
 
 > **exitFeePercent**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L11)
+Defined in: [packages/core/src/actions/registry.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L11)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/registry.ts:11](https://github.com/AAStar
 
 > **isActive**: `boolean`
 
-Defined in: [packages/core/src/actions/registry.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L13)
+Defined in: [packages/core/src/actions/registry.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L13)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/registry.ts:13](https://github.com/AAStar
 
 > **minExitFee**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L12)
+Defined in: [packages/core/src/actions/registry.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L12)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/actions/registry.ts:12](https://github.com/AAStar
 
 > **minStake**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L5)
+Defined in: [packages/core/src/actions/registry.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L5)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [packages/core/src/actions/registry.ts:5](https://github.com/AAStarC
 
 > **slashBase**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L8)
+Defined in: [packages/core/src/actions/registry.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L8)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [packages/core/src/actions/registry.ts:8](https://github.com/AAStarC
 
 > **slashIncrement**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L9)
+Defined in: [packages/core/src/actions/registry.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L9)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [packages/core/src/actions/registry.ts:9](https://github.com/AAStarC
 
 > **slashMax**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L10)
+Defined in: [packages/core/src/actions/registry.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L10)
 
 ***
 
@@ -80,4 +80,4 @@ Defined in: [packages/core/src/actions/registry.ts:10](https://github.com/AAStar
 
 > **slashThreshold**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/actions/registry.ts#L7)
+Defined in: [packages/core/src/actions/registry.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/registry.ts#L7)

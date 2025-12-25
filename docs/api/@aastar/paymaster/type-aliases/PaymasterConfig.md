@@ -1,6 +1,6 @@
 > **PaymasterConfig** = `object`
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA-Plus/index.ts#L4)
+Defined in: [packages/paymaster/src/AOA-Plus/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/paymaster/src/AOA-Plus/index.ts#L4)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:4](https://github.com/AASt
 
 > **operator**: `Address`
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA-Plus/index.ts#L6)
+Defined in: [packages/paymaster/src/AOA-Plus/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/paymaster/src/AOA-Plus/index.ts#L6)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:6](https://github.com/AASt
 
 > **paymasterAddress**: `Address`
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA-Plus/index.ts#L5)
+Defined in: [packages/paymaster/src/AOA-Plus/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/paymaster/src/AOA-Plus/index.ts#L5)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:5](https://github.com/AASt
 
 > `optional` **postOpGasLimit**: `bigint`
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA-Plus/index.ts#L8)
+Defined in: [packages/paymaster/src/AOA-Plus/index.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/paymaster/src/AOA-Plus/index.ts#L8)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:8](https://github.com/AASt
 
 > `optional` **verificationGasLimit**: `bigint`
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/paymaster/src/AOA-Plus/index.ts#L7)
+Defined in: [packages/paymaster/src/AOA-Plus/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/paymaster/src/AOA-Plus/index.ts#L7)

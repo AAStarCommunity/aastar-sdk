@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/contract-versions.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L24)
+Defined in: [packages/core/src/contract-versions.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L24)
 
 Contract version information
 
@@ -8,7 +8,7 @@ Contract version information
 
 > **address**: `string`
 
-Defined in: [packages/core/src/contract-versions.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L34)
+Defined in: [packages/core/src/contract-versions.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L34)
 
 Contract address on network
 
@@ -18,7 +18,7 @@ Contract address on network
 
 > **deployedAt**: `string`
 
-Defined in: [packages/core/src/contract-versions.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L32)
+Defined in: [packages/core/src/contract-versions.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L32)
 
 Deployment date (YYYY-MM-DD)
 
@@ -28,7 +28,7 @@ Deployment date (YYYY-MM-DD)
 
 > `optional` **features**: `string`[]
 
-Defined in: [packages/core/src/contract-versions.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L36)
+Defined in: [packages/core/src/contract-versions.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L36)
 
 Key features in this version
 
@@ -38,7 +38,7 @@ Key features in this version
 
 > **name**: `string`
 
-Defined in: [packages/core/src/contract-versions.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L26)
+Defined in: [packages/core/src/contract-versions.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L26)
 
 Contract name
 
@@ -48,7 +48,7 @@ Contract name
 
 > **version**: `string`
 
-Defined in: [packages/core/src/contract-versions.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L28)
+Defined in: [packages/core/src/contract-versions.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L28)
 
 Semantic version string (e.g., "2.0.0")
 
@@ -58,6 +58,6 @@ Semantic version string (e.g., "2.0.0")
 
 > **versionCode**: `number`
 
-Defined in: [packages/core/src/contract-versions.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L30)
+Defined in: [packages/core/src/contract-versions.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L30)
 
 Numeric version code (e.g., 20000)

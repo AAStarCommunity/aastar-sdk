@@ -1,6 +1,6 @@
 > **getAllV2Contracts**(): [`ContractVersion`](../interfaces/ContractVersion.md)[]
 
-Defined in: [packages/core/src/contract-versions.ts:264](https://github.com/AAStarCommunity/aastar-sdk/blob/2bfec0a83e320e28501997c5fd5b6a5c22584cd8/packages/core/src/contract-versions.ts#L264)
+Defined in: [packages/core/src/contract-versions.ts:264](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-versions.ts#L264)
 
 Get all V2 contracts with VERSION interface
 
