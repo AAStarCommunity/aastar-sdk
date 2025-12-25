@@ -72,15 +72,23 @@ async function testNewSDKCapabilities() {
         const receipt = await adminClient.waitForTransactionReceipt({ hash: createTx });
         console.log('Proposal Created');
 
-        // Sign Proposal (Mock Signature)
+        // Sign Proposal (Mock Signature) - may fail if already signed in previous run
         console.log('Signing proposal...');
-        const signTx = await adminClient.signSlashProposal({
-            address: localAddresses.dvtValidator,
-            proposalId: 1n,
-            signature: '0x1234' as Hex
-        });
-        await adminClient.waitForTransactionReceipt({ hash: signTx });
-        console.log('Proposal Signed');
+        try {
+            const signTx = await adminClient.signSlashProposal({
+                address: localAddresses.dvtValidator,
+                proposalId: 1n,
+                signature: '0x1234' as Hex
+            });
+            await adminClient.waitForTransactionReceipt({ hash: signTx });
+            console.log('Proposal Signed');
+        } catch (error: any) {
+            if (error.message?.includes('AlreadySigned')) {
+                console.log('⚠️  Proposal already signed (expected in repeated runs)');
+            } else {
+                throw error;
+            }
+        }
     } else {
         console.log('⚠️ DVT Validator address missing, skipping...');
     }
