@@ -1,32 +1,33 @@
 import { createObjectCsvWriter } from 'csv-writer';
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, toHex, encodeFunctionData, parseAbi } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http, Hex } from 'viem';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import * as fs from 'fs';
+import { fileURLToPath } from 'url';
+import { getNetworkConfig } from './00_utils.js';
+import { runEOAExperiment, runPimlicoExperiment, runAOAExperiment, runSuperExperiment, TestMetrics } from './test_groups.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 
 const OUTPUT_FILE = 'sdk_experiment_data.csv';
-const RUNS = parseInt(process.env.EXPERIMENT_RUNS || '5');
-const NETWORK = process.env.EXPERIMENT_NETWORK || 'local';
-
-const RPC_URL = NETWORK === 'local' ? 'http://localhost:8545' : process.env.SEPOLIA_RPC_URL;
-const EOA_KEY = process.env.PRIVATE_KEY_JASON;
-const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
-
-const chain = NETWORK === 'local' ? 
-    { id: 31337, name: 'Anvil', network: 'anvil', nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' }, rpcUrls: { default: { http: [RPC_URL] }, public: { http: [RPC_URL] } } } :
-    { id: 11155111, name: 'Sepolia', network: 'sepolia', nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' }, rpcUrls: { default: { http: [RPC_URL] }, public: { http: [RPC_URL] } } };
+const RUNS = parseInt(process.env.EXPERIMENT_RUNS || '3');
+const NETWORK = process.env.EXPERIMENT_NETWORK || 'sepolia';
 
 async function main() {
     console.log(`🧪 PhD Experiment Runner (Network: ${NETWORK}, Runs: ${RUNS})`);
+    const { chain, rpc } = getNetworkConfig(NETWORK);
     
-    const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
-    const eoaAccount = privateKeyToAccount(EOA_KEY);
-    const walletClient = createWalletClient({ account: eoaAccount, chain, transport: http(RPC_URL) });
-    
-    const results = [];
+    const config = {
+        chain,
+        rpc,
+        bundlerRpc: process.env.ALCHEMY_BUNDLER_RPC_URL,
+        pimlicoRpc: `https://api.pimlico.io/v2/sepolia/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
+        privateKey: process.env.PRIVATE_KEY_JASON as Hex,
+        accountAddress: process.env.TEST_SIMPLE_ACCOUNT_A as Hex, // Default for Pimlico
+        pimToken: "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751" // PIM on Sepolia
+    };
+
     const csvWriter = createObjectCsvWriter({
         path: OUTPUT_FILE,
         header: [
@@ -35,7 +36,6 @@ async function main() {
             {id: 'gasUsed', title: 'Gas Used'},
             {id: 'effectiveGasPrice', title: 'Effective Gas Price (wei)'},
             {id: 'totalCostWei', title: 'Total Cost (wei)'},
-            {id: 'totalCostUSD', title: 'Total Cost (USD)'},
             {id: 'latencyMs', title: 'Latency (ms)'},
             {id: 'status', title: 'Status'},
             {id: 'txHash', title: 'Transaction Hash'},
@@ -43,52 +43,47 @@ async function main() {
         ]
     });
 
+    const allResults: any[] = [];
+
     for (let i = 0; i < RUNS; i++) {
         console.log(`\n📊 Run ${i + 1}/${RUNS}`);
         
+        // Group 1: EOA
         try {
-            const start = Date.now();
-            const hash = await walletClient.sendTransaction({
-                to: RECEIVER,
-                value: parseEther("0.0001")
-            });
-            
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
-            const latency = Date.now() - start;
-            
-            const result = {
-                runId: i + 1,
-                group: 'EOA',
-                gasUsed: receipt.gasUsed.toString(),
-                effectiveGasPrice: receipt.effectiveGasPrice.toString(),
-                totalCostWei: (receipt.gasUsed * receipt.effectiveGasPrice).toString(),
-                totalCostUSD: ((Number(receipt.gasUsed * receipt.effectiveGasPrice) / 1e18) * 3500).toFixed(6),
-                latencyMs: latency,
-                status: receipt.status === 'success' ? 'Success' : 'Failed',
-                txHash: receipt.transactionHash,
-                timestamp: new Date().toISOString()
-            };
-            
-            results.push(result);
-            console.log(`   ✅ EOA: ${result.status} (${latency}ms, ${receipt.gasUsed} gas)`);
-        } catch (e) {
-            console.error(`   ❌ Failed: ${e.message}`);
-        }
+            console.log("   --- Group 1: EOA ---");
+            const res = await runEOAExperiment(config);
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ EOA: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ EOA Failed: ${e.message}`); }
+
+        // Group 2: Pimlico
+        try {
+            console.log("   --- Group 2: Pimlico ---");
+            const res = await runPimlicoExperiment({ ...config, accountAddress: process.env.TEST_SIMPLE_ACCOUNT_A });
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ Pimlico: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ Pimlico Failed: ${e.message}`); }
+
+        // Group 3: AOA (Paymaster V4)
+        try {
+            console.log("   --- Group 3: AOA (V4) ---");
+            const res = await runAOAExperiment({ ...config, accountAddress: process.env.TEST_SIMPLE_ACCOUNT_B, paymasterV4: process.env.PAYMASTER_V4_ADDRESS });
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ AOA: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ AOA Failed: ${e.message}`); }
+
+        // Group 4: SuperPaymaster
+        try {
+            console.log("   --- Group 4: SuperPaymaster ---");
+            const res = await runSuperExperiment({ ...config, accountAddress: process.env.TEST_SIMPLE_ACCOUNT_C, superPaymaster: process.env.SUPER_PAYMASTER_ADDRESS });
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ Super: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ Super Failed: ${e.message}`); }
         
-        if (i < RUNS - 1) await new Promise(r => setTimeout(r, 2000));
+        await csvWriter.writeRecords(allResults.slice(-4)); // Write batch
     }
 
-    await csvWriter.writeRecords(results);
     console.log(`\n✅ Complete! Data saved to ${OUTPUT_FILE}`);
-    console.log(`   Total Runs: ${results.length}`);
-    
-    if (results.length > 0) {
-        const avgGas = results.reduce((sum, r) => sum + BigInt(r.gasUsed), 0n) / BigInt(results.length);
-        const avgLatency = Math.round(results.reduce((sum, r) => sum + r.latencyMs, 0) / results.length);
-        console.log(`\n📈 Summary:`);
-        console.log(`   Avg Gas: ${avgGas}`);
-        console.log(`   Avg Latency: ${avgLatency}ms`);
-    }
 }
 
 main().catch(console.error);

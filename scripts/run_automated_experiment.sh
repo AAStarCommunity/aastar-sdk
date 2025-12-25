@@ -28,7 +28,7 @@ run_experiment() {
     EXPERIMENT_NETWORK=$network \
     EXPERIMENT_RUNS=$EXPERIMENT_RUNS \
     ETH_USD_PRICE=$ETH_USD_PRICE \
-    npx ts-node scripts/19_sdk_experiment_runner.ts
+    pnpm tsx scripts/19_sdk_experiment_runner.ts
     
     # Rename output file
     if [ -f "sdk_experiment_data.csv" ]; then

@@ -7,67 +7,26 @@ import { sepolia } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// ABIs
-const factoryAbi = [
-  { inputs: [{ name: "owner", type: "address" }, { name: "salt", type: "uint256" }], name: "createAccount", outputs: [{ name: "ret", type: "address" }], stateMutability: "nonpayable", type: "function" }
-] as const;
 
-const paymasterFactoryAbi = [
-    { inputs: [
-        { name: "token", type: "address" },
-        { name: "sbt", type: "address" },
-        { name: "treasury", type: "address" },
-        { name: "feeRate", type: "uint256" }
-    ], name: "deployPaymaster", outputs: [{ name: "", type: "address" }], stateMutability: "nonpayable", type: "function" }
-] as const;
+import { getNetworkConfig } from './00_utils.js';
 
-const senderAddressResultAbi = [{
-    inputs: [{ name: "sender", type: "address" }],
-    name: "SenderAddressResult",
-    type: "error"
-}] as const;
-
-const erc20Abi = [
-    { inputs: [{ name: "account", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" },
-    { inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }], name: "transfer", outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable", type: "function" }
-] as const;
-
-const sbtAbi = [
-    { inputs: [{ name: "owner", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" },
-    { inputs: [{ name: "to", type: "address" }], name: "mint", outputs: [], stateMutability: "nonpayable", type: "function" }
-] as const;
-
-const entryPointAbi = [
-    { inputs: [{ name: "account", type: "address" }], name: "balanceOf", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" },
-    { inputs: [{ name: "account", type: "address" }], name: "depositTo", outputs: [], stateMutability: "payable", type: "function" }
-] as const;
-
-// --- Helpers ---
-function parseKey(key: string | undefined): Hex {
-    if (!key) throw new Error("Private Key is undefined");
-    if (!key.startsWith("0x")) {
-         if (key.length === 64) return `0x${key}` as Hex;
-         throw new Error(`Private Key must start with 0x. Got: ${key}`);
-    }
-    return key as Hex;
-}
-
-async function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
 
 async function main() {
-    console.log("🚀 Starting Phase 1 Preparation: The Ammo (Deposits & setup)");
+    const network = process.env.EXPERIMENT_NETWORK || 'sepolia';
+    const { chain, rpc } = getNetworkConfig(network);
     
-    // --- Setup Clients ---
-    const rpcUrl = process.env.SEPOLIA_RPC_URL;
-    console.log(`🔌 Connecting to RPC: ${rpcUrl}`);
-    if (!rpcUrl) throw new Error("Missing SEPOLIA_RPC_URL");
+    console.log(`🚀 Starting Phase 1 Preparation: The Ammo (Network: ${network})`);
+    console.log(`🔌 Connecting to RPC: ${rpc}`);
+    
+    if (!rpc) throw new Error(`Missing RPC URL for ${network}`);
+    
     const client = createPublicClient({ 
-        chain: CHAIN,
-        transport: http(rpcUrl)
+        chain,
+        transport: http(rpc)
     });
-    const client = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC || RPC_URL) }); 
+
+    const publicClient = client; // Alias for compatibility with existing code
 
     // 2. Setup Operators
     const supplierKey = process.env.PRIVATE_KEY_SUPPLIER;
@@ -78,8 +37,8 @@ async function main() {
     const supplierAccount = privateKeyToAccount(parseKey(supplierKey));
     const operatorAccount = privateKeyToAccount(parseKey(operatorKey));
     
-    const supplierWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: supplierAccount });
-    const operatorWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: operatorAccount });
+    const supplierWallet = createWalletClient({ chain, transport: http(rpc), account: supplierAccount });
+    const operatorWallet = createWalletClient({ chain, transport: http(rpc), account: operatorAccount });
 
     console.log(`\n📋 Configuration:`);
     console.log(`   MySBT:    ${MYSBT_ADDRESS || "❌"}`);
@@ -262,7 +221,7 @@ async function main() {
                     abi: paymasterFactoryAbi,
                     functionName: 'deployPaymaster',
                     args: [BPNTS_ADDRESS, MYSBT_ADDRESS!, supplierAccount.address, 200n],
-                    chain: sepolia,
+                    chain,
                     account: operatorAccount
                 });
                 console.log(`      ✅ Deployed. Hash: ${tx}`);
