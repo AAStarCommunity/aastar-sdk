@@ -103,71 +103,28 @@ async function generateAPIDocs() {
 
 ### 3.2 文档同步流程
 
-**GitHub Actions**: `.github/workflows/sync-docs.yml`
+文档同步使用 `scripts/extract-docs.sh` 腳本，手動調用命令為 `pnpm run docs:sync`。
 
-```yaml
-name: Sync Docs to Docs Repo
+**流程**:
+1. 在 `aastar-sdk` 運行 `pnpm run docs:generate` 生成最新 API 文檔。
+2. 運行 `pnpm run docs:sync` 將 `docs/` 文件夾內容同步到 `aastar-docs`。
+3. 同步過程會保持相同的目錄結構 (`guide/`, `api/`, `examples/`)。
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'packages/**/src/**'
-      - 'docs/**'
+**Shell 腳本核心邏輯**:
+\`\`\`bash
+# 同步 Guide
+cp -r "$SDK_REPO/docs/guide/"* "$DOCS_REPO/guide/"
+# 同步 API
+cp -r "$SDK_REPO/docs/api/"* "$DOCS_REPO/api/"
+# 同步 Examples
+cp -r "$SDK_REPO/docs/examples/"* "$DOCS_REPO/examples/"
+\`\`\`
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-      
-      - name: Generate API Docs
-        run: pnpm run docs:generate
-      
-      - name: Sync to Docs Repo
-        run: |
-          git clone https://github.com/AAStarCommunity/aastar-docs.git
-          rsync -av --delete docs/ aastar-docs/
-          cd aastar-docs
-          git add .
-          git commit -m "docs: sync from SDK repo"
-          git push
-```
+
 
 ### 3.3 文档站点部署
 
-**GitHub Actions**: `aastar-docs/.github/workflows/deploy.yml`
-
-```yaml
-name: Deploy Docs
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-      
-      - name: Build VitePress
-        run: pnpm run docs:build
-      
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .vitepress/dist
-          cname: docs.aastar.io
-```
-
+Use docs repo shell to deploy.
 ---
 
 ## 4. 文档结构设计
@@ -488,16 +445,11 @@ const txHash = await operator.stake({
 
 ---
 
-## 10. 下一步行动
+## 11. 論文數據採集指南 (PhD Data collection)
 
-**立即执行**:
-1. 创建`aastar-docs`仓库
-2. 安装VitePress基础设施
-3. 编写API文档生成脚本
-4. 完善当前API_REFERENCE.md为完整的模块文档
+詳細指南請參見: [paper-data-collection.md](file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/docs/paper-data-collection.md)
 
-**后续优化**:
-1. 添加交互式代码playground
-2. 添加视频教程
-3. 多语言支持(中英文)
-4. 集成Discord/Telegram社区支持
+**核心要點**:
+- 所有實驗必須使用 `aastar-sdk` 實作。
+- 使用 `run_automated_experiment.sh` 進行自動化運行。
+- 數據採集涵蓋: Gas Usage, Latency, Throughput (TPS), Cost (USD)。

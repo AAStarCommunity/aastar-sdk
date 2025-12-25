@@ -247,6 +247,7 @@ MIT License - 详见 [LICENSE](./LICENSE)
 - **SuperPaymaster 论文**: [最新版本](../SuperPaymaster/docs/)
 - **Mycelium 网络**: [项目主页](https://github.com/AAStarCommunity)
 - **开发者文档**: [`docs/TEST_COMMANDS.md`](./docs/TEST_COMMANDS.md)
+- **文档维护方案**: [`docs/DOCUMENTATION_PLAN.md`](./docs/DOCUMENTATION_PLAN.md)
 
 ---
 
