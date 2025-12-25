@@ -15,6 +15,8 @@ export const CORE_ADDRESSES = {
   registry: '0x49245E1f3c2dD99b3884ffeD410d0605Cf4dC696', // v2.2.1 (2025-11-09) - isRegistered mapping (duplicate prevention)
   gTokenStaking: '0xbEbF9b4c6a4cDB92Ac184aF211AdB13a0b9BF6c0', // v2.0.1 (2025-11-05) - Added stakeFor() function
   paymasterFactory: '0x65Cf6C4ab3d40f3C919b6F3CADC09Efb72817920',
+  dvtValidator: '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1',
+  blsAggregator: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e',
 } as const;
 
 /**

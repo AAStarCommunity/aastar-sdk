@@ -42,9 +42,9 @@ export function createAdminClient({
         ...paymasterActions(usedAddresses.superPaymasterV2)(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
-        ...dvtActions(usedAddresses.dvtValidator)(baseClient as any),
-        ...factoryActions(usedAddresses.xpntsFactory)(baseClient as any),
-        ...aggregatorActions()(baseClient as any), // Aggregator actions just need client, address passed in methods usually? Wait, checking signature.
+        ...dvtActions()(baseClient as any),
+        ...factoryActions()(baseClient as any),
+        ...aggregatorActions()(baseClient as any),
     };
 
     return Object.assign(baseClient, actions) as AdminClient;
