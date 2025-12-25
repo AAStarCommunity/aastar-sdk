@@ -232,6 +232,19 @@
   },
   {
     "type": "function",
+    "name": "blsAggregator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "burnHistory",
     "inputs": [
       {
@@ -1180,6 +1193,19 @@
   },
   {
     "type": "function",
+    "name": "setBLSAggregator",
+    "inputs": [
+      {
+        "name": "_aggregator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setCreditTier",
     "inputs": [
       {
@@ -1216,6 +1242,19 @@
   },
   {
     "type": "function",
+    "name": "setMySBT",
+    "inputs": [
+      {
+        "name": "_mysbt",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setReputationSource",
     "inputs": [
       {
@@ -1243,6 +1282,19 @@
       },
       {
         "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setStaking",
+    "inputs": [
+      {
+        "name": "_staking",
         "type": "address",
         "internalType": "address"
       }

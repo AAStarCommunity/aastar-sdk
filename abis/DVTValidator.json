@@ -80,6 +80,39 @@
   },
   {
     "type": "function",
+    "name": "executeWithProof",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "repUsers",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "newScores",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "proof",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "isValidator",
     "inputs": [
       {

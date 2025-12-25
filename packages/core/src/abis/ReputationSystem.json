@@ -322,6 +322,11 @@
         "name": "epoch",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "proof",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
