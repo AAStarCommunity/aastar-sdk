@@ -1,18 +1,24 @@
 import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
-import { 
+import {
     registryActions, 
     paymasterActions, 
     stakingActions,
     sbtActions,
+    dvtActions,
+    factoryActions,
+    aggregatorActions,
     type RegistryActions, 
     type PaymasterActions, 
     type StakingActions, 
     type SBTActions,
+    type DVTActions,
+    type FactoryActions,
+    type AggregatorActions,
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES 
 } from '@aastar/core';
 
-export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & PaymasterActions & StakingActions & SBTActions;
+export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & PaymasterActions & StakingActions & SBTActions & DVTActions & FactoryActions & AggregatorActions;
 
 export function createAdminClient({ 
     chain, 
@@ -36,6 +42,9 @@ export function createAdminClient({
         ...paymasterActions(usedAddresses.superPaymasterV2)(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
+        ...dvtActions(usedAddresses.dvtValidator)(baseClient as any),
+        ...factoryActions(usedAddresses.xpntsFactory)(baseClient as any),
+        ...aggregatorActions()(baseClient as any), // Aggregator actions just need client, address passed in methods usually? Wait, checking signature.
     };
 
     return Object.assign(baseClient, actions) as AdminClient;
