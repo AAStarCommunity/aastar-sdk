@@ -14,71 +14,61 @@ echo -e "${GREEN}📚 Extracting documentation from SDK repo...${NC}"
 SDK_REPO="/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk"
 DOCS_REPO="/Users/jason/Dev/mycelium/my-exploration/projects/aastar-docs"
 
-# 1. Extract API Reference
-echo -e "${YELLOW}📖 Copying API Reference...${NC}"
+# Ensure directories exist in docs repo
 mkdir -p "$DOCS_REPO/api"
-cp "$SDK_REPO/docs/API_REFERENCE.md" "$DOCS_REPO/api/index.md"
+mkdir -p "$DOCS_REPO/guide"
+mkdir -p "$DOCS_REPO/examples"
 
-# 2. Extract existing docs
-echo -e "${YELLOW}📋 Copying existing documentation...${NC}"
-if [ -d "$SDK_REPO/docs" ]; then
-    # Copy all markdown files from SDK docs
-    find "$SDK_REPO/docs" -name "*.md" -type f | while read file; do
+# 1. Sync Guide folder (Maintain same structure)
+echo -e "${YELLOW}📋 Syncing Guide folder...${NC}"
+if [ -d "$SDK_REPO/docs/guide" ]; then
+    cp -r "$SDK_REPO/docs/guide/"* "$DOCS_REPO/guide/" 2>/dev/null || true
+else
+    # Fallback: Copy all .md files from root of docs/ (except specific ones) to guide/
+    find "$SDK_REPO/docs" -maxdepth 1 -name "*.md" -type f | while read file; do
         filename=$(basename "$file")
-        if [ "$filename" != "API_REFERENCE.md" ] && [ "$filename" != "DOCUMENTATION_PLAN.md" ]; then
+        if [[ "$filename" != "API_REFERENCE.md" && "$filename" != "DOCUMENTATION_PLAN.md" && "$filename" != "API_REFERENCE.md" ]]; then
             cp "$file" "$DOCS_REPO/guide/" 2>/dev/null || true
         fi
     done
 fi
 
-# 3. Extract README
-echo -e "${YELLOW}📄 Copying README...${NC}"
-if [ -f "$SDK_REPO/README.md" ]; then
-    cp "$SDK_REPO/README.md" "$DOCS_REPO/guide/sdk-readme.md"
+# 2. Sync API folder (Maintain same structure)
+echo -e "${YELLOW}📖 Syncing API folder...${NC}"
+if [ -d "$SDK_REPO/docs/api" ]; then
+    cp -r "$SDK_REPO/docs/api/"* "$DOCS_REPO/api/" 2>/dev/null || true
+else
+    # Fallback to single file API reference if folder doesn't exist
+    if [ -f "$SDK_REPO/docs/API_REFERENCE.md" ]; then
+        cp "$SDK_REPO/docs/API_REFERENCE.md" "$DOCS_REPO/api/index.md"
+    fi
 fi
 
-# 4. Extract package READMEs
+# 3. Sync Examples folder (Maintain same structure)
+echo -e "${YELLOW}💡 Syncing Examples folder...${NC}"
+if [ -d "$SDK_REPO/docs/examples" ]; then
+    cp -r "$SDK_REPO/docs/examples/"* "$DOCS_REPO/examples/" 2>/dev/null || true
+elif [ -d "$SDK_REPO/examples" ]; then
+    cp -r "$SDK_REPO/examples/"* "$DOCS_REPO/examples/" 2>/dev/null || true
+fi
+
+# 4. Sync main README to guide/index.md for easy entry
+if [ -f "$SDK_REPO/README.md" ]; then
+    cp "$SDK_REPO/README.md" "$DOCS_REPO/guide/getting-started.md"
+fi
+
+# 5. Extract package READMEs to api/modules/ (Standard fallback)
 echo -e "${YELLOW}📦 Extracting package documentation...${NC}"
 mkdir -p "$DOCS_REPO/api/modules"
-
 for pkg in core account paymaster tokens identity dapp; do
     if [ -f "$SDK_REPO/packages/$pkg/README.md" ]; then
         cp "$SDK_REPO/packages/$pkg/README.md" "$DOCS_REPO/api/modules/$pkg.md"
-    else
-        echo "# @aastar/$pkg" > "$DOCS_REPO/api/modules/$pkg.md"
-        echo "" >> "$DOCS_REPO/api/modules/$pkg.md"
-        echo "Documentation coming soon..." >> "$DOCS_REPO/api/modules/$pkg.md"
     fi
 done
 
-# 5. Extract examples
-echo -e "${YELLOW}💡 Copying examples...${NC}"
-mkdir -p "$DOCS_REPO/examples"
-if [ -d "$SDK_REPO/examples" ]; then
-    cp -r "$SDK_REPO/examples/"*.md "$DOCS_REPO/examples/" 2>/dev/null || true
-fi
-
-# 6. Extract test scenarios as examples
-echo -e "${YELLOW}🧪 Extracting test scenarios...${NC}"
-if [ -f "$SDK_REPO/scripts/99_final_v2_regression.ts" ]; then
-    # Create example from regression test
-    cat > "$DOCS_REPO/examples/complete-workflow.md" << 'EOF'
-# Complete Workflow Example
-
-This example demonstrates a complete workflow using all SDK features.
-
-Based on the regression test suite.
-
-\`\`\`typescript
-// See SDK repo: scripts/99_final_v2_regression.ts
-// for the complete implementation
-\`\`\`
-EOF
-fi
-
-echo -e "${GREEN}✅ Documentation extraction complete!${NC}"
+echo -e "${GREEN}✅ Documentation sync complete!${NC}"
 echo ""
-echo "Extracted to: $DOCS_REPO"
+echo "Synced to: $DOCS_REPO"
 echo ""
 echo "Next steps:"
 echo "  cd $DOCS_REPO"

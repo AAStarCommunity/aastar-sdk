@@ -24,7 +24,9 @@
     "prepare": "pnpm install --frozen-lockfile",
     "example:local": "pnpm --filter @aastar/sdk run example:local",
     "sync-config": "cp ../SuperPaymaster/script/v3/config.json ./packages/sdk/examples/config.json",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "docs:generate": "typedoc --options typedoc.json",
+    "docs:sync": "bash scripts/extract-docs.sh"
   },
   "devDependencies": {
     "@types/node": "20.11.5",
@@ -32,6 +34,8 @@
     "dotenv": "17.2.3",
     "ts-node": "10.9.2",
     "tsx": "4.21.0",
+    "typedoc": "^0.28.15",
+    "typedoc-plugin-markdown": "^4.9.0",
     "typescript": "5.9.3"
   },
   "dependencies": {

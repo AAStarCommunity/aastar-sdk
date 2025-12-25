@@ -1,0 +1,25 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/core",
+    "packages/account",
+    "packages/paymaster",
+    "packages/tokens"
+  ],
+  "entryPointStrategy": "packages",
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/tests/**"],
+  "excludeExternals": true,
+  "skipErrorChecking": true,
+  "readme": "none",
+  "hidePageHeader": true,
+  "hidePageTitle": true,
+  "hideBreadcrumbs": true,
+  "cleanOutputDir": true,
+  "externalSymbolLinkMappings": {
+    "viem": {
+      "*": "https://viem.sh/docs/index.html"
+    }
+  }
+}
