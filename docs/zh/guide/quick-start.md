@@ -1,27 +1,27 @@
-# Quick Start
+# 快速开始 (Quick Start)
 
-Get up and running with AAStar SDK in 5 minutes.
+在 5 分钟内上手使用 AAStar SDK。
 
-## Step 1: Install the SDK
+## 第一步：安装 SDK
 
 ```bash
 pnpm add @aastar/sdk viem
 ```
 
-## Step 2: Set Up Your Environment
+## 第二步：设置环境
 
-Create a `.env` file:
+创建一个 `.env` 文件：
 
 ```bash
 RPC_URL=https://rpc.sepolia.org
 PRIVATE_KEY=your_private_key_here
 ```
 
-## Step 3: Create Your First Client
+## 第三步：创建你的第一个客户端
 
-Choose a client based on your role:
+根据你的角色选择客户端：
 
-### For End Users (DApp Developers)
+### 针对终端用户 (dApp 开发者)
 
 ```typescript
 import { createEndUserClient } from '@aastar/core';
@@ -35,12 +35,12 @@ const client = createEndUserClient({
   account: privateKeyToAccount(process.env.PRIVATE_KEY),
 });
 
-// Check credit limit
+// 查询信用额度
 const credit = await client.getCreditLimit();
-console.log('Available credit:', credit);
+console.log('可用信用余额:', credit);
 ```
 
-### For Operators (Paymaster Providers)
+### 针对运营商 (Paymaster 提供者)
 
 ```typescript
 import { createOperatorClient, CONTRACTS } from '@aastar/core';
@@ -52,18 +52,18 @@ const operator = createOperatorClient({
   account: privateKeyToAccount(process.env.OPERATOR_KEY),
 });
 
-// Stake GTokens
+// 质押 GTokens
 await operator.stake({
   amount: parseEther('100'),
 });
 
-// Deposit to Paymaster
+// 向 Paymaster 存款
 await operator.deposit({
   amount: parseEther('10'),
 });
 ```
 
-### For Communities (DAO Managers)
+### 针对社区 (DAO 管理者)
 
 ```typescript
 import { createCommunityClient } from '@aastar/core';
@@ -74,28 +74,28 @@ const community = createCommunityClient({
   account: privateKeyToAccount(process.env.COMMUNITY_KEY),
 });
 
-// Register community
+// 注册社区
 await community.registerCommunity({
   name: 'MyAwesomeDAO',
   metadata: 'ipfs://...',
 });
 
-// Mint SBT to member
+// 为成员铸造 SBT
 await community.mintSBT({
   to: memberAddress,
   tokenId: 1n,
 });
 ```
 
-## Step 4: Run Your Code
+## 第四步：运行代码
 
 ```bash
 tsx your-script.ts
 ```
 
-## Common Patterns
+## 常见模式
 
-### Check Network Configuration
+### 检查网络配置
 
 ```typescript
 import { getNetwork, CONTRACTS } from '@aastar/core';
@@ -103,42 +103,32 @@ import { getNetwork, CONTRACTS } from '@aastar/core';
 const network = getNetwork('sepolia');
 console.log('Chain ID:', network.chainId);
 console.log('RPC URL:', network.rpcUrl);
-console.log('Registry:', CONTRACTS.sepolia.registry);
+console.log('Registry 地址:', CONTRACTS.sepolia.registry);
 ```
 
-### Handle Errors
+### 异常处理
 
 ```typescript
 try {
   await operator.stake({ amount: parseEther('100') });
 } catch (error) {
   if (error.message.includes('insufficient balance')) {
-    console.error('Not enough GTokens');
+    console.error('GToken 余额不足');
   } else {
-    console.error('Staking failed:', error);
+    console.error('质押失败:', error);
   }
 }
 ```
 
-### Get Transaction URL
+## 下一步
 
-```typescript
-import { getTxUrl } from '@aastar/core';
+- [了解账户抽象](/guide/concepts/account-abstraction)
+- [探索使用场景](/guide/use-cases/community-management)
+- [阅读完整的 API 参考](/api/)
+- [尝试完整示例](/examples/)
 
-const txHash = await operator.stake({ amount: parseEther('100') });
-const url = getTxUrl('sepolia', txHash);
-console.log('View transaction:', url);
-```
-
-## Next Steps
-
-- [Learn about Account Abstraction](/guide/concepts/account-abstraction)
-- [Explore use cases](/guide/use-cases/community-management)
-- [Read the full API reference](/api/)
-- [Try complete examples](/examples/)
-
-## Need Help?
+## 需要帮助？
 
 - [GitHub Issues](https://github.com/AAStarCommunity/aastar-sdk/issues)
 - [Discord](https://discord.gg/aastar)
-- [Documentation](https://docs.aastar.io)
+- [官方文档站](https://docs.aastar.io)

@@ -1,6 +1,6 @@
 > `const` **COMMUNITY\_OWNERS**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/contract-addresses.ts#L70)
+Defined in: [packages/core/src/contract-addresses.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/contract-addresses.ts#L70)
 
 Community Owner Addresses
 

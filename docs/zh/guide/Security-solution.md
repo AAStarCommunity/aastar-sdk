@@ -43,11 +43,11 @@
 
 TypeScript 本身就是第一道防线，但需要正确配置：
 
-* **启用 `strict: true**`
+* **启用 `strict: true`**
 * 这是基础。除此之外，开启 `noImplicitAny` 和 `strictNullChecks` 可以消除绝大多数 `undefined` 导致的运行时崩溃（DoS 风险）。
 
 
-* **避免类型断言 (`as`) 和 `any**`
+* **避免类型断言 (`as`) 和 `any`**
 * 使用 `zod` 或 `io-ts` 进行**运行时数据验证 (Runtime Validation)**。不要盲目相信 API 返回的数据就是 TS 定义的类型。
 * **Bad:** `const data = await res.json() as User;`
 * **Good:** `const data = UserSchema.parse(await res.json());` (这在 Web3 数据处理中尤为重要，防止恶意构造的 Payload 导致逻辑错误)。
@@ -64,7 +64,7 @@ npm 的 `postinstall` 脚本是恶意软件最常见的入侵途径。
 
 
 * **LavaMoat (进阶)**
-* 由 MetaMask 团队开发（很适合你的背景）。它可以为每个 npm 包生成策略文件，限制某个包只能访问 `fs` 模块，或者只能访问特定的全局变量。
+* 由 MetaMask 團隊開發（很適合你的背景）。它可以為每個 npm 包生成策略文件，限制某个包只能访问 `fs` 模块，或者只能访问特定的全局变量。
 
 
 

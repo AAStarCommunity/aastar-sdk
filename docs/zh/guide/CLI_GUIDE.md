@@ -32,23 +32,6 @@ pnpm run test:fast
 ```bash
 pnpm run test:full
 ```
-*包含脚本: 01, 06, 08, 09, 10, 11, 12, 13, 14, 98, 99 系列*
-
-### 4. 特定模块测试 (Module Specific)
-如果你只想测试某个特定模块，可以使用以下快捷命令：
-
-- **核心管理流程 (Registry/Admin)**:
-  ```bash
-  pnpm run test:admin
-  ```
-- **信用与还款系统**:
-  ```bash
-  pnpm run test:credit
-  ```
-- **安全与重入攻击**:
-  ```bash
-  pnpm run test:reentrancy
-  ```
 
 ---
 
@@ -61,5 +44,5 @@ pnpm run test:full
 ---
 
 ## 🔍 故障排查
-- **Panic: Allocated too much memory**: 这是 Anvil 在处理复杂 `roleData` 时的已知限制。如果遇到此错误，请尝试减小 `roleData` 中的字符串长度或清空 Anvil 重新运行。
+- **Panic: Allocated too much memory**: 这是 Anvil 在处理复杂 `roleData` 时的已知限制。
 - **DepositNotVerified**: 确保在调用 `notifyDeposit` 前，对应账户已向 Paymaster 合约转入足够的 aPNTs 代币。

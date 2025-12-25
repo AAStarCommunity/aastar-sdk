@@ -1,28 +1,37 @@
-# Operator Flow Example
+# 运营商流程 (Operator Flow)
 
-This example demonstrates how to set up and manage a SuperPaymaster as an Operator.
+本示例展示了如何使用 `OperatorClient` 来质押代币并注册成为 SuperPaymaster 提供者。
 
-## Steps
+## 关键步骤
 
-1. **Staking**: Deposit GTokens into the staking contract to become an authorized operator.
-2. **Paymaster Deposit**: Add ETH or other tokens to the SuperPaymaster's deposit pool for gas sponsorship.
-3. **Monitoring**: Track gas usage and reputation metrics.
+1.  **初始化**: 创建 `OperatorClient`。
+2.  **质押 (Staking)**: 向合约质押 GTokens。
+3.  **存款 (Deposit)**: 向 Paymaster 资金池存入代币以供用户使用。
+4.  **状态查询**: 验证运营商的在线状态和抵押率。
 
-## Code Preview
+## 代码预览
 
 ```typescript
-import { createOperatorClient } from '@aastar/core';
+import { createOperatorClient } from '@aastar/sdk';
 import { parseEther } from 'viem';
 
-const operator = createOperatorClient({ ... });
+const operator = createOperatorClient({
+  // ... 配置项
+});
 
-// Stake GTokens
+// 1. 质押 100 GTokens
 await operator.stake({
   amount: parseEther('100'),
 });
 
-// Deposit Gas Funds
+// 2. 存入 10 ETH 作为 Gas 储备
 await operator.deposit({
   amount: parseEther('10'),
 });
+```
+
+## 运行方式
+
+```bash
+pnpm run example:operator
 ```

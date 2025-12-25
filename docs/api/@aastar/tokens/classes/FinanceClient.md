@@ -1,4 +1,4 @@
-Defined in: [packages/tokens/src/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L9)
+Defined in: [packages/tokens/src/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L9)
 
 ## Constructors
 
@@ -16,7 +16,7 @@ Defined in: [packages/tokens/src/index.ts:9](https://github.com/AAStarCommunity/
 
 > `static` **depositToEntryPoint**(`wallet`, `entryPoint`, `paymaster`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L61)
+Defined in: [packages/tokens/src/index.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L61)
 
 #### Parameters
 
@@ -1097,7 +1097,7 @@ Handle EntryPoint deposits for Paymasters
 
 > `static` **depositToPaymaster**(`wallet`, `paymaster`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L10)
+Defined in: [packages/tokens/src/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L10)
 
 #### Parameters
 
@@ -2170,7 +2170,7 @@ const receipt = await client.writeContractSync({
 
 > `static` **depositViaTransferAndCall**(`wallet`, `token`, `paymaster`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L20)
+Defined in: [packages/tokens/src/index.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L20)
 
 #### Parameters
 
@@ -3247,7 +3247,7 @@ const receipt = await client.writeContractSync({
 
 > `static` **getEntryPointBalance**(`client`, `entryPoint`, `account`): `Promise`\<`bigint`\>
 
-Defined in: [packages/tokens/src/index.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L72)
+Defined in: [packages/tokens/src/index.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L72)
 
 #### Parameters
 
@@ -3273,7 +3273,7 @@ Defined in: [packages/tokens/src/index.ts:72](https://github.com/AAStarCommunity
 
 > `static` **operatorDeposit**(`wallet`, `paymaster`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L84)
+Defined in: [packages/tokens/src/index.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L84)
 
 #### Parameters
 
@@ -4350,7 +4350,7 @@ SuperPaymaster Operator Balance Management
 
 > `static` **operatorNotifyDeposit**(`wallet`, `paymaster`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L94)
+Defined in: [packages/tokens/src/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L94)
 
 #### Parameters
 
@@ -5423,7 +5423,7 @@ const receipt = await client.writeContractSync({
 
 > `static` **stakeGToken**(`wallet`, `stakingAddr`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L38)
+Defined in: [packages/tokens/src/index.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L38)
 
 #### Parameters
 
@@ -6496,7 +6496,7 @@ const receipt = await client.writeContractSync({
 
 > `static` **withdrawProtocolRevenue**(`wallet`, `paymaster`, `to`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L48)
+Defined in: [packages/tokens/src/index.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L48)
 
 #### Parameters
 
@@ -7573,7 +7573,7 @@ const receipt = await client.writeContractSync({
 
 > `static` **wrapGTokenToXPNTs**(`wallet`, `converter`, `gtoken`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/tokens/src/index.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/tokens/src/index.ts#L108)
+Defined in: [packages/tokens/src/index.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/tokens/src/index.ts#L108)
 
 #### Parameters
 

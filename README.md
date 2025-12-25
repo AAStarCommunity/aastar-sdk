@@ -7,49 +7,49 @@
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
-**完整的賬戶抽象基礎設施 SDK - 為 Mycelium 網絡提供動力**
+**完整的账户抽象基础设施 SDK - 为 Mycelium 网络提供动力**
 
 ---
 
-## 📚 Contents / 目錄
+## 📚 Contents / 目录
 
 - [AAStar SDK (Mycelium Network)](#aastar-sdk-mycelium-network)
-  - [📚 Contents / 目錄](#-contents--目錄)
-  - [Introduction / 簡介](#introduction--簡介)
+  - [📚 Contents / 目录](#-contents--目录)
+  - [Introduction / 简介](#introduction--简介)
     - [Core Features / 核心特性](#core-features--核心特性)
-  - [SDK v2 Architecture / 架構設計](#sdk-v2-architecture--架構設計)
-  - [Installation / 安裝](#installation--安裝)
-  - [Quick Start / 快速開始](#quick-start--快速開始)
-    - [End User Gasless Transaction / 終端用戶 Gasless 流程](#end-user-gasless-transaction--終端用戶-gasless-流程)
-  - [Testing Commands / 測試命令](#testing-commands--測試命令)
+  - [SDK v2 Architecture / 架构设计](#sdk-v2-architecture--架构设计)
+  - [Installation / 安装](#installation--安装)
+  - [Quick Start / 快速开始](#quick-start--快速开始)
+    - [End User Gasless Transaction / 终端用户 Gasless 流程](#end-user-gasless-transaction--终端用户-gasless-流程)
+  - [Testing Commands / 测试命令](#testing-commands--测试命令)
     - [SDK Regression (Using SDK Clients)](#sdk-regression-using-sdk-clients)
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
-  - [Academic Research / 學術研究](#academic-research--學術研究)
+  - [Academic Research / 学术研究](#academic-research--学术研究)
   - [Support / 支援](#support--支援)
 
 ---
 
-## Introduction / 簡介
+## Introduction / 简介
 
 **AAStar SDK** is a high-integration toolkit for the Mycelium network. We've refactored 17 fragmented modules into 7 professional core packages, providing a unified, high-performance, and easy-to-maintain development experience.
 
-**AAStar SDK** 是 Mycelium 網絡的高集成度開發工具包。我們將原有的 17 個碎片化模塊重構為 7 個專業核心包，旨在提供統一、高性能且易於維護的開發體驗。
+**AAStar SDK** 是 Mycelium 网络的高集成度开发工具包。我们将原有的 17 个碎片化模块重构为 7 个专业核心包，旨在提供统一、高性能且易于维护的开发体验。
 
 ### Core Features / 核心特性
 
-- ✅ **Role-Based Clients**: Specific APIs for End Users, Communities, Operators, and Admins. (**角色化客戶端**)
-- ✅ **Infrastructure Ready**: Deep integration with SuperPaymaster and EOA Bridge. (**基礎設施就緒**)
-- ✅ **Seamless User Experience**: Gasless transactions via community credit system. (**無感交互體驗**)
-- ✅ **DVT Security Module**: Decentralized verification and aggregate signatures. (**DVT 安全模塊**)
-- ✅ **Scientific Reproducibility**: Version-locked for academic research. (**科學可複現**)
+- ✅ **Role-Based Clients**: Specific APIs for End Users, Communities, Operators, and Admins. (**角色化客户端**)
+- ✅ **Infrastructure Ready**: Deep integration with SuperPaymaster and EOA Bridge. (**基础设施就绪**)
+- ✅ **Seamless User Experience**: Gasless transactions via community credit system. (**无感交互体验**)
+- ✅ **DVT Security Module**: Decentralized verification and aggregate signatures. (**DVT 安全模块**)
+- ✅ **Scientific Reproducibility**: Version-locked for academic research. (**科学可复现**)
 
 ---
 
-## SDK v2 Architecture / 架構設計
+## SDK v2 Architecture / 架构设计
 
-AAStar SDK v2 採用 **「裝飾器 (Actions-Decorator)」** 模式。它將低層次的合約交互與高層次的業務邏輯解耦，為生態系統中的四種角色提供專屬的 Client 封裝。
+AAStar SDK v2 采用 **「装饰器 (Actions-Decorator)」** 模式。它将低层次的合约交互与高层次的业务逻辑解耦，为生态系统中的四种角色提供专属的 Client 封装。
 
-| Client / 客戶端 | Targeted Developer / 目標開發者 | Core Responsibility / 核心職責 |
+| Client / 客户端 | Targeted Developer / 目标开发者 | Core Responsibility / 核心职责 |
 | :--- | :--- | :--- |
 | **`EndUserClient`** | dApp Developer | Gasless UX, Smart Account management, Credit queries |
 | **`CommunityClient`** | Community/DAO Admin | Auto-onboarding, xPNTs deployment, SBT & Reputation |
@@ -58,7 +58,7 @@ AAStar SDK v2 採用 **「裝飾器 (Actions-Decorator)」** 模式。它將低�
 
 ---
 
-## Installation / 安裝
+## Installation / 安装
 
 ```bash
 pnpm install @aastar/sdk @aastar/core viem
@@ -66,9 +66,9 @@ pnpm install @aastar/sdk @aastar/core viem
 
 ---
 
-## Quick Start / 快速開始
+## Quick Start / 快速开始
 
-### End User Gasless Transaction / 終端用戶 Gasless 流程
+### End User Gasless Transaction / 终端用户 Gasless 流程
 
 ```typescript
 import { createEndUserClient } from '@aastar/sdk';
@@ -78,7 +78,7 @@ const user = createEndUserClient({
   paymasterUrl: 'https://paymaster.aastar.io' 
 });
 
-// Send sponsored transaction / 使用社區信用代付 Gas
+// Send sponsored transaction / 使用社区信用代付 Gas
 await user.sendGaslessTransaction({
   to: TARGET_ADDR,
   data: CALL_DATA
@@ -87,7 +87,7 @@ await user.sendGaslessTransaction({
 
 ---
 
-## Testing Commands / 測試命令
+## Testing Commands / 测试命令
 
 ### SDK Regression (Using SDK Clients)
 ```bash
@@ -101,11 +101,11 @@ pnpm run test:full_anvil
 
 ---
 
-## Academic Research / 學術研究
+## Academic Research / 学术研究
 
 The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.
 
-本 SDK 支撐了 SuperPaymaster 論文的博士實驗數據採集。官方實驗記錄器位於 `scripts/19_sdk_experiment_runner.ts`。
+本 SDK 支撑了 SuperPaymaster 论文的博士实验数据采集。官方实验记录器位于 `scripts/19_sdk_experiment_runner.ts`。
 
 ---
 

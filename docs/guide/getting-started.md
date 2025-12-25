@@ -7,57 +7,59 @@
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
+**完整的账户抽象基础设施 SDK - 为 Mycelium 网络提供动力**
 
 ---
 
-## 📚 Table of Contents
+## 📚 Table of Contents / 目录
 
-- [Introduction](#introduction)
-- [SDK v2 Architecture](#sdk-v2-architecture)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Testing Commands](#testing-commands)
-- [Development Guide](#development-guide)
-- [Academic Research](#academic-research)
+- [Introduction / 简介](#introduction--简介)
+- [SDK v2 Architecture / 架构设计](#sdk-v2-architecture--架构设计)
+- [Installation / 安装](#installation--安装)
+- [Quick Start / 快速开始](#quick-start--快速开始)
+- [Testing Commands / 测试命令](#testing-commands--测试命令)
+- [Academic Research / 学术研究](#academic-research--学术研究)
 
 ---
 
-## Introduction
+## Introduction / 简介
 
 **AAStar SDK** is a high-integration toolkit for the Mycelium network. We've refactored 17 fragmented modules into 7 professional core packages, aimed at providing a unified, high-performance, and easy-to-maintain development experience.
 
-### Core Features
+**AAStar SDK** 是 Mycelium 网络的高集成度开发工具包。我们将原有的 17 个碎片化模块重构为 7 个专业核心包，旨在提供统一、高性能且易于维护的开发体验。
 
-- ✅ **Role-Based Clients**: Specific APIs for End Users, Communities, Operators, and Admins.
-- ✅ **Infrastructure Ready**: Deep integration with SuperPaymaster and EOA Bridge.
-- ✅ **Seamless User Experience**: Gasless transactions via community credit system.
-- ✅ **DVT Security Module**: Decentralized verification and aggregate signatures.
-- ✅ **Scientific Reproducibility**: Version-locked for academic research and data collection.
+### Core Features / 核心特性
+
+- ✅ **Role-Based Clients**: Specific APIs for End Users, Communities, Operators, and Admins. (**角色化客户端**)
+- ✅ **Infrastructure Ready**: Deep integration with SuperPaymaster and EOA Bridge. (**基础设施就绪**)
+- ✅ **Seamless User Experience**: Gasless transactions via community credit system. (**无感交互体验**)
+- ✅ **DVT Security Module**: Decentralized verification and aggregate signatures. (**DVT 安全模块**)
+- ✅ **Scientific Reproducibility**: Version-locked for academic research and data collection. (**科学可复现**)
 
 ---
 
-## SDK v2 Architecture
+## SDK v2 Architecture / 架构设计
 
-AAStar SDK v2 uses an **"Actions-Decorator"** pattern (inspired by `viem` and `permissionless.js`). It decouples low-level contract interactions from high-level business logic, providing specialized Client wrappers for four roles in the ecosystem.
+AAStar SDK v2 采用 **「装饰器 (Actions-Decorator)」** 模式（借鉴自 `viem` 与 `permissionless.js`）。它将低层次的合约交互与高层次的业务逻辑解耦，为生态系统中的四种角色提供专属的 Client 封装。
 
-### Core Concepts
+### Core Concepts / 核心理念
 
-- **Semantic Actions**: Encapsulate complex flows (e.g., "Operator Onboarding") into a single SDK call.
-- **Provider Agnostic**: Perfectly fits any `viem` transport layer (Pimlico, Alchemy, or local Anvil).
-- **Security Hardened**: Locked dependency versions and automated supply chain audits.
+- **Semantic Actions**: Encapsulate complex flows (e.g., "Operator Onboarding") into a single SDK call. (**语义化 Action**)
+- **Provider Agnostic**: Perfectly fits any `viem` transport layer (Pimlico, Alchemy, or local Anvil). (**Provider 无关性**)
+- **Security Hardened**: Locked dependency versions and automated supply chain audits. (**安全加固**)
 
-### Role-Based API Matrix
+### Role-Based API Matrix / 角色化 API 矩阵
 
-| Client | Targeted Developer | Core Responsibility |
+| Client / 客户端 | Targeted Developer / 目标开发者 | Core Responsibility / 核心职责 |
 | :--- | :--- | :--- |
-| **`EndUserClient`** | dApp Developer | Gasless UX, Smart Account management, Credit/Debt queries |
-| **`CommunityClient`** | Community/DAO Admin | Auto-onboarding, xPNTs deployment, SBT & Reputation config |
+| **`EndUserClient`** | dApp Developer | Gasless UX, Smart Account management, Credit queries |
+| **`CommunityClient`** | Community/DAO Admin | Auto-onboarding, xPNTs deployment, SBT & Reputation |
 | **`OperatorClient`** | Node/Operator | SuperPaymaster registration, Staking, Pool management |
 | **`AdminClient`** | Protocol Admin | DVT aggregations, Slashing, Global parameters |
 
 ---
 
-## Installation
+## Installation / 安装
 
 ```bash
 pnpm install @aastar/sdk @aastar/core viem
@@ -65,9 +67,9 @@ pnpm install @aastar/sdk @aastar/core viem
 
 ---
 
-## Quick Start
+## Quick Start / 快速开始
 
-### Basic Example (Operator)
+### Basic Example (Operator) / 基础示例 (运营商)
 
 ```typescript
 import { createOperatorClient } from '@aastar/sdk';
@@ -83,6 +85,7 @@ const operatorClient = createOperatorClient({
 });
 
 // One-click Onboarding to SuperPaymaster (Stake + Deposit)
+// 一键入驻 SuperPaymaster（质押 + 存款）
 await operatorClient.onboardToSuperPaymaster({
   stakeAmount: parseEther('50'),
   depositAmount: parseEther('50')
@@ -91,43 +94,40 @@ await operatorClient.onboardToSuperPaymaster({
 
 ---
 
-## Testing Commands
+## Testing Commands / 测试命令
 
-This project provides two sets of regression tests.
+本项目提供两套完整的回归测试。
 
-### SDK Regression (Using SDK Clients)
-
+### SDK Regression (Using SDK Clients) / SDK 回归测试
 ```bash
 pnpm run test:full_sdk
 ```
 
 - **Scenario**:
-  - ✅ Operator Staking
-  - ✅ Paymaster Deposit
-  - ✅ Community Registration
-  - ✅ SBT Minting
-  - ✅ Admin Slashing
-  - ✅ Credit Query
+  - ✅ Operator Staking (质押)
+  - ✅ Paymaster Deposit (存款)
+  - ✅ Community Registration (社区注册)
+  - ✅ SBT Minting (SBT 铸造)
+  - ✅ Admin Slashing (奖励)
+  - ✅ Credit Query (信用查询)
 
-### Full Protocol Regression (Dedicated Anvil, 72 Scenarios)
-
+### Full Protocol Regression (Anvil Dedicated) / 完整协议回归测试
 ```bash
 pnpm run test:full_anvil
 ```
 
 ---
 
-## Academic Research
+## Academic Research / 学术研究
 
-The SDK supports doctoral data collection for the SuperPaymaster paper:
+The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.
 
-- **`scripts/19_sdk_experiment_runner.ts`**: Official experiment logger.
-- **Coverage**: 95% user use case branches, 72 full scenarios.
+本 SDK 支撑了 SuperPaymaster 论文的博士实验数据采集。官方实验记录器位于 `scripts/19_sdk_experiment_runner.ts`。
 
 ---
 
-## Support & Contributing
+## Support & Contributing / 支持与贡献
 
-- **Repository**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)
-- **Discord**: [Join our community](https://discord.gg/aastar)
-- **License**: MIT
+- **Repository / 代码仓库**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)
+- **Discord**: [Join our community / 加入我们的社区](https://discord.gg/aastar)
+- **License / 许可证**: MIT

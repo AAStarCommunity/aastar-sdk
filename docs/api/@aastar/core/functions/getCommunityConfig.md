@@ -1,6 +1,6 @@
 > **getCommunityConfig**(`address`): [`CommunityConfig`](../interfaces/CommunityConfig.md) \| `undefined`
 
-Defined in: [packages/core/src/communities.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/communities.ts#L77)
+Defined in: [packages/core/src/communities.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/communities.ts#L77)
 
 Get community configuration by address
 

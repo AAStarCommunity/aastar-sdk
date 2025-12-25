@@ -1,62 +1,62 @@
-# Installation
+# 安装 (Installation)
 
-## Package Manager
+## 包管理器
 
-AAStar SDK is available as npm packages. We recommend using **pnpm** for the best experience.
+AAStar SDK 可通过 npm 获得。为了获得最佳体验，我们推荐使用 **pnpm**。
 
-### Using pnpm (Recommended)
+### 使用 pnpm (推荐)
 
 ```bash
 pnpm add @aastar/sdk
 ```
 
-### Using npm
+### 使用 npm
 
 ```bash
 npm install @aastar/sdk
 ```
 
-### Using yarn
+### 使用 yarn
 
 ```bash
 yarn add @aastar/sdk
 ```
 
-## Individual Packages
+## 独立安装包
 
-You can also install individual packages based on your needs:
+你也可以根据需求安装特定模块：
 
 ```bash
-# Core utilities and client creation
+# 核心工具与客户端创建
 pnpm add @aastar/core
 
-# Account Abstraction utilities
+# 账户抽象 (Account Abstraction)
 pnpm add @aastar/account
 
-# Paymaster utilities
+# Paymaster 與贊助邏輯
 pnpm add @aastar/paymaster
 
-# Token utilities (GToken, xPNTs, SBT)
+# 代幣工具 (GToken, xPNTs, SBT)
 pnpm add @aastar/tokens
 
-# Identity and reputation
+# 身份與聲譽系統
 pnpm add @aastar/identity
 
-# React hooks for DApps
+# React Hook 支持
 pnpm add @aastar/dapp
 ```
 
-## Peer Dependencies
+## 同行依赖 (Peer Dependencies)
 
-The SDK requires the following peer dependencies:
+SDK 需要以下同行依赖：
 
 ```bash
-pnpm add viem@^2.41.0
+pnpm add viem@^2.43.0
 ```
 
-## TypeScript Configuration
+## TypeScript 配置
 
-For the best TypeScript experience, add these settings to your `tsconfig.json`:
+为了获得最佳的 TypeScript 体验，请在 `tsconfig.json` 中添加以下设置：
 
 ```json
 {
@@ -71,25 +71,25 @@ For the best TypeScript experience, add these settings to your `tsconfig.json`:
 }
 ```
 
-## Environment Setup
+## 环境配置
 
-Create a `.env` file for your configuration:
+创建一个 `.env` 文件用于存储配置：
 
 ```bash
-# Network RPC URL
+# 网络 RPC 节点
 RPC_URL=https://rpc.sepolia.org
 
-# Your private key (NEVER commit this!)
+# 你的私钥 (千万不要提交此文件！)
 PRIVATE_KEY=0x...
 
-# Contract addresses (optional, SDK provides defaults)
+# 合约地址 (可选，SDK 默认提供官方地址)
 REGISTRY_ADDRESS=0x...
 PAYMASTER_ADDRESS=0x...
 ```
 
-## Verify Installation
+## 验证安装
 
-Test your installation:
+编写一段简单的代码验证安装是否成功：
 
 ```typescript
 import { getNetwork, CONTRACTS } from '@aastar/core';
@@ -100,8 +100,8 @@ console.log('Chain ID:', network.chainId);
 console.log('Registry:', CONTRACTS.sepolia.registry);
 ```
 
-## Next Steps
+## 下一步
 
-- [Quick Start Guide](/guide/quick-start)
-- [Core Concepts](/guide/concepts/account-abstraction)
-- [API Reference](/api/)
+- [快速开始](/guide/quick-start)
+- [核心概念](/guide/concepts/account-abstraction)
+- [API 参考](/api/)

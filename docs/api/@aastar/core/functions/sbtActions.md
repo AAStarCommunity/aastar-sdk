@@ -1,6 +1,6 @@
 > **sbtActions**(`address`): (`client`) => [`SBTActions`](../type-aliases/SBTActions.md)
 
-Defined in: [packages/core/src/actions/sbt.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/401447c149b116a7176de09bdf973a40913dd2f1/packages/core/src/actions/sbt.ts#L12)
+Defined in: [packages/core/src/actions/sbt.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/actions/sbt.ts#L12)
 
 ## Parameters
 
