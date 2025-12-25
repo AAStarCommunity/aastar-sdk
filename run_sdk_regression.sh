@@ -34,7 +34,7 @@ fi
 
 # 2. 运行SDK回归测试
 echo -e "${YELLOW}🧪 Running SDK Regression Test...${NC}"
-tsx scripts/99_final_v2_regression.ts
+pnpm tsx scripts/99_final_v2_regression.ts
 
 if [ $? -eq 0 ]; then
   echo -e "${GREEN}🎉 SDK Regression Test Passed!${NC}"
