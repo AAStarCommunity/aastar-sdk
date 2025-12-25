@@ -1,6 +1,6 @@
 > **getPaymasterV4\_1**(`network`): `string`
 
-Defined in: [packages/core/src/contracts.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/contracts.ts#L232)
+Defined in: [packages/core/src/contracts.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contracts.ts#L232)
 
 Get PaymasterV4_1 address (AOA mode)
 

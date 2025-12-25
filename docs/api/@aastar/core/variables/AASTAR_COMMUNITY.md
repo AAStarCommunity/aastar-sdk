@@ -1,6 +1,6 @@
 > `const` **AASTAR\_COMMUNITY**: [`CommunityConfig`](../interfaces/CommunityConfig.md)
 
-Defined in: [packages/core/src/communities.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/communities.ts#L34)
+Defined in: [packages/core/src/communities.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/communities.ts#L34)
 
 AAstar Community
 - SuperPaymaster shared mode (AOA+)

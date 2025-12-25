@@ -1,6 +1,6 @@
 > **createEOAWalletClient**(`privateKey`, `chain`, `transport`): [`EOAWalletClient`](../type-aliases/EOAWalletClient.md)
 
-Defined in: [packages/account/src/eoa.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/account/src/eoa.ts#L9)
+Defined in: [packages/account/src/eoa.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/account/src/eoa.ts#L9)
 
 ## Parameters
 

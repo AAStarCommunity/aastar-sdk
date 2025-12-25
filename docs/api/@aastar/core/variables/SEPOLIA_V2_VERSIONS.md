@@ -1,6 +1,6 @@
 > `const` **SEPOLIA\_V2\_VERSIONS**: `object`
 
-Defined in: [packages/core/src/contract-versions.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/contract-versions.ts#L42)
+Defined in: [packages/core/src/contract-versions.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contract-versions.ts#L42)
 
 V2 Contract Versions on Sepolia
 

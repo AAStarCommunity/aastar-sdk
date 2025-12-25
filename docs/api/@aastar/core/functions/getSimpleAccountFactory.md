@@ -1,6 +1,6 @@
 > **getSimpleAccountFactory**(`network`): `string`
 
-Defined in: [packages/core/src/contracts.ts:263](https://github.com/AAStarCommunity/aastar-sdk/blob/77dddacf493396832f1a40715c8e5cda4ba43c65/packages/core/src/contracts.ts#L263)
+Defined in: [packages/core/src/contracts.ts:263](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contracts.ts#L263)
 
 Get SimpleAccountFactory address
 
