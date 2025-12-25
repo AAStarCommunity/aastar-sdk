@@ -1,3 +1,3 @@
 > `const` **ROLE\_ANODE**: `"0x3aa2e9509f29532b71f822e18bcde843a8070a508d564188ec8a6adf59eff28a"` = `"0x3aa2e9509f29532b71f822e18bcde843a8070a508d564188ec8a6adf59eff28a"`
 
-Defined in: [packages/core/src/constants.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/4d5be576edce490d7405a108d648a390d96f3eb5/packages/core/src/constants.ts#L67)
+Defined in: [packages/core/src/constants.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/9b0a93af912c0a13b6340209fddaa3c55af271d0/packages/core/src/constants.ts#L67)

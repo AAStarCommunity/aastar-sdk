@@ -21,35 +21,32 @@ mkdir -p "$DOCS_REPO/examples"
 
 # 1. Sync Guide folder (Maintain same structure)
 echo -e "${YELLOW}📋 Syncing Guide folder...${NC}"
+# Sync EN Guide (Root)
 if [ -d "$SDK_REPO/docs/guide" ]; then
     cp -r "$SDK_REPO/docs/guide/"* "$DOCS_REPO/guide/" 2>/dev/null || true
-else
-    # Fallback: Copy all .md files from root of docs/ (except specific ones) to guide/
-    find "$SDK_REPO/docs" -maxdepth 1 -name "*.md" -type f | while read file; do
-        filename=$(basename "$file")
-        if [[ "$filename" != "API_REFERENCE.md" && "$filename" != "DOCUMENTATION_PLAN.md" && "$filename" != "API_REFERENCE.md" ]]; then
-            cp "$file" "$DOCS_REPO/guide/" 2>/dev/null || true
-        fi
-    done
+fi
+# Sync ZH Guide
+if [ -d "$SDK_REPO/docs/zh/guide" ]; then
+    mkdir -p "$DOCS_REPO/zh/guide"
+    cp -r "$SDK_REPO/docs/zh/guide/"* "$DOCS_REPO/zh/guide/" 2>/dev/null || true
 fi
 
 # 2. Sync API folder (Maintain same structure)
 echo -e "${YELLOW}📖 Syncing API folder...${NC}"
 if [ -d "$SDK_REPO/docs/api" ]; then
     cp -r "$SDK_REPO/docs/api/"* "$DOCS_REPO/api/" 2>/dev/null || true
-else
-    # Fallback to single file API reference if folder doesn't exist
-    if [ -f "$SDK_REPO/docs/API_REFERENCE.md" ]; then
-        cp "$SDK_REPO/docs/API_REFERENCE.md" "$DOCS_REPO/api/index.md"
-    fi
 fi
 
 # 3. Sync Examples folder (Maintain same structure)
 echo -e "${YELLOW}💡 Syncing Examples folder...${NC}"
+# Sync EN Examples
 if [ -d "$SDK_REPO/docs/examples" ]; then
     cp -r "$SDK_REPO/docs/examples/"* "$DOCS_REPO/examples/" 2>/dev/null || true
-elif [ -d "$SDK_REPO/examples" ]; then
-    cp -r "$SDK_REPO/examples/"* "$DOCS_REPO/examples/" 2>/dev/null || true
+fi
+# Sync ZH Examples
+if [ -d "$SDK_REPO/docs/zh/examples" ]; then
+    mkdir -p "$DOCS_REPO/zh/examples"
+    cp -r "$SDK_REPO/docs/zh/examples/"* "$DOCS_REPO/zh/examples/" 2>/dev/null || true
 fi
 
 # 4. Sync main README to guide/index.md for easy entry
@@ -57,7 +54,7 @@ if [ -f "$SDK_REPO/README.md" ]; then
     cp "$SDK_REPO/README.md" "$DOCS_REPO/guide/getting-started.md"
 fi
 
-# 5. Extract package READMEs to api/modules/ (Standard fallback)
+# 5. Extract package READMEs to api/modules/
 echo -e "${YELLOW}📦 Extracting package documentation...${NC}"
 mkdir -p "$DOCS_REPO/api/modules"
 for pkg in core account paymaster tokens identity dapp; do
