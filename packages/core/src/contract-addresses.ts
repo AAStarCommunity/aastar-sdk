@@ -12,14 +12,16 @@ import { type Address } from 'viem';
  * Core System Addresses
  */
 export const CORE_ADDRESSES = {
-  registry: (process.env.REGISTRY_ADDRESS || '0x0165878A594ca255338adfa4d48449f69242Eb8F') as Address,
-  gToken: (process.env.GTOKEN_ADDRESS || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0') as Address,
-  gTokenStaking: (process.env.GTOKENSTAKING_ADDRESS || '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9') as Address,
-  superPaymaster: (process.env.SUPER_PAYMASTER || '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e') as Address,
+  registry: process.env.REGISTRY_ADDRESS as Address,
+  gToken: process.env.GTOKEN_ADDRESS as Address,
+  gTokenStaking: process.env.GTOKENSTAKING_ADDRESS as Address,
+  superPaymaster: process.env.SUPER_PAYMASTER as Address,
   paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000') as Address,
-  aPNTs: (process.env.APNTS_ADDRESS || undefined) as Address | undefined,
-  mySBT: (process.env.MYSBT_ADDRESS || '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707') as Address,
- // MySBT v2.4.5-optimized (2024-11-24) - Size optimized (21KB), SuperPaymaster callbacks, external extensions
+  aPNTs: process.env.APNTS_ADDRESS as Address,
+  mySBT: process.env.MYSBT_ADDRESS as Address,
+  paymasterV4: process.env.PAYMASTER_V4_ADDRESS as Address | undefined,
+  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address | undefined,
+  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address | undefined,
 } as const;
 
 /**
