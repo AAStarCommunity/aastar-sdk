@@ -23,7 +23,7 @@ const __dirname = path.dirname(__filename);
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex; // Anvil Account 0
@@ -55,12 +55,74 @@ const ROLE_PAYMASTER = keccak256(stringToBytes('PAYMASTER'));
 const localAddresses = {
     registry: process.env.REGISTRY_ADDRESS as Address,
     gToken: process.env.GTOKEN_ADDRESS as Address,
-    gTokenStaking: process.env.GTOKEN_STAKING_ADDRESS as Address,
-    superPaymasterV2: process.env.SUPER_PAYMASTER as Address,
-    paymasterFactory: '0x0000000000000000000000000000000000000000' as Address, // Unused in this test
+    gTokenStaking: process.env.GTOKENSTAKING_ADDRESS as Address,
+    superPaymaster: process.env.SUPER_PAYMASTER as Address,
+    paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000') as Address,
     aPNTs: process.env.APNTS_ADDRESS as Address,
     mySBT: process.env.MYSBT_ADDRESS as Address
 };
+
+// Common ABI for tokens in local testing
+const erc20AbiWithMint = [
+    {
+        type: 'function',
+        name: 'mint',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'to', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: []
+    },
+    {
+        type: 'function',
+        name: 'balanceOf',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+    },
+    {
+        type: 'function',
+        name: 'transfer',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'recipient', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: [{ type: 'bool' }]
+    },
+    {
+        type: 'function',
+        name: 'approve',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: [{ type: 'bool' }]
+    },
+    {
+        type: 'function',
+        name: 'allowance',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' }
+        ],
+        outputs: [{ type: 'uint256' }]
+    },
+    {
+        type: 'function',
+        name: 'decimals',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ type: 'uint8' }]
+    }
+] as const;
+
+
+console.log('📍 Local Addresses:', JSON.stringify(localAddresses, null, 2));
+
 
 console.log('   Contracts:', localAddresses);
 
@@ -123,19 +185,56 @@ async function runRegressionV2() {
     // Fund Operator with GToken (use transfer instead of mint to avoid permission issues)
     console.log('\n💸 2. Funding Accounts');
     const adminBalance = await adminClient.getBalance({ address: adminAccount.address });
-    console.log(`   Admin Balance: ${adminBalance} wei`);
+    console.log(`   Admin ETH Balance: ${adminBalance} wei`);
     
-    // Transfer GToken from admin to operator (admin should have tokens from deployment)
-    const transferHash = await adminClient.writeContract({
+    // Check GToken Balance
+    const gTokenBalance = await adminClient.readContract({
         address: localAddresses.gToken,
-        abi: erc20Abi,
-        functionName: 'transfer',
+        abi: erc20AbiWithMint,
+        functionName: 'balanceOf',
+        args: [adminAccount.address]
+    });
+    console.log(`   Admin GToken Balance: ${gTokenBalance}`);
+    
+    console.log(`   Transferring 50 GToken to Operator: ${operatorAccount.address}`);
+    // Mint GTokens and aPNTs to Operator for Staking/Deposit (using mint since Admin is Owner)
+    // Admin mints GToken to Operator
+    const mintTx = await adminClient.writeContract({
+        address: localAddresses.gToken,
+        abi: erc20AbiWithMint,
+        functionName: 'mint',
         args: [operatorAccount.address, parseEther('50')],
         account: adminAccount,
         chain: foundry
     });
     
-    await adminClient.waitForTransactionReceipt({ hash: transferHash });
+    // Admin mints aPNTs to Operator (Mock xPNTsToken also has mint)
+    const mintAPNTsTx = await adminClient.writeContract({
+        address: localAddresses.aPNTs!,
+        abi: erc20AbiWithMint,
+        functionName: 'mint',
+        args: [operatorAccount.address, parseEther('50')],
+        account: adminAccount,
+        chain: foundry
+    });
+
+    // Admin mints GToken to Community
+    const mintCommTx = await adminClient.writeContract({
+        address: localAddresses.gToken,
+        abi: erc20AbiWithMint, // Assuming GTokenABI is erc20Abi for mint function
+        functionName: 'mint',
+        args: [communityAccount.address, parseEther('50')],
+        account: adminAccount,
+        chain: foundry
+    });
+
+    await Promise.all([
+        adminClient.waitForTransactionReceipt({ hash: mintTx }),
+        adminClient.waitForTransactionReceipt({ hash: mintAPNTsTx }),
+        adminClient.waitForTransactionReceipt({ hash: mintCommTx })
+    ]);
+    console.log('   Tokens minted to Operator');
+
 
     const tx1 = await adminClient.sendTransaction({ to: operatorAccount.address, value: parseEther('0.1'), account: adminAccount });
     const tx2 = await adminClient.sendTransaction({ to: communityAccount.address, value: parseEther('0.1'), account: adminAccount });
@@ -153,13 +252,13 @@ async function runRegressionV2() {
     const STAKE_AMOUNT = parseEther('50');
     const DEPOSIT_AMOUNT = parseEther('50'); // Reduced to leave buffer if fees exist
     // SuperPaymasterV3 check REGISTRY.hasRole(keccak256("COMMUNITY"), msg.sender)
-    const ROLE_PAYMASTER = keccak256(stringToBytes("COMMUNITY")); 
+    const ROLE_COMMUNITY_INNER = keccak256(stringToBytes("COMMUNITY")); 
     // const ROLE_PAYMASTER = '0x5041594d41535445520000000000000000000000000000000000000000000000' as Hex;
 
     // Configure Role (Paymaster)
     console.log('   Configuring Paymaster Role...');
     const configTx = await adminClient.configureRole({
-        roleId: ROLE_PAYMASTER,
+        roleId: ROLE_COMMUNITY_INNER,
         config: {
             minStake: STAKE_AMOUNT,
             entryBurn: 0n,
@@ -177,54 +276,19 @@ async function runRegressionV2() {
     await adminClient.waitForTransactionReceipt({ hash: configTx });
     console.log('   Paymaster Role Configured');
 
-    // Mint GTokens and aPNTs to Operator for Staking/Deposit
-    // Admin mints GToken to Operator
-    const mintTx = await adminClient.writeContract({
+    // Debug State Check (Tokens already minted in Phase 2)
+    const gTokenBalanceOpResult = await operatorClient.readContract({
         address: localAddresses.gToken,
-        abi: [{type:'function', name:'mint', inputs:[{name:'to', type:'address'},{name:'amount', type:'uint256'}], outputs:[], stateMutability:'nonpayable'}],
-        functionName: 'mint',
-        args: [operatorAccount.address, STAKE_AMOUNT],
-        account: adminAccount
-    });
-    
-    // Admin mints aPNTs to Operator
-    // Admin mints aPNTs to Operator
-    const mintAPNTsTx = await adminClient.writeContract({
-        address: localAddresses.aPNTs,
-        abi: [{type:'function', name:'mint', inputs:[{name:'to', type:'address'},{name:'amount', type:'uint256'}], outputs:[], stateMutability:'nonpayable'}],
-        functionName: 'mint',
-        args: [operatorAccount.address, DEPOSIT_AMOUNT],
-        account: adminAccount
-    });
-
-    // Admin mints GToken to Community
-    const mintCommTx = await adminClient.writeContract({
-        address: localAddresses.gToken,
-        abi: [{type:'function', name:'mint', inputs:[{name:'to', type:'address'},{name:'amount', type:'uint256'}], outputs:[], stateMutability:'nonpayable'}],
-        functionName: 'mint',
-        args: [communityAccount.address, STAKE_AMOUNT],
-        account: adminAccount
-    });
-
-    await Promise.all([
-        adminClient.waitForTransactionReceipt({ hash: mintTx }),
-        adminClient.waitForTransactionReceipt({ hash: mintAPNTsTx }),
-        adminClient.waitForTransactionReceipt({ hash: mintCommTx })
-    ]);
-    console.log('   Tokens minted to Operator');
-
-    // Debug State
-    const gTokenBalance = await operatorClient.readContract({
-        address: localAddresses.gToken,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'balanceOf',
         args: [operatorAccount.address]
     });
-    console.log(`   Operator GToken Balance: ${gTokenBalance} (Expected: ${STAKE_AMOUNT})`);
+    console.log(`   Operator GToken Balance: ${gTokenBalanceOpResult} (Expected: ${STAKE_AMOUNT})`);
+
 
     // Check Paymaster's expected APNTs Token
     const paymasterToken = await operatorClient.readContract({
-        address: localAddresses.superPaymasterV2,
+        address: localAddresses.superPaymaster,
         abi: [{type:'function', name:'APNTS_TOKEN', inputs:[], outputs:[{name:'', type:'address'}], stateMutability:'view'}],
         functionName: 'APNTS_TOKEN',
         args: []
@@ -235,7 +299,7 @@ async function runRegressionV2() {
 
     const gTokenAllowance = await operatorClient.readContract({
         address: localAddresses.gToken,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'allowance',
         args: [operatorAccount.address, localAddresses.gTokenStaking]
     });
@@ -243,7 +307,7 @@ async function runRegressionV2() {
 
     const aPNTsBalance = await operatorClient.readContract({
         address: localAddresses.aPNTs,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'balanceOf',
         args: [operatorAccount.address]
     });
@@ -251,9 +315,9 @@ async function runRegressionV2() {
 
     const aPNTsAllowance = await operatorClient.readContract({
         address: localAddresses.aPNTs,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'allowance',
-        args: [operatorAccount.address, localAddresses.superPaymasterV2]
+        args: [operatorAccount.address, localAddresses.superPaymaster]
     });
     console.log(`   Operator aPNTs Allowance (Pre-Onboard): ${aPNTsAllowance}`);
 
@@ -270,7 +334,7 @@ async function runRegressionV2() {
     // 1. Approve GToken
     const approveTx1 = await operatorClient.writeContract({
         address: localAddresses.gToken,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'approve',
         args: [localAddresses.gTokenStaking, STAKE_AMOUNT],
         account: operatorAccount
@@ -290,9 +354,9 @@ async function runRegressionV2() {
     // 3. Approve aPNTs
     const approveTx2 = await operatorClient.writeContract({
         address: localAddresses.aPNTs,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'approve',
-        args: [localAddresses.superPaymasterV2, DEPOSIT_AMOUNT],
+        args: [localAddresses.superPaymaster, DEPOSIT_AMOUNT],
         account: operatorAccount
     });
     await operatorClient.waitForTransactionReceipt({ hash: approveTx2 });
@@ -301,9 +365,9 @@ async function runRegressionV2() {
     // Verify Allowance
     const debugAllowance = await operatorClient.readContract({
         address: localAddresses.aPNTs,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'allowance',
-        args: [operatorAccount.address, localAddresses.superPaymasterV2]
+        args: [operatorAccount.address, localAddresses.superPaymaster]
     });
     console.log(`   Debug Allowance for Paymaster: ${debugAllowance} (Needed: ${DEPOSIT_AMOUNT})`);
 
@@ -313,9 +377,9 @@ async function runRegressionV2() {
         // Transfer first
         const transferTx = await operatorClient.writeContract({
             address: localAddresses.aPNTs,
-            abi: erc20Abi,
+            abi: erc20AbiWithMint,
             functionName: 'transfer',
-            args: [localAddresses.superPaymasterV2, DEPOSIT_AMOUNT],
+            args: [localAddresses.superPaymaster, DEPOSIT_AMOUNT],
             account: operatorAccount
         });
         await operatorClient.waitForTransactionReceipt({ hash: transferTx });
@@ -323,7 +387,7 @@ async function runRegressionV2() {
 
         // Notify
         const notifyTx = await operatorClient.writeContract({
-            address: localAddresses.superPaymasterV2,
+            address: localAddresses.superPaymaster,
             abi: [{type:'function', name:'notifyDeposit', inputs:[{name:'amount', type:'uint256'}], outputs:[], stateMutability:'nonpayable'}],
             functionName: 'notifyDeposit',
             args: [DEPOSIT_AMOUNT],
@@ -390,7 +454,7 @@ async function runRegressionV2() {
     // Community Approve GToken
     const approveCommTx = await communityClient.writeContract({
         address: localAddresses.gToken,
-        abi: erc20Abi,
+        abi: erc20AbiWithMint,
         functionName: 'approve',
         args: [localAddresses.gTokenStaking, STAKE_AMOUNT],
         account: communityAccount
@@ -471,7 +535,7 @@ async function runRegressionV2() {
         
         // Verify Slash (Check Paymaster Balance or Reputation, NOT Staking)
         const operConfig = await operatorClient.readContract({
-            address: localAddresses.superPaymasterV2,
+            address: localAddresses.superPaymaster,
             abi: [{
                 type: 'function',
                 name: 'operators',
@@ -519,7 +583,7 @@ async function runRegressionV2() {
     try {
         // Check current deposit
         const operatorInfo = await operatorClient.readContract({
-            address: localAddresses.superPaymasterV2,
+            address: localAddresses.superPaymaster,
             abi: [{
                 type: 'function',
                 name: 'operators',
@@ -549,7 +613,7 @@ async function runRegressionV2() {
             console.log(`   Withdrawing: ${withdrawAmount}`);
             
             const withdrawTx = await operatorClient.writeContract({
-                address: localAddresses.superPaymasterV2,
+                address: localAddresses.superPaymaster,
                 abi: [{type:'function', name:'withdraw', inputs:[{name:'amount',type:'uint256'}], outputs:[], stateMutability:'nonpayable'}],
                 functionName: 'withdraw',
                 args: [withdrawAmount],
@@ -682,7 +746,7 @@ async function runRegressionV2() {
     try {
         // 12.1 Discover Community xPNTs Token
         const communityXPNTs = await communityClient.readContract({
-            address: localAddresses.superPaymasterV2,
+            address: localAddresses.superPaymaster,
             abi: [{type:'function', name:'operators', inputs:[{name:'', type:'address'}], outputs:[{name:'xPNTsToken', type:'address'},{name:'',type:'address'},{name:'',type:'uint96'},{name:'',type:'uint256'},{name:'',type:'uint256'},{name:'',type:'uint256'},{name:'',type:'uint256'},{name:'',type:'bool'},{name:'',type:'bool'}], stateMutability:'view'}],
             functionName: 'operators',
             args: [communityAccount.address]
@@ -699,7 +763,7 @@ async function runRegressionV2() {
             const userBal = await endUserClient.getBalance({ address: userAccount.address }); // This is ETH balance, but we need xPNTs
             const userXPNTsBal = await endUserClient.readContract({
                 address: xpntsAddr,
-                abi: erc20Abi,
+                abi: erc20AbiWithMint,
                 functionName: 'balanceOf',
                 args: [userAccount.address]
             }) as bigint;

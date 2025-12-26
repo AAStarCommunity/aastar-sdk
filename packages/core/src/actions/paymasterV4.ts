@@ -145,7 +145,7 @@ export const paymasterV4Actions = () => (client: PublicClient | WalletClient): P
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterABI,
-            functionName: 'supportedGasTokens',
+            functionName: 'getSupportedGasTokens',
             args: []
         }) as Promise<Address[]>;
     },
@@ -154,7 +154,7 @@ export const paymasterV4Actions = () => (client: PublicClient | WalletClient): P
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterABI,
-            functionName: 'supportedSBTs',
+            functionName: 'getSupportedSBTs',
             args: []
         }) as Promise<Address[]>;
     },

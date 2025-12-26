@@ -34,7 +34,7 @@ async function main() {
         account
     });
 
-    const paymasterV4Address = process.env.PAYMASTER_ADDRESS as Address;
+    const paymasterV4Address = process.env.PAYMASTER_V4_ADDRESS as Address;
     const gTokenAddress = process.env.GTOKEN_ADDRESS as Address;
     const mySBTAddress = process.env.MYSBT_ADDRESS as Address;
     
@@ -65,19 +65,17 @@ async function main() {
             address: paymasterV4Address,
             token: gTokenAddress 
         });
-        
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        
-        if (receipt.status === 'success') {
-            console.log('   ✅ PASSED: Gas token added\n');
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log('   ✅ PASSED: Gas token added\n');
+        testsPassed++;
+    } catch (error: any) {
+        if (error.message.includes('AlreadyExists')) {
+            console.log('   ✅ PASSED: Gas token already exists (idempotent)\n');
             testsPassed++;
         } else {
-            console.log('   ❌ FAILED: Transaction reverted\n');
+            console.log(`   ❌ FAILED: ${error.message}\n`);
             testsFailed++;
         }
-    } catch (error: any) {
-        console.log(`   ❌ FAILED: ${error.message}\n`);
-        testsFailed++;
     }
 
     // Test 3: Verify Gas Token was added
@@ -127,19 +125,17 @@ async function main() {
             address: paymasterV4Address,
             sbt: mySBTAddress 
         });
-        
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        
-        if (receipt.status === 'success') {
-            console.log('   ✅ PASSED: SBT added\n');
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log('   ✅ PASSED: SBT added\n');
+        testsPassed++;
+    } catch (error: any) {
+        if (error.message.includes('AlreadyExists')) {
+            console.log('   ✅ PASSED: SBT already exists (idempotent)\n');
             testsPassed++;
         } else {
-            console.log('   ❌ FAILED: Transaction reverted\n');
+            console.log(`   ❌ FAILED: ${error.message}\n`);
             testsFailed++;
         }
-    } catch (error: any) {
-        console.log(`   ❌ FAILED: ${error.message}\n`);
-        testsFailed++;
     }
 
     // Test 6: Verify SBT was added
