@@ -15,7 +15,11 @@ export type PaymasterV4Actions = {
     addGasToken: (args: { address: Address; token: Address; account?: Account | Address }) => Promise<Hash>;
     removeGasToken: (args: { address: Address; token: Address; account?: Account | Address }) => Promise<Hash>;
     addSBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
+    addSBTWithActivity: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
     removeSBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
+    addActivitySBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
+    removeActivitySBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
+    withdrawPNT: (args: { address: Address; to: Address; token: Address; amount: bigint; account?: Account | Address }) => Promise<Hash>;
     setMaxGasCostCap: (args: { address: Address; cap: bigint; account?: Account | Address }) => Promise<Hash>;
     setServiceFeeRate: (args: { address: Address; rate: bigint; account?: Account | Address }) => Promise<Hash>;
     setTreasury: (args: { address: Address; treasury: Address; account?: Account | Address }) => Promise<Hash>;
@@ -74,12 +78,56 @@ export const paymasterV4Actions = () => (client: PublicClient | WalletClient): P
         });
     },
 
+    async addSBTWithActivity({ address, sbt, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterABI,
+            functionName: 'addSBTWithActivity',
+            args: [sbt],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
     async removeSBT({ address, sbt, account }) {
         return (client as any).writeContract({
             address,
             abi: PaymasterABI,
             functionName: 'removeSBT',
             args: [sbt],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async addActivitySBT({ address, sbt, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterABI,
+            functionName: 'addActivitySBT',
+            args: [sbt],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async removeActivitySBT({ address, sbt, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterABI,
+            functionName: 'removeActivitySBT',
+            args: [sbt],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdrawPNT({ address, to, token, amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterABI,
+            functionName: 'withdrawPNT',
+            args: [to, token, amount],
             account: account as any,
             chain: (client as any).chain
         });

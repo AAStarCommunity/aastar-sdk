@@ -147,4 +147,14 @@ export class SuperPaymasterClient {
             chain: wallet.chain
         } as any);
     }
+
+    static async setXPNTsFactory(wallet: any, paymaster: Address, factory: Address) {
+        return wallet.writeContract({
+            address: paymaster,
+            abi: SUPERPAYMASTER_ABI,
+            functionName: 'setXPNTsFactory',
+            args: [factory],
+            chain: wallet.chain
+        } as any);
+    }
 }

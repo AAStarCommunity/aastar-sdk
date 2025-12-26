@@ -1,5 +1,5 @@
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
-import { type Hex, toBytes, keccak256, encodePacked } from 'viem';
+import { type Hex, toBytes, keccak256, encodePacked, encodeAbiParameters, parseAbiParameters } from 'viem';
 
 /**
  * BLS Signer for Registry reputation updates and DVT operations
@@ -47,7 +47,7 @@ export class BLSSigner {
     /**
      * Aggregate multiple BLS public keys
      * @param pubKeys Array of BLS public keys
-     * @returns Aggregated public key
+     * @returns Aggregated public key (uncompressed G1 - 96 bytes for EVM)
      */
     static aggregatePublicKeys(pubKeys: Hex[]): Hex {
         const pubKeyBytes = pubKeys.map(pk => toBytes(pk));
@@ -71,13 +71,11 @@ export class BLSSigner {
 }
 
 /**
- * Helper functions for creating BLS proofs for Registry operations
+ * Helper functions for creating BLS proofs for Registry and BLSAggregator operations
  */
 export const BLSHelpers = {
     /**
      * Create message hash for slash proposal
-     * @param proposalId Slash proposal ID
-     * @returns Message hash to sign
      */
     createSlashProposalMessage(proposalId: bigint): Hex {
         return keccak256(encodePacked(['uint256'], [proposalId]));
@@ -85,10 +83,6 @@ export const BLSHelpers = {
     
     /**
      * Create message hash for reputation update
-     * @param users Array of user addresses
-     * @param scores Array of reputation scores
-     * @param epoch Epoch number
-     * @returns Message hash to sign
      */
     createReputationUpdateMessage(users: Hex[], scores: bigint[], epoch: bigint): Hex {
         return keccak256(encodePacked(
@@ -98,20 +92,18 @@ export const BLSHelpers = {
     },
     
     /**
-     * Encode BLS proof for Registry.batchUpdateGlobalReputation
-     * @param aggregatedSignature Aggregated BLS signature
-     * @param aggregatedPublicKey Aggregated BLS public key
-     * @param bitmap Validator participation bitmap
-     * @returns Encoded proof bytes
+     * Encode BLS proof for Registry/Aggregator (v3 format)
+     * Proof structure: (bytes pkG1, bytes sigG2, bytes msgG2, uint256 signerMask)
      */
-    encodeReputationProof(
-        aggregatedSignature: Hex,
-        aggregatedPublicKey: Hex,
-        bitmap: bigint
+    encodeBLSProof(
+        aggregatedPublicKey: Hex, // G1 (48 bytes compressed or 96 bytes uncompressed)
+        aggregatedSignature: Hex, // G2 (96 bytes compressed or 192 bytes uncompressed)
+        messageMappingG2: Hex,    // G2 (Mapping of hash to G2 point)
+        signerMask: bigint
     ): Hex {
-        return encodePacked(
-            ['bytes', 'bytes', 'uint256'],
-            [aggregatedSignature, aggregatedPublicKey, bitmap]
-        ) as Hex;
+        return encodeAbiParameters(
+            parseAbiParameters('bytes, bytes, bytes, uint256'),
+            [aggregatedPublicKey, aggregatedSignature, messageMappingG2, signerMask]
+        );
     }
 };
