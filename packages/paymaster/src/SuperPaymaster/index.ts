@@ -12,10 +12,10 @@ const DEFAULT_VERIFICATION_GAS = 160000n;
 const DEFAULT_POSTOP_GAS = 10000n;
 
 /**
- * Constructs the middleware for SuperPaymaster V3.
+ * Constructs the middleware for SuperPaymaster.
  * Returns the `paymasterAndData` hex string.
  */
-export function getPaymasterMiddleware(config: PaymasterConfig) {
+export function getSuperPaymasterMiddleware(config: PaymasterConfig) {
     return {
         sponsorUserOperation: async (args: { userOperation: any }) => {
             const verGas = config.verificationGasLimit ?? DEFAULT_VERIFICATION_GAS;

@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { getPaymasterMiddleware, type PaymasterConfig } from '@aastar/paymaster';
+import { getSuperPaymasterMiddleware, type PaymasterConfig } from '@aastar/paymaster';
 
 type UseSuperPaymasterResult = {
     generatePaymasterAndData: (userOp: any) => Promise<string>;
@@ -16,7 +16,7 @@ export function useSuperPaymaster(config: PaymasterConfig): UseSuperPaymasterRes
         setIsLoading(true);
         setError(null);
         try {
-            const middleware = getPaymasterMiddleware(config);
+            const middleware = getSuperPaymasterMiddleware(config);
             const result = await middleware.sponsorUserOperation({ userOperation: userOp });
             return result.paymasterAndData as string;
         } catch (err: any) {

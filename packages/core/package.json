@@ -11,7 +11,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "viem": "2.43.3"
+    "@noble/curves": "^1.6.0",
+    "viem": "^2.43.3"
   },
   "devDependencies": {
     "typescript": "5.9.3"

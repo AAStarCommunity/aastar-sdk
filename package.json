@@ -30,8 +30,11 @@
   },
   "devDependencies": {
     "@types/node": "20.11.5",
+    "@typescript-eslint/eslint-plugin": "8.50.1",
+    "@typescript-eslint/parser": "8.50.1",
     "cross-env": "10.1.0",
     "dotenv": "17.2.3",
+    "eslint": "9.39.2",
     "ts-node": "10.9.2",
     "tsx": "4.21.0",
     "typedoc": "^0.28.15",

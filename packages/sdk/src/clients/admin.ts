@@ -1,14 +1,16 @@
 import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
 import {
     registryActions, 
-    paymasterActions, 
+    superPaymasterActions,
+    paymasterV4Actions, 
     stakingActions,
     sbtActions,
     dvtActions,
     factoryActions,
     aggregatorActions,
     type RegistryActions, 
-    type PaymasterActions, 
+    type SuperPaymasterActions,
+    type PaymasterV4Actions, 
     type StakingActions, 
     type SBTActions,
     type DVTActions,
@@ -18,7 +20,7 @@ import {
     TOKEN_ADDRESSES 
 } from '@aastar/core';
 
-export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & PaymasterActions & StakingActions & SBTActions & DVTActions & FactoryActions & AggregatorActions;
+export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & SBTActions & DVTActions & FactoryActions & AggregatorActions;
 
 export function createAdminClient({ 
     chain, 
@@ -39,7 +41,8 @@ export function createAdminClient({
 
     const actions = {
         ...registryActions(usedAddresses.registry)(baseClient as any),
-        ...paymasterActions(usedAddresses.superPaymasterV2)(baseClient as any),
+        ...superPaymasterActions(usedAddresses.superPaymasterV2)(baseClient as any),
+        ...paymasterV4Actions()(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
         ...dvtActions()(baseClient as any),

@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
 
-export type PaymasterActions = {
+export type SuperPaymasterActions = {
     depositAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     withdrawAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     requestSponsorship: (args: { userOp: any, operator: Address, account?: Account | Address }) => Promise<Hash>;
@@ -10,9 +10,11 @@ export type PaymasterActions = {
     getETHDeposit: () => Promise<bigint>;
     getOperatorInfo: (args: { operator: Address }) => Promise<any>;
     getAvailableCredit: (args: { user: Address, token: Address }) => Promise<bigint>;
+    setXPNTsFactory: (args: { factory: Address, account?: Account | Address }) => Promise<Hash>;
+    getXPNTsFactory: () => Promise<Address>;
 };
 
-export const paymasterActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterActions => ({
+export const superPaymasterActions = (address: Address) => (client: PublicClient | WalletClient): SuperPaymasterActions => ({
     async depositAPNTs({ amount, account }) {
         return (client as any).writeContract({
             address,
@@ -92,5 +94,25 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
             functionName: 'getAvailableCredit',
             args: [user, token]
         }) as Promise<bigint>;
+    },
+
+    async setXPNTsFactory({ factory, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setXPNTsFactory',
+            args: [factory],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async getXPNTsFactory() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'xpntsFactory',
+            args: []
+        }) as Promise<Address>;
     }
 });

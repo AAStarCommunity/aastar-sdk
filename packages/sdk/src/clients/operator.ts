@@ -1,16 +1,18 @@
 import { createClient, type Client, type Transport, type Chain, type Account, type Hash, type Hex, erc20Abi, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
 import { 
     stakingActions, 
-    paymasterActions, 
     registryActions,
+    superPaymasterActions,
+    paymasterV4Actions,
     type StakingActions, 
-    type PaymasterActions, 
     type RegistryActions,
+    type SuperPaymasterActions,
+    type PaymasterV4Actions,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES
 } from '@aastar/core';
 
-export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & StakingActions & PaymasterActions & RegistryActions & {
+export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & StakingActions & SuperPaymasterActions & PaymasterV4Actions & RegistryActions & {
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
 };
 
@@ -37,7 +39,8 @@ export function createOperatorClient({
 
     const actions = {
         ...stakingActions(usedAddresses.gTokenStaking)(client as any),
-        ...paymasterActions(usedAddresses.superPaymasterV2)(client as any),
+        ...superPaymasterActions(usedAddresses.superPaymasterV2)(client as any),
+        ...paymasterV4Actions()(client as any),
         ...registryActions(usedAddresses.registry)(client as any),
     };
 
