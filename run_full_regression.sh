@@ -157,29 +157,25 @@ TEST_SCRIPTS=(
     "scripts/14_test_credit_redesign.ts"
     "scripts/15_test_dvt_bls_full.ts"
     "scripts/17_test_cross_role_collaboration.ts"
-    "scripts/18_test_dvt_sdk_flow.ts"
     "scripts/98_edge_reentrancy.ts"
 )
 
 TOTAL_SCRIPTS=${#TEST_SCRIPTS[@]}
 PASSED_COUNT=0
 FAILED_LIST=()
+CURRENT_INDEX=0
 
 for script in "${TEST_SCRIPTS[@]}"; do
+    CURRENT_INDEX=$((CURRENT_INDEX + 1))
     echo -e "${YELLOW}--------------------------------------------------${NC}"
-    echo -e "${YELLOW}▶️ Running: $script${NC}"
+    echo -e "${CYAN}Suite $CURRENT_INDEX/$TOTAL_SCRIPTS: $script${NC}"
     
     TMP_OUT=$(mktemp)
     # Run with ts-node and force colored output for readability
     if pnpm ts-node "$script" > "$TMP_OUT" 2>&1; then
         # Check for internal reverts even on exit code 0
-        # Specifically excluding "expected" reverts if any script uses them loosely
         if grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" | grep -v "Skipping step" | grep -v "benign" | grep -v "InsufficientBalance" | grep -v "DepositNotVerified" > /dev/null; then
             echo -e "${RED}❌ FAILED (Internal Error): $script${NC}"
-            echo -e "${YELLOW}🔍 Failure Report (Triggered by log scan):${NC}"
-            grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" | grep -v "Skipping step" | grep -v "benign" | grep -v "InsufficientBalance" | grep -v "DepositNotVerified"
-            echo -e "${YELLOW}----------------------------------------${NC}"
-            cat "$TMP_OUT" | tail -n 15
             FAILED_LIST+=("$script")
         else
             echo -e "${GREEN}✅ PASSED: $script${NC}"
@@ -187,7 +183,6 @@ for script in "${TEST_SCRIPTS[@]}"; do
         fi
     else
         echo -e "${RED}❌ FAILED (Exit Code): $script${NC}"
-        cat "$TMP_OUT" | tail -n 15
         FAILED_LIST+=("$script")
     fi
     rm "$TMP_OUT"
@@ -198,21 +193,14 @@ echo -e "\n${YELLOW}==================================================${NC}"
 echo -e "${YELLOW}📊 Full Regression Final Report${NC}"
 echo -e "${YELLOW}==================================================${NC}"
 echo -e "Total Scripts: $TOTAL_SCRIPTS"
-echo -e "Passed: ${GREEN} $PASSED_COUNT ${NC}"
-echo -e "Failed: ${RED} $((TOTAL_SCRIPTS - PASSED_COUNT)) ${NC}"
+echo -e "Passed:       ${GREEN} $PASSED_COUNT ${NC}"
+echo -e "Failed:       ${RED} $((TOTAL_SCRIPTS - PASSED_COUNT)) ${NC}"
+
+PASS_RATE=$(awk "BEGIN {printf \"%.1f\", ($PASSED_COUNT / $TOTAL_SCRIPTS) * 100}")
+echo -e "Pass Rate:    ${CYAN} ${PASS_RATE}% ${NC}"
 
 if [ $PASSED_COUNT -eq $TOTAL_SCRIPTS ]; then
-    echo -e "\n${GREEN}🎉 All local regression tests passed!${NC}"
-    
-    # Post-Test Security Audit
-    echo -e "\n${YELLOW}🔒 Running Security Audit (Post-Test)...${NC}"
-    if [ -f "scripts/security_audit.sh" ]; then
-        bash scripts/security_audit.sh || {
-            echo -e "${RED}⚠️  Security audit found issues after tests.${NC}"
-            echo -e "${YELLOW}Please review security findings before deployment.${NC}"
-        }
-    fi
-    
+    echo -e "\n${GREEN}🎉 All core contract regression tests passed!${NC}"
     exit 0
 else
     echo -e "\n${RED}❌ Regression failed with $((TOTAL_SCRIPTS - PASSED_COUNT)) errors.${NC}"

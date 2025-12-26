@@ -123,7 +123,7 @@ fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
 # Test 5: V2 Regression (with role registration fixes)
-echo -e "\n${YELLOW}🧪 Test 5/5: V2 Regression Tests (Role Registration + notifyDeposit)${NC}"
+echo -e "\n${YELLOW}🧪 Test 5/6: V2 Regression Tests (Role Registration + notifyDeposit)${NC}"
 if pnpm tsx scripts/99_final_v2_regression.ts > /tmp/test_v2_regression.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: V2 Regression (Role Registration, Stake, notifyDeposit, Deposit)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
@@ -137,6 +137,18 @@ else
     cat /tmp/test_v2_regression.log | tail -50
     FAILED_TESTS=$((FAILED_TESTS + 1))
   fi
+fi
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+# Test 6: DVT SDK Flow
+echo -e "\n${YELLOW}🧪 Test 6/6: DVT SDK Flow Actions${NC}"
+if pnpm tsx scripts/18_test_dvt_sdk_flow.ts > /tmp/test_dvt_sdk.log 2>&1; then
+  echo -e "${GREEN}✅ PASSED: DVT SDK Flow (Factory, Validator, SBT)${NC}"
+  PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+  echo -e "${RED}❌ FAILED: DVT SDK Flow${NC}"
+  cat /tmp/test_dvt_sdk.log
+  FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
@@ -160,6 +172,7 @@ echo -e "  • Middleware: 6 tests"
 echo -e "  • SuperPaymaster New APIs: 4 tests"
 echo -e "  • PaymasterV4 Complete: 12 tests"
 echo -e "  • V2 Regression: Role Registration, Stake Lock, notifyDeposit, Deposit"
+echo -e "  • DVT SDK Flow: Factory, Validator, SBT"
 echo -e "\n${BLUE}Total API Tests: 32+ tests${NC}"
 echo -e "${BLUE}Key Fixes in v2.1.0:${NC}"
 echo -e "  ✅ Registry.registerRole payer logic (Operator pays)"
