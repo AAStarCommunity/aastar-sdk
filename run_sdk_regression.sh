@@ -123,7 +123,7 @@ fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
 # Test 5: V2 Regression (with role registration fixes)
-echo -e "\n${YELLOW}🧪 Test 5/6: V2 Regression Tests (Role Registration + notifyDeposit)${NC}"
+echo -e "\n${YELLOW}🧪 Test 5/9: V2 Regression Tests (Role Registration + notifyDeposit)${NC}"
 if pnpm tsx scripts/99_final_v2_regression.ts > /tmp/test_v2_regression.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: V2 Regression (Role Registration, Stake, notifyDeposit, Deposit)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))

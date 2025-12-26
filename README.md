@@ -26,6 +26,7 @@
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
   - [Academic Research / 学术研究](#academic-research--学术研究)
   - [Support / 支援](#support--支援)
+- [SDK Coverage TODO / SDK 测试未覆盖项](docs/TODO_SDK_COVERAGE.md)
 
 ---
 

@@ -1,9 +1,9 @@
 
-import { createAAStarPublicClient, createAAStarWalletClient } from '../packages/core/src/index';
-import { RegistryClient } from '../packages/registry/src/index';
-import { ReputationClient } from '../packages/reputation/src/index';
-import { FinanceClient } from '../packages/finance/src/index';
-import { DVTClient } from '../packages/dvt/src/index';
+import { createAAStarPublicClient, registryActions } from '../packages/core/src/index.js';
+import { createAdminClient } from '../packages/sdk/src/index.js';
+import { ReputationClient } from '../packages/identity/src/index.js';
+import { FinanceClient } from '../packages/tokens/src/index.js';
+import { DVTClient } from '../packages/dapp/src/index.js';
 
 import { foundry } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -14,6 +14,7 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
 const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
+const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const REPUTATION_ADDR = process.env.REPUTATION_SYSTEM_ADDR as Hex; // Check env var name
 const PAYMASTER_ADDR = process.env.SUPERPAYMASTER_ADDR as Hex;
@@ -23,13 +24,22 @@ async function runFullCapabilityTest() {
     console.log("🚀 Running Full Capability SDK Test (v1.0 Preview)...");
 
     const account = privateKeyToAccount(ADMIN_KEY);
-    const publicClient = createAAStarPublicClient({ chain: foundry, rpcUrl: process.env.RPC_URL });
-    const walletClient = createAAStarWalletClient({ chain: foundry, rpcUrl: process.env.RPC_URL, account });
+    const publicClient = createAAStarPublicClient({ chain: foundry, rpcUrl: RPC_URL });
+    const walletClient = createAdminClient({ 
+        chain: foundry, 
+        transport: http(RPC_URL), 
+        account,
+        addresses: {
+            registry: REGISTRY_ADDR,
+            superPaymaster: PAYMASTER_ADDR,
+            gTokenStaking: process.env.GTOKEN_STAKING_ADDR as Hex
+        }
+    });
 
     // 1. Registry
     console.log("   📜 Testing Registry (Credit Check)...");
-    const regClient = new RegistryClient(publicClient, REGISTRY_ADDR);
-    const credit = await regClient.getCreditLimit(account.address);
+    const regActions = registryActions(REGISTRY_ADDR)(publicClient);
+    const credit = await regActions.getCreditLimit({ user: account.address });
     console.log(`      Credit Limit: ${credit}`);
 
     // 2. Reputation

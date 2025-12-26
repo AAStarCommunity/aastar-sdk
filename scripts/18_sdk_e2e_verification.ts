@@ -6,8 +6,8 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 // Import from local packages (Simulating SDK usage)
-import { getPaymasterMiddleware } from '../packages/superpaymaster/src/index';
-// import { createAAStarPublicClient } from '../packages/core/src/index'; 
+import { getSuperPaymasterMiddleware } from '../packages/paymaster/src/index.js';
+// import { createAAStarPublicClient } from '../packages/core/src/index.js'; 
 // (We use direct imports for now as TS alias might not be set in ts-node context without tsconfig paths)
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
@@ -23,7 +23,7 @@ async function runSDKVerification() {
     
     // 1. Initialize Middleware
     console.log("   🔌 Initializing Middleware...");
-    const middleware = getPaymasterMiddleware({
+    const middleware = getSuperPaymasterMiddleware({
         paymasterAddress: SUPER_PAYMASTER,
         operator: OPERATOR,
         verificationGasLimit: 150000n,

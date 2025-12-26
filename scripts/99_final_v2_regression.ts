@@ -63,9 +63,9 @@ function assert(condition: boolean, message: string) {
     }
 }
 
-const ROLE_COMMUNITY = '0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'; // keccak256("COMMUNITY")
-const ROLE_PAYMASTER_AOA = keccak256(stringToBytes('PAYMASTER_AOA'));
-const ROLE_PAYMASTER_SUPER = '0xe94d78b6d8fb99b2c21131eb4552924a60f564d8515a3cc90ef300fc9735c074'; // keccak256("PAYMASTER_SUPER")
+const ROLE_COMMUNITY = '0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'; // From Registry.sol
+const ROLE_PAYMASTER_AOA = '0xf86d13979a91272f2c54c4147e588ecbeaad32dd1e0a5332a77356847049a70e';
+const ROLE_PAYMASTER_SUPER = '0xe94d78b6d8fb99b2c21131eb4552924a60f564d8515a3cc90ef300fc9735c074';
 const ROLE_ENDUSER = keccak256(stringToBytes('ENDUSER'));
 
 // Construct local addresses map from Env
