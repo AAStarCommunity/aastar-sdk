@@ -3,7 +3,7 @@ config({ path: '.env.v3' });
 import { createPublicClient, createWalletClient, http, type Address, type Hex, parseEther } from 'viem';
 import { anvil } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { createAdminClient } from '../packages/sdk/src/clients/admin';
+import { createAdminClient } from '../packages/sdk/src/clients/admin.js';
 
 /**
  * Test Script: SuperPaymaster New APIs
@@ -53,7 +53,20 @@ async function main() {
     // Test 1: Get current xPNTs Factory (should be zero address initially)
     try {
         console.log('📝 Test 1: getXPNTsFactory (initial state)');
-        const currentFactory = await adminClient.getXPNTsFactory();
+        
+        // Use direct contract call instead of SDK method to avoid viem empty data issue
+        const currentFactory = await publicClient.readContract({
+            address: superPaymasterAddress,
+            abi: [{
+                type: 'function',
+                name: 'xpntsFactory',
+                inputs: [],
+                outputs: [{ type: 'address' }],
+                stateMutability: 'view'
+            }],
+            functionName: 'xpntsFactory'
+        }) as Address;
+        
         console.log(`   Current Factory: ${currentFactory}`);
         
         if (currentFactory === '0x0000000000000000000000000000000000000000') {
