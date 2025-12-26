@@ -1,3 +1,3 @@
 > `const` **SimpleAccountFactoryABI**: (\{ `inputs`: `object`[]; `name?`: `undefined`; `outputs?`: `undefined`; `stateMutability`: `string`; `type`: `string`; \} \| \{ `inputs`: `object`[]; `name`: `string`; `outputs`: `object`[]; `stateMutability`: `string`; `type`: `string`; \} \| \{ `inputs`: `object`[]; `name`: `string`; `outputs?`: `undefined`; `stateMutability?`: `undefined`; `type`: `string`; \})[] = `SimpleAccountFactoryABIData`
 
-Defined in: [packages/core/src/abis/index.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/abis/index.ts#L58)
+Defined in: [packages/core/src/abis/index.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/abis/index.ts#L58)

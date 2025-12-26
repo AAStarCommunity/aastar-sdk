@@ -1,6 +1,6 @@
 > **PaymasterV4MiddlewareConfig** = `object`
 
-Defined in: [V4/index.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/V4/index.ts#L3)
+Defined in: [V4/index.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/V4/index.ts#L3)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [V4/index.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/1
 
 > **gasToken**: `Address`
 
-Defined in: [V4/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/V4/index.ts#L5)
+Defined in: [V4/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/V4/index.ts#L5)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [V4/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/1
 
 > **paymasterAddress**: `Address`
 
-Defined in: [V4/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/V4/index.ts#L4)
+Defined in: [V4/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/V4/index.ts#L4)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [V4/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/1
 
 > `optional` **postOpGasLimit**: `bigint`
 
-Defined in: [V4/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/V4/index.ts#L7)
+Defined in: [V4/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/V4/index.ts#L7)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [V4/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/1
 
 > `optional` **verificationGasLimit**: `bigint`
 
-Defined in: [V4/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/V4/index.ts#L6)
+Defined in: [V4/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/V4/index.ts#L6)

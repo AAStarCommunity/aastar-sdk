@@ -1,6 +1,6 @@
 > **DVTActions** = `object`
 
-Defined in: [packages/core/src/actions/dvt.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/actions/dvt.ts#L4)
+Defined in: [packages/core/src/actions/dvt.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L4)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/dvt.ts:4](https://github.com/AAStarCommun
 
 > **createSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/actions/dvt.ts#L5)
+Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L5)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommun
 
 > **executeSlashWithProof**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/actions/dvt.ts#L7)
+Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L7)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommun
 
 > **isValidator**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/actions/dvt.ts#L8)
+Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L8)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommun
 
 > **signSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/actions/dvt.ts#L6)
+Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L6)
 
 #### Parameters
 
