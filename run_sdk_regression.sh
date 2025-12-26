@@ -30,6 +30,24 @@ if ! curl -s -X POST -H "Content-Type: application/json" \
   echo -e "${GREEN}✅ Environment initialized.${NC}"
 else
   echo -e "${GREEN}✅ Anvil is running.${NC}"
+  
+  # Check if contracts are deployed by testing GToken address
+  GTOKEN_CODE=$(curl -s -X POST http://127.0.0.1:8545 \
+    -H "Content-Type: application/json" \
+    --data '{"jsonrpc":"2.0","method":"eth_getCode","params":["'"$(grep GTOKEN_ADDRESS .env.v3 | cut -d= -f2)"'","latest"],"id":1}' \
+    | grep -o '"result":"[^"]*"' | cut -d'"' -f4)
+  
+  if [ "$GTOKEN_CODE" = "0x" ] || [ -z "$GTOKEN_CODE" ]; then
+    echo -e "${YELLOW}⚠️  Contracts not deployed. Running initialization...${NC}"
+    pnpm test:init
+    if [ $? -ne 0 ]; then
+      echo -e "${RED}❌ Contract initialization failed.${NC}"
+      exit 1
+    fi
+    echo -e "${GREEN}✅ Contracts initialized.${NC}"
+  else
+    echo -e "${GREEN}✅ Contracts already deployed.${NC}"
+  fi
 fi
 
 # 2. 运行SDK回归测试

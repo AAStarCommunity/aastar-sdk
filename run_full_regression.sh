@@ -14,6 +14,15 @@ NC='\033[0m' # No Color
 
 echo -e "${YELLOW}🚀 Starting SuperPaymaster V3 Full Local Regression...${NC}"
 
+# 0. Build all packages first to avoid module not found errors
+echo -e "${YELLOW}📦 Building all packages...${NC}"
+pnpm build >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Build failed.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Build completed.${NC}"
+
 # Handle flags
 INIT_ONLY=false
 SKIP_DEPLOY=false
