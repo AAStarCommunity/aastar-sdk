@@ -1,4 +1,4 @@
 
-export * from './ui';
-export * from './ui/hooks/useCreditScore';
-export * from './ui/hooks/useSuperPaymaster';
+export * from './ui/index.js';
+export * from './ui/hooks/useCreditScore.js';
+export * from './ui/hooks/useSuperPaymaster.js';

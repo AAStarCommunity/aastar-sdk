@@ -1,5 +1,5 @@
 
-export * from './mysbt';
+export * from './mysbt.js';
 
 import { createAAStarPublicClient, ReputationSystemV3ABI } from '@aastar/core';
 import { type Address, type PublicClient } from 'viem';
