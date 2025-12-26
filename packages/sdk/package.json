@@ -3,6 +3,9 @@
   "version": "0.14.0",
   "description": "AAStar SDK - The all-in-one package for Mycelium Network",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
