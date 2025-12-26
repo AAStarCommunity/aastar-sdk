@@ -105,5 +105,20 @@ export const BLSHelpers = {
             parseAbiParameters('bytes, bytes, bytes, uint256'),
             [aggregatedPublicKey, aggregatedSignature, messageMappingG2, signerMask]
         );
+    },
+
+    /**
+     * Encode Reputation Proof (for test compatibility)
+     * Matches format: (signature, publicKey, signerMask)
+     */
+    encodeReputationProof(
+        signature: Hex,
+        publicKey: Hex,
+        signerMask: bigint
+    ): Hex {
+        return encodeAbiParameters(
+            parseAbiParameters('bytes signature, bytes publicKey, uint256 signerMask'),
+            [signature, publicKey, signerMask]
+        );
     }
 };

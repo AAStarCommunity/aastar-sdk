@@ -3,34 +3,34 @@
  */
 
 // Core System
-import RegistryABIData from './Registry.json';
-import GTokenABIData from './GToken.json';
-import GTokenStakingABIData from './GTokenStaking.json';
-import SuperPaymasterABIData from './SuperPaymaster.json';
-import PaymasterFactoryABIData from './PaymasterFactory.json';
-import EntryPointABIData from './EntryPoint.json';
+import RegistryABIData from './Registry.json' with { type: 'json' };
+import GTokenABIData from './GToken.json' with { type: 'json' };
+import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
+import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
+import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
+import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
 
 // Token System
-import xPNTsTokenABIData from './xPNTsToken.json';
-import xPNTsFactoryABIData from './xPNTsFactory.json';
-import MySBTABIData from './MySBT.json';
+import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
+import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
+import MySBTABIData from './MySBT.json' with { type: 'json' };
 
 // Identity & Reputation
-import ReputationSystemABIData from './ReputationSystem.json';
+import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json' };
 
 // Monitoring System
-import DVTValidatorABIData from './DVTValidator.json';
-import BLSAggregatorABIData from './BLSAggregator.json';
+import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
+import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 
 // Legacy/Third-party (Standardized)
-import PaymasterABIData from './Paymaster.json';
-import SimpleAccountABIData from './SimpleAccount.json';
-import SimpleAccountFactoryABIData from './SimpleAccountFactory.json';
+import PaymasterABIData from './Paymaster.json' with { type: 'json' };
+import SimpleAccountABIData from './SimpleAccount.json' with { type: 'json' };
+import SimpleAccountFactoryABIData from './SimpleAccountFactory.json' with { type: 'json' };
 
 // New Versions & Extensions
-import SimpleAccountV08ABIData from './SimpleAccountV08.json';
-import SimpleAccountFactoryV08ABIData from './SimpleAccountFactoryV08.json';
-import Simple7702AccountABIData from './Simple7702Account.json';
+import SimpleAccountV08ABIData from './SimpleAccountV08.json' with { type: 'json' };
+import SimpleAccountFactoryV08ABIData from './SimpleAccountFactoryV08.json' with { type: 'json' };
+import Simple7702AccountABIData from './Simple7702Account.json' with { type: 'json' };
 
 // Re-export ABIs - Core System
 export const RegistryABI = RegistryABIData;

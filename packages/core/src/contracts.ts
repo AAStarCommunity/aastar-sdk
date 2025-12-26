@@ -17,7 +17,7 @@ import {
   MONITORING_ADDRESSES,
   OFFICIAL_ADDRESSES,
   COMMUNITY_OWNERS,
-} from './contract-addresses';
+} from './contract-addresses.js';
 
 /**
  * Contract category types

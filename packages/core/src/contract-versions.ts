@@ -16,7 +16,7 @@ import {
   TOKEN_ADDRESSES,
   TEST_TOKEN_ADDRESSES,
   MONITORING_ADDRESSES,
-} from './contract-addresses';
+} from './contract-addresses.js';
 
 /**
  * Contract version information

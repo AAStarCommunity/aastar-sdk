@@ -3,7 +3,7 @@
  * Registry v2.2.0 deployed on 2025-11-08
  */
 
-import { TEST_COMMUNITIES, TEST_TOKEN_ADDRESSES, CORE_ADDRESSES, TOKEN_ADDRESSES } from './contract-addresses';
+import { TEST_COMMUNITIES, TEST_TOKEN_ADDRESSES, CORE_ADDRESSES, TOKEN_ADDRESSES } from './contract-addresses.js';
 
 export enum NodeType {
   PAYMASTER_AOA = 0,    // AOA independent Paymaster

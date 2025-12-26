@@ -43,6 +43,7 @@ function sync() {
         // Legacy Aliases
         'SUPERPAYMASTER_ADDR': config.superPaymaster,
         'APNTS': config.aPNTs,
+        'APNTS_ADDRESS': config.aPNTs, // Required for PaymasterV4 Test
         'MOCK_ENTRY_POINT': config.entryPoint,
         'PRIVATE_KEY_SUPPLIER': '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
         'GTOKEN_ADDRESS': config.gToken,
