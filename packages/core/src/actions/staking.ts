@@ -11,6 +11,10 @@ export type StakingActions = {
 };
 
 export const stakingActions = (address: Address) => (client: PublicClient | WalletClient): StakingActions => ({
+    /**
+     * @internal
+     * @warning This is a low-level internal API. Use high-level clients instead.
+     */
     async lockStake({ user, roleId, stakeAmount, entryBurn, payer, account }) {
         return (client as any).writeContract({
             address,
