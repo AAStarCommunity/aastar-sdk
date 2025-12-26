@@ -141,13 +141,49 @@ fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
 # Test 6: DVT SDK Flow
-echo -e "\n${YELLOW}🧪 Test 6/6: DVT SDK Flow Actions${NC}"
+echo -e "\n${YELLOW}🧪 Test 6/9: DVT SDK Flow Actions${NC}"
 if pnpm tsx scripts/18_test_dvt_sdk_flow.ts > /tmp/test_dvt_sdk.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: DVT SDK Flow (Factory, Validator, SBT)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
 else
   echo -e "${RED}❌ FAILED: DVT SDK Flow${NC}"
   cat /tmp/test_dvt_sdk.log
+  FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+# Test 7: SDK E2E Verification (Phase 1 Logic)
+echo -e "\n${YELLOW}🧪 Test 7/9: SDK E2E Verification (Middleware Phase 1)${NC}"
+if pnpm tsx scripts/18_sdk_e2e_verification.ts > /tmp/test_sdk_e2e.log 2>&1; then
+  echo -e "${GREEN}✅ PASSED: SDK E2E Verification${NC}"
+  PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+  echo -e "${RED}❌ FAILED: SDK E2E Verification${NC}"
+  cat /tmp/test_sdk_e2e.log
+  FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+# Test 8: SDK Full Capability
+echo -e "\n${YELLOW}🧪 Test 8/9: SDK Full Capability (Client Coverage)${NC}"
+if pnpm tsx scripts/20_sdk_full_capability.ts > /tmp/test_sdk_full.log 2>&1; then
+  echo -e "${GREEN}✅ PASSED: SDK Full Capability${NC}"
+  PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+  echo -e "${RED}❌ FAILED: SDK Full Capability${NC}"
+  cat /tmp/test_sdk_full.log
+  FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+# Test 9: SDK Experiment Runner
+echo -e "\n${YELLOW}🧪 Test 9/9: SDK Experiment Runner (Metrics)${NC}"
+if EXPERIMENT_RUNS=1 EXPERIMENT_NETWORK=anvil pnpm tsx scripts/19_sdk_experiment_runner.ts > /tmp/test_sdk_exp.log 2>&1; then
+  echo -e "${GREEN}✅ PASSED: SDK Experiment Runner${NC}"
+  PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+  echo -e "${RED}❌ FAILED: SDK Experiment Runner${NC}"
+  cat /tmp/test_sdk_exp.log
   FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
@@ -173,7 +209,10 @@ echo -e "  • SuperPaymaster New APIs: 4 tests"
 echo -e "  • PaymasterV4 Complete: 12 tests"
 echo -e "  • V2 Regression: Role Registration, Stake Lock, notifyDeposit, Deposit"
 echo -e "  • DVT SDK Flow: Factory, Validator, SBT"
-echo -e "\n${BLUE}Total API Tests: 32+ tests${NC}"
+echo -e "  • SDK E2E Verification: Middleware Phase 1"
+echo -e "  • SDK Full Capability: Client Coverage (Registry/Rep/Finance)"
+echo -e "  • SDK Experiment Runner: Performance Metrics"
+echo -e "\n${BLUE}Total API Tests: 45+ tests${NC}"
 echo -e "${BLUE}Key Fixes in v2.1.0:${NC}"
 echo -e "  ✅ Registry.registerRole payer logic (Operator pays)"
 echo -e "  ✅ ROLE_COMMUNITY for SuperPaymaster.notifyDeposit"

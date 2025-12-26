@@ -445,19 +445,30 @@ async function runRegressionV2() {
          console.log('   ✅ Operator Approved Staking');
 
          
-         // 2. Register Self (Trying 0x matches script 09)
+        // 2. Register Self (Trying 0x matches script 09)
          const commData = "0x";
 
-         const regTx = await operatorClient.writeContract({
+         const alreadyRegistered = await operatorClient.readContract({
             address: localAddresses.registry,
             abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [ROLE_COMMUNITY, commData],
-            account: operatorAccount,
-            chain: foundry
-        });
-        await adminClient.waitForTransactionReceipt({ hash: regTx });
-        console.log('   ✅ Operator Registered (Community Role)');
+            functionName: 'hasRole',
+            args: [ROLE_COMMUNITY, operatorAccount.address]
+         });
+
+         if (!alreadyRegistered) {
+            const regTx = await operatorClient.writeContract({
+                address: localAddresses.registry,
+                abi: RegistryABI,
+                functionName: 'registerRoleSelf',
+                args: [ROLE_COMMUNITY, commData],
+                account: operatorAccount,
+                chain: foundry
+            });
+            await adminClient.waitForTransactionReceipt({ hash: regTx });
+            console.log('   ✅ Operator Registered (Community Role)');
+         } else {
+            console.log('   ⚠️ Operator already registered (Community Role)');
+         }
         passedSteps++;
     } else {
         console.log('   ⚠️ Operator already registered');
@@ -673,33 +684,46 @@ async function runRegressionV2() {
     
     // Register Role (Paymaster) - Use Admin register instead of self-service to bypass issues
     console.log('   Registering Paymaster Role (Admin Override)...');
-    try {
-        const joinTx = await adminClient.registerRole({
-            roleId: ROLE_PAYMASTER_SUPER,
-            user: operatorAccount.address,
-            data: '0x',
-            account: adminAccount
-        });
-        await adminClient.waitForTransactionReceipt({ hash: joinTx });
-        console.log('   Paymaster Registered (Admin)');
-    } catch (e) {
-        console.error('⚠️ Admin Register Failed, trying self-service as fallback...');
-        fs.writeFileSync('scripts/regression_error_admin.log', JSON.stringify(e, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
-        const joinTx = await operatorClient.registerRoleSelf({
-            roleId: ROLE_PAYMASTER_SUPER,
-            data: '0x'
-            // value: STAKE_AMOUNT // Removed value if admin registered? No, Admin shouldn't pay? Admin doesn't pay stake usually? 
-            // Wait, registerRole DOES NOT PAY STAKE?
-            // Registry.sol: _validateAndExtractStake checks Data. If 0 length, uses minStake.
-            // registerRole calls GTokenStaking.lockStake. User must approve tokens?
-            // Admin is caller. Admin must have tokens approved?
-            // Admin has tokens. operatorAccount has tokens.
-            // If Admin registers operator, Admin pays stake?
-            // Registry.sol: GTOKEN_STAKING.lockStake(user, ..., msg.sender (payer)).
-            // So Admin pays stake. Admin has 10000 Tokens. Approved?
-            // Need to approve GTokenStaking to spend Admin's tokens.
-        });
-        await operatorClient.waitForTransactionReceipt({ hash: joinTx });
+    const hasPaymasterRole = await adminClient.readContract({
+        address: localAddresses.registry,
+        abi: RegistryABI,
+        functionName: 'hasRole',
+        args: [ROLE_PAYMASTER_SUPER, operatorAccount.address]
+    });
+
+    if (!hasPaymasterRole) {
+        let joinTx; // Declare joinTx here to be accessible in both try and catch
+        try {
+            joinTx = await adminClient.registerRole({
+                roleId: ROLE_PAYMASTER_SUPER,
+                user: operatorAccount.address,
+                data: '0x',
+                account: adminAccount
+            });
+            await adminClient.waitForTransactionReceipt({ hash: joinTx });
+            console.log('   Paymaster Registered (Admin)');
+        } catch (e) {
+            console.error('⚠️ Admin Register Failed, trying self-service as fallback...');
+            fs.writeFileSync('scripts/regression_error_admin.log', JSON.stringify(e, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
+            joinTx = await operatorClient.registerRoleSelf({
+                roleId: ROLE_PAYMASTER_SUPER,
+                data: '0x'
+                // value: STAKE_AMOUNT // Removed value if admin registered? No, Admin shouldn't pay? Admin doesn't pay stake usually? 
+                // Wait, registerRole DOES NOT PAY STAKE?
+                // Registry.sol: _validateAndExtractStake checks Data. If 0 length, uses minStake.
+                // registerRole calls GTokenStaking.lockStake. User must approve tokens?
+                // Admin is caller. Admin must have tokens approved?
+                // Admin has tokens. operatorAccount has tokens.
+                // If Admin registers operator, Admin pays stake?
+                // Registry.sol: GTOKEN_STAKING.lockStake(user, ..., msg.sender (payer)).
+                // So Admin pays stake. Admin has 10000 Tokens. Approved?
+                // Need to approve GTokenStaking to spend Admin's tokens.
+            });
+            await operatorClient.waitForTransactionReceipt({ hash: joinTx });
+            console.log('   ✅ Paymaster Registered (Self-Service)');
+        }
+    } else {
+        console.log('   ⚠️ Paymaster already registered');
     }
     console.log('   Community Role Configured');
 
@@ -714,13 +738,24 @@ async function runRegressionV2() {
     await communityClient.waitForTransactionReceipt({ hash: approveCommTx });
     console.log('   Community Approved GToken');
 
-    const registerTx = await communityClient.registerRoleSelf({
-        roleId: COMMUNITY_ROLE,
-        data: '0x' as Hex,
-        account: communityAccount
+    const alreadyRegisteredComm = await communityClient.readContract({
+        address: localAddresses.registry,
+        abi: RegistryABI,
+        functionName: 'hasRole',
+        args: [COMMUNITY_ROLE, communityAccount.address]
     });
-    await communityClient.waitForTransactionReceipt({ hash: registerTx });
-    console.log('   Community Registered Role (Implicitly Minted SBT)');
+
+    if (!alreadyRegisteredComm) {
+        const registerTx = await communityClient.registerRoleSelf({
+            roleId: COMMUNITY_ROLE,
+            data: '0x' as Hex,
+            account: communityAccount
+        });
+        await communityClient.waitForTransactionReceipt({ hash: registerTx });
+        console.log('   ✅ Community Registered Role (Implicitly Minted SBT)');
+    } else {
+        console.log('   ⚠️ Community already registered');
+    }
 
     // Verify User SBT (Assuming Community logic might mint to itself? Or just registered?)
     // In V3, registerRole -> MySBT.mintForRole -> Mints SBT to 'communityAccount' (the registrant)
