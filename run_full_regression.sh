@@ -83,7 +83,8 @@ if [ "$SKIP_DEPLOY" = false ]; then
     
     # Clear cache and attempt deployment
     rm -rf broadcast cache
-    if ! forge script script/v3/SetupV3.s.sol:SetupV3 --rpc-url http://127.0.0.1:8545 --broadcast --slow; then
+    # Use DeployV3FullLocal.s.sol (Robust Version)
+    if ! forge script contracts/script/DeployV3FullLocal.s.sol:DeployV3FullLocal --fork-url http://127.0.0.1:8545 --broadcast --slow; then
         echo -e "${RED}❌ Deployment failed.${NC}"
         # Since we just restarted Anvil, failure is critical
         exit 1
@@ -98,6 +99,7 @@ if [ "$SKIP_DEPLOY" = false ]; then
     
     # Extract Registry Address from config
     REGISTRY_ADDR=$(grep -o '"registry": *"[^"]*"' script/v3/config.json | cut -d'"' -f4)
+    PAYMASTER_V4_ADDR=$(grep -o '"paymasterV4": *"[^"]*"' script/v3/config.json | cut -d'"' -f4)
     echo -e "${YELLOW}🔍 Verifying deployment at $REGISTRY_ADDR...${NC}"
     
     # Check code existence (requires cast)

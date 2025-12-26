@@ -5,13 +5,13 @@
  */
 
 export * from './branding.js';
-export * from './contract-addresses'; // Single source of truth for all contract addresses
-export * from './contracts';
-export * from './contract-versions';
-export * from './networks';
-export * from './constants';
-export * from './communities'; // Community configurations
-export * from './abis';
-export * from './clients';
+export * from './contract-addresses.js'; // Single source of truth for all contract addresses
+export * from './contracts.js';
+export * from './contract-versions.js';
+export * from './networks.js';
+export * from './constants.js';
+export * from './communities.js'; // Community configurations
+export * from './abis/index.js'; // Assuming abis is a folder with index.ts
+export * from './clients.js';
 export * from './actions/index.js';
 export * from './crypto/index.js';

@@ -39,6 +39,7 @@ function sync() {
         'REPUTATION_SYSTEM_ADDR': config.reputationSystem,
         'DVT_VALIDATOR_ADDR': config.dvtValidator,
         'BLS_AGGREGATOR_ADDR': config.blsAggregator,
+        'PAYMASTER_V4_ADDRESS': config.paymasterV4,
         // Legacy Aliases
         'SUPERPAYMASTER_ADDR': config.superPaymaster,
         'APNTS': config.aPNTs,
