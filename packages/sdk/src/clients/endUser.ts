@@ -38,7 +38,7 @@ export function createEndUserClient({
     const actions = {
         ...registryActions(usedAddresses.registry)(client as any),
         ...sbtActions(usedAddresses.mySBT)(client as any),
-        ...superPaymasterActions(usedAddresses.superPaymasterV2)(client as any),
+        ...superPaymasterActions(usedAddresses.superPaymaster)(client as any),
         ...paymasterV4Actions()(client as any)
     };
 

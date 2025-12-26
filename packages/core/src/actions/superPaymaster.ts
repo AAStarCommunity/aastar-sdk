@@ -108,11 +108,10 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
     },
 
     async getXPNTsFactory() {
-        return (client as PublicClient).readContract({
+        return (client as any).readContract({
             address,
             abi: SuperPaymasterABI,
-            functionName: 'xpntsFactory',
-            args: []
+            functionName: 'xpntsFactory' // Note: lowercase 'x' - Solidity public variable auto-generates getter
         }) as Promise<Address>;
     }
 });

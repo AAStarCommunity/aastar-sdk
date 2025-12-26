@@ -124,7 +124,7 @@ export type NetworkContracts = typeof SEPOLIA_CONTRACTS;
  * @example
  * ```ts
  * const contracts = getContracts('sepolia');
- * console.log(contracts.core.superPaymasterV2);
+ * console.log(contracts.core.superPaymaster);
  * ```
  */
 export function getContracts(network: ContractNetwork): NetworkContracts {
@@ -145,7 +145,7 @@ export function getContracts(network: ContractNetwork): NetworkContracts {
  *
  * @example
  * ```ts
- * const address = getContract('sepolia', 'core', 'superPaymasterV2');
+ * const address = getContract('sepolia', 'core', 'superPaymaster');
  * ```
  */
 export function getContract(
@@ -177,7 +177,7 @@ export function getContract(
  * @example
  * ```ts
  * const core = getCoreContracts('sepolia');
- * console.log(core.superPaymasterV2);
+ * console.log(core.superPaymaster);
  * console.log(core.registry);
  * ```
  */
@@ -276,7 +276,7 @@ export function getSimpleAccountFactory(network: ContractNetwork): string {
  * ```
  */
 export function getSuperPaymasterV2(network: ContractNetwork): string {
-  return getContracts(network).core.superPaymasterV2;
+  return getContracts(network).core.superPaymaster;
 }
 
 /**
@@ -336,7 +336,7 @@ export const CONTRACT_METADATA = {
     deploymentDates: {
       // Core System
       gToken: '2025-11-01',            // v2.0.0 with VERSION interface
-      superPaymasterV2: '2025-11-01',  // v2.0.0 with VERSION interface
+      superPaymaster: '2025-11-01',  // v2.0.0 with VERSION interface
       registry: '2025-11-02',          // v2.1.4 with allowPermissionlessMint default true
       gTokenStaking: '2025-11-01',     // v2.0.0 with VERSION interface
 
@@ -369,7 +369,7 @@ export const CONTRACT_METADATA = {
  *
  * @example
  * ```ts
- * const date = getDeploymentDate('sepolia', 'superPaymasterV2');
+ * const date = getDeploymentDate('sepolia', 'superPaymaster');
  * // '2025-10-25'
  * ```
  */

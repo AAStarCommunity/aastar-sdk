@@ -3,7 +3,7 @@
  * Registry v2.2.0 deployed on 2025-11-08
  */
 
-import { TEST_COMMUNITIES, TEST_TOKEN_ADDRESSES, TOKEN_ADDRESSES } from './contract-addresses';
+import { TEST_COMMUNITIES, TEST_TOKEN_ADDRESSES, CORE_ADDRESSES, TOKEN_ADDRESSES } from './contract-addresses';
 
 export enum NodeType {
   PAYMASTER_AOA = 0,    // AOA independent Paymaster
@@ -36,7 +36,7 @@ export const AASTAR_COMMUNITY: CommunityConfig = {
   ensName: 'aastar.eth',
   address: TEST_COMMUNITIES.aastar,
   xPNTsToken: TEST_TOKEN_ADDRESSES.aPNTs,
-  supportedSBTs: [TOKEN_ADDRESSES.mySBT],
+  supportedSBTs: [CORE_ADDRESSES.mySBT],
   nodeType: NodeType.PAYMASTER_SUPER,
   isActive: true,
   allowPermissionlessMint: true,
@@ -55,7 +55,7 @@ export const BREAD_COMMUNITY: CommunityConfig = {
   ensName: 'bread.eth',
   address: TEST_COMMUNITIES.bread,
   xPNTsToken: TEST_TOKEN_ADDRESSES.bPNTs,
-  supportedSBTs: [TOKEN_ADDRESSES.mySBT],
+  supportedSBTs: [CORE_ADDRESSES.mySBT],
   nodeType: NodeType.PAYMASTER_AOA,
   isActive: true,
   allowPermissionlessMint: false,

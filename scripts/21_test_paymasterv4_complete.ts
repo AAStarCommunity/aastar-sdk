@@ -33,7 +33,7 @@ async function main() {
         account
     });
 
-    const paymasterV4Address = process.env.PAYMASTER_V4_ADDRESS as Address;
+    const paymasterV4Address = process.env.PAYMASTER_ADDRESS as Address;
     const gTokenAddress = process.env.GTOKEN_ADDRESS as Address;
     const mySBTAddress = process.env.MYSBT_ADDRESS as Address;
     

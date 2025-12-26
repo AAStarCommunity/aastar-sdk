@@ -6,17 +6,20 @@
  * All other files reference these constants to avoid duplication.
  */
 
+import { type Address } from 'viem';
+
 /**
  * Core System Addresses
  */
 export const CORE_ADDRESSES = {
-  gToken: '0x99cCb70646Be7A5aeE7aF98cE853a1EA1A676DCc',
-  superPaymasterV2: '0x7c3c355d9aa4723402bec2a35b61137b8a10d5db', // v2.3.3 (2024-11-24) - Integrated with MySBT v2.4.5, internal SBT registry
-  registry: '0x49245E1f3c2dD99b3884ffeD410d0605Cf4dC696', // v2.2.1 (2025-11-09) - isRegistered mapping (duplicate prevention)
-  gTokenStaking: '0xbEbF9b4c6a4cDB92Ac184aF211AdB13a0b9BF6c0', // v2.0.1 (2025-11-05) - Added stakeFor() function
-  paymasterFactory: '0x65Cf6C4ab3d40f3C919b6F3CADC09Efb72817920',
-  dvtValidator: '0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1',
-  blsAggregator: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e',
+  registry: (process.env.REGISTRY_ADDRESS || '0x0165878A594ca255338adfa4d48449f69242Eb8F') as Address,
+  gToken: (process.env.GTOKEN_ADDRESS || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0') as Address,
+  gTokenStaking: (process.env.GTOKENSTAKING_ADDRESS || '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9') as Address,
+  superPaymaster: (process.env.SUPER_PAYMASTER || '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e') as Address,
+  paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000') as Address,
+  aPNTs: (process.env.APNTS_ADDRESS || undefined) as Address | undefined,
+  mySBT: (process.env.MYSBT_ADDRESS || '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707') as Address,
+ // MySBT v2.4.5-optimized (2024-11-24) - Size optimized (21KB), SuperPaymaster callbacks, external extensions
 } as const;
 
 /**
@@ -24,7 +27,6 @@ export const CORE_ADDRESSES = {
  */
 export const TOKEN_ADDRESSES = {
   xPNTsFactory: '0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd',
-  mySBT: '0xa4eda5d023ea94a60b1d4b5695f022e1972858e7', // MySBT v2.4.5-optimized (2024-11-24) - Size optimized (21KB), SuperPaymaster callbacks, external extensions
 } as const;
 
 /**

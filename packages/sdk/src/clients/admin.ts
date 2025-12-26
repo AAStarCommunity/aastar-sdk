@@ -41,7 +41,7 @@ export function createAdminClient({
 
     const actions = {
         ...registryActions(usedAddresses.registry)(baseClient as any),
-        ...superPaymasterActions(usedAddresses.superPaymasterV2)(baseClient as any),
+        ...superPaymasterActions(usedAddresses.superPaymaster)(baseClient as any),
         ...paymasterV4Actions()(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),

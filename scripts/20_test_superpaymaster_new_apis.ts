@@ -41,6 +41,11 @@ async function main() {
     console.log(`   SuperPaymaster: ${superPaymasterAddress}`);
     console.log(`   Admin: ${account.address}\n`);
 
+    if (!superPaymasterAddress) {
+        console.error('SUPER_PAYMASTER environment variable is not set.');
+        process.exit(1);
+    }
+
     let testsPassed = 0;
     let testsFailed = 0;
 

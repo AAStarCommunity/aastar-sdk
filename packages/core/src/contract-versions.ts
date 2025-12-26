@@ -58,12 +58,12 @@ export const SEPOLIA_V2_VERSIONS = {
       ],
     } as ContractVersion,
 
-    superPaymasterV2: {
+    superPaymaster: {
       name: 'SuperPaymasterV2',
       version: '2.3.3',
       versionCode: 20303,
       deployedAt: '2024-11-24',
-      address: CORE_ADDRESSES.superPaymasterV2,
+      address: CORE_ADDRESSES.superPaymaster,
       features: [
         'VERSION interface',
         'Unified architecture',
@@ -158,7 +158,7 @@ export const SEPOLIA_V2_VERSIONS = {
       version: '2.4.5',
       versionCode: 20405,
       deployedAt: '2024-11-24',
-      address: TOKEN_ADDRESSES.mySBT,
+      address: CORE_ADDRESSES.mySBT,
       features: [
         'IVersioned interface: version() returns 2004005, versionString() returns "v2.4.5"',
         'VERSION constants: VERSION="2.4.5", VERSION_CODE=20405',
@@ -266,7 +266,7 @@ export function getAllV2Contracts(): ContractVersion[] {
 
   // Core system
   contracts.push(SEPOLIA_V2_VERSIONS.core.gToken);
-  contracts.push(SEPOLIA_V2_VERSIONS.core.superPaymasterV2);
+  contracts.push(SEPOLIA_V2_VERSIONS.core.superPaymaster);
   contracts.push(SEPOLIA_V2_VERSIONS.core.registry);
   contracts.push(SEPOLIA_V2_VERSIONS.core.gTokenStaking);
   contracts.push(SEPOLIA_V2_VERSIONS.core.paymasterFactory);

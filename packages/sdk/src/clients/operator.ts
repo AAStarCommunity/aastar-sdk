@@ -39,7 +39,7 @@ export function createOperatorClient({
 
     const actions = {
         ...stakingActions(usedAddresses.gTokenStaking)(client as any),
-        ...superPaymasterActions(usedAddresses.superPaymasterV2)(client as any),
+        ...superPaymasterActions(usedAddresses.superPaymaster)(client as any),
         ...paymasterV4Actions()(client as any),
         ...registryActions(usedAddresses.registry)(client as any),
     };
@@ -79,7 +79,7 @@ export function createOperatorClient({
                 address: usedAddresses.aPNTs!,
                 abi: erc20Abi,
                 functionName: 'approve',
-                args: [usedAddresses.superPaymasterV2, depositAmount],
+                args: [usedAddresses.superPaymaster, depositAmount],
                 account,
                 chain
             });
