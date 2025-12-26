@@ -120,9 +120,22 @@ async function runRegressionV2() {
     console.log(`   End User Created: ${userAccount.address}`);
     
     // --- 2. Funding Accounts ---
+    // Fund Operator with GToken (use transfer instead of mint to avoid permission issues)
     console.log('\n💸 2. Funding Accounts');
     const adminBalance = await adminClient.getBalance({ address: adminAccount.address });
     console.log(`   Admin Balance: ${adminBalance} wei`);
+    
+    // Transfer GToken from admin to operator (admin should have tokens from deployment)
+    const transferHash = await adminClient.writeContract({
+        address: localAddresses.gToken,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [operatorAccount.address, parseEther('50')],
+        account: adminAccount,
+        chain: foundry
+    });
+    
+    await adminClient.waitForTransactionReceipt({ hash: transferHash });
 
     const tx1 = await adminClient.sendTransaction({ to: operatorAccount.address, value: parseEther('0.1'), account: adminAccount });
     const tx2 = await adminClient.sendTransaction({ to: communityAccount.address, value: parseEther('0.1'), account: adminAccount });
