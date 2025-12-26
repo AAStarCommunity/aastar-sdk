@@ -1,14 +1,10 @@
 > `const` **TOKEN\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contract-addresses.ts#L23)
+Defined in: [packages/core/src/contract-addresses.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contract-addresses.ts#L28)
 
 Token System Addresses
 
 ## Type Declaration
-
-### mySBT
-
-> `readonly` **mySBT**: `"0xa4eda5d023ea94a60b1d4b5695f022e1972858e7"` = `'0xa4eda5d023ea94a60b1d4b5695f022e1972858e7'`
 
 ### xPNTsFactory
 

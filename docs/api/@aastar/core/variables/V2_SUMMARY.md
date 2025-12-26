@@ -1,6 +1,6 @@
 > `const` **V2\_SUMMARY**: `object`
 
-Defined in: [packages/core/src/contract-versions.ts:364](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contract-versions.ts#L364)
+Defined in: [packages/core/src/contract-versions.ts:364](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contract-versions.ts#L364)
 
 V2 Contract Summary
 

@@ -4,6 +4,10 @@ AAStar Shared Configuration Package
 
 - [NodeType](enumerations/NodeType.md)
 
+## Classes
+
+- [BLSSigner](classes/BLSSigner.md)
+
 ## Interfaces
 
 - [CommunityConfig](interfaces/CommunityConfig.md)
@@ -11,21 +15,28 @@ AAStar Shared Configuration Package
 
 ## Type Aliases
 
+- [AggregatorActions](type-aliases/AggregatorActions.md)
 - [ContractCategory](type-aliases/ContractCategory.md)
 - [ContractNetwork](type-aliases/ContractNetwork.md)
+- [DVTActions](type-aliases/DVTActions.md)
+- [FactoryActions](type-aliases/FactoryActions.md)
 - [NetworkContracts](type-aliases/NetworkContracts.md)
-- [PaymasterActions](type-aliases/PaymasterActions.md)
+- [PaymasterV4Actions](type-aliases/PaymasterV4Actions.md)
 - [RegistryActions](type-aliases/RegistryActions.md)
+- [ReputationActions](type-aliases/ReputationActions.md)
 - [RoleConfig](type-aliases/RoleConfig.md)
 - [SBTActions](type-aliases/SBTActions.md)
 - [StakingActions](type-aliases/StakingActions.md)
+- [SuperPaymasterActions](type-aliases/SuperPaymasterActions.md)
 - [SupportedNetwork](type-aliases/SupportedNetwork.md)
+- [TokenActions](type-aliases/TokenActions.md)
 
 ## Variables
 
 - [AASTAR\_COMMUNITY](variables/AASTAR_COMMUNITY.md)
 - [ALL\_ADDRESSES](variables/ALL_ADDRESSES.md)
 - [BLSAggregatorABI](variables/BLSAggregatorABI.md)
+- [BLSHelpers](variables/BLSHelpers.md)
 - [BPS\_DENOMINATOR](variables/BPS_DENOMINATOR.md)
 - [BRANDING](variables/BRANDING.md)
 - [BREAD\_COMMUNITY](variables/BREAD_COMMUNITY.md)
@@ -83,7 +94,10 @@ AAStar Shared Configuration Package
 
 ## Functions
 
+- [aggregatorActions](functions/aggregatorActions.md)
 - [createAAStarPublicClient](functions/createAAStarPublicClient.md)
+- [dvtActions](functions/dvtActions.md)
+- [factoryActions](functions/factoryActions.md)
 - [getAddressUrl](functions/getAddressUrl.md)
 - [getAllCommunityConfigs](functions/getAllCommunityConfigs.md)
 - [getAllV2Contracts](functions/getAllV2Contracts.md)
@@ -113,7 +127,10 @@ AAStar Shared Configuration Package
 - [isContractNetworkSupported](functions/isContractNetworkSupported.md)
 - [isRegisteredCommunity](functions/isRegisteredCommunity.md)
 - [isV2Contract](functions/isV2Contract.md)
-- [paymasterActions](functions/paymasterActions.md)
+- [paymasterV4Actions](functions/paymasterV4Actions.md)
 - [registryActions](functions/registryActions.md)
+- [reputationActions](functions/reputationActions.md)
 - [sbtActions](functions/sbtActions.md)
 - [stakingActions](functions/stakingActions.md)
+- [superPaymasterActions](functions/superPaymasterActions.md)
+- [tokenActions](functions/tokenActions.md)

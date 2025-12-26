@@ -1,6 +1,6 @@
 > `const` **ALL\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contract-addresses.ts#L87)
+Defined in: [packages/core/src/contract-addresses.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contract-addresses.ts#L91)
 
 All Addresses Combined (for reference)
 
@@ -28,11 +28,11 @@ All Addresses Combined (for reference)
 
 ### gToken
 
-> `readonly` **gToken**: `"0x99cCb70646Be7A5aeE7aF98cE853a1EA1A676DCc"` = `'0x99cCb70646Be7A5aeE7aF98cE853a1EA1A676DCc'`
+> `readonly` **gToken**: `` `0x${string}` ``
 
 ### gTokenStaking
 
-> `readonly` **gTokenStaking**: `"0xbEbF9b4c6a4cDB92Ac184aF211AdB13a0b9BF6c0"` = `'0xbEbF9b4c6a4cDB92Ac184aF211AdB13a0b9BF6c0'`
+> `readonly` **gTokenStaking**: `` `0x${string}` ``
 
 ### mockUSDT
 
@@ -40,11 +40,11 @@ All Addresses Combined (for reference)
 
 ### mySBT
 
-> `readonly` **mySBT**: `"0xa4eda5d023ea94a60b1d4b5695f022e1972858e7"` = `'0xa4eda5d023ea94a60b1d4b5695f022e1972858e7'`
+> `readonly` **mySBT**: `` `0x${string}` ``
 
 ### paymasterFactory
 
-> `readonly` **paymasterFactory**: `"0x65Cf6C4ab3d40f3C919b6F3CADC09Efb72817920"` = `'0x65Cf6C4ab3d40f3C919b6F3CADC09Efb72817920'`
+> `readonly` **paymasterFactory**: `` `0x${string}` ``
 
 ### paymasterV4\_1
 
@@ -56,15 +56,15 @@ All Addresses Combined (for reference)
 
 ### registry
 
-> `readonly` **registry**: `"0x49245E1f3c2dD99b3884ffeD410d0605Cf4dC696"` = `'0x49245E1f3c2dD99b3884ffeD410d0605Cf4dC696'`
+> `readonly` **registry**: `` `0x${string}` ``
 
 ### simpleAccountFactory
 
 > `readonly` **simpleAccountFactory**: `"0x8B516A71c134a4b5196775e63b944f88Cc637F2b"` = `'0x8B516A71c134a4b5196775e63b944f88Cc637F2b'`
 
-### superPaymasterV2
+### superPaymaster
 
-> `readonly` **superPaymasterV2**: `"0x7c3c355d9aa4723402bec2a35b61137b8a10d5db"` = `'0x7c3c355d9aa4723402bec2a35b61137b8a10d5db'`
+> `readonly` **superPaymaster**: `` `0x${string}` ``
 
 ### xPNTsFactory
 

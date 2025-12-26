@@ -1,0 +1,147 @@
+Defined in: [packages/core/src/crypto/blsSigner.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L9)
+
+BLS Signer for Registry reputation updates and DVT operations
+
+Uses BLS12-381 curve for signature aggregation
+
+## Constructors
+
+### Constructor
+
+> **new BLSSigner**(`privateKeyHex`): `BLSSigner`
+
+Defined in: [packages/core/src/crypto/blsSigner.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L12)
+
+#### Parameters
+
+##### privateKeyHex
+
+`` `0x${string}` ``
+
+#### Returns
+
+`BLSSigner`
+
+## Methods
+
+### getPublicKey()
+
+> **getPublicKey**(): `` `0x${string}` ``
+
+Defined in: [packages/core/src/crypto/blsSigner.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L31)
+
+Get BLS public key
+
+#### Returns
+
+`` `0x${string}` ``
+
+Public key as hex string
+
+***
+
+### sign()
+
+> **sign**(`message`): `` `0x${string}` ``
+
+Defined in: [packages/core/src/crypto/blsSigner.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L21)
+
+Sign a message with BLS private key
+
+#### Parameters
+
+##### message
+
+`` `0x${string}` ``
+
+Message hash to sign
+
+#### Returns
+
+`` `0x${string}` ``
+
+BLS signature as hex string
+
+***
+
+### aggregatePublicKeys()
+
+> `static` **aggregatePublicKeys**(`pubKeys`): `` `0x${string}` ``
+
+Defined in: [packages/core/src/crypto/blsSigner.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L52)
+
+Aggregate multiple BLS public keys
+
+#### Parameters
+
+##### pubKeys
+
+`` `0x${string}` ``[]
+
+Array of BLS public keys
+
+#### Returns
+
+`` `0x${string}` ``
+
+Aggregated public key
+
+***
+
+### aggregateSignatures()
+
+> `static` **aggregateSignatures**(`signatures`): `` `0x${string}` ``
+
+Defined in: [packages/core/src/crypto/blsSigner.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L41)
+
+Aggregate multiple BLS signatures
+
+#### Parameters
+
+##### signatures
+
+`` `0x${string}` ``[]
+
+Array of BLS signatures
+
+#### Returns
+
+`` `0x${string}` ``
+
+Aggregated signature
+
+***
+
+### verify()
+
+> `static` **verify**(`message`, `signature`, `publicKey`): `boolean`
+
+Defined in: [packages/core/src/crypto/blsSigner.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/crypto/blsSigner.ts#L65)
+
+Verify a BLS signature
+
+#### Parameters
+
+##### message
+
+`` `0x${string}` ``
+
+Message hash
+
+##### signature
+
+`` `0x${string}` ``
+
+BLS signature
+
+##### publicKey
+
+`` `0x${string}` ``
+
+BLS public key
+
+#### Returns
+
+`boolean`
+
+True if signature is valid

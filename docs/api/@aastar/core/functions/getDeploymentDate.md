@@ -1,6 +1,6 @@
 > **getDeploymentDate**(`network`, `contractName`): `string` \| `undefined`
 
-Defined in: [packages/core/src/contracts.ts:376](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contracts.ts#L376)
+Defined in: [packages/core/src/contracts.ts:376](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contracts.ts#L376)
 
 Get contract deployment date
 
@@ -27,6 +27,6 @@ Deployment date string (YYYY-MM-DD)
 ## Example
 
 ```ts
-const date = getDeploymentDate('sepolia', 'superPaymasterV2');
+const date = getDeploymentDate('sepolia', 'superPaymaster');
 // '2025-10-25'
 ```

@@ -1,6 +1,6 @@
 > `const` **NODE\_STAKE\_AMOUNTS**: `object`
 
-Defined in: [packages/core/src/constants.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/constants.ts#L43)
+Defined in: [packages/core/src/constants.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/constants.ts#L43)
 
 Minimum stake amount for different node types (in sGT)
 

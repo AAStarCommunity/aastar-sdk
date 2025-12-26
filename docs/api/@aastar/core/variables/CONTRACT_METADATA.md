@@ -1,6 +1,6 @@
 > `const` **CONTRACT\_METADATA**: `object`
 
-Defined in: [packages/core/src/contracts.ts:332](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contracts.ts#L332)
+Defined in: [packages/core/src/contracts.ts:332](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contracts.ts#L332)
 
 Contract deployment metadata
 
@@ -50,9 +50,9 @@ Contract deployment metadata
 
 > `readonly` **registry**: `"2025-11-02"` = `'2025-11-02'`
 
-#### sepolia.deploymentDates.superPaymasterV2
+#### sepolia.deploymentDates.superPaymaster
 
-> `readonly` **superPaymasterV2**: `"2025-11-01"` = `'2025-11-01'`
+> `readonly` **superPaymaster**: `"2025-11-01"` = `'2025-11-01'`
 
 #### sepolia.deploymentDates.xPNTsFactory
 

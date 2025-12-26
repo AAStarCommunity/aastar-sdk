@@ -1,6 +1,6 @@
 > `const` **MONITORING\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contract-addresses.ts#L55)
+Defined in: [packages/core/src/contract-addresses.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contract-addresses.ts#L59)
 
 Monitoring System Addresses
 

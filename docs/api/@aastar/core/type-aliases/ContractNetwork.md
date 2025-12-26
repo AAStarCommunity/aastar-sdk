@@ -1,5 +1,5 @@
 > **ContractNetwork** = keyof *typeof* [`CONTRACTS`](../variables/CONTRACTS.md)
 
-Defined in: [packages/core/src/contracts.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/core/src/contracts.ts#L111)
+Defined in: [packages/core/src/contracts.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/core/src/contracts.ts#L111)
 
 Supported network types for contracts

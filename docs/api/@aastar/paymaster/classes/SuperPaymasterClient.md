@@ -1,4 +1,4 @@
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L93)
+Defined in: [SuperPaymaster/index.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L93)
 
 Admin Client for SuperPaymaster V3
 
@@ -8,7 +8,7 @@ Admin Client for SuperPaymaster V3
 
 > **new SuperPaymasterClient**(`client`, `paymasterAddress`): `SuperPaymasterClient`
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L94)
+Defined in: [SuperPaymaster/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L94)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:94](https://github.com/AAS
 
 > **getOperator**(`operator`): `Promise`\<`any`\>
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L96)
+Defined in: [SuperPaymaster/index.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L96)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:96](https://github.com/AAS
 
 > `static` **configureOperator**(`wallet`, `paymaster`, `token`, `treasury`, `exchangeRate`): `Promise`\<`any`\>
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L105)
+Defined in: [SuperPaymaster/index.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L105)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:105](https://github.com/AA
 
 > `static` **setAPNTsToken**(`wallet`, `paymaster`, `token`): `Promise`\<`any`\>
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L141)
+Defined in: [SuperPaymaster/index.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L141)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:141](https://github.com/AA
 
 > `static` **setOperatorPaused**(`wallet`, `paymaster`, `operator`, `paused`): `Promise`\<`any`\>
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L121)
+Defined in: [SuperPaymaster/index.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L121)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [packages/paymaster/src/AOA-Plus/index.ts:121](https://github.com/AA
 
 > `static` **updateReputation**(`wallet`, `paymaster`, `operator`, `score`): `Promise`\<`any`\>
 
-Defined in: [packages/paymaster/src/AOA-Plus/index.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/02429a724df6d1db083144e00515cd09857c0075/packages/paymaster/src/AOA-Plus/index.ts#L131)
+Defined in: [SuperPaymaster/index.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/1e464e07d70938a0d2026a0fe8dd301cb780e6eb/packages/paymaster/src/SuperPaymaster/index.ts#L131)
 
 #### Parameters
 
