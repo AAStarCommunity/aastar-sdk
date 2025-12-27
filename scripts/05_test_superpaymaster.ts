@@ -5,18 +5,18 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 
-const RPC_URL = process.env.SEPOLIA_RPC_URL;
-const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
-const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+const RPC_URL = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL;
+const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL || process.env.BUNDLER_RPC;
+const ENTRY_POINT = (process.env.ENTRY_POINT_ADDR || "0x0000000071727De22E5E9d8BAf0edAc6f37da032") as Hex;
 
-const ACCOUNT_C = process.env.TEST_SIMPLE_ACCOUNT_C as Hex; 
-const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex; 
-const BPNTS = process.env.BPNTS_ADDRESS as Hex;
+const ACCOUNT_C = (process.env.TEST_SIMPLE_ACCOUNT_C || process.env.ACCOUNT_C) as Hex; 
+const SIGNER_KEY = (process.env.PRIVATE_KEY_JASON || process.env.USER_KEY) as Hex; 
+const BPNTS = (process.env.BPNTS_ADDRESS || process.env.GTOKEN_ADDRESS) as Hex;
 const APNTS = process.env.APNTS_ADDRESS as Hex;
-const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
-const ANNI_KEY = process.env.PRIVATE_KEY_ANNI as Hex; 
+const SUPER_PAYMASTER = (process.env.SUPER_PAYMASTER_ADDRESS || process.env.SUPER_PAYMASTER) as Hex;
+const ANNI_KEY = (process.env.PRIVATE_KEY_ANNI || process.env.OPERATOR_KEY) as Hex;  
 const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
 if (!BUNDLER_RPC || !BPNTS || !SUPER_PAYMASTER) throw new Error("Missing Config for Group C");
@@ -182,13 +182,15 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
             await publicClient.waitForTransactionReceipt({ hash: txTrans });
             console.log("   ➡ Transferred tokens.");
 
-            // 2. Notify
-            const txNotify = await wallet.writeContract({
-                address: pm, abi: pmAbi, functionName: 'notifyDeposit',
-                args: [parseEther("100")]
+            // 2. Deposit via depositFor (Push)
+            const txDep = await wallet.writeContract({
+                address: pm,
+                abi: pmAbi,
+                functionName: 'depositFor',
+                args: [wallet.account.address, parseEther('100')]
             });
-            await publicClient.waitForTransactionReceipt({ hash: txNotify });
-            console.log("   ✅ Deposited (Push + Notify): 100 aPNTs");
+            await publicClient.waitForTransactionReceipt({ hash: txDep });
+            console.log("   ✅ Deposited (Push + DepositFor): 100 aPNTs");
         }
     }
 }
@@ -361,6 +363,7 @@ function entryPointGetUserOpHash(op: any, ep: Address, chainId: number): Hex {
     return keccak256(enc);
 }
 
-if (require.main === module) {
+import { fileURLToPath } from 'url';
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
     runSuperPaymasterTest().catch(console.error);
 }

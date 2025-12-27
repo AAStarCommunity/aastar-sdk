@@ -148,13 +148,12 @@ async function main() {
     // 3. Approve Staking (Operator must approve since they are the payer)
     const APPROVE_AMOUNT = parseEther('100'); // Stake 50 + Burn 5 + buffer
     console.log('   Approving GToken (Operator)...');
-    const appTx = await operatorClient.writeContract({
-        address: localAddresses.gToken,
-        abi: ERC20ABI,
-        functionName: 'approve',
-        args: [localAddresses.gTokenStaking, APPROVE_AMOUNT]
+    const txApprove = await operatorClient.writeContract({
+        address: localAddresses.gToken, abi: ERC20ABI,
+        functionName: 'approve', args: [localAddresses.gTokenStaking, APPROVE_AMOUNT]
     });
-    await client.waitForTransactionReceipt({ hash: appTx });
+    await client.waitForTransactionReceipt({ hash: txApprove });
+    await client.waitForTransactionReceipt({ hash: txApprove });
     console.log('   Approved (Operator).');
 
     // 3.1 Approve Staking (Admin - Critical Fix)
@@ -243,8 +242,8 @@ async function main() {
             const notTx = await operatorClient.writeContract({
                 address: localAddresses.superPaymaster,
                 abi: SuperPaymasterABI,
-                functionName: 'notifyDeposit',
-                args: [DEPOSIT]
+                functionName: 'depositFor',
+                args: [operatorAccount.address, DEPOSIT]
             });
             await client.waitForTransactionReceipt({ hash: notTx });
             console.log('✅ Deposit Notified Successfully');

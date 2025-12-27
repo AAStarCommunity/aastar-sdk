@@ -18,9 +18,9 @@ if (!SUPER_PAYMASTER || !SIGNER_KEY || !APNTS) throw new Error("Missing Config")
 
 const pmAbi = parseAbi([
     'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
-    'function deposit(uint256)',
-    'function notifyDeposit(uint256)',
-    'function withdraw(uint256)',
+    'function deposit(uint256) external',
+    'function depositFor(address, uint256) external',
+    'function withdraw(uint256) external',
     'function withdrawProtocolRevenue(address, uint256)',
     'function protocolRevenue() view returns (uint256)'
 ]);
@@ -74,14 +74,22 @@ async function runFundingTest() {
         await publicClient.waitForTransactionReceipt({ hash: hashMint });
     }
 
-    // V3.1.1 Policy: Use Push Model (Transfer + notifyDeposit) if direct deposit is restricted
-    console.log("   🚀 Using notifyDeposit (Push Model)...");
-    const hashTrans = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'transfer', args: [SUPER_PAYMASTER, depositAmount] });
-    await publicClient.waitForTransactionReceipt({ hash: hashTrans });
+    // V3.1.1 Policy: Use Push Model (Approve + DepositFor)
+    console.log("   Calling depositFor(100 aPNTs)...");
     
-    const hashNotif = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'notifyDeposit', args: [depositAmount] });
-    await publicClient.waitForTransactionReceipt({ hash: hashNotif });
-    console.log("   ✅ notifyDeposit Success.");
+    // Ensure Approval
+    const allowPM = await publicClient.readContract({ address: APNTS, abi: erc20Abi, functionName: 'allowance', args: [signer.address, SUPER_PAYMASTER] });
+    if (allowPM < depositAmount) {
+         const txApp = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("1000")] });
+         await publicClient.waitForTransactionReceipt({ hash: txApp });
+    }
+
+    const txDep = await wallet.writeContract({
+        address: SUPER_PAYMASTER, abi: pmAbi,
+        functionName: 'depositFor', args: [signer.address, depositAmount]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: txDep });
+    console.log("   ✅ deposit Success.");
 
     // 3. Test Withdraw
     console.log("   🏧 Testing withdraw...");

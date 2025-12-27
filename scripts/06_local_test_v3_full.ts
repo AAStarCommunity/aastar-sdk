@@ -192,12 +192,12 @@ async function runFullV3Test() {
 
     // Confirm Configured
     if (!opData[1]) {
-         console.log("   ⚙️ Configuring Operator...");
-         const hash = await wallet.writeContract({
-             address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'configureOperator', 
-             args: [APNTS, signer.address, 1000000000000000000n] 
-         });
-          await publicClient.waitForTransactionReceipt({ hash });
+         console.log("   Calling depositFor(200)...");
+    const txDep = await wallet.writeContract({
+        address: SUPER_PAYMASTER, abi: pmAbi,
+        functionName: 'depositFor', args: [wallet.account.address, parseEther('200')]
+    });
+          await publicClient.waitForTransactionReceipt({ hash: txDep });
     }
 
     // Test Pause/Unpause
