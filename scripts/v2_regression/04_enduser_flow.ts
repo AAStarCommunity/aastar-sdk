@@ -69,7 +69,7 @@ async function enduserFlow() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [[userAccount.address, communityAccount.address, '', '', 0n]]
+            [{ account: userAccount.address, community: communityAccount.address, avatarURI: '', ensName: '', stakeAmount: 0n }]
         );
 
         // Register ENDUSER role using writeContract

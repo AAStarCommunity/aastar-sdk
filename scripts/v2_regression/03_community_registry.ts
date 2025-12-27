@@ -76,7 +76,7 @@ async function communityRegistry() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [[uniqueName, '', 'https://test.com', 'A test community for regression tests', '', 0n]]
+            [{ name: uniqueName, ensName: '', website: 'https://test.com', description: 'A test community for regression tests', logoURI: '', stakeAmount: 0n }]
         );
 
         // Register using writeContract directly

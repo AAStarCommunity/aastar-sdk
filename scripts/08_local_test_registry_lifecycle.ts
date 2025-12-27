@@ -128,9 +128,10 @@ async function main() {
         functionName: 'roleConfigs',
         args: [ROLE_PAYMASTER_AOA]
     }) as any;
-    console.log(`   DEBUG: roleConfig:`, roleConfig); // ADDED LOG
-    console.log(`   Role Config (AOA): MinStake=${formatEther(roleConfig[0])}, Active=${roleConfig[6]}`);
-    if(!roleConfig[6]) throw new Error("Paymaster Role not active");
+    console.log(`   DEBUG: roleConfig:`, roleConfig);
+    // V3.2 RoleConfig: 0:minStake, 1:entryBurn... 8:isActive, 9:description
+    console.log(`   Role Config (AOA): MinStake=${formatEther(roleConfig[0])}, Active=${roleConfig[8]}`);
+    if(!roleConfig[8]) throw new Error("Paymaster Role not active");
 
     const requiredStake = roleConfig[0];
 
@@ -168,7 +169,7 @@ async function main() {
 
         const commData = encodeAbiParameters(
              [{ type: 'tuple', components: [{ name: 'name', type: 'string' }, { name: 'ensName', type: 'string' }, { name: 'website', type: 'string' }, { name: 'description', type: 'string' }, { name: 'logoURI', type: 'string' }, { name: 'stakeAmount', type: 'uint256' }] }],
-             [['PM Community', '', '', '', '', 0n]]
+             [{ name: 'PM Community', ensName: '', website: '', description: '', logoURI: '', stakeAmount: 0n }]
         );
         const txComm = await pmWallet.writeContract({
             address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf', args: [ROLE_COMMUNITY, commData]
@@ -261,16 +262,16 @@ async function main() {
     // Increase Min Stake for AOA
     const newMinStake = requiredStake + parseEther('1');
     const roleConfigStruct = [
-        newMinStake,      // minStake
-        roleConfig[1],    // entryBurn
-        roleConfig[2],    // slashThreshold
-        roleConfig[3],    // slashBase
-        roleConfig[4],    // slashIncrement
-        roleConfig[5],    // slashMax
-        roleConfig[6],    // exitFeePercent
-        roleConfig[7],    // minExitFee
-        true,             // isActive
-        "Updated AOA Paymaster" // description
+        newMinStake,      // 0: minStake
+        roleConfig[1],    // 1: entryBurn
+        roleConfig[2],    // 2: slashThreshold
+        roleConfig[3],    // 3: slashBase
+        roleConfig[4],    // 4: slashIncrement
+        roleConfig[5],    // 5: slashMax
+        roleConfig[6],    // 6: exitFeePercent
+        roleConfig[7],    // 7: minExitFee
+        true,             // 8: isActive
+        "Updated AOA Paymaster" // 9: description
     ];
 
     console.log(`   Updating MinStake to ${formatEther(newMinStake)}...`);
@@ -296,16 +297,16 @@ async function main() {
     // Revert config to avoid breaking other tests
     console.log(`   Restoring Config...`);
     const restoreConfigStruct = [
-        requiredStake,
-        roleConfig[1],
-        roleConfig[2],
-        roleConfig[3],
-        roleConfig[4],
-        roleConfig[5],
-        roleConfig[6],
-        roleConfig[7],
-        roleConfig[8],
-        roleConfig[9]
+        requiredStake,    // 0
+        roleConfig[1],    // 1
+        roleConfig[2],    // 2
+        roleConfig[3],    // 3
+        roleConfig[4],    // 4
+        roleConfig[5],    // 5
+        roleConfig[6],    // 6
+        roleConfig[7],    // 7
+        roleConfig[8],    // 8
+        roleConfig[9]     // 9
     ];
      const txRestore = await adminWallet.writeContract({
         address: REGISTRY_ADDR,

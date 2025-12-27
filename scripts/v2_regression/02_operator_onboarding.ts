@@ -111,7 +111,7 @@ async function onboarding() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [['TestCommunity', 'test.eth', 'http://test.com', 'Test Community', 'http://logo.png', 0n]]
+            [{ name: 'TestCommunity', ensName: 'test.eth', website: 'http://test.com', description: 'Test Community', logoURI: 'http://logo.png', stakeAmount: 0n }]
         );
         
         // Register Community role
@@ -190,19 +190,19 @@ async function onboarding() {
         abi: [{
             type: 'function', name: 'operators', inputs: [{type:'address'}],
             outputs: [
-                {name:'xPNTsToken', type:'address'}, {name:'treasury', type:'address'},
-                {name:'exchangeRate', type:'uint96'}, {name:'reputation', type:'uint256'},
-                {name:'aPNTsBalance', type:'uint256'}, {name:'totalSpent', type:'uint256'},
-                {name:'totalTxSponsored', type:'uint256'}, {name:'isConfigured', type:'bool'},
-                {name:'isPaused', type:'bool'}
+                {name:'balance', type:'uint128'}, {name:'exRate', type:'uint96'},
+                {name:'isConfigured', type:'bool'}, {name:'isPaused', type:'bool'},
+                {name:'xPNTsToken', type:'address'}, {name:'reputation', type:'uint32'},
+                {name:'treasury', type:'address'}, {name:'spent', type:'uint256'},
+                {name:'txSponsored', type:'uint256'}
             ],
             stateMutability: 'view'
         }],
         functionName: 'operators',
         args: [operatorAccount.address]
-    });
+    }) as any[];
 
-    if (!opConfig[7]) { // isConfigured
+    if (!opConfig[2]) { // isConfigured at index 2 in V3.2 Packed
         const configTx = await operatorClient.configureOperator({
             xPNTs: localAddresses.aPNTs,
             treasury: operatorAccount.address,

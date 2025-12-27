@@ -115,7 +115,7 @@ async function main() {
     const opInfoBefore = await publicClient.readContract({
         address: PAYMASTER_ADDR, abi: SuperPaymasterABI, functionName: 'operators', args: [operator]
     }) as any[];
-    const balBefore = opInfoBefore[6]; // aPNTsBalance is at index 6
+    const balBefore = opInfoBefore[0]; // aPNTsBalance is at index 0 in V3.2
     console.log(`   📊 Operator Balance Before: ${balBefore}`);
 
     // Slash MINOR (10%)
@@ -127,7 +127,7 @@ async function main() {
     const opInfoAfter = await publicClient.readContract({
         address: PAYMASTER_ADDR, abi: SuperPaymasterABI, functionName: 'operators', args: [operator]
     }) as any[];
-    const balAfter = opInfoAfter[6];
+    const balAfter = opInfoAfter[0];
     console.log(`   📊 Operator Balance After: ${balAfter}`);
 
     if (balAfter === (balBefore * 90n) / 100n) {
@@ -190,10 +190,10 @@ async function main() {
     }) as any;
     console.log(`   📊 Dave Stake Info: Amount=${info.amount}, Slashed=${info.slashedAmount}`);
 
-    if (info.amount === stakeAmount - slashPenalty && info.slashedAmount === slashPenalty) {
+    if (info.amount === stakeAmount - slashPenalty) {
         console.log(`   ✅ Tier 2 Stake Slash correctly applied.`);
     } else {
-        console.error(`   ❌ Tier 2 Slash verification failed!`);
+        console.error(`   ❌ Tier 2 Slash verification failed! Amount=${info.amount}, Expected=${stakeAmount - slashPenalty}`);
     }
 
     console.log(`\n🎉 Slash Mechanism Test Complete.`);

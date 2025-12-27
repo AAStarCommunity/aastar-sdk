@@ -20,82 +20,107 @@ async function main() {
 
     // 1. Registry → GTokenStaking
     console.log('1️⃣  Checking Registry → GTokenStaking...');
-    const registryStaking = await client.readContract({
-        address: REGISTRY,
-        abi: parseAbi(['function GTOKEN_STAKING() view returns (address)']),
-        functionName: 'GTOKEN_STAKING'
-    });
-    if ((registryStaking as string).toLowerCase() !== GTOKEN_STAKING.toLowerCase()) {
-        console.error(`   ❌ MISMATCH!`);
-        console.error(`      .env: ${GTOKEN_STAKING}`);
-        console.error(`      Registry: ${registryStaking}`);
+    try {
+        const registryStaking = await client.readContract({
+            address: REGISTRY,
+            abi: parseAbi(['function GTOKEN_STAKING() view returns (address)']),
+            functionName: 'GTOKEN_STAKING'
+        });
+        if ((registryStaking as string).toLowerCase() !== (GTOKEN_STAKING || "").toLowerCase()) {
+            console.error(`   ❌ MISMATCH!`);
+            console.error(`      .env: ${GTOKEN_STAKING}`);
+            console.error(`      Registry: ${registryStaking}`);
+            hasError = true;
+        } else {
+            console.log(`   ✅ Match: ${GTOKEN_STAKING}`);
+        }
+    } catch (e) {
+        console.error(`   ❌ Failed to read GTOKEN_STAKING from Registry: ${e instanceof Error ? e.message : String(e)}`);
         hasError = true;
-    } else {
-        console.log(`   ✅ Match: ${GTOKEN_STAKING}`);
     }
 
     // 2. GTokenStaking → GToken
     console.log('\n2️⃣  Checking GTokenStaking → GToken...');
-    const stakingGToken = await client.readContract({
-        address: GTOKEN_STAKING,
-        abi: parseAbi(['function GTOKEN() view returns (address)']),
-        functionName: 'GTOKEN'
-    });
-    if ((stakingGToken as string).toLowerCase() !== GTOKEN.toLowerCase()) {
-        console.error(`   ❌ MISMATCH!`);
-        console.error(`      .env: ${GTOKEN}`);
-        console.error(`      GTokenStaking: ${stakingGToken}`);
+    try {
+        const stakingGToken = await client.readContract({
+            address: GTOKEN_STAKING,
+            abi: parseAbi(['function GTOKEN() view returns (address)']),
+            functionName: 'GTOKEN'
+        });
+        if ((stakingGToken as string).toLowerCase() !== (GTOKEN || "").toLowerCase()) {
+            console.error(`   ❌ MISMATCH!`);
+            console.error(`      .env: ${GTOKEN}`);
+            console.error(`      GTokenStaking: ${stakingGToken}`);
+            hasError = true;
+        } else {
+            console.log(`   ✅ Match: ${GTOKEN}`);
+        }
+    } catch (e) {
+        console.error(`   ❌ Failed to read GTOKEN from Staking: ${e instanceof Error ? e.message : String(e)}`);
         hasError = true;
-    } else {
-        console.log(`   ✅ Match: ${GTOKEN}`);
     }
 
     // 3. Registry → MySBT
     console.log('\n3️⃣  Checking Registry → MySBT...');
-    const registryMySBT = await client.readContract({
-        address: REGISTRY,
-        abi: parseAbi(['function MYSBT() view returns (address)']),
-        functionName: 'MYSBT'
-    });
-    if ((registryMySBT as string).toLowerCase() !== MYSBT.toLowerCase()) {
-        console.error(`   ❌ MISMATCH!`);
-        console.error(`      .env: ${MYSBT}`);
-        console.error(`      Registry: ${registryMySBT}`);
+    try {
+        const registryMySBT = await client.readContract({
+            address: REGISTRY,
+            abi: parseAbi(['function MYSBT() view returns (address)']),
+            functionName: 'MYSBT'
+        });
+        if ((registryMySBT as string).toLowerCase() !== (MYSBT || "").toLowerCase()) {
+            console.error(`   ❌ MISMATCH!`);
+            console.error(`      .env: ${MYSBT}`);
+            console.error(`      Registry: ${registryMySBT}`);
+            hasError = true;
+        } else {
+            console.log(`   ✅ Match: ${MYSBT}`);
+        }
+    } catch (e) {
+        console.error(`   ❌ Failed to read MYSBT from Registry: ${e instanceof Error ? e.message : String(e)}`);
         hasError = true;
-    } else {
-        console.log(`   ✅ Match: ${MYSBT}`);
     }
 
     // 4. SuperPaymaster → aPNTs
     console.log('\n4️⃣  Checking SuperPaymaster → aPNTs...');
-    const paymasterAPNTs = await client.readContract({
-        address: SUPER_PAYMASTER,
-        abi: parseAbi(['function APNTS_TOKEN() view returns (address)']),
-        functionName: 'APNTS_TOKEN'
-    });
-    if ((paymasterAPNTs as string).toLowerCase() !== APNTS.toLowerCase()) {
-        console.error(`   ❌ MISMATCH!`);
-        console.error(`      .env: ${APNTS}`);
-        console.error(`      SuperPaymaster: ${paymasterAPNTs}`);
+    try {
+        const paymasterAPNTs = await client.readContract({
+            address: SUPER_PAYMASTER,
+            abi: parseAbi(['function APNTS_TOKEN() view returns (address)']),
+            functionName: 'APNTS_TOKEN'
+        });
+        if ((paymasterAPNTs as string).toLowerCase() !== (APNTS || "").toLowerCase()) {
+            console.error(`   ❌ MISMATCH!`);
+            console.error(`      .env: ${APNTS}`);
+            console.error(`      SuperPaymaster: ${paymasterAPNTs}`);
+            hasError = true;
+        } else {
+            console.log(`   ✅ Match: ${APNTS}`);
+        }
+    } catch (e) {
+        console.error(`   ❌ Failed to read APNTS_TOKEN from Paymaster: ${e instanceof Error ? e.message : String(e)}`);
         hasError = true;
-    } else {
-        console.log(`   ✅ Match: ${APNTS}`);
     }
 
     // 5. SuperPaymaster → Registry
     console.log('\n5️⃣  Checking SuperPaymaster → Registry...');
-    const paymasterRegistry = await client.readContract({
-        address: SUPER_PAYMASTER,
-        abi: parseAbi(['function REGISTRY() view returns (address)']),
-        functionName: 'REGISTRY'
-    });
-    if ((paymasterRegistry as string).toLowerCase() !== REGISTRY.toLowerCase()) {
-        console.error(`   ❌ MISMATCH!`);
-        console.error(`      .env: ${REGISTRY}`);
-        console.error(`      SuperPaymaster: ${paymasterRegistry}`);
+    try {
+        const paymasterRegistry = await client.readContract({
+            address: SUPER_PAYMASTER,
+            abi: parseAbi(['function REGISTRY() view returns (address)']),
+            functionName: 'REGISTRY'
+        });
+        if ((paymasterRegistry as string).toLowerCase() !== (REGISTRY || "").toLowerCase()) {
+            console.error(`   ❌ MISMATCH!`);
+            console.error(`      .env: ${REGISTRY}`);
+            console.error(`      SuperPaymaster: ${paymasterRegistry}`);
+            hasError = true;
+        } else {
+            console.log(`   ✅ Match: ${REGISTRY}`);
+        }
+    } catch (e) {
+        console.error(`   ❌ Failed to read REGISTRY from Paymaster: ${e instanceof Error ? e.message : String(e)}`);
         hasError = true;
-    } else {
-        console.log(`   ✅ Match: ${REGISTRY}`);
     }
 
     // Summary

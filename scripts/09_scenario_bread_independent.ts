@@ -22,11 +22,11 @@ const __dirname = path.dirname(__filename);
 // Fix BigInt serialization
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(__dirname, '../../SuperPaymaster/contracts/.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
 
 // --- LOAD ABIS ---
 const loadAbi = (name: string) => {
-    const abiPath = path.resolve(__dirname, `../abis/${name}.abi.json`);
+    const abiPath = path.resolve(__dirname, `../abis/${name}.json`);
     if (!fs.existsSync(abiPath)) throw new Error(`ABI not found: ${abiPath}`);
     return JSON.parse(fs.readFileSync(abiPath, 'utf-8'));
 };
@@ -204,6 +204,19 @@ async function main() {
     await pmWallet.writeContract({
         address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, pmStake]
     });
+
+    // --- Ensure COMMUNITY Role for PM (Prerequisite) ---
+    const hasPmCommunity = await publicClient.readContract({ address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole', args: [ROLE_COMMUNITY, pmAccount.address] });
+    if (!hasPmCommunity) {
+        console.log(`   ⚠️ BreadPaymaster missing COMMUNITY role. Registering...`);
+        const commData = encodeAbiParameters(
+            [{ type: 'tuple', components: [{ name: 'name', type: 'string' }, { name: 'ensName', type: 'string' }, { name: 'website', type: 'string' }, { name: 'description', type: 'string' }, { name: 'logoURI', type: 'string' }, { name: 'stakeAmount', type: 'uint256' }] }],
+            [{ name: 'BreadPM Community', ensName: '', website: '', description: '', logoURI: '', stakeAmount: 0n }]
+        );
+        const txCPm = await pmWallet.writeContract({ address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf', args: [ROLE_COMMUNITY, commData] });
+        await waitForTx(publicClient, txCPm);
+        console.log(`   ✅ Registered COMMUNITY for PM.`);
+    }
 
     const pmData = encodeAbiParameters(
         [{ name: 'paymaster', type: 'address' }, { name: 'name', type: 'string' }, { name: 'api', type: 'string' }, { name: 'stake', type: 'uint256' }],

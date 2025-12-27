@@ -46,8 +46,8 @@ async function runFundingTest() {
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);
     
-    // ABI returns: xPNTsToken(0), isConfigured(1), isPaused(2), treasury(3), exchangeRate(4), aPNTsBalance(5), totalSpent(6), totalTxSponsored(7), reputation(8)
-    const initialBalance = BigInt(opData[5]);
+    // V3.2 Packed: 0: balance, 1: exRate, 2: isConfigured, 3: isPaused, 4: token, 5: reputation, 6: treasury, 7: spent, 8: txSponsored
+    const initialBalance = BigInt(opData[0]);
     console.log(`   Initial Operator Balance: ${formatEther(initialBalance)} aPNTs`);
 
     // 2. Test Deposit (The official way)

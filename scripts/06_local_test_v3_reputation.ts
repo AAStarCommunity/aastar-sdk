@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, formatEther, parseAbi, keccak256, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, http, formatEther, parseAbi, keccak256, toHex, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -15,8 +15,9 @@ const REPUTATION_SYSTEM = process.env.REPUTATION_SYSTEM_ADDR as Hex;
 const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
 // Use a random address if ALICE is missing, sufficient for reputation updates (registry doesn't checks if it's a contract for score updates)
 const ACCOUNT_C = (process.env.ALICE_AA_ACCOUNT || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8') as Hex; // Default to Anvil #1
+const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 
-if (!REGISTRY || !REPUTATION_SYSTEM || !SIGNER_KEY) throw new Error("Missing Config");
+if (!REGISTRY || !REPUTATION_SYSTEM || !SIGNER_KEY || !SUPER_PAYMASTER) throw new Error("Missing Config");
 
 const regAbi = parseAbi([
     'function globalReputation(address) view returns (uint256)',
@@ -31,6 +32,10 @@ const repAbi = parseAbi([
     'function setRule(bytes32, uint256, uint256, uint256, string)'
 ]);
 
+const pmAbi = parseAbi([
+    'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)',
+]);
+
 async function runReputationTest() {
     console.log("🧪 Running SuperPaymaster V3 Reputation & Credit Modular Test...");
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
@@ -39,7 +44,7 @@ async function runReputationTest() {
 
     // 1. Setup Scoring Rules (Community Admin Context)
     console.log("   📏 Setting up Scoring Rules...");
-    const ruleId = keccak256(Buffer.from("TEST_RULE"));
+    const ruleId = keccak256(toHex("TEST_RULE"));
     const hashRule = await wallet.writeContract({ 
         address: REPUTATION_SYSTEM, abi: repAbi, functionName: 'setRule', 
         args: [ruleId, 50n, 5n, 100n, "Modular Test Rule"] 
@@ -48,7 +53,7 @@ async function runReputationTest() {
 
     // 1.1 Ensure Community Role (Prerequisite for Reputation Updates)
     console.log("   🔍 Checking Community Role...");
-    const ROLE_COMMUNITY = keccak256(Buffer.from('COMMUNITY'));
+    const ROLE_COMMUNITY = keccak256(toHex('COMMUNITY'));
     const hasCommunity = await publicClient.readContract({
         address: REGISTRY, abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
         functionName: 'hasRole', args: [ROLE_COMMUNITY, signer.address]
@@ -78,7 +83,7 @@ async function runReputationTest() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [['RepTest', '', '', '', '', 0n]]
+            [{ name: 'RepTest', ensName: '', website: '', description: '', logoURI: '', stakeAmount: 0n }]
         ));
 
         // Register
@@ -158,11 +163,14 @@ async function runReputationTest() {
     await publicClient.waitForTransactionReceipt({ hash: hashSync });
 
     // 5. Verify Final Global Reputation & Credit Limit
+    let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] }) as unknown as any[];
+    console.log(`   🔍 Final Operator Reputation: ${opData[5]}`);
+    
     const globalRep = await publicClient.readContract({ address: REGISTRY, abi: regAbi, functionName: 'globalReputation', args: [ACCOUNT_C] });
     const credit = await publicClient.readContract({ address: REGISTRY, abi: regAbi, functionName: 'getCreditLimit', args: [ACCOUNT_C] });
     
     console.log(`   🏆 Registry Reputation: ${globalRep}`);
-    console.log(`   💳 Credit Limit: ${formatEther(credit)} ETH`);
+    console.log(`   💳 Credit Limit: ${formatEther(credit as bigint)} ETH`);
 
     console.log("\n🏁 Reputation Module Test Passed (Coverage: computeScore, syncToRegistry, setRule, setEntropyFactor, getCreditLimit)");
 }

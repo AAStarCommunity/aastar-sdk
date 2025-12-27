@@ -20,7 +20,7 @@ const APNTS = process.env.XPNTS_ADDR as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !REGISTRY) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
+    'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)',
     'function configureOperator(address, address, uint256)',
     'function setOperatorPaused(address, bool)',
     'function updateReputation(address, uint256)',
@@ -94,7 +94,8 @@ async function runAdminTest() {
     // ABI returns: xPNTsToken(0), isConfigured(1), isPaused(2), treasury(3), exchangeRate(4), aPNTsBalance(5), totalSpent(6), totalTxSponsored(7), reputation(8)
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);
-    console.log(`   Initial State: Configured=${opData[1]}, Paused=${opData[2]}`);
+    // V3.2 Packed: 0:balance, 1:exRate, 2:isConfigured, 3:isPaused, 4:token, 5:reputation, 6:treasury, 7:spent, 8:txSponsored
+    console.log(`   Initial State: Configured=${opData[2]}, Paused=${opData[3]}`);
 
     // 2. Test configureOperator
     console.log("   ⚙️ Testing configureOperator...");
@@ -104,7 +105,7 @@ async function runAdminTest() {
     });
     await publicClient.waitForTransactionReceipt({ hash: hashConf });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (!opData[1]) throw new Error("configureOperator failed");
+    if (!opData[2]) throw new Error("configureOperator failed");
     console.log("   ✅ Operator Configured.");
 
     // 3. Test setOperatorPaused
@@ -115,7 +116,7 @@ async function runAdminTest() {
     });
     await publicClient.waitForTransactionReceipt({ hash: hashPause });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (opData[2] !== true) throw new Error("Pause failed");
+    if (opData[3] !== true) throw new Error("Pause failed");
     console.log("   ✅ Operator Paused.");
 
     console.log("   ▶️ Testing setOperatorPaused (false)...");
@@ -125,7 +126,7 @@ async function runAdminTest() {
     });
     await publicClient.waitForTransactionReceipt({ hash: hashUnpause });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (opData[2] !== false) throw new Error("Unpause failed");
+    if (opData[3] !== false) throw new Error("Unpause failed");
     console.log("   ✅ Operator Unpaused.");
 
     // 4. Test updateReputation
