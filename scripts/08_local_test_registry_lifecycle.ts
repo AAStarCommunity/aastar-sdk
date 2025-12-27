@@ -147,6 +147,36 @@ async function main() {
         console.warn(`   ⚠️ Funding check failed (maybe duplicate run, assuming balance ok): ${e.message.split('\n')[0]}`);
     }
 
+    // 1.1.5 Helper: Ensure COMMUNITY Role (Prerequisite in V3.2.0)
+    console.log(`   Checking Prerequisite: COMMUNITY Role...`);
+    const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
+    const hasCommunity = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole', args: [ROLE_COMMUNITY, paymasterUser.address]
+    });
+
+    if (!hasCommunity) {
+        console.log(`   ⚠️ Missing COMMUNITY role. Registering...`);
+        // We technically need GTokens for this too if it requires stake.
+        // Assuming Admin funded enough or we fund more.
+        await adminWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'transfer', args: [paymasterUser.address, parseEther('50')] 
+        }); 
+        
+        await pmWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, parseEther('50')] 
+        });
+
+        const commData = encodeAbiParameters(
+             [{ type: 'tuple', components: [{ name: 'name', type: 'string' }, { name: 'ensName', type: 'string' }, { name: 'website', type: 'string' }, { name: 'description', type: 'string' }, { name: 'logoURI', type: 'string' }, { name: 'stakeAmount', type: 'uint256' }] }],
+             [['PM Community', '', '', '', '', 0n]]
+        );
+        const txComm = await pmWallet.writeContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf', args: [ROLE_COMMUNITY, commData]
+        });
+        await waitForTx(publicClient, txComm);
+        console.log(`   ✅ COMMUNITY Registered.`);
+    }
+
     // 1.2 Approve Staking Contract
     console.log(`   Approving Staking Contract...`);
     const txApprove = await pmWallet.writeContract({

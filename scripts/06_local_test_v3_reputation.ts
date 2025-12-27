@@ -46,6 +46,52 @@ async function runReputationTest() {
     });
     await publicClient.waitForTransactionReceipt({ hash: hashRule });
 
+    // 1.1 Ensure Community Role (Prerequisite for Reputation Updates)
+    console.log("   🔍 Checking Community Role...");
+    const ROLE_COMMUNITY = keccak256(Buffer.from('COMMUNITY'));
+    const hasCommunity = await publicClient.readContract({
+        address: REGISTRY, abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
+        functionName: 'hasRole', args: [ROLE_COMMUNITY, signer.address]
+    });
+
+    if (!hasCommunity) {
+        console.log("   ⚠️ Missing COMMUNITY role. Registering...");
+        // 1. Mint/Approve GTokens often needed for stake
+        const GTOKEN = process.env.GTOKEN_ADDR as Hex;
+        const STAKING = process.env.STAKING_ADDR as Hex;
+        if (GTOKEN && STAKING) {
+             const mint = await wallet.writeContract({ address: GTOKEN, abi: parseAbi(['function mint(address, uint256)']), functionName: 'mint', args: [signer.address, 30000000000000000000n] });
+             await publicClient.waitForTransactionReceipt({hash:mint});
+             const app = await wallet.writeContract({ address: GTOKEN, abi: parseAbi(['function approve(address, uint256)']), functionName: 'approve', args: [STAKING, 30000000000000000000n] });
+             await publicClient.waitForTransactionReceipt({hash:app});
+        }
+
+        const roleData = await import('viem').then(v => v.encodeAbiParameters(
+            [{
+                type: 'tuple',
+                components: [
+                    { name: 'name', type: 'string' },
+                    { name: 'ensName', type: 'string' },
+                    { name: 'website', type: 'string' },
+                    { name: 'description', type: 'string' },
+                    { name: 'logoURI', type: 'string' },
+                    { name: 'stakeAmount', type: 'uint256' }
+                ]
+            }],
+            [['RepTest', '', '', '', '', 0n]]
+        ));
+
+        // Register
+        const reg = await wallet.writeContract({
+            address: REGISTRY,
+            abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+            functionName: 'registerRoleSelf',
+            args: [ROLE_COMMUNITY, roleData]
+        }); 
+        await publicClient.waitForTransactionReceipt({ hash: reg });
+        console.log("   ✅ Registered COMMUNITY.");
+    }
+
     // 1.5 Register ReputationSystem as trusted source in Registry BEFORE sync
     console.log("   🔑 Configuring trusted reputation source...");
     const abiRegSet = parseAbi(['function setReputationSource(address, bool)']);

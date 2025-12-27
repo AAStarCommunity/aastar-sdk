@@ -40,7 +40,7 @@
     - `OperatorClient.checkResources` (模拟前端资源自检逻辑)
     - `PaymasterFactory.deployPaymaster`
     - `OperatorClient.depositCollateral`
-- **预期结果**: 完成后，Operator 在 `SuperPaymaster` 的 aPNTs 余额可见且可用于代付。
+- **预期结果**: 完成后，Operator拥有独立的`Paymaster`节点和 Gas Token（xPNTs），或者在 `SuperPaymaster` 的 aPNTs 余额可见且可用于支持自己社区成员使用xPNTs代付。
 
 ### 用例 3：用户身份获取与信誉激活 (SBT & Reputation)
 **原型参考**: `GetSBT.tsx`, `MySBT.tsx`
@@ -51,6 +51,7 @@
     - `RegistryClient.getCreditLimit` (验证信誉分是否正确转化为信用额度)
 
 ### 用例 4：纯净 Gasless 交易体验 (Ultimate Gasless UX)
+这也是我们PhD paper获取实验数据的阶段，包括baseline（EOA和Pimlico Paymaster，以及业界平均统计成本）和两个对比实验（Paymaster V4和SuperPaymaster）。
 **原型参考**: `DeveloperPortal.tsx` (集成示例)
 - **业务流程**: 一个没有任何 ETH 的新账户，使用社区发放的 SBT 凭证，通过 SDK 发送一笔交易。
 - **SDK 验证重点**:
@@ -58,7 +59,31 @@
     - `getSuperPaymasterMiddleware` 后台自动构建 `userOp.paymasterAndData`
     - 验证 `SuperPaymaster` 的 `postOp` 阶段是否正确扣除用户信用或 xPNTs 代币。
 
-### 用例 X：更多用例，持续加入（下面是TODO，不加入开发）
+
+### 基础用例整合（后续TODO）
+我们期望能够整合基础用例，给用户（社区）提供自主自助的launchpad以及管理平台。
+🎫
+Get GToken
+Get protocol access permission GToken, become protocol member, join permissionless, quit anytime freely
+
+Get →
+🏛️
+Register Community
+Create and register your community on the AAstar Network
+
+Register →
+💎
+Deploy xPNTs
+Create your community gas token for payment abstraction
+
+Deploy →
+🚀
+Launch Paymaster
+Deploy your Paymaster contract and start serving gasless transactions to your community
+
+Launch Paymaster → →
+
+### 用例 X：更多用例，持续加入（后续TODO，不加入开发）
     用例 5：危机管理与 DVT 治理 (Governance & Slashing)
 **原型参考**: `AdminBatchMint.tsx` (管理入口)
 - **业务流程**: 管理员发现恶意行为 -> DVT 节点投票 -> 执行对社区质押额的 Slash。
@@ -76,8 +101,9 @@
 - 更新 SDK `constants.ts` 中的 Sepolia 合约地址。
 
 ### 第二步：场景化示例开发
-- 在 `examples/` 目录下按上述 5 个用例创建独立的 TS 脚本。
+- 在 `examples/` 目录下按上述 4 个用例创建独立的 目录和TS 脚本。
 - 编写配套的中文文档注释，确保其作为“开发者指南”的使用价值。
+- 结合SuperPaymaster Readme中的数据收集计划，完成PhD paper的数据收集。这部分可以独立目录。
 
 ### 第三步：全流程冒烟测试
 - 运行 `pnpm run test:sepolia` (新增脚本)。

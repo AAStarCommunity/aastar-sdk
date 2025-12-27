@@ -69,6 +69,42 @@ async function main() {
 
     // Test Operator (Admin itself for simplicity, or we can use another)
     const operator = adminAddr;
+
+    console.log("   🔍 Checking Roles for Operator...");
+    // 0. Ensure Prerequisite Roles
+    const ROLE_PAYMASTER_SUPER = keccak256(toBytes('PAYMASTER_SUPER'));
+    const hasSuper = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole',
+        args: [ROLE_PAYMASTER_SUPER, operator]
+    });
+
+    if (!hasSuper) {
+        console.log("   ⚠️ Missing PAYMASTER_SUPER role. Registering...");
+        
+        // Fetch Config for Stake
+        const config = await publicClient.readContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'roleConfigs', args: [ROLE_PAYMASTER_SUPER]
+        }) as unknown as any[];
+        const stakeNeeded = (config[1] as bigint) + (config[3] as bigint);
+
+        // Mint & Approve GTokens
+        console.log(`   💰 Minting & Approving ${Number(stakeNeeded)} GTokens...`);
+        await waitForTx(publicClient, await adminWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [operator, stakeNeeded]
+        }));
+        await waitForTx(publicClient, await adminWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, stakeNeeded]
+        }));
+
+        // Register
+        await waitForTx(publicClient, await adminWallet.writeContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf', 
+            args: [ROLE_PAYMASTER_SUPER, "0x"]
+        }));
+        console.log("   ✅ Registered PAYMASTER_SUPER.");
+    } else {
+        console.log("   ✅ Operator already has PAYMASTER_SUPER role.");
+    }
     
     // Increase balance first
     console.log(`   💰 Depositing aPNTs...`);

@@ -122,23 +122,8 @@ else
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-# Test 5: V2 Regression (with role registration fixes)
-echo -e "\n${YELLOW}🧪 Test 5/9: V2 Regression Tests (Role Registration + notifyDeposit)${NC}"
-if pnpm tsx scripts/99_final_v2_regression.ts > /tmp/test_v2_regression.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: V2 Regression (Role Registration, Stake, notifyDeposit, Deposit)${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: V2 Regression${NC}"
-  # Check for known partial success patterns
-  if grep -q "Has Role: true" /tmp/test_v2_regression.log && grep -q "Deposit Notified" /tmp/test_v2_regression.log; then
-    echo -e "${YELLOW}⚠️  Core functions passed (Role + Deposit). Minor test failures acceptable.${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-  else
-    cat /tmp/test_v2_regression.log | tail -50
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-  fi
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+# Test 5: V2 Regression (Obsolete - Moved to run_full_regression.sh)
+# Skipping...
 
 # Test 6: DVT SDK Flow
 echo -e "\n${YELLOW}🧪 Test 6/9: DVT SDK Flow Actions${NC}"

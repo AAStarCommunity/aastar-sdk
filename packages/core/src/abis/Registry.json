@@ -48,7 +48,33 @@
   },
   {
     "type": "function",
+    "name": "ROLE_ANODE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "ROLE_COMMUNITY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ROLE_DVT",
     "inputs": [],
     "outputs": [
       {
@@ -1669,6 +1695,11 @@
         "name": "roleId",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "isActive",
+        "type": "bool",
+        "internalType": "bool"
       }
     ]
   },

@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseAbi, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, type Hex, keccak256, stringToBytes, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
@@ -11,10 +11,13 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
 // Configuration
 const RPC_URL = process.env.RPC_URL;
 const SUPER_PAYMASTER = process.env.SUPERPAYMASTER_ADDR as Hex;
+const REGISTRY = process.env.REGISTRY_ADDR as Hex;
+const GTOKEN = process.env.GTOKEN_ADDR as Hex;
+const STAKING = process.env.STAKING_ADDR as Hex;
 const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
 const APNTS = process.env.XPNTS_ADDR as Hex;
 
-if (!SUPER_PAYMASTER || !SIGNER_KEY) throw new Error("Missing Config");
+if (!SUPER_PAYMASTER || !SIGNER_KEY || !REGISTRY) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
     'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
@@ -25,6 +28,18 @@ const pmAbi = parseAbi([
     'function owner() view returns (address)'
 ]);
 
+const registryAbi = parseAbi([
+    'function hasRole(bytes32, address) view returns (bool)',
+    'function roleConfigs(bytes32) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, string)',
+    'function registerRoleSelf(bytes32, bytes)'
+]);
+
+const erc20Abi = parseAbi([
+    'function approve(address, uint256) returns (bool)'
+]);
+
+const ROLE_PAYMASTER_SUPER = keccak256(stringToBytes('PAYMASTER_SUPER'));
+
 async function runAdminTest() {
     console.log("🧪 Running SuperPaymaster V3 Admin Modular Test...");
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
@@ -33,6 +48,47 @@ async function runAdminTest() {
 
     console.log(`   Operator: ${signer.address}`);
     console.log(`   Paymaster: ${SUPER_PAYMASTER}`);
+    console.log(`   Registry:  ${REGISTRY}`);
+
+    // ====================================================
+    // 0. Ensure Prerequisite Roles (COMMUNITY + PAYMASTER_SUPER)
+    // ====================================================
+    console.log("   🔍 Checking Roles...");
+    const hasSuper = await publicClient.readContract({
+        address: REGISTRY, abi: registryAbi, functionName: 'hasRole',
+        args: [ROLE_PAYMASTER_SUPER, signer.address]
+    });
+
+    if (!hasSuper) {
+        console.log("   ⚠️ Missing PAYMASTER_SUPER role. Registering...");
+        // Get Stake Amount
+        const roleConf = await publicClient.readContract({
+            address: REGISTRY, abi: registryAbi, functionName: 'roleConfigs',
+            args: [ROLE_PAYMASTER_SUPER]
+        });
+        const minStake = roleConf[0];
+        const entryBurn = roleConf[1];
+        const total = minStake + entryBurn;
+
+        // Approve
+        console.log(`   💰 Approving ${total} GTokens...`);
+        const txApprove = await wallet.writeContract({
+            address: GTOKEN, abi: erc20Abi, functionName: 'approve',
+            args: [STAKING, total]
+        });
+        await publicClient.waitForTransactionReceipt({ hash: txApprove });
+
+        // Register
+        console.log("   📝 Registering PAYMASTER_SUPER...");
+        const txReg = await wallet.writeContract({
+            address: REGISTRY, abi: registryAbi, functionName: 'registerRoleSelf',
+            args: [ROLE_PAYMASTER_SUPER, "0x"]
+        });
+        await publicClient.waitForTransactionReceipt({ hash: txReg });
+        console.log("   ✅ Registered PAYMASTER_SUPER.");
+    } else {
+        console.log("   ✅ Operator already has PAYMASTER_SUPER role.");
+    }
 
     // 1. Initial State Check
     // ABI returns: xPNTsToken(0), isConfigured(1), isPaused(2), treasury(3), exchangeRate(4), aPNTsBalance(5), totalSpent(6), totalTxSponsored(7), reputation(8)

@@ -16,6 +16,7 @@ const ENTRY_POINT = process.env.MOCK_ENTRY_POINT as Hex;
 const APNTS = process.env.APNTS as Hex;
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const ROLE_COMMUNITY = keccak256(toHex('COMMUNITY'));
+const ROLE_PAYMASTER_SUPER = keccak256(toHex('PAYMASTER_SUPER'));
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
 const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Fallback to Anvil #0 if missing
@@ -89,6 +90,59 @@ async function runFullV3Test() {
             args: [ROLE_COMMUNITY, roleData]
         });
         await waitForTx(registerTx);
+    }
+
+    // Ensure PAYMASTER_SUPER Role (Required for configureOperator)
+    console.log("🛠  Ensuring PAYMASTER_SUPER Role for Operator...");
+    const hasSuper = await publicClient.readContract({
+        address: REGISTRY_ADDR,
+        abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
+        functionName: 'hasRole',
+        args: [ROLE_PAYMASTER_SUPER, signer.address]
+    });
+
+    if (!hasSuper) {
+        console.log("   Registering PAYMASTER_SUPER...");
+        
+        // Fetch Config for Stake
+        const config = await publicClient.readContract({
+            address: REGISTRY_ADDR,
+            abi: parseAbi(['function roleConfigs(bytes32) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, string)']),
+            functionName: 'roleConfigs',
+            args: [ROLE_PAYMASTER_SUPER]
+        }) as unknown as any[];
+        
+        const stakeNeeded = (config[1] as bigint) + (config[3] as bigint); // entryBurn + stakeAmount
+        console.log(`   Stake Required: ${formatEther(stakeNeeded)} GTokens`);
+
+        const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex; // Ensure existing
+        
+        // Mint & Approve
+        const mintTx = await wallet.writeContract({ 
+            address: GTOKEN_ADDR, 
+            abi: parseAbi(['function mint(address, uint256)']), 
+            functionName: 'mint', 
+            args: [signer.address, stakeNeeded] 
+        });
+        await waitForTx(mintTx);
+
+        const approveTx = await wallet.writeContract({
+            address: GTOKEN_ADDR,
+            abi: parseAbi(['function approve(address, uint256)']), 
+            functionName: 'approve', 
+            args: [process.env.STAKING_ADDR as Hex, stakeNeeded] 
+        });
+        await waitForTx(approveTx);
+
+        // Register (No data needed for Super Paymaster)
+        const registerTx = await wallet.writeContract({
+            address: REGISTRY_ADDR,
+            abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+            functionName: 'registerRoleSelf',
+            args: [ROLE_PAYMASTER_SUPER, "0x"]
+        });
+        await waitForTx(registerTx);
+        console.log("   ✅ Registered PAYMASTER_SUPER.");
     }
 
     const pmAbi = parseAbi([
