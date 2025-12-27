@@ -17,7 +17,7 @@ const APNTS = process.env.XPNTS_ADDR as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !APNTS) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
+    'function operators(address) view returns (uint128 aPNTsBalance, uint96 exchangeRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
     'function deposit(uint256) external',
     'function depositFor(address, uint256) external',
     'function withdraw(uint256) external',
@@ -39,15 +39,9 @@ async function runFundingTest() {
     const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
 
     // 1. Check Initial Balance
-    // Structural Index (V3.1.1):
-    // 0: xPNTsToken, 1: isConfigured, 2: isPaused, 3: treasury (wait, let's re-verify)
-    // Solidity Struct:
-    // Slot 0: address xPNTsToken, bool isConfigured, bool isPaused, uint80 _reserved
-    // Slot 1: address treasury, uint96 exchangeRate
-    // Slot 2: uint256 aPNTsBalance
-    // ...
-    // Returns Tuple: (xPNTsToken, treasury, isConfigured, isPaused, exRate, exFull, balance, spent, txSponsored, reputation)
-    // Wait, the tuple return might differ from struct order. 
+    // Structural Index (V3.2 Packed):
+    // 0: uint128 aPNTsBalance, 1: uint96 exchangeRate, 2: bool isConfigured, 3: bool isPaused, 
+    // 4: address xPNTsToken, 5: uint32 reputation, 6: address treasury, 7: totalSpent, 8: totalTxSponsored 
     // Let's log full opData to see.
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);

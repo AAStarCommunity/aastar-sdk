@@ -67,8 +67,11 @@ async function main() {
     // Or just PaymasterAddress?
     // UserOp v0.7 paymasterAndData = [paymaster (20)] [gasLimits (32)] [data (?)]
     // We pre-pack a placeholder
+    // We pre-pack a placeholder
     const pmGasLimitsPlaceholder = packUint(300000n, 10000n);
-    const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder]);
+    // V3 requires [PM(20)][Limits(32)][Operator(20)]
+    const operator = signer.address;
+    const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder, operator]);
 
     await sendUserOp(
         publicClient, bundlerClient, signer, ACCOUNT_B,
