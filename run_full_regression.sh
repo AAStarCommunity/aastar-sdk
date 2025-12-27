@@ -14,14 +14,22 @@ NC='\033[0m' # No Color
 
 echo -e "${YELLOW}🚀 Starting SuperPaymaster V3 Full Local Regression...${NC}"
 
-# 0. Build all packages first to avoid module not found errors
-echo -e "${YELLOW}📦 Building all packages...${NC}"
-pnpm build >/dev/null 2>&1
+# 0. Build all packages and Extract ABIs first
+echo -e "${YELLOW}📦 Building all packages and extracting fresh ABIs...${NC}"
+
+# Extract fresh ABIs from SuperPaymaster
+if [ -f "./extract_abis.sh" ]; then
+    echo -e "${YELLOW}📝 Extracting fresh ABIs...${NC}"
+    ./extract_abis.sh || { echo -e "${RED}❌ ABI Extraction failed.${NC}"; exit 1; }
+fi
+
+# Build SDK packages
+pnpm build
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Build failed.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ Build completed.${NC}"
+echo -e "${GREEN}✅ Build and Extraction completed.${NC}"
 
 # Handle flags
 INIT_ONLY=false
