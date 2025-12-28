@@ -25,8 +25,8 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
      * 3. Approve aPNTs (Deposit)
      * 4. Deposit aPNTs (SuperPaymaster)
      */
-    onboardFully: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<Hash[]>
-    /** @deprecated Use onboardFully */
+    onboardOperator: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<Hash[]>
+    /** @deprecated Use onboardOperator */
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
     configureOperator: (args: { xPNTs: Address, treasury: Address, rate: bigint }) => Promise<Hash>
 };
@@ -61,7 +61,16 @@ export function createOperatorClient({
     };
 
     return Object.assign(client, actions, {
-        async onboardFully({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
+        async onboardOperator(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
+            return this.onboardFully(args);
+        },
+        async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
+            // Internal implementation remains or can be renamed to onboardOperator
+            // For now, let's just make them aliases or rename the main one.
+            // Let's rename the main implementation to onboardOperator and keep onboardFully as alias.
+            return (this as any)._onboardOperator(args);
+        },
+        async _onboardOperator({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             const txs: Hash[] = [];
             const accountToUse = account; 
 
@@ -150,9 +159,9 @@ export function createOperatorClient({
                 throw error;
             }
         },
-        // Backwards compatibility wrapper
+        // Backwards compatibility wrappers
         async onboardToSuperPaymaster(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) {
-            return this.onboardFully(args);
+            return this.onboardOperator(args);
         },
         async configureOperator({ xPNTs, treasury, rate }: { xPNTs: Address, treasury: Address, rate: bigint }) {
             console.log(`   SDK: Configuring Operator (xPNTs: ${xPNTs}, Treasury: ${treasury}, Rate: ${rate})...`);

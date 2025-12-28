@@ -13,5 +13,8 @@ export * from './clients/admin.js';
 
 // Export Utils & Errors
 export * from './utils/roleData.js';
+export * from './utils/keys.js';
+export * from './utils/funding.js';
+export * from './utils/validation.js';
 export * from './errors/decoder.js';
 

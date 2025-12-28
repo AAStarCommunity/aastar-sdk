@@ -7,6 +7,7 @@ import {
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES 
 } from '@aastar/core';
+import { RoleDataFactory, RoleIds } from '../utils/roleData.js';
 
 export type CommunityClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions;
 
