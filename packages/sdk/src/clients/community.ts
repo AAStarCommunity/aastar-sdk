@@ -82,14 +82,18 @@ export function createCommunityClient({
             // Register community role
             console.log(`   📤 Registering community role...`);
             console.log(`   📋 Params:`, {
-                roleId: RoleIds.COMMUNITY_HUB,
+                roleId: RoleIds.COMMUNITY,
                 user: account.address,
-                roleDataLength: roleData?.length
+                dataLength: roleData?.length,
+                accountExists: !!account
             });
+            console.log(`   📋 Full data:`, roleData);
+            
             const registerTx = await registryActionsObj.registerRole({
-                roleId: RoleIds.COMMUNITY_HUB,
+                roleId: RoleIds.COMMUNITY,
                 user: account.address,
-                roleData
+                data: roleData,
+                account: account  // 添加 account 参数！
             });
             console.log(`   ✅ Community registered: ${registerTx}`);
 
