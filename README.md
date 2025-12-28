@@ -26,7 +26,6 @@
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
   - [Academic Research / 学术研究](#academic-research--学术研究)
   - [Support / 支援](#support--支援)
-- [SDK Coverage TODO / SDK 测试未覆盖项](docs/TODO_SDK_COVERAGE.md)
 
 ---
 
@@ -107,6 +106,8 @@ pnpm run test:full_anvil
 The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.
 
 本 SDK 支撑了 SuperPaymaster 论文的博士实验数据采集。官方实验记录器位于 `scripts/19_sdk_experiment_runner.ts`。
+
+- [Stage 3 Scenario Experiment Plan](./docs/STAGE_3_SCENARIO_EXP_PLAN.md)
 
 ---
 
