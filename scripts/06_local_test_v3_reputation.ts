@@ -36,11 +36,16 @@ const pmAbi = parseAbi([
     'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)',
 ]);
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 async function runReputationTest() {
     console.log("🧪 Running SuperPaymaster V3 Reputation & Credit Modular Test...");
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
     const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
+
+    // ... (rest of setup)
 
     // 1. Setup Scoring Rules (Community Admin Context)
     console.log("   📏 Setting up Scoring Rules...");
@@ -130,15 +135,76 @@ async function runReputationTest() {
     if (score !== 80n) throw new Error(`Score mismatch: expected 80, got ${score}`);
 
     // 4. Sync to Registry (Real BLS Proof Format satisfy Registry.sol)
-    console.log("   🔄 Syncing to Registry...");
-    // Registry.sol expects: 
-    // pkG1: 96 bytes (uncompressed affine x:48, y:48)
-    // sigG2: 192 bytes (uncompressed affine x:96, y:96)
-    // msgG2: 192 bytes (uncompressed affine x:96, y:96)
-    const dummyPk = "0x" + "00".repeat(96); 
-    const dummySig = "0x" + "00".repeat(192);
-    const dummyMsg = "0x" + "00".repeat(192);
+    console.log("   🔄 Syncing to Registry (Generating Valid BLS Proof)...");
+    
+    // Import noble-curves locally to avoid global dependency issues if not installed in root
+    // We assume it's installed via 'pnpm add -w @noble/curves'
+    const { bls12_381 } = require('@noble/curves/bls12-381');
+    // Removed @noble/hashes/utils, using viem's toHex which supports Uint8Array
+
+    // Generate random items
+    const privKey = bls12_381.utils.randomPrivateKey();
+    // Note: getPublicKey returns compressed (48 bytes) by default? No, usually Uint8Array.
+    // We need UNCOMPRESSED G1 (96 bytes) for Registry.sol
+    // Helper to pad hex string to 64 bytes (128 chars) or 128 bytes (256 chars) per coordinate if needed
+    
+    const pkPoint = bls12_381.G1.ProjectivePoint.fromPrivateKey(privKey);
+    // G1 (96 bytes) -> (128 bytes)
+    const pkRaw = pkPoint.toRawBytes(false); // 96 bytes
+    // x: bytes 0-47, y: bytes 48-95
+    const pkX = pkRaw.slice(0, 48);
+    const pkY = pkRaw.slice(48, 96);
+    // Pad to 64 bytes
+    const pkX_padded = new Uint8Array(64); pkX_padded.set(pkX, 16);
+    const pkY_padded = new Uint8Array(64); pkY_padded.set(pkY, 16);
+    const pkHex = toHex(pkX_padded).slice(2) + toHex(pkY_padded).slice(2);
+
+    // Message to G2
+    const msgBytes = new TextEncoder().encode("SuperPaymaster Reputation Update");
+    const msgPoint = bls12_381.G2.hashToCurve(msgBytes);
+    // G2 (192 bytes) -> (256 bytes)
+    const msgRaw = msgPoint.toRawBytes(false); // 192 bytes
+    // x: 0-95 (two 48 byte parts?), y: 96-191
+    // G2 element is (c0, c1) where c0, c1 are Fq.
+    // noble encodes [x_c1, x_c0, y_c1, y_c0] ? No, usually [x_c1, x_c0]
+    // Let's assume noble output is correct order, just field elements are 48 bytes.
+    // We need 64 bytes per field element.
+    // G2 uncompressed is 192 bytes. 48 * 4.
+    // We want 256 bytes. 64 * 4.
+    function padG2(raw: Uint8Array): string {
+        // noble-curves (ZCash spec): c0 (Real), c1 (Imaginary)
+        // EIP-2537: x_im (c1), x_re (c0), y_im (c1), y_re (c0)
+        
+        const x_c0 = raw.slice(0, 48);   // Real
+        const x_c1 = raw.slice(48, 96);  // Im
+        const y_c0 = raw.slice(96, 144); // Real
+        const y_c1 = raw.slice(144, 192);// Im
+        
+        const x_c0_p = new Uint8Array(64); x_c0_p.set(x_c0, 16);
+        const x_c1_p = new Uint8Array(64); x_c1_p.set(x_c1, 16);
+        const y_c0_p = new Uint8Array(64); y_c0_p.set(y_c0, 16);
+        const y_c1_p = new Uint8Array(64); y_c1_p.set(y_c1, 16);
+        
+        // Return Im then Re (c1, c0)
+        return toHex(x_c1_p).slice(2) + toHex(x_c0_p).slice(2) + toHex(y_c1_p).slice(2) + toHex(y_c0_p).slice(2);
+    }
+
+    const msgHex = "0x" + padG2(msgRaw);
+
+    // Signature (G2) = sk * msgG2
+    const sigPoint = msgPoint.multiply(BigInt(toHex(privKey)));
+    const sigRaw = sigPoint.toRawBytes(false);
+    const sigHex = "0x" + padG2(sigRaw);
+    
+    // pkHex was just string concat, need 0x prefix
+    const dummyPk = "0x" + pkHex;
+    const dummySig = sigHex;
+    const dummyMsg = msgHex;
     const signerMask = 0xFFFFn;
+
+    console.log(`      PK Length: ${(dummyPk.length - 2)/2} bytes`);
+    console.log(`      Sig Length: ${(dummySig.length - 2)/2} bytes`);
+    console.log(`      Msg Length: ${(dummyMsg.length - 2)/2} bytes`);
     
     const { encodeAbiParameters, parseAbiParameters } = await import('viem');
     const encodedProof = encodeAbiParameters(

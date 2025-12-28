@@ -271,6 +271,19 @@
   },
   {
     "type": "function",
+    "name": "blsValidator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IBLSValidator"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "burnHistory",
     "inputs": [
       {
@@ -1223,6 +1236,19 @@
     "inputs": [
       {
         "name": "_aggregator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setBLSValidator",
+    "inputs": [
+      {
+        "name": "_validator",
         "type": "address",
         "internalType": "address"
       }
