@@ -19,6 +19,10 @@ import { decodeContractError } from '../errors/decoder.js';
 
 export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & StakingActions & SuperPaymasterActions & PaymasterV4Actions & RegistryActions & {
     /**
+     * High-level API: Setup operator with automatic funding and onboarding
+     */
+    setup: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<{ txs: Hash[] }>
+    /**
      * Orchestrates the full onboarding flow:
      * 1. Approve GToken (Stake)
      * 2. Register Role (Stake Lock)
@@ -61,13 +65,16 @@ export function createOperatorClient({
     };
 
     return Object.assign(client, actions, {
+        async setup(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
+            console.log('⚙️ Setting up operator...');
+            const txs = await (this as any)._onboardOperator(args);
+            console.log(`✅ Operator setup complete! Transactions: ${txs.length}`);
+            return { txs };
+        },
         async onboardOperator(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             return this.onboardFully(args);
         },
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
-            // Internal implementation remains or can be renamed to onboardOperator
-            // For now, let's just make them aliases or rename the main one.
-            // Let's rename the main implementation to onboardOperator and keep onboardFully as alias.
             return (this as any)._onboardOperator(args);
         },
         async _onboardOperator({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {

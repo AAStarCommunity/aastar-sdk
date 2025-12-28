@@ -15,6 +15,14 @@ import {
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterV4Actions & {
     /**
+     * High-level API: Onboard user to community with automatic funding
+     */
+    onboard: (args: {
+        community: Address,
+        roleId: Hex,
+        roleData: Hex
+    }) => Promise<{ tx: Hash, sbtId: bigint }>
+    /**
      * Orchestrates the user joining a community and activating gas credit flow:
      * 1. Mint SBT for the community (Register ENDUSER role)
      * 2. Verify Credit is active (Reputation check)
@@ -64,6 +72,16 @@ export function createEndUserClient({
     };
 
     return Object.assign(client, actions, {
+        async onboard({ community, roleId, roleData }: {
+            community: Address,
+            roleId: Hex,
+            roleData: Hex
+        }) {
+            console.log('👤 Onboarding user to community...');
+            const result = await (this as any).joinAndActivate({ community, roleId, roleData });
+            console.log(`✅ User onboarded! SBT ID: ${result.sbtId}`);
+            return { tx: result.tx, sbtId: result.sbtId };
+        },
         async joinAndActivate({ community, roleId, roleData }: { 
             community: Address, 
             roleId: Hex, 
