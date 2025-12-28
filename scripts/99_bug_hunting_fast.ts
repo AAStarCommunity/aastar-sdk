@@ -22,7 +22,7 @@ const RPC_URL = process.env.RPC_URL!;
 const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
-const PAYMASTER_FACTORY_ADDR = '0x0B306BF915C4d645ff596e518fAf3F9669b97016' as Address;
+const PAYMASTER_FACTORY_ADDR = process.env.PAYMASTER_FACTORY_ADDR as Address;
 const MOCK_CONTRACT_ADMIN = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as Address;
 
 let bugs: string[] = [];

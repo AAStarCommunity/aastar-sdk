@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { type Address, type Hex, concat, pad, toHex } from 'viem';
-import { getSuperPaymasterMiddleware, getPaymasterV4Middleware } from '../packages/paymaster/src';
+import { getSuperPaymasterMiddleware } from '../packages/paymaster/src/SuperPaymaster/index.ts';
+import { getPaymasterV4Middleware } from '../packages/paymaster/src/V4/index.ts';
 
 /**
  * Test Script: Middleware Functionality
@@ -67,12 +68,12 @@ async function main() {
         console.log(`   PaymasterAndData: ${result.paymasterAndData.slice(0, 20)}...`);
         console.log(`   Length: ${result.paymasterAndData.length} chars`);
         
-        // Format: [Paymaster(20)][VerGas(16)][PostOpGas(16)][Operator(20)] = 72 bytes = 144 hex chars + 0x
-        if (result.paymasterAndData.length === 146 && result.paymasterAndData.startsWith('0x')) {
-            console.log('   ✅ PASSED: Correct format (20+16+16+20 bytes)\n');
+        // V3.2.1 Layout: [Paymaster(20)][VerGas(16)][PostOpGas(16)][Operator(20)][MaxRate(32)] = 104 bytes = 208 hex chars + 0x = 210
+        if (result.paymasterAndData.length === 210 && result.paymasterAndData.startsWith('0x')) {
+            console.log('   ✅ PASSED: Correct format (20+16+16+20+32 bytes)\n');
             testsPassed++;
         } else {
-            console.log(`   ❌ FAILED: Invalid format. Expected 146 chars, got ${result.paymasterAndData.length}\n`);
+            console.log(`   ❌ FAILED: Invalid format. Expected 210 chars, got ${result.paymasterAndData.length}\n`);
             testsFailed++;
         }
     } catch (error: any) {

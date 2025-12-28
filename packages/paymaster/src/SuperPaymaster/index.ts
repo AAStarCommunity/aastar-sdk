@@ -93,7 +93,13 @@ export async function checkEligibility(
  * Admin Client for SuperPaymaster V3
  */
 export class SuperPaymasterClient {
-    constructor(private client: any, private paymasterAddress: Address) {}
+    private client: any;
+    private paymasterAddress: Address;
+
+    constructor(client: any, paymasterAddress: Address) {
+        this.client = client;
+        this.paymasterAddress = paymasterAddress;
+    }
 
     async getOperator(operator: Address) {
         return this.client.readContract({

@@ -24,7 +24,7 @@ function dotenv_config() {
 }
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
-let BLS_VALIDATOR_ADDR: Hex = '0xf6a8ad553b265405526030c2102fda2bdcddc177'; 
+let BLS_VALIDATOR_ADDR: Hex = (process.env.BLS_VALIDATOR_ADDR as Hex) || '0xf6a8ad553b265405526030c2102fda2bdcddc177'; 
 
 const validatorAbi = [
   {
