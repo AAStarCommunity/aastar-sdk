@@ -21,6 +21,6 @@
         "internalType": "bool"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   }
 ]
