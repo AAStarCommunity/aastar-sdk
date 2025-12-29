@@ -93,7 +93,7 @@ export function createCommunityClient({
                 roleId: RoleIds.COMMUNITY,
                 user: account.address,
                 data: roleData,
-                account: account  // 添加 account 参数！
+                account: account
             });
             console.log(`   ✅ Community registered: ${registerTx}`);
 
@@ -106,9 +106,31 @@ export function createCommunityClient({
             console.log(`   Transactions: ${txs.length}`);
 
             return { tokenAddress, txs };
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ Error in launch():', error);
-            throw error;
+            
+            // 检查是否是 RoleAlreadyGranted 错误
+            const errorMessage = error.message || '';
+            const errorData = error.data?.errorName || '';
+            const errorString = JSON.stringify(error);
+            
+            if (errorMessage.includes('RoleAlreadyGranted') || 
+                errorData === 'RoleAlreadyGranted' ||
+                errorString.includes('RoleAlreadyGranted')) {
+                throw new Error(`Account ${account.address} already has COMMUNITY role. Please use a different account or exit the role first.`);
+            }
+            
+            // 检查其他常见错误
+            if (errorMessage.includes('InsufficientStake')) {
+                throw new Error('Insufficient stake. Please ensure you have enough GToken staked.');
+            }
+            
+            if (errorMessage.includes('RoleNotConfigured')) {
+                throw new Error('COMMUNITY role is not configured in the Registry contract.');
+            }
+            
+            // 重新抛出原始错误
+            throw new Error(`Failed to launch community: ${errorMessage}`);
         }
     };
 
