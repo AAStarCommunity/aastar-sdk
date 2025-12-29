@@ -91,7 +91,7 @@ export function createOperatorClient({
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             return (this as any)._onboardOperator(args);
         },
-        async deployPaymasterV4({ version = 'v4', initData = '0x' }: { version?: string, initData?: Hex } = {}) {
+        async deployPaymasterV4({ version = 'v4.1', initData = '0x' }: { version?: string, initData?: Hex } = {}) {
             console.log(`   SDK: Deploying Paymaster V4 (${version})...`);
             const tx = await (client as any).writeContract({
                 address: usedAddresses.paymasterFactory,
