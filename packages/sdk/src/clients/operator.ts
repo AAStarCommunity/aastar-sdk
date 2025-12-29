@@ -7,6 +7,7 @@ import {
     superPaymasterActions,
 
     paymasterV4Actions,
+    PaymasterFactoryABI,
     type StakingActions, 
     type RegistryActions,
     type SuperPaymasterActions,
@@ -17,11 +18,12 @@ import {
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
 
-export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & StakingActions & SuperPaymasterActions & PaymasterV4Actions & RegistryActions & {
+export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & {
     /**
      * High-level API: Setup operator with automatic funding and onboarding
      */
-    setup: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<{ txs: Hash[] }>
+    setup: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<{ txs: Hash[] }>;
+    deployPaymasterV4: (args?: { version?: string, initData?: Hex }) => Promise<Hash>;
     /**
      * Orchestrates the full onboarding flow:
      * 1. Approve GToken (Stake)
@@ -29,10 +31,24 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
      * 3. Approve aPNTs (Deposit)
      * 4. Deposit aPNTs (SuperPaymaster)
      */
-    onboardOperator: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<Hash[]>
+    onboardOperator: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<Hash[]>;
     /** @deprecated Use onboardOperator */
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
     configureOperator: (args: { xPNTs: Address, treasury: Address, rate: bigint }) => Promise<Hash>
+    getOperatorStatus: (accountAddress: Address) => Promise<{
+        type: 'super' | 'v4' | null;
+        superPaymaster: {
+            hasRole: boolean;
+            isConfigured: boolean;
+            balance: bigint;
+            exchangeRate: bigint;
+            treasury: Address;
+        } | null;
+        paymasterV4: {
+            address: Address;
+            balance: bigint;
+        } | null;
+    }>
 };
 
 
@@ -62,9 +78,7 @@ export function createOperatorClient({
         ...superPaymasterActions(usedAddresses.superPaymaster)(client as any),
         ...paymasterV4Actions()(client as any),
         ...registryActions(usedAddresses.registry)(client as any),
-    };
 
-    return Object.assign(client, actions, {
         async setup(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             console.log('⚙️ Setting up operator...');
             const txs = await (this as any)._onboardOperator(args);
@@ -76,6 +90,19 @@ export function createOperatorClient({
         },
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             return (this as any)._onboardOperator(args);
+        },
+        async deployPaymasterV4({ version = 'v4', initData = '0x' }: { version?: string, initData?: Hex } = {}) {
+            console.log(`   SDK: Deploying Paymaster V4 (${version})...`);
+            const tx = await (client as any).writeContract({
+                address: usedAddresses.paymasterFactory,
+                abi: PaymasterFactoryABI,
+                functionName: 'deployPaymaster',
+                args: [version, initData],
+                account,
+                chain
+            });
+            await (client as any).waitForTransactionReceipt({ hash: tx });
+            return tx;
         },
         async _onboardOperator({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             const txs: Hash[] = [];
@@ -89,9 +116,9 @@ export function createOperatorClient({
                     abi: RegistryABI,
                     functionName: 'roleConfigs',
                     args: [roleId]
-                }) as any; // [minStake, entryBurn, ...]
+                }) as any; 
 
-                const entryBurn = roleConfig[1]; // Index 1 is entryBurn in struct
+                const entryBurn = roleConfig[1]; 
                 const totalStakeNeeded = stakeAmount + entryBurn;
 
                 console.log(`   SDK: Approving GToken (Stake: ${stakeAmount}, Burn: ${entryBurn})...`);
@@ -107,39 +134,46 @@ export function createOperatorClient({
                 txs.push(approveGToken);
 
                 // 2. Register Role
-                // Auto-select roleData based on roleId if not provided
                 let data: Hex;
-                if (roleData) {
+                if (roleData && roleData !== '0x') {
                     data = roleData;
                 } else {
-                    // Auto-generate roleData based on role type
+                    console.log(`   SDK: Auto-generating roleData for roleId ${roleId}...`);
                     if (roleId === keccak256(stringToBytes('COMMUNITY'))) {
                         data = RoleDataFactory.community();
                     } else if (roleId === keccak256(stringToBytes('ENDUSER'))) {
                         data = RoleDataFactory.endUser();
+                    } else if (roleId === keccak256(stringToBytes('PAYMASTER_SUPER'))) {
+                        data = RoleDataFactory.paymasterSuper();
                     } else {
                         data = RoleDataFactory.paymasterSuper();
                     }
                 }
                 
-                console.log(`   SDK: Registering role ${roleId}...`);
-                const registerTx = await actions.registerRoleSelf({
-                    roleId,
-                    data, 
-                    account: accountToUse
-                });
-                await (client as any).waitForTransactionReceipt({ hash: registerTx });
-                txs.push(registerTx);
+                console.log(`   SDK: Checking if role already granted...`);
+                const hasRoleResult = await (client as any).readContract({
+                    address: usedAddresses.registry,
+                    abi: RegistryABI,
+                    functionName: 'hasRole',
+                    args: [roleId, accountToUse!.address]
+                }) as boolean;
 
-                // 3. Deposit aPNTs via transferAndCall (ERC1363 Push)
-                // Note: SuperPaymaster blocks standard transferFrom, so we must use push.
+                if (hasRoleResult) {
+                    console.log(`   ℹ️  Role already granted, skipping registration`);
+                } else {
+                    console.log(`   SDK: Registering role ${roleId}...`);
+                    const registerTx = await actions.registerRoleSelf({
+                        roleId,
+                        data, 
+                        account: accountToUse
+                    });
+                    await (client as any).waitForTransactionReceipt({ hash: registerTx });
+                    txs.push(registerTx);
+                }
+
                 if (depositAmount > 0n) {
                     console.log('   SDK: Depositing aPNTs via transferAndCall...');
-                    
-                    const erc1363Abi = parseAbi([
-                        'function transferAndCall(address to, uint256 value) external returns (bool)'
-                    ]);
-
+                    const erc1363Abi = parseAbi(['function transferAndCall(address to, uint256 value) external returns (bool)']);
                     const depositTx = await (client as any).writeContract({
                         address: usedAddresses.aPNTs!,
                         abi: erc1363Abi,
@@ -150,46 +184,94 @@ export function createOperatorClient({
                     });
                     await (client as any).waitForTransactionReceipt({ hash: depositTx });
                     txs.push(depositTx);
-                } else {
-                    console.log('   SDK: Skipping deposit (amount is 0 or Community registration)...');
                 }
-
-
 
                 return txs;
-
             } catch (error) {
                 const decodedMsg = decodeContractError(error);
-                if (decodedMsg) {
-                    throw new Error(`Onboarding Failed: ${decodedMsg}`);
-                }
-                throw error;
+                throw decodedMsg ? new Error(`Onboarding Failed: ${decodedMsg}`) : error;
             }
         },
-        // Backwards compatibility wrappers
         async onboardToSuperPaymaster(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) {
             return this.onboardOperator(args);
         },
         async configureOperator({ xPNTs, treasury, rate }: { xPNTs: Address, treasury: Address, rate: bigint }) {
-            console.log(`   SDK: Configuring Operator (xPNTs: ${xPNTs}, Treasury: ${treasury}, Rate: ${rate})...`);
-            
-            // Minimal ABI for configuration
-            const configAbi = parseAbi([
-                'function configureOperator(address xPNTsToken, address _opTreasury, uint256 exchangeRate) external'
-            ]);
-
+            const configAbi = parseAbi(['function configureOperator(address xPNTsToken, address _opTreasury, uint256 exchangeRate) external']);
             const tx = await (client as any).writeContract({
                 address: usedAddresses.superPaymaster,
                 abi: configAbi,
                 functionName: 'configureOperator',
                 args: [xPNTs, treasury, rate],
-                account: account,
+                account,
                 chain
             });
             await (client as any).waitForTransactionReceipt({ hash: tx });
             return tx;
+        },
+        async getOperatorStatus(accountAddress: Address) {
+            try {
+                const hasRole = await client.readContract({
+                    address: usedAddresses.registry,
+                    abi: RegistryABI,
+                    functionName: 'hasRole',
+                    args: [keccak256(stringToBytes('PAYMASTER_SUPER')), accountAddress]
+                }) as boolean;
+
+                let operatorType: 'super' | 'v4' | null = null;
+                let superPaymasterInfo = null;
+                let paymasterV4Info = null;
+
+                if (hasRole && usedAddresses.superPaymaster) {
+                    const pmAbi = parseAbi(['function operators(address) view returns (uint128 balance, uint96 exchangeRate, bool isConfigured, bool isPaused, address token, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)']);
+                    const operatorData = await client.readContract({
+                        address: usedAddresses.superPaymaster!,
+                        abi: pmAbi,
+                        functionName: 'operators',
+                        args: [accountAddress]
+                    }) as any;
+
+                    if (operatorData && operatorData[2]) { // isConfigured
+                        operatorType = 'super';
+                        superPaymasterInfo = {
+                            hasRole: true,
+                            isConfigured: true,
+                            balance: operatorData[0],
+                            exchangeRate: operatorData[1],
+                            treasury: operatorData[6]
+                        };
+                    }
+                }
+                
+                // 检查 Paymaster V4 (Direct)
+                if (usedAddresses.paymasterFactory && usedAddresses.paymasterFactory !== '0x0000000000000000000000000000000000000000') {
+                    try {
+                        const factoryAbi = parseAbi(['function getPaymasterByOperator(address) view returns (address)']);
+                        const pmAddr = await client.readContract({
+                            address: usedAddresses.paymasterFactory,
+                            abi: factoryAbi,
+                            functionName: 'getPaymasterByOperator',
+                            args: [accountAddress]
+                        }) as Address;
+            
+                        if (pmAddr !== '0x0000000000000000000000000000000000000000') {
+                            operatorType = operatorType || 'v4';
+                            paymasterV4Info = {
+                                address: pmAddr,
+                                balance: await client.getBalance({ address: pmAddr })
+                            };
+                        }
+                    } catch (e) {
+                        console.warn(`   ⚠️ Failed to fetch V4 info from factory ${usedAddresses.paymasterFactory}:`, e);
+                    }
+                }
+
+                return { type: operatorType, superPaymaster: superPaymasterInfo, paymasterV4: paymasterV4Info };
+            } catch (error) {
+                console.error('Error in getOperatorStatus:', error);
+                return { type: null, superPaymaster: null, paymasterV4: null };
+            }
         }
+    };
 
-    }) as OperatorClient;
-
+    return Object.assign(client, actions) as OperatorClient;
 }

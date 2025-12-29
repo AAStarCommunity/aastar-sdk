@@ -1,4 +1,4 @@
-import { createPublicClient, http, type PublicClient, type Hex, type Address, type Chain } from 'viem';
+import { createPublicClient, http, type PublicClient, type Hex, type Address, type Chain, erc20Abi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 /**
@@ -71,6 +71,76 @@ export class StateValidator {
             chain: params.chain,
             transport: http(params.rpcUrl)
         });
+    }
+
+    /**
+     * Batch query balances for multiple accounts
+     * Returns ETH, GToken, aPNTs, and xPNTs balances
+     */
+    static async getAccountBalances(params: {
+        rpcUrl: string;
+        chain: Chain;
+        addresses: Address[];
+        gTokenAddress?: Address;
+        aPNTsAddress?: Address;
+        xPNTsAddress?: Address;
+    }): Promise<Array<{
+        address: Address;
+        eth: bigint;
+        gToken: bigint;
+        aPNTs: bigint;
+        xPNTs: bigint;
+    }>> {
+        const client = createPublicClient({
+            chain: params.chain,
+            transport: http(params.rpcUrl)
+        });
+
+        const results = await Promise.all(
+            params.addresses.map(async (address) => {
+                const [eth, gToken, aPNTs, xPNTs] = await Promise.all([
+                    // ETH balance
+                    client.getBalance({ address }),
+                    // GToken balance
+                    params.gTokenAddress
+                        ? client.readContract({
+                              address: params.gTokenAddress,
+                              abi: erc20Abi,
+                              functionName: 'balanceOf',
+                              args: [address]
+                          }) as Promise<bigint>
+                        : Promise.resolve(0n),
+                    // aPNTs balance
+                    params.aPNTsAddress
+                        ? client.readContract({
+                              address: params.aPNTsAddress,
+                              abi: erc20Abi,
+                              functionName: 'balanceOf',
+                              args: [address]
+                          }) as Promise<bigint>
+                        : Promise.resolve(0n),
+                    // xPNTs balance
+                    params.xPNTsAddress
+                        ? client.readContract({
+                              address: params.xPNTsAddress,
+                              abi: erc20Abi,
+                              functionName: 'balanceOf',
+                              args: [address]
+                          }) as Promise<bigint>
+                        : Promise.resolve(0n)
+                ]);
+
+                return {
+                    address,
+                    eth,
+                    gToken,
+                    aPNTs,
+                    xPNTs
+                };
+            })
+        );
+
+        return results;
     }
 
     /**

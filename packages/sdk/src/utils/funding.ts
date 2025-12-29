@@ -102,6 +102,7 @@ export class FundingManager {
             
             const hash = await walletClient.sendTransaction({
                 account: walletClient.account!,
+                chain: params.chain, 
                 to: params.targetAddress,
                 value: amount
             });

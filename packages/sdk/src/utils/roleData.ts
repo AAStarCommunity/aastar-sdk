@@ -1,4 +1,4 @@
-import { keccak256, stringToBytes, encodeAbiParameters, parseAbiParameters, type Hex, type Address, zeroAddress } from 'viem';
+import { keccak256, stringToBytes, encodeAbiParameters, decodeAbiParameters, parseAbiParameters, type Hex, type Address, zeroAddress } from 'viem';
 
 export const RoleIds = {
     PAYMASTER_SUPER: keccak256(stringToBytes('PAYMASTER_SUPER')),
@@ -87,4 +87,65 @@ export const RoleDataFactory = {
             ] as any]
         );
     },
+
+    decodeCommunity: (data: Hex) => {
+        const decoded = decodeAbiParameters(
+            [{
+                type: 'tuple',
+                components: [
+                    { name: 'name', type: 'string' },
+                    { name: 'ensName', type: 'string' },
+                    { name: 'website', type: 'string' },
+                    { name: 'description', type: 'string' },
+                    { name: 'logoURI', type: 'string' },
+                    { name: 'stakeAmount', type: 'uint256' }
+                ]
+            }],
+            data
+        );
+        const result = decoded[0] as any;
+        // Check if result is array (iterable) or object
+        if (Array.isArray(result)) {
+             const [n, e, w, d, l, s] = result;
+             return { name: n, ensName: e, website: w, description: d, logoURI: l, stakeAmount: s };
+        } else {
+             return { 
+                name: result.name, 
+                ensName: result.ensName, 
+                website: result.website, 
+                description: result.description, 
+                logoURI: result.logoURI, 
+                stakeAmount: result.stakeAmount 
+            };
+        }
+    },
+
+    decodeEndUser: (data: Hex) => {
+        const decoded = decodeAbiParameters(
+            [{
+                type: 'tuple',
+                components: [
+                    { name: 'account', type: 'address' },
+                    { name: 'community', type: 'address' },
+                    { name: 'avatarURI', type: 'string' },
+                    { name: 'ensName', type: 'string' },
+                    { name: 'stakeAmount', type: 'uint256' }
+                ]
+            }],
+            data
+        );
+        const result = decoded[0] as any;
+        if (Array.isArray(result)) {
+            const [a, c, av, en, s] = result;
+            return { account: a, community: c, avatarURI: av, ensName: en, stakeAmount: s };
+        } else {
+            return {
+                account: result.account,
+                community: result.community,
+                avatarURI: result.avatarURI,
+                ensName: result.ensName,
+                stakeAmount: result.stakeAmount
+            };
+        }
+    }
 };

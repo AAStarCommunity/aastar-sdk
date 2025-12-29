@@ -16,58 +16,58 @@ export const CORE_ADDRESSES = {
   gToken: process.env.GTOKEN_ADDRESS as Address,
   gTokenStaking: process.env.GTOKENSTAKING_ADDRESS as Address,
   superPaymaster: process.env.SUPER_PAYMASTER as Address,
-  paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000') as Address,
+  paymasterFactory: process.env.PAYMASTER_FACTORY_ADDRESS as Address,
   aPNTs: process.env.APNTS_ADDRESS as Address,
   mySBT: process.env.MYSBT_ADDRESS as Address,
-  paymasterV4: process.env.PAYMASTER_V4_ADDRESS as Address | undefined,
-  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address | undefined,
-  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address | undefined,
+  paymasterV4: process.env.PAYMASTER_V4_ADDRESS as Address,
+  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address,
+  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address,
 } as const;
 
 /**
  * Token System Addresses
  */
 export const TOKEN_ADDRESSES = {
-  xPNTsFactory: '0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd',
+  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address,
 } as const;
 
 /**
  * Test Token Addresses (For Development & Testing)
  */
 export const TEST_TOKEN_ADDRESSES = {
-  mockUSDT: '0x14EaC6C3D49AEDff3D59773A7d7bfb50182bCfDc',
-  aPNTs: '0xBD0710596010a157B88cd141d797E8Ad4bb2306b',
-  bPNTs: '0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3',
+  mockUSDT: process.env.TEST_MOCK_USDT as Address,
+  aPNTs: process.env.TEST_APNTS as Address,
+  bPNTs: process.env.TEST_BPNTS as Address,
 } as const;
 
 /**
  * Test Account Addresses (For Development & Testing)
  */
 export const TEST_ACCOUNT_ADDRESSES = {
-  simpleAccountFactory: '0x8B516A71c134a4b5196775e63b944f88Cc637F2b',
+  simpleAccountFactory: process.env.SIMPLE_ACCOUNT_FACTORY as Address,
 } as const;
 
 /**
  * Paymaster Addresses
  */
 export const PAYMASTER_ADDRESSES = {
-  paymasterV4_1: '0x4D6A367aA183903968833Ec4AE361CFc8dDDBA38',
-  paymasterV4_1iImplementation: '0x3E1C6a741f4b3f8bE24f324342539982324a6f8a',
+  paymasterV4_1: process.env.PAYMASTER_V4_ADDRESS as Address,
+  paymasterV4_1iImplementation: process.env.PAYMASTER_V4_IMPL as Address,
 } as const;
 
 /**
  * Monitoring System Addresses
  */
 export const MONITORING_ADDRESSES = {
-  dvtValidator: '0x937CdD172fb0674Db688149093356F6dA95498FD',
-  blsAggregator: '0x3Cf0587912c692aa0f5FEEEDC52959ABEEEFaEc6',
+  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address,
+  blsAggregator: process.env.BLS_AGGREGATOR_ADDRESS as Address,
 } as const;
 
 /**
  * Official Contract Addresses
  */
 export const OFFICIAL_ADDRESSES = {
-  entryPoint: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  entryPoint: (process.env.ENTRYPOINT_ADDRESS || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address,
 } as const;
 
 /**
@@ -82,9 +82,9 @@ export const COMMUNITY_OWNERS = {
  * Test Community Addresses (Registered in Registry v2.2.0 on 2025-11-08)
  */
 export const TEST_COMMUNITIES = {
-  aastar: '0x411BD567E46C0781248dbB6a9211891C032885e5', // AAstar community (PAYMASTER_SUPER, aPNTs, MySBT, 50 GT staked)
-  bread: '0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA', // Bread community (PAYMASTER_AOA, bPNTs, MySBT, 50 GT staked)
-  mycelium: '0x411BD567E46C0781248dbB6a9211891C032885e5', // Legacy alias for aastar
+  aastar: process.env.TEST_COMMUNITY_AASTAR as Address,
+  bread: process.env.TEST_COMMUNITY_BREAD as Address,
+  mycelium: process.env.TEST_COMMUNITY_MYCELIUM as Address,
 } as const;
 
 /**
