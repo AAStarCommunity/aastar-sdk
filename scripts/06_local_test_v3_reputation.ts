@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, formatEther, parseAbi, keccak256, toHex, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -41,9 +41,9 @@ const require = createRequire(import.meta.url);
 
 async function runReputationTest() {
     console.log("🧪 Running SuperPaymaster V3 Reputation & Credit Modular Test...");
-    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(RPC_URL) });
 
     // ... (rest of setup)
 

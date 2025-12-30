@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseAbi, type Hex, keccak256, stringToBytes, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -42,9 +42,9 @@ const ROLE_PAYMASTER_SUPER = keccak256(stringToBytes('PAYMASTER_SUPER'));
 
 async function runAdminTest() {
     console.log("🧪 Running SuperPaymaster V3 Admin Modular Test...");
-    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(RPC_URL) });
 
     console.log(`   Operator: ${signer.address}`);
     console.log(`   Paymaster: ${SUPER_PAYMASTER}`);

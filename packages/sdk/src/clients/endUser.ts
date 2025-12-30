@@ -92,18 +92,38 @@ export function createEndUserClient({
 
             console.log(`   SDK: Joining community ${community}...`);
             
-            // 1. SBT Mint / Role Registration
-            // If roleData not provided, default to standard enduser data (usually user address or community reference)
-            const finalData = roleData || `0x000000000000000000000000${community.slice(2)}` as Hex;
-
+            // Registry.registerRoleSelf is now idempotent (modified contract)
+            // First call: Mints SBT + grants role
+            // Subsequent calls: Adds community membership
+            
+            // If roleData not provided, encode EndUserRoleData structure
+            let finalData: Hex;
+            if (roleData) {
+                finalData = roleData;
+            } else {
+                // Encode EndUserRoleData: (address account, address community, string avatarURI, string ensName, uint256 stakeAmount)
+                const { encodeAbiParameters } = await import('viem');
+                finalData = encodeAbiParameters(
+                    [
+                        { name: 'account', type: 'address' },
+                        { name: 'community', type: 'address' },
+                        { name: 'avatarURI', type: 'string' },
+                        { name: 'ensName', type: 'string' },
+                        { name: 'stakeAmount', type: 'uint256' }
+                    ],
+                    [accountToUse.address, community, '', '', 0n] // Use minimum stake (Registry will use roleConfig.minStake)
+                ) as Hex;
+            }
+            
             const regTx = await (client as any).writeContract({
                 address: usedAddresses.registry,
                 abi: RegistryABI,
-                functionName: 'registerRole',
-                args: [roleId, accountToUse.address, finalData],
+                functionName: 'registerRoleSelf',
+                args: [roleId, finalData],
                 account: accountToUse,
                 chain
             });
+            
             await (client as any).waitForTransactionReceipt({ hash: regTx });
 
             // 2. Fetch SBT ID
@@ -111,23 +131,31 @@ export function createEndUserClient({
             console.log(`   SDK: User joined. SBT ID: ${sbtId}`);
 
             // 3. Fetch Initial Credit for verification
-            // Get the xPNTs token for this community from Factory first
-            const factoryAbi = parseAbi(['function communityToToken(address) view returns (address)']);
-            const tokenAddress = await (client as any).readContract({
-                address: usedAddresses.xPNTsFactory,
-                abi: factoryAbi,
-                functionName: 'communityToToken',
-                args: [community]
-            }) as Address;
+            let credit = 0n;
+            try {
+                const factoryAbi = parseAbi(['function communityToToken(address) view returns (address)']);
+                const tokenAddress = await (client as any).readContract({
+                    address: usedAddresses.xPNTsFactory,
+                    abi: factoryAbi,
+                    functionName: 'communityToToken',
+                    args: [community]
+                }) as Address;
 
-            const credit = await actions.getAvailableCredit({
-                user: (client as any).aaAddress || accountToUse.address, // Use AA if context exists, else EOA
-                token: tokenAddress
-            });
+                credit = await actions.getAvailableCredit({
+                    user: (client as any).aaAddress || accountToUse.address,
+                    token: tokenAddress
+                });
 
-            console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
+                console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
+            } catch (error: any) {
+                console.log(`   SDK: Credit system not available (${error.message.split('\n')[0]}). Continuing...`);
+            }
 
-            return { tx: regTx, sbtId, initialCredit: credit };
+            return {
+                tx: regTx,
+                sbtId,
+                initialCredit: credit
+            };
         },
         async executeGasless({ target, data, value = 0n, operator }: { 
             target: Address, 
