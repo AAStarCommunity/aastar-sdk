@@ -334,6 +334,15 @@ async function main() {
     // ==========================================
     console.log(`\n🧪 [Test 4] Role Exit (Paymaster)`);
 
+    // NEW in V3.2: Clear lock duration for testing immediate exit
+    console.log(`   Admin clearing lock duration for AOA Paymaster...`);
+    await waitForTx(publicClient, await adminWallet.writeContract({
+        address: REGISTRY_ADDR,
+        abi: RegistryABI,
+        functionName: 'setRoleLockDuration',
+        args: [ROLE_PAYMASTER_AOA, 0n]
+    }));
+
     console.log(`   Exiting Paymaster Role...`);
     const txExit = await pmWallet.writeContract({
         address: REGISTRY_ADDR,

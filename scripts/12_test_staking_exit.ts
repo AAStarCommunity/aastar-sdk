@@ -102,6 +102,16 @@ async function main() {
     }) as bigint;
 
     console.log(`   🚪 Alice exiting role...`);
+
+    // NEW in V3.2: Clear lock duration for testing immediate exit
+    console.log(`   Admin clearing lock duration for EndUser...`);
+    await waitForTx(publicClient, await adminWallet.writeContract({
+        address: REGISTRY_ADDR, 
+        abi: RegistryABI,
+        functionName: 'setRoleLockDuration',
+        args: [ROLE_ENDUSER, 0n]
+    }));
+
     await waitForTx(publicClient, await aliceWallet.writeContract({
         address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'exitRole', args: [ROLE_ENDUSER]
     }));

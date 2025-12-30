@@ -1,0 +1,24 @@
+[
+  {
+    "type": "error",
+    "name": "Eip7702SenderNotDelegate",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Eip7702SenderWithoutCode",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+]
