@@ -1,13 +1,16 @@
 import { http, parseEther, type Hex, type Address, keccak256, stringToBytes, erc20Abi, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { foundry, sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { createOperatorClient, createAdminClient, RegistryABI, RoleIds } from '../../packages/sdk/src/index.js';
+import { createOperatorClient, createAdminClient, RegistryABI, RoleIds } from '../../packages/sdk/dist/index.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
+const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
+const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const chain = isSepolia ? sepolia : foundry;
+const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const OPERATOR_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as Hex;
 
@@ -28,12 +31,12 @@ async function onboarding() {
     
     const adminAccount = privateKeyToAccount(ADMIN_KEY);
     const adminClient = createAdminClient({
-        chain: foundry, transport: http(RPC_URL), account: adminAccount, addresses: localAddresses as any
+        chain, transport: http(RPC_URL), account: adminAccount, addresses: localAddresses as any
     });
 
     const operatorAccount = privateKeyToAccount(OPERATOR_KEY);
     const operatorClient = createOperatorClient({
-        chain: foundry, transport: http(RPC_URL), account: operatorAccount, addresses: localAddresses as any
+        chain, transport: http(RPC_URL), account: operatorAccount, addresses: localAddresses as any
     });
 
     console.log(`   Operator: ${operatorAccount.address}`);

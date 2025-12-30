@@ -3,14 +3,14 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, http, type Hex, parseAbi, type Address, keccak256, stringToBytes, formatEther } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env.sepolia') });
 
 async function main() {
-    const client = createPublicClient({ chain: sepolia, transport: http(process.env.SEPOLIA_RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(process.env.SEPOLIA_RPC_URL) });
     const REGISTRY = process.env.REGISTRY_ADDR as Address;
     const ADMIN_A = '0xCA8E22D78D5eF0598C67E4aF6D39BA6682a558e7' as Address;
     const ADMIN_B = '0x021ccDEED21A8ea540017188fB6D9a3BAaDc8C40' as Address;

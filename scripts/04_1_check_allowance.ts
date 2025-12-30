@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -15,9 +15,9 @@ const SIGNER_KEY = process.env.PRIVATE_KEY_JASON as Hex;
 
 async function main() {
     console.log("🔍 [04.1] Checking Allowance for Group B...");
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
 
     const erc20Abi = parseAbi([
         'function allowance(address, address) view returns (uint256)',

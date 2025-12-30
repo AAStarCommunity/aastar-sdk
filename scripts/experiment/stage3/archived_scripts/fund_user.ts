@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseEther, type Address, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,9 +16,9 @@ async function main() {
     const SUPPLIER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
     if (!RPC_URL || !SUPPLIER_KEY) throw new Error('Missing Config');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const account = privateKeyToAccount(SUPPLIER_KEY);
-    const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
     const ADMIN_FRESH = '0x0c52a28d94e411a01580d995eb0b0a90256e7eef32f7eaddfc9f0c889afd67ce';
     const USER_FRESH = '0x0a7108e34f0d05eddc6e80ee380f5d81dcae2030263f75e42a4c015f59ccd8a4';

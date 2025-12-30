@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseAbi, parseEther, formatEther, getContract, Hex, Address, encodeAbiParameters, keccak256, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseAbi, type Address, parseEther, keccak256, stringToBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +19,7 @@ async function main() {
     
     if (!RPC_URL) throw new Error('Missing RPC_URL');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const SP = '0xd6EACcC89522f1d507d226495adD33C5A74b6A45' as Address;
     const REGISTRY = '0xf265d21c2cE6B2fA5d6eD1A2d7b032F03516BE19' as Address;
     const GTOKEN = '0xfc5671D606e8dd65EA39FB3f519443B7DAB40570' as Address;
@@ -48,7 +48,7 @@ async function main() {
     for (const admin of admins) {
         console.log(`\n--- Processing ${admin.name} ---`);
         const account = privateKeyToAccount(admin.key);
-        const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+        const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
         // 1. Role Check/Register
         const isOp = await client.readContract({ address: REGISTRY, abi: regAbi, functionName: 'hasRole', args: [ROLE_PAYMASTER, account.address] });

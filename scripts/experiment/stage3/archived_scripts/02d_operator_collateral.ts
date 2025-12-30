@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseAbi, type Address, parseEther, formatEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +20,7 @@ async function main() {
     
     if (!RPC_URL || !JASON_KEY) throw new Error('Missing Config');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const SP = '0xd6EACcC89522f1d507d226495adD33C5A74b6A45' as Address;
     const APNTS = '0xD348d910f93b60083bF137803FAe5AF25E14B69d' as Address;
 
@@ -28,7 +28,7 @@ async function main() {
     const tokenAbi = parseAbi(['function mint(address, uint256) external', 'function approve(address, uint256) external', 'function balanceOf(address) view returns (uint256)']);
 
     const jasonAccount = privateKeyToAccount(JASON_KEY);
-    const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(RPC_URL) });
+    const jasonWallet = createWalletClient({ account: jasonAccount, chain: foundry, transport: http(RPC_URL) });
 
     const COLLATERAL_AMT = parseEther('100');
 
@@ -45,7 +45,7 @@ async function main() {
     for (const admin of admins) {
         console.log(`\n--- Collateral for ${admin.name} ---`);
         const account = privateKeyToAccount(admin.key);
-        const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+        const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
         // 0. Check Balance
         const bal = await client.readContract({ address: APNTS, abi: tokenAbi, functionName: 'balanceOf', args: [account.address] });

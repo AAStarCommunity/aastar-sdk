@@ -1,13 +1,16 @@
 import { createPublicClient, http, parseEther, type Hex, type Address, erc20Abi, keccak256, stringToBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { foundry, sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { createAdminClient } from '../../packages/sdk/src/index.js';
+import { createAdminClient } from '../../packages/sdk/dist/index.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
+const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
+const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const chain = isSepolia ? sepolia : foundry;
+const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 
 // Test Data
@@ -46,11 +49,17 @@ async function setup() {
     
     const adminAccount = privateKeyToAccount(ADMIN_KEY);
     const adminClient = createAdminClient({
-        chain: foundry,
+        chain,
         transport: http(RPC_URL),
         account: adminAccount,
         addresses: localAddresses as any
     });
+
+    if (isSepolia) {
+        console.log('   🌐 Sepolia Mode: Skipping Anvil-specific funding and minting...');
+        console.log('   ℹ️ Assuming accounts are pre-funded on Testnet.');
+        return;
+    }
 
     const operator = privateKeyToAccount(OPERATOR_KEY).address;
     const community = privateKeyToAccount(COMMUNITY_OWNER_KEY).address;
@@ -103,7 +112,7 @@ async function setup() {
             functionName: 'mint',
             args: [m.to, m.amount],
             account: adminAccount,
-            chain: foundry
+            chain
         });
         await adminClient.waitForTransactionReceipt({ hash: tx });
         console.log(`   ✅ Minted ${m.amount.toString()} to ${m.to} (${m.token})`);

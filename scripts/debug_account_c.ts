@@ -1,6 +1,6 @@
 import { createPublicClient, http, Hex, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -13,7 +13,7 @@ async function main() {
 
     console.log(`Checking Account C: ${accountC}`);
     
-    const client = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createPublicClient({ chain: foundry, transport: http(rpc) });
     const jasonAccount = privateKeyToAccount(jasonKey);
     console.log(`Jason Address (Signer): ${jasonAccount.address}`);
 

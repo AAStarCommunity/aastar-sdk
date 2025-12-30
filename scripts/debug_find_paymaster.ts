@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, http, Hex } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 // @ts-ignore
 import { CONTRACTS } from '@aastar/shared-config';
@@ -23,7 +23,7 @@ async function main() {
     console.log("🔍 Finding Paymaster for bPNTs (Group B)...");
     
     if (!PUBLIC_RPC) throw new Error("Missing RPC");
-    const client = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
+    const client = createPublicClient({ chain: foundry, transport: http(PUBLIC_RPC) });
 
     console.log(`   Registry: ${REGISTRY_ADDRESS}`);
     console.log(`   bPNTs:    ${BPNTS_ADDRESS}`);

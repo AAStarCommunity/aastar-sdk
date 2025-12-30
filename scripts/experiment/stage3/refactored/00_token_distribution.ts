@@ -5,7 +5,7 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { FundingManager } from '../../../packages/sdk/src/index.js';
 import type { Hex, Address } from 'viem';
 
@@ -29,13 +29,13 @@ async function main() {
 
     // 批量充值 ETH
     await FundingManager.batchFundETH(
-        { rpcUrl: RPC_URL, chain: sepolia, supplierKey: SUPPLIER_KEY },
+        { rpcUrl: RPC_URL, chain: foundry, supplierKey: SUPPLIER_KEY },
         targets.map(t => ({ address: t.address, amount: '0.1' }))
     );
 
     // 批量充值 GToken
     await FundingManager.batchFundToken(
-        { rpcUrl: RPC_URL, chain: sepolia, supplierKey: SUPPLIER_KEY },
+        { rpcUrl: RPC_URL, chain: foundry, supplierKey: SUPPLIER_KEY },
         GTOKEN_ADDR,
         targets.map(t => ({ address: t.address, amount: '100' }))
     );

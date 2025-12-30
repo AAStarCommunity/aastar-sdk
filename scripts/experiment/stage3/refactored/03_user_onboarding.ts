@@ -7,7 +7,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { http, type Hex, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { createEndUserClient, FundingManager, RoleIds, RoleDataFactory } from '../../../packages/sdk/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +29,7 @@ async function main() {
     // 1. 自动充值
     await FundingManager.ensureFunding({
         rpcUrl: RPC_URL,
-        chain: sepolia,
+        chain: foundry,
         supplierKey: SUPPLIER_KEY,
         targetAddress: account.address,
         minETH: '0.01',
@@ -38,7 +38,7 @@ async function main() {
 
     // 2. 创建 EndUser Client
     const client = createEndUserClient({
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL),
         account,
         addresses: {

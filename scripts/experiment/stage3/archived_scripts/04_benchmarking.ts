@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { http, type Hex, parseAbi, type Address, encodeFunctionData, keccak256, stringToBytes, createPublicClient, createWalletClient, type Hash, formatEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { createEndUserClient, RoleIds } from '../../../packages/sdk/src/index.js';
 import { toSimpleSmartAccount } from '../../../packages/account/src/index.js';
 
@@ -22,7 +22,7 @@ async function main() {
     
     if (!RPC_URL || !USER_KEY) throw new Error('Missing Config');
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const checkAcc = privateKeyToAccount(USER_KEY);
     const bal = await publicClient.getBalance({ address: checkAcc.address });
     if (bal === 0n && process.env.PRIVATE_KEY_SUPPLIER) {
@@ -42,7 +42,7 @@ async function main() {
     // --- Group A: Standard EOA ---
     console.log("\n📊 [Group A] Standard EOA Transfer (Live Hash)...");
     try {
-        const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(RPC_URL) });
+        const walletClient = createWalletClient({ account: owner, chain: foundry, transport: http(RPC_URL) });
         const txA = await walletClient.sendTransaction({ to: adminA_addr, value: 0n });
         console.log(`   Transaction Sent: ${txA}`);
         const receiptA = await publicClient.waitForTransactionReceipt({ hash: txA });
@@ -69,7 +69,7 @@ async function main() {
     
     try {
         const sdkClient = createEndUserClient({
-            chain: sepolia,
+            chain: foundry,
             transport: http(RPC_URL),
             account: owner,
             addresses: { superPaymaster: SUPER_PAYMASTER, registry: process.env.REGISTRY_ADDR as Address }

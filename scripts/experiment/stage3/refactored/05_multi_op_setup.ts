@@ -6,7 +6,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { http, parseEther, type Hex, type Address } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { KeyManager, FundingManager, createOperatorClient, RoleIds } from '../../../packages/sdk/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,13 +27,13 @@ async function main() {
 
     // 2. 批量充值 ETH
     await FundingManager.batchFundETH(
-        { rpcUrl: RPC_URL, chain: sepolia, supplierKey: SUPPLIER_KEY },
+        { rpcUrl: RPC_URL, chain: foundry, supplierKey: SUPPLIER_KEY },
         operators.map(op => ({ address: op.address, amount: '0.1' }))
     );
 
     // 3. 批量充值 GToken
     await FundingManager.batchFundToken(
-        { rpcUrl: RPC_URL, chain: sepolia, supplierKey: SUPPLIER_KEY },
+        { rpcUrl: RPC_URL, chain: foundry, supplierKey: SUPPLIER_KEY },
         process.env.GTOKEN_ADDR as Address,
         operators.map(op => ({ address: op.address, amount: '50' }))
     );
@@ -41,7 +41,7 @@ async function main() {
     // 4. 批量注册为 Operator
     for (const op of operators) {
         const client = createOperatorClient({
-            chain: sepolia,
+            chain: foundry,
             transport: http(RPC_URL),
             account: { address: op.address, signMessage: async () => '0x' as Hex, signTransaction: async () => '0x' as Hex, signTypedData: async () => '0x' as Hex, type: 'local' },
             addresses: {

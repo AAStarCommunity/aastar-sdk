@@ -17,7 +17,7 @@ import {
   decodeErrorResult
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,12 +67,12 @@ async function main() {
     console.log(`Using RPC: ${rpcUrl}`);
 
     const client = createPublicClient({
-        chain: sepolia,
+        chain: foundry,
         transport: http(BUNDLER_RPC) // Bundler RPC for UserOp methods
     });
     
     // For normal reads/funds
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(rpcUrl) });
     
     // Owner Account
     const ownerAccount = privateKeyToAccount(parseKey(process.env.PRIVATE_KEY_JASON));
@@ -152,7 +152,7 @@ async function main() {
              if (supplierKey) {
                  try {
                      const supplier = privateKeyToAccount(supplierKey);
-                     const supplierWallet = createWalletClient({ chain: sepolia, transport: http(rpcUrl), account: supplier });
+                     const supplierWallet = createWalletClient({ chain: foundry, transport: http(rpcUrl), account: supplier });
                      
                      
                      // Check supplier balance
@@ -169,7 +169,7 @@ async function main() {
                                 const tx = await supplierWallet.sendTransaction({
                                     to: senderAddress as Hex,
                                     value: parseEther("0.05"),
-                                    chain: sepolia, 
+                                    chain: foundry, 
                                     account: supplier
                                 });
                                 console.log(`      Tx: ${tx}`);

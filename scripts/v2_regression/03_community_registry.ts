@@ -1,13 +1,16 @@
 import { http, parseEther, type Hex, type Address, keccak256, stringToBytes, encodeAbiParameters, parseAbiParameters, erc20Abi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { foundry, sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { createCommunityClient, createAdminClient, RegistryABI } from '../../packages/sdk/src/index.js';
+import { createCommunityClient, createAdminClient, RegistryABI } from '../../packages/sdk/dist/index.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
+const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
+const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const chain = isSepolia ? sepolia : foundry;
+const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const COMMUNITY_OWNER_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as Hex;
 

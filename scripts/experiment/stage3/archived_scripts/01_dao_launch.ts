@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { http, type Hex, parseEther, keccak256, stringToBytes, type Address, encodeAbiParameters, createPublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { createCommunityClient } from '../../../packages/sdk/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,7 +20,7 @@ async function main() {
     
     // Check balance of Admin A, if 0 and siphoned, fallback to Supplier temporarily for experiment
     const checkAcc = privateKeyToAccount(ADMIN_KEY);
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const bal = await publicClient.getBalance({ address: checkAcc.address });
     if (bal === 0n && process.env.PRIVATE_KEY_SUPPLIER) {
         console.log(`⚠️  Admin Account ${checkAcc.address} has 0 ETH. Falling back to Supplier for experiment.`);
@@ -31,7 +31,7 @@ async function main() {
     
     // Initialize Community Client
     const client = createCommunityClient({
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL),
         account,
         addresses: {

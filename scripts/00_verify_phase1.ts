@@ -1,5 +1,5 @@
 import { createPublicClient, http, parseAbi, formatEther, getContract, Address, zeroAddress } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -10,7 +10,7 @@ const rpcUrl = process.env.SEPOLIA_RPC_URL;
 if (!rpcUrl) throw new Error("SEPOLIA_RPC_URL missing");
 
 const client = createPublicClient({
-  chain: sepolia,
+  chain: foundry,
   transport: http(rpcUrl),
 });
 

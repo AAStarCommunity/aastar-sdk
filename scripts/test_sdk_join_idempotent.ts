@@ -1,7 +1,7 @@
 import { createEndUserClient } from '../packages/sdk/src/index.js';
 import { createPublicClient, http, parseEther, createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -26,7 +26,7 @@ async function main() {
     const bob = privateKeyToAccount(BOB_KEY);
     
     const publicClient = createPublicClient({
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL)
     });
     
@@ -42,7 +42,7 @@ async function main() {
     
     const adminWallet = createWalletClient({
         account: admin,
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL)
     });
     
@@ -66,7 +66,7 @@ async function main() {
     // Approve GTokenStaking to spend Bob's GToken
     const bobWallet = createWalletClient({
         account: bob,
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL)
     });
     
@@ -85,7 +85,7 @@ async function main() {
     console.log('📝 Step 2: Create EndUserClient for Bob...');
     
     const bobClient = await createEndUserClient({
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL),
         account: bob,
         addresses: {

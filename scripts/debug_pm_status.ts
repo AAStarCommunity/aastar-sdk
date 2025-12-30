@@ -1,5 +1,5 @@
 import { createPublicClient, http, Hex, parseAbi, formatEther } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -16,7 +16,7 @@ async function main() {
     console.log(`   Paymaster: ${superPaymaster}`);
     console.log(`   Operator: ${operator}`);
     
-    const client = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createPublicClient({ chain: foundry, transport: http(rpc) });
 
     const abi = parseAbi([
         'struct OperatorConfig { address xPNTsToken; address treasury; bool isConfigured; uint256 exchangeRate; uint256 aPNTsBalance; uint256 totalSpent; uint256 totalTxSponsored; }',

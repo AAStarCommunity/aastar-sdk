@@ -45,7 +45,7 @@ export async function waitForUserOp(client: any, hash: Hex, maxRetries = 30) {
 export function getNetworkConfig(network: string) {
     switch (network.toLowerCase()) {
         case 'sepolia':
-            return { chain: sepolia, rpc: process.env.SEPOLIA_RPC_URL };
+            return { chain: foundry, rpc: process.env.SEPOLIA_RPC_URL };
         case 'optimism':
             return { chain: optimism, rpc: process.env.OPTIMISM_RPC_URL };
         case 'optimism-sepolia':

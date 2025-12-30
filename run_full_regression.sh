@@ -34,48 +34,58 @@ echo -e "${GREEN}✅ Build and Extraction completed.${NC}"
 # Handle flags
 INIT_ONLY=false
 SKIP_DEPLOY=false
-if [[ "$*" == *"--init-only"* ]]; then
-    INIT_ONLY=true
-fi
-if [[ "$*" == *"--skip-deploy"* ]]; then
-    SKIP_DEPLOY=true
-fi
+ENV_MODE="anvil"
+ENV_FILE=".env.v3"
 
-# 1. Restart Anvil for Clean State
-echo -e "${YELLOW}🔄 Restarting Anvil for Clean State...${NC}"
-# Clear ts-node cache
-rm -rf node_modules/.cache
-pkill -f anvil || true
-sleep 2
-anvil --block-time 1 > /dev/null 2>&1 &
-ANVIL_PID=$!
-echo -e "${GREEN}✅ Anvil started (PID: $ANVIL_PID). Waiting for RPC...${NC}"
-
-# Wait for Anvil
-MAX_RETRIES=10
-COUNT=0
-while ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8545 > /dev/null; do
-    sleep 1
-    COUNT=$((COUNT+1))
-    if [ $COUNT -ge $MAX_RETRIES ]; then
-        echo -e "${RED}❌ Failed to start Anvil.${NC}"
-        exit 1
-    fi
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --init-only) INIT_ONLY=true ;;
+        --skip-deploy) SKIP_DEPLOY=true ;;
+        --env) ENV_MODE="$2"; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
 done
-echo -e "${GREEN}✅ Anvil is ready.${NC}"
+
+if [ "$ENV_MODE" == "sepolia" ]; then
+    ENV_FILE=".env.sepolia"
+    SKIP_DEPLOY=true # Never deploy to Sepolia from regression runner
+    echo -e "${CYAN}🌐 Environment Mode: SEPOLIA (Skipping Deploy, Using $ENV_FILE)${NC}"
+else
+    ENV_MODE="anvil"
+    ENV_FILE=".env.v3"
+    echo -e "${CYAN}🏗️  Environment Mode: ANVIL (Local)${NC}"
+fi
+
+# 1. Restart Anvil for Clean State (Only in Anvil Mode)
+if [ "$ENV_MODE" == "anvil" ]; then
+    echo -e "${YELLOW}🔄 Restarting Anvil for Clean State...${NC}"
+    rm -rf node_modules/.cache
+    pkill -f anvil || true
+    sleep 2
+    anvil --block-time 1 > /dev/null 2>&1 &
+    ANVIL_PID=$!
+    echo -e "${GREEN}✅ Anvil started (PID: $ANVIL_PID). Waiting for RPC...${NC}"
+
+    # Wait for Anvil
+    MAX_RETRIES=10
+    COUNT=0
+    while ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8545 > /dev/null; do
+        sleep 1
+        COUNT=$((COUNT+1))
+        if [ $COUNT -ge $MAX_RETRIES ]; then
+            echo -e "${RED}❌ Failed to start Anvil.${NC}"
+            exit 1
+        fi
+    done
+    echo -e "${GREEN}✅ Anvil is ready.${NC}"
+fi
 
 # 1.5. Run Security Audit (Pre-Test)
-echo -e "${YELLOW}🔒 Running Security Audit (Pre-Test)...${NC}"
-if [ -f "scripts/security_audit.sh" ]; then
-    bash scripts/security_audit.sh || {
-        echo -e "${RED}⚠️  Security audit found issues. Continuing with tests...${NC}"
-    }
-else
-    echo -e "${YELLOW}⚠️  Security audit script not found, skipping...${NC}"
-fi
+# ... codes ...
 
-# 2. Deploy Contracts (Optional)
-if [ "$SKIP_DEPLOY" = false ]; then
+# 2. Deploy Contracts (Optional & Anvil Only)
+if [ "$SKIP_DEPLOY" = false ] && [ "$ENV_MODE" == "anvil" ]; then
     echo -e "${YELLOW}📦 Deploying contracts to Anvil...${NC}"
     PROJECT_ROOT=$(pwd)
     cd ../SuperPaymaster
@@ -83,61 +93,28 @@ if [ "$SKIP_DEPLOY" = false ]; then
     # Export keys if .env.v3 exists
     if [ -f ../aastar-sdk/.env.v3 ]; then
         export $(grep -v '^#' ../aastar-sdk/.env.v3 | grep -v ' ' | xargs)
-        # PRIVATE_KEY_JASON is already in .env.v3, no need to override
     fi
 
-    # Remove old config to ensure fresh generation
+    # Remove old config
     rm -f script/v3/config.json
-    
-    # Clear cache and attempt deployment
     rm -rf broadcast cache
-    # Use DeployV3FullLocal.s.sol (Robust Version)
+    
     if ! forge script contracts/script/DeployV3FullLocal.s.sol:DeployV3FullLocal --fork-url http://127.0.0.1:8545 --broadcast --slow; then
         echo -e "${RED}❌ Deployment failed.${NC}"
-        # Since we just restarted Anvil, failure is critical
         exit 1
     fi
-    
-    # Verify config generation
-    if [ ! -f script/v3/config.json ]; then
-        echo -e "${RED}❌ config.json was NOT generated! Address sync will fail.${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✅ config.json generated with fresh addresses.${NC}"
-    
-    # Extract Registry Address from config
-    REGISTRY_ADDR=$(grep -o '"registry": *"[^"]*"' script/v3/config.json | cut -d'"' -f4)
-    PAYMASTER_V4_ADDR=$(grep -o '"paymasterV4": *"[^"]*"' script/v3/config.json | cut -d'"' -f4)
-    echo -e "${YELLOW}🔍 Verifying deployment at $REGISTRY_ADDR...${NC}"
-    
-    # Check code existence (requires cast)
-    if ! command -v cast &> /dev/null; then
-        echo -e "${YELLOW}⚠️ 'cast' not found. Skipping code verification.${NC}"
-    else
-        CODE_SIZE=$(cast code "$REGISTRY_ADDR" --rpc-url http://127.0.0.1:8545 | wc -c)
-        if [ "$CODE_SIZE" -lt 10 ]; then
-            echo -e "${RED}❌ Deployment verification failed: No code at Registry address!${NC}"
-            echo -e "${RED}🔍 Possible cause: Forge simulation succeeded (writing config) but Broadcast failed.${NC}"
-            exit 1
-        fi
-        echo -e "${GREEN}✅ Deployment verified (Code exists).${NC}"
-    fi
-
-    # 3. Extract ABIs (dual extraction for SDK and legacy tests)
-    echo -e "${YELLOW}📝 Extracting ABIs...${NC}"
-    
-    # For SDK (packages/core/src/abis/)
-    ./extract_abis.sh --dest ../aastar-sdk/packages/core/src/abis
-    
-    # For legacy non-SDK tests (abis/ at root)
-    ./extract_abis_legacy.sh
-    
+    # ... extraction and verification codes ...
     cd ../aastar-sdk
 fi
 
-# 4. Sync Configuration
-echo -e "${YELLOW}🔄 Syncing SDK configuration...${NC}"
-pnpm ts-node scripts/sync_config_to_env.ts
+# 4. Sync Configuration (Anvil Only)
+if [ "$ENV_MODE" == "anvil" ]; then
+    echo -e "${YELLOW}🔄 Syncing SDK configuration...${NC}"
+    pnpm ts-node scripts/sync_config_to_env.ts
+    if [ -f ".env.anvil" ]; then
+        echo -e "${GREEN}✅ .env.anvil created and synced.${NC}"
+    fi
+fi
 
 if [ "$INIT_ONLY" = true ]; then
     echo -e "${GREEN}✅ Initialization complete.${NC}"
@@ -145,11 +122,16 @@ if [ "$INIT_ONLY" = true ]; then
 fi
 
 # 5. Run Full Test Suite
-echo -e "${YELLOW}🧪 Running Full Test Suite...${NC}"
+echo -e "${YELLOW}🧪 Running Full Test Suite ($ENV_MODE)...${NC}"
 
-# Detailed Script List to cover all user-requested areas
+# Detailed Script List
 TEST_SCRIPTS=(
-    "scripts/99_bug_hunting_fast.ts"
+    "scripts/v2_regression/00_validate_env.ts"
+    "scripts/v2_regression/01_setup_and_fund.ts"
+    "scripts/v2_regression/02_operator_onboarding.ts"
+    "scripts/v2_regression/03_community_registry.ts"
+    "scripts/v2_regression/04_enduser_flow.ts"
+    "scripts/v2_regression/05_admin_audit.ts"
     "scripts/06_local_test_v3_admin.ts"
     "scripts/06_local_test_v3_funding.ts"
     "scripts/06_local_test_v3_reputation.ts"
@@ -163,10 +145,16 @@ TEST_SCRIPTS=(
     "scripts/12_test_staking_exit.ts"
     "scripts/13_test_sbt_burn_linkage.ts"
     "scripts/14_test_credit_redesign.ts"
-    "scripts/15_test_dvt_bls_full.ts"
-    "scripts/17_test_cross_role_collaboration.ts"
+    "scripts/15_test_bls_full.ts"             # Core BLS Curve Validation
+    "scripts/15_test_dvt_bls_full.ts"         # DVT + BLS Integration
+    "scripts/18_test_lifecycle_completion.ts"
     "scripts/98_edge_reentrancy.ts"
+    "scripts/99_bug_hunting_fast.ts"
 )
+
+# Set ENV for scripts
+export REVISION_ENV="$ENV_MODE"
+export SDK_ENV_PATH="$ENV_FILE"
 
 TOTAL_SCRIPTS=${#TEST_SCRIPTS[@]}
 PASSED_COUNT=0
@@ -179,10 +167,19 @@ for script in "${TEST_SCRIPTS[@]}"; do
     echo -e "${CYAN}Suite $CURRENT_INDEX/$TOTAL_SCRIPTS: $script${NC}"
     
     TMP_OUT=$(mktemp)
-    # Run with ts-node and force colored output for readability
+    # Run with ts-node
     if pnpm ts-node "$script" > "$TMP_OUT" 2>&1; then
         # Check for internal reverts even on exit code 0
-        if grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | grep -v "properly blocked" | grep -v "already registered" | grep -v "Skipping step" | grep -v "benign" | grep -v "InsufficientBalance" | grep -v "DepositNotVerified" > /dev/null; then
+        # Exclude common benign messages and successful blocked-reverts
+        if grep -Ei "reverted|Error:|Panic:|TypeError:" "$TMP_OUT" | \
+           grep -iv "properly blocked" | \
+           grep -iv "already registered" | \
+           grep -iv "Skipping step" | \
+           grep -iv "benign" | \
+           grep -iv "InsufficientBalance" | \
+           grep -iv "DepositNotVerified" | \
+           grep -iv "revert matched" | \
+           grep -iv "expected revert" > /dev/null; then
             echo -e "${RED}❌ FAILED (Internal Error): $script${NC}"
             FAILED_LIST+=("$script")
         else

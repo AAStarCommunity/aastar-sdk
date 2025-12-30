@@ -1,30 +1,23 @@
-
 import { createPublicClient, http, hexToBytes, toHex, encodeAbiParameters, type Hex } from 'viem';
-import { foundry } from 'viem/chains';
+import { foundry, sepolia } from 'viem/chains';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
 import { createRequire } from 'module';
 import * as bls from '@noble/curves/bls12-381';
+import * as dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
-dotenv_config();
-function dotenv_config() {
-    const envPath = path.resolve(process.cwd(), '.env.v3');
-    if (fs.existsSync(envPath)) {
-        const env = fs.readFileSync(envPath, 'utf8');
-        env.split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) process.env[key.trim()] = value.trim();
-        });
-    }
-}
+const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
-let BLS_VALIDATOR_ADDR: Hex = (process.env.BLS_VALIDATOR_ADDR as Hex) || '0xf6a8ad553b265405526030c2102fda2bdcddc177'; 
+const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const chain = isSepolia ? sepolia : foundry;
+const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
+let BLS_VALIDATOR_ADDR: Hex = (process.env.BLS_VALIDATOR_ADDR as Hex) || '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82'; 
 
 const validatorAbi = [
   {
@@ -39,7 +32,7 @@ const validatorAbi = [
   }
 ] as const;
 
-const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+const client = createPublicClient({ chain, transport: http(RPC_URL) });
 
 function splitFp(coordBytes: Uint8Array): bigint[] {
     const start16 = coordBytes.slice(0, 16);

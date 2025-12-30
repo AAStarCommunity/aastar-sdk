@@ -1,5 +1,5 @@
 import { createPublicClient, http, Hex, parseAbi, formatEther } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -13,7 +13,7 @@ async function main() {
 
     console.log(`🔎 Checking Tokens`);
     
-    const client = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createPublicClient({ chain: foundry, transport: http(rpc) });
 
     const checks = [
         { name: "Old APNTS", address: oldApnts },

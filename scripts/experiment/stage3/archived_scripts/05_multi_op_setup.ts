@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { http, type Hex, parseEther, createPublicClient, createWalletClient, erc20Abi } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { createOperatorClient, RoleIds } from '../../../packages/sdk/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,9 +22,9 @@ async function main() {
     const SUPPLIER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
     if (!RPC_URL || !SUPPLIER_KEY) throw new Error('Missing Config (RPC_URL or SUPPLIER_KEY)');
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const supplierAccount = privateKeyToAccount(SUPPLIER_KEY);
-    const supplierWallet = createWalletClient({ account: supplierAccount, chain: sepolia, transport: http(RPC_URL) });
+    const supplierWallet = createWalletClient({ account: supplierAccount, chain: foundry, transport: http(RPC_URL) });
 
     // 1. Generate Keys if not exists
     let jasonKey: Hex;
@@ -110,7 +110,7 @@ async function main() {
 
         // 3. Onboarding
         const sdkOp = createOperatorClient({
-            chain: sepolia,
+            chain: foundry,
             transport: http(RPC_URL),
             account: op.account,
             addresses: {

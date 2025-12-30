@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseAbi, type Address, parseEther, keccak256, stringToBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,9 +19,9 @@ async function main() {
     
     if (!RPC_URL) throw new Error('Missing RPC_URL');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const account = privateKeyToAccount(ADMIN_B_KEY);
-    const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
     const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Address;
     const REGISTRY = process.env.REGISTRY_ADDR as Address;

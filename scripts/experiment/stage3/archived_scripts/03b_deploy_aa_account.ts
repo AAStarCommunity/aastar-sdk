@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseAbi, type Address, getContractAddress, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,9 +20,9 @@ async function main() {
     
     if (!RPC_URL) throw new Error('Missing RPC_URL');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const owner = privateKeyToAccount(USER_KEY);
-    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: owner, chain: foundry, transport: http(RPC_URL) });
 
     const factoryAbi = parseAbi([
         'function createAccount(address owner, uint256 salt) external returns (address)',

@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -28,10 +28,10 @@ function packUint(high128: bigint, low128: bigint): Hex {
 
 export async function runSuperPaymasterTest() {
     console.log("🚀 Starting Group C: SuperPaymaster...");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-    const anniWallet = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: sepolia, transport: http(RPC_URL) });
+    const anniWallet = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: foundry, transport: http(RPC_URL) });
 
     const erc20Abi = parseAbi([
         'function balanceOf(address) view returns (uint256)',
@@ -113,7 +113,7 @@ export async function runSuperPaymasterTest() {
 // Ensure Signer is a valid Operator
 async function setupOperator(publicClient: any, bundlerClient: any, signer: any, pm: Hex, token: Hex, treasury: Hex) {
     console.log("   🛠️  Setting up Operator...");
-    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(process.env.SEPOLIA_RPC_URL) });
+    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(process.env.SEPOLIA_RPC_URL) });
     
     const pmAbi = parseAbi([
         'function operators(address) view returns (uint128, uint96, bool, bool, address, uint32, address, uint256, uint256)',

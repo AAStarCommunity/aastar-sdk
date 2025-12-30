@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseAbi, keccak256, stringToBytes, type Address, encodeAbiParameters } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +21,7 @@ async function main() {
     
     if (!RPC_URL) throw new Error('Missing RPC_URL');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const registryAddr = process.env.REGISTRY_ADDR as Address;
     const gtokenAddr = process.env.GTOKEN_ADDR as Address;
     const stakingAddr = process.env.STAKING_ADDR as Address;
@@ -45,7 +45,7 @@ async function main() {
     for (const adm of admins) {
         console.log(`\n--- Onboarding by ${adm.name} ---`);
         const account = privateKeyToAccount(adm.key);
-        const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+        const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
         // Check if already registered
         // Note: Registry checks if user has ENDUSER role in the community? 

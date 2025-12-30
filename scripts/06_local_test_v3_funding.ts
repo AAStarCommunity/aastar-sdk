@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, parseAbi, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -34,9 +34,9 @@ const erc20Abi = parseAbi([
 
 async function runFundingTest() {
     console.log("🧪 Running SuperPaymaster V3 Funding Modular Test...");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
-    const wallet = createWalletClient({ account: signer, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
 
     // 1. Check Initial Balance
     // Structural Index (V3.2 Packed):

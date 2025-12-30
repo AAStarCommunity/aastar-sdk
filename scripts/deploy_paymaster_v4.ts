@@ -10,7 +10,7 @@ import {
   formatEther
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 // @ts-ignore
 import { CONTRACTS } from '@aastar/shared-config';
@@ -52,7 +52,7 @@ async function main() {
     console.log("🏭 Deploying/Finding Paymaster V4 (Target B - AOA)...");
 
     if (!PUBLIC_RPC) throw new Error("Missing RPC");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(PUBLIC_RPC) });
 
     const supplierKey = process.env.PRIVATE_KEY_SUPPLIER;
     const operatorKey = process.env.PRIVATE_KEY_JASON;
@@ -61,7 +61,7 @@ async function main() {
     const operatorAccount = privateKeyToAccount(parseKey(operatorKey)); // Operator deploys
     const supplierAccount = privateKeyToAccount(parseKey(supplierKey)); // Supplier is Treasury
 
-    const operatorWallet = createWalletClient({ chain: sepolia, transport: http(PUBLIC_RPC), account: operatorAccount });
+    const operatorWallet = createWalletClient({ chain: foundry, transport: http(PUBLIC_RPC), account: operatorAccount });
 
     console.log(`   Config:`);
     console.log(`   Factory:  ${PAYMASTER_FACTORY_ADDRESS}`);
@@ -115,7 +115,7 @@ async function main() {
             abi: paymasterFactoryAbi,
             functionName: 'deployPaymaster',
             args: [BPNTS_ADDRESS, MYSBT_ADDRESS!, supplierAccount.address, 200n],
-            chain: sepolia,
+            chain: foundry,
             account: operatorAccount
         });
         console.log(`⏳ Waiting for Receipt (Tx: ${tx})...`);

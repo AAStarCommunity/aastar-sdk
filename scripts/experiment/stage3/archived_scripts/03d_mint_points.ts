@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseAbi, parseEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +21,7 @@ async function main() {
     
     if (!RPC_URL) throw new Error('Missing RPC_URL');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
 
     const XPNTS_FACTORY = process.env.XPNTS_FACTORY_ADDR as Address;
     const factoryAbi = parseAbi(['function communityToToken(address) view returns (address)']);
@@ -42,7 +42,7 @@ async function main() {
     for (const m of minting) {
         console.log(`\n--- Minting ${m.name} ---`);
         const account = privateKeyToAccount(m.key);
-        const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+        const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
         const tx = await wallet.writeContract({
             address: m.token, abi: tokenAbi, functionName: 'mint', args: [USER_AA, parseEther('100')]

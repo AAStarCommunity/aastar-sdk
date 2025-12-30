@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,9 +29,9 @@ async function main() {
     if (!RPC_URL) throw new Error('❌ Missing RPC_URL');
     if (!SUPPLIER_KEY) throw new Error('❌ Missing PRIVATE_KEY_SUPPLIER');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const supplier = privateKeyToAccount(SUPPLIER_KEY);
-    const wallet = createWalletClient({ account: supplier, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: supplier, chain: foundry, transport: http(RPC_URL) });
 
     console.log(`🏦 Supplier: ${supplier.address}`);
     const supplierBal = await client.getBalance({ address: supplier.address });

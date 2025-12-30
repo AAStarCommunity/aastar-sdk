@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -18,11 +18,11 @@ async function main() {
     const account = privateKeyToAccount(RELAYER_KEY);
     const client = createWalletClient({
         account,
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL)
     });
     const publicClient = createPublicClient({ 
-        chain: sepolia, 
+        chain: foundry, 
         transport: http(RPC_URL) 
     });
 

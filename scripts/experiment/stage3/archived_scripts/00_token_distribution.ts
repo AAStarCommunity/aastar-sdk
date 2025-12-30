@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, parseAbi, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,9 +24,9 @@ async function main() {
     const SUPPLIER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
     if (!RPC_URL || !SUPPLIER_KEY) throw new Error('Missing Config (Need PRIVATE_KEY_SUPPLIER)');
 
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const account = privateKeyToAccount(SUPPLIER_KEY);
-    const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account, chain: foundry, transport: http(RPC_URL) });
 
     const GTOKEN = process.env.GTOKEN_ADDR as Address;
     

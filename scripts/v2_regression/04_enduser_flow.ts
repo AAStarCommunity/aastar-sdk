@@ -1,13 +1,16 @@
-import { http, parseEther, type Hex, type Address, keccak256, stringToBytes, erc20Abi, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { http, parseEther, type Hex, type Address, keccak256, stringToBytes, encodeAbiParameters, parseAbiParameters, erc20Abi, encodeFunctionData, decodeEventLog } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { foundry, sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { createEndUserClient, RegistryABI } from '../../packages/sdk/src/index.js';
+import { createEndUserClient, createAdminClient, RegistryABI, RoleIds } from '../../packages/sdk/dist/index.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
+const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
+const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const chain = isSepolia ? sepolia : foundry;
+const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const USER_KEY = "0x7c8521197cd533c301a916120409a63c809181144001a1c93a0280eb46c6495d" as Hex;
 const COMMUNITY_OWNER_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as Hex;
 
@@ -25,10 +28,15 @@ const ROLE_ENDUSER = keccak256(stringToBytes('ENDUSER'));
 async function enduserFlow() {
     console.log('🚀 Step 04: End User Flow');
     
+    const adminAccount = privateKeyToAccount(COMMUNITY_OWNER_KEY);
+    const adminClient = createAdminClient({
+        chain, transport: http(RPC_URL), account: adminAccount, addresses: localAddresses as any
+    });
+
     const userAccount = privateKeyToAccount(USER_KEY);
     const communityAccount = privateKeyToAccount(COMMUNITY_OWNER_KEY);
     const userClient = createEndUserClient({
-        chain: foundry, transport: http(RPC_URL), account: userAccount, addresses: localAddresses as any
+        chain, transport: http(RPC_URL), account: userAccount, addresses: localAddresses as any
     });
 
     console.log(`   User: ${userAccount.address}`);

@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -29,9 +29,9 @@ function packUint(high128: bigint, low128: bigint): Hex {
 async function main() {
     console.log("🚀 Starting Standard AA Test (Pimlico ERC20)...");
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const pimlicoClient = createPublicClient({ chain: sepolia, transport: http(PIMLICO_RPC) });
-    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const pimlicoClient = createPublicClient({ chain: foundry, transport: http(PIMLICO_RPC) });
+    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
 
     // ABIs

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { http, type Hex, type Address, createPublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import { createEndUserClient, RoleIds, RoleDataFactory } from '../../../packages/sdk/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,7 +19,7 @@ async function main() {
     let USER_KEY = (process.env.AA_OWNER_PRIVATE_KEY || process.env.PRIVATE_KEY_SUPPLIER) as Hex;
     if (!RPC_URL) throw new Error('Missing Config (SEPOLIA_RPC_URL)');
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const checkAcc = privateKeyToAccount(USER_KEY);
     const bal = await publicClient.getBalance({ address: checkAcc.address });
     if (bal === 0n && process.env.PRIVATE_KEY_SUPPLIER) {
@@ -32,7 +32,7 @@ async function main() {
     
     // Initialize EndUser Client
     const client = createEndUserClient({
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL),
         account,
         addresses: {

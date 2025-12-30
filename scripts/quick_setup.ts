@@ -9,7 +9,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, http, getContractAddress, encodeDeployData, keccak256, encodePacked } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -1,5 +1,5 @@
 import { createPublicClient, http, Hex, parseAbi, formatEther } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -14,7 +14,7 @@ async function main() {
     console.log(`   Paymaster: ${superPaymaster}`);
     console.log(`   Jason: ${jason}`);
     
-    const client = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createPublicClient({ chain: foundry, transport: http(rpc) });
 
     // 1. Get APNTS_TOKEN from Paymaster
     try {
