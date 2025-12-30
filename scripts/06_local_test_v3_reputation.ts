@@ -6,13 +6,13 @@ import * as path from 'path';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
 const REGISTRY = process.env.REGISTRY_ADDR as Hex;
 const REPUTATION_SYSTEM = process.env.REPUTATION_SYSTEM_ADDR as Hex;
-const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
+const SIGNER_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 // Use a random address if ALICE is missing, sufficient for reputation updates (registry doesn't checks if it's a contract for score updates)
 const ACCOUNT_C = (process.env.ALICE_AA_ACCOUNT || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8') as Hex; // Default to Anvil #1
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;

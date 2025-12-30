@@ -17,7 +17,7 @@ import { CONTRACTS } from '@aastar/shared-config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../env/.env.v3');
+const envPath = path.resolve(__dirname, '../../env/.env.anvil');
 dotenv.config({ path: envPath });
 
 // --- Config ---
@@ -85,7 +85,7 @@ async function main() {
         });
         if (pm && pm !== '0x0000000000000000000000000000000000000000') {
             console.log(`✅ Found Existing Paymaster: ${pm}`);
-            console.log("👉 Please update .env.v3 -> PAYMASTER_V4_ADDRESS");
+            console.log("👉 Please update .env.anvil -> PAYMASTER_V4_ADDRESS");
             return;
         }
     } catch (e: any) {
@@ -125,7 +125,7 @@ async function main() {
         // Try getPaymaster again or infer from logs if simulate gave address.
         // But simulation result IS the address.
         console.log(`\n🎉 PAYMASTER V4 ADDRESS: ${result}`);
-        console.log("👉 Please update .env.v3 -> PAYMASTER_V4_ADDRESS");
+        console.log("👉 Please update .env.anvil -> PAYMASTER_V4_ADDRESS");
 
     } catch (e: any) {
         console.error(`❌ Deployment Failed: ${e.message}`);

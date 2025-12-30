@@ -22,7 +22,7 @@ const __dirname = path.dirname(__filename);
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../.env.anvil') });
 
 const loadAbi = (name: string) => {
     const abiPath = path.resolve(__dirname, `../abis/${name}.json`);
@@ -56,10 +56,10 @@ async function main() {
     const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex;
 
     if (!REGISTRY_ADDR || !GTOKEN_ADDR || !STAKING_ADDR) {
-        throw new Error("Missing Registry or Staking Config in .env.v3");
+        throw new Error("Missing Registry or Staking Config in .env.anvil");
     }
 
-    const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
+    const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'); 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
 
     // 1. Setup User (Dave)

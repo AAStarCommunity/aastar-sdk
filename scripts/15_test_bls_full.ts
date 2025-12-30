@@ -7,11 +7,15 @@ import { createRequire } from 'module';
 import * as bls from '@noble/curves/bls12-381';
 import * as dotenv from 'dotenv';
 
+if (!(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
-const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
 const isSepolia = process.env.REVISION_ENV === 'sepolia';

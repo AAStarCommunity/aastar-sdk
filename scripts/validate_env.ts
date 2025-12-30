@@ -2,7 +2,7 @@ import { createPublicClient, http, parseAbi } from 'viem';
 import { foundry } from 'viem/chains';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.v3' });
+dotenv.config({ path: '.env.anvil' });
 
 const client = createPublicClient({ chain: foundry, transport: http() });
 
@@ -102,7 +102,7 @@ async function main() {
     console.log('\n' + '='.repeat(50));
     if (hasError) {
         console.error('❌ Environment validation FAILED!');
-        console.error('   Please update .env.v3 with correct addresses.');
+        console.error('   Please update .env.anvil with correct addresses.');
         process.exit(1);
     } else {
         console.log('✅ All addresses validated successfully!');

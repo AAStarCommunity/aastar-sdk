@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 const CONFIG_PATH = path.resolve(__dirname, '../../SuperPaymaster/script/v3/config.json');
 const ENV_FILES = [
-    path.resolve(__dirname, '../.env.v3'),
+    path.resolve(__dirname, '../.env.anvil'),
     path.resolve(__dirname, '../.env.anvil')
 ];
 

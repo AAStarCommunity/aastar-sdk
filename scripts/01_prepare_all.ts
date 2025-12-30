@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 import { getNetworkConfig } from './00_utils.js';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 async function main() {
     const network = process.env.EXPERIMENT_NETWORK || 'sepolia';

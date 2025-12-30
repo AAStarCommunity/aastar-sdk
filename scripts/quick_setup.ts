@@ -14,9 +14,9 @@ import { foundry } from 'viem/chains';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const ENV_FILE = path.resolve(__dirname, '../.env.v3');
+const ENV_FILE = path.resolve(__dirname, '../.env.anvil');
 
-// From SuperPaymaster .env.v3.bak
+// From SuperPaymaster .env.anvil.bak
 const SEPOLIA_RPC = "https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N";
 const DEPLOYER_KEY = "0x2717524c39f8b8ab74c902dc712e590fee36993774119c1e06d31daa4b0fbc81";
 const OWNER_KEY = "0x7c28d50030917fb555bb19ac888f973b28eff37a7853cdb2da46d23fb46e4724";

@@ -5,7 +5,7 @@ import * as path from 'path';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
@@ -17,7 +17,7 @@ const ALICE_ACCOUNT = process.env.ALICE_AA_ACCOUNT as Hex;
 const DEPLOYER = process.env.PRIVATE_KEY_SUPPLIER;
 
 if (!REGISTRY || !MYSBT || !GTOKEN || !STAKING) {
-    throw new Error("Missing deep audit environment variables. Please ensure .env.v3 is populated with REGISTRY, MYSBT, GTOKEN, STAKING addresses.");
+    throw new Error("Missing deep audit environment variables. Please ensure .env.anvil is populated with REGISTRY, MYSBT, GTOKEN, STAKING addresses.");
 }
 
 const registryAbi = parseAbi([

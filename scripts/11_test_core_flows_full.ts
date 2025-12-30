@@ -17,10 +17,10 @@ const PaymasterFactoryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '
 
 // BigInt serialization
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const RPC_URL = process.env.RPC_URL!;
-const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex;
 const STAKING_ADDR = process.env.STAKING_ADDR as Hex;

@@ -124,5 +124,17 @@ done < <(find "$OUT_DIR" -type f -name "*.json" -not -name "*.dbg.json" -not -pa
 
 # Final Cleanup & Report
 echo "🎉 Extraction complete!"
+
+# Manual Fixes for SDK compatibility
+if [ -f "$DEST_DIR/xPNTsToken.json" ]; then
+    echo "   Use xPNTsToken ABI for aPNTs..."
+    cp "$DEST_DIR/xPNTsToken.json" "$DEST_DIR/aPNTs.json"
+fi
+
+if [ -f "$DEST_DIR/SimpleAccount.json" ]; then
+    echo "   Use SimpleAccount ABI for LegacyAccount..."
+    cp "$DEST_DIR/SimpleAccount.json" "$DEST_DIR/LegacyAccount.json"
+fi
+
 echo "   Extracted: $extracted, skipped: $skipped"
 ls -lh "$DEST_DIR" | sed 's/^/   /'

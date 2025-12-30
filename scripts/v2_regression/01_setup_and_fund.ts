@@ -5,7 +5,11 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { createAdminClient } from '../../packages/sdk/dist/index.js';
 
-const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+if (!(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+}
+
+const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
 const isSepolia = process.env.REVISION_ENV === 'sepolia';
@@ -14,9 +18,9 @@ const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL 
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 
 // Test Data
-const OPERATOR_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as Hex;
-const COMMUNITY_OWNER_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as Hex;
-const USER_KEY = "0x7c8521197cd533c301a916120409a63c809181144001a1c93a0280eb46c6495d" as Hex;
+const OPERATOR_KEY = (process.env.OPERATOR_KEY || "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d") as Hex;
+const COMMUNITY_OWNER_KEY = (process.env.COMMUNITY_OWNER_KEY || "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a") as Hex;
+const USER_KEY = (process.env.USER_KEY || "0x7c8521197cd533c301a916120409a63c809181144001a1c93a0280eb46c6495d") as Hex;
 
 const localAddresses = {
     registry: (process.env.REGISTRY_ADDRESS || '').trim() as Address,

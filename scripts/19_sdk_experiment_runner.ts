@@ -8,7 +8,7 @@ import { runEOAExperiment, runPimlicoExperiment, runAOAExperiment, runSuperExper
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const OUTPUT_FILE = 'sdk_experiment_data.csv';
 const RUNS = parseInt(process.env.EXPERIMENT_RUNS || '3');

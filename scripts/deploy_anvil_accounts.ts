@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../.env.anvil') });
 
 const RPC_URL = 'http://localhost:8545';
 const FACTORY = process.env.SIMPLE_ACCOUNT_FACTORY;
@@ -121,9 +121,9 @@ async function main() {
         console.log('   ✅ Already deployed');
     }
     
-    // Update .env.v3
-    console.log('\n📝 Updating .env.v3...');
-    const envPath = path.resolve(__dirname, '../.env.v3');
+    // Update .env.anvil
+    console.log('\n📝 Updating .env.anvil...');
+    const envPath = path.resolve(__dirname, '../.env.anvil');
     let envContent = fs.readFileSync(envPath, 'utf-8');
     
     envContent = envContent.replace(/TEST_SIMPLE_ACCOUNT_A=.*/, `TEST_SIMPLE_ACCOUNT_A=${addrA}`);

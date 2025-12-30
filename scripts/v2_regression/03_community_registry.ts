@@ -5,14 +5,18 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { createCommunityClient, createAdminClient, RegistryABI } from '../../packages/sdk/dist/index.js';
 
-const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+if (!(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+}
+
+const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
 const isSepolia = process.env.REVISION_ENV === 'sepolia';
 const chain = isSepolia ? sepolia : foundry;
 const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
-const COMMUNITY_OWNER_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as Hex;
+const COMMUNITY_OWNER_KEY = (process.env.COMMUNITY_OWNER_KEY || "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a") as Hex;
 
 const localAddresses = {
     registry: process.env.REGISTRY_ADDRESS as Address,

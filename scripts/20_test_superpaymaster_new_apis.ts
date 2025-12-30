@@ -12,8 +12,8 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load .env.v3
-config({ path: path.resolve(__dirname, '../.env.v3') });
+// Load .env.anvil
+config({ path: path.resolve(__dirname, '../.env.anvil') });
 
 /**
  * Test Script: SuperPaymaster New APIs

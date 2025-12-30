@@ -21,7 +21,7 @@ import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../env/.env.v3');
+const envPath = path.resolve(__dirname, '../../env/.env.anvil');
 dotenv.config({ path: envPath });
 
 // --- Config ---
@@ -60,7 +60,7 @@ async function sleep(ms: number) {
 
 async function main() {
     if (!BUNDLER_RPC || !process.env.PRIVATE_KEY_JASON) {
-        console.error("Missing BUNDLER_RPC or PRIVATE_KEY_JASON in .env.v3");
+        console.error("Missing BUNDLER_RPC or PRIVATE_KEY_JASON in .env.anvil");
         process.exit(1);
     }
     const rpcUrl = PUBLIC_RPC || BUNDLER_RPC;

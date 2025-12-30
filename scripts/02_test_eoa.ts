@@ -4,7 +4,7 @@ import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const RELAYER_KEY = process.env.PRIVATE_KEY_RELAYER as Hex || process.env.PRIVATE_KEY_JASON as Hex;

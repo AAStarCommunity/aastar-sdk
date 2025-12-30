@@ -2,7 +2,7 @@
 import { createPublicClient, createWalletClient, http, defineChain, Hex, toHex, keccak256, stringToBytes, parseEther, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env.v3', override: true });
+dotenv.config({ path: '.env.anvil', override: true });
 
 // --- CONFIG ---
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
@@ -16,7 +16,7 @@ const ANVIL_CHAIN = defineChain({
 
 const ROLE_PAYMASTER_SUPER = keccak256(stringToBytes('PAYMASTER_SUPER'));
 
-// Addresses from .env.v3
+// Addresses from .env.anvil
 const localAddresses = {
     registry: process.env.REGISTRY_ADDRESS as Address,
     gToken: process.env.GTOKEN_ADDRESS as Address,

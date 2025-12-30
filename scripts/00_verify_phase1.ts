@@ -3,8 +3,8 @@ import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// Load .env.v3 explicitly
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+// Load .env.anvil explicitly
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const rpcUrl = process.env.SEPOLIA_RPC_URL;
 if (!rpcUrl) throw new Error("SEPOLIA_RPC_URL missing");

@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 };
 
 // Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Load ABIs
 const loadAbi = (name: string) => {
@@ -52,7 +52,7 @@ const ROLE_PAYMASTER_AOA = keccak256(toBytes('PAYMASTER_AOA'));
 // Config
 const ANVIL_RPC = 'http://127.0.0.1:8545';
 // Force Anvil Account #0 for local test to match deployment
-const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'); 
 
 
 // Helper to wait for tx

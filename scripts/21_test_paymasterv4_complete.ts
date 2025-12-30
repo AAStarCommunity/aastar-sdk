@@ -13,8 +13,8 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load .env.v3 specifically
-config({ path: path.resolve(__dirname, '../.env.v3') });
+// Load .env.anvil specifically
+config({ path: path.resolve(__dirname, '../.env.anvil') });
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as `0x${string}`;
@@ -57,7 +57,7 @@ async function main() {
     console.log(`   Admin:  ${account.address}\n`);
 
     if (!paymasterV4Address || paymasterV4Address === '0x0000000000000000000000000000000000000000') {
-        console.error('❌ PaymasterV4 Address not set in .env.v3');
+        console.error('❌ PaymasterV4 Address not set in .env.anvil');
         process.exit(1);
     }
 

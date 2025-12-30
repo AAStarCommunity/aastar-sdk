@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Load Env
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const localAddresses = {
     registry: process.env.REGISTRY_ADDRESS as Address,
@@ -27,7 +27,7 @@ async function main() {
     console.log('Local Addresses:', localAddresses);
 
     if (!localAddresses.registry || !localAddresses.gTokenStaking || !localAddresses.mySBT) {
-        console.error('❌ Missing addresses in .env.v3');
+        console.error('❌ Missing addresses in .env.anvil');
         return;
     }
 

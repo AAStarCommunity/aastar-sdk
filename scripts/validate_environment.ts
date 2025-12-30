@@ -10,7 +10,7 @@ import * as path from 'path';
 import { createPublicClient, http } from 'viem';
 import { sepolia, optimism } from 'viem/chains';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 interface ValidationResult {
     name: string;
@@ -126,7 +126,7 @@ async function main() {
     
     if (critical.length > 0) {
         console.log('❌ CRITICAL ISSUES FOUND - Cannot proceed with experiments');
-        console.log('   Please set the following in .env.v3:');
+        console.log('   Please set the following in .env.anvil:');
         critical.forEach(r => console.log(`   - ${r.name}`));
         process.exit(1);
     } else if (grouped.MISSING.length > 0 || grouped.INVALID.length > 0) {

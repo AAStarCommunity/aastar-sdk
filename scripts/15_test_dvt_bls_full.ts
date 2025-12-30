@@ -6,7 +6,7 @@ import * as path from 'path';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
 const isSepolia = process.env.REVISION_ENV === 'sepolia';

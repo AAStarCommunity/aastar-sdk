@@ -11,13 +11,13 @@ const __dirname = path.dirname(__filename);
 
 // Helper for BigInt serialization
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
-const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const XPNTS_ADDR = process.env.XPNTS_ADDR as Hex;
 const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex;
 const STAKING_ADDR = process.env.STAKING_ADDR as Hex;

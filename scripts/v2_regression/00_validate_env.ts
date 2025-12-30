@@ -2,7 +2,11 @@ import { createPublicClient, http, parseAbi } from 'viem';
 import { foundry, sepolia } from 'viem/chains';
 import dotenv from 'dotenv';
 
-const envPath = process.env.SDK_ENV_PATH || '.env.v3';
+if (!(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+}
+
+const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: envPath, override: true });
 
 const chain = process.env.REVISION_ENV === 'sepolia' ? sepolia : foundry;

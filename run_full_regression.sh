@@ -50,11 +50,10 @@ done
 if [ "$ENV_MODE" == "sepolia" ]; then
     ENV_FILE=".env.sepolia"
     SKIP_DEPLOY=true # Never deploy to Sepolia from regression runner
-    echo -e "${CYAN}🌐 Environment Mode: SEPOLIA (Skipping Deploy, Using $ENV_FILE)${NC}"
+    echo -e "${CYAN}🌐 Environment Mode: SEPOLIA (Skipping Deploy, Using .env.sepolia)${NC}"
 else
-    ENV_MODE="anvil"
-    ENV_FILE=".env.v3"
-    echo -e "${CYAN}🏗️  Environment Mode: ANVIL (Local)${NC}"
+    ENV_FILE=".env.anvil"
+    echo -e "${CYAN}🏠 Environment Mode: ANVIL (Local)${NC}"
 fi
 
 # 1. Restart Anvil for Clean State (Only in Anvil Mode)

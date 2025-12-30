@@ -22,7 +22,7 @@ const __dirname = path.dirname(__filename);
 // Fix BigInt serialization
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3'), override: true });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil'), override: true });
 
 // --- LOAD ABIS ---
 const loadAbi = (name: string) => {

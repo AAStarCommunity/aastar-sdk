@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate .env.v3 from SuperPaymaster deployment config
+ * Generate .env.anvil from SuperPaymaster deployment config
  */
 
 import * as fs from 'fs';
@@ -12,10 +12,10 @@ const __dirname = path.dirname(__filename);
 
 const SUPERPM_CONFIG = path.resolve(__dirname, '../../SuperPaymaster/script/v3/config.json');
 const ENV_TEMPLATE = path.resolve(__dirname, '../../SuperPaymaster/.env.example');
-const OUTPUT_FILE = path.resolve(__dirname, '../.env.v3');
+const OUTPUT_FILE = path.resolve(__dirname, '../.env.anvil');
 
 async function main() {
-    console.log('📝 Generating .env.v3 from SuperPaymaster deployment...\n');
+    console.log('📝 Generating .env.anvil from SuperPaymaster deployment...\n');
     
     // Load config
     if (!fs.existsSync(SUPERPM_CONFIG)) {
