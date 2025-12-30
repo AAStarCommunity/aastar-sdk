@@ -24,14 +24,16 @@ const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
 async function testLifecycle() {
     console.log('🧪 Running Step 18: Enhanced Lifecycle Scenarios (Completion)');
     
+    // Setup Admin Wallet
+    const admin = privateKeyToAccount(ADMIN_KEY);
+    const adminWallet = createWalletClient({ account: admin, chain, transport: http(RPC_URL) });
+    
     if (!REGISTRY) {
         console.error('❌ REGISTRY_ADDRESS missing in environment');
         process.exit(1);
     }
 
-    const admin = privateKeyToAccount(ADMIN_KEY);
     const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
-    const walletClient = createWalletClient({ account: admin, chain, transport: http(RPC_URL) });
 
     // 1. Batch Reputation Sync (Simulation of Batch Enrollment State)
     console.log('\n📊 Scenario 1: Batch Reputation Sync');
@@ -43,7 +45,7 @@ async function testLifecycle() {
     const epoch = BigInt(Math.floor(Date.now() / 1000));
 
     console.log(`   Syncing ${users.length} user scores...`);
-    const syncTx = await walletClient.writeContract({
+    const syncTx = await adminWallet.writeContract({
         address: REGISTRY,
         abi: parseAbi(['function syncGlobalReputation(address[] calldata users, uint256[] calldata newScores, uint256 epoch, bytes calldata proof) external']),
         functionName: 'syncGlobalReputation',
@@ -80,6 +82,17 @@ async function testLifecycle() {
 
     if (hasCommRole) {
         console.log(`   User ${exitUser.address} has COMMUNITY role, initiating exit...`);
+        
+        // NEW in V3.2: Clear lock duration for testing immediate exit
+        console.log(`   Admin clearing lock duration for COMMUNITY...`);
+        const setLockTx = await adminWallet.writeContract({
+            address: REGISTRY,
+            abi: parseAbi(['function setRoleLockDuration(bytes32 roleId, uint256 duration) external']),
+            functionName: 'setRoleLockDuration',
+            args: [ROLE_COMMUNITY, 0n]
+        });
+        await publicClient.waitForTransactionReceipt({ hash: setLockTx });
+
         const exitTx = await exitWallet.writeContract({
             address: REGISTRY,
             abi: parseAbi(['function exitRole(bytes32 roleId) external']),
@@ -112,7 +125,7 @@ async function testLifecycle() {
 
     if (currentOwner.toLowerCase() === admin.address.toLowerCase()) {
         console.log('   Admin is owner. Transferring to self to verify flow...');
-        const transferTx = await walletClient.writeContract({
+        const transferTx = await adminWallet.writeContract({
             address: REGISTRY,
             abi: parseAbi(['function transferOwnership(address newOwner) external']),
             functionName: 'transferOwnership',

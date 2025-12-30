@@ -252,6 +252,16 @@ async function main() {
 
     // 6. Exit Role (Unlock)
     console.log(`\n🚪 Dave Exiting Role...`);
+
+    // NEW in V3.2: Clear lock duration for testing immediate exit
+    console.log(`   Admin clearing lock duration for EndUser...`);
+    await waitForTx(publicClient, await adminWallet.writeContract({
+        address: REGISTRY_ADDR, 
+        abi: RegistryABI,
+        functionName: 'setRoleLockDuration',
+        args: [ROLE_ENDUSER, 0n]
+    }));
+
     const balanceBeforeExit = await publicClient.readContract({
         address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'balanceOf', args: [daveAccount.address]
     }) as bigint;
