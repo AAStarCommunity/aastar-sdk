@@ -1,6 +1,9 @@
 import { Address, Hash, PublicClient, WalletClient, Hex, parseEther } from 'viem';
 import { ROLE_ENDUSER, RequirementChecker, type RoleRequirement } from '@aastar/core';
 
+// Export test utilities
+export { TestAccountManager, type TestAccount, type TestEnvironment, type TestEnvironmentConfig, type TokenFundingRecord } from './testAccountManager.js';
+
 /**
  * End user client for community participation and gasless transactions
  * 
@@ -161,4 +164,150 @@ export class EndUserClient {
         return { tokenId: 1n, txHash: mintTx };
     }
 
+    /**
+     * Create/Predict a Smart Account (SimpleAccount)
+     * Useful for onboarding new users or experiment runners.
+     */
+    async createSmartAccount(params: {
+        owner: Address;
+        salt?: bigint;
+    }): Promise<{
+        accountAddress: Address;
+        initCode: Hex;
+        isDeployed: boolean;
+    }> {
+        const { TEST_ACCOUNT_ADDRESSES, SimpleAccountFactoryABI } = await import('@aastar/core');
+        let factoryAddress = TEST_ACCOUNT_ADDRESSES.simpleAccountFactory;
+        
+        if (!factoryAddress || factoryAddress === "0x0000000000000000000000000000000000000000") {
+            // Fallback for experiments - Official Sepolia v0.6 Factory
+            factoryAddress = "0x9406Cc6185a346906296840746125a0E44976454";
+        }
+
+        const salt = params.salt || 0n;
+        const { encodeFunctionData, concat } = await import('viem');
+
+        // Predict Address
+        const accountAddress = await this.publicClient.readContract({
+            address: factoryAddress,
+            abi: SimpleAccountFactoryABI,
+            functionName: 'getAddress',
+            args: [params.owner, salt]
+        });
+
+        // Generate InitCode
+        const createAccountData = encodeFunctionData({
+            abi: SimpleAccountFactoryABI,
+            functionName: 'createAccount',
+            args: [params.owner, salt]
+        });
+        const initCode = concat([factoryAddress, createAccountData]);
+
+        // Check Deployment
+        const byteCode = await this.publicClient.getBytecode({ address: accountAddress });
+        const isDeployed = byteCode !== undefined && byteCode !== '0x';
+
+        return { accountAddress, initCode, isDeployed };
+    }
+
+    /**
+     * Deploy a Smart Account on-chain using official SimpleAccountFactory
+     * 
+     * **Purpose**: This API is designed for PhD paper experimental data collection.
+     * It uses the official SimpleAccountFactory (0x9406...454) contract to deploy
+     * deterministic AA accounts for performance comparison experiments.
+     * 
+     * **Technical Details**:
+     * - Uses `SimpleAccountFactoryABI` from `@aastar/core` (official v0.6/v0.7 ABI)
+     * - Calls `createAccount(owner, salt)` function for deployment
+     * - Factory Address: 0x9406Cc6185a346906296840746125a0E44976454 (Sepolia)
+     * - Supports deterministic address generation via salt parameter
+     * 
+     * **Usage in Experiments**:
+     * - Generate test accounts for EOA vs AA vs SuperPaymaster comparisons
+     * - Pre-fund accounts with ETH for gas payment experiments
+     * - Persist account addresses to .env for reproducible tests
+     * 
+     * @param params.owner - The EOA address that will control the Smart Account
+     * @param params.salt - Salt for deterministic address generation (default: 0)
+     * @param params.fundWithETH - Optional: Amount of ETH to fund the account after deployment
+     * 
+     * @returns Promise resolving to deployed account address, transaction hash, and deployment status
+     * 
+     * @example
+     * ```typescript
+     * // Deploy AA account for experiment
+     * const { accountAddress, deployTxHash } = await endUser.deploySmartAccount({
+     *   owner: ownerAddress,
+     *   salt: 0n,
+     *   fundWithETH: parseEther("0.02") // Pre-fund for tests
+     * });
+     * console.log(`Deployed: ${accountAddress}`);
+     * console.log(`Tx: https://sepolia.etherscan.io/tx/${deployTxHash}`);
+     * ```
+     */
+    async deploySmartAccount(params: {
+        owner: Address;
+        salt?: bigint;
+        fundWithETH?: bigint; // Optional: fund the new account with ETH
+    }): Promise<{
+        accountAddress: Address;
+        deployTxHash: Hash;
+        isDeployed: true;
+    }> {
+        const { TEST_ACCOUNT_ADDRESSES, SimpleAccountFactoryABI } = await import('@aastar/core');
+        let factoryAddress = TEST_ACCOUNT_ADDRESSES.simpleAccountFactory;
+        
+        if (!factoryAddress || factoryAddress === "0x0000000000000000000000000000000000000000") {
+            factoryAddress = "0x9406Cc6185a346906296840746125a0E44976454";
+        }
+
+        const salt = params.salt || 0n;
+
+        // First predict the address
+        const accountAddress = (await this.publicClient.readContract({
+            address: factoryAddress,
+            abi: SimpleAccountFactoryABI,
+            functionName: 'getAddress',
+            args: [params.owner, salt]
+        })) as Address;
+
+        // Check if already deployed
+        const byteCode = await this.publicClient.getBytecode({ address: accountAddress });
+        const alreadyDeployed = byteCode !== undefined && byteCode !== '0x';
+
+        if (alreadyDeployed) {
+            console.log(`   ℹ️ Account ${accountAddress} already deployed, skipping deployment.`);
+            // Still fund if requested
+            if (params.fundWithETH && params.fundWithETH > 0n) {
+                const fundTx = await this.walletClient.sendTransaction({
+                    to: accountAddress,
+                    value: params.fundWithETH
+                });
+                await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
+            }
+            return { accountAddress, deployTxHash: '0x0' as Hash, isDeployed: true };
+        }
+
+        // Deploy via Factory
+        const deployTx = (await this.walletClient.writeContract({
+            address: factoryAddress,
+            abi: SimpleAccountFactoryABI,
+            functionName: 'createAccount',
+            args: [params.owner, salt]
+        })) as Hash;
+
+        await this.publicClient.waitForTransactionReceipt({ hash: deployTx });
+
+        // Fund if requested
+        if (params.fundWithETH && params.fundWithETH > 0n) {
+            const fundTx = await this.walletClient.sendTransaction({
+                to: accountAddress,
+                value: params.fundWithETH
+            });
+            await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
+        }
+
+        return { accountAddress, deployTxHash: deployTx, isDeployed: true };
+    }
 }

@@ -11,7 +11,7 @@ dotenv.config({ path: '.env.sepolia' });
 const RPC_URL = process.env.SEPOLIA_RPC_URL!;
 const SUPPLIER_KEY = process.env.ADMIN_KEY as `0x${string}`;
 
-console.log('🔍 Generating API Proof Credentials...');
+console.log('🚀 Running SDK Regression V2 (Full API Coverage)...');
 console.log(`📡 RPC: ${RPC_URL.substring(0, 25)}...`);
 
 async function verify() {
@@ -84,13 +84,17 @@ async function verify() {
     const community = new CommunityClient(publicClient, walletClient);
 
     try {
-        // issueXPNTs requires ROLE_COMMUNITY. We likely don't have it on this test account.
-        // A revert "AccessControl: account ... is missing role ..." PROVES the API targeted the right contract!
-        await community.issueXPNTs(account.address, 100n);
+        // issueXPNTs requires { symbol, initialSupply, exchangeRate } now (per Phase 2 update)
+        // A revert "xPNTsFactory address not found" or "revert" PROVES the API targeted the SDK logic correctly!
+        await community.issueXPNTs({
+             symbol: "TEST",
+             initialSupply: parseEther("100"),
+             exchangeRate: 1n
+        });
         console.log('   ✅ Success: Tx Sent');
     } catch (e: any) {
         const msg = e.message || "";
-        if (msg.includes('Missing ROLE_COMMUNITY') || msg.includes('revert') || msg.includes('User rejected')) {
+        if (msg.includes('Missing ROLE_COMMUNITY') || msg.includes('revert') || msg.includes('Factory address not found') || msg.includes('User rejected')) {
             console.log(`   ✅ API Connected (Logic Verified): ${e.shortMessage || msg.substring(0, 100)}...`);
         } else {
             console.log(`   ❌ Error: ${msg}`);

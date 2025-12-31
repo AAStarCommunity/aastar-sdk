@@ -45,7 +45,8 @@ export const TEST_TOKEN_ADDRESSES = {
  * Test Account Addresses (For Development & Testing)
  */
 export const TEST_ACCOUNT_ADDRESSES = {
-  simpleAccountFactory: process.env.SIMPLE_ACCOUNT_FACTORY as Address,
+  // Official EntryPoint 0.6 Factory for Sepolia
+  simpleAccountFactory: (process.env.SIMPLE_ACCOUNT_FACTORY || '0x9406Cc6185a346906296840746125a0E44976454') as Address,
 } as const;
 
 /**
