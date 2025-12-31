@@ -12,9 +12,11 @@ if (!(BigInt.prototype as any).toJSON) {
 const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const isSepolia = process.env.REVISION_ENV === 'sepolia' || process.env.SDK_ENV_PATH?.includes('sepolia');
+console.log(`Debug: isSepolia=${isSepolia}, REVISION_ENV=${process.env.REVISION_ENV}, SDK_ENV_PATH=${process.env.SDK_ENV_PATH}`);
 const chain = isSepolia ? sepolia : foundry;
 const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const USER_KEY = (process.env.USER_KEY || "0x7c8521197cd533c301a916120409a63c809181144001a1c93a0280eb46c6495d") as Hex;
 const COMMUNITY_OWNER_KEY = (process.env.COMMUNITY_OWNER_KEY || "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a") as Hex;
 
@@ -32,7 +34,7 @@ const ROLE_ENDUSER = keccak256(stringToBytes('ENDUSER'));
 async function enduserFlow() {
     console.log('🚀 Step 04: End User Flow');
     
-    const adminAccount = privateKeyToAccount(COMMUNITY_OWNER_KEY);
+    const adminAccount = privateKeyToAccount(ADMIN_KEY);
     const adminClient = createAdminClient({
         chain, transport: http(RPC_URL), account: adminAccount, addresses: localAddresses as any
     });
@@ -44,6 +46,44 @@ async function enduserFlow() {
     });
 
     console.log(`   User: ${userAccount.address}`);
+
+    // FUNDING HELPER
+    const { createPublicClient } = await import('viem');
+    const publicClientViem = createPublicClient({ chain, transport: http(RPC_URL) });
+
+    async function ensureFunds(target: Address, ethNeeded: bigint, gTokenNeeded: bigint) {
+        // ETH
+        const ethBal = await publicClientViem.getBalance({ address: target });
+        console.log(`   💰 Target ETH Balance: ${ethBal}`);
+        if (ethBal < ethNeeded) {
+            console.log(`   ⚠️ Low ETH. Admin funding...`);
+            try {
+                const tx = await adminClient.sendTransaction({ to: target, value: ethNeeded - ethBal });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded ETH`);
+            } catch (e) { console.log(`   ❌ ETH Fund Fail:`, e); }
+        }
+
+        // GToken
+        const gTokenBal = await publicClientViem.readContract({
+            address: localAddresses.gToken, abi: erc20Abi, functionName: 'balanceOf', args: [target]
+        });
+        console.log(`   💰 Target GToken Balance: ${gTokenBal}`);
+        if (gTokenBal < gTokenNeeded) {
+            console.log(`   ⚠️ Low GTokens. Admin funding...`);
+            try {
+                const tx = await adminClient.writeContract({
+                    address: localAddresses.gToken, abi: erc20Abi, functionName: 'transfer', args: [target, gTokenNeeded - gTokenBal]
+                });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded GTokens`);
+            } catch (e: any) { console.log(`   ❌ GToken Fund Fail:`, e.message?.split('\n')[0]); }
+        }
+    }
+    
+    // Fund User
+    await ensureFunds(userAccount.address, parseEther('0.05'), parseEther('20'));
+
 
     // 1. Check if user already has ENDUSER role
     console.log('\n👤 Checking ENDUSER Role...');
@@ -81,7 +121,7 @@ async function enduserFlow() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [{ account: userAccount.address, community: communityAccount.address, avatarURI: '', ensName: '', stakeAmount: 0n }]
+            [{ account: userAccount.address, community: communityAccount.address, avatarURI: '', ensName: '', stakeAmount: parseEther('0.3') }]
         );
 
         // Register ENDUSER role using writeContract

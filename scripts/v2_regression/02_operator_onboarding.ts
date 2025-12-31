@@ -12,7 +12,8 @@ if (!(BigInt.prototype as any).toJSON) {
 const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const isSepolia = process.env.REVISION_ENV === 'sepolia' || process.env.SDK_ENV_PATH?.includes('sepolia');
+console.log(`Debug: isSepolia=${isSepolia}, REVISION_ENV=${process.env.REVISION_ENV}, SDK_ENV_PATH=${process.env.SDK_ENV_PATH}`);
 const chain = isSepolia ? sepolia : foundry;
 const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
@@ -46,6 +47,68 @@ async function onboarding() {
     console.log(`   Operator: ${operatorAccount.address}`);
 
     // ROLE_PAYMASTER_SUPER is now built-in and active in Registry.sol
+    
+    // FUNDING HELPER
+    const publicClient = adminClient.extend(c => c); // Admin client is already a WalletClient + PublicActions? No, createAdminClient returns specific type.
+    // Use createPublicClient instead
+    const { createPublicClient } = await import('viem');
+    const publicClientViem = createPublicClient({ chain, transport: http(RPC_URL) });
+
+    async function ensureFunds(target: Address, ethNeeded: bigint, gTokenNeeded: bigint, aPNTsNeeded: bigint) {
+        // ETH
+        const ethBal = await publicClientViem.getBalance({ address: target });
+        console.log(`   💰 Operator ETH Balance: ${ethBal} wei`);
+        if (ethBal < ethNeeded) {
+            console.log(`   ⚠️ Low ETH. Admin funding...`);
+            try {
+                const tx = await adminClient.sendTransaction({ to: target, value: ethNeeded - ethBal });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded ETH`);
+            } catch (e) {
+                console.log(`   ❌ Failed to fund ETH (Admin might be poor):`, e);
+            }
+        }
+
+        // GToken
+        const gTokenBal = await publicClientViem.readContract({
+            address: localAddresses.gToken, abi: erc20Abi, functionName: 'balanceOf', args: [target]
+        });
+        console.log(`   💰 Operator GToken Balance: ${gTokenBal}`);
+        if (gTokenBal < gTokenNeeded) {
+            console.log(`   ⚠️ Low GTokens. Admin funding...`);
+            try {
+                const tx = await adminClient.writeContract({
+                    address: localAddresses.gToken, abi: erc20Abi, functionName: 'transfer', args: [target, gTokenNeeded - gTokenBal]
+                });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded GTokens`);
+            } catch (e: any) {
+                console.log(`   ❌ Failed to fund GTokens:`, e.message?.split('\n')[0]);
+            }
+        }
+
+        // aPNTs
+        const aPNTsBal = await publicClientViem.readContract({
+            address: localAddresses.aPNTs, abi: erc20Abi, functionName: 'balanceOf', args: [target]
+        });
+        console.log(`   💰 Operator aPNTs Balance: ${aPNTsBal}`);
+        if (aPNTsBal < aPNTsNeeded) {
+            console.log(`   ⚠️ Low aPNTs. Admin funding...`);
+            try {
+                const tx = await adminClient.writeContract({
+                    address: localAddresses.aPNTs, abi: erc20Abi, functionName: 'transfer', args: [target, aPNTsNeeded - aPNTsBal]
+                });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded aPNTs`);
+            } catch (e: any) {
+                console.log(`   ❌ Failed to fund aPNTs:`, e.message?.split('\n')[0]);
+            }
+        }
+    }
+
+    // Ensure Operator has enough for 2 stakes (30 + 50 = 80 GTokens) + Gas + aPNTs for deposit
+    await ensureFunds(operatorAccount.address, parseEther('0.05'), parseEther('100'), parseEther('100'));
+
 
     // 2. Operator Onboarding (Stake + Register + Deposit)
     console.log('\n📦 Executing SDK onboardToSuperPaymaster...');
@@ -106,6 +169,7 @@ async function onboarding() {
         await operatorClient.waitForTransactionReceipt({ hash: approveGToken });
         
         // Create proper CommunityRoleData: (name, ensName, website, description, logoURI, stakeAmount)
+        const uniqueName = `OpComm_${Date.now()}`;
         const communityData = encodeAbiParameters(
             [{
                 type: 'tuple',
@@ -118,7 +182,7 @@ async function onboarding() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [{ name: 'TestCommunity', ensName: 'test.eth', website: 'http://test.com', description: 'Test Community', logoURI: 'http://logo.png', stakeAmount: 0n }]
+            [{ name: uniqueName, ensName: 'test.eth', website: 'http://test.com', description: 'Test Community', logoURI: 'http://logo.png', stakeAmount: parseEther('30') }]
         );
         
         // Register Community role

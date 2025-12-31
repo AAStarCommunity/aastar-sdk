@@ -12,7 +12,8 @@ if (!(BigInt.prototype as any).toJSON) {
 const envPath = process.env.SDK_ENV_PATH || '.env.anvil';
 dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 
-const isSepolia = process.env.REVISION_ENV === 'sepolia';
+const isSepolia = process.env.REVISION_ENV === 'sepolia' || process.env.SDK_ENV_PATH?.includes('sepolia');
+console.log(`Debug: isSepolia=${isSepolia}, REVISION_ENV=${process.env.REVISION_ENV}, SDK_ENV_PATH=${process.env.SDK_ENV_PATH}`);
 const chain = isSepolia ? sepolia : foundry;
 const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
@@ -34,15 +35,52 @@ async function communityRegistry() {
     
     const adminAccount = privateKeyToAccount(ADMIN_KEY);
     const adminClient = createAdminClient({
-        chain: foundry, transport: http(RPC_URL), account: adminAccount, addresses: localAddresses as any
+        chain, transport: http(RPC_URL), account: adminAccount, addresses: localAddresses as any
     });
 
     const communityAccount = privateKeyToAccount(COMMUNITY_OWNER_KEY);
     const communityClient = createCommunityClient({
-        chain: foundry, transport: http(RPC_URL), account: communityAccount, addresses: localAddresses as any
+        chain, transport: http(RPC_URL), account: communityAccount, addresses: localAddresses as any
     });
 
     console.log(`   Community Owner: ${communityAccount.address}`);
+
+    // FUNDING HELPER
+    const { createPublicClient } = await import('viem');
+    const publicClientViem = createPublicClient({ chain, transport: http(RPC_URL) });
+
+    async function ensureFunds(target: Address, ethNeeded: bigint, gTokenNeeded: bigint) {
+        // ETH
+        const ethBal = await publicClientViem.getBalance({ address: target });
+        console.log(`   💰 Target ETH Balance: ${ethBal}`);
+        if (ethBal < ethNeeded) {
+            console.log(`   ⚠️ Low ETH. Admin funding...`);
+            try {
+                const tx = await adminClient.sendTransaction({ to: target, value: ethNeeded - ethBal });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded ETH`);
+            } catch (e) { console.log(`   ❌ ETH Fund Fail:`, e); }
+        }
+
+        // GToken
+        const gTokenBal = await publicClientViem.readContract({
+            address: localAddresses.gToken, abi: erc20Abi, functionName: 'balanceOf', args: [target]
+        });
+        console.log(`   💰 Target GToken Balance: ${gTokenBal}`);
+        if (gTokenBal < gTokenNeeded) {
+            console.log(`   ⚠️ Low GTokens. Admin funding...`);
+            try {
+                const tx = await adminClient.writeContract({
+                    address: localAddresses.gToken, abi: erc20Abi, functionName: 'transfer', args: [target, gTokenNeeded - gTokenBal]
+                });
+                await adminClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`   ✅ Funded GTokens`);
+            } catch (e: any) { console.log(`   ❌ GToken Fund Fail:`, e.message?.split('\n')[0]); }
+        }
+    }
+
+    await ensureFunds(communityAccount.address, parseEther('0.05'), parseEther('100'));
+
 
     // 1. Register Community Role
     console.log('\n🏘️ Registering Community in Registry...');
@@ -56,15 +94,23 @@ async function communityRegistry() {
     if (hasRole) {
         console.log('   ✅ Community already registered');
     } else {
-        // Approve GToken for staging/burn
-        const approveTx = await communityClient.writeContract({
-            address: localAddresses.gToken,
-            abi: erc20Abi,
-            functionName: 'approve',
-            args: [localAddresses.gTokenStaking, parseEther('100')],
-            account: communityAccount
+        // Check allowance first
+        const allowance = await communityClient.readContract({
+            address: localAddresses.gToken, abi: erc20Abi, functionName: 'allowance', args: [communityAccount.address, localAddresses.gTokenStaking]
         });
-        await adminClient.waitForTransactionReceipt({ hash: approveTx });
+        if (allowance < parseEther('100')) {
+            console.log('   📝 Approving GToken...');
+            const approveTx = await communityClient.writeContract({
+                address: localAddresses.gToken,
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [localAddresses.gTokenStaking, parseEther('100')],
+                account: communityAccount
+            });
+            await adminClient.waitForTransactionReceipt({ hash: approveTx });
+        } else {
+            console.log('   ✅ GToken Allowance OK');
+        }
 
         // Create unique name to avoid "Name taken"
         const uniqueName = `RegTest_${Date.now()}`;
@@ -83,10 +129,11 @@ async function communityRegistry() {
                     { name: 'stakeAmount', type: 'uint256' }
                 ]
             }],
-            [{ name: uniqueName, ensName: '', website: 'https://test.com', description: 'A test community for regression tests', logoURI: '', stakeAmount: 0n }]
+            [{ name: uniqueName, ensName: '', website: 'https://test.com', description: 'A test community for regression tests', logoURI: '', stakeAmount: parseEther('30') }]
         );
 
         // Register using writeContract directly
+        console.log(`   📝 Role Data Hex: ${communityData}`);
         const registerTx = await communityClient.writeContract({
             address: localAddresses.registry,
             abi: RegistryABI,
