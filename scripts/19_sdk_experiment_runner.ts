@@ -129,6 +129,7 @@ const config = {
         } catch (e: any) {
             console.error(`   ❌ Auto-generation failed: ${e.message}`);
         }
+        }
     }
 
     const csvWriter = createObjectCsvWriter({
