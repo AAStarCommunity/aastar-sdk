@@ -15,3 +15,5 @@ export * from './abis/index.js'; // Assuming abis is a folder with index.ts
 export * from './clients.js';
 export * from './actions/index.js';
 export * from './crypto/index.js';
+export * from './roles.js'; // Role system
+export * from './requirementChecker.js'; // Requirement validation

@@ -1,18 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { RegistryABI } from '../abis/index.js';
-
-export type RoleConfig = {
-    minStake: bigint;
-    entryBurn: bigint;
-    slashThreshold: bigint;
-    slashBase: bigint;
-    slashIncrement: bigint;
-    slashMax: bigint;
-    exitFeePercent: bigint;
-    minExitFee: bigint;
-    isActive: boolean;
-    description: string;
-};
+import type { RoleConfig } from '../roles.js';
 
 export type RegistryActions = {
     configureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;

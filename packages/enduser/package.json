@@ -1,0 +1,21 @@
+{
+  "name": "@aastar/enduser",
+  "version": "0.14.3",
+  "description": "Enduser client for AAstar SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "keywords": ["aastar", "enduser", "web3"],
+  "author": "AAstar Team",
+  "license": "MIT",
+  "dependencies": {
+    "@aastar/core": "workspace:*",
+    "viem": "^2.43.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

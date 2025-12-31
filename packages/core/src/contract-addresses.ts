@@ -19,8 +19,9 @@ export const CORE_ADDRESSES = {
   paymasterFactory: process.env.PAYMASTER_FACTORY_ADDRESS as Address,
   aPNTs: process.env.APNTS_ADDRESS as Address,
   mySBT: process.env.MYSBT_ADDRESS as Address,
-  paymasterV4: process.env.PAYMASTER_V4_ADDRESS as Address,
-  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address,
+  paymasterV4: process.env.PAYMASTER_ADDRESS as Address,
+  dvtValidator: process.env.DVT_VALIDATOR_ADDR as Address,
+  entryPoint: process.env.ENTRY_POINT_ADDR as Address,
   xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address,
 } as const;
 
