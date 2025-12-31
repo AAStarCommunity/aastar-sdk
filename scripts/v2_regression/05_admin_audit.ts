@@ -69,20 +69,18 @@ async function adminAudit() {
     console.log(`   Operator Stake: ${formatEther(stake)} GToken`);
 
     // 3. Query Slash History
-    console.log('\n📜 Querying Slash History...');
+    console.log('\\n📜 Querying Slash History...');
     try {
         const slashHistory = await adminClient.readContract({
-            address: localAddresses.registry,
+            address: localAddresses.superPaymaster,  // ✅ 修复:使用 SuperPaymaster 地址
             abi: [{ 
                 type: 'function', 
-                name: 'getBurnHistory', 
-                inputs: [{ name: 'user', type: 'address' }], 
+                name: 'getSlashHistory',  // ✅ 修复:正确的函数名
+                inputs: [{ name: 'operator', type: 'address' }], 
                 outputs: [{ 
                     name: '', 
                     type: 'tuple[]', 
                     components: [
-                        { name: 'roleId', type: 'bytes32' },
-                        { name: 'user', type: 'address' },
                         { name: 'amount', type: 'uint256' },
                         { name: 'timestamp', type: 'uint256' },
                         { name: 'reason', type: 'string' }
@@ -90,12 +88,12 @@ async function adminAudit() {
                 }], 
                 stateMutability: 'view' 
             }],
-            functionName: 'getBurnHistory',
+            functionName: 'getSlashHistory',
             args: [operatorAccount.address]
         }) as any[];
         
         if (slashHistory.length > 0) {
-            console.log(`   Slash Records: ${slashHistory.length}`);
+            console.log(`   Total Slash Records: ${slashHistory.length}`);
             slashHistory.forEach((record, i) => {
                 console.log(`     [${i}] Amount: ${formatEther(record.amount)} | Reason: ${record.reason}`);
             });
