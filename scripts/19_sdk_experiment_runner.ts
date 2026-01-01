@@ -32,7 +32,7 @@ async function main() {
 const config = {
         chain,
         rpc,
-        bundlerRpc: process.env.ALCHEMY_BUNDLER_RPC_URL,
+        bundlerRpc: process.env.SEPOLIA_RPC_URL2 || process.env.ALCHEMY_BUNDLER_RPC_URL,
         pimlicoRpc: `https://api.pimlico.io/v2/sepolia/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
         privateKey: pk,
         accountAddress: (process.env.TEST_SIMPLE_ACCOUNT_A || "0x0000000000000000000000000000000000000000") as Hex, 
