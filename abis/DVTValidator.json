@@ -255,6 +255,19 @@
     "stateMutability": "nonpayable"
   },
   {
+    "type": "function",
+    "name": "version",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
     "type": "event",
     "name": "OwnershipTransferred",
     "inputs": [

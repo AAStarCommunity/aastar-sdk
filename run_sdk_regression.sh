@@ -4,6 +4,9 @@
 
 set -e
 
+# Robust PATH setup for non-interactive shells
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin"
+
 # 颜色
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -74,8 +77,31 @@ echo -e "\n${BLUE}╔═══════════════════�
 echo -e "${BLUE}║   Running Test Suite                          ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
 
-# Test 1: BLS Signing (独立测试，不需要Anvil)
-echo -e "${YELLOW}🧪 Test 1/5: BLS Signing Functionality${NC}"
+# Test 1: V2 SDK Regression (Setup, Onboarding, Flow)
+echo -e "${YELLOW}🧪 Test 1/9: V2 SDK Regression Suite (Clients)${NC}"
+V2_TESTS=(
+    "scripts/v2_regression/01_setup_and_fund.ts"
+    "scripts/v2_regression/02_operator_onboarding.ts"
+    "scripts/v2_regression/03_community_registry.ts"
+    "scripts/v2_regression/04_enduser_flow.ts"
+    "scripts/v2_regression/05_admin_audit.ts"
+)
+
+for v2_test in "${V2_TESTS[@]}"; do
+    echo -e "   Running $v2_test..."
+    if pnpm tsx "$v2_test" > /tmp/v2_test.log 2>&1; then
+        echo -e "   ${GREEN}✅ Success: $v2_test${NC}"
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        echo -e "   ${RED}❌ Failed: $v2_test${NC}"
+        cat /tmp/v2_test.log
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+    fi
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+done
+
+# Test 2: BLS Signing (独立测试，不需要Anvil)
+echo -e "\n${YELLOW}🧪 Test 2/9: BLS Signing Functionality${NC}"
 if pnpm tsx scripts/22_test_bls_signing.ts > /tmp/test_bls.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: BLS Signing (10/10 tests)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
@@ -86,8 +112,8 @@ else
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-# Test 2: Middleware (独立测试，不需要Anvil)
-echo -e "\n${YELLOW}🧪 Test 2/5: Middleware Functionality${NC}"
+# Test 3: Middleware (独立测试，不需要Anvil)
+echo -e "\n${YELLOW}🧪 Test 3/9: Middleware Functionality${NC}"
 if pnpm tsx scripts/23_test_middleware.ts > /tmp/test_middleware.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: Middleware (6/6 tests)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
@@ -98,8 +124,8 @@ else
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-# Test 3: SuperPaymaster New APIs
-echo -e "\n${YELLOW}🧪 Test 3/5: SuperPaymaster New APIs${NC}"
+# Test 4: SuperPaymaster New APIs
+echo -e "\n${YELLOW}🧪 Test 4/9: SuperPaymaster New APIs${NC}"
 if pnpm tsx scripts/20_test_superpaymaster_new_apis.ts > /tmp/test_superpaymaster.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: SuperPaymaster New APIs (4/4 tests)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
@@ -110,8 +136,8 @@ else
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-# Test 4: PaymasterV4 Complete
-echo -e "\n${YELLOW}🧪 Test 4/5: PaymasterV4 Complete APIs${NC}"
+# Test 5: PaymasterV4 Complete
+echo -e "\n${YELLOW}🧪 Test 5/9: PaymasterV4 Complete APIs${NC}"
 if pnpm tsx scripts/21_test_paymasterv4_complete.ts > /tmp/test_paymasterv4.log 2>&1; then
   echo -e "${GREEN}✅ PASSED: PaymasterV4 Complete (12/12 tests)${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
@@ -121,9 +147,6 @@ else
   FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 5: V2 Regression (Obsolete - Moved to run_full_regression.sh)
-# Skipping...
 
 # Test 6: DVT SDK Flow
 echo -e "\n${YELLOW}🧪 Test 6/9: DVT SDK Flow Actions${NC}"

@@ -14,10 +14,8 @@ const chain = isSepolia ? sepolia : foundry;
 const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
 
 const SIGNER_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
-const DVT_VALIDATOR = process.env.DVT_VALIDATOR_ADDR as Hex;
-const BLS_AGGREGATOR = process.env.BLS_AGGREGATOR_ADDR as Hex;
-
-if (!DVT_VALIDATOR || !BLS_AGGREGATOR) throw new Error("Missing DVT/BLS Config");
+const DVT_VALIDATOR = (process.env.DVT_VALIDATOR_ADDR || process.env.DVT_VALIDATOR_ADDRESS) as Hex;
+const BLS_AGGREGATOR = (process.env.BLS_AGGREGATOR_ADDR || process.env.BLS_AGGREGATOR_ADDRESS) as Hex;
 
 // ABIs
 const dvtAbi = parseAbi([
@@ -37,6 +35,15 @@ const blsAbi = parseAbi([
 
 async function runDVTBLSTest() {
     console.log("🛡️ Running SuperPaymaster V3 DVT & BLS Integration Test...");
+    console.log(`📍 Environment: ${isSepolia ? 'Sepolia' : 'Anvil'}`);
+    console.log(`🔗 RPC URL: ${RPC_URL}`);
+    console.log(`📝 DVT_VALIDATOR: ${DVT_VALIDATOR || 'not set'}`);
+    console.log(`📝 BLS_AGGREGATOR: ${BLS_AGGREGATOR || 'not set'}`);
+    console.log(`📝 DVT_VALIDATOR_ADDR env: ${process.env.DVT_VALIDATOR_ADDR || 'not set'}`);
+    console.log(`📝 DVT_VALIDATOR_ADDRESS env: ${process.env.DVT_VALIDATOR_ADDRESS || 'not set'}`);
+    console.log(`📝 BLS_AGGREGATOR_ADDR env: ${process.env.BLS_AGGREGATOR_ADDR || 'not set'}`);
+    console.log(`📝 BLS_AGGREGATOR_ADDRESS env: ${process.env.BLS_AGGREGATOR_ADDRESS || 'not set'}`);
+    
     const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
     const wallet = createWalletClient({ account: signer, chain, transport: http(RPC_URL) });

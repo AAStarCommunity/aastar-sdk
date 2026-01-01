@@ -6,36 +6,10 @@
   },
   {
     "type": "function",
-    "name": "VERSION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "VERSION_CODE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "addImplementation",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       },
@@ -66,7 +40,7 @@
     "name": "deployPaymaster",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       },
@@ -90,7 +64,7 @@
     "name": "deployPaymasterDeterministic",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       },
@@ -119,7 +93,7 @@
     "name": "getImplementation",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       }
@@ -237,7 +211,7 @@
     "name": "hasImplementation",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       }
@@ -364,7 +338,7 @@
     "name": "predictPaymasterAddress",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       },
@@ -395,7 +369,7 @@
     "name": "setDefaultVersion",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       }
@@ -434,7 +408,7 @@
     "name": "upgradeImplementation",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       },
@@ -446,6 +420,19 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "version",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "event",
@@ -471,7 +458,7 @@
     "name": "ImplementationAdded",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "indexed": true,
         "internalType": "string"
@@ -490,7 +477,7 @@
     "name": "ImplementationUpgraded",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "indexed": true,
         "internalType": "string"
@@ -546,7 +533,7 @@
         "internalType": "address"
       },
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "indexed": false,
         "internalType": "string"
@@ -570,7 +557,7 @@
     "name": "ImplementationNotFound",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       }
@@ -641,7 +628,7 @@
     "name": "VersionAlreadyExists",
     "inputs": [
       {
-        "name": "version",
+        "name": "_version",
         "type": "string",
         "internalType": "string"
       }

@@ -60,7 +60,7 @@ const reputationAbi = parseAbi([
 ]);
 
 const xpntsFactoryAbi = parseAbi([
-    'function createToken(string, string, string, string, uint256) external returns (address)',
+    'function deployxPNTsToken(string, string, string, string, uint256, address) external returns (address)',
     'function communityTokens(address) view returns (address)'
 ]);
 
@@ -339,13 +339,14 @@ async function runCommunityLifecycleTest() {
                 const createTokenTx = await walletClient.writeContract({
                     address: XPNTS_FACTORY_ADDR,
                     abi: xpntsFactoryAbi,
-                    functionName: 'createToken',
+                    functionName: 'deployxPNTsToken',
                     args: [
                         'Test Community PNTs',
                         'tcPNTs',
                         'Test DAO',
                         'testdao.eth',
-                        parseEther('1')
+                        parseEther('1'),
+                        '0x0000000000000000000000000000000000000000' // No specific AOA Paymaster in this test
                     ]
                 });
                 await publicClient.waitForTransactionReceipt({ hash: createTokenTx });

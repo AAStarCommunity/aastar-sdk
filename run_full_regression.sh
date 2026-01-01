@@ -5,6 +5,9 @@
 
 set -e
 
+# Robust PATH setup for non-interactive shells
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin"
+
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -21,13 +24,6 @@ echo -e "${YELLOW}📦 Building all packages and extracting fresh ABIs...${NC}"
 if [ -f "./extract_abis.sh" ]; then
     echo -e "${YELLOW}📝 Extracting fresh ABIs...${NC}"
     ./extract_abis.sh || { echo -e "${RED}❌ ABI Extraction failed.${NC}"; exit 1; }
-fi
-
-# Build SDK packages
-pnpm build
-if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Build failed.${NC}"
-    exit 1
 fi
 echo -e "${GREEN}✅ Build and Extraction completed.${NC}"
 
@@ -126,11 +122,6 @@ echo -e "${YELLOW}🧪 Running Full Test Suite ($ENV_MODE)...${NC}"
 # Detailed Script List
 TEST_SCRIPTS=(
     "scripts/v2_regression/00_validate_env.ts"
-    "scripts/v2_regression/01_setup_and_fund.ts"
-    "scripts/v2_regression/02_operator_onboarding.ts"
-    "scripts/v2_regression/03_community_registry.ts"
-    "scripts/v2_regression/04_enduser_flow.ts"
-    "scripts/v2_regression/05_admin_audit.ts"
     "scripts/06_local_test_v3_admin.ts"
     "scripts/06_local_test_v3_funding.ts"
     "scripts/06_local_test_v3_reputation.ts"

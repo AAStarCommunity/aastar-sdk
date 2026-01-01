@@ -47,8 +47,8 @@ async function testLifecycle() {
     console.log(`   Syncing ${users.length} user scores...`);
     const syncTx = await adminWallet.writeContract({
         address: REGISTRY,
-        abi: parseAbi(['function syncGlobalReputation(address[] calldata users, uint256[] calldata newScores, uint256 epoch, bytes calldata proof) external']),
-        functionName: 'syncGlobalReputation',
+        abi: parseAbi(['function batchUpdateGlobalReputation(address[] calldata users, uint256[] calldata newScores, uint256 epoch, bytes calldata proof) external']),
+        functionName: 'batchUpdateGlobalReputation',
         args: [users, newScores, epoch, '0x'], // Skip BLS proof check for admin if configured or using mock
     }).catch(e => {
         console.log(`   ℹ️ Sync failed (expected revert if BLS active): ${e.message.split('\n')[0]}`);

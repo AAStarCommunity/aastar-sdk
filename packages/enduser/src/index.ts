@@ -89,6 +89,7 @@ export class EndUserClient {
             abi: [{ name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [{ type: 'bool' }] }],
             functionName: 'approve',
             args: [CONTRACTS.sepolia.core.gTokenStaking, totalRequired],
+            account,
             chain: this.walletClient.chain
         } as any);
         await this.publicClient.waitForTransactionReceipt({ hash: approveTx });
@@ -100,6 +101,7 @@ export class EndUserClient {
             abi: [{ name: 'registerRole', type: 'function', stateMutability: 'nonpayable', inputs: [{ type: 'bytes32' }, { type: 'address' }, { type: 'bytes' }], outputs: [] }],
             functionName: 'registerRole',
             args: [ROLE_ENDUSER, account.address, roleData],
+            account,
             chain: this.walletClient.chain
         } as any);
 
@@ -158,6 +160,7 @@ export class EndUserClient {
             abi: [{ name: 'mint', type: 'function', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] }],
             functionName: 'mint',
             args: [account.address],
+            account,
             chain: this.walletClient.chain
         } as any);
 
@@ -204,10 +207,10 @@ export class EndUserClient {
         const initCode = concat([factoryAddress, createAccountData]);
 
         // Check Deployment
-        const byteCode = await this.publicClient.getBytecode({ address: accountAddress });
+        const byteCode = await this.publicClient.getBytecode({ address: accountAddress as Address });
         const isDeployed = byteCode !== undefined && byteCode !== '0x';
 
-        return { accountAddress, initCode, isDeployed };
+        return { accountAddress: accountAddress as Address, initCode, isDeployed };
     }
 
     /**
@@ -255,6 +258,9 @@ export class EndUserClient {
         deployTxHash: Hash;
         isDeployed: true;
     }> {
+        const account = this.walletClient.account;
+        if (!account) throw new Error('Wallet account not found');
+
         const { TEST_ACCOUNT_ADDRESSES, SimpleAccountFactoryABI } = await import('@aastar/core');
         let factoryAddress = TEST_ACCOUNT_ADDRESSES.simpleAccountFactory;
         
@@ -273,7 +279,7 @@ export class EndUserClient {
         })) as Address;
 
         // Check if already deployed
-        const byteCode = await this.publicClient.getBytecode({ address: accountAddress });
+        const byteCode = await this.publicClient.getBytecode({ address: accountAddress as Address });
         const alreadyDeployed = byteCode !== undefined && byteCode !== '0x';
 
         if (alreadyDeployed) {
@@ -281,8 +287,10 @@ export class EndUserClient {
             // Still fund if requested
             if (params.fundWithETH && params.fundWithETH > 0n) {
                 const fundTx = await this.walletClient.sendTransaction({
-                    to: accountAddress,
-                    value: params.fundWithETH
+                    to: accountAddress as Address,
+                    value: params.fundWithETH,
+                    account,
+                    chain: this.walletClient.chain
                 });
                 await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
             }
@@ -294,7 +302,9 @@ export class EndUserClient {
             address: factoryAddress,
             abi: SimpleAccountFactoryABI,
             functionName: 'createAccount',
-            args: [params.owner, salt]
+            args: [params.owner, salt],
+            account,
+            chain: this.walletClient.chain
         })) as Hash;
 
         await this.publicClient.waitForTransactionReceipt({ hash: deployTx });
@@ -302,8 +312,10 @@ export class EndUserClient {
         // Fund if requested
         if (params.fundWithETH && params.fundWithETH > 0n) {
             const fundTx = await this.walletClient.sendTransaction({
-                to: accountAddress,
-                value: params.fundWithETH
+                to: accountAddress as Address,
+                value: params.fundWithETH,
+                account,
+                chain: this.walletClient.chain
             });
             await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
         }

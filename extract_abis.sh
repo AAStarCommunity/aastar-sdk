@@ -4,20 +4,26 @@
 
 set -euo pipefail
 
+# Add Foundry to PATH if not present
+export PATH="$PATH:$HOME/.foundry/bin"
+
 # Paths
 SP_ROOT="../SuperPaymaster"
 FOUNDRY_DIR="$SP_ROOT"
 OUT_DIR="$FOUNDRY_DIR/out"
 CACHE_DIR="$FOUNDRY_DIR/cache"
 DEST_DIR="./packages/core/src/abis"
+DEST_DIR_ROOT="./abis"
 
 # Ensure destination exists
 mkdir -p "$DEST_DIR"
+mkdir -p "$DEST_DIR_ROOT"
 
-echo "📂 Extracting ABIs from $OUT_DIR to $DEST_DIR..."
+echo "📂 Extracting ABIs from $OUT_DIR to $DEST_DIR and $DEST_DIR_ROOT..."
 
-# Clean only JSON ABIs to ensure consistency while keeping index.ts and index.js
+# Clean only JSON ABIs to ensure consistency
 rm -rf "$DEST_DIR"/*.json
+rm -rf "$DEST_DIR_ROOT"/*.json
 
 # Optimization: Forge build can be slow, but we need the latest artifacts.
 # We explicitly list the core directories to build to speed up, 
@@ -109,12 +115,15 @@ while IFS= read -r json_file; do
   file_name="${file_name%V4_1i}"
   
   dest_file="$DEST_DIR/$file_name.json"
+  dest_file_root="$DEST_DIR_ROOT/$file_name.json"
   if jq -e '.abi' "$json_file" >/dev/null 2>&1; then
     jq '.abi' "$json_file" > "$dest_file"
+    cp "$dest_file" "$dest_file_root"
     if [ -s "$dest_file" ] && jq -e 'type=="array"' "$dest_file" >/dev/null 2>&1; then
       extracted=$((extracted + 1))
     else
       rm -f "$dest_file"
+      rm -f "$dest_file_root"
       skipped=$((skipped + 1))
     fi
   else
@@ -129,11 +138,13 @@ echo "🎉 Extraction complete!"
 if [ -f "$DEST_DIR/xPNTsToken.json" ]; then
     echo "   Use xPNTsToken ABI for aPNTs..."
     cp "$DEST_DIR/xPNTsToken.json" "$DEST_DIR/aPNTs.json"
+    cp "$DEST_DIR/xPNTsToken.json" "$DEST_DIR_ROOT/aPNTs.json"
 fi
 
 if [ -f "$DEST_DIR/SimpleAccount.json" ]; then
     echo "   Use SimpleAccount ABI for LegacyAccount..."
     cp "$DEST_DIR/SimpleAccount.json" "$DEST_DIR/LegacyAccount.json"
+    cp "$DEST_DIR/SimpleAccount.json" "$DEST_DIR_ROOT/LegacyAccount.json"
 fi
 
 echo "   Extracted: $extracted, skipped: $skipped"

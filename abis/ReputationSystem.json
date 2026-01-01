@@ -44,6 +44,40 @@
   },
   {
     "type": "function",
+    "name": "calculateReputation",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "community",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "communityScore",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "globalScore",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "communityActiveRules",
     "inputs": [
       {
@@ -180,6 +214,50 @@
     "outputs": [
       {
         "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getReputationBreakdown",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "community",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "baseScore",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nftBonus",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "activityBonus",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "multiplier",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -344,6 +422,19 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "version",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "event",

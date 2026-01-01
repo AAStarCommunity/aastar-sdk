@@ -38,6 +38,10 @@ export class TestAccountManager {
         private publicClient: PublicClient,
         private walletClient: WalletClient
     ) {
+        if (!walletClient.account) {
+            // Placeholder account if not provided to avoid strict null checks in experiments
+            // In production, the consumer must ensure the wallet is connected.
+        }
         this.endUserClient = new EndUserClient(publicClient, walletClient);
     }
 
@@ -92,7 +96,9 @@ export class TestAccountManager {
                 console.log(`   ⛽ Funding EOA with ${fundEachEOAWithETH} wei ETH...`);
                 const fundTx = await this.walletClient.sendTransaction({
                     to: ownerAccount.address,
-                    value: fundEachEOAWithETH
+                    value: fundEachEOAWithETH,
+                    account: this.walletClient.account!,
+                    chain: this.walletClient.chain
                 });
                 await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
             }
@@ -126,7 +132,9 @@ export class TestAccountManager {
                         address: tokenConfig.address,
                         abi: erc20Abi,
                         functionName: 'transfer',
-                        args: [account.ownerAddress, tokenConfig.amount]
+                        args: [account.ownerAddress, tokenConfig.amount],
+                        account: this.walletClient.account!,
+                        chain: this.walletClient.chain
                     });
                     await this.publicClient.waitForTransactionReceipt({ hash: tx });
                     console.log(`      ✅ ${account.label} EOA: ${tokenConfig.amount}`);
@@ -138,7 +146,9 @@ export class TestAccountManager {
                         address: tokenConfig.address,
                         abi: erc20Abi,
                         functionName: 'transfer',
-                        args: [account.aaAddress, tokenConfig.amount]
+                        args: [account.aaAddress, tokenConfig.amount],
+                        account: this.walletClient.account!,
+                        chain: this.walletClient.chain
                     });
                     await this.publicClient.waitForTransactionReceipt({ hash: tx });
                     console.log(`      ✅ ${account.label} AA: ${tokenConfig.amount}`);
