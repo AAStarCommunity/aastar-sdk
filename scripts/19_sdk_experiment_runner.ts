@@ -35,7 +35,7 @@ const config = {
         bundlerRpc: process.env.SEPOLIA_RPC_URL2 || process.env.ALCHEMY_BUNDLER_RPC_URL,
         pimlicoRpc: `https://api.pimlico.io/v2/sepolia/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
         privateKey: pk,
-        accountAddress: (process.env.TEST_SIMPLE_ACCOUNT_A || "0x0000000000000000000000000000000000000000") as Hex, 
+        accountAddress: (process.env.TEST_SIMPLE_ACCOUNT_B || "0x0000000000000000000000000000000000000000") as Hex, 
         pimToken: "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751" 
     };
 
@@ -169,7 +169,7 @@ const config = {
                 console.log(`   ✅ Pimlico: ${res.gasUsed} gas, ${res.latencyMs}ms`);
             } catch (e: any) { console.error(`   ❌ Pimlico Failed: ${e.message}`); }
         } else {
-            console.log("   ⚠️ Skipping Pimlico (Missing TEST_SIMPLE_ACCOUNT_A)");
+            console.log("   ⚠️ Skipping Pimlico (Missing TEST_SIMPLE_ACCOUNT_B)");
         }
 
         // Group 3: AOA (Paymaster V4)
