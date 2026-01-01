@@ -173,7 +173,7 @@ const config = {
         }
 
         // Group 3: AOA (Paymaster V4)
-        const paymasterV4 = process.env.PAYMASTER_V4_ADDRESS || process.env.PAYMASTER_ADDRESS;
+        const paymasterV4 = process.env.PAYMASTER_V4_PROXY || process.env.PAYMASTER_ADDRESS;
         if (config.accountAddress && paymasterV4 && config.accountAddress !== "0x0000000000000000000000000000000000000000") {
             try {
                 console.log("   --- Group 3: AOA (V4) ---");
