@@ -17,6 +17,9 @@ export type RegistryActions = {
     communityToToken: (args: { community: Address }) => Promise<Address>;
     getCommunityRoleData: (args: { community: Address }) => Promise<any>;
     isCommunityMember: (args: { community: Address, user: Address }) => Promise<boolean>;
+    communityByNameV3: (args: { name: string }) => Promise<Address>;
+    communityByENSV3: (args: { ensName: string }) => Promise<Address>;
+    proposedRoleNames: (args: { roleId: Hex }) => Promise<string>;
     
     // Credit & Reputation
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
@@ -57,6 +60,41 @@ export type RegistryActions = {
     globalReputation: (args: { user: Address }) => Promise<bigint>;
     creditTiers: (args: { tier: bigint }) => Promise<any>;
     levelThresholds: (args: { level: bigint }) => Promise<bigint>;
+    
+    // Role Metadata & Members
+    roleLockDurations: (args: { roleId: Hex }) => Promise<bigint>;
+    roleMetadata: (args: { roleId: Hex }) => Promise<any>;
+    roleStakes: (args: { roleId: Hex }) => Promise<bigint>;
+    roleSBTTokenIds: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
+    roleOwners: (args: { roleId: Hex }) => Promise<Address>;
+    roleMemberIndex: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
+    getRoleMembers: (args: { roleId: Hex }) => Promise<Address[]>;
+    getRoleUserCount: (args: { roleId: Hex }) => Promise<bigint>;
+    getUserRoles: (args: { user: Address }) => Promise<Hex[]>;
+    
+    // Admin Operations
+    adminConfigureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
+    createNewRole: (args: { name: string, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
+    safeMintForRole: (args: { roleId: Hex, to: Address, uri: string, account?: Account | Address }) => Promise<Hash>;
+    exitRole: (args: { roleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    calculateExitFee: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
+    addLevelThreshold: (args: { level: bigint, threshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    creditTierConfig: (args: { tier: bigint }) => Promise<any>;
+    accountToUser: (args: { account: Address }) => Promise<Address>;
+    
+    // Constants (Role IDs)
+    ROLE_COMMUNITY: () => Promise<Hex>;
+    ROLE_ENDUSER: () => Promise<Hex>;
+    ROLE_PAYMASTER_SUPER: () => Promise<Hex>;
+    ROLE_PAYMASTER_AOA: () => Promise<Hex>;
+    ROLE_DVT: () => Promise<Hex>;
+    ROLE_KMS: () => Promise<Hex>;
+    ROLE_ANODE: () => Promise<Hex>;
+    GTOKEN_STAKING: () => Promise<Address>;
+    MYSBT: () => Promise<Address>;
+    SUPER_PAYMASTER: () => Promise<Address>;
+    isReputationSource: (args: { source: Address }) => Promise<boolean>;
+    lastReputationEpoch: () => Promise<bigint>;
     
     // Version
     version: () => Promise<string>;
@@ -472,6 +510,308 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             abi: RegistryABI,
             functionName: 'levelThresholds',
             args: [level]
+        }) as Promise<bigint>;
+    },
+
+    // Community lookup functions
+    async communityByNameV3({ name }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'communityByNameV3',
+            args: [name]
+        }) as Promise<Address>;
+    },
+
+    async communityByENSV3({ ensName }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'communityByENSV3',
+            args: [ensName]
+        }) as Promise<Address>;
+    },
+
+    async proposedRoleNames({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'proposedRoleNames',
+            args: [roleId]
+        }) as Promise<string>;
+    },
+
+    // Role Metadata & Members
+    async roleLockDurations({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleLockDurations',
+            args: [roleId]
+        }) as Promise<bigint>;
+    },
+
+    async roleMetadata({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleMetadata',
+            args: [roleId]
+        });
+    },
+
+    async roleStakes({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleStakes',
+            args: [roleId]
+        }) as Promise<bigint>;
+    },
+
+    async roleSBTTokenIds({ roleId, user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleSBTTokenIds',
+            args: [roleId, user]
+        }) as Promise<bigint>;
+    },
+
+    async roleOwners({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleOwners',
+            args: [roleId]
+        }) as Promise<Address>;
+    },
+
+    async roleMemberIndex({ roleId, user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleMemberIndex',
+            args: [roleId, user]
+        }) as Promise<bigint>;
+    },
+
+    async getRoleMembers({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getRoleMembers',
+            args: [roleId]
+        }) as Promise<Address[]>;
+    },
+
+    async getRoleUserCount({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getRoleUserCount',
+            args: [roleId]
+        }) as Promise<bigint>;
+    },
+
+    async getUserRoles({ user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getUserRoles',
+            args: [user]
+        }) as Promise<Hex[]>;
+    },
+
+    // Admin Operations
+    async adminConfigureRole({ roleId, config, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'adminConfigureRole',
+            args: [roleId, config],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async createNewRole({ name, config, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'createNewRole',
+            args: [name, config],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async safeMintForRole({ roleId, to, uri, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'safeMintForRole',
+            args: [roleId, to, uri],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async exitRole({ roleId, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'exitRole',
+            args: [roleId],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async calculateExitFee({ user, roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'calculateExitFee',
+            args: [user, roleId]
+        }) as Promise<bigint>;
+    },
+
+    async addLevelThreshold({ level, threshold, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'addLevelThreshold',
+            args: [level, threshold],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async creditTierConfig({ tier }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'creditTierConfig',
+            args: [tier]
+        });
+    },
+
+    async accountToUser({ account: userAccount }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'accountToUser',
+            args: [userAccount]
+        }) as Promise<Address>;
+    },
+
+    // Constants (Role IDs)
+    async ROLE_COMMUNITY() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_COMMUNITY',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async ROLE_ENDUSER() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_ENDUSER',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async ROLE_PAYMASTER_SUPER() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_PAYMASTER_SUPER',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async ROLE_PAYMASTER_AOA() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_PAYMASTER_AOA',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async ROLE_DVT() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_DVT',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async ROLE_KMS() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_KMS',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async ROLE_ANODE() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'ROLE_ANODE',
+            args: []
+        }) as Promise<Hex>;
+    },
+
+    async GTOKEN_STAKING() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'GTOKEN_STAKING',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async MYSBT() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'MYSBT',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async SUPER_PAYMASTER() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'SUPER_PAYMASTER',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async isReputationSource({ source }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'isReputationSource',
+            args: [source]
+        }) as Promise<boolean>;
+    },
+
+    async lastReputationEpoch() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'lastReputationEpoch',
+            args: []
         }) as Promise<bigint>;
     },
 

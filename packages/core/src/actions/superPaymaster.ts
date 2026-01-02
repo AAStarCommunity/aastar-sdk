@@ -13,8 +13,10 @@ export type SuperPaymasterActions = {
     // Operator Management
     configureOperator: (args: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) => Promise<Hash>;
     setOperatorPaused: (args: { operator: Address, paused: boolean, account?: Account | Address }) => Promise<Hash>;
+    setOperatorLimits: (args: { operator: Address, limits: any, account?: Account | Address }) => Promise<Hash>;
     updateReputation: (args: { operator: Address, newReputation: bigint, account?: Account | Address }) => Promise<Hash>;
     executeSlashWithBLS: (args: { operator: Address, roleId: Hex, amount: bigint, reason: string, blsSignature: Hex, account?: Account | Address }) => Promise<Hash>;
+    slashOperator: (args: { operator: Address, amount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
     
     // Price & Configuration
     setAPNTsPrice: (args: { priceUSD: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -23,6 +25,7 @@ export type SuperPaymasterActions = {
     
     // User Management  
     blockUser: (args: { user: Address, blocked: boolean, account?: Account | Address }) => Promise<Hash>;
+    updateBlockedStatus: (args: { user: Address, blocked: boolean, account?: Account | Address }) => Promise<Hash>;
     
     // Validation (EntryPoint calls)
     validatePaymasterUserOp: (args: { userOp: any, userOpHash: Hex, maxCost: bigint }) => Promise<any>;
@@ -36,7 +39,38 @@ export type SuperPaymasterActions = {
     aPNTsPriceUSD: () => Promise<bigint>;
     cachedPrice: () => Promise<any>;
     protocolFee: () => Promise<any>;
+    protocolFeeBPS: () => Promise<bigint>;
+    protocolRevenue: () => Promise<bigint>;
+    treasury: () => Promise<Address>;
+    xpntsFactory: () => Promise<Address>;
     entryPoint: () => Promise<Address>;
+    totalTrackedBalance: () => Promise<bigint>;
+    lastUserOpTimestamp: (args: { user: Address }) => Promise<bigint>;
+    
+    // Slash History
+    getSlashHistory: (args: { operator: Address }) => Promise<any[]>;
+    getSlashCount: (args: { operator: Address }) => Promise<bigint>;
+    getLatestSlash: (args: { operator: Address }) => Promise<any>;
+    slashHistory: (args: { operator: Address, index: bigint }) => Promise<any>;
+    
+    // Price Management
+    updatePrice: (args: { account?: Account | Address }) => Promise<Hash>;
+    updatePriceDVT: (args: { price: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    
+    // Treasury & Revenue
+    setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
+    withdrawProtocolRevenue: (args: { to: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    // Factory
+    setXPNTsFactory: (args: { factory: Address, account?: Account | Address }) => Promise<Hash>;
+    setAPNTsToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    // Transfer callback
+    onTransferReceived: (args: { from: Address, amount: bigint, data: Hex }) => Promise<any>;
+    
+    // Withdraw alias
+    withdraw: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Constants
     APNTS_TOKEN: () => Promise<Address>;
@@ -434,6 +468,235 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             abi: SuperPaymasterABI,
             functionName: 'renounceOwnership',
             args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Additional Operator Management
+    async setOperatorLimits({ operator, limits, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setOperatorLimits',
+            args: [operator, limits],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async slashOperator({ operator, amount, reason, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'slashOperator',
+            args: [operator, amount, reason],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // User Management
+    async updateBlockedStatus({ user, blocked, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'updateBlockedStatus',
+            args: [user, blocked],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Additional View Functions
+    async protocolFeeBPS() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'protocolFeeBPS',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async protocolRevenue() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'protocolRevenue',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async treasury() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'treasury',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async xpntsFactory() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'xpntsFactory',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async totalTrackedBalance() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'totalTrackedBalance',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async lastUserOpTimestamp({ user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'lastUserOpTimestamp',
+            args: [user]
+        }) as Promise<bigint>;
+    },
+
+    // Slash History
+    async getSlashHistory({ operator }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'getSlashHistory',
+            args: [operator]
+        }) as Promise<any[]>;
+    },
+
+    async getSlashCount({ operator }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'getSlashCount',
+            args: [operator]
+        }) as Promise<bigint>;
+    },
+
+    async getLatestSlash({ operator }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'getLatestSlash',
+            args: [operator]
+        });
+    },
+
+    async slashHistory({ operator, index }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'slashHistory',
+            args: [operator, index]
+        });
+    },
+
+    // Price Management
+    async updatePrice({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'updatePrice',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async updatePriceDVT({ price, proof, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'updatePriceDVT',
+            args: [price, proof],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Treasury & Revenue
+    async setTreasury({ treasury, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setTreasury',
+            args: [treasury],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdrawProtocolRevenue({ to, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'withdrawProtocolRevenue',
+            args: [to],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Factory & Config
+    async setXPNTsFactory({ factory, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setXPNTsFactory',
+            args: [factory],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setAPNTsToken({ token, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setAPNTsToken',
+            args: [token],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setBLSAggregator({ aggregator, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setBLSAggregator',
+            args: [aggregator],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Transfer callback
+    async onTransferReceived({ from, amount, data }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'onTransferReceived',
+            args: [from, amount, data]
+        });
+    },
+
+    // Withdraw alias
+    async withdraw({ amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'withdraw',
+            args: [amount],
             account: account as any,
             chain: (client as any).chain
         });
