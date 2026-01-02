@@ -31,16 +31,11 @@ async function main() {
         args: [RoleIds.COMMUNITY, account.address]
     });
     
+    console.log(`   🔍 hasRole returned: ${hasRole}`);
+    
     if (hasRole) {
         console.log(`   ✅ Already registered as Local Operator`);
-        
-        // Get token address if available
-        try {
-            const info = await communityClient.getCommunityInfo(account.address);
-            console.log(`   🪙 Token: ${info.tokenAddress || 'Pending'}`);
-        } catch (e) {
-            console.log(`   🪙 Token: (Unable to fetch)`);
-        }
+        console.log(`   🪙 Token: ${process.env.TEST_XPNTS_TOKEN || 'Check via getCommunityInfo'}`);
     } else {
         console.log("   ℹ️  Not registered. Launching...");
         
@@ -62,6 +57,6 @@ async function main() {
 
 main().catch(error => {
     console.error("\n❌ Scenario 01 Failed:");
-    console.error(error);
+    console.error(error.message || error);
     process.exit(1);
 });

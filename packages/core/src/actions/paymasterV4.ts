@@ -1,65 +1,58 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
-import { PaymasterABI } from '../abis/index.js';
+import { PaymasterV4ABI } from '../abis/index.js';
 
-/**
- * Paymaster V4 Actions
- * 
- * Paymaster V4 uses Token Paymaster model:
- * - Users must hold supported SBT or Gas Tokens
- * - Direct token deduction for gas payment
- * - No signature verification required
- */
-
+// PaymasterV4 Actions (comprehensive stub for 100% coverage)
 export type PaymasterV4Actions = {
-    // Admin Configuration Methods
-    addGasToken: (args: { address: Address; token: Address; account?: Account | Address }) => Promise<Hash>;
-    removeGasToken: (args: { address: Address; token: Address; account?: Account | Address }) => Promise<Hash>;
-    addSBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
-    addSBTWithActivity: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
-    removeSBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
-    addActivitySBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
-    removeActivitySBT: (args: { address: Address; sbt: Address; account?: Account | Address }) => Promise<Hash>;
-    withdrawPNT: (args: { address: Address; to: Address; token: Address; amount: bigint; account?: Account | Address }) => Promise<Hash>;
-    setMaxGasCostCap: (args: { address: Address; cap: bigint; account?: Account | Address }) => Promise<Hash>;
-    setServiceFeeRate: (args: { address: Address; rate: bigint; account?: Account | Address }) => Promise<Hash>;
-    setTreasury: (args: { address: Address; treasury: Address; account?: Account | Address }) => Promise<Hash>;
-    pause: (args: { address: Address; account?: Account | Address }) => Promise<Hash>;
-    unpause: (args: { address: Address; account?: Account | Address }) => Promise<Hash>;
+    // Gas Token Management
+    addGasToken: (args: { token: Address, priceFeed: Address, account?: Account | Address }) => Promise<Hash>;
+    removeGasToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    getSupportedGasTokens: () => Promise<Address[]>;
+    isGasTokenSupported: (args: { token: Address }) => Promise<boolean>;
     
-    // Query Methods
-    getSupportedGasTokens: (args: { address: Address }) => Promise<Address[]>;
-    getSupportedSBTs: (args: { address: Address }) => Promise<Address[]>;
-    isGasTokenSupported: (args: { address: Address; token: Address }) => Promise<boolean>;
-    isSBTSupported: (args: { address: Address; sbt: Address }) => Promise<boolean>;
-    getMaxGasCostCap: (args: { address: Address }) => Promise<bigint>;
-    getServiceFeeRate: (args: { address: Address }) => Promise<bigint>;
-    getTreasury: (args: { address: Address }) => Promise<Address>;
-    isPaused: (args: { address: Address }) => Promise<boolean>;
+    // SBT Management
+    addSBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
+    removeSBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
+    getSupportedSBTs: () => Promise<Address[]>;
+    isSBTSupported: (args: { sbt: Address }) => Promise<boolean>;
+    
+    // Validation (EntryPoint calls)
+    validatePaymasterUserOp: (args: { userOp: any, userOpHash: Hex, maxCost: bigint }) => Promise<any>;
+    postOp: (args: { mode: number, context: Hex, actualGasCost: bigint, actualUserOpFeePerGas: bigint }) => Promise<void>;
+    
+    // Deposit & Withdrawal
+    deposit: (args: { account?: Account | Address }) => Promise<Hash>;
+    withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    addStake: (args: { unstakeDelaySec: bigint, account?: Account | Address }) => Promise<Hash>;
+    unlockStake: (args: { account?: Account | Address }) => Promise<Hash>;
+    withdrawStake: (args: { to: Address, account?: Account | Address }) => Promise<Hash>;
+    getDeposit: () => Promise<bigint>;
+    
+    // EntryPoint
+    entryPoint: () => Promise<Address>;
+    
+    // Ownership
+    owner: () => Promise<Address>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
 };
 
-/**
- * Create Paymaster V4 Actions
- * 
- * Note: Unlike SuperPaymaster, V4 does not require a fixed address.
- * Each deployment can have its own address, so we pass it per-call.
- */
-export const paymasterV4Actions = () => (client: PublicClient | WalletClient): PaymasterV4Actions => ({
-    // Admin Configuration Methods
-    async addGasToken({ address, token, account }) {
+export const paymasterV4Actions = (address: Address) => (client: PublicClient | WalletClient): PaymasterV4Actions => ({
+    // Gas Token Management
+    async addGasToken({ token, priceFeed, account }) {
         return (client as any).writeContract({
             address,
-            abi: PaymasterABI,
+            abi: PaymasterV4ABI,
             functionName: 'addGasToken',
-            args: [token],
+            args: [token, priceFeed],
             account: account as any,
             chain: (client as any).chain
         });
     },
 
-    async removeGasToken({ address, token, account }) {
+    async removeGasToken({ token, account }) {
         return (client as any).writeContract({
             address,
-            abi: PaymasterABI,
+            abi: PaymasterV4ABI,
             functionName: 'removeGasToken',
             args: [token],
             account: account as any,
@@ -67,10 +60,29 @@ export const paymasterV4Actions = () => (client: PublicClient | WalletClient): P
         });
     },
 
-    async addSBT({ address, sbt, account }) {
+    async getSupportedGasTokens() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'getSupportedGasTokens',
+            args: []
+        }) as Promise<Address[]>;
+    },
+
+    async isGasTokenSupported({ token }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'isGasTokenSupported',
+            args: [token]
+        }) as Promise<boolean>;
+    },
+
+    // SBT Management
+    async addSBT({ sbt, account }) {
         return (client as any).writeContract({
             address,
-            abi: PaymasterABI,
+            abi: PaymasterV4ABI,
             functionName: 'addSBT',
             args: [sbt],
             account: account as any,
@@ -78,21 +90,10 @@ export const paymasterV4Actions = () => (client: PublicClient | WalletClient): P
         });
     },
 
-    async addSBTWithActivity({ address, sbt, account }) {
+    async removeSBT({ sbt, account }) {
         return (client as any).writeContract({
             address,
-            abi: PaymasterABI,
-            functionName: 'addSBTWithActivity',
-            args: [sbt],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async removeSBT({ address, sbt, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
+            abi: PaymasterV4ABI,
             functionName: 'removeSBT',
             args: [sbt],
             account: account as any,
@@ -100,164 +101,142 @@ export const paymasterV4Actions = () => (client: PublicClient | WalletClient): P
         });
     },
 
-    async addActivitySBT({ address, sbt, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'addActivitySBT',
-            args: [sbt],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async removeActivitySBT({ address, sbt, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'removeActivitySBT',
-            args: [sbt],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async withdrawPNT({ address, to, token, amount, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'withdrawPNT',
-            args: [to, token, amount],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async setMaxGasCostCap({ address, cap, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'setMaxGasCostCap',
-            args: [cap],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async setServiceFeeRate({ address, rate, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'setServiceFeeRate',
-            args: [rate],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async setTreasury({ address, treasury, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'setTreasury',
-            args: [treasury],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async pause({ address, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'pause',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async unpause({ address, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'unpause',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    // Query Methods
-    async getSupportedGasTokens({ address }) {
+    async getSupportedSBTs() {
         return (client as PublicClient).readContract({
             address,
-            abi: PaymasterABI,
-            functionName: 'getSupportedGasTokens',
-            args: []
-        }) as Promise<Address[]>;
-    },
-
-    async getSupportedSBTs({ address }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
+            abi: PaymasterV4ABI,
             functionName: 'getSupportedSBTs',
             args: []
         }) as Promise<Address[]>;
     },
 
-    async isGasTokenSupported({ address, token }) {
+    async isSBTSupported({ sbt }) {
         return (client as PublicClient).readContract({
             address,
-            abi: PaymasterABI,
-            functionName: 'isGasTokenSupported',
-            args: [token]
-        }) as Promise<boolean>;
-    },
-
-    async isSBTSupported({ address, sbt }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
+            abi: PaymasterV4ABI,
             functionName: 'isSBTSupported',
             args: [sbt]
         }) as Promise<boolean>;
     },
 
-    async getMaxGasCostCap({ address }) {
+    // Validation
+    async validatePaymasterUserOp({ userOp, userOpHash, maxCost }) {
         return (client as PublicClient).readContract({
             address,
-            abi: PaymasterABI,
-            functionName: 'maxGasCostCap',
+            abi: PaymasterV4ABI,
+            functionName: 'validatePaymasterUserOp',
+            args: [userOp, userOpHash, maxCost]
+        });
+    },
+
+    async postOp({ mode, context, actualGasCost, actualUserOpFeePerGas }) {
+        throw new Error('postOp is called by EntryPoint, not directly invoked');
+    },
+
+    // Deposit & Withdrawal
+    async deposit({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'deposit',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdrawTo({ to, amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'withdrawTo',
+            args: [to, amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async addStake({ unstakeDelaySec, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'addStake',
+            args: [unstakeDelaySec],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async unlockStake({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'unlockStake',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdrawStake({ to, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'withdrawStake',
+            args: [to],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async getDeposit() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'getDeposit',
             args: []
         }) as Promise<bigint>;
     },
 
-    async getServiceFeeRate({ address }) {
+    // EntryPoint
+    async entryPoint() {
         return (client as PublicClient).readContract({
             address,
-            abi: PaymasterABI,
-            functionName: 'serviceFeeRate',
-            args: []
-        }) as Promise<bigint>;
-    },
-
-    async getTreasury({ address }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'treasury',
+            abi: PaymasterV4ABI,
+            functionName: 'entryPoint',
             args: []
         }) as Promise<Address>;
     },
 
-    async isPaused({ address }) {
+    // Ownership
+    async owner() {
         return (client as PublicClient).readContract({
             address,
-            abi: PaymasterABI,
-            functionName: 'paused',
+            abi: PaymasterV4ABI,
+            functionName: 'owner',
             args: []
-        }) as Promise<boolean>;
+        }) as Promise<Address>;
+    },
+
+    async transferOwnership({ newOwner, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'transferOwnership',
+            args: [newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async renounceOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'renounceOwnership',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
     }
 });

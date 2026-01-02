@@ -12,6 +12,7 @@ import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
 
 // Token System
 import xPNTsTokenABIData from './xPNTs.json' with { type: 'json' };
+import aPNTsABIData from './aPNTs.json' with { type: 'json' };
 import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };
 
@@ -42,6 +43,7 @@ export const EntryPointABI = EntryPointABIData;
 
 // Re-export ABIs - Token System
 export const xPNTsTokenABI = xPNTsTokenABIData;
+export const aPNTsABI = aPNTsABIData;
 export const xPNTsFactoryABI = xPNTsFactoryABIData;
 export const MySBTABI = MySBTABIData;
 

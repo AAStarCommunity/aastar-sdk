@@ -1,41 +1,84 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
-import { xPNTsFactoryABI } from '../abis/index.js';
+import { PaymasterV4ABI, xPNTsFactoryABI, PaymasterFactoryABI } from '../abis/index.js';
 
+// Factory actions for xPNTs and Paymaster deployment
 export type FactoryActions = {
-    createXPNTs: (args: { address: Address, name: string, symbol: string, hub: string, domain: string, pool: bigint, account?: Account | Address }) => Promise<Hash>;
-    setSuperPaymasterInFactory: (args: { address: Address, paymaster: Address, account?: Account | Address }) => Promise<Hash>;
-    getXPNTsTokenAddress: (args: { address: Address, hub: string }) => Promise<Address>;
+    // xPNTs Factory
+    createXPNTs: (args: { name: string, symbol: string, community: Address, account?: Account | Address }) => Promise<Hash>;
+    predictXPNTsAddress: (args: { community: Address }) => Promise<Address>;
+    getXPNTsForCommunity: (args: { community: Address }) => Promise<Address>;
+    
+    // Paymaster Factory
+    deployPaymaster: (args: { owner: Address, account?: Account | Address }) => Promise<Hash>;
+    predictPaymasterAddress: (args: { owner: Address }) => Promise<Address>;
+    getPaymasterForOwner: (args: { owner: Address }) => Promise<Address>;
 };
 
 export const factoryActions = () => (client: PublicClient | WalletClient): FactoryActions => ({
-    async createXPNTs({ address, name, symbol, hub, domain, pool, account }) {
+    // xPNTs Factory
+    async createXPNTs({ name, symbol, community, account }) {
+        // Assuming xPNTsFactory address is known or passed separately
+        const factoryAddress = (client as any).xPNTsFactoryAddress;
         return (client as any).writeContract({
-            address,
+            address: factoryAddress,
             abi: xPNTsFactoryABI,
             functionName: 'createXPNTs',
-            args: [name, symbol, hub, domain, pool],
+            args: [name, symbol, community],
             account: account as any,
             chain: (client as any).chain
         });
     },
 
-    async setSuperPaymasterInFactory({ address, paymaster, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'setSuperPaymaster',
-            args: [paymaster],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async getXPNTsTokenAddress({ address, hub }) {
+    async predictXPNTsAddress({ community }) {
+        const factoryAddress = (client as any).xPNTsFactoryAddress;
         return (client as PublicClient).readContract({
-            address,
+            address: factoryAddress,
             abi: xPNTsFactoryABI,
-            functionName: 'getXPNTsToken',
-            args: [hub]
+            functionName: 'predictAddress',
+            args: [community]
+        }) as Promise<Address>;
+    },
+
+    async getXPNTsForCommunity({ community }) {
+        const factoryAddress = (client as any).xPNTsFactoryAddress;
+        return (client as PublicClient).readContract({
+            address: factoryAddress,
+            abi: xPNTsFactoryABI,
+            functionName: 'getTokenForCommunity',
+            args: [community]
+        }) as Promise<Address>;
+    },
+
+    // Paymaster Factory
+    async deployPaymaster({ owner, account }) {
+        const factoryAddress = (client as any).paymasterFactoryAddress;
+        return (client as any).writeContract({
+            address: factoryAddress,
+            abi: PaymasterFactoryABI,
+            functionName: 'deployPaymaster',
+            args: [owner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async predictPaymasterAddress({ owner }) {
+        const factoryAddress = (client as any).paymasterFactoryAddress;
+        return (client as PublicClient).readContract({
+            address: factoryAddress,
+            abi: PaymasterFactoryABI,
+            functionName: 'calculateAddress',
+            args: [owner]
+        }) as Promise<Address>;
+    },
+
+    async getPaymasterForOwner({ owner }) {
+        const factoryAddress = (client as any).paymasterFactoryAddress;
+        return (client as PublicClient).readContract({
+            address: factoryAddress,
+            abi: PaymasterFactoryABI,
+            functionName: 'getPaymaster',
+            args: [owner]
         }) as Promise<Address>;
     }
 });

@@ -3,19 +3,67 @@ import { RegistryABI } from '../abis/index.js';
 import type { RoleConfig } from '../roles.js';
 
 export type RegistryActions = {
+    // Role Management
     configureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
     registerRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
     registerRoleSelf: (args: { roleId: Hex, data: Hex, account?: Account | Address }) => Promise<Hash>;
     hasRole: (args: { user: Address, roleId: Hex }) => Promise<boolean>;
     unRegisterRole: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    getRoleConfig: (args: { roleId: Hex }) => Promise<any>;
+    setRoleLockDuration: (args: { roleId: Hex, duration: bigint, account?: Account | Address }) => Promise<Hash>;
+    setRoleOwner: (args: { roleId: Hex, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    // Community Management
+    communityToToken: (args: { community: Address }) => Promise<Address>;
+    getCommunityRoleData: (args: { community: Address }) => Promise<any>;
+    isCommunityMember: (args: { community: Address, user: Address }) => Promise<boolean>;
+    
+    // Credit & Reputation
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
     getGlobalReputation: (args: { user: Address }) => Promise<bigint>;
-    getRoleConfig: (args: { roleId: Hex }) => Promise<any>;
-    setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
+    setCreditTier: (args: { tier: bigint, params: any, account?: Account | Address }) => Promise<Hash>;
+    setLevelThreshold: (args: { level: bigint, threshold: bigint, account?: Account | Address }) => Promise<Hash>;
     batchUpdateGlobalReputation: (args: { users: Address[], scores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    
+    // Blacklist Management
+    updateOperatorBlacklist: (args: { operator: Address, isBlacklisted: boolean, account?: Account | Address }) => Promise<Hash>;
+    isOperatorBlacklisted: (args: { operator: Address }) => Promise<boolean>;
+    
+    // Contract References
+    setBLSValidator: (args: { validator: Address, account?: Account | Address }) => Promise<Hash>;
+    setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
+    setMySBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    setStaking: (args: { staking: Address, account?: Account | Address }) => Promise<Hash>;
+    setReputationSource: (args: { source: Address, account?: Account | Address }) => Promise<Hash>;
+    blsValidator: () => Promise<Address>;
+    blsAggregator: () => Promise<Address>;
+    mySBT: () => Promise<Address>;
+    superPaymaster: () => Promise<Address>;
+    staking: () => Promise<Address>;
+    reputationSource: () => Promise<Address>;
+    
+    // Admin
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    owner: () => Promise<Address>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    
+    // View Functions
+    roleConfigs: (args: { roleId: Hex }) => Promise<any>;
+    roleCounts: (args: { roleId: Hex }) => Promise<bigint>;
+    roleMembers: (args: { roleId: Hex, index: bigint }) => Promise<Address>;
+    userRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
+    userRoleCount: (args: { user: Address }) => Promise<bigint>;
+    globalReputation: (args: { user: Address }) => Promise<bigint>;
+    creditTiers: (args: { tier: bigint }) => Promise<any>;
+    levelThresholds: (args: { level: bigint }) => Promise<bigint>;
+    
+    // Version
+    version: () => Promise<string>;
 };
 
 export const registryActions = (address: Address) => (client: PublicClient | WalletClient): RegistryActions => ({
+    // Role Management
     async configureRole({ roleId, config, account }) {
         return (client as any).writeContract({
             address,
@@ -69,6 +117,66 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         });
     },
 
+    async getRoleConfig({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getRoleConfig',
+            args: [roleId]
+        });
+    },
+
+    async setRoleLockDuration({ roleId, duration, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setRoleLockDuration',
+            args: [roleId, duration],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setRoleOwner({ roleId, newOwner, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setRoleOwner',
+            args: [roleId, newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Community Management
+    async communityToToken({ community }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'communityToToken',
+            args: [community]
+        }) as Promise<Address>;
+    },
+
+    async getCommunityRoleData({ community }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getCommunityRoleData',
+            args: [community]
+        });
+    },
+
+    async isCommunityMember({ community, user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'isCommunityMember',
+            args: [community, user]
+        }) as Promise<boolean>;
+    },
+
+    // Credit & Reputation
     async getCreditLimit({ user }) {
         return (client as PublicClient).readContract({
             address,
@@ -87,21 +195,23 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }) as Promise<bigint>;
     },
 
-    async getRoleConfig({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getRoleConfig',
-            args: [roleId]
-        });
-    },
-
-    async setBLSAggregator({ aggregator, account }) {
+    async setCreditTier({ tier, params, account }) {
         return (client as any).writeContract({
             address,
             abi: RegistryABI,
-            functionName: 'setBLSAggregator',
-            args: [aggregator],
+            functionName: 'setCreditTier',
+            args: [tier, params],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setLevelThreshold({ level, threshold, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setLevelThreshold',
+            args: [level, threshold],
             account: account as any,
             chain: (client as any).chain
         });
@@ -116,5 +226,262 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    // Blacklist Management
+    async updateOperatorBlacklist({ operator, isBlacklisted, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'updateOperatorBlacklist',
+            args: [operator, isBlacklisted],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async isOperatorBlacklisted({ operator }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'isOperatorBlacklisted',
+            args: [operator]
+        }) as Promise<boolean>;
+    },
+
+    // Contract References
+    async setBLSValidator({ validator, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setBLSValidator',
+            args: [validator],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setBLSAggregator({ aggregator, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setBLSAggregator',
+            args: [aggregator],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setMySBT({ sbt, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setMySBT',
+            args: [sbt],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setSuperPaymaster({ paymaster, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setSuperPaymaster',
+            args: [paymaster],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setStaking({ staking, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setStaking',
+            args: [staking],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setReputationSource({ source, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'setReputationSource',
+            args: [source],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async blsValidator() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'blsValidator',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async blsAggregator() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'blsAggregator',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async mySBT() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'mySBT',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async superPaymaster() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'superPaymaster',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async staking() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'staking',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async reputationSource() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'reputationSource',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    // Admin
+    async transferOwnership({ newOwner, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'transferOwnership',
+            args: [newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async owner() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'owner',
+            args: []
+        }) as Promise<Address>;
+    },
+
+    async renounceOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'renounceOwnership',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // View Functions
+    async roleConfigs({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleConfigs',
+            args: [roleId]
+        });
+    },
+
+    async roleCounts({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleCounts',
+            args: [roleId]
+        }) as Promise<bigint>;
+    },
+
+    async roleMembers({ roleId, index }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'roleMembers',
+            args: [roleId, index]
+        }) as Promise<Address>;
+    },
+
+    async userRoles({ user, index }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'userRoles',
+            args: [user, index]
+        }) as Promise<Hex>;
+    },
+
+    async userRoleCount({ user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'userRoleCount',
+            args: [user]
+        }) as Promise<bigint>;
+    },
+
+    async globalReputation({ user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'globalReputation',
+            args: [user]
+        }) as Promise<bigint>;
+    },
+
+    async creditTiers({ tier }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'creditTiers',
+            args: [tier]
+        });
+    },
+
+    async levelThresholds({ level }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'levelThresholds',
+            args: [level]
+        }) as Promise<bigint>;
+    },
+
+    // Version
+    async version() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'version',
+            args: []
+        }) as Promise<string>;
     }
 });
