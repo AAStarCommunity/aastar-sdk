@@ -383,8 +383,8 @@ export function createCommunityClient({
 
         return {
             hasRole: true,
-            tokenAddress: tokenAddress !== '0x0000000000000000000000000000000000000000' ? tokenAddress : null,
-            communityData: tokenAddress !== '0x0000000000000000000000000000000000000000' ? communityData : null
+            tokenAddress: (tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000') ? tokenAddress : null,
+            communityData: (metadata && metadata !== '0x') ? communityData : null
         };
     } catch (error) {
             console.error('Error fetching community info:', error);

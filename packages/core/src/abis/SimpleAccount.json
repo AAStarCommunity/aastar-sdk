@@ -3,7 +3,7 @@
     "type": "constructor",
     "inputs": [
       {
-        "name": "anEntryPoint",
+        "name": "entryPoint",
         "type": "address",
         "internalType": "contract IEntryPoint"
       }

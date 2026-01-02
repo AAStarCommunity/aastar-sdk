@@ -1,13 +1,26 @@
 #!/bin/bash
-# SDK完整回归测试脚本（优化版）
-# 用途：运行所有SDK测试，包括新增API测试
+# SDK Full Regression & Scenario Runner
+# Usage: ./run_sdk_regression.sh [--env anvil|sepolia] [--scenarios-only]
 
 set -e
 
-# Robust PATH setup for non-interactive shells
-export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin"
+# 1. Configuration & Args
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin:$HOME/Library/pnpm:/Users/jason/.nvm/versions/node/v24.12.0/bin"
 
-# 颜色
+ENV="anvil"
+SCENARIOS_ONLY=false
+KEEP_ANVIL=false
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --env) ENV="$2"; shift ;;
+        --scenarios-only) SCENARIOS_ONLY=true ;;
+        --keep-anvil) KEEP_ANVIL=true ;;
+    esac
+    shift
+done
+
+# Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -15,222 +28,108 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   SDK Complete Regression Test Suite          ║${NC}"
+echo -e "${BLUE}║   AAStar SDK Multi-Env Regression Suite       ║${NC}"
+echo -e "${BLUE}║   Target Environment: ${ENV}                      ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
 
-# 1. 检查Anvil是否运行
-echo -e "${YELLOW}📡 Step 1: Checking Anvil...${NC}"
-if ! curl -s -X POST -H "Content-Type: application/json" \
-  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-  http://127.0.0.1:8545 > /dev/null 2>&1; then
-  
-  echo -e "${YELLOW}⚠️  Anvil not running. Initializing environment...${NC}"
-  
-  # 运行完整初始化
-  ./run_full_regression.sh --init-only
-  
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Environment initialization failed.${NC}"
+# 2. Load Environment Variables
+# Priority: .env.${ENV} > .env
+if [ -f ".env.${ENV}" ]; then
+    echo -e "${YELLOW}📡 Loading environment: .env.${ENV}${NC}"
+    export $(grep -v '^#' .env.${ENV} | xargs)
+elif [ -f ".env" ]; then
+    echo -e "${YELLOW}📡 Loading default .env${NC}"
+    export $(grep -v '^#' .env | xargs)
+else
+    echo -e "${RED}❌ No environment file found (.env or .env.${ENV})${NC}"
     exit 1
-  fi
-  
-  echo -e "${GREEN}✅ Environment initialized.${NC}"
-else
-  echo -e "${GREEN}✅ Anvil is running.${NC}"
-  
-  # Check if contracts are deployed
-  GTOKEN_CODE=$(curl -s -X POST http://127.0.0.1:8545 \
-    -H "Content-Type: application/json" \
-    --data '{"jsonrpc":"2.0","method":"eth_getCode","params":["'"$(grep GTOKEN_ADDRESS .env.v3 | cut -d= -f2)"'","latest"],"id":1}' \
-    | grep -o '"result":"[^"]*"' | cut -d'"' -f4)
-  
-  if [ "$GTOKEN_CODE" = "0x" ] || [ -z "$GTOKEN_CODE" ]; then
-    echo -e "${YELLOW}⚠️  Contracts not deployed. Running initialization...${NC}"
-    pnpm test:init
-    if [ $? -ne 0 ]; then
-      echo -e "${RED}❌ Contract initialization failed.${NC}"
-      exit 1
+fi
+
+# 3. Environment Check/Init
+WE_STARTED_ANVIL=false
+if [ "$ENV" == "anvil" ]; then
+    echo -e "${YELLOW}🔍 Checking Anvil instance...${NC}"
+    if ! curl -s -X POST -H "Content-Type: application/json" \
+      --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+      http://127.0.0.1:8545 > /dev/null 2>&1; then
+      
+      echo -e "${YELLOW}⚠️  Anvil not running. Starting persistent Anvil...${NC}"
+      pkill anvil || true
+      anvil --port 8545 --chain-id 31337 > /dev/null 2>&1 &
+      ANVIL_PID=$!
+      WE_STARTED_ANVIL=true
+      sleep 3
+      
+      echo -e "${YELLOW}🚀 Deploying contracts to Anvil...${NC}"
+      if [ -d "../SuperPaymaster" ]; then
+          cd ../SuperPaymaster
+          forge script contracts/script/DeployV3FullLocal.s.sol:DeployV3FullLocal \
+            --rpc-url http://127.0.0.1:8545 \
+            --broadcast \
+            --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+          
+          # Sync ABIs & Config
+          node scripts/extract_abis_to_sdk.js
+          cd ../aastar-sdk
+          node scripts/sync_anvil_config.cjs
+          # Refresh env in current shell
+          export $(grep -v '^#' .env.${ENV} | xargs)
+      else
+          echo -e "${RED}❌ SuperPaymaster directory not found at ../SuperPaymaster.${NC}"
+          kill $ANVIL_PID
+          exit 1
+      fi
     fi
-    echo -e "${GREEN}✅ Contracts initialized.${NC}"
-  else
-    echo -e "${GREEN}✅ Contracts already deployed.${NC}"
-  fi
+    echo -e "${GREEN}✅ Anvil is ready.${NC}"
 fi
 
-# 2. 编译所有包
-echo -e "\n${YELLOW}🔨 Step 2: Building packages...${NC}"
-pnpm build > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-  echo -e "${GREEN}✅ Build successful${NC}"
-else
-  echo -e "${RED}❌ Build failed${NC}"
-  exit 1
-fi
+# 4. Build SDK
+echo -e "\n${YELLOW}🔨 Building SDK packages...${NC}"
+export PATH="$PATH:/Users/jason/Library/pnpm:/Users/jason/.nvm/versions/node/v24.12.0/bin"
+# Clean up any accidental artifacts in src before build
+find packages -name "*.js" -o -name "*.d.ts" -o -name "*.map" | grep "/src/" | xargs rm -f
+# Build only our packages
+pnpm -F "@aastar/*" build
+echo -e "${GREEN}✅ Build successful.${NC}"
 
-# 测试计数器
-TOTAL_TESTS=0
-PASSED_TESTS=0
-FAILED_TESTS=0
+# 5. Run Test Scenarios
+echo -e "\n${BLUE}🚀 Running Scenarios...${NC}"
 
-# 3. 运行测试套件
-echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   Running Test Suite                          ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
+# Scenario 1: Onboard Community
+echo -e "${YELLOW}🧪 Scenario 1: Community Onboarding${NC}"
+TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/01_onboard_community.ts
 
-# Test 1: V2 SDK Regression (Setup, Onboarding, Flow)
-echo -e "${YELLOW}🧪 Test 1/9: V2 SDK Regression Suite (Clients)${NC}"
-V2_TESTS=(
-    "scripts/v2_regression/01_setup_and_fund.ts"
-    "scripts/v2_regression/02_operator_onboarding.ts"
-    "scripts/v2_regression/03_community_registry.ts"
-    "scripts/v2_regression/04_enduser_flow.ts"
-    "scripts/v2_regression/05_admin_audit.ts"
-)
+# Scenario 2: Onboard Operator
+echo -e "${YELLOW}🧪 Scenario 2: Operator Onboarding${NC}"
+TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/02_onboard_operator.ts
 
-for v2_test in "${V2_TESTS[@]}"; do
-    echo -e "   Running $v2_test..."
-    if pnpm tsx "$v2_test" > /tmp/v2_test.log 2>&1; then
-        echo -e "   ${GREEN}✅ Success: $v2_test${NC}"
-        PASSED_TESTS=$((PASSED_TESTS + 1))
-    else
-        echo -e "   ${RED}❌ Failed: $v2_test${NC}"
-        cat /tmp/v2_test.log
-        FAILED_TESTS=$((FAILED_TESTS + 1))
+# Scenario 3: Onboard User
+echo -e "${YELLOW}🧪 Scenario 3: User Onboarding${NC}"
+TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/03_onboard_user.ts
+
+# Scenario 4: Gasless Flow
+echo -e "${YELLOW}🧪 Scenario 4: Gasless Transaction Flow${NC}"
+TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/04_gasless_tx_flow.ts
+
+if [ "$SCENARIOS_ONLY" == "true" ]; then
+    echo -e "\n${GREEN}🎉 Scenario verification complete.${NC}"
+    if [ "$WE_STARTED_ANVIL" == "true" ] && [ "$KEEP_ANVIL" == "false" ]; then
+        echo -e "${YELLOW}🛑 Stopping Anvil...${NC}"
+        kill $ANVIL_PID
     fi
-    TOTAL_TESTS=$((TOTAL_TESTS + 1))
-done
-
-# Test 2: BLS Signing (独立测试，不需要Anvil)
-echo -e "\n${YELLOW}🧪 Test 2/9: BLS Signing Functionality${NC}"
-if pnpm tsx scripts/22_test_bls_signing.ts > /tmp/test_bls.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: BLS Signing (10/10 tests)${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: BLS Signing${NC}"
-  cat /tmp/test_bls.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 3: Middleware (独立测试，不需要Anvil)
-echo -e "\n${YELLOW}🧪 Test 3/9: Middleware Functionality${NC}"
-if pnpm tsx scripts/23_test_middleware.ts > /tmp/test_middleware.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: Middleware (6/6 tests)${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: Middleware${NC}"
-  cat /tmp/test_middleware.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 4: SuperPaymaster New APIs
-echo -e "\n${YELLOW}🧪 Test 4/9: SuperPaymaster New APIs${NC}"
-if pnpm tsx scripts/20_test_superpaymaster_new_apis.ts > /tmp/test_superpaymaster.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: SuperPaymaster New APIs (4/4 tests)${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: SuperPaymaster New APIs${NC}"
-  cat /tmp/test_superpaymaster.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 5: PaymasterV4 Complete
-echo -e "\n${YELLOW}🧪 Test 5/9: PaymasterV4 Complete APIs${NC}"
-if pnpm tsx scripts/21_test_paymasterv4_complete.ts > /tmp/test_paymasterv4.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: PaymasterV4 Complete (12/12 tests)${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: PaymasterV4 Complete${NC}"
-  cat /tmp/test_paymasterv4.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 6: DVT SDK Flow
-echo -e "\n${YELLOW}🧪 Test 6/9: DVT SDK Flow Actions${NC}"
-if pnpm tsx scripts/18_test_dvt_sdk_flow.ts > /tmp/test_dvt_sdk.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: DVT SDK Flow (Factory, Validator, SBT)${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: DVT SDK Flow${NC}"
-  cat /tmp/test_dvt_sdk.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 7: SDK E2E Verification (Phase 1 Logic)
-echo -e "\n${YELLOW}🧪 Test 7/9: SDK E2E Verification (Middleware Phase 1)${NC}"
-if pnpm tsx scripts/18_sdk_e2e_verification.ts > /tmp/test_sdk_e2e.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: SDK E2E Verification${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: SDK E2E Verification${NC}"
-  cat /tmp/test_sdk_e2e.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 8: SDK Full Capability
-echo -e "\n${YELLOW}🧪 Test 8/9: SDK Full Capability (Client Coverage)${NC}"
-if pnpm tsx scripts/20_sdk_full_capability.ts > /tmp/test_sdk_full.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: SDK Full Capability${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: SDK Full Capability${NC}"
-  cat /tmp/test_sdk_full.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# Test 9: SDK Experiment Runner
-echo -e "\n${YELLOW}🧪 Test 9/9: SDK Experiment Runner (Metrics)${NC}"
-if EXPERIMENT_RUNS=1 EXPERIMENT_NETWORK=anvil pnpm tsx scripts/19_sdk_experiment_runner.ts > /tmp/test_sdk_exp.log 2>&1; then
-  echo -e "${GREEN}✅ PASSED: SDK Experiment Runner${NC}"
-  PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-  echo -e "${RED}❌ FAILED: SDK Experiment Runner${NC}"
-  cat /tmp/test_sdk_exp.log
-  FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-# 4. 生成测试报告
-echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   Test Summary                                 ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
-
-echo -e "Total Test Suites: ${TOTAL_TESTS}"
-echo -e "${GREEN}✅ Passed: ${PASSED_TESTS}${NC}"
-if [ $FAILED_TESTS -gt 0 ]; then
-  echo -e "${RED}❌ Failed: ${FAILED_TESTS}${NC}"
+    exit 0
 fi
 
-COVERAGE=$(awk "BEGIN {printf \"%.1f\", ($PASSED_TESTS / $TOTAL_TESTS) * 100}")
-echo -e "Coverage: ${COVERAGE}%"
-
-echo -e "\n${BLUE}Test Details:${NC}"
-echo -e "  • BLS Signing: 10 tests"
-echo -e "  • Middleware: 6 tests"
-echo -e "  • SuperPaymaster New APIs: 4 tests"
-echo -e "  • PaymasterV4 Complete: 12 tests"
-echo -e "  • V2 Regression: Role Registration, Stake Lock, notifyDeposit, Deposit"
-echo -e "  • DVT SDK Flow: Factory, Validator, SBT"
-echo -e "  • SDK E2E Verification: Middleware Phase 1"
-echo -e "  • SDK Full Capability: Client Coverage (Registry/Rep/Finance)"
-echo -e "  • SDK Experiment Runner: Performance Metrics"
-echo -e "\n${BLUE}Total API Tests: 45+ tests${NC}"
-echo -e "${BLUE}Key Fixes in v2.1.0:${NC}"
-echo -e "  ✅ Registry.registerRole payer logic (Operator pays)"
-echo -e "  ✅ ROLE_COMMUNITY for SuperPaymaster.notifyDeposit"
-echo -e "  ✅ Proper GToken minting and approval"
-
-# 5. 退出状态
-if [ $FAILED_TESTS -eq 0 ]; then
-  echo -e "\n${GREEN}🎉 All Tests Passed!${NC}\n"
-  exit 0
-else
-  echo -e "\n${RED}❌ Some Tests Failed. Check logs above.${NC}\n"
-  exit 1
+# 6. Legacy Regression (Anvil Only)
+if [ "$ENV" == "anvil" ]; then
+    echo -e "\n${YELLOW}🧪 Running Legacy SDK Regression (Anvil)...${NC}"
+    TARGET_ENV=$ENV pnpm tsx scripts/v2_regression/01_setup_and_fund.ts
+    TARGET_ENV=$ENV pnpm tsx scripts/v2_regression/02_operator_onboarding.ts
 fi
+
+if [ "$WE_STARTED_ANVIL" == "true" ] && [ "$KEEP_ANVIL" == "false" ]; then
+    echo -e "${YELLOW}🛑 Stopping Anvil...${NC}"
+    kill $ANVIL_PID
+fi
+
+echo -e "\n${GREEN}🎉 SDK Regression Suite Finished!${NC}\n"

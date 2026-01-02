@@ -12,17 +12,17 @@ import { type Address } from 'viem';
  * Core System Addresses
  */
 export const CORE_ADDRESSES = {
-  registry: process.env.REGISTRY_ADDRESS as Address,
-  gToken: process.env.GTOKEN_ADDRESS as Address,
-  gTokenStaking: process.env.GTOKENSTAKING_ADDRESS as Address,
-  superPaymaster: process.env.SUPER_PAYMASTER as Address,
-  paymasterFactory: process.env.PAYMASTER_FACTORY_ADDRESS as Address,
-  aPNTs: process.env.APNTS_ADDRESS as Address,
-  mySBT: process.env.MYSBT_ADDRESS as Address,
-  paymasterV4: process.env.PAYMASTER_ADDRESS as Address,
-  dvtValidator: process.env.DVT_VALIDATOR_ADDR as Address,
-  entryPoint: process.env.ENTRY_POINT_ADDR as Address,
-  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address,
+  registry: (process.env.REGISTRY_ADDRESS || process.env.REGISTRY) as Address,
+  gToken: (process.env.GTOKEN_ADDRESS || process.env.GTOKEN) as Address,
+  gTokenStaking: (process.env.STAKING_ADDRESS || process.env.GTOKENSTAKING_ADDRESS) as Address,
+  superPaymaster: (process.env.PAYMASTER_SUPER || process.env.SUPER_PAYMASTER) as Address,
+  paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || process.env.PAYMASTER_FACTORY) as Address,
+  aPNTs: (process.env.APNTS_TOKEN_ADDRESS || process.env.APNTS_ADDRESS) as Address,
+  mySBT: (process.env.MYSBT_ADDRESS || process.env.SBT) as Address,
+  paymasterV4: (process.env.PAYMASTER_V4_PROXY || process.env.PAYMASTER_ADDRESS) as Address,
+  dvtValidator: (process.env.DVT_VALIDATOR_ADDR || process.env.DVT_VALIDATOR) as Address,
+  entryPoint: (process.env.ENTRY_POINT_ADDR || process.env.ENTRY_POINT) as Address,
+  xPNTsFactory: (process.env.XPNTS_FACTORY || process.env.XPNTS_FACTORY_ADDRESS) as Address,
 } as const;
 
 /**

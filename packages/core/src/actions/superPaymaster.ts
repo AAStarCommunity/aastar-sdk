@@ -10,6 +10,10 @@ export type SuperPaymasterActions = {
     getETHDeposit: () => Promise<bigint>;
     getOperatorInfo: (args: { operator: Address }) => Promise<any>;
     getAvailableCredit: (args: { user: Address, token: Address }) => Promise<bigint>;
+    configureOperator: (args: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) => Promise<Hash>;
+    setAPNTsToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    setAPNTSPrice: (args: { price: bigint, account?: Account | Address }) => Promise<Hash>;
+    setProtocolFee: (args: { feeBps: bigint, account?: Account | Address }) => Promise<Hash>;
     setXPNTsFactory: (args: { factory: Address, account?: Account | Address }) => Promise<Hash>;
     getXPNTsFactory: () => Promise<Address>;
 };
@@ -38,12 +42,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
     },
 
     async requestSponsorship({ userOp, operator, account }) {
-        // This is likely off-chain or a signature request, but if it's on-chain (e.g. self-sponsorship or something):
-        // Actually requestSponsorship usually involves signing.
-        // For regression script, if we need it, we implement it.
-        // Assuming it's a write for now or just a placeholder if not used in regression.
-        // But to satisfy types:
-        throw new Error("requestSponsorship Not Implemented fully for regression");
+        throw new Error("requestSponsorship involves off-chain signature or bundler interaction. Use EndUserClient.executeGasless for full flow.");
     },
 
     async depositETH({ value, account }) {
@@ -96,6 +95,50 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         }) as Promise<bigint>;
     },
 
+    async configureOperator({ xPNTsToken, treasury, exchangeRate, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'configureOperator',
+            args: [xPNTsToken, treasury, exchangeRate],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setAPNTsToken({ token, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setAPNTsToken',
+            args: [token],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setAPNTSPrice({ price, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setAPNTSPrice',
+            args: [price],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setProtocolFee({ feeBps, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'setProtocolFee',
+            args: [feeBps],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
     async setXPNTsFactory({ factory, account }) {
         return (client as any).writeContract({
             address,
@@ -111,7 +154,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         return (client as any).readContract({
             address,
             abi: SuperPaymasterABI,
-            functionName: 'xpntsFactory' // Note: lowercase 'x' - Solidity public variable auto-generates getter
+            functionName: 'xpntsFactory'
         }) as Promise<Address>;
     }
 });

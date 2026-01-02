@@ -13,7 +13,8 @@ import {
     type SuperPaymasterActions,
     type PaymasterV4Actions,
     CORE_ADDRESSES,
-    TEST_TOKEN_ADDRESSES
+    TEST_TOKEN_ADDRESSES,
+    TEST_ACCOUNT_ADDRESSES
 } from '@aastar/core';
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
@@ -34,7 +35,7 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
     onboardOperator: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<Hash[]>;
     /** @deprecated Use onboardOperator */
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
-    configureOperator: (args: { xPNTs: Address, treasury: Address, rate: bigint }) => Promise<Hash>
+    configureOperator: (args: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) => Promise<Hash>
     getOperatorStatus: (accountAddress: Address) => Promise<{
         type: 'super' | 'v4' | null;
         superPaymaster: {
@@ -71,13 +72,18 @@ export function createOperatorClient({
     .extend(publicActions)
     .extend(walletActions);
 
-    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...addresses };
+    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...addresses };
+
+    const spActions = superPaymasterActions(usedAddresses.superPaymaster)(client as any);
+    const regActions = registryActions(usedAddresses.registry)(client as any);
+    const stkActions = stakingActions(usedAddresses.gTokenStaking)(client as any);
+    const pmV4Actions = paymasterV4Actions()(client as any);
 
     const actions = {
-        ...stakingActions(usedAddresses.gTokenStaking)(client as any),
-        ...superPaymasterActions(usedAddresses.superPaymaster)(client as any),
-        ...paymasterV4Actions()(client as any),
-        ...registryActions(usedAddresses.registry)(client as any),
+        ...stkActions,
+        ...spActions,
+        ...pmV4Actions,
+        ...regActions,
 
         async setup(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             console.log('⚙️ Setting up operator...');
@@ -107,6 +113,7 @@ export function createOperatorClient({
         async _onboardOperator({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             const txs: Hash[] = [];
             const accountToUse = account; 
+            if (!accountToUse) throw new Error("Account required for onboarding");
 
             try {
                 // 1. Fetch Entry Burn & Approve GToken
@@ -172,13 +179,12 @@ export function createOperatorClient({
                 }
 
                 if (depositAmount > 0n) {
-                    console.log('   SDK: Depositing aPNTs via transferAndCall...');
-                    const erc1363Abi = parseAbi(['function transferAndCall(address to, uint256 value) external returns (bool)']);
+                    console.log('   SDK: Depositing aPNTs via depositFor...');
                     const depositTx = await (client as any).writeContract({
-                        address: usedAddresses.aPNTs!,
-                        abi: erc1363Abi,
-                        functionName: 'transferAndCall',
-                        args: [usedAddresses.superPaymaster, depositAmount],
+                        address: usedAddresses.superPaymaster,
+                        abi: parseAbi(['function depositFor(address targetOperator, uint256 amount) external']),
+                        functionName: 'depositFor',
+                        args: [accountToUse.address, depositAmount],
                         account: accountToUse,
                         chain
                     });
@@ -195,15 +201,12 @@ export function createOperatorClient({
         async onboardToSuperPaymaster(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) {
             return this.onboardOperator(args);
         },
-        async configureOperator({ xPNTs, treasury, rate }: { xPNTs: Address, treasury: Address, rate: bigint }) {
-            const configAbi = parseAbi(['function configureOperator(address xPNTsToken, address _opTreasury, uint256 exchangeRate) external']);
-            const tx = await (client as any).writeContract({
-                address: usedAddresses.superPaymaster,
-                abi: configAbi,
-                functionName: 'configureOperator',
-                args: [xPNTs, treasury, rate],
-                account,
-                chain
+        async configureOperator({ xPNTsToken, treasury, exchangeRate, account: accountOverride }: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) {
+            const tx = await spActions.configureOperator({ 
+                xPNTsToken, 
+                treasury, 
+                exchangeRate,
+                account: accountOverride || account
             });
             await (client as any).waitForTransactionReceipt({ hash: tx });
             return tx;

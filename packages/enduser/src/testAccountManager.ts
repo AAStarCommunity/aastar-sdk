@@ -241,8 +241,57 @@ export class TestAccountManager {
      */
     static getTestAccount(label: string): TestAccount | null {
         const accounts = TestAccountManager.loadFromEnv([label]);
-        return accounts[0];
+        return accounts[0] || null;
     }
+
+    // --- Data Collection Extensions ---
+    private records: any[] = [];
+
+    /**
+     * Add a standardized experiment record
+     */
+    addExperimentRecord(record: {
+        scenario: string,
+        group: 'EOA' | 'AA' | 'SuperPaymaster',
+        txHash: string,
+        gasUsed: bigint,
+        gasPrice: bigint,
+        status: string,
+        meta?: any
+    }) {
+        const fullRecord = {
+            ...record,
+            id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            timestamp: Date.now(),
+            costETH: formatEther(record.gasUsed * record.gasPrice)
+        };
+        this.records.push(fullRecord);
+        return fullRecord;
+    }
+
+    /**
+     * Export collected data to CSV for PhD paper analysis
+     */
+    exportExperimentResults(filename: string = 'sdk_experiment_data.csv') {
+        const fs = require('fs');
+        const path = require('path');
+        
+        const headers = ['ID', 'Scenario', 'Group', 'TxHash', 'GasUsed', 'GasPrice', 'CostETH', 'Status', 'Timestamp', 'Latency'];
+        const rows = this.records.map(r => [
+            r.id, r.scenario, r.group, r.txHash, 
+            r.gasUsed.toString(), r.gasPrice.toString(), r.costETH, 
+            r.status, new Date(r.timestamp).toISOString(),
+            r.meta?.latency || ''
+        ].join(','));
+        
+        const csv = [headers.join(','), ...rows].join('\n');
+        fs.writeFileSync(path.join(process.cwd(), filename), csv);
+        console.log(`📊 Exported ${this.records.length} records to ${filename}`);
+    }
+}
+
+function formatEther(wei: bigint): string {
+    return (Number(wei) / 1e18).toString();
 }
 
 /**
