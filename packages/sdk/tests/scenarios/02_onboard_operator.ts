@@ -2,6 +2,7 @@ import { getTestSetup } from './setup.js';
 import { http, keccak256, stringToBytes, parseEther, parseAbi } from 'viem';
 import { CORE_ADDRESSES } from '@aastar/core';
 import { createOperatorClient } from '../../src/clients/operator.js';
+import { RegistryABI, RoleIds } from '../../src/index.js';
 
 async function main() {
     const { account, chain, rpcUrl } = await getTestSetup();
@@ -15,13 +16,31 @@ async function main() {
         account
     });
 
-    // 1. Check current status
+    // 1. Directly check role using Registry
     console.log("\n1. Checking existing operator status...");
-    const status = await operatorClient.getOperatorStatus(account.address);
     
-    if (status.type === 'super' && status.superPaymaster?.isConfigured) {
+    const registryAddress = process.env.REGISTRY_ADDRESS || process.env.REGISTRY;
+    if (!registryAddress) {
+        throw new Error('REGISTRY_ADDRESS not found in environment');
+    }
+    
+    const hasRole = await operatorClient.readContract({
+        address: registryAddress as `0x${string}`,
+        abi: RegistryABI,
+        functionName: 'hasRole',
+        args: [RoleIds.PAYMASTER_SUPER, account.address]
+    });
+    
+    if (hasRole) {
         console.log(`   ✅ Already configured as SuperPaymaster Operator`);
-        console.log(`   💰 Balance: ${status.superPaymaster.balance} aPNTs`);
+        
+        // Get balance if available
+        try {
+            const status = await operatorClient.getOperatorStatus(account.address);
+            console.log(`   💰 Balance: ${status.superPaymaster?.balance || 0} aPNTs`);
+        } catch (e) {
+            console.log(`   💰 Balance: (Unable to fetch)`);
+        }
     } else {
         console.log("   ℹ️  Not onboarded or configured. Starting onboarding...");
         
@@ -32,7 +51,7 @@ async function main() {
         console.log(`   📍 SuperPaymaster Address: ${spAddress}`);
 
         if (!aPNTsAddress) {
-            throw new Error("aPNTs Address is undefined. Check your .env.anvil or CORE_ADDRESSES configuration.");
+            throw new Error("aPNTs Address is undefined. Check your .env or CORE_ADDRESSES configuration.");
         }
         
         // Mint aPNTs (we are communityOwner of aPNTs in Anvil setup)
