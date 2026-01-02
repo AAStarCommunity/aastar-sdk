@@ -97,6 +97,20 @@ export class UserClient extends BaseClient {
         });
     }
 
+    /**
+     * Self-mint SBT for a role (user self-service)
+     */
+    async mintSBT(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
+        if (!this.sbtAddress) throw new Error('SBT address required');
+        const sbt = sbtActions(this.sbtAddress);
+        
+        return sbt(this.client).mintForRole({
+            roleId,
+            to: this.accountAddress,
+            account: options?.account
+        });
+    }
+
     // ========================================
     // 3. 资产管理 (基于 L1 tokenActions)
     // ========================================

@@ -1,0 +1,63 @@
+#!/usr/bin/env ts-node
+import { loadNetworkConfig, validateConfig, type NetworkName } from './config';
+import { testL1Actions } from './l1-tests';
+import { testL2Clients } from './l2-tests';
+import { testL3Patterns } from './l3-tests';
+
+/**
+ * SDK Regression Test Runner
+ * 
+ * Usage:
+ *   pnpm test:regression --network=sepolia
+ *   pnpm test:regression --network=anvil
+ *   pnpm test:regression --network=op-sepolia
+ */
+
+async function main() {
+    // Parse CLI args
+    const args = process.argv.slice(2);
+    const networkArg = args.find(arg => arg.startsWith('--network='));
+    
+    if (!networkArg) {
+        console.error('❌ Missing --network argument');
+        console.log('\nUsage: pnpm test:regression --network=<network>');
+        console.log('Networks: anvil, sepolia, op-sepolia, op-mainnet, mainnet');
+        process.exit(1);
+    }
+
+    const network = networkArg.split('=')[1] as NetworkName;
+    const validNetworks: NetworkName[] = ['anvil', 'sepolia', 'op-sepolia', 'op-mainnet', 'mainnet'];
+    
+    if (!validNetworks.includes(network)) {
+        console.error(`❌ Invalid network: ${network}`);
+        console.log(`Valid networks: ${validNetworks.join(', ')}`);
+        process.exit(1);
+    }
+
+    console.log('═══════════════════════════════════════════════');
+    console.log('🧪 AAStar SDK Regression Test Suite');
+    console.log('═══════════════════════════════════════════════\n');
+
+    // Load config
+    const config = loadNetworkConfig(network);
+    validateConfig(config);
+
+    console.log('\n═══════════════════════════════════════════════');
+    console.log('Starting Test Suite...');
+    console.log('═══════════════════════════════════════════════');
+
+    // Run tests
+    await testL1Actions(config);
+    await testL2Clients(config);
+    await testL3Patterns(config);
+
+    console.log('═══════════════════════════════════════════════');
+    console.log('✅ Test Suite Complete');
+    console.log('═══════════════════════════════════════════════\n');
+}
+
+main().catch((error) => {
+    console.error('\n❌ Test Suite Failed:');
+    console.error(error);
+    process.exit(1);
+});
