@@ -1,6 +1,15 @@
 # SDK 合约与 API 覆盖情况完整总结
 
-## 📋 完整的 25 个合约清单
+## � L2 Client Capability Matrix (New)
+
+| Client | Role | Coverage | Key Features Added |
+| :--- | :--- | :--- | :--- |
+| **`UserClient`** | End User | ✅ **95%** | Staking (`stakeForRole`), Lifecycle (`exitRole`, `leaveCommunity`) |
+| **`CommunityClient`** | Community Manager | ✅ **90%** | SBT Revocation (`revokeMembership`), Token Transfer |
+| **`PaymasterOperatorClient`** | Paymaster Operator | ✅ **95%** | Gas Tokens (`addGasToken`), Config (`configureOperator`) |
+| **`ProtocolClient`** | Protocol Admin | ✅ **90%** | Global Params (`setProtocolFee`, `setTreasury`) |
+
+## �📋 完整的 25 个合约清单
 
 ### 核心业务合约 (6个)
 | # | 合约 | 函数数 | SDK Actions | 覆盖率 | 优先级 |
@@ -83,26 +92,33 @@
 
 ---
 
-## 🎯 实际使用场景覆盖
+## 🎯 Actual Usage Scenario Coverage (Updated)
 
-### ✅ 社区管理员场景 (95% 覆盖)
-- ✅ 启动社区 (Registry.registerRole)
-- ✅ 发行代币 (xPNTsFactory.createXPNTs)
-- ✅ 配置运营商 (SuperPaymaster.configureOperator)
-- ✅ 管理信誉 (Registry.batchUpdateGlobalReputation)
-- ✅ 管理 SBT (MySBT.airdropMint)
+### ✅ User Scenarios (95%)
+- **Basic:** Transfer, Account Info ✅
+- **Identity:** Check SBT, Join Community (via Airdrop) ✅
+- **Staking:** Stake to Operator, Unstake, Check Rewards ✅ **(Added in v0.14.3)**
+- **Lifecycle:** Leave Community, Exit Role ✅ **(Added in v0.14.3)**
 
-### ✅ 社区用户场景 (90% 覆盖)
-- ✅ 创建 AA 账户 (SimpleAccountFactory.createAccount)
-- ✅ 加入社区 (Registry.registerRoleSelf)
-- ✅ 提交 Gasless 交易 (SuperPaymaster.validatePaymasterUserOp)
-- ✅ 获取 SBT (MySBT.getUserSBT)
-- ⏭️ 查询信用额度 (Registry.getCreditLimit) - 已有但需测试
+### ✅ Community Scenarios (90%)
+- **Setup:** Create Token, Register ✅
+- **Growth:** Airdrop SBT ✅
+- **Governance:** Set Reputation Rules ✅
+- **Management:** Revoke Membership, Transfer Token Ownership ✅ **(Added in v0.14.3)**
 
-### ⚠️ 未完全覆盖的功能
-- ReputationSystem (5%) - 大部分通过 Registry 间接调用
-- PaymasterV4 ERC20 支付 (42%) - 基础功能够用
-- BLS 聚合签名 (17%) - 高级功能，低频使用
+### ✅ Operator Scenarios (95%)
+- **Funds:** Deposit, Withdraw ✅
+- **Staking:** Stake (Register), Unstake ✅
+- **Configuration:** Set Gas Tokens, Configure Global Params ✅ **(Added in v0.14.3)**
+
+### ✅ Protocol Scenarios (90%)
+- **Governance:** Create Proposal, Vote ✅
+- **Infra:** Register BLS Key ✅
+- **Admin:** Set Protocol Fee, Set Treasury ✅ **(Added in v0.14.3)**
+
+### ⚠️ Remaining Gaps
+- **Advanced:** BLS multi-signature aggregation (low priority)
+- **Edge Cases:** Force-exit of stuck roles (handled by Protocol Admin via slash)
 
 ---
 

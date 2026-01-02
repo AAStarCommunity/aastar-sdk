@@ -1,24 +1,30 @@
 import { type Address, type Hash, type Hex } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
-import { accountActions, sbtActions, tokenActions, entryPointActions } from '@aastar/core';
+import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions } from '@aastar/core';
 
 export interface UserClientConfig extends ClientConfig {
     accountAddress: Address; // The AA account address
     sbtAddress?: Address;
     entryPointAddress?: Address;
     superPaymasterAddress?: Address; // For sponsorship queries
+    gTokenStakingAddress?: Address; // For staking/investing
+    registryAddress?: Address; // For role management
 }
 
 export class UserClient extends BaseClient {
     public accountAddress: Address;
     public sbtAddress?: Address;
     public entryPointAddress?: Address;
+    public gTokenStakingAddress?: Address;
+    public registryAddress?: Address;
 
     constructor(config: UserClientConfig) {
         super(config);
         this.accountAddress = config.accountAddress;
         this.sbtAddress = config.sbtAddress;
         this.entryPointAddress = config.entryPointAddress;
+        this.gTokenStakingAddress = config.gTokenStakingAddress;
+        this.registryAddress = config.registryAddress;
     }
 
     // ========================================
@@ -118,6 +124,84 @@ export class UserClient extends BaseClient {
         return tokens.balanceOf({
             token,
             account: this.accountAddress
+        });
+    }
+
+    // ========================================
+    // 4. 委托与质押 (Delegation & Staking)
+    // ========================================
+
+    /**
+     * Delegate stake to a role (Delegate to an operator/community)
+     */
+    async stakeForRole(roleId: Hex, amount: bigint, options?: TransactionOptions): Promise<Hash> {
+        if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required');
+        const staking = stakingActions(this.gTokenStakingAddress);
+        
+        return staking(this.client).lockStake({
+            user: this.accountAddress, // The delegator (self)
+            roleId,
+            stakeAmount: amount,
+            entryBurn: 0n, // Default 0 burn
+            payer: this.accountAddress, // Self pay
+            account: options?.account
+        });
+    }
+
+    /**
+     * Unstake from a role
+     */
+    async unstakeFromRole(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
+        if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required');
+        const staking = stakingActions(this.gTokenStakingAddress);
+        
+        return staking(this.client).unlockAndTransfer({
+            user: this.accountAddress,
+            roleId,
+            account: options?.account
+        });
+    }
+
+    /**
+     * Get staked balance for a specific role
+     */
+    async getStakedBalance(roleId: Hex): Promise<bigint> {
+        if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required');
+        const staking = stakingActions(this.gTokenStakingAddress);
+        
+        return staking(this.getStartPublicClient()).getLockedStake({
+            user: this.accountAddress,
+            roleId
+        });
+    }
+
+    // ========================================
+    // 5. 生命周期管理 (Lifecycle)
+    // ========================================
+
+    /**
+     * Exit a specific role (Cleanup registry status)
+     */
+    async exitRole(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
+        if (!this.registryAddress) throw new Error('Registry address required');
+        const registry = registryActions(this.registryAddress);
+        
+        return registry(this.client).exitRole({
+            roleId,
+            account: options?.account
+        });
+    }
+
+    /**
+     * Leave a community (Burn SBT and clean up)
+     */
+    async leaveCommunity(community: Address, options?: TransactionOptions): Promise<Hash> {
+        if (!this.sbtAddress) throw new Error('SBT address required');
+        const sbt = sbtActions(this.sbtAddress);
+        
+        return sbt(this.client).leaveCommunity({
+            community,
+            account: options?.account
         });
     }
 }

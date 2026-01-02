@@ -121,4 +121,36 @@ export class CommunityClient extends BaseClient {
             account: options?.account
         });
     }
+
+    // ========================================
+    // 4. 管理功能
+    // ========================================
+
+    /**
+     * Revoke membership (Burn SBT)
+     */
+    async revokeMembership(tokenId: bigint, options?: TransactionOptions): Promise<Hash> {
+        if (!this.sbtAddress) throw new Error('SBT address required');
+        const sbt = sbtActions(this.sbtAddress);
+        
+        // Use burn or deactivateMembership depending on logic.
+        // burnSBT is likely the admin action
+        return sbt(this.client).burnSBT({
+            tokenId,
+            account: options?.account
+        });
+    }
+
+    /**
+     * Transfer ownership of the Community Token
+     */
+    async transferCommunityTokenOwnership(tokenAddress: Address, newOwner: Address, options?: TransactionOptions): Promise<Hash> {
+        const token = tokenActions()(this.client);
+        
+        return token.transferOwnership({
+            token: tokenAddress,
+            newOwner,
+            account: options?.account
+        });
+    }
 }

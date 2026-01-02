@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
-import { superPaymasterActions, tokenActions } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterV4Actions } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -69,6 +69,29 @@ export class PaymasterOperatorClient extends BaseClient {
         return { deposit };
     }
 
+    /**
+     * Stake ETH/Funds to register as a SuperPaymaster Operator
+     */
+    async stake(amount: bigint, options?: TransactionOptions): Promise<Hash> {
+        const pm = superPaymasterActions(this.superPaymasterAddress);
+        
+        return pm(this.client).addSuperStake({
+            amount,
+            account: options?.account
+        });
+    }
+
+    /**
+     * Unstake funds (initiates withdrawal delay)
+     */
+    async unstake(options?: TransactionOptions): Promise<Hash> {
+        const pm = superPaymasterActions(this.superPaymasterAddress);
+        
+        return pm(this.client).unlockSuperStake({
+            account: options?.account
+        });
+    }
+
     // ========================================
     // 2. 运营配置
     // ========================================
@@ -77,13 +100,63 @@ export class PaymasterOperatorClient extends BaseClient {
      * Check if address is a valid operator
      */
     async isOperator(operator: Address): Promise<boolean> {
-        // This might need Registry check or PM check depending on architecture
-        // PMv3 usually checks Registry roles?
-        // Or internal whitelist.
-        // Assuming PM has internal operator management or uses Registry.
         const pm = superPaymasterActions(this.superPaymasterAddress);
-        // Checking price map or something? 
-        // Let's assume verifying if they can sponsor.
-        return true; // Placeholder logic
+        try {
+            const opData = await pm(this.getStartPublicClient()).operators({ operator });
+            return opData && opData.length > 0; // Assuming struct return
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Configure Operator parameters (Token, Treasury, Exchange Rate)
+     */
+    async configureOperator(xPNTsToken: Address, treasury: Address, exchangeRate: bigint, options?: TransactionOptions): Promise<Hash> {
+        const pm = superPaymasterActions(this.superPaymasterAddress);
+        
+        return pm(this.client).configureOperator({
+            xPNTsToken,
+            treasury,
+            exchangeRate,
+            account: options?.account
+        });
+    }
+
+    // ========================================
+    // 3. 支付代币管理 (基于 PaymasterV4Actions)
+    // ========================================
+
+    /**
+     * Add a supported Gas Token
+     */
+    async addGasToken(token: Address, priceFeed: Address, options?: TransactionOptions): Promise<Hash> {
+        const pm = paymasterV4Actions(this.superPaymasterAddress);
+        
+        return pm(this.client).addGasToken({
+            token,
+            priceFeed,
+            account: options?.account
+        });
+    }
+
+    /**
+     * Remove a Gas Token
+     */
+    async removeGasToken(token: Address, options?: TransactionOptions): Promise<Hash> {
+        const pm = paymasterV4Actions(this.superPaymasterAddress);
+        
+        return pm(this.client).removeGasToken({
+            token,
+            account: options?.account
+        });
+    }
+
+    /**
+     * Get list of supported Gas Tokens
+     */
+    async getSupportedGasTokens(): Promise<Address[]> {
+        const pm = paymasterV4Actions(this.superPaymasterAddress);
+        return pm(this.getStartPublicClient()).getSupportedGasTokens();
     }
 }
