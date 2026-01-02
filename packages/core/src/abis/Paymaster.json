@@ -1,7 +1,13 @@
 [
   {
     "type": "constructor",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "_registry",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
@@ -301,11 +307,6 @@
       },
       {
         "name": "_initialGasToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_registry",
         "type": "address",
         "internalType": "address"
       }
@@ -1110,7 +1111,7 @@
   },
   {
     "type": "error",
-    "name": "PaymasterV4_1i__RegistryNotSet",
+    "name": "PaymasterV4_1__RegistryNotSet",
     "inputs": []
   },
   {
