@@ -1,0 +1,20 @@
+{
+  "name": "@aastar/patterns",
+  "version": "0.1.0",
+  "description": "L3 Scenario Patterns for AAStar SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aastar/core": "workspace:*",
+    "@aastar/enduser": "workspace:*",
+    "@aastar/operator": "workspace:*",
+    "viem": "2.43.3"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
+}

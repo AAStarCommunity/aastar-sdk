@@ -186,6 +186,25 @@ importers:
         specifier: 5.7.2
         version: 5.7.2
 
+  packages/patterns:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      '@aastar/enduser':
+        specifier: workspace:*
+        version: link:../enduser
+      '@aastar/operator':
+        specifier: workspace:*
+        version: link:../operator
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+
   packages/paymaster:
     dependencies:
       '@aastar/core':
