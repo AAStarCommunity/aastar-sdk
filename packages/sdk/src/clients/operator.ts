@@ -77,7 +77,7 @@ export function createOperatorClient({
     const spActions = superPaymasterActions(usedAddresses.superPaymaster)(client as any);
     const regActions = registryActions(usedAddresses.registry)(client as any);
     const stkActions = stakingActions(usedAddresses.gTokenStaking)(client as any);
-    const pmV4Actions = paymasterV4Actions()(client as any);
+    const pmV4Actions = paymasterV4Actions(usedAddresses.paymasterV4)(client as any);
 
     const actions = {
         ...stkActions,

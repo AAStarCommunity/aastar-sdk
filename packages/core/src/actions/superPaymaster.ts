@@ -6,8 +6,8 @@ export type SuperPaymasterActions = {
     deposit: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     depositFor: (args: { operator: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    addStake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    unlockStake: (args: { account?: Account | Address }) => Promise<Hash>;
+    addSuperStake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    unlockSuperStake: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawStake: (args: { to: Address, account?: Account | Address }) => Promise<Hash>;
    
     // Operator Management
@@ -129,7 +129,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         });
     },
 
-    async addStake({ amount, account }) {
+    async addSuperStake({ amount, account }) {
         return (client as any).writeContract({
             address,
             abi: SuperPaymasterABI,
@@ -140,7 +140,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         });
     },
 
-    async unlockStake({ account }) {
+    async unlockSuperStake({ account }) {
         return (client as any).writeContract({
             address,
             abi: SuperPaymasterABI,

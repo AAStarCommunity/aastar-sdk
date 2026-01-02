@@ -21,7 +21,7 @@ export function useCreditScore({ chain, rpcUrl, registryAddress, userAddress }: 
         const fetchCredit = async () => {
             setLoading(true);
             try {
-                const client = createAAStarPublicClient(rpcUrl, chain);
+                const client = createAAStarPublicClient(rpcUrl, chain as any);
                 const limit = await client.readContract({
                     address: registryAddress,
                     abi: RegistryABI as any,

@@ -82,7 +82,7 @@ export class CommunityClient {
     ) {
         this.publicClient = publicClient;
         this.walletClient = walletClient;
-        this.requirementChecker = new RequirementChecker(publicClient, addresses);
+        this.requirementChecker = new RequirementChecker(publicClient as any, addresses);
         
         this.registryAddress = addresses?.registry;
         this.gtokenAddress = addresses?.gtoken;

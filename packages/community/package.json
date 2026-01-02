@@ -14,9 +14,9 @@
   "dependencies": {
     "@aastar/core": "workspace:*",
     "@aastar/tokens": "workspace:*",
-    "viem": "^2.43.3"
+    "viem": "2.43.3"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "5.7.2"
   }
 }

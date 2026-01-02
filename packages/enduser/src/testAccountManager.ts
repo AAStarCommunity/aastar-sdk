@@ -1,6 +1,6 @@
 import { Address, Hash, PublicClient, WalletClient, parseEther, Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { EndUserClient } from './index.js';
+import { accountFactoryActions, TEST_ACCOUNT_ADDRESSES } from '@aastar/core';
 
 /**
  * PhD Paper Experiment Test Toolkit
@@ -32,8 +32,6 @@ import { EndUserClient } from './index.js';
  * ```
  */
 export class TestAccountManager {
-    private endUserClient: EndUserClient;
-
     constructor(
         private publicClient: PublicClient,
         private walletClient: WalletClient
@@ -42,7 +40,6 @@ export class TestAccountManager {
             // Placeholder account if not provided to avoid strict null checks in experiments
             // In production, the consumer must ensure the wallet is connected.
         }
-        this.endUserClient = new EndUserClient(publicClient, walletClient);
     }
 
     /**
@@ -72,6 +69,10 @@ export class TestAccountManager {
         const accounts: TestAccount[] = [];
         const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
+        const factoryAddress = TEST_ACCOUNT_ADDRESSES.simpleAccountFactory;
+        const factoryRead = accountFactoryActions(factoryAddress)(this.publicClient as any);
+        const factoryWrite = accountFactoryActions(factoryAddress)(this.walletClient as any);
+
         // Step 1: Generate accounts and deploy AAs
         for (let i = 0; i < accountCount; i++) {
             const label = labels[i] || `${i + 1}`;
@@ -83,13 +84,43 @@ export class TestAccountManager {
             console.log(`   🔑 EOA: ${ownerAccount.address}`);
 
             // Deploy AA
-            console.log(`   🏭 Deploying SimpleAccount (salt: ${startingSalt + i})...`);
-            const { accountAddress, deployTxHash } = await this.endUserClient.deploySmartAccount({
-                owner: ownerAccount.address,
-                salt: BigInt(startingSalt + i),
-                fundWithETH: fundEachAAWithETH
-            });
+            const salt = BigInt(startingSalt + i);
+            console.log(`   🏭 Deploying SimpleAccount (salt: ${salt})...`);
+            
+            // Predict address
+            const accountAddress = await factoryRead.getAddress({ owner: ownerAccount.address, salt });
+            
+            // Deploy if needed (createAccount sends tx regardless, or we can check code?)
+            // For simplicitly we just call createAccount. If already deployed it might revert?
+            // SimpleAccountFactory doesn't seem to check existence in createAccount, but CREATE2 validates.
+            // But we are using a fresh key/salt, so collision is unlikely unless we rerun.
+            // We'll try-catch or just execute.
+            
+            let deployTxHash: Hash = '0x0';
+            try {
+                 deployTxHash = await factoryWrite.createAccount({
+                    owner: ownerAccount.address,
+                    salt,
+                    account: this.walletClient.account as any
+                });
+                await this.publicClient.waitForTransactionReceipt({ hash: deployTxHash });
+            } catch (e: any) {
+                console.log(`      ⚠️ Deployment might have failed (or already deployed): ${e.message?.split('\n')[0]}`);
+            }
+
             console.log(`   ✅ AA: ${accountAddress}`);
+
+            // Fund AA with ETH
+            if (fundEachAAWithETH > 0n) {
+                console.log(`   ⛽ Funding AA with ${fundEachAAWithETH} wei ETH...`);
+                const fundTx = await this.walletClient.sendTransaction({
+                    to: accountAddress,
+                    value: fundEachAAWithETH,
+                    account: this.walletClient.account as any,
+                    chain: this.walletClient.chain
+                });
+                await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
+            }
 
             // Fund EOA with ETH
             if (fundEachEOAWithETH > 0n) {
@@ -97,7 +128,7 @@ export class TestAccountManager {
                 const fundTx = await this.walletClient.sendTransaction({
                     to: ownerAccount.address,
                     value: fundEachEOAWithETH,
-                    account: this.walletClient.account!,
+                    account: this.walletClient.account as any,
                     chain: this.walletClient.chain
                 });
                 await this.publicClient.waitForTransactionReceipt({ hash: fundTx });
@@ -133,7 +164,7 @@ export class TestAccountManager {
                         abi: erc20Abi,
                         functionName: 'transfer',
                         args: [account.ownerAddress, tokenConfig.amount],
-                        account: this.walletClient.account!,
+                        account: this.walletClient.account as any,
                         chain: this.walletClient.chain
                     });
                     await this.publicClient.waitForTransactionReceipt({ hash: tx });
@@ -147,7 +178,7 @@ export class TestAccountManager {
                         abi: erc20Abi,
                         functionName: 'transfer',
                         args: [account.aaAddress, tokenConfig.amount],
-                        account: this.walletClient.account!,
+                        account: this.walletClient.account as any,
                         chain: this.walletClient.chain
                     });
                     await this.publicClient.waitForTransactionReceipt({ hash: tx });

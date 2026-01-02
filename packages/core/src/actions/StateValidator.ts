@@ -49,7 +49,7 @@ export class StateValidator {
         return createPublicClient({
             chain: params.chain,
             transport: http(params.rpcUrl)
-        });
+        }) as unknown as PublicClient;
     }
 
     /**

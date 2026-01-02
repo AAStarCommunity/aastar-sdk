@@ -23,7 +23,7 @@ export type PaymasterV4Actions = {
     deposit: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     addStake: (args: { unstakeDelaySec: bigint, account?: Account | Address }) => Promise<Hash>;
-    unlockStake: (args: { account?: Account | Address }) => Promise<Hash>;
+    unlockPaymasterStake: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawStake: (args: { to: Address, account?: Account | Address }) => Promise<Hash>;
     getDeposit: () => Promise<bigint>;
     
@@ -167,7 +167,7 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
         });
     },
 
-    async unlockStake({ account }) {
+    async unlockPaymasterStake({ account }) {
         return (client as any).writeContract({
             address,
             abi: PaymasterV4ABI,

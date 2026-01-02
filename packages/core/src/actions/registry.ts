@@ -75,7 +75,7 @@ export type RegistryActions = {
     // Admin Operations
     adminConfigureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
     createNewRole: (args: { name: string, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
-    safeMintForRole: (args: { roleId: Hex, to: Address, uri: string, account?: Account | Address }) => Promise<Hash>;
+    safeMintForRole: (args: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
     exitRole: (args: { roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     calculateExitFee: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
     addLevelThreshold: (args: { level: bigint, threshold: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -376,7 +376,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         return (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
-            functionName: 'mySBT',
+            functionName: 'MYSBT',
             args: []
         }) as Promise<Address>;
     },
@@ -385,7 +385,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         return (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
-            functionName: 'superPaymaster',
+            functionName: 'SUPER_PAYMASTER',
             args: []
         }) as Promise<Address>;
     },
@@ -394,7 +394,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         return (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
-            functionName: 'staking',
+            functionName: 'GTOKEN_STAKING',
             args: []
         }) as Promise<Address>;
     },
@@ -646,12 +646,12 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         });
     },
 
-    async safeMintForRole({ roleId, to, uri, account }) {
+    async safeMintForRole({ roleId, to, tokenURI, account }) {
         return (client as any).writeContract({
             address,
             abi: RegistryABI,
             functionName: 'safeMintForRole',
-            args: [roleId, to, uri],
+            args: [roleId, to, tokenURI],
             account: account as any,
             chain: (client as any).chain
         });

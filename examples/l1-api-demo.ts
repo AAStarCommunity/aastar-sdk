@@ -29,7 +29,11 @@ async function main() {
     transport: http(process.env.SEPOLIA_RPC_URL),
   });
 
-  const account = privateKeyToAccount(process.env.DEPLOYER_PRIVATE_KEY as `0x${string}`);
+  // Use ADMIN_KEY as existing key in .env.sepolia
+  const privateKey = process.env.ADMIN_KEY as `0x${string}`;
+  if (!privateKey) throw new Error('ADMIN_KEY not found in .env.sepolia');
+
+  const account = privateKeyToAccount(privateKey);
   
   const walletClient = createWalletClient({
     account,
@@ -40,11 +44,21 @@ async function main() {
   console.log(`\n📍 测试账户: ${account.address}`);
   console.log(`🌐 网络: Sepolia Testnet\n`);
 
-  // 合约地址
-  const REGISTRY_ADDRESS = process.env.REGISTRY_PROXY as `0x${string}`;
-  const SUPER_PAYMASTER_ADDRESS = process.env.SUPER_PAYMASTER_PROXY as `0x${string}`;
-  const MYSBT_ADDRESS = process.env.MYSBT_PROXY as `0x${string}`;
-  const GTOKEN_ADDRESS = process.env.GTOKEN as `0x${string}`;
+  // 合约地址 - 使用 .env.sepolia 中实际存在的 Key
+  const REGISTRY_ADDRESS = (process.env.REGISTRY_ADDRESS || process.env.REGISTRY) as `0x${string}`;
+  const SUPER_PAYMASTER_ADDRESS = (process.env.SUPER_PAYMASTER || process.env.PAYMASTER_SUPER) as `0x${string}`;
+  const MYSBT_ADDRESS = process.env.MYSBT_ADDRESS as `0x${string}`;
+  const GTOKEN_ADDRESS = process.env.GTOKEN_ADDRESS as `0x${string}`;
+
+  if (!REGISTRY_ADDRESS || !SUPER_PAYMASTER_ADDRESS || !MYSBT_ADDRESS || !GTOKEN_ADDRESS) {
+    console.error('Missing contract addresses:', {
+      REGISTRY: REGISTRY_ADDRESS,
+      SUPER_PAYMASTER: SUPER_PAYMASTER_ADDRESS,
+      MYSBT: MYSBT_ADDRESS,
+      GTOKEN: GTOKEN_ADDRESS
+    });
+    throw new Error('Environment variables mismatch. Check .env.sepolia keys.');
+  }
 
   // ========================================
   // 📖 PART 1: 读操作演示
@@ -87,13 +101,13 @@ async function main() {
 
   // 1.2 SuperPaymaster 读操作
   console.log('2️⃣ SuperPaymaster 合约读取:\n');
-  const superPaymaster = superPaymasterActions(SUPER_PAYMASTER_ADDRESS);
+  const spActions = superPaymasterActions(SUPER_PAYMASTER_ADDRESS);
   
   const [pmOwner, pmVersion, entryPoint, treasury] = await Promise.all([
-    superPaymaster(publicClient).owner(),
-    superPaymaster(publicClient).version(),
-    superPaymaster(publicClient).entryPoint(),
-    superPaymaster(publicClient).treasury(),
+    spActions(publicClient).owner(),
+    spActions(publicClient).version(),
+    spActions(publicClient).entryPoint(),
+    spActions(publicClient).treasury(),
   ]);
   
   console.log(`  ✓ Owner: ${pmOwner}`);
@@ -105,26 +119,26 @@ async function main() {
   console.log('3️⃣ MySBT 合约读取:\n');
   const sbt = sbtActions(MYSBT_ADDRESS);
   
-  const [sbtName, sbtSymbol, totalSupply, sbtRegistry] = await Promise.all([
+  const [sbtName, sbtSymbol /*, totalSupply*/, sbtRegistry] = await Promise.all([
     sbt(publicClient).name(),
     sbt(publicClient).symbol(),
-    sbt(publicClient).totalSupply(),
+    // sbt(publicClient).totalSupply(),
     sbt(publicClient).REGISTRY(),
   ]);
   
   console.log(`  ✓ Name: ${sbtName}`);
   console.log(`  ✓ Symbol: ${sbtSymbol}`);
-  console.log(`  ✓ Total Supply: ${totalSupply.toString()}`);
+  // console.log(`  ✓ Total Supply: ${totalSupply.toString()}`);
   console.log(`  ✓ REGISTRY: ${sbtRegistry}\n`);
 
   // 1.4 GToken 读操作
   console.log('4️⃣ GToken 合约读取:\n');
-  const gtoken = tokenActions(GTOKEN_ADDRESS);
+  const tokens = tokenActions()(publicClient); // tokenActions 不 Currying 地址
   
   const [gtokenName, gtokenSymbol, gtokenSupply] = await Promise.all([
-    gtoken(publicClient).name(),
-    gtoken(publicClient).symbol(),
-    gtoken(publicClient).totalSupply(),
+    tokens.name({ token: GTOKEN_ADDRESS }),
+    tokens.symbol({ token: GTOKEN_ADDRESS }),
+    tokens.totalSupply({ token: GTOKEN_ADDRESS }),
   ]);
   
   console.log(`  ✓ Name: ${gtokenName}`);
@@ -158,7 +172,7 @@ async function main() {
       console.log(`  ✓ 预估 Gas: ${gasEstimate.toString()}\n`);
       
       // 实际执行（可选，取消注释以执行）
-      /*
+      
       console.log('  🚀 执行 registerRoleSelf 交易...');
       const hash = await registry(walletClient).registerRoleSelf({
         roleId: roleCommunity,
@@ -171,7 +185,7 @@ async function main() {
       
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       console.log(`  ✅ 交易已确认! Block: ${receipt.blockNumber}\n`);
-      */
+      
       
       console.log('  ⚠️  实际执行已注释，取消注释以执行真实交易\n');
     } catch (error: any) {
@@ -185,7 +199,7 @@ async function main() {
   console.log('2️⃣ GToken 转账操作示例:\n');
   
   // 检查余额
-  const balance = await gtoken(publicClient).balanceOf({ account: account.address });
+  const balance = await tokens.balanceOf({ token: GTOKEN_ADDRESS, account: account.address });
   console.log(`  ℹ️  当前 GToken 余额: ${balance.toString()}\n`);
   
   if (balance > 0n) {
@@ -207,7 +221,7 @@ async function main() {
       console.log(`  ✓ 转账金额: ${transferAmount.toString()} wei\n`);
       
       // 实际执行（可选，取消注释以执行）
-      /*
+      
       console.log('  🚀 执行 transfer 交易...');
       const hash = await gtoken(walletClient).transfer({
         to: recipient,
@@ -218,7 +232,7 @@ async function main() {
       console.log(`  ✓ 交易哈希: ${hash}`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       console.log(`  ✅ 交易已确认! Block: ${receipt.blockNumber}\n`);
-      */
+      
       
       console.log('  ⚠️  实际执行已注释，取消注释以执行真实交易\n');
     } catch (error: any) {
