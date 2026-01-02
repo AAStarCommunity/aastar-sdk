@@ -7,21 +7,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@aastar/core": ["packages/core/src/index.ts"],
-      "@aastar/account": ["packages/account/src/index.ts"],
-      "@aastar/analytics": ["packages/analytics/src/index.ts"],
-      "@aastar/community": ["packages/community/src/index.ts"],
-      "@aastar/dapp": ["packages/dapp/src/index.ts"],
-      "@aastar/enduser": ["packages/enduser/src/index.ts"],
-      "@aastar/identity": ["packages/identity/src/index.ts"],
-      "@aastar/operator": ["packages/operator/src/index.ts"],
-      "@aastar/paymaster": ["packages/paymaster/src/index.ts"],
-      "@aastar/sdk": ["packages/sdk/src/index.ts"],
-      "@aastar/tokens": ["packages/tokens/src/index.ts"]
-    }
+    "noEmit": true
   },
   "exclude": [
     "node_modules",

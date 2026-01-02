@@ -275,9 +275,9 @@ async function onboarding() {
 
     if (!opConfig[2]) { // isConfigured at index 2 in V3.2 Packed
         const configTx = await operatorClient.configureOperator({
-            xPNTs: localAddresses.aPNTs,
+            xPNTsToken: localAddresses.aPNTs,
             treasury: operatorAccount.address,
-            rate: 1000000000000000000n // 1 ETH (1:1)
+            exchangeRate: 1000000000000000000n // 1 ETH (1:1)
         });
         await adminClient.waitForTransactionReceipt({ hash: configTx });
         console.log('   ✅ Operator Billing Configured');
