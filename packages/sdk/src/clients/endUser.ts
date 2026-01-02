@@ -204,12 +204,27 @@ export function createEndUserClient({
             const { accountAddress } = await (this as any).createSmartAccount({ owner: accountToUse.address });
             console.log(`   SDK: Executing gasless via AA ${accountAddress} Sponsored by ${operator}`);
 
-            // 2. Fetch Nonce
-            const nonce = await (client as any).readContract({
-                address: accountAddress,
-                abi: [{ type: 'function', name: 'getNonce', outputs: [{type: 'uint256'}], stateMutability: 'view' }],
-                functionName: 'getNonce'
-            }) as bigint;
+            // 2. Fetch Nonce from EntryPoint (v0.7 standard)
+            // Note: In v0.7, nonce is managed by EntryPoint, not the account itself
+            let nonce = 0n;
+            try {
+                nonce = await (client as any).readContract({
+                    address: usedAddresses.entryPoint,
+                    abi: [{ 
+                        type: 'function', 
+                        name: 'getNonce', 
+                        inputs: [{ type: 'address', name: 'sender' }, { type: 'uint192', name: 'key' }],
+                        outputs: [{ type: 'uint256' }], 
+                        stateMutability: 'view' 
+                    }],
+                    functionName: 'getNonce',
+                    args: [accountAddress, 0n] // 0 = default nonce key
+                }) as bigint;
+            } catch (e: any) {
+                console.warn(`   ⚠️  Failed to fetch nonce from EntryPoint, using default 0:`, e.message);
+                // For initial transactions, nonce is always 0
+                nonce = 0n;
+            }
 
             // 3. Build CallData (execute(target, value, data))
             const { encodeFunctionData, concat, pad, keccak256 } = await import('viem');

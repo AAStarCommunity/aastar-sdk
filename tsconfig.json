@@ -27,6 +27,7 @@
     "node_modules",
     "dist",
     "ext",
+    "lib",
     "**/node_modules",
     "**/dist"
   ]
