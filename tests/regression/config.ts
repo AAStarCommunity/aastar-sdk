@@ -94,6 +94,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             gToken: getAddress('GTOKEN_ADDRESS'),
             gTokenStaking: getAddress('GTOKEN_STAKING_ADDRESS', 'STAKING_ADDRESS'),
             superPaymaster: getAddress('SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_SUPER'),
+            paymasterFactory: getAddress('PAYMASTER_FACTORY_ADDRESS', 'PAYMASTER_FACTORY'), // Added loader
             sbt: getAddress('SBT_ADDRESS', 'MYSBT_ADDRESS'),
             reputation: getAddress('REPUTATION_ADDRESS', 'REPUTATION_SYSTEM'),
             xPNTsFactory: getAddress('XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),

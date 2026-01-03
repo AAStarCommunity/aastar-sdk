@@ -4,6 +4,7 @@ import { runL1Tests } from './l1-tests';
 import { runL2Tests } from './l2-tests';
 import { runL3Tests } from './l3-tests';
 import { runTransactionTests } from './l4-transactions';
+import { runGaslessTests } from './l4-gasless';
 
 /**
  * SDK Regression Test Runner
@@ -51,7 +52,11 @@ async function main() {
     await runL1Tests(config);
     await runL2Tests(config);
     await runL3Tests(config);
+    // Run L4 Transaction Tests (Writer)
     await runTransactionTests(config);
+    
+    // Run L4 Gasless Verification
+    await runGaslessTests(config);
 
     console.log('═══════════════════════════════════════════════');
     console.log('✅ Test Suite Complete');

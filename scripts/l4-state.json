@@ -1,0 +1,14 @@
+{
+  "jason": {
+    "tokenAddress": "0x7e652Ce3793320072ae42EF1982c3a7215381f8e",
+    "paymasterAddress": "0xdF96FD23f8240b837E89Fb73EECa0a397322Fb12"
+  },
+  "bob": {
+    "tokenAddress": "0xCf12B901034995928eC5E49AEe2bb44339B9B083",
+    "paymasterAddress": "0x1315f90425449C99BD2F68173FDAF3068dAddFa8"
+  },
+  "anni": {
+    "tokenAddress": "0x6868723f3C9919D11D891D5AB931A08e9Fd8002e",
+    "superPaymasterAddress": "0x678062d16A4d72B37F0fc453eff747322F51094F"
+  }
+}

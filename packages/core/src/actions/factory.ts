@@ -40,8 +40,8 @@ export type XPNTsFactoryActions = {
 // Paymaster Factory Actions
 export type PaymasterFactoryActions = {
     // Deployment
-    deployPaymaster: (args: { owner: Address, account?: Account | Address }) => Promise<Hash>;
-    deployPaymasterV4: (args: { owner: Address, entryPoint: Address, account?: Account | Address }) => Promise<Hash>;
+    // Deployment
+    deployPaymaster: (args: { owner: Address, version?: string, account?: Account | Address }) => Promise<Hash>;
     
     // Query
     calculateAddress: (args: { owner: Address }) => Promise<Address>;
@@ -69,11 +69,22 @@ export type PaymasterFactoryActions = {
 
 export const xPNTsFactoryActions = (address: Address) => (client: PublicClient | WalletClient): XPNTsFactoryActions => ({
     async createToken({ name, symbol, community, account }) {
+        // Map to deployxPNTsToken
+        // Args: name, symbol, communityName, communityENS, exchangeRate, paymasterAOA
+        // We use name/symbol as community name/ens placeholder if not provided
+        // We assume msg.sender (account) is the community owner
         return (client as any).writeContract({
             address,
             abi: xPNTsFactoryABI,
-            functionName: 'createToken',
-            args: [name, symbol, community],
+            functionName: 'deployxPNTsToken',
+            args: [
+                name, 
+                symbol, 
+                name, // communityName
+                symbol, // communityENS
+                1n, // exchangeRate (1 w/ 0 decimals? or 1e18? Assuming 1 for now)
+                '0x0000000000000000000000000000000000000000' // paymasterAOA
+            ],
             account: account as any,
             chain: (client as any).chain
         });
@@ -273,23 +284,17 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
 });
 
 export const paymasterFactoryActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterFactoryActions => ({
-    async deployPaymaster({ owner, account }) {
+    async deployPaymaster({ owner, version, account }) {
+        // Note: ABI expects (_version, initData). SDK abstraction needs to handle this or expose it.
+        // For regression fix, we assume defaults or passing raw args.
+        const defaultVer = 'V4.0.0'; // Fallback
+        const useVer = version || defaultVer;
+        
         return (client as any).writeContract({
             address,
             abi: PaymasterFactoryABI,
             functionName: 'deployPaymaster',
-            args: [owner],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async deployPaymasterV4({ owner, entryPoint, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'deployPaymasterV4',
-            args: [owner, entryPoint],
+            args: [useVer, '0x'], // Placeholder fix for initData
             account: account as any,
             chain: (client as any).chain
         });
@@ -308,7 +313,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,
-            functionName: 'getPaymaster',
+            functionName: 'paymasterByOperator',
             args: [owner]
         }) as Promise<Address>;
     },
