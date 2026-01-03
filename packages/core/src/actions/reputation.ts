@@ -8,13 +8,14 @@ export type ReputationActions = {
     enableRule: (args: { ruleId: Hex, account?: Account | Address }) => Promise<Hash>;
     disableRule: (args: { ruleId: Hex, account?: Account | Address }) => Promise<Hash>;
     isRuleActive: (args: { ruleId: Hex }) => Promise<boolean>;
-    getActiveRules: () => Promise<Hex[]>;
+    getActiveRules: (args: { community: Address }) => Promise<Hex[]>;
     getRuleCount: () => Promise<bigint>;
     
     // 积分计算
     computeScore: (args: { user: Address, community: Address }) => Promise<bigint>;
     getUserScore: (args: { user: Address }) => Promise<bigint>;
     getCommunityScore: (args: { community: Address }) => Promise<bigint>;
+    communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>; // Public mapping getter
     
     // 批量操作
     batchUpdateScores: (args: { users: Address[], scores: bigint[], account?: Account | Address }) => Promise<Hash>;
@@ -98,12 +99,12 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }) as Promise<boolean>;
     },
 
-    async getActiveRules() {
+    async getActiveRules({ community }) {
         return (client as PublicClient).readContract({
             address,
             abi: ReputationSystemABI,
             functionName: 'getActiveRules',
-            args: []
+            args: [community]
         }) as Promise<Hex[]>;
     },
 
@@ -141,6 +142,16 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
             abi: ReputationSystemABI,
             functionName: 'getCommunityScore',
             args: [community]
+        }) as Promise<bigint>;
+    },
+
+    // Public mapping getter
+    async communityReputations({ community, user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'communityReputations',
+            args: [community, user]
         }) as Promise<bigint>;
     },
 

@@ -246,6 +246,25 @@
   },
   {
     "type": "function",
+    "name": "getActiveRules",
+    "inputs": [
+      {
+        "name": "community",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ruleIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getReputationBreakdown",
     "inputs": [
       {

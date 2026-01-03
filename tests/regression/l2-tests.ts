@@ -45,7 +45,7 @@ export async function runL2Tests(config: NetworkConfig) {
             gTokenStakingAddress: config.contracts.gTokenStaking,
             sbtAddress: config.contracts.sbt,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         const sbtBalance = await userClient.getSBTBalance();
@@ -66,7 +66,7 @@ export async function runL2Tests(config: NetworkConfig) {
             gTokenStakingAddress: config.contracts.gTokenStaking,
             sbtAddress: config.contracts.sbt,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         const roleId = '0x0000000000000000000000000000000000000000000000000000000000000001' as Hex;
@@ -88,7 +88,7 @@ export async function runL2Tests(config: NetworkConfig) {
             gTokenStakingAddress: config.contracts.gTokenStaking,
             sbtAddress: config.contracts.sbt,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         const balance = await userClient.getTokenBalance(config.contracts.gToken);
@@ -115,7 +115,7 @@ export async function runL2Tests(config: NetworkConfig) {
             reputationAddress: config.contracts.reputation,
             sbtAddress: config.contracts.sbt,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         console.log('    Client created successfully');
@@ -136,7 +136,7 @@ export async function runL2Tests(config: NetworkConfig) {
             reputationAddress: config.contracts.reputation,
             sbtAddress: config.contracts.sbt,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         const roleId = '0x0000000000000000000000000000000000000000000000000000000000000002' as Hex;
@@ -161,7 +161,7 @@ export async function runL2Tests(config: NetworkConfig) {
             rpcUrl: config.rpcUrl,
             superPaymasterAddress: config.contracts.superPaymaster,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         const isOp = await operatorClient.isOperator(account.address);
@@ -180,7 +180,7 @@ export async function runL2Tests(config: NetworkConfig) {
             rpcUrl: config.rpcUrl,
             superPaymasterAddress: config.contracts.superPaymaster,
             publicClient,
-            walletClient
+            client: walletClient
         });
         
         const details = await operatorClient.getDepositDetails();
@@ -207,7 +207,7 @@ export async function runL2Tests(config: NetworkConfig) {
                 blsAggregatorAddress: config.contracts.blsAggregator,
                 superPaymasterAddress: config.contracts.superPaymaster,
                 publicClient,
-                walletClient
+                client: walletClient
             });
             
             console.log('    Client created successfully');

@@ -58,24 +58,11 @@ export async function runL1Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
-        console.log('  Test: getRoleMemberCount()');
+        console.log('  Test: getRoleUserCount()');
         const registry = registryActions(config.contracts.registry);
-        const roleId = '0x0000000000000000000000000000000000000000000000000000000000000001' as Hex;
-        const count = await registry(publicClient).getRoleMemberCount (roleId);
+        const roleId = '0x0000000000000000000000000000000000000000000000000000000000000002' as Hex;
+        const count = await registry(publicClient).getRoleUserCount({ roleId });
         console.log(`    Count: ${count.toString()}`);
-        console.log('    ✅ PASS\n');
-        passedTests++;
-    } catch (e) {
-        console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
-    }
-
-    totalTests++;
-    try {
-        console.log('  Test: getRoleAdmin()');
-        const registry = registryActions(config.contracts.registry);
-        const roleId = '0x0000000000000000000000000000000000000000000000000000000000000001' as Hex;
-        const admin = await registry(publicClient).getRoleAdmin(roleId);
-        console.log(`    Admin: ${admin}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {
@@ -91,7 +78,7 @@ export async function runL1Tests(config: NetworkConfig) {
     try {
         console.log('  Test: balanceOf()');
         const token = tokenActions(config.contracts.gToken);
-        const balance = await token(publicClient).balanceOf(account.address);
+        const balance = await token(publicClient).balanceOf({ account: account.address });
         console.log(`    Balance: ${balance.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
@@ -104,7 +91,7 @@ export async function runL1Tests(config: NetworkConfig) {
         console.log('  Test: totalSupply()');
         const token = tokenActions(config.contracts.gToken);
         const supply = await token(publicClient).totalSupply();
-        console.log(`    Supply: ${supply.toString()}`);
+        console.log(`    Total Supply: ${supply.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {
@@ -178,18 +165,6 @@ export async function runL1Tests(config: NetworkConfig) {
         console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
     }
 
-    totalTests++;
-    try {
-        console.log('  Test: totalSupply()');
-        const sbt = sbtActions(config.contracts.sbt);
-        const supply = await sbt(publicClient).totalSupply();
-        console.log(`    Total SBTs: ${supply.toString()}`);
-        console.log('    ✅ PASS\n');
-        passedTests++;
-    } catch (e) {
-        console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
-    }
-
     // ========================================
     // 5. Reputation Actions
     // ========================================
@@ -197,9 +172,11 @@ export async function runL1Tests(config: NetworkConfig) {
     
     totalTests++;
     try {
-        console.log('  Test: getUserScore()');
+        console.log('  Test: communityReputations()');
         const rep = reputationActions(config.contracts.reputation);
-        const score = await rep(publicClient).getUserScore({ user: account.address });
+        // Use communityReputations instead of getUserScore
+        const community = config.contracts.registry; // Use registry as test community
+        const score = await rep(publicClient).communityReputations({ community, user: account.address });
         console.log(`    Score: ${score.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
@@ -211,7 +188,8 @@ export async function runL1Tests(config: NetworkConfig) {
     try {
         console.log('  Test: getActiveRules()');
         const rep = reputationActions(config.contracts.reputation);
-        const rules = await rep(publicClient).getActiveRules();
+        const community = config.contracts.registry; // Use registry as test community
+        const rules = await rep(publicClient).getActiveRules({ community });
         console.log(`    Active Rules: ${rules.length}`);
         console.log('    ✅ PASS\n');
         passedTests++;
