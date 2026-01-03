@@ -3,6 +3,7 @@ import { loadNetworkConfig, validateConfig, type NetworkName } from './config';
 import { runL1Tests } from './l1-tests';
 import { runL2Tests } from './l2-tests';
 import { runL3Tests } from './l3-tests';
+import { runTransactionTests } from './l4-transactions';
 
 /**
  * SDK Regression Test Runner
@@ -50,6 +51,7 @@ async function main() {
     await runL1Tests(config);
     await runL2Tests(config);
     await runL3Tests(config);
+    await runTransactionTests(config);
 
     console.log('═══════════════════════════════════════════════');
     console.log('✅ Test Suite Complete');

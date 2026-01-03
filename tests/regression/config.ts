@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import type { Address, Chain } from 'viem';
+import { type Address, type Chain, type Hex } from 'viem';
 import { sepolia, optimismSepolia, optimism, mainnet } from 'viem/chains';
-import { anvil } from 'viem/chains';
+import { anvil, localhost } from 'viem/chains';
 
 export type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
 
@@ -27,6 +27,9 @@ export interface NetworkConfig {
         privateKey: `0x${string}`;
         address: Address;
     };
+    supplierAccount?: { // Added supplierAccount
+        privateKey: Hex;
+    };
 }
 
 /**
@@ -39,6 +42,12 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
     
     console.log(`📄 Loading config from: ${envPath}`);
     dotenv.config({ path: envPath });
+    
+    // Debug ENV loading
+    console.log(`    🔍 DEBUG: PRIVATE_KEY_SUPPLIER present? ${!!process.env.PRIVATE_KEY_SUPPLIER}`);
+    if (process.env.PRIVATE_KEY_SUPPLIER) {
+        console.log(`    🔍 DEBUG: Supplier Key Length: ${process.env.PRIVATE_KEY_SUPPLIER.length}`);
+    }
 
     // Get chain
     const chains: Record<NetworkName, Chain> = {
@@ -73,6 +82,8 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         return addr as Address;
     };
 
+    const supplierPrivateKey = process.env.PRIVATE_KEY_SUPPLIER as Hex | undefined;
+
     return {
         name: network,
         chain,
@@ -92,7 +103,8 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         testAccount: {
             privateKey: process.env.TEST_PRIVATE_KEY as `0x${string}`,
             address: process.env.TEST_ACCOUNT_ADDRESS as Address
-        }
+        },
+        supplierAccount: supplierPrivateKey ? { privateKey: supplierPrivateKey } : undefined
     };
 }
 
