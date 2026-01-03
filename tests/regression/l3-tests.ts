@@ -242,7 +242,7 @@ export async function runL3Tests(config: NetworkConfig) {
         console.log('  Test: getUserScore()');
         const repMgr = new ReputationManager(
             config.contracts.reputation,
-            walletClient,
+            publicClient,
             config.contracts.sbt
         );
         

@@ -4,6 +4,7 @@ import type { NetworkConfig } from './config';
 import { UserClient } from '../../packages/enduser/dist/UserClient.js';
 import { CommunityClient } from '../../packages/enduser/dist/CommunityClient.js';
 import { PaymasterOperatorClient, ProtocolClient } from '../../packages/operator/dist/index.js';
+import { registryActions } from '../../packages/core/dist/index.js';
 
 /**
  * Comprehensive L2 Business Clients Regression Tests
@@ -139,8 +140,10 @@ export async function runL2Tests(config: NetworkConfig) {
             client: walletClient
         });
         
+        // Use registry actions for hasRole check
+        const registry = registryActions(config.contracts.registry);
         const roleId = '0x0000000000000000000000000000000000000000000000000000000000000002' as Hex;
-        const hasRole = await communityClient.hasRole(roleId);
+        const hasRole = await registry(publicClient).hasRole({ roleId, user: account.address });
         console.log(`    Has Community Role: ${hasRole}`);
         console.log('    ✅ PASS\n');
         passedTests++;

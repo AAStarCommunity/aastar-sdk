@@ -78,7 +78,10 @@ export async function runL1Tests(config: NetworkConfig) {
     try {
         console.log('  Test: balanceOf()');
         const token = tokenActions(config.contracts.gToken);
-        const balance = await token(publicClient).balanceOf({ account: account.address });
+        const balance = await token(publicClient).balanceOf({ 
+            token: config.contracts.gToken,
+            account: account.address 
+        });
         console.log(`    Balance: ${balance.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
@@ -202,28 +205,32 @@ export async function runL1Tests(config: NetworkConfig) {
     // ========================================
     console.log('⚡ === SuperPaymaster Actions ===');
     
-    totalTests++;
-    try {
-        console.log('  Test: getDeposit()');
-        const sp = superPaymasterActions(config.contracts.superPaymaster);
-        const deposit = await sp(publicClient).getDeposit(account.address);
-        console.log(`    Deposit: ${deposit.deposit.toString()}`);
-        console.log('    ✅ PASS\n');
-        passedTests++;
-    } catch (e) {
-        console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
-    }
+    if (!config.contracts.superPaymaster) {
+        console.log('  ⏭️  Skipping (SuperPaymaster not configured)\n');
+    } else {
+        totalTests++;
+        try {
+            console.log('  Test: getDeposit()');
+            const sp = superPaymasterActions(config.contracts.superPaymaster);
+            const deposit = await sp(publicClient).getDeposit({ operator: account.address });
+            console.log(`    Deposit: ${deposit.toString()}`);
+            console.log('    ✅ PASS\n');
+            passedTests++;
+        } catch (e) {
+            console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
+        }
 
-    totalTests++;
-    try {
-        console.log('  Test: operators()');
-        const sp = superPaymasterActions(config.contracts.superPaymaster);
-        const isOp = await sp(publicClient).operators(account.address);
-        console.log(`    Is Operator: ${isOp}`);
-        console.log('    ✅ PASS\n');
-        passedTests++;
-    } catch (e) {
-        console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
+        totalTests++;
+        try {
+            console.log('  Test: operators()');
+            const sp = superPaymasterActions(config.contracts.superPaymaster);
+            const isOp = await sp(publicClient).operators({ operator: account.address });
+            console.log(`    Is Operator: ${isOp}`);
+            console.log('    ✅ PASS\n');
+            passedTests++;
+        } catch (e) {
+            console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
+        }
     }
 
     // ========================================
@@ -233,10 +240,10 @@ export async function runL1Tests(config: NetworkConfig) {
     
     totalTests++;
     try {
-        console.log('  Test: getTokenCount()');
+        console.log('  Test: getDeployedCount()');
         const factory = xPNTsFactoryActions(config.contracts.xPNTsFactory);
-        const count = await factory(publicClient).getTokenCount();
-        console.log(`    Token Count: ${count.toString()}`);
+        const count = await factory(publicClient).getDeployedCount();
+        console.log(`    Deployed Tokens: ${count.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {
