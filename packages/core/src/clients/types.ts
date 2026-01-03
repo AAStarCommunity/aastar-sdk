@@ -35,6 +35,12 @@ export interface ClientConfig {
      * Required for role registration that involves staking.
      */
     gTokenStakingAddress?: Address;
+
+    /**
+     * PaymasterFactory contract address.
+     * Required for deploying new PaymasterV4 instances.
+     */
+    paymasterFactoryAddress?: Address;
 }
 
 /**

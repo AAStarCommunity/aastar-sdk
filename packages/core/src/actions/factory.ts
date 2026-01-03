@@ -64,6 +64,7 @@ export type PaymasterFactoryActions = {
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Version
+    defaultVersion: () => Promise<string>;
     version: () => Promise<string>;
 };
 
@@ -301,15 +302,13 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
     },
 
     async calculateAddress({ owner }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'calculateAddress',
-            args: [owner]
-        }) as Promise<Address>;
+        // This function doesn't exist in V4 factory for non-deterministic deploy
+        // We throw to avoid misleading usage
+        throw new Error('Predicting address not supported for standard deploy. Use getPaymaster after deploy.');
     },
 
     async getPaymaster({ owner }) {
+        // paymasterByOperator is public mapping
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,
@@ -328,11 +327,16 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
     },
 
     async getAllPaymasters() {
+        // Not directly supported by contract as single call (it has list + pagination), using pagination shim
+        const count = await (client as PublicClient).readContract({
+            address, abi: PaymasterFactoryABI, functionName: 'getPaymasterCount', args: []
+        }) as bigint;
+        
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,
-            functionName: 'getAllPaymasters',
-            args: []
+            functionName: 'getPaymasterList',
+            args: [0n, count]
         }) as Promise<Address[]>;
     },
 
@@ -340,7 +344,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,
-            functionName: 'isPaymasterDeployed',
+            functionName: 'hasPaymaster', // Corrected from isPaymasterDeployed
             args: [owner]
         }) as Promise<boolean>;
     },
@@ -412,6 +416,15 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async defaultVersion() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterFactoryABI,
+            functionName: 'defaultVersion',
+            args: []
+        }) as Promise<string>;
     },
 
     async version() {

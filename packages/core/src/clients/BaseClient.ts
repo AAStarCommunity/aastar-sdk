@@ -7,6 +7,7 @@ export abstract class BaseClient {
     protected registryAddress?: Address;
     protected gTokenAddress?: Address;
     protected gTokenStakingAddress?: Address;
+    protected paymasterFactoryAddress?: Address;
 
     constructor(config: ClientConfig) {
         if (!config.client) {
@@ -21,6 +22,7 @@ export abstract class BaseClient {
         this.registryAddress = config.registryAddress;
         this.gTokenAddress = config.gTokenAddress;
         this.gTokenStakingAddress = config.gTokenStakingAddress;
+        this.paymasterFactoryAddress = config.paymasterFactoryAddress;
     }
 
     /**
@@ -56,5 +58,12 @@ export abstract class BaseClient {
             throw new Error('GTokenStaking address is not configured for this client');
         }
         return this.gTokenStakingAddress;
+    }
+
+    protected requirePaymasterFactory(): Address {
+        if (!this.paymasterFactoryAddress) {
+            throw new Error('PaymasterFactory address is not configured for this client');
+        }
+        return this.paymasterFactoryAddress;
     }
 }

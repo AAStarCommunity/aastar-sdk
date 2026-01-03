@@ -21,6 +21,30 @@
       "role": "ROLE_COMMUNITY",
       "registeredAt": "2026-01-04T00:11:00Z",
       "paymasterType": null
+    },
+    {
+      "name": "Brown",
+      "address": "0xfceD1c4A1F2f97D5198ce3f47FaB3811526C49B7",
+      "privateKeyEnv": "PRIVATE_KEY_BROWN",
+      "community": "BBQ",
+      "tokenSymbol": "bbqPNTs",
+      "roles": [
+        "ROLE_COMMUNITY",
+        "ROLE_PAYMASTER_SUPER",
+        "ROLE_PAYMASTER_AOA"
+      ],
+      "registeredAt": "2026-01-03T17:30:17.276Z",
+      "paymasterV4": "0x00d76797284F1460a0173a6F1081eC20450dc07e"
     }
-  ]
+  ],
+  "jack": {
+    "tokenAddress": "0x1a52d5bcEC54468AbAE4904745880576737b7343",
+    "community": "Dancing",
+    "owner": "0x084b5F85A5149b03aDf9396C7C94D8B8F328FB36",
+    "superPaymasterAddress": "0x678062d16A4d72B37F0fc453eff747322F51094F",
+    "roles": [
+      "ROLE_COMMUNITY",
+      "ROLE_PAYMASTER_SUPER"
+    ]
+  }
 }
