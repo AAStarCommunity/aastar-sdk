@@ -1,15 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, type Address, type Hash, type Account } from 'viem';
+import { type Address, type Hash, parseEther, formatEther, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig, type NetworkConfig } from './config';
-import { 
-    tokenActions, 
-    paymasterFactoryActions, 
-    xPNTsFactoryActions,
-    communityActions,
-    registryActions
-} from '../../packages/core/dist/index.js';
+import { PaymasterOperatorClient } from '../../packages/operator/dist/index.js';
+import { tokenActions, superPaymasterActions } from '../../packages/core/dist/index.js';
 import { fileURLToPath } from 'url';
 
 // Load L4 State
@@ -42,47 +37,33 @@ export async function runGaslessTests(config: NetworkConfig) {
     console.log('═══════════════════════════════════════════════\n');
 
     const state = loadState();
-    const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
 
     // --- Scenario A: Jason (AAStar) - PaymasterV4 ---
-    await runPaymasterV4Scenario('Jason (AAStar)', 'jason', state.jason, config, publicClient);
+    await runPaymasterV4Scenario('Jason (AAStar)', 'jason', state.jason, config);
 
     // --- Scenario B: Bob (Bread) - PaymasterV4 ---
-    await runPaymasterV4Scenario('Bob (Bread)', 'bob', state.bob, config, publicClient);
+    await runPaymasterV4Scenario('Bob (Bread)', 'bob', state.bob, config);
 
     // --- Scenario C: Anni (Demo) - SuperPaymasterV3 ---
-    await runSuperPaymasterScenario('Anni (Demo)', 'anni', state.anni, config, publicClient);
+    await runSuperPaymasterScenario('Anni (Demo)', 'anni', state.anni, config);
 }
 
 async function runPaymasterV4Scenario(
     name: string, 
     keyName: string, 
     opState: OperatorState, 
-    config: NetworkConfig,
-    publicClient: any
+    config: NetworkConfig
 ) {
     console.log(`\n👤 === Scenario: ${name} with PaymasterV4 ===`);
     
-    // Logging Helpers
-    const logStep = (msg: string) => console.log(`  ➡️  ${msg}`);
-    const logSuccess = (msg: string) => console.log(`  ✅ ${msg}`);
-    const logInfo = (msg: string) => console.log(`  ℹ️  ${msg}`);
-    const logTx = (hash: Hash) => {
-        const baseUrl = config.name === 'sepolia' ? 'https://sepolia.etherscan.io/tx/' : 'https://etherscan.io/tx/';
-        console.log(`     #️⃣  Hash: ${hash}`);
-        console.log(`     🔗 Link: ${baseUrl}${hash}`);
-    };
-
-    // 1. Setup Client
     const keyEnv = `PRIVATE_KEY_${keyName.toUpperCase()}`;
-    const key = process.env[keyEnv] as Hex;
+    const key = process.env[keyEnv] as `0x${string}`;
     if (!key) {
         console.log(`  ⚠️  Skipping ${name}: Missing ${keyEnv}`);
         return;
     }
+
     const account = privateKeyToAccount(key);
-    const client = createWalletClient({ account, chain: config.chain, transport: http(config.rpcUrl) });
-    
     const tokenAddr = opState.tokenAddress;
     const pmAddr = opState.paymasterAddress;
 
@@ -91,59 +72,37 @@ async function runPaymasterV4Scenario(
         return; 
     }
 
-    logInfo(`Token: ${tokenAddr}`);
-    logInfo(`Paymaster: ${pmAddr}`);
+    console.log(`  ℹ️  Token: ${tokenAddr}`);
+    console.log(`  ℹ️  Paymaster: ${pmAddr}`);
 
-    // Mint Token to self
-    logStep(`Minting xPNTs to self...`);
     try {
-        const hash = await client.writeContract({
-            address: tokenAddr,
-            abi: [{ type: 'function', name: 'mint', inputs: [{name: 'to', type: 'address'}, {name: 'amount', type: 'uint256'}], outputs: [], stateMutability: 'nonpayable' }],
-            functionName: 'mint',
-            args: [account.address, parseEther('10')],
+        // Create proper WalletClient
+        const client = createWalletClient({
+            chain: config.chain,
+            transport: http(config.rpcUrl),
             account
         });
-        logTx(hash);
-        await publicClient.waitForTransactionReceipt({ hash });
-        logSuccess(`Minted 10 xPNTs to self`);
-    } catch (e: any) {
-        console.log(`  ❌ Mint Failed: ${e.message.split('\n')[0]}`);
-    }
 
-    // Check Paymaster Deposit on EntryPoint
-    const entryPoint = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
-    logStep(`Checking Paymaster Deposit on EntryPoint...`);
-    try {
-        const deposit = await publicClient.readContract({
-            address: entryPoint,
-            abi: [{ type: 'function', name: 'balanceOf', inputs: [{name: 'account', type: 'address'}], outputs: [{type: 'uint256'}], stateMutability: 'view' }],
-            functionName: 'balanceOf',
-            args: [pmAddr]
-        }) as bigint;
-        
-        logInfo(`Deposit: ${formatEther(deposit)} ETH`);
-        
-        if (deposit < parseEther('0.01')) {
-            logStep(`Depositing ETH to EntryPoint for Paymaster...`);
-            try {
-                const hash = await client.writeContract({
-                    address: entryPoint,
-                    abi: [{ type: 'function', name: 'depositTo', inputs: [{name: 'account', type: 'address'}], outputs: [], stateMutability: 'payable' }],
-                    functionName: 'depositTo',
-                    args: [pmAddr],
-                    value: parseEther('0.02'),
-                    account
-                });
-                logTx(hash);
-                await publicClient.waitForTransactionReceipt({ hash });
-                logSuccess(`Deposited 0.02 ETH`);
-            } catch (e: any) {
-                 console.log(`  ❌ Deposit Trx Failed: ${e.message.split('\n')[0]}`);
-            }
-        }
+        // Step 1: Mint xPNTs using SDK tokenActions
+        console.log(`  ➡️  Minting xPNTs...`);
+        const token = tokenActions();
+        const mintHash = await token(client).mint({
+            token: tokenAddr,
+            to: account.address,
+            amount: parseEther('10'),
+            account
+        });
+        console.log(`     #️⃣  Hash: ${mintHash}`);
+        console.log(`  ✅ Minted 10 xPNTs`);
+
+        // Step 2: Check Paymaster EntryPoint deposit
+        // TODO: Add EntryPoint deposit check and auto-deposit if needed
+
+        // Step 3: Construct UserOperation (TODO)
+        console.log(`  ⚠️  PaymasterV4 UserOp - Implementation TODO`);
+
     } catch (e: any) {
-         console.log(`  ⚠️  EP Deposit Check Failed: ${e.message.split('\n')[0]}`);
+        console.log(`  ❌ Scenario Failed: ${e.message.split('\n')[0]}`);
     }
 }
 
@@ -151,83 +110,74 @@ async function runSuperPaymasterScenario(
     name: string, 
     keyName: string, 
     opState: OperatorState, 
-    config: NetworkConfig,
-    publicClient: any
+    config: NetworkConfig
 ) {
     console.log(`\n👤 === Scenario: ${name} with SuperPaymasterV3 ===`);
     
-    // Logging Helpers
-    const logStep = (msg: string) => console.log(`  ➡️  ${msg}`);
-    const logSuccess = (msg: string) => console.log(`  ✅ ${msg}`);
-    const logInfo = (msg: string) => console.log(`  ℹ️  ${msg}`);
-    const logTx = (hash: Hash) => {
-        const baseUrl = config.name === 'sepolia' ? 'https://sepolia.etherscan.io/tx/' : 'https://etherscan.io/tx/';
-        console.log(`     #️⃣  Hash: ${hash}`);
-        console.log(`     🔗 Link: ${baseUrl}${hash}`);
-    };
-
     const keyEnv = `PRIVATE_KEY_${keyName.toUpperCase()}`;
-    const key = process.env[keyEnv] as Hex;
+    const key = process.env[keyEnv] as `0x${string}`;
     if (!key) {
         console.log(`  ⚠️  Skipping ${name}: Missing ${keyEnv}`);
         return;
     }
+
     const account = privateKeyToAccount(key);
-    const client = createWalletClient({ account, chain: config.chain, transport: http(config.rpcUrl) });
-    
     const tokenAddr = opState.tokenAddress;
     const spmAddr = opState.superPaymasterAddress || config.contracts.superPaymaster;
 
-    logInfo(`Token: ${tokenAddr}`);
-    logInfo(`SuperPaymaster: ${spmAddr}`);
+    console.log(`  ℹ️  Token (cPNTs): ${tokenAddr}`);
+    console.log(`  ℹ️  SuperPaymaster: ${spmAddr}`);
 
-    // 1. Mint Token (cPNTs) to self
-    logStep(`Minting cPNTs to self...`);
-    try {
-        const hash = await client.writeContract({
-            address: tokenAddr!,
-            abi: [{ type: 'function', name: 'mint', inputs: [{name: 'to', type: 'address'}, {name: 'amount', type: 'uint256'}], outputs: [], stateMutability: 'nonpayable' }],
-            functionName: 'mint',
-            args: [account.address, parseEther('50')],
-            account
-        });
-        logTx(hash);
-        await publicClient.waitForTransactionReceipt({ hash });
-        logSuccess(`Minted 50 cPNTs`);
-    } catch (e: any) {
-        console.log(`  ❌ Mint Failed: ${e.message.split('\n')[0]}`);
+    if (!tokenAddr) {
+        console.log(`  ⚠️  Skipping: Missing Token in state.`);
+        return;
     }
 
-    // 2. Deposit (No Approve Needed for Gasless Tokens)
-    // logStep(`Approving cPNTs for SuperPaymaster...`);
-    // ... removed ... 
+    try {
+        // Create proper WalletClient
+        const client = createWalletClient({
+            chain: config.chain,
+            transport: http(config.rpcUrl),
+            account
+        });
+
+        // Step 1: Mint cPNTs using SDK tokenActions
+        console.log(`  ➡️  Minting cPNTs...`);
+        const token = tokenActions();
         
-        logStep(`Depositing cPNTs to SuperPaymaster...`);
-        try {
-             // Try depositFor via generic write
-             const hashDep = await client.writeContract({
-                address: spmAddr!,
-                abi: [{ 
-                    type: 'function', 
-                    name: 'depositFor', 
-                    inputs: [
-                        {name: 'token', type: 'address'}, 
-                        {name: 'account', type: 'address'}, 
-                        {name: 'amount', type: 'uint256'}
-                    ], 
-                    outputs: [], 
-                    stateMutability: 'nonpayable' 
-                }],
-                functionName: 'depositFor',
-                args: [tokenAddr!, account.address, parseEther('10')],
-                account
-            });
-            logTx(hashDep);
-            await publicClient.waitForTransactionReceipt({ hash: hashDep });
-            logSuccess(`Deposited 10 cPNTs Credit`);
-        } catch (e: any) {
-             console.log(`  ⚠️  Deposit Failed: ${e.message.split('\n')[0]}`);
-        }
+        const mintHash = await token(client).mint({
+            token: tokenAddr,
+            to: account.address,
+            amount: parseEther('50'),
+            account
+        });
+        console.log(`     #️⃣  Hash: ${mintHash}`);
+        console.log(`  ✅ Minted 50 cPNTs`);
 
+        // Step 2: Approve cPNTs for SuperPaymaster (传统模式)
+        console.log(`  ➡️  Approving cPNTs for SuperPaymaster...`);
+        const approveHash = await token(client).approve({
+            token: tokenAddr,
+            spender: spmAddr,
+            amount: parseEther('50'),
+            account
+        });
+        console.log(`  ✅ Approved 50 cPNTs`);
 
+        // Step 3: Deposit using Legacy Pull mode
+        console.log(`  ➡️  Depositing cPNTs to SuperPaymaster (Legacy mode)...`);
+        const spm = superPaymasterActions(spmAddr);
+        const depositHash = await spm(client).deposit({
+            amount: parseEther('10'),
+            account
+        });
+        console.log(`     #️⃣  Hash: ${depositHash}`);
+        console.log(`  ✅ Deposited 10 cPNTs to SuperPaymaster`);
+
+        // Step 4: Construct UserOperation (TODO)
+        console.log(`  ⚠️  SuperPaymasterV3 UserOp - Implementation TODO`);
+
+    } catch (e: any) {
+        console.log(`  ❌ Scenario Failed: ${e.message.split('\n')[0]}`);
+    }
 }

@@ -5,6 +5,8 @@ export abstract class BaseClient {
     protected client: WalletClient<Transport, Chain, Account>;
     protected publicClient?: PublicClient;
     protected registryAddress?: Address;
+    protected gTokenAddress?: Address;
+    protected gTokenStakingAddress?: Address;
 
     constructor(config: ClientConfig) {
         if (!config.client) {
@@ -17,6 +19,8 @@ export abstract class BaseClient {
         this.client = config.client;
         this.publicClient = config.publicClient;
         this.registryAddress = config.registryAddress;
+        this.gTokenAddress = config.gTokenAddress;
+        this.gTokenStakingAddress = config.gTokenStakingAddress;
     }
 
     /**
@@ -38,5 +42,19 @@ export abstract class BaseClient {
             throw new Error('Registry address is not configured for this client');
         }
         return this.registryAddress;
+    }
+
+    protected requireGToken(): Address {
+        if (!this.gTokenAddress) {
+            throw new Error('GToken address is not configured for this client');
+        }
+        return this.gTokenAddress;
+    }
+
+    protected requireGTokenStaking(): Address {
+        if (!this.gTokenStakingAddress) {
+            throw new Error('GTokenStaking address is not configured for this client');
+        }
+        return this.gTokenStakingAddress;
     }
 }

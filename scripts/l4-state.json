@@ -10,5 +10,17 @@
   "anni": {
     "tokenAddress": "0x6868723f3C9919D11D891D5AB931A08e9Fd8002e",
     "superPaymasterAddress": "0x678062d16A4d72B37F0fc453eff747322F51094F"
-  }
+  },
+  "operators": [
+    {
+      "name": "Jack",
+      "address": "0x084b5F85A5149b03aDf9396C7C94D8B8F328FB36",
+      "privateKeyEnv": "PRIVATE_KEY_JACK",
+      "community": "Dancing",
+      "tokenSymbol": "dPNTs",
+      "role": "ROLE_COMMUNITY",
+      "registeredAt": "2026-01-04T00:11:00Z",
+      "paymasterType": null
+    }
+  ]
 }

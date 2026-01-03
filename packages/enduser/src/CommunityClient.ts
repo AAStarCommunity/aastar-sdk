@@ -1,4 +1,4 @@
-import { type Address, type Hash, parseEther } from 'viem';
+import { type Address, type Hash, parseEther, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
 import { registryActions, sbtActions, xPNTsFactoryActions, reputationActions, tokenActions } from '@aastar/core';
 
@@ -64,17 +64,72 @@ export class CommunityClient extends BaseClient {
     }
 
     /**
-     * Register self as a Community Manager (if open)
+     * Register self as a Community Manager.
+     * This method handles all necessary steps:
+     * 1. Checks and approves GToken to GTokenStaking
+     * 2. Encodes CommunityRoleData with provided parameters
+     * 3. Calls registerRoleSelf on Registry
+     * 
+     * @param params Community registration parameters
+     * @param options Transaction options
+     * @returns Transaction hash
      */
-    async registerAsCommunity(options?: TransactionOptions): Promise<Hash> {
+    async registerAsCommunity(params: {
+        name: string;
+        ensName?: string;
+        website?: string;
+        description?: string;
+        logoURI?: string;
+        stakeAmount?: bigint;
+    }, options?: TransactionOptions): Promise<Hash> {
         const registryAddr = this.requireRegistry();
         const registry = registryActions(registryAddr);
+        const gTokenStakingAddr = this.requireGTokenStaking();
+        const gTokenAddr = this.requireGToken();
         
+        // 1. Get ROLE_COMMUNITY
         const roleCommunity = await registry(this.getStartPublicClient()).ROLE_COMMUNITY();
         
+        // 2. Prepare stake amount (default 30 GToken as per Registry config)
+        const stakeAmount = params.stakeAmount || parseEther('30');
+        
+        // 3. Check and approve GToken to GTokenStaking if needed
+        const gToken = tokenActions();
+        
+        const allowance = await gToken(this.getStartPublicClient()).allowance({
+            token: gTokenAddr,
+            owner: this.getAddress(),
+            spender: gTokenStakingAddr
+        });
+        
+        if (allowance < stakeAmount) {
+            const approveHash = await gToken(this.client).approve({
+                token: gTokenAddr,
+                spender: gTokenStakingAddr,
+                amount: stakeAmount * BigInt(2), // Approve 2x for future use
+                account: options?.account
+            });
+            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: approveHash });
+        }
+        
+        // 4. Encode CommunityRoleData
+        // struct CommunityRoleData { string name; string ensName; string website; string description; string logoURI; uint256 stakeAmount; }
+        const communityData = encodeAbiParameters(
+            parseAbiParameters('string, string, string, string, string, uint256'),
+            [
+                params.name,
+                params.ensName || '',
+                params.website || '',
+                params.description || `${params.name} Community`,
+                params.logoURI || '',
+                stakeAmount
+            ]
+        );
+        
+        // 5. Register role
         return registry(this.client).registerRoleSelf({
             roleId: roleCommunity,
-            data: '0x',
+            data: communityData,
             account: options?.account
         });
     }

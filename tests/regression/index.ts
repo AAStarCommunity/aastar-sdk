@@ -44,6 +44,10 @@ async function main() {
     const config = loadNetworkConfig(network);
     validateConfig(config);
 
+    // Display Contract Versions
+    const { displayContractVersions } = await import('./display-versions.js');
+    await displayContractVersions(config);
+
     console.log('\n═══════════════════════════════════════════════');
     console.log('Starting Test Suite...');
     console.log('═══════════════════════════════════════════════');

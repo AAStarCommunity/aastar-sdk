@@ -23,6 +23,18 @@ export interface ClientConfig {
      * Essential for looking up other contracts if not provided explicitly.
      */
     registryAddress?: Address;
+
+    /**
+     * GToken contract address.
+     * Required for operations involving token approvals and transfers.
+     */
+    gTokenAddress?: Address;
+
+    /**
+     * GTokenStaking contract address.
+     * Required for role registration that involves staking.
+     */
+    gTokenStakingAddress?: Address;
 }
 
 /**

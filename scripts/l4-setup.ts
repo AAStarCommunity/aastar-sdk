@@ -1,7 +1,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, type Address, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
 import { 
@@ -169,22 +169,30 @@ async function main() {
     ) => {
         console.log(`\n🏗️  Setting up ${name} (${tokenSymbol})...`);
         
-        // A. Register Community Role
+        // A. Register Community Role (using L2 CommunityClient API)
         const isCommunity = await registry(publicClient).hasRole({ user: account.address, roleId: ROLE_COMMUNITY });
         if (!isCommunity) {
-            console.log(`  📝 Registering Community Role (via Admin)...`);
+            console.log(`  📝 Registering Community Role...`);
             try {
-                const hash = await registry(clientJason).registerRole({
-                    roleId: ROLE_COMMUNITY,
-                    user: account.address,
-                    data: '0x', 
-                    account: opJason
+                // Use CommunityClient.registerAsCommunity() - it handles approval and encoding automatically
+                const { CommunityClient } = await import('../packages/enduser/dist/CommunityClient.js');
+                const communityClient = new CommunityClient({
+                    client: client,
+                    publicClient: publicClient,
+                    registryAddress: config.contracts.registry,
+                    gTokenAddress: config.contracts.gToken,
+                    gTokenStakingAddress: config.contracts.gTokenStaking
+                });
+                
+                const hash = await communityClient.registerAsCommunity({
+                    name: name,
+                    description: `${name} Community for testing`
                 });
                 await publicClient.waitForTransactionReceipt({ hash });
-                console.log(`  ✅ Registered`);
+                console.log(`  ✅ Community Role Granted`);
             } catch (e: any) {
                 if (e.message.includes('RoleAlreadyGranted')) {
-                    console.log(`  ✅ Already Registered (caught Error)`);
+                    console.log(`  ✅ Already Granted (caught Error)`);
                 } else {
                     console.log(`  ⚠️  Registration Warning: ${e.message.split('\n')[0]}`);
                 }
@@ -282,13 +290,23 @@ async function main() {
              // Register as SuperPaymaster Operator
              const isSuper = await registry(publicClient).hasRole({ user: account.address, roleId: ROLE_PAYMASTER_SUPER });
              if (!isSuper) {
-                 console.log(`  🦸 Granting SuperPaymaster Operator Role (via Admin)...`);
+                 console.log(`  🦸 Granting SuperPaymaster Operator Role (Self)...`);
                  try {
-                     const hash = await registry(clientJason).registerRole({
+                     // Ensure user has approved Registry for stake
+                     const gToken = tokenActions();
+                     const approveHash = await gToken(client).approve({
+                         token: config.contracts.gToken,
+                         spender: config.contracts.registry,
+                         amount: parseEther('100000'),
+                         account: account
+                     });
+                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                     
+                     // Use registerRoleSelf
+                     const hash = await registry(client).registerRoleSelf({
                          roleId: ROLE_PAYMASTER_SUPER,
-                         user: account.address,
                          data: '0x',
-                         account: opJason // Admin account
+                         account: account
                      });
                      await publicClient.waitForTransactionReceipt({ hash });
                      console.log(`  ✅ SuperPaymaster Operator Granted`);
