@@ -53,11 +53,12 @@ export class ReputationManager {
     }
 
     /**
-     * Get active rules
+     * Get active rules for a community
      */
-    async getActiveRules(): Promise<Hex[]> {
+    async getActiveRules(community?: Address): Promise<Hex[]> {
+        const comm = community || this.reputationAddr;
         const rep = reputationActions(this.reputationAddr);
-        return rep(this.client as PublicClient).getActiveRules();
+        return rep(this.client as PublicClient).getActiveRules({ community: comm });
     }
 
     // ========================================
@@ -145,11 +146,12 @@ export class ReputationManager {
     // ========================================
 
     /**
-     * Get user's reputation score
+     * Get user's reputation score in a community
      */
-    async getUserScore(user: Address): Promise<bigint> {
+    async getUserScore(user: Address, community?: Address): Promise<bigint> {
+        const comm = community || this.reputationAddr;
         const rep = reputationActions(this.reputationAddr);
-        return rep(this.client as PublicClient).getUserScore({ user });
+        return rep(this.client as PublicClient).communityReputations({ community: comm, user });
     }
 
     /**
