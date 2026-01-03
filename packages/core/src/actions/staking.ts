@@ -33,6 +33,7 @@ export type StakingActions = {
     userActiveRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
     authorizedSlashers: (args: { slasher: Address }) => Promise<boolean>;
     totalStaked: () => Promise<bigint>;
+    getTotalStaked: () => Promise<bigint>; // Alias for totalStaked
     treasury: () => Promise<Address>;
     owner: () => Promise<Address>;
     
@@ -272,6 +273,10 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
             functionName: 'totalStaked',
             args: []
         }) as Promise<bigint>;
+    },
+
+    async getTotalStaked() {
+        return this.totalStaked();
     },
 
     async treasury() {

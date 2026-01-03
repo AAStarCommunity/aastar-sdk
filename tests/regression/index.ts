@@ -1,8 +1,8 @@
 #!/usr/bin/env ts-node
 import { loadNetworkConfig, validateConfig, type NetworkName } from './config';
-import { testL1Actions } from './l1-tests';
-import { testL2Clients } from './l2-tests';
-import { testL3Patterns } from './l3-tests';
+import { runL1Tests } from './l1-tests';
+import { runL2Tests } from './l2-tests';
+import { runL3Tests } from './l3-tests';
 
 /**
  * SDK Regression Test Runner
@@ -47,9 +47,9 @@ async function main() {
     console.log('═══════════════════════════════════════════════');
 
     // Run tests
-    await testL1Actions(config);
-    await testL2Clients(config);
-    await testL3Patterns(config);
+    await runL1Tests(config);
+    await runL2Tests(config);
+    await runL3Tests(config);
 
     console.log('═══════════════════════════════════════════════');
     console.log('✅ Test Suite Complete');

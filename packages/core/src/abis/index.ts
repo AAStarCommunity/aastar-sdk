@@ -11,7 +11,7 @@ import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json
 import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
 
 // Token System
-import xPNTsTokenABIData from './xPNTs.json' with { type: 'json' };
+import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
 import aPNTsABIData from './aPNTs.json' with { type: 'json' };
 import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };

@@ -54,6 +54,8 @@ export type RegistryActions = {
     // View Functions
     roleConfigs: (args: { roleId: Hex }) => Promise<any>;
     roleCounts: (args: { roleId: Hex }) => Promise<bigint>;
+    getRoleMemberCount: (args: { roleId: Hex }) => Promise<bigint>;
+    getRoleAdmin: (args: { roleId: Hex }) => Promise<Hex>;
     roleMembers: (args: { roleId: Hex, index: bigint }) => Promise<Address>;
     userRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
     userRoleCount: (args: { user: Address }) => Promise<bigint>;
@@ -457,6 +459,20 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             functionName: 'roleCounts',
             args: [roleId]
         }) as Promise<bigint>;
+    },
+
+    // Alias for roleCounts
+    async getRoleMemberCount({ roleId }) {
+        return this.roleCounts({ roleId });
+    },
+
+    async getRoleAdmin({ roleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getRoleAdmin',
+            args: [roleId]
+        }) as Promise<Hex>;
     },
 
     async roleMembers({ roleId, index }) {

@@ -1,95 +1,168 @@
-# AAStar SDK Regression Testing
+# Complete Regression Test Suite
 
 ## Overview
-
-Complete regression test framework for L1/L2/L3 APIs across multiple networks.
+Integrated regression testing framework for AAStar SDK covering L1/L2/L3 APIs with automatic environment setup, ABI synchronization, and contract deployment.
 
 ## Quick Start
 
 ```bash
-# Test on Sepolia
-pnpm test:regression:sepolia
+# Full regression on Anvil (auto-deploy + ABI sync + tests)
+./run_complete_regression.sh
 
-# Test on Anvil
-pnpm test:regression:anvil
+# Test on Sepolia (skip deployment)
+./run_complete_regression.sh --env sepolia
 
-# Test custom network
-pnpm test:regression -- --network=op-sepolia
+# Skip ABI sync (use existing ABIs)
+./run_complete_regression.sh --skip-abi-sync
+
+# Keep Anvil running after tests
+./run_complete_regression.sh --keep-anvil
 ```
 
-## Supported Networks
+## Workflow
 
-| Network | Command | ENV File |
-|---------|---------|----------|
-| Anvil | `pnpm test:regression:anvil` | `.env.anvil` |
-| Sepolia | `pnpm test:regression:sepolia` | `.env.sepolia` |
-| OP Sepolia | `pnpm test:regression:op-sepolia` | `.env.op-sepolia` |
-| OP Mainnet | `pnpm test:regression:op-mainnet` | `.env.op-mainnet` |
-| ETH Mainnet | `pnpm test:regression:mainnet` | `.env.mainnet` |
+The complete regression suite follows this workflow:
 
-## Setup
+```
+1. Environment Check
+   ├─ Anvil: Start if not running
+   └─ Sepolia: Verify RPC connection
 
-1. **Copy ENV template**:
-   ```bash
-   cp env.template .env.sepolia
-   ```
+2. Contract Deployment (Anvil only)
+   ├─ Deploy via SuperPaymaster/DeployV3FullLocal.s.sol
+   └─ Generate config.json
 
-2. **Fill in contract addresses** from your deployment or use SuperPaymaster repo addresses.
+3. ABI Synchronization
+   ├─ Extract ABIs from SuperPaymaster/out
+   ├─ Copy to packages/core/src/abis
+   └─ Update index.ts exports
 
-3. **Add test account**:
-   ```env
-   TEST_PRIVATE_KEY=0x...
-   TEST_ACCOUNT_ADDRESS=0x...
-   ```
+4. Environment Configuration
+   ├─ Sync config.json → .env.anvil
+   └─ Load environment variables
 
-4. **Run tests**:
-   ```bash
-   pnpm test:regression:sepolia
-   ```
+5. SDK Build
+   ├─ Clean stale artifacts
+   └─ Build all @aastar/* packages
 
-## Test Layers
+6. L1/L2/L3 Regression Tests
+   ├─ L1: Core Actions (Registry, Staking, SBT, Reputation, etc.)
+   ├─ L2: Business Clients (UserClient, CommunityClient, etc.)
+   └─ L3: Scenario Patterns (UserLifecycle, OperatorLifecycle, etc.)
 
-### L1 Core Actions
-- Registry role checks
-- Token balance queries
-- Staking queries
-- SBT balance checks
+7. Cleanup
+   └─ Stop Anvil (if started by script)
+```
 
-### L2 Business Clients
-- UserClient functionality
-- Community Client init
-- Paymaster Operator checks
+## Scripts
 
-### L3 Scenario Patterns
-- UserLifecycle queries
-- StakingManager init
-- OperatorLifecycle status
+### Main Script
+- `run_complete_regression.sh` - Complete integrated test suite
 
-## ENV File Structure
+### Helper Scripts
+- `extract_abis.sh` - Extract ABIs from SuperPaymaster
+- `extract_addresses_to_env.sh` - Parse deployment output to ENV
+- `scripts/sync_anvil_config.cjs` - Sync config.json to .env.anvil
 
-Required variables:
+### Test Files
+- `tests/regression/index.ts` - Test runner
+- `tests/regression/config.ts` - Network configuration loader
+- `tests/regression/l1-tests.ts` - L1 Core Actions tests
+- `tests/regression/l2-tests.ts` - L2 Business Clients tests
+- `tests/regression/l3-tests.ts` - L3 Scenario Patterns tests
+
+## Environment Files
+
+### .env.anvil
 ```bash
-RPC_URL=...
-TEST_PRIVATE_KEY=0x...
-TEST_ACCOUNT_ADDRESS=0x...
+RPC_URL=http://127.0.0.1:8545
+TEST_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+TEST_ACCOUNT_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 
 REGISTRY_ADDRESS=0x...
 GTOKEN_ADDRESS=0x...
-GTOKEN_STAKING_ADDRESS=0x...
-SUPER_PAYMASTER_ADDRESS=0x...
-SBT_ADDRESS=0x...
-REPUTATION_ADDRESS=0x...
-XPNTS_FACTORY_ADDRESS=0x...
+# ... (auto-synced from config.json)
 ```
 
-## L3 Examples
-
-Run L3 pattern examples:
-
+### .env.sepolia
 ```bash
-# Community Launch
-tsx examples/l3-community-launch.ts
+RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
+TEST_PRIVATE_KEY=0xYOUR_KEY
+TEST_ACCOUNT_ADDRESS=0xYOUR_ADDRESS
 
-# User Onboarding
-tsx examples/l3-user-onboarding.ts
+# Contract addresses from SuperPaymaster deployment
+REGISTRY_ADDRESS=0x...
+GTOKEN_ADDRESS=0x...
+```
+
+## Test Coverage
+
+### L1 Core Actions
+- Registry: Role management, community queries
+- Staking: Stake/unstake, balance queries
+- Token: ERC20 operations
+- SBT: NFT operations, membership
+- Reputation: Score queries, rule management
+- SuperPaymaster: Operator management, deposits
+- xPNTsFactory: Token deployment
+
+### L2 Business Clients
+- UserClient: User operations
+- CommunityClient: Community management
+- PaymasterOperatorClient: Operator operations
+- ProtocolClient: Governance operations
+
+### L3 Scenario Patterns
+- UserLifecycle: Onboarding, staking, SBT minting
+- StakingManager: Stake management
+- OperatorLifecycle: Operator registration, management
+- CommunityLaunchpad: Community creation
+- SuperPaymasterOperator: Operator lifecycle
+- ProtocolGovernance: Governance workflows
+- ReputationManager: Reputation management
+
+## Troubleshooting
+
+### Anvil won't start
+```bash
+pkill anvil
+./run_complete_regression.sh
+```
+
+### ABI mismatch errors
+```bash
+# Force ABI re-sync
+./run_complete_regression.sh --skip-deploy
+```
+
+### Contract not deployed
+```bash
+# Force re-deployment
+pkill anvil
+./run_complete_regression.sh
+```
+
+### Build errors
+```bash
+# Clean and rebuild
+pnpm -r clean
+./run_complete_regression.sh --skip-deploy --skip-abi-sync
+```
+
+## CI/CD Integration
+
+```yaml
+# .github/workflows/regression.yml
+name: Regression Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Run Regression
+        run: ./run_complete_regression.sh --env anvil
 ```

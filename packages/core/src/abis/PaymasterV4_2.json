@@ -3,51 +3,6 @@
     "type": "constructor",
     "inputs": [
       {
-        "name": "_entryPoint",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_ethUsdPriceFeed",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_serviceFeeRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_maxGasCostCap",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_xpntsFactory",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_initialSBT",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_initialGasToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "_registry",
         "type": "address",
         "internalType": "address"
@@ -306,7 +261,52 @@
     "name": "initialize",
     "inputs": [
       {
+        "name": "_entryPoint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "_owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_treasury",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_ethUsdPriceFeed",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_serviceFeeRate",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_maxGasCostCap",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_minTokenBalance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_xpntsFactory",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_initialSBT",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_initialGasToken",
         "type": "address",
         "internalType": "address"
       }
@@ -886,6 +886,19 @@
   },
   {
     "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "MaxGasCostCapUpdated",
     "inputs": [
       {
@@ -1062,6 +1075,16 @@
   {
     "type": "error",
     "name": "FailedInnerCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
     "inputs": []
   },
   {
