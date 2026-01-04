@@ -1,10 +1,41 @@
 import * as dotenv from 'dotenv';
-import * as path from 'path';
-import { type Address, type Chain, type Hex } from 'viem';
+/**
+ * Network Configuration Loader for Regression Tests
+ * 
+ * Contract addresses are loaded from SuperPaymaster deployments directory
+ * to ensure consistency across all testing layers (L1/L2/L3/L4).
+ */
+
+import { type Address, type Hex, type Chain } from 'viem';
 import { sepolia, optimismSepolia, optimism, mainnet } from 'viem/chains';
 import { anvil, localhost } from 'viem/chains';
+import * as path from 'path';
+import * as fs from 'fs';
 
-export type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
+type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
+
+/**
+ * Load contract addresses from SuperPaymaster deployments
+ */
+function loadDeployments(network: NetworkName): Record<string, Address> {
+    const SUPERPAYMASTER_ROOT = path.resolve(process.cwd(), '../SuperPaymaster');
+    const deploymentsPath = path.join(SUPERPAYMASTER_ROOT, `deployments/${network}.json`);
+    
+    if (!fs.existsSync(deploymentsPath)) {
+        console.warn(`⚠️  Deployments file not found: ${deploymentsPath}`);
+        console.warn(`   Using fallback addresses from .env`);
+        return {};
+    }
+    
+    try {
+        const deployments = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
+        console.log(`✅ Loaded contract addresses from: ${deploymentsPath}`);
+        return deployments as Record<string, Address>;
+    } catch (error) {
+        console.error(`❌ Failed to load deployments: ${error}`);
+        return {};
+    }
+}
 
 export interface ContractAddresses {
     registry: Address;
@@ -82,6 +113,22 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         return addr as Address;
     };
 
+    // Load contract addresses from SuperPaymaster deployments (with .env fallback)
+    const deployments = loadDeployments(network);
+    
+    const getContractAddress = (deploymentKey: string, envKey: string, envFallback?: string): Address => {
+        // 1. Try deployments first
+        if (deployments[deploymentKey]) {
+            return deployments[deploymentKey];
+        }
+        // 2. Fallback to .env
+        const addr = process.env[envKey] || (envFallback && process.env[envFallback]);
+        if (!addr) {
+            throw new Error(`Missing contract address: ${deploymentKey} (env: ${envKey}${envFallback ? ` or ${envFallback}` : ''}) in ${envFile}`);
+        }
+        return addr as Address;
+    };
+
     const supplierPrivateKey = process.env.PRIVATE_KEY_SUPPLIER as Hex | undefined;
 
     return {
@@ -89,17 +136,19 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         chain,
         rpcUrl: process.env.RPC_URL!,
         contracts: {
-            // Support both naming conventions
-            registry: getAddress('REGISTRY_ADDRESS'),
-            gToken: getAddress('GTOKEN_ADDRESS'),
-            gTokenStaking: getAddress('GTOKEN_STAKING_ADDRESS', 'STAKING_ADDRESS'),
-            superPaymaster: getAddress('SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_SUPER'),
-            paymasterFactory: getAddress('PAYMASTER_FACTORY_ADDRESS', 'PAYMASTER_FACTORY'), // Added loader
-            sbt: getAddress('SBT_ADDRESS', 'MYSBT_ADDRESS'),
-            reputation: getAddress('REPUTATION_ADDRESS', 'REPUTATION_SYSTEM'),
-            xPNTsFactory: getAddress('XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
-            dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address | undefined,
-            blsAggregator: process.env.BLS_AGGREGATOR_ADDRESS as Address | process.env.BLS_AGGREGATOR as Address | undefined
+            registry: getContractAddress('registry', 'REGISTRY_ADDRESS'),
+            gToken: getContractAddress('gToken', 'GTOKEN_ADDRESS'),
+            gTokenStaking: getContractAddress('staking', 'GTOKEN_STAKING_ADDRESS', 'STAKING_ADDRESS'),
+            mySBT: getContractAddress('sbt', 'SBT_ADDRESS', 'MYSBT_ADDRESS'),
+            reputationSystem: getContractAddress('reputationSystem', 'REPUTATION_ADDRESS', 'REPUTATION_SYSTEM'),
+            superPaymaster: getContractAddress('superPaymaster', 'SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_SUPER'),
+            paymasterFactory: getContractAddress('paymasterFactory', 'PAYMASTER_FACTORY_ADDRESS', 'PAYMASTER_FACTORY'),
+            xpntsFactory: getContractAddress('xPNTsFactory', 'XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
+            blsAggregator: getContractAddress('blsAggregator', 'BLS_AGGREGATOR_ADDRESS', 'BLS_AGGREGATOR'),
+            blsValidator: getContractAddress('blsValidator', 'BLS_VALIDATOR_ADDRESS', 'BLS_VALIDATOR'),
+            dvtValidator: getContractAddress('dvtValidator', 'DVT_VALIDATOR_ADDRESS', 'DVT_VALIDATOR'),
+            entryPoint: getContractAddress('entryPoint', 'ENTRY_POINT_ADDRESS'),
+            simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985' as Address, // Pimlico v0.7 (standard)
         },
         testAccount: {
             privateKey: process.env.TEST_PRIVATE_KEY as `0x${string}`,
