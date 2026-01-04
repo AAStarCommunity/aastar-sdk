@@ -1,5 +1,5 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
-import { GTokenABI, xPNTsTokenABI, aPNTsABI } from '../abis/index.js';
+import { GTokenABI, xPNTsTokenABI } from '../abis/index.js';
 
 // Universal Token Actions for GToken, aPNTs, xPNTs
 export type TokenActions = {
@@ -250,7 +250,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     async addAutoApprovedSpender({ token, spender, account }) {
         return (client as any).writeContract({
             address: token,
-            abi: aPNTsABI,
+            abi: xPNTsTokenABI,
             functionName: 'addAutoApprovedSpender',
             args: [spender],
             account: account as any,
@@ -261,7 +261,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     async removeAutoApprovedSpender({ token, spender, account }) {
         return (client as any).writeContract({
             address: token,
-            abi: aPNTsABI,
+            abi: xPNTsTokenABI,
             functionName: 'removeAutoApprovedSpender',
             args: [spender],
             account: account as any,
@@ -272,7 +272,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     async isAutoApprovedSpender({ token, spender }) {
         return (client as PublicClient).readContract({
             address: token,
-            abi: aPNTsABI,
+            abi: xPNTsTokenABI,
             functionName: 'isAutoApprovedSpender',
             args: [spender]
         }) as Promise<boolean>;
@@ -282,7 +282,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     async SUPERPAYMASTER_ADDRESS({ token }) {
         return (client as PublicClient).readContract({
             address: token,
-            abi: aPNTsABI,
+            abi: xPNTsTokenABI,
             functionName: 'SUPERPAYMASTER_ADDRESS',
             args: []
         }) as Promise<Address>;

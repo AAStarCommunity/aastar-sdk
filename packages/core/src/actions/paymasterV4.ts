@@ -34,6 +34,7 @@ export type PaymasterV4Actions = {
     owner: () => Promise<Address>;
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    version: () => Promise<string>;
 };
 
 export const paymasterV4Actions = (address: Address) => (client: PublicClient | WalletClient): PaymasterV4Actions => ({
@@ -238,5 +239,14 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async version() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'version',
+            args: []
+        }) as Promise<string>;
     }
 });

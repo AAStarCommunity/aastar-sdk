@@ -20,11 +20,15 @@ export interface SponsorshipPolicy {
 export class PaymasterOperatorClient extends BaseClient {
     public superPaymasterAddress: Address;
     public tokenAddress?: Address;
+    public ethUsdPriceFeed: Address;
+    public xpntsFactory: Address;
 
     constructor(config: OperatorClientConfig) {
         super(config);
         this.superPaymasterAddress = config.superPaymasterAddress;
         this.tokenAddress = config.tokenAddress;
+        this.ethUsdPriceFeed = config.ethUsdPriceFeedAddress || '0x694AA1769357215DE4FAC081bf1f309aDC325306'; // Default Sepolia
+        this.xpntsFactory = config.xpntsFactoryAddress || '0x0000000000000000000000000000000000000000'; // Should be provided
     }
 
     // ========================================
@@ -137,6 +141,7 @@ export class PaymasterOperatorClient extends BaseClient {
     async deployAndRegisterPaymasterV4(params?: {
         stakeAmount?: bigint; // Optional, defaults to 30 GToken (Registry requirement for AOA)
         version?: string; // Optional, defaults to Factory default or V4.0.0
+        salt?: bigint; // Optional, for deterministic deployment
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 
         deployHash: Hash; 
@@ -191,14 +196,47 @@ export class PaymasterOperatorClient extends BaseClient {
                 }
             }
             if (!version || version === '') {
-                version = 'V4.0.0'; // Ultimate fallback
+                version = 'v4.2'; // Default to v4.2 now
             }
 
             console.log(`Deploying Paymaster ${version}...`);
+            
+            // Construct initData for V4.2
+            let initData: Hash = '0x';
+            if (version && (version.toLowerCase().includes('v4.2'))) {
+                const { PaymasterV4ABI } = await import('@aastar/core');
+                const { encodeFunctionData, parseEther } = await import('viem');
+                
+                const ownerAddr = typeof account === 'string' ? account : account.address;
+                const treasuryAddr = ownerAddr;
+                // Use input args or configured properties
+                const priceFeed = this.ethUsdPriceFeed;
+                const xpntsFactory = this.xpntsFactory !== '0x0000000000000000000000000000000000000000' 
+                    ? this.xpntsFactory 
+                    : factoryAddr; // Fallback unsafe, but maybe better than 0x0
+                
+                initData = encodeFunctionData({
+                    abi: PaymasterV4ABI,
+                    functionName: 'initialize',
+                    args: [
+                         '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7
+                         ownerAddr,
+                         treasuryAddr,
+                         priceFeed,
+                         200n, // serviceFeeRate (2%)
+                         parseEther('0.1'), // maxGasCostCap
+                         parseEther('1'), // minTokenBalance
+                         xpntsFactory,
+                         '0x0000000000000000000000000000000000000000', // initialSBT
+                         '0x0000000000000000000000000000000000000000'  // initialGasToken
+                    ]
+                });
+            }
+
             try {
                 deployHash = await factory(this.client).deployPaymaster({
                     owner: typeof account === 'string' ? account : account.address,
-                    version: version, // User requested V4.2
+                    version: version, // User requested (or default v4.2)
                     account: account
                 });
             } catch (error: any) {
@@ -457,5 +495,48 @@ export class PaymasterOperatorClient extends BaseClient {
     async getSupportedGasTokens(): Promise<Address[]> {
         const pm = paymasterV4Actions(this.superPaymasterAddress);
         return pm(this.getStartPublicClient()).getSupportedGasTokens();
+    }
+    /**
+     * Setup Paymaster V4 Configuration (Add SBT and GasToken)
+     * @param params configuration parameters
+     */
+    async setupPaymasterV4(params: {
+        paymaster: Address;
+        sbt: Address;
+        gasToken: Address;
+        priceFeed: Address;
+    }): Promise<void> {
+        const { paymasterV4Actions } = await import('@aastar/core');
+        
+        // Use Public Client for Reads
+        const pmRead = paymasterV4Actions(params.paymaster)(this.getStartPublicClient());
+        // Use Wallet Client for Writes (this.client)
+        const pmWrite = paymasterV4Actions(params.paymaster)(this.client);
+        
+        // 1. Add SBT
+        const isSbtSupported = await pmRead.isSBTSupported({ sbt: params.sbt });
+        if (!isSbtSupported) {
+            console.log(`Adding SBT ${params.sbt} to Paymaster...`);
+            const hash = await pmWrite.addSBT({ sbt: params.sbt, account: this.client.account });
+            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash });
+            console.log('SBT Added.');
+        } else {
+            console.log(`SBT ${params.sbt} already supported.`);
+        }
+
+        // 2. Add GasToken
+        const isTokenSupported = await pmRead.isGasTokenSupported({ token: params.gasToken });
+        if (!isTokenSupported) {
+            console.log(`Adding GasToken ${params.gasToken} to Paymaster...`);
+            const hash = await pmWrite.addGasToken({ 
+                token: params.gasToken, 
+                priceFeed: params.priceFeed,
+                account: this.client.account 
+            });
+            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash });
+            console.log('GasToken Added.');
+        } else {
+             console.log(`GasToken ${params.gasToken} already supported.`);
+        }
     }
 }

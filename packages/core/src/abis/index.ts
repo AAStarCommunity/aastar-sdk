@@ -12,7 +12,7 @@ import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
 
 // Token System
 import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
-import aPNTsABIData from './aPNTs.json' with { type: 'json' };
+// Note: aPNTs uses xPNTsToken ABI (same interface, different instance)
 import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };
 
@@ -25,6 +25,7 @@ import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 
 // Legacy/Third-party (Standardized)
 import PaymasterABIData from './Paymaster.json' with { type: 'json' };
+import PaymasterV4_2ABIData from './PaymasterV4_2.json' with { type: 'json' };
 import SimpleAccountABIData from './SimpleAccount.json' with { type: 'json' };
 import SimpleAccountFactoryABIData from './SimpleAccountFactory.json' with { type: 'json' };
 
@@ -42,8 +43,7 @@ export const PaymasterFactoryABI = PaymasterFactoryABIData;
 export const EntryPointABI = EntryPointABIData;
 
 // Re-export ABIs - Token System
-export const xPNTsTokenABI = xPNTsTokenABIData;
-export const aPNTsABI = aPNTsABIData;
+export const xPNTsTokenABI = xPNTsTokenABIData; // Use this for all xPNTs instances (aPNTs, bPNTs, etc.)
 export const xPNTsFactoryABI = xPNTsFactoryABIData;
 export const MySBTABI = MySBTABIData;
 
@@ -64,7 +64,6 @@ export const SimpleAccountV08ABI = SimpleAccountV08ABIData;
 export const SimpleAccountFactoryV08ABI = SimpleAccountFactoryV08ABIData;
 export const Simple7702AccountABI = Simple7702AccountABIData;
 
-// Legacy Aliases for compatibility (if needed)
-export const SuperPaymasterV3ABI = SuperPaymasterABIData;
-export const ReputationSystemV3ABI = ReputationSystemABIData;
-export const PaymasterV4ABI = PaymasterABIData;
+// Paymaster V4 (use V4_2 as the current standard)
+export const PaymasterV4ABI = PaymasterV4_2ABIData;
+

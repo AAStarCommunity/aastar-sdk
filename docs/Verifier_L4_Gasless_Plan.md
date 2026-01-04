@@ -114,6 +114,71 @@
 
 补充：
 xPNTsFactory合约初始化会设置SuperPaymaster内置为超级账户，可以直接从任意xPNTsFactory部署的xPNTs合约转账gas需要的xPNTs到自己的账户，不用approve。不过也提供了安全校验，只能用来转gas费用。
+
+
+## 规则补充
+以下规则在aastar-sdk 项目生效
+第一，禁止创建便利性的脚本或者临时性的脚本用来什么检查余额、部署token、资助账户，这些都禁止，如果需要便利性脚本，参考第二条
+第二，所有过程必须使用使用我们的API，我们API有L1L2L3级别的API，都封装了基础能力，你为什么不用API，需要便利性脚本了，在test，utils模块下新增工具api，转化为可重复使用的api，为全回归测试做准备
+。第三个，禁止产生任何编译的过程文件，产生后马上清理这些过程文件，你如果需要运行ts，使用npx tsx来运行，禁止编译。
+第四，所有的环境变量配置，在根目录的.env.sepolia（不同网络，不同配置名称，例如.env.anvil, .env.op-sepolia, .env.mainnet，目前我们重点是在sepolia跑通全回归测试）。
+第五，全回归测试必须包含三个阶段，必须一步步完成，禁止未完成第一阶段，进入第二阶段，以此类推。
+其中，第一阶段，定义为合约环境检查，第二阶段，定义为初始化账户（EOA和AA）、社区、token、paymaster和superpaymaster，第三阶段，准备forge script dry run测试useroperation是否合格，然后测试和fix，完成gasless测试。
+以上所有阶段的实现，都在L4 test脚本实现，通过组织和调用L1,L2,L3的sdk api，实现关键动作，禁止借助外部临时api完成，任何步骤没有api实现了，check后可以新增api，原则参考第二条规则， 最后无法完成的，抛出报错。
+------
+以上规则的详细版本，在docs/Verifier_L4_Gasless_Plan.md,此规则为实现gasless回归测试为目标。
+
+
+## 合约验证
+**目标**
+验证所有合约地址是否是最新版本，合约名称，版本号，部署日期，合约地址，都要输出和明确展示，验证是否完成了相互之间的依赖初始化。
+以上需要统计合约数量（指的是由本项目开发的合约和依赖合约），目前有如下合约：
+ 1. Registry                       60 functions，全局注册表合约
+ 2. SuperPaymaster                 58 functions，唯一实例的多租户Paymaster，由AAStar社区维护
+ 3. MySBT                          49 functions，全局唯一SBT合约，白板MySBT协议，只有你可以自由涂抹
+ 4. PaymasterV4_2                  48 functions ，模板合约，reg在PaymasterFactory合约一个具体实现
+ 5. xPNTsToken                     37 functions 模板合约,immutable方式固化在了xPNTsFactory合约
+ 6. GToken                         18 functions，基础GToken合约，未来要改进为销售合约
+ 7. GTokenStaking                  28 functions，GToken的质押管理合约
+ 8. xPNTsFactory                   28 functions xPNTs合约注册到工厂，然后通过工厂部署具体实现proxy
+ 9. PaymasterFactory               24 functions paymaster某版本实现reg到工厂，use工厂部署实现proxy
+ 10. ReputationSystem               20 functions，信用系统
+ 11. BLSAggregator                  18 functions，BLS聚合器
+ 12. DVTValidator                   15 functions，DVT验证器
+ 13. BLSValidator                   2 functions，BLS验证器合约
+-----------------------------------------------------------------   
+14. SimpleAccount                  17 functions，默认0.7版，外部依赖，符合entrypoint 0.7的合约账户
+15. SimpleAccountV08               17 functions，外部依赖，符合entrypoint 0.8的合约账户
+16. EntryPoint                     22 functions，外部依赖，官方entrypoint
+17. Simple7702Account              10 functions，外部依赖，符合entrypoint 0.7的合约账户
+18. SimpleAccountFactory           4 functions，外部依赖，符合entrypoint 0.7的合约账户工厂
+19. SimpleAccountFactoryV08        4 functions，外部依赖，符合entrypoint 0.8的合约账户工厂
+20. SenderCreator                  3 functions，外部依赖，部署AA账户的工具合约
+21. UserOperationLib               3 functions，外部依赖，用户操作的工具合约
+ 
+   
+
+基于工厂部署的实例：
+ 1. aPNTs，基于xpntsFactory部署的标准实现，提供xpnts接口的具体实例，归属于AAStar社区
+ 2. bPNTs，基于xpntsFactory部署的标准实现，提供xpnts接口的具体实例，归属于Bread社区，以此类推
+ 3. PaymasterV4_2-Bread，归属于Bread社区，基于paymasterFactory部署的标准实现，提供paymaster接口的具体实例，以此类推
+ 4. SuperPaymaster，归属于AAStar社区，全局唯一实例，提供superpaymaster服务的多租户合约（这个是特殊实例，只有一个）
+
+验证相互之间的依赖是否初始化完成，包括：
+1. GToken是否是immutable变量在GTokenStaking合约中
+(Wiring Matrix)
+* 		MySBT -> Registry
+* 		 GTokenStaking -> Registry
+* 		 xPNTsFactory -> SuperPaymaster
+* 		Registry -> ReputationSystem (as Source)
+* 		Registry -> BLSAggregator
+* 		Registry -> BLSValidator
+* 		SuperPaymaster -> xPNTsFactory
+* 		SuperPaymaster -> BLSAggregator
+* 依赖的设置分为immutable变量设置和依赖合约地址设置，immutable变量设置在合约初始化时设置，依赖合约地址设置在合约初始化时设置（部署者/管理员调用setter函数）
+
+两个方式完成合约验证：到superpaymaster项目目录，运行 forge script scripts/VerifyV3_1_1.s.sol 来验证
+或者到aastar-sdk项目目录，添加checkContract函数（借鉴VerifyV3_1_1.s.sol逻辑，我们重新编写，这个还没做，需要新增checkContract函数），来验证
 -------
 TX requirements 
 

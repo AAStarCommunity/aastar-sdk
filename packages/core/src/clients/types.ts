@@ -41,6 +41,8 @@ export interface ClientConfig {
      * Required for deploying new PaymasterV4 instances.
      */
     paymasterFactoryAddress?: Address;
+    xpntsFactoryAddress?: Address;
+    ethUsdPriceFeedAddress?: Address;
 }
 
 /**

@@ -48,7 +48,8 @@ async function testBrownV4Deploy() {
     try {
         console.log('\n🚀 Deploying V4 Paymaster and Registering AOA Role...');
         const result = await paymasterClient.deployAndRegisterPaymasterV4({
-            stakeAmount: parseEther('30')
+            stakeAmount: parseEther('30'),
+            salt: 1n
         });
         
         console.log(`\n✅ Success!`);

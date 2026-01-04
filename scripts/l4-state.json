@@ -35,6 +35,14 @@
       ],
       "registeredAt": "2026-01-03T17:30:17.276Z",
       "paymasterV4": "0x00d76797284F1460a0173a6F1081eC20450dc07e"
+    },
+    {
+      "name": "BrownClean",
+      "address": "0x6b28363b7fc3c53B34F4e63D1203d6E2e249C4fC",
+      "privateKey": "0x0b95a64ad087b7453bcb9161579641e2260a7ae348e8c5b90db267fc5626f7d4",
+      "roles": [
+        "ROLE_COMMUNITY"
+      ]
     }
   ],
   "jack": {

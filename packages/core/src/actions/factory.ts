@@ -41,11 +41,11 @@ export type XPNTsFactoryActions = {
 export type PaymasterFactoryActions = {
     // Deployment
     // Deployment
-    deployPaymaster: (args: { owner: Address, version?: string, account?: Account | Address }) => Promise<Hash>;
+    deployPaymaster: (args: { owner: Address, version?: string, account?: Account | Address }) => Promise<Hash>; // initData不需要，implementation已注册
     
     // Query
     calculateAddress: (args: { owner: Address }) => Promise<Address>;
-    getPaymaster: (args: { owner: Address }) => Promise<Address>;
+    getPaymaster: (args: { owner: Address }) => Promise<Address>; // 使用 msg.sender mapping，不支持 salt
     getPaymasterCount: () => Promise<bigint>;
     getAllPaymasters: () => Promise<Address[]>;
     isPaymasterDeployed: (args: { owner: Address }) => Promise<boolean>;
@@ -285,17 +285,16 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
 });
 
 export const paymasterFactoryActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterFactoryActions => ({
-    async deployPaymaster({ owner, version, account }) {
-        // Note: ABI expects (_version, initData). SDK abstraction needs to handle this or expose it.
-        // For regression fix, we assume defaults or passing raw args.
-        const defaultVer = 'V4.0.0'; // Fallback
+    async deployPaymaster({ owner, version, account }: { owner: Address, version?: string, account?: Account | Address }) {
+        // Factory.deployPaymaster(version) - implementation 已注册，不需要 initData
+        const defaultVer = 'v4.2'; // 当前标准版本
         const useVer = version || defaultVer;
         
         return (client as any).writeContract({
             address,
             abi: PaymasterFactoryABI,
             functionName: 'deployPaymaster',
-            args: [useVer, '0x'], // Placeholder fix for initData
+            args: [useVer, '0x'], // initData 固定为 0x（不需要初始化参数）
             account: account as any,
             chain: (client as any).chain
         });
@@ -308,7 +307,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
     },
 
     async getPaymaster({ owner }) {
-        // paymasterByOperator is public mapping
+        // 使用 paymasterByOperator mapping（不支持 salt）
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,
