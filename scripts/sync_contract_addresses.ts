@@ -88,13 +88,27 @@ async function main() {
         const coreAbiFiles = fs.readdirSync(superpaymasterAbisDir).filter(f => f.endsWith('.json'));
         let coreCount = 0;
         
+        // 版本号映射：去除 V3 等后缀
+        const versionMapping: Record<string, string> = {
+            'BLSAggregatorV3.json': 'BLSAggregator.json',
+            'DVTValidatorV3.json': 'DVTValidator.json',
+            'ReputationSystemV3.json': 'ReputationSystem.json',
+            'SuperPaymasterV3.json': 'SuperPaymaster.json',
+        };
+        
         for (const file of coreAbiFiles) {
             const sourcePath = path.join(superpaymasterAbisDir, file);
-            const targetPath = path.join(sdkAbisDir, file);
+            // 使用映射表去除版本号，如果没有映射则保持原名
+            const targetFileName = versionMapping[file] || file;
+            const targetPath = path.join(sdkAbisDir, targetFileName);
             
             try {
                 fs.copyFileSync(sourcePath, targetPath);
-                console.log(`    ✅ ${file}`);
+                if (versionMapping[file]) {
+                    console.log(`    ✅ ${file} → ${targetFileName}`);
+                } else {
+                    console.log(`    ✅ ${targetFileName}`);
+                }
                 coreCount++;
             } catch (error: any) {
                 console.error(`    ❌ ${file}: ${error.message}`);

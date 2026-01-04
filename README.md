@@ -102,6 +102,13 @@ pnpm run test:full_anvil
 
 ---
 
+## Development Guides / 开发指南
+
+### ABI Maintenance / ABI 维护
+- [ABI Maintenance Plan](./docs/ABI_MAINTENANCE_PLAN.md) - 合约 ABI 自动同步和维护策略
+
+---
+
 ## Development Workflow / 开发者工作流
 
 A step-by-step guide for contributors from contract modification to Sepolia deployment.
