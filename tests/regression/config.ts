@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv';
+console.log('🔍 DATA SOURCE: tests/regression/config.ts (TS Source)');
 /**
  * Network Configuration Loader for Regression Tests
  * 
@@ -30,6 +31,13 @@ function loadDeployments(network: NetworkName): Record<string, Address> {
     try {
         const deployments = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
         console.log(`✅ Loaded contract addresses from: ${deploymentsPath}`);
+        console.log(`   Keys found: ${Object.keys(deployments).join(', ')}`);
+        // Check xPNTsFactory specifically
+        if ('xPNTsFactory' in deployments) {
+            console.log(`   🎯 xPNTsFactory in JSON: ${deployments['xPNTsFactory']}`);
+        } else {
+            console.error(`   ❌ xPNTsFactory NOT found in JSON keys!`);
+        }
         return deployments as Record<string, Address>;
     } catch (error) {
         console.error(`❌ Failed to load deployments: ${error}`);
@@ -119,13 +127,18 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
     const getContractAddress = (deploymentKey: string, envKey: string, envFallback?: string): Address => {
         // 1. Try deployments first
         if (deployments[deploymentKey]) {
+            // console.log(`    Address found in deployments: ${deploymentKey} -> ${deployments[deploymentKey]}`);
             return deployments[deploymentKey];
+        } else {
+            console.warn(`    ⚠️  Missing in deployments: ${deploymentKey}`);
         }
         // 2. Fallback to .env
         const addr = process.env[envKey] || (envFallback && process.env[envFallback]);
         if (!addr) {
+            console.error(`    ❌ Missing contract address: ${deploymentKey} (env: ${envKey} or ${envFallback})`);
             throw new Error(`Missing contract address: ${deploymentKey} (env: ${envKey}${envFallback ? ` or ${envFallback}` : ''}) in ${envFile}`);
         }
+        console.log(`    ✅ Found in ENV: ${deploymentKey} -> ${addr}`);
         return addr as Address;
     };
 
@@ -143,7 +156,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             reputationSystem: getContractAddress('reputationSystem', 'REPUTATION_ADDRESS', 'REPUTATION_SYSTEM'),
             superPaymaster: getContractAddress('superPaymaster', 'SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_SUPER'),
             paymasterFactory: getContractAddress('paymasterFactory', 'PAYMASTER_FACTORY_ADDRESS', 'PAYMASTER_FACTORY'),
-            xpntsFactory: getContractAddress('xPNTsFactory', 'XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
+            xPNTsFactory: getContractAddress('xPNTsFactory', 'XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
             blsAggregator: getContractAddress('blsAggregator', 'BLS_AGGREGATOR_ADDRESS', 'BLS_AGGREGATOR'),
             blsValidator: getContractAddress('blsValidator', 'BLS_VALIDATOR_ADDRESS', 'BLS_VALIDATOR'),
             dvtValidator: getContractAddress('dvtValidator', 'DVT_VALIDATOR_ADDRESS', 'DVT_VALIDATOR'),
