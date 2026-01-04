@@ -1,5 +1,5 @@
 import { type Address, concat, pad, toHex } from 'viem';
-import { SuperPaymasterV3ABI as SUPERPAYMASTER_ABI } from '@aastar/core';
+import { SuperPaymasterABI as SUPERPAYMASTER_ABI } from '@aastar/core';
 
 export type PaymasterConfig = {
     paymasterAddress: Address;

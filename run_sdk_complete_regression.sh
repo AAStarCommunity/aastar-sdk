@@ -145,10 +145,10 @@ fi
 echo -e "\n${YELLOW}⚙️  Syncing environment configuration...${NC}"
 
 if [ "$ENV" == "anvil" ]; then
-    # Sync from SuperPaymaster config.json
+    # Sync from SuperPaymaster config.anvil.json
     if [ -f "./scripts/sync_anvil_config.cjs" ]; then
         node ./scripts/sync_anvil_config.cjs
-        echo -e "${GREEN}✅ Anvil config synced from config.json${NC}"
+        echo -e "${GREEN}✅ Anvil config synced from config.anvil.json${NC}"
     else
         echo -e "${YELLOW}⚠️  sync_anvil_config.cjs not found${NC}"
     fi

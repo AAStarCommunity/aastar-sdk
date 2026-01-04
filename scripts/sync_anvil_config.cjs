@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const CONFIG_PATH = path.resolve(__dirname, '../../SuperPaymaster/config.json');
+const CONFIG_PATH = path.resolve(__dirname, '../../SuperPaymaster/config.anvil.json');
 const ENV_PATH = path.resolve(__dirname, '../.env.anvil');
 
 if (!fs.existsSync(CONFIG_PATH)) {
@@ -15,12 +15,12 @@ let envContent = fs.readFileSync(ENV_PATH, 'utf8');
 const mapping = {
     'registry': 'REGISTRY_ADDRESS',
     'gToken': 'GTOKEN_ADDRESS',
-    'staking': 'GTOKENSTAKING_ADDRESS',
+    'staking': 'STAKING_ADDRESS',
     'superPaymaster': 'SUPERPAYMASTER_ADDRESS',
-    'aPNTs': 'APNTS_ADDRESS',
+    'aPNTs': 'APNTS_TOKEN_ADDRESS',
     'simpleAccountFactory': 'SIMPLE_ACCOUNT_FACTORY',
-    'entryPoint': 'ENTRY_POINT_ADDR',
-    'paymasterV4': 'PAYMASTER_V4_ADDRESS'
+    'entryPoint': 'ENTRY_POINT_ADDRESS',
+    'paymaster': 'PAYMASTER_IMPL_ADDRESS'
 };
 
 console.log('🔄 Syncing Anvil configuration to .env.anvil...');

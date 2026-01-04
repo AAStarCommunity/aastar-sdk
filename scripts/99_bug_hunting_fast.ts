@@ -20,9 +20,9 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const RPC_URL = process.env.RPC_URL!;
 const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
-const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
-const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
-const PAYMASTER_FACTORY_ADDR = process.env.PAYMASTER_FACTORY_ADDR as Address;
+const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESSESS as Hex;
+const SUPER_PAYMASTER_ADDRESS = process.env.SUPER_PAYMASTER_ADDRESS_ADDRESS as Hex;
+const PAYMASTER_FACTORY_ADDRESS = process.env.PAYMASTER_FACTORY_ADDRESSESS as Address;
 const MOCK_CONTRACT_ADMIN = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as Address;
 
 let bugs: string[] = [];
@@ -66,7 +66,7 @@ async function runBugHuntingTests() {
     await test('Attacker cannot set credit tier', async () => {
         try {
             await attackerClient.writeContract({
-                address: REGISTRY_ADDR,
+                address: REGISTRY_ADDRESS,
                 abi: RegistryABI,
                 functionName: 'setCreditTier',
                 args: [10n, parseEther('99999')],
@@ -81,7 +81,7 @@ async function runBugHuntingTests() {
     await test('Attacker cannot set aPNTs token', async () => {
         try {
             await attackerClient.writeContract({
-                address: SUPER_PAYMASTER,
+                address: SUPER_PAYMASTER_ADDRESS,
                 abi: SuperPaymasterABI,
                 functionName: 'setAPNTsToken',
                 args: [attacker.address],
@@ -100,7 +100,7 @@ async function runBugHuntingTests() {
     console.log('==================================');
 
     await test('Owner is correctly set', async () => {
-        const owner = await publicClient.readContract({ address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'owner', args: [] });
+        const owner = await publicClient.readContract({ address: REGISTRY_ADDRESS, abi: RegistryABI, functionName: 'owner', args: [] });
         if (owner !== admin.address) throw new Error(`🐛 BUG: Owner mismatch!`);
     });
 
@@ -113,7 +113,7 @@ async function runBugHuntingTests() {
     await test('Cannot set zero address as aPNTs', async () => {
         try {
             await walletClient.writeContract({
-                address: SUPER_PAYMASTER,
+                address: SUPER_PAYMASTER_ADDRESS,
                 abi: SuperPaymasterABI,
                 functionName: 'setAPNTsToken',
                 args: ['0x0000000000000000000000000000000000000000' as Address],
@@ -134,7 +134,7 @@ async function runBugHuntingTests() {
     await test('Can transfer ownership to a contract and act as admin', async () => {
         // 1. Transfer to Mock Contract
         const tx1 = await walletClient.writeContract({
-            address: REGISTRY_ADDR,
+            address: REGISTRY_ADDRESS,
             abi: RegistryABI,
             functionName: 'transferOwnership',
             args: [MOCK_CONTRACT_ADMIN],
@@ -148,7 +148,7 @@ async function runBugHuntingTests() {
         const contractClient = createWalletClient({ account: MOCK_CONTRACT_ADMIN, chain: foundry, transport: http(RPC_URL) });
         
         const tx2 = await contractClient.writeContract({
-            address: REGISTRY_ADDR,
+            address: REGISTRY_ADDRESS,
             abi: RegistryABI,
             functionName: 'setCreditTier',
             args: [5n, parseEther('5000')],
@@ -159,7 +159,7 @@ async function runBugHuntingTests() {
 
         // 3. Transfer back
         const tx3 = await contractClient.writeContract({
-            address: REGISTRY_ADDR,
+            address: REGISTRY_ADDRESS,
             abi: RegistryABI,
             functionName: 'transferOwnership',
             args: [admin.address],
@@ -180,7 +180,7 @@ async function runBugHuntingTests() {
         try {
             const randomSalt = keccak256(toHex(`salt_${Math.random()}`, { size: 32 }));
             const tx = await attackerClient.writeContract({
-                address: PAYMASTER_FACTORY_ADDR,
+                address: PAYMASTER_FACTORY_ADDRESS,
                 abi: PaymasterFactoryABI,
                 functionName: 'deployPaymasterDeterministic',
                 args: ['v4.1i', randomSalt, '0x'],

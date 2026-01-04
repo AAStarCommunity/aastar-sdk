@@ -1,5 +1,5 @@
 import { type Address, parseAbi, type WalletClient, type PublicClient, type Hash, formatEther } from 'viem';
-import { SuperPaymasterV3ABI as SUPERPAYMASTER_ABI, CONTRACTS } from '@aastar/core';
+import { SuperPaymasterABI as SUPERPAYMASTER_ABI, CONTRACTS } from '@aastar/core';
 
 const STAKING_ABI = parseAbi([
     'function stake(uint256)',
