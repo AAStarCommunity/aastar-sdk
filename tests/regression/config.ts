@@ -51,8 +51,8 @@ export interface ContractAddresses {
     gToken: Address;
     gTokenStaking: Address;
     superPaymaster: Address;
-    mySBT: Address;
-    reputationSystem: Address;
+    sbt: Address;
+    reputation: Address;
     paymasterFactory: Address;
     xPNTsFactory: Address;
     dvtValidator?: Address;
@@ -156,8 +156,8 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             registry: getContractAddress('registry', 'REGISTRY_ADDRESS'),
             gToken: getContractAddress('gToken', 'GTOKEN_ADDRESS'),
             gTokenStaking: getContractAddress('staking', 'GTOKEN_STAKING_ADDRESS', 'STAKING_ADDRESS'),
-            mySBT: getContractAddress('sbt', 'SBT_ADDRESS', 'MYSBT_ADDRESS'),
-            reputationSystem: getContractAddress('reputationSystem', 'REPUTATION_ADDRESS', 'REPUTATION_SYSTEM'),
+            sbt: getContractAddress('sbt', 'SBT_ADDRESS', 'MYSBT_ADDRESS'),
+            reputation: getContractAddress('reputationSystem', 'REPUTATION_ADDRESS', 'REPUTATION_SYSTEM'),
             superPaymaster: getContractAddress('superPaymaster', 'SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_SUPER'),
             paymasterFactory: getContractAddress('paymasterFactory', 'PAYMASTER_FACTORY_ADDRESS', 'PAYMASTER_FACTORY'),
             xPNTsFactory: getContractAddress('xPNTsFactory', 'XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
