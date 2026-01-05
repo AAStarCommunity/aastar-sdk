@@ -11,6 +11,7 @@ set -e
 export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin:$HOME/Library/pnpm:$HOME/.nvm/versions/node/v24.12.0/bin"
 
 ENV="anvil"
+export NETWORK="$ENV"
 SKIP_DEPLOY=false
 SKIP_ABI_SYNC=false
 KEEP_ANVIL=false
@@ -154,6 +155,14 @@ if [ "$ENV" == "anvil" ]; then
     fi
 fi
 
+# Copy config.{env}.json to SDK root for constants.ts check
+if [ -f "../SuperPaymaster/deployments/config.${ENV}.json" ]; then
+    cp "../SuperPaymaster/deployments/config.${ENV}.json" "./config.${ENV}.json"
+    echo -e "${GREEN}✅ config.${ENV}.json copied to SDK root${NC}"
+else
+    echo -e "${YELLOW}⚠️  ../SuperPaymaster/deployments/config.${ENV}.json not found${NC}"
+fi
+
 # Load environment variables
 ENV_FILE=".env.${ENV}"
 if [ -f "$ENV_FILE" ]; then
@@ -180,6 +189,20 @@ if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ SDK packages built successfully${NC}"
 else
     echo -e "${RED}❌ Build failed${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit 1
+fi
+
+# ========================================
+# 6.5. Verify Onchain Milestone
+# ========================================
+echo -e "\n${YELLOW}🔍 Verifying on-chain state...${NC}"
+pnpm tsx scripts/verify_onchain_milestone.ts $ENV
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ On-chain verification passed${NC}"
+else
+    echo -e "${RED}❌ On-chain verification failed${NC}"
     [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
     exit 1
 fi

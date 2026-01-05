@@ -7,29 +7,44 @@
  */
 
 import { type Address } from 'viem';
+import {
+  REGISTRY_ADDRESS,
+  GTOKEN_ADDRESS,
+  GTOKEN_STAKING_ADDRESS,
+  SUPER_PAYMASTER_ADDRESS,
+  PAYMASTER_FACTORY_ADDRESS,
+  PAYMASTER_V4_IMPL_ADDRESS,
+  APNTS_ADDRESS,
+  SBT_ADDRESS,
+  DVT_VALIDATOR_ADDRESS,
+  ENTRY_POINT_ADDRESS,
+  XPNTS_FACTORY_ADDRESS,
+  BLS_AGGREGATOR_ADDRESS
+} from './constants.js';
 
 /**
  * Core System Addresses
  */
 export const CORE_ADDRESSES = {
-  registry: (process.env.REGISTRY_ADDRESS || process.env.REGISTRY) as Address,
-  gToken: (process.env.GTOKEN_ADDRESS || process.env.GTOKEN) as Address,
-  gTokenStaking: (process.env.STAKING_ADDRESS || process.env.GTOKENSTAKING_ADDRESS) as Address,
-  superPaymaster: (process.env.PAYMASTER_SUPER || process.env.SUPER_PAYMASTER) as Address,
-  paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || process.env.PAYMASTER_FACTORY) as Address,
-  aPNTs: (process.env.APNTS_TOKEN_ADDRESS || process.env.APNTS_ADDRESS) as Address,
-  mySBT: (process.env.MYSBT_ADDRESS || process.env.SBT) as Address,
-  paymasterV4: (process.env.PAYMASTER_V4_PROXY || process.env.PAYMASTER_ADDRESS) as Address,
-  dvtValidator: (process.env.DVT_VALIDATOR_ADDR || process.env.DVT_VALIDATOR) as Address,
-  entryPoint: (process.env.ENTRY_POINT_ADDR || process.env.ENTRY_POINT) as Address,
-  xPNTsFactory: (process.env.XPNTS_FACTORY || process.env.XPNTS_FACTORY_ADDRESS) as Address,
+  registry: REGISTRY_ADDRESS,
+  gToken: GTOKEN_ADDRESS,
+  gTokenStaking: GTOKEN_STAKING_ADDRESS,
+  superPaymaster: SUPER_PAYMASTER_ADDRESS,
+  paymasterFactory: PAYMASTER_FACTORY_ADDRESS,
+  aPNTs: APNTS_ADDRESS,
+  mySBT: SBT_ADDRESS,
+  // Fallback to Env if not in config (or use Implementation)
+  paymasterV4: (process.env.PAYMASTER_V4_PROXY || PAYMASTER_V4_IMPL_ADDRESS) as Address,
+  dvtValidator: DVT_VALIDATOR_ADDRESS,
+  entryPoint: ENTRY_POINT_ADDRESS,
+  xPNTsFactory: XPNTS_FACTORY_ADDRESS,
 } as const;
 
 /**
  * Token System Addresses
  */
 export const TOKEN_ADDRESSES = {
-  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address,
+  xPNTsFactory: XPNTS_FACTORY_ADDRESS,
 } as const;
 
 /**
@@ -54,22 +69,22 @@ export const TEST_ACCOUNT_ADDRESSES = {
  */
 export const PAYMASTER_ADDRESSES = {
   paymasterV4_1: process.env.PAYMASTER_V4_ADDRESS as Address,
-  paymasterV4_1iImplementation: process.env.PAYMASTER_V4_IMPL as Address,
+  paymasterV4_1iImplementation: PAYMASTER_V4_IMPL_ADDRESS,
 } as const;
 
 /**
  * Monitoring System Addresses
  */
 export const MONITORING_ADDRESSES = {
-  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address,
-  blsAggregator: process.env.BLS_AGGREGATOR_ADDRESS as Address,
+  dvtValidator: DVT_VALIDATOR_ADDRESS,
+  blsAggregator: BLS_AGGREGATOR_ADDRESS,
 } as const;
 
 /**
  * Official Contract Addresses
  */
 export const OFFICIAL_ADDRESSES = {
-  entryPoint: (process.env.ENTRYPOINT_ADDRESS || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address,
+  entryPoint: (ENTRY_POINT_ADDRESS || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address,
 } as const;
 
 /**

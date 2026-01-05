@@ -1,3 +1,36 @@
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+
+const network = process.env.NETWORK || 'anvil';
+let config: any = {};
+try {
+  config = require(`../../../config.${network}.json`);
+} catch (e) {
+  console.warn(`Warning: Could not load config.${network}.json. Contract addresses may be undefined.`);
+}
+
+/**
+ * Contract Addresses (loaded from config.{network}.json)
+ */
+export const CONTRACT_SRC_HASH = config.srcHash;
+export const REGISTRY_ADDRESS = config.registry as `0x${string}`;
+export const GTOKEN_ADDRESS = config.gToken as `0x${string}`;
+export const GTOKEN_STAKING_ADDRESS = config.staking as `0x${string}`;
+export const SBT_ADDRESS = config.sbt as `0x${string}`;
+export const REPUTATION_SYSTEM_ADDRESS = config.reputationSystem as `0x${string}`;
+export const SUPER_PAYMASTER_ADDRESS = config.superPaymaster as `0x${string}`;
+export const PAYMASTER_FACTORY_ADDRESS = config.paymasterFactory as `0x${string}`;
+export const PAYMASTER_V4_IMPL_ADDRESS = config.paymasterV4Impl as `0x${string}`;
+export const XPNTS_FACTORY_ADDRESS = config.xPNTsFactory as `0x${string}`;
+export const BLS_AGGREGATOR_ADDRESS = config.blsAggregator as `0x${string}`;
+export const BLS_VALIDATOR_ADDRESS = config.blsValidator as `0x${string}`;
+export const DVT_VALIDATOR_ADDRESS = config.dvtValidator as `0x${string}`;
+export const ENTRY_POINT_ADDRESS = config.entryPoint as `0x${string}`;
+export const ENTRY_POINT_0_8_ADDRESS = config.entryPoint08 as `0x${string}`;
+export const ENTRY_POINT_0_9_ADDRESS = config.entryPoint09 as `0x${string}`;
+export const APNTS_ADDRESS = config.aPNTs as `0x${string}`;
+
 /**
  * Common Constants
  */
