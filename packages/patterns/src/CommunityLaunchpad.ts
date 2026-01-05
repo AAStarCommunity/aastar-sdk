@@ -43,7 +43,10 @@ export class CommunityLaunchpad {
         // 1. Register Self as Community (if capability allows)
         // In some flows, you register first, then attach token.
         console.log('📝 Registering Community Role...');
-        const registrationTxHash = await this.client.registerAsCommunity(options);
+        const registrationTxHash = await this.client.registerAsCommunity({
+            name: params.name,
+            description: `Community ${params.name} launched via Launchpad`
+        }, options);
 
         // 2. Deploy Token
         console.log('Testing Token Deployment...');

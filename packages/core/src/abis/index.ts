@@ -13,7 +13,7 @@ import GTokenABIData from './GToken.json' with { type: 'json' };
 import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
 import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
 import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
-import PaymasterV4_2ABIData from './PaymasterV4_2.json' with { type: 'json' };
+import PaymasterABIData from './Paymaster.json' with { type: 'json' };
 
 // AA Standard (从 out/ 提取)
 import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
@@ -40,9 +40,9 @@ export const GTokenStakingABI = GTokenStakingABIData;
 export const SuperPaymasterABI = SuperPaymasterABIData;
 export const PaymasterFactoryABI = PaymasterFactoryABIData;
 
-// Paymaster V4 (使用 V4_2 作为当前标准)
-export const PaymasterV4_2ABI = PaymasterV4_2ABIData;
-export const PaymasterV4ABI = PaymasterV4_2ABIData; // 别名
+// Paymaster V4 (使用 Paymaster.json)
+export const PaymasterV4ABI = PaymasterABIData;
+export const PaymasterABI = PaymasterABIData;
 
 // ========== AA Standard ==========
 export const EntryPointABI = EntryPointABIData;

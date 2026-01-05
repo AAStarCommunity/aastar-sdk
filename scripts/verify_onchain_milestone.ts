@@ -14,7 +14,7 @@ config({ path: `.env.${networkName}` });
 
 // 2. Dynamic Import (to ensure NETWORK env var is picked up by constants.ts)
 async function main() {
-    const core = await import('@aastar/core');
+    const core = await import('../packages/core/src/index.js');
     
     const {
         REGISTRY_ADDRESS,
@@ -31,9 +31,11 @@ async function main() {
     console.log(`   Source Hash: ${CONTRACT_SRC_HASH || 'Not set'}`);
     console.log(`   Registry: ${REGISTRY_ADDRESS}`);
     
-    if (!CONTRACT_SRC_HASH) {
+    if (!CONTRACT_SRC_HASH && networkName !== 'anvil') {
         console.error('❌ Missing srcHash in config! Deployment might be incomplete.');
         process.exit(1);
+    } else if (!CONTRACT_SRC_HASH) {
+        console.warn('   ⚠️  Missing srcHash in config (Skipping for Anvil)');
     }
 
     // 3. Client Setup

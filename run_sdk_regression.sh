@@ -34,10 +34,28 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   AAStar SDK Complete Regression Suite        ║${NC}"
-echo -e "${BLUE}║   Environment: ${ENV}                             ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
+echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║          AAStar SDK Complete Regression Suite                ║${NC}"
+echo -e "${BLUE}║          Environment: ${ENV-unknown}                             ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}\n"
+
+function log_section() {
+    echo -e "\n${BLUE}================================================================${NC}"
+    echo -e "${BLUE}  $1${NC}"
+    echo -e "${BLUE}================================================================${NC}\n"
+}
+
+function log_step() {
+    echo -e "${YELLOW}🔹 $1...${NC}"
+}
+
+function log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+function log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
 
 # ========================================
 # 2. Anvil Environment Setup
@@ -45,7 +63,8 @@ echo -e "${BLUE}╚════════════════════�
 WE_STARTED_ANVIL=false
 
 if [ "$ENV" == "anvil" ]; then
-    echo -e "${YELLOW}🔍 Checking Anvil instance...${NC}"
+    log_section "Anvil Environment Setup"
+    log_step "Checking Anvil instance"
     
     if ! curl -s -X POST -H "Content-Type: application/json" \
       --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
@@ -58,9 +77,9 @@ if [ "$ENV" == "anvil" ]; then
       ANVIL_PID=$!
       WE_STARTED_ANVIL=true
       sleep 3
-      echo -e "${GREEN}✅ Anvil started (PID: $ANVIL_PID)${NC}"
+      log_success "Anvil started (PID: $ANVIL_PID)"
     else
-      echo -e "${GREEN}✅ Anvil already running${NC}"
+      log_success "Anvil already running"
     fi
 fi
 
@@ -68,25 +87,29 @@ fi
 # 3. Contract Deployment (Anvil only)
 # ========================================
 if [ "$ENV" == "anvil" ] && [ "$SKIP_DEPLOY" == "false" ]; then
-    echo -e "\n${YELLOW}🚀 Deploying contracts to Anvil...${NC}"
+    log_section "Contract Deployment (Anvil)"
+    log_step "Deploying contracts to Anvil"
     
     if [ ! -d "../SuperPaymaster" ]; then
-        echo -e "${RED}❌ SuperPaymaster directory not found at ../SuperPaymaster${NC}"
+        log_error "SuperPaymaster directory not found at ../SuperPaymaster"
         [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
         exit 1
     fi
     
     cd ../SuperPaymaster
+    # Use tee to show output and log to file
     forge script contracts/script/v3/DeployAnvil.s.sol:DeployAnvil \
       --rpc-url http://127.0.0.1:8545 \
       --broadcast \
       --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-      > /tmp/deploy.log 2>&1
+      2>&1 | tee /tmp/deploy.log
     
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Contracts deployed successfully${NC}"
+    DEPLOY_STATUS=${PIPESTATUS[0]}
+    
+    if [ $DEPLOY_STATUS -eq 0 ]; then
+        log_success "Contracts deployed successfully"
     else
-        echo -e "${RED}❌ Deployment failed. Check /tmp/deploy.log${NC}"
+        log_error "Deployment failed. Check /tmp/deploy.log"
         cd ../aastar-sdk
         [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
         exit 1
@@ -99,45 +122,32 @@ fi
 # 4. ABI Synchronization
 # ========================================
 if [ "$SKIP_ABI_SYNC" == "false" ]; then
-    echo -e "\n${YELLOW}📦 Building contracts and synchronizing ABIs...${NC}"
+    log_section "ABI Synchronization"
+    log_step "Building contracts and synchronizing ABIs"
     
     if [ ! -d "../SuperPaymaster" ]; then
-        echo -e "${RED}❌ SuperPaymaster directory not found${NC}"
+        log_error "SuperPaymaster directory not found"
         [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
         exit 1
     fi
     
     # Step 1: Build contracts in SuperPaymaster
-    echo -e "${YELLOW}🔨 Building SuperPaymaster contracts...${NC}"
+    log_step "Building SuperPaymaster contracts"
     cd ../SuperPaymaster
-    forge build --force > /tmp/forge-build.log 2>&1
+    forge build --force 2>&1 | tee /tmp/forge-build.log
     
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Contracts built successfully${NC}"
+    FORGE_BUILD_STATUS=${PIPESTATUS[0]}
+    
+    if [ $FORGE_BUILD_STATUS -eq 0 ]; then
+        log_success "Contracts built successfully"
     else
-        echo -e "${RED}❌ Forge build failed. Check /tmp/forge-build.log${NC}"
+        log_error "Forge build failed. Check /tmp/forge-build.log"
         cd ../aastar-sdk
         [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
         exit 1
     fi
     
     cd ../aastar-sdk
-    
-    # Step 2: Extract ABIs, no need to sync abis, superpaymaster regression shell do it
-    # echo -e "${YELLOW}📄 Extracting ABIs...${NC}"
-    # if [ -f "./extract_abis.sh" ]; then
-    #     bash ./extract_abis.sh > /tmp/extract-abis.log 2>&1
-        
-    #     if [ $? -eq 0 ]; then
-    #         echo -e "${GREEN}✅ ABIs extracted and synchronized${NC}"
-    #     else
-    #         echo -e "${RED}❌ ABI extraction failed. Check /tmp/extract-abis.log${NC}"
-    #         [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
-    #         exit 1
-    #     fi
-    # else
-    #     echo -e "${YELLOW}⚠️  extract_abis.sh not found, skipping ABI extraction${NC}"
-    # fi
 fi
 
 # ========================================
@@ -158,7 +168,7 @@ fi
 # Copy config.{env}.json to SDK root for constants.ts check
 if [ -f "../SuperPaymaster/deployments/config.${ENV}.json" ]; then
     cp "../SuperPaymaster/deployments/config.${ENV}.json" "./config.${ENV}.json"
-    echo -e "${GREEN}✅ config.${ENV}.json copied to SDK root${NC}"
+    log_success "config.${ENV}.json copied to SDK root"
 else
     echo -e "${YELLOW}⚠️  ../SuperPaymaster/deployments/config.${ENV}.json not found${NC}"
 fi
@@ -166,10 +176,11 @@ fi
 # Load environment variables
 ENV_FILE=".env.${ENV}"
 if [ -f "$ENV_FILE" ]; then
-    echo -e "${GREEN}✅ Loading $ENV_FILE${NC}"
+    log_step "Loading environment from $ENV_FILE"
     export $(grep -v '^#' "$ENV_FILE" | xargs)
+    log_success "Environment loaded"
 else
-    echo -e "${RED}❌ Environment file not found: $ENV_FILE${NC}"
+    log_error "Environment file not found: $ENV_FILE"
     [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
     exit 1
 fi
@@ -178,13 +189,14 @@ fi
 # 5.5. Strict Synchronization Verification
 # ========================================
 # Run the node script to compare hashes of ABIs and Configs
-echo -e "\n${YELLOW}🔍 Verifying file synchronization (SDK vs SuperPaymaster)...${NC}"
+log_section "Synchronization Verification"
+log_step "Verifying file synchronization (SDK vs SuperPaymaster)"
 pnpm tsx scripts/pre_test_sync.ts
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Synchronization verified${NC}"
+    log_success "Synchronization verified"
 else
-    echo -e "${RED}❌ Sync verification failed. ABIs or Contracts are out of sync.${NC}"
+    log_error "Sync verification failed. ABIs or Contracts are out of sync."
     [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
     exit 1
 fi
@@ -192,18 +204,20 @@ fi
 # ========================================
 # 6. Build SDK Packages
 # ========================================
-echo -e "\n${YELLOW}🔨 Building SDK packages...${NC}"
-
+log_section "Build SDK Packages"
+log_step "Cleaning stale artifacts"
 # Clean stale artifacts
 find packages -name "*.js" -o -name "*.d.ts" -o -name "*.map" | grep "/src/" | xargs rm -f 2>/dev/null || true
 
-# Build all packages
-pnpm -r build
+log_step "Building all packages via pnpm"
+pnpm -r build 2>&1 | tee /tmp/sdk-build.log
 
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ SDK packages built successfully${NC}"
+SDK_BUILD_STATUS=${PIPESTATUS[0]}
+
+if [ $SDK_BUILD_STATUS -eq 0 ]; then
+    log_success "SDK packages built successfully"
 else
-    echo -e "${RED}❌ Build failed${NC}"
+    log_error "Build failed. Check /tmp/sdk-build.log"
     [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
     exit 1
 fi
@@ -211,13 +225,14 @@ fi
 # ========================================
 # 6.5. Verify Onchain Milestone
 # ========================================
-echo -e "\n${YELLOW}🔍 Verifying on-chain state...${NC}"
+log_section "On-Chain Milestone Verification"
+log_step "Verifying on-chain state"
 pnpm tsx scripts/verify_onchain_milestone.ts $ENV
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ On-chain verification passed${NC}"
+    log_success "On-chain verification passed"
 else
-    echo -e "${RED}❌ On-chain verification failed${NC}"
+    log_error "On-chain verification failed"
     [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
     exit 1
 fi
