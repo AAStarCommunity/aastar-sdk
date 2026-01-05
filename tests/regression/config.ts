@@ -8,6 +8,7 @@ console.log('🔍 DATA SOURCE: tests/regression/config.ts (TS Source)');
  */
 
 import { type Address, type Hex, type Chain } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia, optimismSepolia, optimism, mainnet } from 'viem/chains';
 import { anvil, localhost } from 'viem/chains';
 import * as path from 'path';
@@ -20,7 +21,7 @@ type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet'
  */
 function loadDeployments(network: NetworkName): Record<string, Address> {
     const SUPERPAYMASTER_ROOT = path.resolve(process.cwd(), '../SuperPaymaster');
-    const deploymentsPath = path.join(SUPERPAYMASTER_ROOT, `deployments/${network}.json`);
+    const deploymentsPath = path.join(SUPERPAYMASTER_ROOT, `deployments/config.${network}.json`);
     
     if (!fs.existsSync(deploymentsPath)) {
         console.warn(`⚠️  Deployments file not found: ${deploymentsPath}`);
@@ -50,11 +51,15 @@ export interface ContractAddresses {
     gToken: Address;
     gTokenStaking: Address;
     superPaymaster: Address;
-    sbt: Address;
-    reputation: Address;
+    mySBT: Address;
+    reputationSystem: Address;
+    paymasterFactory: Address;
     xPNTsFactory: Address;
     dvtValidator?: Address;
     blsAggregator?: Address;
+    blsValidator?: Address;
+    entryPoint: Address;
+    simpleAccountFactory: Address;
 }
 
 export interface NetworkConfig {
@@ -102,8 +107,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
     // Validate required ENV vars (with fallbacks for SuperPaymaster naming)
     const required = [
         'RPC_URL',
-        'TEST_PRIVATE_KEY',
-        'TEST_ACCOUNT_ADDRESS'
+        'TEST_PRIVATE_KEY'
     ];
 
     for (const key of required) {
@@ -165,7 +169,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         },
         testAccount: {
             privateKey: process.env.TEST_PRIVATE_KEY as `0x${string}`,
-            address: process.env.TEST_ACCOUNT_ADDRESS as Address
+            address: (process.env.TEST_ACCOUNT_ADDRESS as Address) || privateKeyToAccount(process.env.TEST_PRIVATE_KEY as Hex).address
         },
         supplierAccount: supplierPrivateKey ? { privateKey: supplierPrivateKey } : undefined
     };
