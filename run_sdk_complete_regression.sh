@@ -175,6 +175,21 @@ else
 fi
 
 # ========================================
+# 5.5. Strict Synchronization Verification
+# ========================================
+# Run the node script to compare hashes of ABIs and Configs
+echo -e "\n${YELLOW}🔍 Verifying file synchronization (SDK vs SuperPaymaster)...${NC}"
+pnpm tsx scripts/pre_test_sync.ts
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Synchronization verified${NC}"
+else
+    echo -e "${RED}❌ Sync verification failed. ABIs or Contracts are out of sync.${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit 1
+fi
+
+# ========================================
 # 6. Build SDK Packages
 # ========================================
 echo -e "\n${YELLOW}🔨 Building SDK packages...${NC}"
