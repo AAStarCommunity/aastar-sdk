@@ -1,21 +1,28 @@
 #!/bin/bash
-# SDK Full Regression & Scenario Runner
-# Usage: ./run_sdk_regression.sh [--env anvil|sepolia] [--scenarios-only]
+# Complete SDK Regression Test Suite
+# Integrates: Environment setup, ABI sync, Contract deployment, L1/L2/L3 API tests
+# Usage: ./run_complete_regression.sh [--env anvil|sepolia] [--skip-deploy] [--skip-abi-sync]
 
 set -e
 
-# 1. Configuration & Args
-export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin:$HOME/Library/pnpm:/Users/jason/.nvm/versions/node/v24.12.0/bin"
+# ========================================
+# 1. Configuration & Arguments
+# ========================================
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin:$HOME/Library/pnpm:$HOME/.nvm/versions/node/v24.12.0/bin"
 
 ENV="anvil"
-SCENARIOS_ONLY=false
+export NETWORK="$ENV"
+SKIP_DEPLOY=false
+SKIP_ABI_SYNC=false
 KEEP_ANVIL=false
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --env) ENV="$2"; shift ;;
-        --scenarios-only) SCENARIOS_ONLY=true ;;
+        --skip-deploy) SKIP_DEPLOY=true ;;
+        --skip-abi-sync) SKIP_ABI_SYNC=true ;;
         --keep-anvil) KEEP_ANVIL=true ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
 done
@@ -28,108 +35,221 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   AAStar SDK Multi-Env Regression Suite       ║${NC}"
-echo -e "${BLUE}║   Target Environment: ${ENV}                      ║${NC}"
+echo -e "${BLUE}║   AAStar SDK Complete Regression Suite        ║${NC}"
+echo -e "${BLUE}║   Environment: ${ENV}                             ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
 
-# 2. Load Environment Variables
-# Priority: .env.${ENV} > .env
-if [ -f ".env.${ENV}" ]; then
-    echo -e "${YELLOW}📡 Loading environment: .env.${ENV}${NC}"
-    export $(grep -v '^#' .env.${ENV} | xargs)
-elif [ -f ".env" ]; then
-    echo -e "${YELLOW}📡 Loading default .env${NC}"
-    export $(grep -v '^#' .env | xargs)
-else
-    echo -e "${RED}❌ No environment file found (.env or .env.${ENV})${NC}"
-    exit 1
-fi
-
-# 3. Environment Check/Init
+# ========================================
+# 2. Anvil Environment Setup
+# ========================================
 WE_STARTED_ANVIL=false
+
 if [ "$ENV" == "anvil" ]; then
     echo -e "${YELLOW}🔍 Checking Anvil instance...${NC}"
+    
     if ! curl -s -X POST -H "Content-Type: application/json" \
       --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
       http://127.0.0.1:8545 > /dev/null 2>&1; then
       
-      echo -e "${YELLOW}⚠️  Anvil not running. Starting persistent Anvil...${NC}"
+      echo -e "${YELLOW}⚠️  Anvil not running. Starting Anvil...${NC}"
       pkill anvil || true
-      anvil --port 8545 --chain-id 31337 > /dev/null 2>&1 &
+      sleep 1
+      anvil --port 8545 --chain-id 31337 > /tmp/anvil.log 2>&1 &
       ANVIL_PID=$!
       WE_STARTED_ANVIL=true
       sleep 3
-      
-      echo -e "${YELLOW}🚀 Deploying contracts to Anvil...${NC}"
-      if [ -d "../SuperPaymaster" ]; then
-          cd ../SuperPaymaster
-          forge script contracts/script/DeployAnvil.s.sol:DeployAnvil \
-            --rpc-url http://127.0.0.1:8545 \
-            --broadcast \
-            --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-          
-          # Sync ABIs & Config
-          node scripts/extract_abis_to_sdk.js
-          cd ../aastar-sdk
-          node scripts/sync_anvil_config.cjs
-          # Refresh env in current shell
-          export $(grep -v '^#' .env.${ENV} | xargs)
-      else
-          echo -e "${RED}❌ SuperPaymaster directory not found at ../SuperPaymaster.${NC}"
-          kill $ANVIL_PID
-          exit 1
-      fi
+      echo -e "${GREEN}✅ Anvil started (PID: $ANVIL_PID)${NC}"
+    else
+      echo -e "${GREEN}✅ Anvil already running${NC}"
     fi
-    echo -e "${GREEN}✅ Anvil is ready.${NC}"
 fi
 
-# 4. Build SDK
+# ========================================
+# 3. Contract Deployment (Anvil only)
+# ========================================
+if [ "$ENV" == "anvil" ] && [ "$SKIP_DEPLOY" == "false" ]; then
+    echo -e "\n${YELLOW}🚀 Deploying contracts to Anvil...${NC}"
+    
+    if [ ! -d "../SuperPaymaster" ]; then
+        echo -e "${RED}❌ SuperPaymaster directory not found at ../SuperPaymaster${NC}"
+        [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+        exit 1
+    fi
+    
+    cd ../SuperPaymaster
+    forge script contracts/script/v3/DeployAnvil.s.sol:DeployAnvil \
+      --rpc-url http://127.0.0.1:8545 \
+      --broadcast \
+      --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+      > /tmp/deploy.log 2>&1
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Contracts deployed successfully${NC}"
+    else
+        echo -e "${RED}❌ Deployment failed. Check /tmp/deploy.log${NC}"
+        cd ../aastar-sdk
+        [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+        exit 1
+    fi
+    
+    cd ../aastar-sdk
+fi
+
+# ========================================
+# 4. ABI Synchronization
+# ========================================
+if [ "$SKIP_ABI_SYNC" == "false" ]; then
+    echo -e "\n${YELLOW}📦 Building contracts and synchronizing ABIs...${NC}"
+    
+    if [ ! -d "../SuperPaymaster" ]; then
+        echo -e "${RED}❌ SuperPaymaster directory not found${NC}"
+        [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+        exit 1
+    fi
+    
+    # Step 1: Build contracts in SuperPaymaster
+    echo -e "${YELLOW}🔨 Building SuperPaymaster contracts...${NC}"
+    cd ../SuperPaymaster
+    forge build --force > /tmp/forge-build.log 2>&1
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Contracts built successfully${NC}"
+    else
+        echo -e "${RED}❌ Forge build failed. Check /tmp/forge-build.log${NC}"
+        cd ../aastar-sdk
+        [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+        exit 1
+    fi
+    
+    cd ../aastar-sdk
+    
+    # Step 2: Extract ABIs, no need to sync abis, superpaymaster regression shell do it
+    # echo -e "${YELLOW}📄 Extracting ABIs...${NC}"
+    # if [ -f "./extract_abis.sh" ]; then
+    #     bash ./extract_abis.sh > /tmp/extract-abis.log 2>&1
+        
+    #     if [ $? -eq 0 ]; then
+    #         echo -e "${GREEN}✅ ABIs extracted and synchronized${NC}"
+    #     else
+    #         echo -e "${RED}❌ ABI extraction failed. Check /tmp/extract-abis.log${NC}"
+    #         [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    #         exit 1
+    #     fi
+    # else
+    #     echo -e "${YELLOW}⚠️  extract_abis.sh not found, skipping ABI extraction${NC}"
+    # fi
+fi
+
+# ========================================
+# 5. Environment Configuration Sync: now we use config.network.json to load contract addresses, no need to save to .env files
+# ========================================
+# echo -e "\n${YELLOW}⚙️  Syncing environment configuration...${NC}"
+
+# if [ "$ENV" == "anvil" ]; then
+#     # Sync from SuperPaymaster config.anvil.json
+#     if [ -f "./scripts/sync_anvil_config.cjs" ]; then
+#         node ./scripts/sync_anvil_config.cjs
+#         echo -e "${GREEN}✅ Anvil config synced from config.anvil.json${NC}"
+#     else
+#         echo -e "${YELLOW}⚠️  sync_anvil_config.cjs not found${NC}"
+#     fi
+# fi
+
+# Copy config.{env}.json to SDK root for constants.ts check
+if [ -f "../SuperPaymaster/deployments/config.${ENV}.json" ]; then
+    cp "../SuperPaymaster/deployments/config.${ENV}.json" "./config.${ENV}.json"
+    echo -e "${GREEN}✅ config.${ENV}.json copied to SDK root${NC}"
+else
+    echo -e "${YELLOW}⚠️  ../SuperPaymaster/deployments/config.${ENV}.json not found${NC}"
+fi
+
+# Load environment variables
+ENV_FILE=".env.${ENV}"
+if [ -f "$ENV_FILE" ]; then
+    echo -e "${GREEN}✅ Loading $ENV_FILE${NC}"
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+else
+    echo -e "${RED}❌ Environment file not found: $ENV_FILE${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit 1
+fi
+
+# ========================================
+# 5.5. Strict Synchronization Verification
+# ========================================
+# Run the node script to compare hashes of ABIs and Configs
+echo -e "\n${YELLOW}🔍 Verifying file synchronization (SDK vs SuperPaymaster)...${NC}"
+pnpm tsx scripts/pre_test_sync.ts
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Synchronization verified${NC}"
+else
+    echo -e "${RED}❌ Sync verification failed. ABIs or Contracts are out of sync.${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit 1
+fi
+
+# ========================================
+# 6. Build SDK Packages
+# ========================================
 echo -e "\n${YELLOW}🔨 Building SDK packages...${NC}"
-export PATH="$PATH:/Users/jason/Library/pnpm:/Users/jason/.nvm/versions/node/v24.12.0/bin"
-# Clean up any accidental artifacts in src before build
-find packages -name "*.js" -o -name "*.d.ts" -o -name "*.map" | grep "/src/" | xargs rm -f
-# Build only our packages
-pnpm -F "@aastar/*" build
-echo -e "${GREEN}✅ Build successful.${NC}"
 
-# 5. Run Test Scenarios
-echo -e "\n${BLUE}🚀 Running Scenarios...${NC}"
+# Clean stale artifacts
+find packages -name "*.js" -o -name "*.d.ts" -o -name "*.map" | grep "/src/" | xargs rm -f 2>/dev/null || true
 
-# Scenario 1: Onboard Community
-echo -e "${YELLOW}🧪 Scenario 1: Community Onboarding${NC}"
-TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/01_onboard_community.ts
+# Build all packages
+pnpm -r build
 
-# Scenario 2: Onboard Operator
-echo -e "${YELLOW}🧪 Scenario 2: Operator Onboarding${NC}"
-TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/02_onboard_operator.ts
-
-# Scenario 3: Onboard User
-echo -e "${YELLOW}🧪 Scenario 3: User Onboarding${NC}"
-TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/03_onboard_user.ts
-
-# Scenario 4: Gasless Flow
-echo -e "${YELLOW}🧪 Scenario 4: Gasless Transaction Flow${NC}"
-TARGET_ENV=$ENV pnpm tsx packages/sdk/tests/scenarios/04_gasless_tx_flow.ts
-
-if [ "$SCENARIOS_ONLY" == "true" ]; then
-    echo -e "\n${GREEN}🎉 Scenario verification complete.${NC}"
-    if [ "$WE_STARTED_ANVIL" == "true" ] && [ "$KEEP_ANVIL" == "false" ]; then
-        echo -e "${YELLOW}🛑 Stopping Anvil...${NC}"
-        kill $ANVIL_PID
-    fi
-    exit 0
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ SDK packages built successfully${NC}"
+else
+    echo -e "${RED}❌ Build failed${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit 1
 fi
 
-# 6. Legacy Regression (Anvil Only)
-if [ "$ENV" == "anvil" ]; then
-    echo -e "\n${YELLOW}🧪 Running Legacy SDK Regression (Anvil)...${NC}"
-    TARGET_ENV=$ENV pnpm tsx scripts/v2_regression/01_setup_and_fund.ts
-    TARGET_ENV=$ENV pnpm tsx scripts/v2_regression/02_operator_onboarding.ts
+# ========================================
+# 6.5. Verify Onchain Milestone
+# ========================================
+echo -e "\n${YELLOW}🔍 Verifying on-chain state...${NC}"
+pnpm tsx scripts/verify_onchain_milestone.ts $ENV
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ On-chain verification passed${NC}"
+else
+    echo -e "${RED}❌ On-chain verification failed${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit 1
 fi
 
+# ========================================
+# 7. Run L1/L2/L3 Regression Tests
+# ========================================
+echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Running L1/L2/L3 API Regression Tests       ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
+
+pnpm tsx tests/regression/index.ts --network=$ENV
+
+TEST_EXIT_CODE=$?
+
+# ========================================
+# 8. Cleanup
+# ========================================
 if [ "$WE_STARTED_ANVIL" == "true" ] && [ "$KEEP_ANVIL" == "false" ]; then
-    echo -e "${YELLOW}🛑 Stopping Anvil...${NC}"
-    kill $ANVIL_PID
+    echo -e "\n${YELLOW}🛑 Stopping Anvil...${NC}"
+    kill $ANVIL_PID 2>/dev/null || true
 fi
 
-echo -e "\n${GREEN}🎉 SDK Regression Suite Finished!${NC}\n"
+# ========================================
+# 9. Summary
+# ========================================
+echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+    echo -e "${BLUE}║   ${GREEN}✅ Regression Suite PASSED${BLUE}                   ║${NC}"
+else
+    echo -e "${BLUE}║   ${RED}❌ Regression Suite FAILED${BLUE}                   ║${NC}"
+fi
+echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
+
+exit $TEST_EXIT_CODE
