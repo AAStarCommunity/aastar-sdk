@@ -28,7 +28,7 @@
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IGTokenStakingV3"
+        "internalType": "contract IGTokenStaking"
       }
     ],
     "stateMutability": "view"
@@ -41,7 +41,7 @@
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IMySBTV3"
+        "internalType": "contract IMySBT"
       }
     ],
     "stateMutability": "view"
@@ -295,7 +295,7 @@
   },
   {
     "type": "function",
-    "name": "communityByENSV3",
+    "name": "communityByENS",
     "inputs": [
       {
         "name": "",
@@ -314,7 +314,7 @@
   },
   {
     "type": "function",
-    "name": "communityByNameV3",
+    "name": "communityByName",
     "inputs": [
       {
         "name": "",
@@ -343,7 +343,7 @@
       {
         "name": "config",
         "type": "tuple",
-        "internalType": "struct IRegistryV3.RoleConfig",
+        "internalType": "struct IRegistry.RoleConfig",
         "components": [
           {
             "name": "minStake",
@@ -413,7 +413,7 @@
       {
         "name": "config",
         "type": "tuple",
-        "internalType": "struct IRegistryV3.RoleConfig",
+        "internalType": "struct IRegistry.RoleConfig",
         "components": [
           {
             "name": "minStake",
@@ -541,7 +541,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct IRegistryV3.RoleConfig",
+        "internalType": "struct IRegistry.RoleConfig",
         "components": [
           {
             "name": "minStake",
@@ -1428,7 +1428,7 @@
         "name": "config",
         "type": "tuple",
         "indexed": false,
-        "internalType": "struct IRegistryV3.RoleConfig",
+        "internalType": "struct IRegistry.RoleConfig",
         "components": [
           {
             "name": "minStake",

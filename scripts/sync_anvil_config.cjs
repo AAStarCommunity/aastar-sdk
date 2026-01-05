@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const CONFIG_PATH = path.resolve(__dirname, '../../SuperPaymaster/config.anvil.json');
+const CONFIG_PATH = path.resolve(__dirname, '../../SuperPaymaster/deployments/config.anvil.json');
 const ENV_PATH = path.resolve(__dirname, '../.env.anvil');
 
 if (!fs.existsSync(CONFIG_PATH)) {
