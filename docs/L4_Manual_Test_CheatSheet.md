@@ -15,7 +15,22 @@
 | **Operator B** | `PRIVATE_KEY_BOB` | Bob (Bread Operator)。负责 Paymaster V4 + bPNTs。 |
 | **Operator C** | `PRIVATE_KEY_ANNI` | Anni (Demo Operator)。负责 SuperPaymaster + cPNTs (Credit)。 |
 
-## 2. 全局合约地址 (Global Contracts - Sepolia)
+## 2. 全局合约 (Global Contracts - Sepolia)
+
+### 2.1 说明
+PaymasterFactory是有注册实例（PaymasterV4Impl）的工厂合约，任何社区可以无许可的发行自己的Gas Token，然后从工厂clone 实例proxy来完成低gas部署和绑定自己的Gas Token（例如bPNTs，cPNTs），从而为自己的社区提供Gasless服务（需要自行充值到EntryPoint和维护运营）。
+
+而SuperPaymaster是多租户的公共基础设施，它是一个全局唯一Paymaster，同时也是一个多租户的合约，社区在注册和发行自己的gas token后，需要购买此合约的唯一服务方AAStar社区发行的aPNTs并deposite到SuperPaymaster，然后自己的社区成员可以获得该社区的bPNTs，cPNTs等，作为gas token无感支付（AAStar社区会维护运营）。
+
+无论是Paymaster V4还是SuperPaymaster，都是标准的ERC4337 Paymaster，本测试会为几个测试账户分别部署两个不同的Paymaster V4，注册一个SuperPaymaster（全局唯一，无需部署，注册即可）。
+
+GToken是Mycelium的治理代币，2100万硬顶，除了社区投票和治理外，核心作用是公共物品花园的门票。所有协议的参与者（例如节点运营商、Paymaster服务商和SuperPaymaster注册服务商等）和使用者（普通的用户等），都需要stake & locky一定数量的GToken来获得入场资格，永久一次性门票，可退票。Mycelium协议致力于维护和提供一套不断产生数字公共物品的流程和基建，包括Infrastucture, Protocol, DApp三个层级的协作和支持。GTokenStaking是对应的管理合约，在注册和质押GToken时使用，需要一次性approve一定的额度范围（例如普通用户大约需要0.45,注册社区需要33, 启动Paymaster大约需要33, 注册启动SuperPaymaster大约需要55等等，此配置可由协议治理多签进行调整）。
+
+MySBT是Mycelium的灵魂绑定的一个数字白板，归属于第一次mint的用户，当你注册为Mycelium协议成员或者任意协议社区时自动mint。白板秉持隐私保护策略，owner全权控制显示哪些信息，自动绑定了Gasless加油卡，接受所有协议内的社区自己发行的Gas Token，自动绑定了数字公共物品花园的门票，同时被动接受社区自定义的reputation规则的更新和全局reputation的更新。Reputation越高，获得Mycelium内部DApp启动的早期邀请和airdrop的概率越大。同时也是一个可以设置头像的NFT，可配置profile等。
+
+xPNTsFactory和xPNTs，是工厂合约和泛指任意社区发行的ERC20Gas Token，只要拥有加油卡（MySBT+充值xPNTs）即可无感支付Gas，自由交易。
+
+### 2.2 合约地址
 
 这些是部署在 Sepolia 的核心系统合约 (来自 `config.sepolia.json`)。
 
