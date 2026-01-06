@@ -168,7 +168,7 @@ async function main() {
                  console.log(`   ⛽ Deploying Paymaster V4 for ${op.name}...`);
                  try {
                      const res = await operatorSdk.deployAndRegisterPaymasterV4({ 
-                         stakeAmount: parseEther('10') 
+                         stakeAmount: parseEther('30') 
                      });
                      pAddr = res.paymasterAddress;
                      pmV4 = pAddr;
@@ -177,17 +177,32 @@ async function main() {
                  }
             } else {
                 pmV4 = pAddr;
+                // 即使已部署，也检查是否在Registry注册过角色
+                try {
+                    const ROLE_AOA = await registry(publicClient).ROLE_PAYMASTER_AOA();
+                    const hasRole = await registry(publicClient).hasRole({ user: acc.address, roleId: ROLE_AOA });
+                    if (!hasRole) {
+                        console.log(`   📝 Registering Paymaster V4 Role for ${op.name}...`);
+                        await operatorSdk.deployAndRegisterPaymasterV4({
+                            stakeAmount: parseEther('30')
+                        });
+                    }
+                } catch(e:any) { console.log(`      ⚠️ PM Role Check/Reg Failed: ${e.message}`); }
             }
             if(pmV4 && pmV4 !== 'None' && communityMap[op.name]) communityMap[op.name].pmV4 = pmV4 as Address;
         } else {
             pmV4 = "N/A (Super)";
             try {
-                const registered = await registry(publicClient).hasRole({ user: acc.address, roleId: await registry(publicClient).ROLE_PAYMASTER_SUPER() });
+                const ROLE_SUPER = await registry(publicClient).ROLE_PAYMASTER_SUPER();
+                const registered = await registry(publicClient).hasRole({ user: acc.address, roleId: ROLE_SUPER });
                 if(!registered) {
                     console.log(`   📝 Registering SuperPM Role for Anni...`);
-                    await operatorSdk.registerAsSuperPaymasterOperator({ stakeAmount: parseEther('30') });
+                    await operatorSdk.registerAsSuperPaymasterOperator({
+                        stakeAmount: parseEther('50'),
+                        depositAmount: parseEther('50000')
+                    });
                 }
-            } catch(e:any) { /* ignore */ }
+            } catch(e:any) { console.log(`      ⚠️ SuperPM Role Check/Reg Failed: ${e.message}`); }
         }
 
         operatorStatus.push({
@@ -348,114 +363,129 @@ async function main() {
     }
 
 
-    // 5. Check Paymaster & Deposits
+    // 5. Check Paymaster & Deposits (EntryPoint + Internal Credit)
     console.log(`\n💳 5. Checking Paymaster Configuration...`);
     const pmStatus: any[] = [];
-    const pmV4s = Object.values(communityMap).map(c => c.pmV4).filter(Boolean);
+    const pmV4s = Object.values(communityMap).map(c => c.pmV4).filter(Boolean) as Address[];
     const superPM = config.contracts.superPaymaster;
+    const epAddr = config.contracts.entryPoint;
+    const regAddr = config.contracts.registry;
 
-    for (const pm of pmV4s) {
-        if (!pm) continue;
-        const bal = await publicClient.readContract({
-            address: config.contracts.entryPoint,
+    // Get Role IDs
+    const ROLE_PAYMASTER_AOA = await registry(publicClient).ROLE_PAYMASTER_AOA();
+    const ROLE_PAYMASTER_SUPER = await registry(publicClient).ROLE_PAYMASTER_SUPER();
+
+    // Map PMs to their owners for stake check
+    const pmToOwner = new Map<Address, Address>();
+    for (const op of operators) {
+        const addr = privateKeyToAccount(op.key).address;
+        if (communityMap[op.name]?.pmV4) {
+            pmToOwner.set(communityMap[op.name].pmV4 as Address, addr);
+        }
+    }
+
+    // All Paymasters to check in EntryPoint
+    const allPMs = [
+        ...pmV4s.map(addr => ({ addr, owner: pmToOwner.get(addr), type: 'V4', role: ROLE_PAYMASTER_AOA })),
+        { addr: superPM, owner: privateKeyToAccount(operators.find(o => o.name.includes('Anni'))?.key!).address, type: 'SuperPM', role: ROLE_PAYMASTER_SUPER }
+    ];
+
+    for (const pmInfo of allPMs) {
+        const pm = pmInfo.addr;
+        
+        // 5a. EntryPoint Deposit Check
+        const epBal = await publicClient.readContract({
+            address: epAddr,
             abi: [{name:'balanceOf',inputs:[{type:'address'}],outputs:[{type:'uint256'}],type:'function'}],
             functionName: 'balanceOf', args: [pm]
         }) as bigint;
         
-        let stakeVal = '0.00';
-        try {
-            const stake = await publicClient.readContract({
-                address: config.contracts.gTokenStaking,
-                abi: [{name:'getStakeInfo',inputs:[{type:'address'}],outputs:[{type:'uint256',name:'stake'},{type:'uint256',name:'lock'}],type:'function'}],
-                functionName: 'getStakeInfo', args: [pm]
-            }) as any;
-            stakeVal = parseFloat(formatEther(stake[0] || 0n)).toFixed(2);
-        } catch(e) { stakeVal = 'Err'; }
+        const MIN_EP_DEPOSIT = parseEther('0.1');
+        const REFILL_EP_AMOUNT = parseEther('0.2');
 
-        pmStatus.push({
-            Type: 'V4',
-            Address: pm,
-            EP_Deposit: parseFloat(formatEther(bal)).toFixed(4),
-            Stake: stakeVal
-        });
-        
-        if (bal < parseEther('0.05')) {
-             console.log(`   💵 Refilling Paymaster ${pm}...`);
+        if (epBal < MIN_EP_DEPOSIT) {
+             console.log(`   💵 Refilling EntryPoint Deposit for ${pmInfo.type} at ${pm}...`);
              const hash = await supplierClient.writeContract({
-                 address: config.contracts.entryPoint,
+                 address: epAddr,
                  abi: [{name:'depositTo',type:'function',inputs:[{type:'address'}],outputs:[],stateMutability:'payable'}],
-                 functionName: 'depositTo', args: [pm], value: parseEther('0.1')
+                 functionName: 'depositTo', args: [pm], value: REFILL_EP_AMOUNT
              });
              await publicClient.waitForTransactionReceipt({ hash });
+             console.log(`      ✅ Refilled to ${formatEther(REFILL_EP_AMOUNT)} ETH`);
+        }
+
+        // 5b. Stake Info from Registry (Query Operator's stake)
+        let stakeVal = '0.00';
+        if (pmInfo.owner) {
+            try {
+                const stake = await publicClient.readContract({
+                    address: regAddr,
+                    abi: [{name:'roleStakes',inputs:[{type:'bytes32',name:'roleId'},{type:'address',name:'user'}],outputs:[{type:'uint256'}],type:'function'}],
+                    functionName: 'roleStakes', args: [pmInfo.role, pmInfo.owner]
+                }) as bigint;
+                stakeVal = parseFloat(formatEther(stake)).toFixed(2);
+            } catch(e) { }
+        }
+
+        // Special handling for SuperPM status display (we update it later with Internal Credit)
+        if (pmInfo.type === 'V4') {
+            pmStatus.push({
+                Type: 'V4',
+                Address: pm,
+                EP_Deposit: parseFloat(formatEther(epBal < MIN_EP_DEPOSIT ? REFILL_EP_AMOUNT : epBal)).toFixed(4),
+                Stake: stakeVal
+            });
+        } else {
+            // SuperPM basic info (will add Internal_Credit later)
+            (pmInfo as any).epDeposit = parseFloat(formatEther(epBal < MIN_EP_DEPOSIT ? REFILL_EP_AMOUNT : epBal)).toFixed(4);
+            (pmInfo as any).stake = stakeVal;
         }
     }
 
-    // SuperPM Check
+    // 5c. SuperPM Internal Credit (Anni's stake in SuperPM)
     const anniOp = operators.find(o => o.name.includes('Anni'));
     if (anniOp) {
         const anniAddr = privateKeyToAccount(anniOp.key).address;
         let internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
         
-        if (internalBal < parseEther('50000')) {  // 按文档要求: ≥50,000 aPNTs
+        if (internalBal < parseEther('50000')) {
             console.log(`   🔄 Refilling SuperPaymaster Credit for Anni...`);
-            
-            // Use global aPNTs token (APNTS_TOKEN in SuperPaymaster contract)
             const globalAPNTs = config.contracts.aPNTs;
-            console.log(`      📍 Global aPNTs Token: ${globalAPNTs}`);
-            
             const anniAcc = privateKeyToAccount(anniOp.key);
             const anniClient = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
             
             try {
-                // Step 1: Check Anni's aPNTs balance
                 const anniApntsBal = await tokenActions()(publicClient).balanceOf({ token: globalAPNTs, account: anniAddr });
-                console.log(`      📊 Anni Global aPNTs Balance: ${formatEther(anniApntsBal)}`);
-                
-                // Step 2: Mint global aPNTs to Anni if needed (Supplier/Admin mints) - 按文档要求补足到100,000
-                const requiredForDeposit = parseEther('60000'); // 需要存50,000 + buffer
+                const requiredForDeposit = parseEther('60000');
                 if (anniApntsBal < requiredForDeposit) {
-                    console.log(`      💸 Minting Global aPNTs to Anni (via Supplier)...`);
                     const mintAmount = requiredForDeposit - anniApntsBal;
                     const mintHash = await tokenActions()(supplierClient).mint({
                         token: globalAPNTs, to: anniAddr, amount: mintAmount, account: supplier
                     });
-                    console.log(`      ⏳ Waiting for mint tx: ${mintHash}`);
                     await publicClient.waitForTransactionReceipt({ hash: mintHash });
-                    console.log(`      ✅ Mint confirmed`);
                 }
                 
-                // Step 3: Approve SuperPaymaster to spend aPNTs
                 const currentAllowance = await tokenActions()(publicClient).allowance({ token: globalAPNTs, owner: anniAddr, spender: superPM });
-                console.log(`      📊 Current allowance: ${formatEther(currentAllowance)}`);
-                
                 if (currentAllowance < parseEther('50000')) {
-                    console.log(`      🔓 Approving SuperPaymaster to spend aPNTs...`);
                     const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('100000') });
-                    console.log(`      ⏳ Waiting for approve tx: ${approveHash}`);
                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
-                    console.log(`      ✅ Approve confirmed`);
                 }
                 
-                // Step 4: Deposit 50,000 aPNTs into SuperPaymaster (按文档要求)
-                console.log(`      💰 Depositing 50,000 aPNTs to SuperPaymaster...`);
                 const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50000') });
-                console.log(`      ⏳ Waiting for deposit tx: ${depositHash}`);
                 await publicClient.waitForTransactionReceipt({ hash: depositHash });
-                console.log(`      ✅ Deposit confirmed`);
                 
-                // Refresh balance for table display
                 internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
-                console.log(`      📊 New SuperPM Balance: ${formatEther(internalBal)} aPNTs`);
             } catch(e: any) {
                 console.error(`      ❌ SuperPM Refill Failed: ${e.message}`);
-                if (e.cause) console.error(`         Cause:`, e.cause);
             }
         }
         
-        // Add to table AFTER potential refill
+        const superPMInfo = allPMs.find(p => p.type === 'SuperPM') as any;
         pmStatus.push({
             Type: 'SuperPM',
             Address: superPM,
+            EP_Deposit: superPMInfo.epDeposit,
+            Stake: superPMInfo.stake,
             Internal_Credit: parseFloat(formatEther(internalBal)).toFixed(2),
             Operator: 'Anni'
         });

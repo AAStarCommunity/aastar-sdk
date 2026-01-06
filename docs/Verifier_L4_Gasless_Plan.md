@@ -176,7 +176,32 @@ xPNTsFactory合约初始化会设置SuperPaymaster内置为超级账户，可以
  3. PaymasterV4_2-Bread，归属于Bread社区，基于paymasterFactory部署的标准实现，提供paymaster接口的具体实例，以此类推
  4. SuperPaymaster，归属于AAStar社区，全局唯一实例，提供superpaymaster服务的多租户合约（这个是特殊实例，只有一个）
 
-验证相互之间的依赖是否初始化完成，包括：
+### 角色和信用等级
+ 预置角色配置表 (Registry v3.1.1)
+以下是合约构造函数中初始化的核心参数（金额单位均为 GToken/ETH 对应的 18 位小数）：
+
+角色 (Role ID)	最小质押 (minStake)	进入销毁 (entryBurn)	退出费率 (exitFeeBP)	最小退出费	说明
+ROLE_COMMUNITY	30 ETH	3 ETH	500 (5%)	1 ETH	社区运营者基础角色
+ROLE_ENDUSER	0.3 ETH	0.05 ETH	1000 (10%)	0.05 ETH	终端用户角色
+ROLE_PAYMASTER_SUPER	50 ETH	5 ETH	1000 (10%)	2 ETH	超级支付主角色
+ROLE_PAYMASTER_AOA	30 ETH	3 ETH	1000 (10%)	1 ETH	常规 AOA 支付主
+ROLE_DVT / ROLE_KMS	30~100 ETH	3~10 ETH	1000 (10%)	1~5 ETH	基础设施节点角色
+[!NOTE] bra fee (entryBurn): 注册时立即扣除并销毁的部分。 stakeExit fee (exitFeeBP): 退出角色时从质押余额中扣除的比例（BP 为万分之一）。
+
+C. 信用分等级与额度 (Credit Tiers)
+系统根据 Reputation 分数自动划分等级，对应不同的 SuperPaymaster 信用额度：
+
+等级 (Level)	信誉分阈值 (Reputation)	信用额度 (Credit Limit)
+Level 1	< 13	0
+Level 2	13 - 33	100 aPNTs
+Level 3	34 - 88	300 aPNTs
+Level 4	89 - 232	600 aPNTs
+Level 5	233 - 609	1000 aPNTs
+Level 6	610+	2000 aPNTs
+这就解释了为什么在 L4 测试中，我们需要先提升 AA 账户的 Reputation，才能触发 SuperPaymaster 的信用支付逻辑。
+
+### 验证
+相互之间的依赖是否初始化完成，包括：
 1. GToken是否是immutable变量在GTokenStaking合约中
 (Wiring Matrix)
 * 		MySBT -> Registry
