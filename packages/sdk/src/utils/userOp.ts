@@ -5,11 +5,11 @@ import { type Address, type Hex, concat, pad, keccak256, encodeAbiParameters, pa
  */
 export interface PackedUserOperation {
     sender: Address;
-    nonce: bigint;
+    nonce: Hex;
     initCode: Hex;
     callData: Hex;
     accountGasLimits: Hex; // bytes32 (packed verificationGasLimit and callGasLimit)
-    preVerificationGas: bigint;
+    preVerificationGas: Hex;
     gasFees: Hex; // bytes32 (packed maxPriorityFeePerGas and maxFeePerGas)
     paymasterAndData: Hex;
     signature: Hex;
@@ -105,5 +105,16 @@ export class UserOperationBuilder {
             functionName: 'getUserOpHash',
             args: [userOp]
         }) as Hex;
+    }
+
+    /**
+     * Formats a PackedUserOperation into a JSON-RPC compatible object with hex-encoded strings.
+     */
+    static jsonifyUserOp(userOp: any): any {
+        const result: any = { ...userOp };
+        // Ensure all numeric fields are hex strings
+        if (typeof result.nonce === 'bigint') result.nonce = `0x${result.nonce.toString(16)}`;
+        if (typeof result.preVerificationGas === 'bigint') result.preVerificationGas = `0x${result.preVerificationGas.toString(16)}`;
+        return result;
     }
 }

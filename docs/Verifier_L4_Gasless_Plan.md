@@ -318,6 +318,11 @@ cat scripts/l4-state.json
    - Anvil本地没有真实Bundler,无法测试完整UserOp流程
    - **建议L4跳过Anvil**,仅在Sepolia/OP-Sepolia执行
 
+### 5.3 构造UserOp
+- 交易内容：从 Jason 的第一个 AA 账户 (Jason_AA1) 向 Bob 的 EOA 地址转移 2 个 bPNTs 代币。
+- 签名来源：使用 Jason 的私钥（即 AA 的 Owner）对 UserOp Hash 进行了标准的 signMessage 签名。
+- Nonce 处理：通过 SDK 实时获取了最新的 Nonce 值 (当前为 1)。
+
 ### 5.4 l4-gasless.ts 测试场景
 
 | # | 场景 | Paymaster | 预期 |

@@ -18,7 +18,11 @@ import {
 } from '../packages/core/dist/index.js';
 import { CommunityClient, UserClient } from '../packages/enduser/dist/index.js';
 import { PaymasterOperatorClient } from '../packages/operator/dist/PaymasterOperatorClient.js';
-import { UserOperationBuilder } from './../packages/sdk/src/utils/userOp.js';
+import {
+    UserOperationBuilder,
+    UserOpScenarioBuilder,
+    UserOpScenarioType
+} from '../packages/sdk/dist/index.js';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 import { loadContract } from './00_utils.js'; 
@@ -502,46 +506,65 @@ async function main() {
 
     printTable("Paymaster Status", pmStatus);
 
-    // 6. UserOperation Generation Demo (ERC-4337 v0.7)
-    console.log(`\n📦 6. Preparing Sample PackedUserOperation (v0.7)...`);
-    const targetAA = testAccounts[0]; // Jason_AA1
-    if (targetAA) {
-        const { encodeFunctionData } = await import('viem');
-        
-        // Use standard builder logic
-        const callData = encodeFunctionData({
-            abi: [{ name: 'execute', type: 'function', inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'bytes' }] }],
-            functionName: 'execute',
-            args: [regAddr, 0n, '0x'] // Example: call Registry (noop)
-        });
+    // 6. UserOperation Generation Demo (5 Scenarios)
+    console.log(`\n📦 6. Constructing 5 Different UserOperation Scenarios (v0.7)...`);
+    
+    const targetAA = testAccounts[0]; // Jason (AAStar)_AA1
+    const jasonAcc = privateKeyToAccount(operators[0].key);
+    
+    // Scenarios setup
+    const bobOp = operators.find(o => o.name.includes('Bob'));
+    const bobEOA = bobOp ? privateKeyToAccount(bobOp.key).address : null;
+    const bPNTsToken = communityMap['Bob (Bread)']?.token;
+    const cPNTsToken = communityMap['Jason (AAStar)']?.token; // Assumption: using native community token as cPNTs for demo
+    
+    if (targetAA && bobEOA && bPNTsToken && cPNTsToken) {
+        const scenarios = [
+            { type: UserOpScenarioType.NATIVE, label: '1. Standard ERC-4337 (User pays ETH)' },
+            { type: UserOpScenarioType.GASLESS_V4, label: '2. Gasless via PaymasterV4 (Jason Community)', paymaster: communityMap['Jason (AAStar)']?.pmV4 },
+            { type: UserOpScenarioType.GASLESS_V4, label: '3. Gasless via PaymasterV4 (Bob Community)', paymaster: communityMap['Bob (Bread)']?.pmV4 },
+            { type: UserOpScenarioType.SUPER_BPNT, label: '4. SuperPaymaster via bPNT (Internal Settlement)', paymaster: superPM, operator: jasonAcc.address, token: bPNTsToken },
+            { type: UserOpScenarioType.SUPER_CPNT, label: '5. SuperPaymaster via cPNT (Internal Settlement)', paymaster: superPM, operator: jasonAcc.address, token: cPNTsToken }
+        ];
 
-        const userOp = {
-            sender: targetAA.address,
-            nonce: 0n, // Assuming initial op
-            initCode: '0x' as Hex, // Already deployed in step 3
-            callData,
-            accountGasLimits: UserOperationBuilder.packAccountGasLimits(200000n, 100000n),
-            preVerificationGas: 50000n,
-            gasFees: UserOperationBuilder.packGasFees(2000000000n, 2000000000n), // 2 Gwei
-            paymasterAndData: UserOperationBuilder.packPaymasterAndData(
-                superPM,
-                250000n, // paymasterGasLimit
-                50000n,  // paymasterPostOpGasLimit
-                privateKeyToAccount(operators[0].key).address // Jason as Operator address
-            ),
-            signature: '0x' as Hex
-        };
+        for (const scene of scenarios) {
+            console.log(`\n--- ${scene.label} ---`);
+            const { userOp, opHash } = await UserOpScenarioBuilder.buildTransferScenario(scene.type, {
+                sender: targetAA.address,
+                ownerAccount: jasonAcc,
+                recipient: bobEOA,
+                tokenAddress: bPNTsToken, // Transfer bPNTs in all cases
+                amount: parseEther('2'),
+                entryPoint: epAddr,
+                chainId: config.chain.id,
+                publicClient,
+                paymaster: scene.paymaster,
+                operator: scene.operator
+            });
+            
+            console.log(`   UserOp Hash: ${opHash}`);
+            console.log(`   Internal Payer Token: ${scene.token || 'N/A'}`);
+            console.log(`   Paymaster: ${scene.paymaster || 'None'}`);
+            console.log(`   Signature (First 32 bytes): ${userOp.signature.slice(0, 66)}...`);
+        }
 
-        console.log(`\n📋 Sample UserOperation for ${targetAA.label}:`);
-        console.log(JSON.stringify(userOp, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
-        
-        const opHash = await UserOperationBuilder.getUserOpHash({
-            userOp,
-            entryPoint: epAddr,
-            chainId: config.chain.id,
-            publicClient
-        });
-        console.log(`\n🔑 UserOp Hash: ${opHash}`);
+        console.log(`\n================================================================`);
+        console.log(`📖 SDK UserOperation Construction Guide`);
+        console.log(`================================================================`);
+        console.log(`API: UserOpScenarioBuilder.buildTransferScenario(type, params)`);
+        console.log(`Context: Transferring 2 bPNTs from Jason (AA1) to Bob (EOA)`);
+        console.log(`\nAvailable Scenarios:`);
+        console.log(`1. NATIVE       : Standard 4337, AA pays gas in ETH`);
+        console.log(`2. GASLESS_V4   : Gasless via PaymasterV4 (Community sponsored)`);
+        console.log(`3. SUPER_BPNT   : SuperPaymaster (Internal bPNT settlement)`);
+        console.log(`4. SUPER_CPNT   : SuperPaymaster (Internal cPNT settlement)`);
+        console.log(`5. SUPER_CUSTOM : SuperPaymaster (Custom operator/token)`);
+        console.log(`\nUsage Example:`);
+        console.log(`const { userOp } = await UserOpScenarioBuilder.buildTransferScenario(`);
+        console.log(`    UserOpScenarioType.SUPER_BPNT, { ...params }`);
+        console.log(`);`);
+        console.log(`// userOp is now ready for eth_sendUserOperation (Hex-compliant)`);
+        console.log(`================================================================`);
     }
 
     console.log(`\n✅ L4 Setup Complete!`);
