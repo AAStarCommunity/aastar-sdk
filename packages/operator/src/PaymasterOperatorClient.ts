@@ -237,6 +237,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 deployHash = await factory(this.client).deployPaymaster({
                     owner: typeof account === 'string' ? account : account.address,
                     version: version, // User requested (or default v4.2)
+                    initData: initData,
                     account: account
                 });
             } catch (error: any) {
@@ -246,6 +247,7 @@ export class PaymasterOperatorClient extends BaseClient {
                      deployHash = await factory(this.client).deployPaymaster({
                         owner: typeof account === 'string' ? account : account.address,
                         version: version,
+                        initData: initData,
                         account: account
                     });
                 } else {

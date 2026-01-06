@@ -43,6 +43,7 @@ export interface ClientConfig {
     paymasterFactoryAddress?: Address;
     xpntsFactoryAddress?: Address;
     ethUsdPriceFeedAddress?: Address;
+    entryPointAddress?: Address;
 }
 
 /**

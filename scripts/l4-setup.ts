@@ -9,8 +9,9 @@ import {
     registryActions, 
     xPNTsFactoryActions,
     paymasterFactoryActions,
-    communityActions
 } from '../packages/core/dist/index.js';
+import { CommunityClient } from '../packages/enduser/dist/CommunityClient.js';
+import { PaymasterOperatorClient } from '../packages/operator/dist/PaymasterOperatorClient.js';
 
 // State File for Idempotency
 import { fileURLToPath } from 'url';
@@ -20,9 +21,10 @@ const STATE_FILE = path.resolve(__dirname, 'l4-state.json');
 
 // --- Sync Deployment First ---
 import { execSync } from 'child_process';
-import * as dotenv from 'dotenv'; // Added dotenv import
+import * as dotenv from 'dotenv';
 const DEPLOY_SYNC_SCRIPT = path.resolve(__dirname, 'deploy-sync.ts');
 
+/*
 try {
     console.log('🔄 Running Deployment Sync...');
     // Pass through arguments like --redeploy
@@ -32,9 +34,10 @@ try {
     console.error('❌ Deployment Sync Failed');
     process.exit(1);
 }
+*/
 
 // Load Updated Config
-dotenv.config({ path: path.resolve(__dirname, '../.env.sepolia'), override: true });
+// dotenv.config loaded in main() based on network
 
 interface OperatorState {
     communityId?: bigint;
@@ -61,8 +64,14 @@ function saveState(state: L4State) {
 }
 
 async function main() {
-    const config = loadNetworkConfig('sepolia');
+    // Parse network arg
+    const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
+    const config = loadNetworkConfig(networkArg);
     console.log(`\n🚀 Starting L4 Environment Setup on ${config.name}...`);
+    
+    // Load config relative to network
+    dotenv.config({ path: path.resolve(__dirname, `../.env.${networkArg}`), override: true });
+    
     const state = loadState();
 
     const publicClient = createPublicClient({
@@ -75,9 +84,16 @@ async function main() {
     const supplier = privateKeyToAccount(config.supplierAccount.privateKey);
     const supplierClient = createWalletClient({ account: supplier, chain: config.chain, transport: http(config.rpcUrl) });
 
-    const keyJason = process.env.PRIVATE_KEY_JASON as Hex;
-    const keyBob = process.env.PRIVATE_KEY_BOB as Hex;
-    const keyAnni = process.env.PRIVATE_KEY_ANNI as Hex;
+    let keyJason = process.env.PRIVATE_KEY_JASON as Hex;
+    let keyBob = process.env.PRIVATE_KEY_BOB as Hex;
+    let keyAnni = process.env.PRIVATE_KEY_ANNI as Hex;
+
+    if (config.name === 'anvil') {
+        if (!keyJason) keyJason = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'; // Account #1
+        if (!keyBob) keyBob = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a';   // Account #2
+        if (!keyAnni) keyAnni = '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6';  // Account #3
+        console.log(`  ⚠️  Using Anvil Default Keys for Operators`);
+    }
 
     if (!keyJason || !keyBob || !keyAnni) throw new Error('Missing Operator Keys in ENV');
 
@@ -175,7 +191,6 @@ async function main() {
             console.log(`  📝 Registering Community Role...`);
             try {
                 // Use CommunityClient.registerAsCommunity() - it handles approval and encoding automatically
-                const { CommunityClient } = await import('../packages/enduser/dist/CommunityClient.js');
                 const communityClient = new CommunityClient({
                     client: client,
                     publicClient: publicClient,
@@ -233,54 +248,41 @@ async function main() {
 
         // C. Paymaster Setup
         let pmAddr = opState.paymasterAddress;
+        
+        // Init Operator Client
+        const opClient = new PaymasterOperatorClient({
+            client: client,
+            publicClient: publicClient,
+            superPaymasterAddress: config.contracts.superPaymaster,
+            tokenAddress: tokenAddr,
+            xpntsFactoryAddress: config.contracts.xPNTsFactory,
+            registryAddress: config.contracts.registry,
+            entryPointAddress: config.contracts.entryPoint
+        });
+
         if (paymasterType === 'V4') {
-             if (!pmAddr) {
-                // Check if already deployed
-                const existing = await pmFactory(publicClient).getPaymaster({ owner: account.address });
-                if (existing && existing !== '0x0000000000000000000000000000000000000000') {
-                    pmAddr = existing;
-                    console.log(`  ✅ Found PaymasterV4: ${pmAddr}`);
-                } else {
-                    console.log(`  ⛽ Deploying PaymasterV4...`);
-                    const entryPoint = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EP 0.7 Mainnet/Sepolia Addr
-                    // V4 Init: abi.encode(entryPoint, owner) ?
-                    // Actually ABI deployPaymaster takes (version, initData). 
-                    // initData for V4 is likely just the owner? Or empty?
-                    // Standard Paymaster V4 initialization logic?
-                    // Let's assume for now initData is empty or just owner encoded.
-                    // If I look at PaymasterV4.sol (if I could), I'd know.
-                    // Let's try initData = '0x' + owner?
-                    // Actually, if I look at `packages/paymaster/src/PaymasterV4.sol` constructor?
-                    // It likely takes EntryPoint and Owner in constructor, OR initialize().
-                    // Factory usually calls initialize(initData).
-                    // Let's try encoding both.
-                    // But I cannot easily import encodeAbiParameters here in the replacement.
-                    // I will use `encodeAbiParameters` from viem if I can import it.
-                    // But for now, let's just passing '0x' if uncertain, OR assume `deployPaymaster` in factory handles it?
-                    // SDK `deployPaymaster` takes `owner`. Implementation does what?
-                    // Line 276 of factory.ts: deployPaymaster({ owner, account }) -> calls 'deployPaymaster' with [owner].
-                    // BUT ABI deployPaymaster takes (_version, initData)!
-                    // So SDK `deployPaymaster` implementation (Line 276) is ALSO BROKEN if it passes [owner].
-                    // It must pass ["V4.0.0", "0x..."].
-                    // I MUST FIX SDK `deployPaymaster` implementation first.
-                    
-                    // Since I cannot easily fix SDK logic blindly without knowing V4 version string,
-                    // I will pause deployment in l4-setup.ts and only rely on Manual Deployment for now?
-                    // No, invalidates the task.
-                    
-                    // I will fix SDK `deployPaymaster` to match ABI.
-                    // And I will try version "0.0.1" or "V3.0.0"? 
-                    // PaymasterFactory.json has event PaymasterDeployed(..., version, ...).
-                    // I will try to use the `deployPaymaster` from SDK but I must fix its arguments mapping.
-                    
-                    const hash = await pmFactory(client).deployPaymaster({
-                        owner: account.address,
+             if (!pmAddr || pmAddr === '0x0000000000000000000000000000000000000000') {
+                console.log(`  ⛽ Deploying PaymasterV4 (via SDK)...`);
+                try {
+                    // Use SDK high-level API
+                    // Note: deployAndRegisterPaymasterV4 handles prerequisites and initData encoding
+                    const result = await opClient.deployAndRegisterPaymasterV4({
                         version: paymasterVersion,
-                        account: account
+                        stakeAmount: parseEther('1000') // Stake 1000 GToken
                     });
-                     await publicClient.waitForTransactionReceipt({ hash });
-                     pmAddr = await pmFactory(publicClient).getPaymaster({ owner: account.address });
-                     console.log(`  ✅ PaymasterV4 Deployed: ${pmAddr}`);
+                    
+                    pmAddr = result.paymasterAddress;
+                    console.log(`  ✅ PaymasterV4 Deployed: ${pmAddr}`);
+                    console.log(`  ✅ Role Registered: AOA`);
+                } catch (e: any) {
+                    if (e.message.includes('Already has ROLE_PAYMASTER_AOA')) {
+                        console.log(`  ✅ Already Registered AOA`);
+                        // Try to fetch PM address if we missed it
+                         pmAddr = await paymasterFactoryActions(config.contracts.paymasterFactory)(publicClient).getPaymaster({ owner: account.address });
+                         console.log(`  ✅ PaymasterV4 Found: ${pmAddr}`);
+                    } else {
+                        console.log(`  ⚠️  Deploy Error: ${e.message.split('\n')[0]}`);
+                    }
                 }
                 opState.paymasterAddress = pmAddr;
              } else {
@@ -288,34 +290,18 @@ async function main() {
              }
         } else if (paymasterType === 'Super') {
              // Register as SuperPaymaster Operator
-             const isSuper = await registry(publicClient).hasRole({ user: account.address, roleId: ROLE_PAYMASTER_SUPER });
-             if (!isSuper) {
-                 console.log(`  🦸 Granting SuperPaymaster Operator Role (Self)...`);
-                 try {
-                     // Ensure user has approved Registry for stake
-                     const gToken = tokenActions();
-                     const approveHash = await gToken(client).approve({
-                         token: config.contracts.gToken,
-                         spender: config.contracts.registry,
-                         amount: parseEther('100000'),
-                         account: account
-                     });
-                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
-                     
-                     // Use registerRoleSelf
-                     const hash = await registry(client).registerRoleSelf({
-                         roleId: ROLE_PAYMASTER_SUPER,
-                         data: '0x',
-                         account: account
-                     });
-                     await publicClient.waitForTransactionReceipt({ hash });
-                     console.log(`  ✅ SuperPaymaster Operator Granted`);
-                 } catch (e: any) {
-                    if (e.message.includes('RoleAlreadyGranted')) {
-                        console.log(`  ✅ Already Granted (caught Error)`);
-                    } else {
-                        console.log(`  ⚠️  Grant Warning: ${e.message.split('\n')[0]}`);
-                    }
+             console.log(`  🦸 Registering SuperPaymaster Operator...`);
+             try {
+                 await opClient.registerAsSuperPaymasterOperator({
+                     stakeAmount: parseEther('1000'),
+                     depositAmount: parseEther('0') // Deposit later or separate step
+                 });
+                 console.log(`  ✅ SuperPaymaster Operator Registered`);
+             } catch (e: any) {
+                 if (e.message.includes('Already registered')) {
+                     console.log(`  ✅ Already Registered`);
+                 } else {
+                     console.log(`  ⚠️  Register Error: ${e.message.split('\n')[0]}`);
                  }
              }
              opState.superPaymasterAddress = config.contracts.superPaymaster; // Global instance

@@ -14,6 +14,9 @@ import { anvil, localhost } from 'viem/chains';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// Anvil Default Private Key (Account #0)
+const ANVIL_DEFAULT_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+
 type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
 
 /**
@@ -146,7 +149,11 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         return addr as Address;
     };
 
-    const supplierPrivateKey = process.env.PRIVATE_KEY_SUPPLIER as Hex | undefined;
+    let supplierPrivateKey = process.env.PRIVATE_KEY_SUPPLIER as Hex | undefined;
+    if (!supplierPrivateKey && network === 'anvil') {
+        supplierPrivateKey = ANVIL_DEFAULT_KEY;
+        console.log(`    ⚠️  Using Anvil Default Key for Supplier`);
+    }
 
     return {
         name: network,

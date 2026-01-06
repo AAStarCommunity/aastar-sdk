@@ -8,6 +8,7 @@ export abstract class BaseClient {
     protected gTokenAddress?: Address;
     protected gTokenStakingAddress?: Address;
     protected paymasterFactoryAddress?: Address;
+    protected entryPointAddress?: Address;
 
     constructor(config: ClientConfig) {
         if (!config.client) {
@@ -23,6 +24,7 @@ export abstract class BaseClient {
         this.gTokenAddress = config.gTokenAddress;
         this.gTokenStakingAddress = config.gTokenStakingAddress;
         this.paymasterFactoryAddress = config.paymasterFactoryAddress;
+        this.entryPointAddress = config.entryPointAddress;
     }
 
     /**
@@ -65,5 +67,12 @@ export abstract class BaseClient {
             throw new Error('PaymasterFactory address is not configured for this client');
         }
         return this.paymasterFactoryAddress;
+    }
+
+    protected requireEntryPoint(): Address {
+        if (!this.entryPointAddress) {
+            throw new Error('EntryPoint address is not configured for this client');
+        }
+        return this.entryPointAddress;
     }
 }

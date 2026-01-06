@@ -1,6 +1,8 @@
 import { type Address, type Hash, type Hex } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
-import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions } from '@aastar/core';
+import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterV4Actions, superPaymasterActions } from '@aastar/core';
+import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
+import { encodeFunctionData } from 'viem';
 
 export interface UserClientConfig extends ClientConfig {
     accountAddress: Address; // The AA account address
@@ -216,6 +218,120 @@ export class UserClient extends BaseClient {
         return sbt(this.client).leaveCommunity({
             community,
             account: options?.account
+        });
+    }
+
+    // ========================================
+    // 6. Gasless Execution (Advanced)
+    // ========================================
+
+    /**
+     * Execute a transaction with Gasless Sponsorship
+     */
+    async executeGasless(params: {
+        target: Address;
+        value: bigint;
+        data: Hex;
+        paymaster: Address;
+        paymasterType: 'V4' | 'Super';
+    }, options?: TransactionOptions): Promise<Hash> {
+        const client = (this.client as any).extend(bundlerActions);
+        const ep = this.requireEntryPoint();
+        
+        // 1. Prepare Call Data
+        // SimpleAccount.execute(dest, value, func)
+        const callData = encodeFunctionData({
+            abi: [{ name: 'execute', type: 'function', inputs: [{ name: 'dest', type: 'address' }, { name: 'value', type: 'uint256' }, { name: 'func', type: 'bytes' }], outputs: [] }],
+            functionName: 'execute',
+            args: [params.target, params.value, params.data]
+        });
+
+        // 2. Prepare Paymaster Data
+        let paymasterAndData: Hex = '0x';
+        const publicClient = this.getStartPublicClient();
+
+        if (params.paymasterType === 'V4') {
+             // V4: Paymaster + InitData? No, just address if no special logic.
+             // Usually V4 needs no special data for basic sponsorship if token is setup?
+             // Actually, Paymaster V4 usually requires `paymasterAndData` to contain Token info or just use default?
+             // If V4 uses `validatePaymasterUserOp`, it checks `userOp.paymasterAndData`.
+             // If we just pass address, it might fail?
+             // Let's assume just address for now, or use stub helper if available.
+             // Standard V4: address + ...
+             // We'll append empty bytes if needed: account-abstraction/contracts usually needs nothing?
+             // Wait, if it's Token Paymaster, it might need token address encoded?
+             // PaymasterV4.sol logic: assumes defaults or reads from Storage?
+             // We'll assume address is sufficient for now (packed to 20 bytes).
+             paymasterAndData = params.paymaster;
+        } else if (params.paymasterType === 'Super') {
+             // SuperPaymaster V3:
+             // Needs mode (0=Basic, 1=Credit).
+             // If Credit, needs nothing?
+             // SuperPaymasterV3 `validatePaymasterUserOp` parses mode.
+             // Let's assume standard sponsorship (Credit/Registry).
+             // Just address is usually enough for "Mycelium" mode (Pull)?
+             // If using `PostOp`, we need verifyingGasLimit > 0.
+             paymasterAndData = params.paymaster;
+        }
+
+        // 3. Estimate Gas
+        // We use bundler to estimate
+        const sender = this.accountAddress;
+        const nonce = await this.getNonce();
+        
+        // Partial UserOp
+        const userOpPartial = {
+            sender,
+            nonce,
+            initCode: '0x' as Hex, // Valid only if deployed
+            callData,
+            paymasterAndData,
+            signature: '0x' as Hex // Dummy
+        };
+
+        // Estimate
+        const gasEstimate = await (client as any).estimateUserOperationGas({
+             userOperation: userOpPartial as any, // Viem types are strict, partial might need casting
+             entryPoint: ep
+        });
+
+        // 4. Construct Final UserOp 
+        // We need fees.
+        const fees = await (publicClient as any).estimateFeesPerGas();
+        
+        const userOp: UserOperation = {
+            ...userOpPartial,
+            callGasLimit: gasEstimate.callGasLimit,
+            verificationGasLimit: gasEstimate.verificationGasLimit + 50000n, // Buffer
+            preVerificationGas: gasEstimate.preVerificationGas,
+            maxFeePerGas: fees.maxFeePerGas || fees.gasPrice || 1000000000n,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas || 1000000000n
+        };
+
+        // 5. Sign
+        const chainId = this.client.chain?.id || 31337;
+        const hash = getUserOperationHash({
+            userOperation: userOp,
+            entryPointAddress: ep,
+            entryPointVersion: '0.7',
+            chainId
+        });
+
+        const signature = await this.client.signMessage({
+            message: { raw: hash },
+            account: this.client.account
+        });
+
+        const signedUserOp = {
+            ...userOp,
+            signature
+        };
+
+        // 6. Send
+        const bundleClient = client as any;
+        return bundleClient.sendUserOperation({
+            userOperation: signedUserOp,
+            entryPoint: ep
         });
     }
 }

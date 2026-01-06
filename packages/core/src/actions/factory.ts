@@ -41,7 +41,7 @@ export type XPNTsFactoryActions = {
 export type PaymasterFactoryActions = {
     // Deployment
     // Deployment
-    deployPaymaster: (args: { owner: Address, version?: string, account?: Account | Address }) => Promise<Hash>; // initData不需要，implementation已注册
+    deployPaymaster: (args: { owner: Address, version?: string, initData?: Hex, account?: Account | Address }) => Promise<Hash>; // initData 支持
     
     // Query
     calculateAddress: (args: { owner: Address }) => Promise<Address>;
@@ -285,8 +285,8 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
 });
 
 export const paymasterFactoryActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterFactoryActions => ({
-    async deployPaymaster({ owner, version, account }: { owner: Address, version?: string, account?: Account | Address }) {
-        // Factory.deployPaymaster(version) - implementation 已注册，不需要 initData
+    async deployPaymaster({ owner, version, initData, account }: { owner: Address, version?: string, initData?: Hex, account?: Account | Address }) {
+        // Factory.deployPaymaster(version, initData)
         const defaultVer = 'v4.2'; // 当前标准版本
         const useVer = version || defaultVer;
         
@@ -294,7 +294,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
             address,
             abi: PaymasterFactoryABI,
             functionName: 'deployPaymaster',
-            args: [useVer, '0x'], // initData 固定为 0x（不需要初始化参数）
+            args: [useVer, initData || '0x'], 
             account: account as any,
             chain: (client as any).chain
         });
