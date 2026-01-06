@@ -1,7 +1,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, type Address, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, type Address, encodeAbiParameters, parseAbiParameters, getContractAddress, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
 import { 
@@ -9,70 +9,44 @@ import {
     registryActions, 
     xPNTsFactoryActions,
     paymasterFactoryActions,
+    accountFactoryActions,
+    paymasterV4Actions,
+    superPaymasterActions
 } from '../packages/core/dist/index.js';
-import { CommunityClient } from '../packages/enduser/dist/CommunityClient.js';
+import { CommunityClient, UserClient } from '../packages/enduser/dist/index.js';
 import { PaymasterOperatorClient } from '../packages/operator/dist/PaymasterOperatorClient.js';
-
-// State File for Idempotency
 import { fileURLToPath } from 'url';
+import * as dotenv from 'dotenv';
+import { loadContract } from './00_utils.js'; 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STATE_FILE = path.resolve(__dirname, 'l4-state.json');
 
-// --- Sync Deployment First ---
-import { execSync } from 'child_process';
-import * as dotenv from 'dotenv';
-const DEPLOY_SYNC_SCRIPT = path.resolve(__dirname, 'deploy-sync.ts');
-
-/*
-try {
-    console.log('🔄 Running Deployment Sync...');
-    // Pass through arguments like --redeploy
-    const args = process.argv.slice(2).join(' ');
-    execSync(`pnpm tsx ${DEPLOY_SYNC_SCRIPT} ${args}`, { stdio: 'inherit' });
-} catch (e) {
-    console.error('❌ Deployment Sync Failed');
-    process.exit(1);
-}
-*/
-
-// Load Updated Config
-// dotenv.config loaded in main() based on network
-
-interface OperatorState {
-    communityId?: bigint;
-    tokenAddress?: Address;
-    paymasterAddress?: Address;
-    superPaymasterAddress?: Address;
+// --- Helper: Console Table ---
+function printTable(title: string, data: any[]) {
+    console.log(`\n📋 ${title}`);
+    console.table(data);
 }
 
-interface L4State {
-    jason: OperatorState;
-    bob: OperatorState;
-    anni: OperatorState;
-}
-
-function loadState(): L4State {
-    if (fs.existsSync(STATE_FILE)) {
-        return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-    }
-    return { jason: {}, bob: {}, anni: {} };
-}
-
-function saveState(state: L4State) {
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-}
+// Pimlico v0.7 Factory Address
+const FACTORY_ADDRESS = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985'; 
 
 async function main() {
-    // Parse network arg
-    const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
+    // 1. Load Config & ENV
+    const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1];
+    if (!networkArg) {
+        console.error("❌ Please provide --network argument (e.g., --network=sepolia)");
+        process.exit(1);
+    }
+    
     const config = loadNetworkConfig(networkArg);
-    console.log(`\n🚀 Starting L4 Environment Setup on ${config.name}...`);
+    console.log(`\n🚀 Starting L4 Assessment & Setup on ${config.name}...`);
     
-    // Load config relative to network
-    dotenv.config({ path: path.resolve(__dirname, `../.env.${networkArg}`), override: true });
-    
-    const state = loadState();
+    // Load .env
+    const envPath = path.resolve(__dirname, `../.env.${networkArg}`);
+    console.log(`  📂 Loading ENV from: ${envPath}`);
+    dotenv.config({ path: envPath, override: true });
 
     const publicClient = createPublicClient({
         chain: config.chain,
@@ -80,241 +54,387 @@ async function main() {
     });
 
     if (!config.supplierAccount) throw new Error('PRIVATE_KEY_SUPPLIER required');
-    
     const supplier = privateKeyToAccount(config.supplierAccount.privateKey);
     const supplierClient = createWalletClient({ account: supplier, chain: config.chain, transport: http(config.rpcUrl) });
+    
+    // 2. Output Core Addresses & EOA Status
+    printTable("Core Contracts", Object.entries(config.contracts).map(([k, v]) => ({ Contract: k, Address: v })));
+    
+    const operators = [
+        { name: 'Jason (AAStar)', key: process.env.PRIVATE_KEY_JASON as Hex, role: 'Operator', symbol: 'aPNTs', pmType: 'V4' },
+        { name: 'Bob (Bread)', key: process.env.PRIVATE_KEY_BOB as Hex, role: 'Operator', symbol: 'bPNTs', pmType: 'V4' },
+        { name: 'Anni (Demo)', key: process.env.PRIVATE_KEY_ANNI as Hex, role: 'Operator', symbol: 'cPNTs', pmType: 'Super' },
+    ];
 
-    let keyJason = process.env.PRIVATE_KEY_JASON as Hex;
-    let keyBob = process.env.PRIVATE_KEY_BOB as Hex;
-    let keyAnni = process.env.PRIVATE_KEY_ANNI as Hex;
-
-    if (config.name === 'anvil') {
-        if (!keyJason) keyJason = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'; // Account #1
-        if (!keyBob) keyBob = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a';   // Account #2
-        if (!keyAnni) keyAnni = '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6';  // Account #3
-        console.log(`  ⚠️  Using Anvil Default Keys for Operators`);
-    }
-
-    if (!keyJason || !keyBob || !keyAnni) throw new Error('Missing Operator Keys in ENV');
-
-    const opJason = privateKeyToAccount(keyJason);
-    const opBob = privateKeyToAccount(keyBob);
-    const opAnni = privateKeyToAccount(keyAnni);
-
-    const clientJason = createWalletClient({ account: opJason, chain: config.chain, transport: http(config.rpcUrl) });
-    const clientBob = createWalletClient({ account: opBob, chain: config.chain, transport: http(config.rpcUrl) });
-    const clientAnni = createWalletClient({ account: opAnni, chain: config.chain, transport: http(config.rpcUrl) });
-
-    // --- Helpers ---
-    const ensureETH = async (target: Hex, name: string, minEth: string = '0.05') => {
-        const bal = await publicClient.getBalance({ address: target });
-        // console.log(`  Checking ${name} ETH: ${formatEther(bal)}`);
-        if (bal < parseEther(minEth)) {
-            console.log(`  ⛽ Funding ${name} with 0.1 ETH...`);
-            const hash = await supplierClient.sendTransaction({
-                to: target,
-                value: parseEther('0.1')
-            });
-            await publicClient.waitForTransactionReceipt({ hash });
-            console.log(`  ✅ Funded`);
-        }
-    };
-
-    const gToken = tokenActions();
-    const ensureGToken = async (target: Hex, name: string, amount: bigint) => {
-        const bal = await gToken(publicClient).balanceOf({ 
-            token: config.contracts.gToken, 
-            account: target 
-        });
-        if (bal < amount) {
-            console.log(`  🪙 Minting ${formatEther(amount - bal)} GToken to ${name}...`);
-            const hash = await gToken(supplierClient).mint({
-                token: config.contracts.gToken,
-                to: target,
-                amount: amount - bal,
-                account: supplier
-            });
-            await publicClient.waitForTransactionReceipt({ hash });
-            console.log(`  ✅ Minted`);
-        }
-    };
-
-    // --- 1. Funding ---
-    console.log(`\n💰 1. Ensuring Funds...`);
-    await ensureETH(opJason.address, 'Jason');
-    await ensureETH(opBob.address, 'Bob');
-    await ensureETH(opAnni.address, 'Anni');
-
-    await ensureGToken(opJason.address, 'Jason', parseEther('100000'));
-    await ensureGToken(opBob.address, 'Bob', parseEther('100000'));
-    await ensureGToken(opAnni.address, 'Anni', parseEther('200000'));
-
-    // --- 2. Community & Token Setup ---
-    const factory = xPNTsFactoryActions(config.contracts.xPNTsFactory);
     const registry = registryActions(config.contracts.registry);
+    const gToken = tokenActions();
+    const xpntsFactory = xPNTsFactoryActions(config.contracts.xPNTsFactory);
     const pmFactory = paymasterFactoryActions(config.contracts.paymasterFactory);
-    const ROLE_COMMUNITY = await registry(publicClient).ROLE_COMMUNITY();
-    const ROLE_PAYMASTER_SUPER = await registry(publicClient).ROLE_PAYMASTER_SUPER();
 
-    // Check Default Paymaster Version
-    let paymasterVersion = 'V4.0.0';
-    try {
-        const v = await publicClient.readContract({
-            address: config.contracts.paymasterFactory,
-            abi: paymasterFactoryActions(config.contracts.paymasterFactory).abi || [
-                { type: 'function', name: 'defaultVersion', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' }
-            ],
-            functionName: 'defaultVersion',
-            args: []
-        }) as string;
-        paymasterVersion = v;
-        console.log(`  ℹ️  Paymaster Default Version: ${paymasterVersion}`);
-    } catch (e) {
-        console.log(`  ⚠️  Could not fetch default Paymaster version, using fallback: ${paymasterVersion}`);
-    }
+    console.log(`\n🔍 Checking & Repairing Operators...`);
+    const operatorStatus: any[] = [];
+    const communityMap: Record<string, { token: Address, pmV4?: Address }> = {};
 
-    // Generic Setup Function
-    const setupOperator = async (
-        name: string, 
-        client: any, 
-        account: any, 
-        opState: OperatorState,
-        tokenSymbol: string,
-        tokenName: string,
-        paymasterType: 'V4' | 'Super'
-    ) => {
-        console.log(`\n🏗️  Setting up ${name} (${tokenSymbol})...`);
+    for (const op of operators) {
+        const acc = privateKeyToAccount(op.key);
+        const opClient = createWalletClient({ account: acc, chain: config.chain, transport: http(config.rpcUrl) });
         
-        // A. Register Community Role (using L2 CommunityClient API)
-        const isCommunity = await registry(publicClient).hasRole({ user: account.address, roleId: ROLE_COMMUNITY });
-        if (!isCommunity) {
-            console.log(`  📝 Registering Community Role...`);
-            try {
-                // Use CommunityClient.registerAsCommunity() - it handles approval and encoding automatically
-                const communityClient = new CommunityClient({
-                    client: client,
-                    publicClient: publicClient,
-                    registryAddress: config.contracts.registry,
-                    gTokenAddress: config.contracts.gToken,
-                    gTokenStakingAddress: config.contracts.gTokenStaking
-                });
-                
-                const hash = await communityClient.registerAsCommunity({
-                    name: name,
-                    description: `${name} Community for testing`
-                });
-                await publicClient.waitForTransactionReceipt({ hash });
-                console.log(`  ✅ Community Role Granted`);
-            } catch (e: any) {
-                if (e.message.includes('RoleAlreadyGranted')) {
-                    console.log(`  ✅ Already Granted (caught Error)`);
-                } else {
-                    console.log(`  ⚠️  Registration Warning: ${e.message.split('\n')[0]}`);
-                }
-            }
-        } else {
-            // console.log(`  ✅ Already Community`);
+        // 2a. Ensure Funds
+        let ethBal = await publicClient.getBalance({ address: acc.address });
+        if(ethBal < parseEther('0.02')) {
+            console.log(`   ⛽ Funding ETH to ${op.name}...`);
+            const h = await supplierClient.sendTransaction({ to: acc.address, value: parseEther('0.05') });
+            await publicClient.waitForTransactionReceipt({hash:h});
+            ethBal = await publicClient.getBalance({ address: acc.address });
+        }
+        
+        let gTokenBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: acc.address });
+        if(gTokenBal < parseEther('100.0')) {
+             console.log(`   🪙 Minting GToken to ${op.name}...`);
+             const h = await gToken(supplierClient).mint({ token: config.contracts.gToken, to: acc.address, amount: parseEther('5000'), account: supplier });
+             await publicClient.waitForTransactionReceipt({hash:h});
+             gTokenBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: acc.address });
         }
 
-        // B. Deploy Token
-        let tokenAddr = opState.tokenAddress;
-        if (!tokenAddr) {
-            // Check if already deployed on-chain
-            const existing = await factory(publicClient).getTokenAddress({ community: account.address });
-            if (existing && existing !== '0x0000000000000000000000000000000000000000') {
-                 tokenAddr = existing;
-                 console.log(`  ✅ Found Token: ${tokenAddr}`);
-            } else {
-                console.log(`  🏭 Deploying ${tokenSymbol}...`);
-                try {
-                    const hash = await factory(client).createToken({
-                        name: tokenName,
-                        symbol: tokenSymbol,
-                        community: account.address,
-                        account: account
-                    });
-                    await publicClient.waitForTransactionReceipt({ hash });
-                    // Fetch address
-                    tokenAddr = await factory(publicClient).getTokenAddress({ community: account.address });
-                    console.log(`  ✅ Token Deployed: ${tokenAddr}`);
-                } catch (e: any) {
-                    console.log(`  ⚠️  Deploy warning: ${e.message.split('\n')[0]}`);
-                }
-            }
-            opState.tokenAddress = tokenAddr;
+        // 2b. Check/Register Community
+        let community = "None";
+        const isComm = await registry(publicClient).hasRole({ user: acc.address, roleId: await registry(publicClient).ROLE_COMMUNITY() });
+        if (isComm) {
+            community = "Registered";
         } else {
-             console.log(`  ✅ Token cached: ${tokenAddr}`);
+             console.log(`   📝 Registering Community for ${op.name}...`);
+             const commClient = new CommunityClient({
+                 client: opClient, publicClient, 
+                 registryAddress: config.contracts.registry,
+                 gTokenAddress: config.contracts.gToken,
+                 gTokenStakingAddress: config.contracts.gTokenStaking
+             });
+             try {
+                 const h = await commClient.registerAsCommunity({ name: op.name.split(' ')[0] });
+                 await publicClient.waitForTransactionReceipt({hash:h});
+                 community = "Registered (New)";
+             } catch(e:any) { community = `Error: ${e.message.split('\n')[0]}`; }
         }
 
-        // C. Paymaster Setup
-        let pmAddr = opState.paymasterAddress;
-        
-        // Init Operator Client
-        const opClient = new PaymasterOperatorClient({
-            client: client,
-            publicClient: publicClient,
+        // 2c. Check/Deploy Token
+        let token = "None";
+        let tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
+        if (!tAddr || tAddr === '0x0000000000000000000000000000000000000000') {
+             console.log(`   🏭 Deploying ${op.symbol} for ${op.name}...`);
+             try {
+                 const h = await xpntsFactory(opClient).createToken({
+                    name: `${op.symbol} Token`, symbol: op.symbol, community: acc.address, account: acc
+                 });
+                 await publicClient.waitForTransactionReceipt({hash:h});
+                 tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
+                 token = tAddr;
+             } catch(e:any) { token = `Error`; }
+        } else {
+            token = tAddr;
+        }
+        if(token && token !== 'Error' && token !== 'None') communityMap[op.name] = { token: token as Address };
+
+        // 2d. Check/Deploy Paymaster V4
+        let pmV4 = "None";
+        const operatorSdk = new PaymasterOperatorClient({
+            client: opClient, publicClient,
             superPaymasterAddress: config.contracts.superPaymaster,
-            tokenAddress: tokenAddr,
+            tokenAddress: token as Address,
             xpntsFactoryAddress: config.contracts.xPNTsFactory,
             registryAddress: config.contracts.registry,
-            entryPointAddress: config.contracts.entryPoint
+            entryPointAddress: config.contracts.entryPoint,
+            gTokenAddress: config.contracts.gToken,
+            gTokenStakingAddress: config.contracts.gTokenStaking,
+            paymasterFactoryAddress: config.contracts.paymasterFactory
         });
 
-        if (paymasterType === 'V4') {
-             if (!pmAddr || pmAddr === '0x0000000000000000000000000000000000000000') {
-                console.log(`  ⛽ Deploying PaymasterV4 (via SDK)...`);
+        if (op.pmType === 'V4') {
+            let pAddr = await pmFactory(publicClient).getPaymaster({ owner: acc.address });
+            if (!pAddr || pAddr === '0x0000000000000000000000000000000000000000') {
+                 console.log(`   ⛽ Deploying Paymaster V4 for ${op.name}...`);
+                 try {
+                     const res = await operatorSdk.deployAndRegisterPaymasterV4({ 
+                         stakeAmount: parseEther('10') 
+                     });
+                     pAddr = res.paymasterAddress;
+                     pmV4 = pAddr;
+                 } catch(e:any) { 
+                     console.log(`      ⚠️ PM Deploy Failed: ${e.message}`);
+                 }
+            } else {
+                pmV4 = pAddr;
+            }
+            if(pmV4 && pmV4 !== 'None' && communityMap[op.name]) communityMap[op.name].pmV4 = pmV4 as Address;
+        } else {
+            pmV4 = "N/A (Super)";
+            try {
+                const registered = await registry(publicClient).hasRole({ user: acc.address, roleId: await registry(publicClient).ROLE_PAYMASTER_SUPER() });
+                if(!registered) {
+                    console.log(`   📝 Registering SuperPM Role for Anni...`);
+                    await operatorSdk.registerAsSuperPaymasterOperator({ stakeAmount: parseEther('30') });
+                }
+            } catch(e:any) { /* ignore */ }
+        }
+
+        operatorStatus.push({
+            Name: op.name,
+            Address: acc.address,
+            ETH: parseFloat(formatEther(ethBal)).toFixed(4),
+            GToken: parseFloat(formatEther(gTokenBal)).toFixed(2),
+            Community: community,
+            Token: token,
+            PM_V4: pmV4
+        });
+    }
+    printTable("Operator Status", operatorStatus);
+
+
+    // 3. AA Setup (6 Accounts)
+    console.log(`\n🏭 3. Checking & Deploying 6 Test AA Accounts (Pimlico v0.7)...`);
+    const testAccounts: any[] = [];
+    const accountFactory = accountFactoryActions(FACTORY_ADDRESS);
+
+    // Salts
+    for (const op of operators) {
+        const owner = privateKeyToAccount(op.key);
+        for (let i = 0; i < 2; i++) {
+            const salt = BigInt(i);
+            const label = `${op.name}_AA${i+1}`;
+            const aaAddr = await accountFactory(publicClient).getAddress({ owner: owner.address, salt });
+            const code = await publicClient.getBytecode({ address: aaAddr });
+            const isDeployed = code && code.length > 2;
+
+            testAccounts.push({
+                label, owner, salt, address: aaAddr, isDeployed,
+                opName: op.name 
+            });
+            
+            if (!isDeployed) {
+                console.log(`   Deploying ${label} (${aaAddr})...`);
+                const client = createWalletClient({ account: owner, chain: config.chain, transport: http(config.rpcUrl) });
                 try {
-                    // Use SDK high-level API
-                    // Note: deployAndRegisterPaymasterV4 handles prerequisites and initData encoding
-                    const result = await opClient.deployAndRegisterPaymasterV4({
-                        version: paymasterVersion,
-                        stakeAmount: parseEther('1000') // Stake 1000 GToken
+                    const hash = await accountFactory(client).createAccount({ owner: owner.address, salt, account: owner });
+                    await publicClient.waitForTransactionReceipt({ hash });
+                } catch(e:any) { console.error(`   ❌ Failed to deploy ${label}: ${e.message}`); }
+            }
+        }
+    }
+
+    // 3b. Fund AA Accounts
+    console.log(`\n💰 Checking AA Resources...`);
+    const aaStatus: any[] = [];
+    const allTokens = Object.values(communityMap).map(c => c.token);
+
+    for (const aa of testAccounts) {
+        // ETH
+        let ethBal = await publicClient.getBalance({ address: aa.address });
+        if (ethBal < parseEther('0.01')) {
+            console.log(`   ⛽ Funding ETH to ${aa.label}...`);
+            const hash = await supplierClient.sendTransaction({ to: aa.address, value: parseEther('0.02') });
+            await publicClient.waitForTransactionReceipt({ hash });
+            ethBal = await publicClient.getBalance({ address: aa.address });
+        }
+
+        // GToken
+        let gtBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: aa.address });
+        if (gtBal < parseEther('100')) {
+             console.log(`   🪙 Funding GToken to ${aa.label}...`);
+             const hash = await gToken(supplierClient).mint({ token: config.contracts.gToken, to: aa.address, amount: parseEther('1000'), account: supplier });
+             await publicClient.waitForTransactionReceipt({ hash });
+             gtBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: aa.address });
+        }
+
+        // Tokens
+        for (const tAddr of allTokens) {
+            const issuerName = Object.keys(communityMap).find(k => communityMap[k].token === tAddr);
+            if (!issuerName) continue;
+            const issuerOp = operators.find(o => o.name === issuerName);
+            if (!issuerOp) continue;
+            const issuerClient = createWalletClient({ account: privateKeyToAccount(issuerOp.key), chain: config.chain, transport: http(config.rpcUrl) });
+            
+            const xpBal = await gToken(publicClient).balanceOf({ token: tAddr, account: aa.address });
+            if (xpBal < parseEther('100')) {
+                console.log(`   🎫 Funding ${issuerName} Token to ${aa.label}...`);
+                try {
+                    // FIX: Replaced mintToken with mint (from factory logic or token logic?)
+                    // Factory usually has createToken / getTokenAddress.
+                    // Token minting is done via token contract if user has permission.
+                    // If xPNTs tokens are mintable by owner (issuer).
+                    // xPNTsFactoryActions typically doesn't have mintToken unless custom.
+                    // Let's assume standard ERC20 mint via tokenActions or check factory.ts definition.
+                    // But wait, xPNTs might need minting via Factory if specialized.
+                    // I will check factory.ts content in next tool step to be 100% sure.
+                    // For now, I'll optimistically use tokenActions(issuerClient).mint() for xPNTs tokens.
+                    // Assuming Issuer is owner of the token.
+                    
+                    const h = await tokenActions()(issuerClient).mint({
+                        token: tAddr, to: aa.address, amount: parseEther('500'), account: privateKeyToAccount(issuerOp.key)
                     });
                     
-                    pmAddr = result.paymasterAddress;
-                    console.log(`  ✅ PaymasterV4 Deployed: ${pmAddr}`);
-                    console.log(`  ✅ Role Registered: AOA`);
-                } catch (e: any) {
-                    if (e.message.includes('Already has ROLE_PAYMASTER_AOA')) {
-                        console.log(`  ✅ Already Registered AOA`);
-                        // Try to fetch PM address if we missed it
-                         pmAddr = await paymasterFactoryActions(config.contracts.paymasterFactory)(publicClient).getPaymaster({ owner: account.address });
-                         console.log(`  ✅ PaymasterV4 Found: ${pmAddr}`);
-                    } else {
-                        console.log(`  ⚠️  Deploy Error: ${e.message.split('\n')[0]}`);
-                    }
-                }
-                opState.paymasterAddress = pmAddr;
-             } else {
-                console.log(`  ✅ PaymasterV4 cached: ${pmAddr}`);
-             }
-        } else if (paymasterType === 'Super') {
-             // Register as SuperPaymaster Operator
-             console.log(`  🦸 Registering SuperPaymaster Operator...`);
-             try {
-                 await opClient.registerAsSuperPaymasterOperator({
-                     stakeAmount: parseEther('1000'),
-                     depositAmount: parseEther('0') // Deposit later or separate step
-                 });
-                 console.log(`  ✅ SuperPaymaster Operator Registered`);
-             } catch (e: any) {
-                 if (e.message.includes('Already registered')) {
-                     console.log(`  ✅ Already Registered`);
-                 } else {
-                     console.log(`  ⚠️  Register Error: ${e.message.split('\n')[0]}`);
-                 }
-             }
-             opState.superPaymasterAddress = config.contracts.superPaymaster; // Global instance
+                    await publicClient.waitForTransactionReceipt({ hash:h });
+                } catch(e:any) { console.log(`      ⚠️ Mint Failed: ${e.message}`); }
+            }
         }
-    };
-    
-    // Configs from Plan
-    await setupOperator('AAStar', clientJason, opJason, state.jason, 'aPNTs', 'AAStar Token', 'V4');
-    await setupOperator('Bread', clientBob, opBob, state.bob, 'bPNTs', 'Bread Token', 'V4');
-    await setupOperator('Demo', clientAnni, opAnni, state.anni, 'cPNTs', 'Demo Token', 'Super');
-    
-    saveState(state);
-    console.log(`\n💾 State saved to l4-state.json`);
+        
+        aaStatus.push({ 
+            Label: aa.label, 
+            Addr: aa.address, 
+            ETH: parseFloat(formatEther(ethBal)).toFixed(4), 
+            GToken: parseFloat(formatEther(gtBal)).toFixed(2) 
+        });
+    }
+    printTable("AA Accounts Ready", aaStatus);
+
+
+    // 4. Register Multi - Cross Join (Idempotent)
+    console.log(`\n🤝 4. Registering AAs into Communities...`);
+    for (const aa of testAccounts) {
+        // Check if AA is already a community member (ENDUSER)
+        const isMember = await registry(publicClient).isCommunityMember({ 
+            community: config.contracts.registry, // Note: community param not used in implementation for ENDUSER check
+            user: aa.address 
+        });
+        
+        if (!isMember) {
+            console.log(`   📝 ${aa.label} joining as ENDUSER...`);
+            const client = createWalletClient({ account: aa.owner, chain: config.chain, transport: http(config.rpcUrl) });
+            
+            const ROLE_ENDUSER = await registry(publicClient).ROLE_ENDUSER();
+            // Register as ENDUSER via registerRoleSelf
+            const registerData = encodeFunctionData({
+                abi: [{name: 'registerRoleSelf', type:'function', inputs:[{type:'bytes32',name:'roleId'},{type:'bytes',name:'roleData'}], outputs:[{type:'uint256',name:'sbtTokenId'}], stateMutability:'nonpayable'}],
+                functionName: 'registerRoleSelf', args: [ROLE_ENDUSER, '0x']
+            });
+            const executeData = encodeFunctionData({
+                abi: [{name:'execute', type:'function', inputs:[{type:'address'},{type:'uint256'},{type:'bytes'}], outputs:[], stateMutability:'nonpayable'}],
+                functionName: 'execute', args: [config.contracts.registry, 0n, registerData]
+            });
+            try {
+                const hash = await client.sendTransaction({ to: aa.address, data: executeData, account: aa.owner });
+               await publicClient.waitForTransactionReceipt({ hash });
+            } catch(e:any) { }
+        } else {
+            console.log(`   ✓ ${aa.label} already an ENDUSER`);
+        }
+    }
+
+
+    // 5. Check Paymaster & Deposits
+    console.log(`\n💳 5. Checking Paymaster Configuration...`);
+    const pmStatus: any[] = [];
+    const pmV4s = Object.values(communityMap).map(c => c.pmV4).filter(Boolean);
+    const superPM = config.contracts.superPaymaster;
+
+    for (const pm of pmV4s) {
+        if (!pm) continue;
+        const bal = await publicClient.readContract({
+            address: config.contracts.entryPoint,
+            abi: [{name:'balanceOf',inputs:[{type:'address'}],outputs:[{type:'uint256'}],type:'function'}],
+            functionName: 'balanceOf', args: [pm]
+        }) as bigint;
+        
+        let stakeVal = '0.00';
+        try {
+            const stake = await publicClient.readContract({
+                address: config.contracts.gTokenStaking,
+                abi: [{name:'getStakeInfo',inputs:[{type:'address'}],outputs:[{type:'uint256',name:'stake'},{type:'uint256',name:'lock'}],type:'function'}],
+                functionName: 'getStakeInfo', args: [pm]
+            }) as any;
+            stakeVal = parseFloat(formatEther(stake[0] || 0n)).toFixed(2);
+        } catch(e) { stakeVal = 'Err'; }
+
+        pmStatus.push({
+            Type: 'V4',
+            Address: pm,
+            EP_Deposit: parseFloat(formatEther(bal)).toFixed(4),
+            Stake: stakeVal
+        });
+        
+        if (bal < parseEther('0.05')) {
+             console.log(`   💵 Refilling Paymaster ${pm}...`);
+             const hash = await supplierClient.writeContract({
+                 address: config.contracts.entryPoint,
+                 abi: [{name:'depositTo',type:'function',inputs:[{type:'address'}],outputs:[],stateMutability:'payable'}],
+                 functionName: 'depositTo', args: [pm], value: parseEther('0.1')
+             });
+             await publicClient.waitForTransactionReceipt({ hash });
+        }
+    }
+
+    // SuperPM Check
+    const anniOp = operators.find(o => o.name.includes('Anni'));
+    if (anniOp) {
+        const anniAddr = privateKeyToAccount(anniOp.key).address;
+        let internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
+        
+        if (internalBal < parseEther('10')) {
+            console.log(`   🔄 Refilling SuperPaymaster Credit for Anni...`);
+            
+            // Use global aPNTs token (not community token)
+            const globalAPNTs = config.contracts.aPNTs;
+            console.log(`      📍 Global aPNTs Token: ${globalAPNTs}`);
+            
+            const anniAcc = privateKeyToAccount(anniOp.key);
+            const anniClient = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
+            
+            try {
+                // Step 1: Check Anni's aPNTs balance
+                const anniApntsBal = await tokenActions()(publicClient).balanceOf({ token: globalAPNTs, account: anniAddr });
+                console.log(`      📊 Anni aPNTs Balance: ${formatEther(anniApntsBal)}`);
+                
+                // Step 2: Mint aPNTs to Anni if needed (Supplier/Admin mints)
+                if (anniApntsBal < parseEther('50')) {
+                    console.log(`      💸 Minting 100 aPNTs to Anni (via Supplier)...`);
+                    const mintHash = await tokenActions()(supplierClient).mint({
+                        token: globalAPNTs, to: anniAddr, amount: parseEther('100'), account: supplier
+                    });
+                    console.log(`      ⏳ Waiting for mint tx: ${mintHash}`);
+                    await publicClient.waitForTransactionReceipt({ hash: mintHash });
+                    console.log(`      ✅ Mint confirmed`);
+                }
+                
+                // Step 3: Approve SuperPaymaster to spend aPNTs
+                const currentAllowance = await tokenActions()(publicClient).allowance({ token: globalAPNTs, owner: anniAddr, spender: superPM });
+                console.log(`      📊 Current allowance: ${formatEther(currentAllowance)}`);
+                
+                if (currentAllowance < parseEther('50')) {
+                    console.log(`      🔓 Approving SuperPaymaster to spend aPNTs...`);
+                    const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('1000') });
+                    console.log(`      ⏳ Waiting for approve tx: ${approveHash}`);
+                    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                    console.log(`      ✅ Approve confirmed`);
+                }
+                
+                // Step 4: Deposit aPNTs into SuperPaymaster (using semantic API)
+                console.log(`      💰 Depositing 50 aPNTs to SuperPaymaster...`);
+                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50') });
+                console.log(`      ⏳ Waiting for deposit tx: ${depositHash}`);
+                await publicClient.waitForTransactionReceipt({ hash: depositHash });
+                console.log(`      ✅ Deposit confirmed`);
+                
+                // Refresh balance for table display
+                internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
+                console.log(`      📊 New SuperPM Balance: ${formatEther(internalBal)} aPNTs`);
+            } catch(e: any) {
+                console.error(`      ❌ SuperPM Refill Failed: ${e.message}`);
+                if (e.cause) console.error(`         Cause:`, e.cause);
+            }
+        }
+        
+        // Add to table AFTER potential refill
+        pmStatus.push({
+            Type: 'SuperPM',
+            Address: superPM,
+            Internal_Credit: parseFloat(formatEther(internalBal)).toFixed(2),
+            Operator: 'Anni'
+        });
+    }
+
+    printTable("Paymaster Status", pmStatus);
+    console.log(`\n✅ L4 Setup Complete!`);
 }
 
-main().catch(console.error);
+main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+});

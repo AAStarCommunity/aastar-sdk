@@ -1,7 +1,19 @@
 # L4 无 Gas 交易验证测试计划 (L4 Gasless Transaction Verification Plan)
 
-本文档详细描述了在 Sepolia 网络上验证无 Gas 交易（Gasless Transactions）的详细步骤和要求。
-
+本文档详细描述了在 Sepolia和其他网络参数的验证无 Gas 交易（Gasless Transactions）的详细步骤和要求。
+一些信息和要求：
+1. L4是run_sdk_regression.sh 整体回归脚本的一部分，完成gasless的账户数据check和准备和交易测试。
+2. 所有私钥、RPC等私密信息，来自于根目录的.env.sepolia（或者对应的网络,例如.env.op-sepolia, .env.mainnet, .env.anvil）
+3. 使用SDK 提供的合约ABI（来源是根目录的abis）
+4. 所有合约地址来自于根目录的config.sepolia.json（或者对应的config.network.json)，包括唯一hash。
+5. 所有L4的数据准备、检查、初始化和交易测试，要求是幂等的，即可以重复执行，不会对系统和要进行的测试计划造成影响。
+6. L4 测试的目标，是使用L1,L2,L3积累和验证过的API（就是根目录的 run_sdk_regression.sh），来完成可重复的gasless交易全过程。
+7. 兼容不同网络参数：sepolia, mainnet, op-sepolia, anvil等等，但是对于anvil，L4模拟entrypoint和useroperation有一定限制，我建议L4跳过anvil的测试，你来评估是否合理。
+8. 检查、生成和初始化，然后记录log或者config并输出测试准备结果
+9. 如果API没有需要的能力，则添加API,全部使用API能力完成数据准备校验初始化和gasless交易全过程。
+10. 如果API报错，则修复，全部使用API能力
+11. 可以参考SDK的ABI和合约代码来调试
+12. 语义化函数名，避免类似getBalance, deposit, withdraw, mint, burn等太通用的函数名，使用反映业务场景的名字，例depositAPNTsToSuperPaymaster，当然不一定这个名字，但要语义化，场景匹配。
 ## 1. 测试账户准备 (Test Accounts)
 
 需要在 `.env.sepolia` 中配置以下账户私钥：

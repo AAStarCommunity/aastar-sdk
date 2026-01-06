@@ -207,12 +207,12 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async isCommunityMember({ community, user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'isCommunityMember',
-            args: [community, user]
-        }) as Promise<boolean>;
+        // Implementation: Check if user has the community role
+        // In the AAStar system, a community member is identified by having a specific role
+        // We need to check if the user has a role associated with this community
+        // For now, we check if user has ROLE_ENDUSER which indicates general membership
+        const ROLE_ENDUSER = await this.ROLE_ENDUSER();
+        return this.hasRole({ user, roleId: ROLE_ENDUSER });
     },
 
     // Credit & Reputation

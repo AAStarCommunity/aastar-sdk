@@ -4,6 +4,9 @@ import { SuperPaymasterABI } from '../abis/index.js';
 export type SuperPaymasterActions = {
     // Deposit & Withdrawal
     deposit: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Use depositAPNTs for clarity */
+    depositAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>; // Semantic alias for deposit(uint256)
+    depositETH: (args: { value: bigint, account?: Account | Address }) => Promise<Hash>; // For payable deposit()
     depositFor: (args: { operator: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     addSuperStake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -36,6 +39,7 @@ export type SuperPaymasterActions = {
     getDeposit: () => Promise<bigint>;
     getAvailableCredit: (args: { operator: Address, user: Address }) => Promise<bigint>;
     blockedUsers: (args: { user: Address }) => Promise<boolean>;
+    balanceOfOperator: (args: { operator: Address }) => Promise<bigint>; // Get operator's aPNTs balance
     aPNTsPriceUSD: () => Promise<bigint>;
     cachedPrice: () => Promise<any>;
     protocolFee: () => Promise<any>;
@@ -102,6 +106,31 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             abi: SuperPaymasterABI,
             functionName: 'deposit',
             args: [amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Semantic alias: depositAPNTs - uses aPNTs token (nonpayable)
+    async depositAPNTs({ amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'deposit',
+            args: [amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // depositETH - uses native ETH (payable, no args)
+    async depositETH({ value, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'deposit',
+            args: [],
+            value,
             account: account as any,
             chain: (client as any).chain
         });
@@ -303,6 +332,12 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             functionName: 'blockedUsers',
             args: [user]
         }) as Promise<boolean>;
+    },
+
+    // Convenience function: Get operator's aPNTs balance
+    async balanceOfOperator({ operator }: { operator: Address }) {
+        const operatorConfig = await this.operators({ operator });
+        return operatorConfig[0]; // aPNTsBalance is the first field
     },
 
     async aPNTsPriceUSD() {

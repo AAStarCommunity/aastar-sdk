@@ -58,6 +58,7 @@ export interface ContractAddresses {
     reputation: Address;
     paymasterFactory: Address;
     xPNTsFactory: Address;
+    aPNTs: Address; // Global aPNTs token for SuperPaymaster deposits
     dvtValidator?: Address;
     blsAggregator?: Address;
     blsValidator?: Address;
@@ -168,6 +169,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             superPaymaster: getContractAddress('superPaymaster', 'SUPER_PAYMASTER_ADDRESS', 'PAYMASTER_SUPER'),
             paymasterFactory: getContractAddress('paymasterFactory', 'PAYMASTER_FACTORY_ADDRESS', 'PAYMASTER_FACTORY'),
             xPNTsFactory: getContractAddress('xPNTsFactory', 'XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
+            aPNTs: getContractAddress('aPNTs', 'APNTS_ADDRESS', 'APNTS_TOKEN'),
             blsAggregator: getContractAddress('blsAggregator', 'BLS_AGGREGATOR_ADDRESS', 'BLS_AGGREGATOR'),
             blsValidator: getContractAddress('blsValidator', 'BLS_VALIDATOR_ADDRESS', 'BLS_VALIDATOR'),
             dvtValidator: getContractAddress('dvtValidator', 'DVT_VALIDATOR_ADDRESS', 'DVT_VALIDATOR'),

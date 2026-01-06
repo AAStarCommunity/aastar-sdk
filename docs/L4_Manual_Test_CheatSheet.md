@@ -1,23 +1,24 @@
-# L4 Gasless 调试备忘录 (Sepolia Edition)
+# L4 Gasless 调试备忘录 (L4 Debug Cheat Sheet)
 
-这份文档旨在协助进行 L4 Gasless 场景的人工调试和验证 (Sepolia Testnet)。
+这份文档旨在协助进行 L4 Gasless 场景的人工调试和验证。适用于 Sepolia, Anvil 或其他 EVM 网络。
 
 > **注意**: 部分地址 (Token, Paymaster) 是在运行 `l4-setup.ts` 脚本时动态生成的，请参照 `scripts/l4-state.json` 文件获取最新值。
 
 ## 1. 核心账户配置 (Keys & Accounts)
 
-请确保你的 `.env.sepolia` 文件中包含以下私钥配置。测试同事应拥有这些账户的控制权。
+请确保你的 ENV 文件 (`.env.sepolia` 或 `.env.anvil`) 中包含以下私钥配置。
 
 | 角色 (Role) | 变量名 (ENV Variable) | 说明 (Description) |
 | :--- | :--- | :--- |
-| **资金提供方** | `PRIVATE_KEY_SUPPLIER` | 用于 Mint GToken, 初始 ETH 分发。 |
-| **Operator A** | `PRIVATE_KEY_JASON` | Jason (AAStar Operator)。负责 Paymaster V4 + aPNTs。 |
-| **Operator B** | `PRIVATE_KEY_BOB` | Bob (Bread Operator)。负责 Paymaster V4 + bPNTs。 |
-| **Operator C** | `PRIVATE_KEY_ANNI` | Anni (Demo Operator)。负责 SuperPaymaster + cPNTs (Credit)。 |
+| **资金提供方** | `PRIVATE_KEY_SUPPLIER` | Used for Minting GToken, Initial ETH funding. |
+| **Operator A** | `PRIVATE_KEY_JASON` | Jason (AAStar Operator). Paymaster V4 + aPNTs. |
+| **Operator B** | `PRIVATE_KEY_BOB` | Bob (Bread Operator). Paymaster V4 + bPNTs. |
+| **Operator C** | `PRIVATE_KEY_ANNI` | Anni (Demo Operator). SuperPaymaster + cPNTs. |
 
-## 2. 全局合约 (Global Contracts - Sepolia)
+## 2. 全局合约 (Global Contracts)
 
-### 2.1 说明
+### 2.1 说明 (Concepts)
+
 PaymasterFactory是有注册实例（PaymasterV4Impl）的工厂合约，任何社区可以无许可的发行自己的Gas Token，然后从工厂clone 实例proxy来完成低gas部署和绑定自己的Gas Token（例如bPNTs，cPNTs），从而为自己的社区提供Gasless服务（需要自行充值到EntryPoint和维护运营）。
 
 而SuperPaymaster是多租户的公共基础设施，它是一个全局唯一Paymaster，同时也是一个多租户的合约，社区在注册和发行自己的gas token后，需要购买此合约的唯一服务方AAStar社区发行的aPNTs并deposite到SuperPaymaster，然后自己的社区成员可以获得该社区的bPNTs，cPNTs等，作为gas token无感支付（AAStar社区会维护运营）。
@@ -30,50 +31,49 @@ MySBT是Mycelium的灵魂绑定的一个数字白板，归属于第一次mint的
 
 xPNTsFactory和xPNTs，是工厂合约和泛指任意社区发行的ERC20Gas Token，只要拥有加油卡（MySBT+充值xPNTs）即可无感支付Gas，自由交易。
 
-### 2.2 合约地址
+### 2.2 合约地址 (Addresses)
 
-这些是部署在 Sepolia 的核心系统合约 (来自 `config.sepolia.json`)。
+这些是部署在网络上的核心系统合约 (请检查 `config.<network>.json`)。
 
-| 合约名称 (Contract) | 地址 (Address) | 说明 |
-| :--- | :--- | :--- |
-| **Registry** | `0x5938d6C887EF7b4e7733c5e7ea0595AAEf508e74` | 核心注册表，管理权限与角色 |
-| **EntryPoint** | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` | ERC-4337 官方入口点 (v0.7) |
-| **GToken** | `0xf6d7fa6819791FE595b12c6C34A8e0a8982F375D` | 系统 Gas Token (ERC-20) |
-| **GTokenStaking** | `0xfE7513281D4e9ad922C89125C5B509Fda2426f20` | Paymaster 质押合约 (Locking) |
-| **SBT** | `0x255b0fFBcAFE8FdBC4eD8119E59897DcaF61eF12` | 灵魂绑定代币合约 (Identity) |
-| **ReputationSystem**| `0x98C2aA5D87f7F2511813a07df2369C36E8522F1F` | 信誉系统合约 |
-| **PaymasterFactory**| `0x4b05538995a159754923867bDA5cb20c16410a8d` | 部署 Paymaster V4 的工厂 |
-| **PaymasterV4Impl** | `0xe57c0fDBB96e228b01fF5DFCA83482b40C7a9A53` | V4 实现合约地址 |
-| **SuperPaymaster** | `0x64C95279bA723394aaA01fE47ECA1Bfc4A234508` | 超级 Paymaster (代理合约) |
+| 合约名称 (Contract) | 说明 |
+| :--- | :--- |
+| **Registry** | 核心注册表，管理权限与角色 |
+| **EntryPoint** | ERC-4337 官方入口点 (v0.7) |
+| **GToken** | 系统 Gas Token (ERC-20) |
+| **GTokenStaking** | Paymaster 质押合约 (Locking) |
+| **SBT** | 灵魂绑定代币合约 (Identity) |
+| **ReputationSystem**| 信誉系统合约 |
+| **PaymasterFactory**| 部署 Paymaster V4 的工厂 |
+| **SuperPaymaster** | 超级 Paymaster (代理合约) |
 
 ## 3. 动态环境配置 (Dynamic Setup)
 
-运行 `pnpm tsx scripts/l4-setup.ts --network=sepolia` 后，以下信息会更新到 `scripts/l4-state.json`。
+运行 `pnpm tsx scripts/l4-setup.ts --network=<name>` 后，以下信息会更新到 `scripts/l4-state.json`。
 
-| 社区名称 | Operator | Token Symbol | Paymaster 类型 | 获取地址方式 |
+| 社区名称 | Operator | Token Symbol | Paymaster 类型 | 获取地址方式 (l4-state.json) |
 | :--- | :--- | :--- | :--- | :--- |
-| **AAStar** | Jason | **aPNTs** | **V4** | 查看 `l4-state.json` -> `jason.tokenAddress` / `jason.paymasterAddress` |
-| **Bread** | Bob | **bPNTs** | **V4** | 查看 `l4-state.json` -> `bob.tokenAddress` / `bob.paymasterAddress` |
-| **Demo** | Anni | **cPNTs** | **Super** | 查看 `l4-state.json` -> `anni.tokenAddress` / `anni.superPaymasterAddress` |
+| **AAStar** | Jason | **aPNTs** | **V4** | `jason.tokenAddress` / `jason.paymasterAddress` |
+| **Bread** | Bob | **bPNTs** | **V4** | `bob.tokenAddress` / `bob.paymasterAddress` |
+| **Demo** | Anni | **cPNTs** | **Super** | `anni.tokenAddress` / `anni.superPaymasterAddress` |
 
-## 4. 初始化状态检查清单 (Setup Checklist)
+## 4. 自动化初始化检查清单 (Setup Checklist)
 
-人工测试前，请确认脚本已自动完成以下步骤：
+`scripts/l4-setup.ts` 会自动执行以下检查与修复动作 (Idempotent)。此脚本适配不同网络，基于 `config.<network>.json` 加载配置。
 
-- [ ] **Community Registered**: 三个 Operator 地址都拥有 `ROLE_COMMUNITY`。
-- [ ] **Token Issued**: aPNTs, bPNTs, cPNTs 已部署。
-- [ ] **Paymaster Setup**:
-    - Jason & Bob 的 Paymaster V4 已部署，且 Stake > 0 (在 GTokenStaking)。
-    - Anni 的 SuperPaymaster 额度已配置。
-    - Paymaster V4 在 EntryPoint 的 ETH 存款 (Deposit) 足够 (建议 > 0.05 ETH)。
-- [ ] **User Funding**:
-    - 测试用户 (NewUser) 拥有足够的 **aPNTs** (支付 Gas 用)。
-    - 测试用户拥有 **GToken** (如果测试 Staking 场景)。
+| # | 检查项 (Item) | 逻辑 (Logic) | 预期 (Expectation) |
+| :--- | :--- | :--- | :--- |
+| **1** | **Check/Deploy AA** | 使用 0.7 Factory 计算并部署 AA 账户 | Jason, Bob, Anni 的 AA 账户已部署 |
+| **2** | **Operator Funding** | 检查 AA & EOA 的 ETH/GToken 余额 | ETH > 0.05, GToken > 1000 |
+| **3** | **Community Role** | `registry.hasRole(COMMUNITY)` | Operator 均注册为 Community |
+| **4** | **Token Deployment** | `factory.getTokenAddress(owner)` | aPNTs, bPNTs, cPNTs 已部署 |
+| **5** | **Paymaster V4** | `pmFactory.getPaymaster(owner)` | Jason & Bob 拥有 Paymaster V4 实例 |
+| **6** | **SuperPaymaster**| Operator Client Registration | Anni 注册为 SuperPaymaster Operator |
+| **7** | **Deposits** | `entryPoint.balanceOf(pm)` | Paymaster 在 EntryPoint 存款 > 0.1 ETH |
 
 ## 5. 常用调试命令
 
 ```bash
-# 1. 运行环境配置 (幂等，可重复运行修复状态)
+# 1. 运行环境配置 (幂等，推荐每次测试前运行)
 pnpm tsx scripts/l4-setup.ts --network=sepolia
 
 # 2. 运行 Gasless 回归测试
@@ -81,4 +81,92 @@ pnpm tsx tests/regression/l4-gasless.ts --network=sepolia
 
 # 3. 查看状态文件
 cat scripts/l4-state.json
+```
+
+## 6. 新建 AA 账户 & Gasless 开发指南 (Developer Workflow)
+
+如果你需要测试一个新的 AA 账户 (SimpleAccount)，请遵循以下标准流程：
+
+### Step 1: 账户生成与初始化 (Client SDK)
+
+无需手动部署 Factory，使用 `UserClient` 即可。
+
+```typescript
+import { UserClient } from '@aastar/enduser';
+import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
+
+// 1. 本地生成/读取私钥
+const pKey = generatePrivateKey(); 
+const account = privateKeyToAccount(pKey);
+
+// 2. 初始化 Client (自动关联 EntryPoint v0.7)
+// 注意：configs 应从 network config 加载，不应 hardcode
+const client = new UserClient({
+    client: createWalletClient({ 
+        account, 
+        chain: chainConfig, 
+        transport: http(rpcUrl) 
+    }),
+    entryPointAddress: CONFIG.entryPoint,
+    registryAddress: CONFIG.registry
+    // ... 其他地址
+});
+console.log(`New AA Address: ${client.accountAddress}`);
+```
+
+### Step 2: 资金准备 (Admin Actions)
+
+新账户需要 Gas Token 来通过 Paymaster 验证。
+
+*   **Operator (Admin)** 调用 SDK 发放代币：
+    ```typescript
+    await tokenActions(operatorClient).mint({
+        token: aPNTsAddress,
+        to: client.accountAddress, // AA 地址
+        amount: parseEther('100')
+    });
+    ```
+*   **Supplier** 发放少量 ETH (可选，如果 Token 不支持 Permit 或是首次 Approve 需要)：
+    ```typescript
+    await supplier.sendTransaction({ to: client.accountAddress, value: parseEther('0.05') });
+    ```
+
+### Step 3: Approve Paymaster (User Actions)
+
+在发起 Gasless 交易前，必须授权 Paymaster 扣款。
+
+```typescript
+// 普通 ERC20 Approve
+const tx = await tokenActions(client.client).approve({
+    token: aPNTsAddress,
+    spender: paymasterAddress,
+    amount: parseEther('1000')
+});
+// 等待 Approve 上链 (Approve 本身需要 ETH Gas)
+```
+
+### Step 4: 发送 Gasless 交易 (User Actions)
+
+使用 `executeGasless` 自动构建 UserOp。
+
+```typescript
+import { encodeFunctionData } from 'viem';
+
+// 1. 业务逻辑 (如: 注册自己)
+const callData = encodeFunctionData({
+    abi: RegistryABI,
+    functionName: 'registerRoleSelf',
+    args: [ROLE_COMMUNITY, '0x']
+});
+
+// 2. 提交
+const hash = await client.executeGasless({
+    target: registryAddress,
+    value: 0n,
+    data: callData,
+    paymaster: paymasterAddress,
+    paymasterType: 'V4' // 或 'Super'
+});
+console.log(`UserOp Hash: ${hash}`);
 ```
