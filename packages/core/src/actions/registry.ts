@@ -65,7 +65,7 @@ export type RegistryActions = {
     // Role Metadata & Members
     roleLockDurations: (args: { roleId: Hex }) => Promise<bigint>;
     roleMetadata: (args: { roleId: Hex }) => Promise<any>;
-    roleStakes: (args: { roleId: Hex }) => Promise<bigint>;
+    roleStakes: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
     roleSBTTokenIds: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
     roleOwners: (args: { roleId: Hex }) => Promise<Address>;
     roleMemberIndex: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
@@ -571,12 +571,12 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         });
     },
 
-    async roleStakes({ roleId }) {
+    async roleStakes({ roleId, user }) {
         return (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
             functionName: 'roleStakes',
-            args: [roleId]
+            args: [roleId, user]
         }) as Promise<bigint>;
     },
 

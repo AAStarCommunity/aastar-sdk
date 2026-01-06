@@ -11,7 +11,10 @@ import {
     paymasterFactoryActions,
     accountFactoryActions,
     paymasterV4Actions,
-    superPaymasterActions
+    superPaymasterActions,
+    entryPointActions,
+    EntryPointVersion,
+    RegistryABI
 } from '../packages/core/dist/index.js';
 import { CommunityClient, UserClient } from '../packages/enduser/dist/index.js';
 import { PaymasterOperatorClient } from '../packages/operator/dist/PaymasterOperatorClient.js';
@@ -248,6 +251,7 @@ async function main() {
     console.log(`\n🏭 3. Checking & Deploying 6 Test AA Accounts (Pimlico v0.7)...`);
     const testAccounts: any[] = [];
     const accountFactory = accountFactoryActions(FACTORY_ADDRESS);
+    const ROLE_ENDUSER_ID = await registry(publicClient).ROLE_ENDUSER();
 
     // Salts
     for (const op of operators) {
@@ -336,20 +340,24 @@ async function main() {
     console.log(`\n🤝 4. Registering AAs into Communities...`);
     for (const aa of testAccounts) {
         // Check if AA is already a community member (ENDUSER)
-        const isMember = await registry(publicClient).isCommunityMember({ 
-            community: config.contracts.registry, // Note: community param not used in implementation for ENDUSER check
-            user: aa.address 
+        const isMember = await registry(publicClient).hasRole({ 
+            user: aa.address,
+            roleId: ROLE_ENDUSER_ID
         });
         
         if (!isMember) {
             console.log(`   📝 ${aa.label} joining as ENDUSER...`);
             const client = createWalletClient({ account: aa.owner, chain: config.chain, transport: http(config.rpcUrl) });
             
+            // Refactor: Use UserClient for registration if possible, 
+            // but since it's an AA account, we need to call from the AA.
+            // For now, we keep the manual execute but use registry actions for roleId
             const ROLE_ENDUSER = await registry(publicClient).ROLE_ENDUSER();
-            // Register as ENDUSER via registerRoleSelf
+            
             const registerData = encodeFunctionData({
-                abi: [{name: 'registerRoleSelf', type:'function', inputs:[{type:'bytes32',name:'roleId'},{type:'bytes',name:'roleData'}], outputs:[{type:'uint256',name:'sbtTokenId'}], stateMutability:'nonpayable'}],
-                functionName: 'registerRoleSelf', args: [ROLE_ENDUSER, '0x']
+                abi: RegistryABI,
+                functionName: 'registerRoleSelf', 
+                args: [ROLE_ENDUSER, '0x']
             });
             const executeData = encodeFunctionData({
                 abi: [{name:'execute', type:'function', inputs:[{type:'address'},{type:'uint256'},{type:'bytes'}], outputs:[], stateMutability:'nonpayable'}],
@@ -357,7 +365,7 @@ async function main() {
             });
             try {
                 const hash = await client.sendTransaction({ to: aa.address, data: executeData, account: aa.owner });
-               await publicClient.waitForTransactionReceipt({ hash });
+                await publicClient.waitForTransactionReceipt({ hash });
             } catch(e:any) { }
         } else {
             console.log(`   ✓ ${aa.label} already an ENDUSER`);
@@ -372,6 +380,9 @@ async function main() {
     const superPM = config.contracts.superPaymaster;
     const epAddr = config.contracts.entryPoint;
     const regAddr = config.contracts.registry;
+    
+    // Default to v0.7
+    const ep = entryPointActions(epAddr, EntryPointVersion.V07);
 
     // Get Role IDs
     const ROLE_PAYMASTER_AOA = await registry(publicClient).ROLE_PAYMASTER_AOA();
@@ -395,36 +406,31 @@ async function main() {
     for (const pmInfo of allPMs) {
         const pm = pmInfo.addr;
         
-        // 5a. EntryPoint Deposit Check
-        const epBal = await publicClient.readContract({
-            address: epAddr,
-            abi: [{name:'balanceOf',inputs:[{type:'address'}],outputs:[{type:'uint256'}],type:'function'}],
-            functionName: 'balanceOf', args: [pm]
-        }) as bigint;
+        // 5a. EntryPoint Deposit Check - Use SDK Action
+        const epBal = await ep(publicClient).balanceOf({ account: pm });
         
         const MIN_EP_DEPOSIT = parseEther('0.1');
         const REFILL_EP_AMOUNT = parseEther('0.2');
 
         if (epBal < MIN_EP_DEPOSIT) {
              console.log(`   💵 Refilling EntryPoint Deposit for ${pmInfo.type} at ${pm}...`);
-             const hash = await supplierClient.writeContract({
-                 address: epAddr,
-                 abi: [{name:'depositTo',type:'function',inputs:[{type:'address'}],outputs:[],stateMutability:'payable'}],
-                 functionName: 'depositTo', args: [pm], value: REFILL_EP_AMOUNT
+             const hash = await ep(supplierClient).depositTo({ 
+                 account: pm, 
+                 amount: REFILL_EP_AMOUNT, 
+                 txAccount: supplier 
              });
              await publicClient.waitForTransactionReceipt({ hash });
              console.log(`      ✅ Refilled to ${formatEther(REFILL_EP_AMOUNT)} ETH`);
         }
 
-        // 5b. Stake Info from Registry (Query Operator's stake)
+        // 5b. Stake Info from Registry (Query Operator's stake) - Use SDK Action
         let stakeVal = '0.00';
         if (pmInfo.owner) {
             try {
-                const stake = await publicClient.readContract({
-                    address: regAddr,
-                    abi: [{name:'roleStakes',inputs:[{type:'bytes32',name:'roleId'},{type:'address',name:'user'}],outputs:[{type:'uint256'}],type:'function'}],
-                    functionName: 'roleStakes', args: [pmInfo.role, pmInfo.owner]
-                }) as bigint;
+                const stake = await registry(publicClient).roleStakes({ 
+                    roleId: pmInfo.role, 
+                    user: pmInfo.owner 
+                });
                 stakeVal = parseFloat(formatEther(stake)).toFixed(2);
             } catch(e) { }
         }
@@ -470,11 +476,11 @@ async function main() {
                 
                 const currentAllowance = await tokenActions()(publicClient).allowance({ token: globalAPNTs, owner: anniAddr, spender: superPM });
                 if (currentAllowance < parseEther('50000')) {
-                    const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('100000') });
+                    const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('100000'), account: anniAcc });
                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
                 }
                 
-                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50000') });
+                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50000'), account: anniAcc });
                 await publicClient.waitForTransactionReceipt({ hash: depositHash });
                 
                 internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });

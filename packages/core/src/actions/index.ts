@@ -5,6 +5,7 @@ export * from './superPaymaster.js';
 export * from './paymasterV4.js';
 export * from './reputation.js';
 export * from './tokens.js';
+export * from './entryPoint.js'; // entryPoint.ts exports EntryPointVersion, EntryPointActions, entryPointActions
 export * from './StateValidator.js';
 export * from './dvt.js';
 export * from './factory.js';
