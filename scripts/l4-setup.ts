@@ -567,6 +567,39 @@ async function main() {
         console.log(`================================================================`);
     }
 
+    // 7. Save State
+    console.log(`\n💾 Saving State to ${STATE_FILE}...`);
+    const stateToSave = {
+        network: config.name,
+        timestamp: new Date().toISOString(),
+        operators: {
+            jason: {
+                address: privateKeyToAccount(operators[0].key).address,
+                tokenAddress: communityMap['Jason (AAStar)']?.token,
+                paymasterV4: communityMap['Jason (AAStar)']?.pmV4
+            },
+            bob: {
+                address: privateKeyToAccount(operators[1].key).address,
+                tokenAddress: communityMap['Bob (Bread)']?.token,
+                paymasterV4: communityMap['Bob (Bread)']?.pmV4
+            },
+            anni: {
+                address: privateKeyToAccount(operators[2].key).address,
+                tokenAddress: communityMap['Anni (Demo)']?.token,
+                superPaymaster: superPM
+            }
+        },
+        aaAccounts: testAccounts.map(aa => ({
+            label: aa.label,
+            address: aa.address,
+            owner: aa.owner.address,
+            salt: aa.salt.toString(), // Convert BigInt to string
+            opName: aa.opName
+        }))
+    };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2));
+    console.log(`   ✅ State Saved!`);
+
     console.log(`\n✅ L4 Setup Complete!`);
 }
 

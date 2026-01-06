@@ -1,58 +1,65 @@
 {
-  "jason": {
-    "tokenAddress": "0x7e652Ce3793320072ae42EF1982c3a7215381f8e",
-    "paymasterAddress": "0xdF96FD23f8240b837E89Fb73EECa0a397322Fb12"
-  },
-  "bob": {
-    "tokenAddress": "0xCf12B901034995928eC5E49AEe2bb44339B9B083",
-    "paymasterAddress": "0x1315f90425449C99BD2F68173FDAF3068dAddFa8"
-  },
-  "anni": {
-    "tokenAddress": "0x6868723f3C9919D11D891D5AB931A08e9Fd8002e",
-    "superPaymasterAddress": "0x683d9CDD3239E0e01E8dC6315fA50AD92aB71D2d"
-  },
-  "operators": [
-    {
-      "name": "Jack",
-      "address": "0x084b5F85A5149b03aDf9396C7C94D8B8F328FB36",
-      "privateKeyEnv": "PRIVATE_KEY_JACK",
-      "community": "Dancing",
-      "tokenSymbol": "dPNTs",
-      "role": "ROLE_COMMUNITY",
-      "registeredAt": "2026-01-04T00:11:00Z",
-      "paymasterType": null
+  "network": "sepolia",
+  "timestamp": "2026-01-06T15:39:23.698Z",
+  "operators": {
+    "jason": {
+      "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "tokenAddress": "0xBdF389a6e402AF1C0d4A0A45396303dC0b1Cf8d2",
+      "paymasterV4": "0x103AAE1e6875f47CC5812f7bfCBB0844D8d55024"
     },
-    {
-      "name": "Brown",
-      "address": "0xfceD1c4A1F2f97D5198ce3f47FaB3811526C49B7",
-      "privateKeyEnv": "PRIVATE_KEY_BROWN",
-      "community": "BBQ",
-      "tokenSymbol": "bbqPNTs",
-      "roles": [
-        "ROLE_COMMUNITY",
-        "ROLE_PAYMASTER_SUPER",
-        "ROLE_PAYMASTER_AOA"
-      ],
-      "registeredAt": "2026-01-03T17:30:17.276Z",
-      "paymasterV4": "0x00d76797284F1460a0173a6F1081eC20450dc07e"
+    "bob": {
+      "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
+      "tokenAddress": "0x38ca20c6CB61a87D4C435564057dee156C828FbE",
+      "paymasterV4": "0xa0B14C4d5Ef914ADd9B50F2b51f58d4D56C4427a"
     },
-    {
-      "name": "BrownClean",
-      "address": "0x6b28363b7fc3c53B34F4e63D1203d6E2e249C4fC",
-      "privateKey": "0x0b95a64ad087b7453bcb9161579641e2260a7ae348e8c5b90db267fc5626f7d4",
-      "roles": [
-        "ROLE_COMMUNITY"
-      ]
+    "anni": {
+      "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
+      "tokenAddress": "0x9Db0DC0ee1A41CC3147cb900189BD9856AC72AEE",
+      "superPaymaster": "0x64C95279bA723394aaA01fE47ECA1Bfc4A234508"
     }
-  ],
-  "jack": {
-    "tokenAddress": "0x1a52d5bcEC54468AbAE4904745880576737b7343",
-    "community": "Dancing",
-    "owner": "0x084b5F85A5149b03aDf9396C7C94D8B8F328FB36",
-    "superPaymasterAddress": "0x678062d16A4d72B37F0fc453eff747322F51094F",
-    "roles": [
-      "ROLE_COMMUNITY",
-      "ROLE_PAYMASTER_SUPER"
-    ]
-  }
+  },
+  "aaAccounts": [
+    {
+      "label": "Jason (AAStar)_AA1",
+      "address": "0xECD9C07f648B09CFb78906302822Ec52Ab87dd70",
+      "owner": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "salt": "0",
+      "opName": "Jason (AAStar)"
+    },
+    {
+      "label": "Jason (AAStar)_AA2",
+      "address": "0x179Faf25600c01DBFcEf7971f15DcFa3FbE5d31C",
+      "owner": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "salt": "1",
+      "opName": "Jason (AAStar)"
+    },
+    {
+      "label": "Bob (Bread)_AA1",
+      "address": "0x021C8cA0a2825F69fE79177a7e19Fb0bB171D1E2",
+      "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
+      "salt": "0",
+      "opName": "Bob (Bread)"
+    },
+    {
+      "label": "Bob (Bread)_AA2",
+      "address": "0x8Cbe2644c3A2f71b6936636491616ee6D2e71576",
+      "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
+      "salt": "1",
+      "opName": "Bob (Bread)"
+    },
+    {
+      "label": "Anni (Demo)_AA1",
+      "address": "0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4",
+      "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
+      "salt": "0",
+      "opName": "Anni (Demo)"
+    },
+    {
+      "label": "Anni (Demo)_AA2",
+      "address": "0x055dBe74925F687882A9FA62D89ba73c15aeEf03",
+      "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
+      "salt": "1",
+      "opName": "Anni (Demo)"
+    }
+  ]
 }
