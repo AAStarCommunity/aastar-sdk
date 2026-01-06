@@ -322,6 +322,18 @@ cat scripts/l4-state.json
 - 交易内容：从 Jason 的第一个 AA 账户 (Jason_AA1) 向 Bob 的 EOA 地址转移 2 个 bPNTs 代币。
 - 签名来源：使用 Jason 的私钥（即 AA 的 Owner）对 UserOp Hash 进行了标准的 signMessage 签名。
 - Nonce 处理：通过 SDK 实时获取了最新的 Nonce 值 (当前为 1)。
+“UserOperation 构造指南”，内容包括：
+
+Context: 明确演示背景为从 Jason (AA1) 向 Bob (EOA) 转移 2 个 bPNTs。
+5 种测试场景总结:
+NATIVE: 标准 4337，AA 支付 ETH Gas。
+GASLESS_V4: PaymasterV4 免 Gas（社区赞助）。
+SUPER_BPNT: SuperPaymaster 内部结算 bPNT。
+SUPER_CPNT: SuperPaymaster 内部结算 cPNT。
+SUPER_CUSTOM: SuperPaymaster 自定义结算。
+API 使用范例: 展示了如何通过 UserOpScenarioBuilder 简单调用即可获得符合 Bundler JSON-RPC 规范（Hex 编码）的 UserOp。
+2. 验证结果
+脚本运行结果显示，所有场景的 UserOp Hash 均已成功计算，且签名已由 Jason 的 Owner 私钥完成。输出的 JSON 格式已完全兼容 Alchemy Bundler 等后端的集成
 
 ### 5.4 l4-gasless.ts 测试场景
 
