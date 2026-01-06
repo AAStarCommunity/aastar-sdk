@@ -79,19 +79,22 @@ async function main() {
         const acc = privateKeyToAccount(op.key);
         const opClient = createWalletClient({ account: acc, chain: config.chain, transport: http(config.rpcUrl) });
         
-        // 2a. Ensure Funds
+        // 2a. Ensure Funds - 按文档要求: ≥0.1 ETH
         let ethBal = await publicClient.getBalance({ address: acc.address });
-        if(ethBal < parseEther('0.02')) {
+        if(ethBal < parseEther('0.1')) {
             console.log(`   ⛽ Funding ETH to ${op.name}...`);
-            const h = await supplierClient.sendTransaction({ to: acc.address, value: parseEther('0.05') });
+            const h = await supplierClient.sendTransaction({ to: acc.address, value: parseEther('0.2') });
             await publicClient.waitForTransactionReceipt({hash:h});
             ethBal = await publicClient.getBalance({ address: acc.address });
         }
         
+        // 2b. GToken - 按文档要求: Jason/Bob 100,000, Anni 200,000
+        const requiredGToken = op.name.includes('Anni') ? parseEther('200000') : parseEther('100000');
         let gTokenBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: acc.address });
-        if(gTokenBal < parseEther('100.0')) {
-             console.log(`   🪙 Minting GToken to ${op.name}...`);
-             const h = await gToken(supplierClient).mint({ token: config.contracts.gToken, to: acc.address, amount: parseEther('5000'), account: supplier });
+        if(gTokenBal < requiredGToken) {
+             console.log(`   🪙 Minting ${op.name.includes('Anni') ? '200,000' : '100,000'} GToken to ${op.name}...`);
+             const mintAmount = requiredGToken - gTokenBal + parseEther('1000'); // 补足+额外buffer
+             const h = await gToken(supplierClient).mint({ token: config.contracts.gToken, to: acc.address, amount: mintAmount, account: supplier });
              await publicClient.waitForTransactionReceipt({hash:h});
              gTokenBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: acc.address });
         }
@@ -117,22 +120,33 @@ async function main() {
         }
 
         // 2c. Check/Deploy Token
-        let token = "None";
-        let tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
-        if (!tAddr || tAddr === '0x0000000000000000000000000000000000000000') {
-             console.log(`   🏭 Deploying ${op.symbol} for ${op.name}...`);
-             try {
-                 const h = await xpntsFactory(opClient).createToken({
-                    name: `${op.symbol} Token`, symbol: op.symbol, community: acc.address, account: acc
-                 });
-                 await publicClient.waitForTransactionReceipt({hash:h});
-                 tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
-                 token = tAddr;
-             } catch(e:any) { token = `Error`; }
-        } else {
+        // Jason(AAStar)使用已部署的config.contracts.aPNTs,不需要通过xPNTsFactory部署新代币
+        let token: string = "None";
+        let tAddr: Address | null = null;
+        
+        if (op.name.includes('Jason')) {
+            // Jason's aPNTs is the global aPNTs already deployed and configured in SuperPaymaster
+            tAddr = config.contracts.aPNTs;
             token = tAddr;
+            console.log(`   ✓ ${op.name} using pre-deployed aPNTs: ${tAddr}`);
+        } else {
+            // Bob and Anni deploy their own community tokens via xPNTsFactory
+            tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
+            if (!tAddr || tAddr === '0x0000000000000000000000000000000000000000') {
+                 console.log(`   🏭 Deploying ${op.symbol} for ${op.name}...`);
+                 try {
+                     const h = await xpntsFactory(opClient).createToken({
+                        name: `${op.symbol} Token`, symbol: op.symbol, community: acc.address, account: acc
+                     });
+                     await publicClient.waitForTransactionReceipt({hash:h});
+                     tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
+                     token = tAddr ?? 'Error';
+                 } catch(e:any) { token = `Error`; }
+            } else {
+                token = tAddr;
+            }
         }
-        if(token && token !== 'Error' && token !== 'None') communityMap[op.name] = { token: token as Address };
+        if(tAddr && token !== 'Error' && token !== 'None') communityMap[op.name] = { token: tAddr };
 
         // 2d. Check/Deploy Paymaster V4
         let pmV4 = "None";
@@ -188,6 +202,31 @@ async function main() {
     }
     printTable("Operator Status", operatorStatus);
 
+    // 2e. Jason mint aPNTs给Anni (用于SuperPaymaster存款) - 按文档要求: 100,000 aPNTs
+    console.log(`\n🔄 Checking aPNTs for Anni's SuperPaymaster deposit...`);
+    const jasonOp = operators.find(o => o.name.includes('Jason'));
+    const anniOpData = operators.find(o => o.name.includes('Anni'));
+    if (jasonOp && anniOpData && communityMap[jasonOp.name]?.token) {
+        const jasonAcc = privateKeyToAccount(jasonOp.key);
+        const anniAddr = privateKeyToAccount(anniOpData.key).address;
+        const aPNTsToken = communityMap[jasonOp.name].token; // Jason's aPNTs
+        
+        const anniAPNTsBal = await gToken(publicClient).balanceOf({ token: aPNTsToken, account: anniAddr });
+        const requiredAPNTs = parseEther('100000');
+        
+        if (anniAPNTsBal < requiredAPNTs) {
+            console.log(`   💸 Jason minting 100,000 aPNTs to Anni...`);
+            const jasonClient = createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) });
+            const mintAmount = requiredAPNTs - anniAPNTsBal;
+            const h = await tokenActions()(jasonClient).mint({
+                token: aPNTsToken, to: anniAddr, amount: mintAmount, account: jasonAcc
+            });
+            await publicClient.waitForTransactionReceipt({ hash: h });
+            console.log(`   ✅ Anni now has 100,000 aPNTs for SuperPaymaster deposit`);
+        } else {
+            console.log(`   ✓ Anni already has ${formatEther(anniAPNTsBal)} aPNTs`);
+        }
+    }
 
     // 3. AA Setup (6 Accounts)
     console.log(`\n🏭 3. Checking & Deploying 6 Test AA Accounts (Pimlico v0.7)...`);
@@ -244,7 +283,7 @@ async function main() {
              gtBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: aa.address });
         }
 
-        // Tokens
+        // xPNTs Tokens - 按文档要求: 各10,000 a/b/cPNTs
         for (const tAddr of allTokens) {
             const issuerName = Object.keys(communityMap).find(k => communityMap[k].token === tAddr);
             if (!issuerName) continue;
@@ -253,22 +292,12 @@ async function main() {
             const issuerClient = createWalletClient({ account: privateKeyToAccount(issuerOp.key), chain: config.chain, transport: http(config.rpcUrl) });
             
             const xpBal = await gToken(publicClient).balanceOf({ token: tAddr, account: aa.address });
-            if (xpBal < parseEther('100')) {
-                console.log(`   🎫 Funding ${issuerName} Token to ${aa.label}...`);
+            if (xpBal < parseEther('10000')) {  // 按文档要求: 10,000
+                console.log(`   🎫 Funding ${issuerName} Token (10,000) to ${aa.label}...`);
                 try {
-                    // FIX: Replaced mintToken with mint (from factory logic or token logic?)
-                    // Factory usually has createToken / getTokenAddress.
-                    // Token minting is done via token contract if user has permission.
-                    // If xPNTs tokens are mintable by owner (issuer).
-                    // xPNTsFactoryActions typically doesn't have mintToken unless custom.
-                    // Let's assume standard ERC20 mint via tokenActions or check factory.ts definition.
-                    // But wait, xPNTs might need minting via Factory if specialized.
-                    // I will check factory.ts content in next tool step to be 100% sure.
-                    // For now, I'll optimistically use tokenActions(issuerClient).mint() for xPNTs tokens.
-                    // Assuming Issuer is owner of the token.
-                    
+                    const mintAmount = parseEther('10000') - xpBal;
                     const h = await tokenActions()(issuerClient).mint({
-                        token: tAddr, to: aa.address, amount: parseEther('500'), account: privateKeyToAccount(issuerOp.key)
+                        token: tAddr, to: aa.address, amount: mintAmount, account: privateKeyToAccount(issuerOp.key)
                     });
                     
                     await publicClient.waitForTransactionReceipt({ hash:h });
@@ -367,10 +396,10 @@ async function main() {
         const anniAddr = privateKeyToAccount(anniOp.key).address;
         let internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
         
-        if (internalBal < parseEther('10')) {
+        if (internalBal < parseEther('50000')) {  // 按文档要求: ≥50,000 aPNTs
             console.log(`   🔄 Refilling SuperPaymaster Credit for Anni...`);
             
-            // Use global aPNTs token (not community token)
+            // Use global aPNTs token (APNTS_TOKEN in SuperPaymaster contract)
             const globalAPNTs = config.contracts.aPNTs;
             console.log(`      📍 Global aPNTs Token: ${globalAPNTs}`);
             
@@ -380,13 +409,15 @@ async function main() {
             try {
                 // Step 1: Check Anni's aPNTs balance
                 const anniApntsBal = await tokenActions()(publicClient).balanceOf({ token: globalAPNTs, account: anniAddr });
-                console.log(`      📊 Anni aPNTs Balance: ${formatEther(anniApntsBal)}`);
+                console.log(`      📊 Anni Global aPNTs Balance: ${formatEther(anniApntsBal)}`);
                 
-                // Step 2: Mint aPNTs to Anni if needed (Supplier/Admin mints)
-                if (anniApntsBal < parseEther('50')) {
-                    console.log(`      💸 Minting 100 aPNTs to Anni (via Supplier)...`);
+                // Step 2: Mint global aPNTs to Anni if needed (Supplier/Admin mints) - 按文档要求补足到100,000
+                const requiredForDeposit = parseEther('60000'); // 需要存50,000 + buffer
+                if (anniApntsBal < requiredForDeposit) {
+                    console.log(`      💸 Minting Global aPNTs to Anni (via Supplier)...`);
+                    const mintAmount = requiredForDeposit - anniApntsBal;
                     const mintHash = await tokenActions()(supplierClient).mint({
-                        token: globalAPNTs, to: anniAddr, amount: parseEther('100'), account: supplier
+                        token: globalAPNTs, to: anniAddr, amount: mintAmount, account: supplier
                     });
                     console.log(`      ⏳ Waiting for mint tx: ${mintHash}`);
                     await publicClient.waitForTransactionReceipt({ hash: mintHash });
@@ -397,17 +428,17 @@ async function main() {
                 const currentAllowance = await tokenActions()(publicClient).allowance({ token: globalAPNTs, owner: anniAddr, spender: superPM });
                 console.log(`      📊 Current allowance: ${formatEther(currentAllowance)}`);
                 
-                if (currentAllowance < parseEther('50')) {
+                if (currentAllowance < parseEther('50000')) {
                     console.log(`      🔓 Approving SuperPaymaster to spend aPNTs...`);
-                    const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('1000') });
+                    const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('100000') });
                     console.log(`      ⏳ Waiting for approve tx: ${approveHash}`);
                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
                     console.log(`      ✅ Approve confirmed`);
                 }
                 
-                // Step 4: Deposit aPNTs into SuperPaymaster (using semantic API)
-                console.log(`      💰 Depositing 50 aPNTs to SuperPaymaster...`);
-                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50') });
+                // Step 4: Deposit 50,000 aPNTs into SuperPaymaster (按文档要求)
+                console.log(`      💰 Depositing 50,000 aPNTs to SuperPaymaster...`);
+                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50000') });
                 console.log(`      ⏳ Waiting for deposit tx: ${depositHash}`);
                 await publicClient.waitForTransactionReceipt({ hash: depositHash });
                 console.log(`      ✅ Deposit confirmed`);

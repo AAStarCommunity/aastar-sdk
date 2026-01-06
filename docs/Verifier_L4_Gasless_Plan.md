@@ -238,7 +238,87 @@ Test 4 kinds of gasless tx:
         2. if AA account has no cPNTs balance
         3. improve the reputation of test account enough to get credit for 3 free tx
             1. try more tx, it should be put into blacklist (we put it manually for now) and can’t get gasless free tx anymore, it run out the credit.
-        4. try again, should record a debt in cPNTs contract
-        5. deposit cPNTs to test AA, it should pay debt first, then deposite
+        5. try again, should record a debt in cPNTs contract
+        6. deposit cPNTs to test AA, it should pay debt first, then deposite
 
 
+---
+
+## 5. L4 实现计划 (Implementation Plan)
+
+### 5.1 脚本结构
+
+```bash
+# 1. 环境准备(幂等)
+pnpm tsx scripts/l4-setup.ts --network=sepolia
+
+# 2. Gasless测试
+pnpm tsx tests/regression/l4-gasless.ts --network=sepolia
+
+# 3. 查看状态
+cat scripts/l4-state.json
+```
+
+### 5.2 l4-setup.ts 数据准备目标
+
+| 阶段 | 对象 | 目标值 | 说明 |
+|------|------|--------|------|
+| **Funding** | Jason ETH | ≥0.1 ETH | 部署合约Gas |
+| | Bob ETH | ≥0.1 ETH | 部署合约Gas |
+| | Anni ETH | ≥0.1 ETH | 部署合约Gas |
+| | Jason GToken | 100,000 | PaymasterV4 Stake |
+| | Bob GToken | 100,000 | PaymasterV4 Stake |
+| | Anni GToken | **200,000** | 100k社区质押+100k SuperPM质押 |
+| **社区** | Jason | AAStar社区+aPNTs+PaymasterV4 | |
+| | Bob | Bread社区+bPNTs+PaymasterV4 | |
+| | Anni | Demo社区+cPNTs+SuperPM Operator | |
+| **SuperPM** | Anni aPNTs余额 | **100,000** | Jason mint aPNTs给Anni |
+| | Anni SuperPM内余额 | ≥50,000 aPNTs | Anni存入SuperPM的credit |
+| **AA账户** | 6个AA | 每个≥0.02 ETH, 1000 GToken | |
+| | AA xPNTs | 各10,000 a/b/cPNTs | 用于Gasless测试 |
+
+### 5.3 关键修复事项
+
+1. **SuperPaymaster.deposit问题**:
+   - 合约`deposit(uint256 amount)`使用的是`APNTS_TOKEN`(全局aPNTs=`0xBdF389a6e402AF1C0d4A0A45396303dC0b1Cf8d2`)
+   - 不是Jason的社区aPNTs代币
+   - SDK需添加`depositAPNTsToSuperPaymaster`语义化函数
+
+2. **Token数量调整**:
+   - GToken: Jason/Bob 100,000, Anni 200,000
+   - aPNTs from Jason to Anni: 100,000
+   - SuperPM存入: 50,000 (保留50,000备用)
+
+3. **Anvil跳过评估**:
+   - Anvil本地没有真实Bundler,无法测试完整UserOp流程
+   - **建议L4跳过Anvil**,仅在Sepolia/OP-Sepolia执行
+
+### 5.4 l4-gasless.ts 测试场景
+
+| # | 场景 | Paymaster | 预期 |
+|---|------|-----------|------|
+| 1 | AA有ETH,直接交易 | 无 | 成功,扣ETH |
+| 2 | AA使用aPNTs | PaymasterV4(AAStar) | 成功,扣aPNTs |
+| 3 | AA使用bPNTs | PaymasterV4(Bread) | 成功,扣bPNTs |
+| 4 | AA使用cPNTs | SuperPM(Demo) | 成功,扣cPNTs,Anni aPNTs余额减少 |
+| 5 | AA无cPNTs有信用 | SuperPM(Demo) | 成功,记录债务 |
+| 6 | 信用耗尽 | SuperPM(Demo) | 失败,黑名单 |
+| 7 | 充值cPNTs | - | 优先还债 |
+
+### 5.5 状态输出 (l4-state.json)
+
+```json
+{
+  "network": "sepolia",
+  "timestamp": "2026-01-06T20:30:00Z",
+  "operators": {
+    "jason": { "address": "0x...", "community": true, "token": "0x...", "paymasterV4": "0x..." },
+    "bob": { "address": "0x...", "community": true, "token": "0x...", "paymasterV4": "0x..." },
+    "anni": { "address": "0x...", "community": true, "token": "0x...", "superPM": { "balance": "50000" } }
+  },
+  "aaAccounts": [
+    { "label": "Jason_AA1", "address": "0x...", "eth": "0.02", "gToken": "1000", "registered": true }
+  ],
+  "readyForGaslessTest": true
+}
+```
