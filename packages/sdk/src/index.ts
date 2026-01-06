@@ -16,5 +16,6 @@ export * from './clients/ExperimentClient.js';
 export * from './utils/roleData.js';
 export * from './utils/keys.js';
 export * from './utils/funding.js';
+export * from './utils/userOp.js';
 export * from './errors/decoder.js';
 

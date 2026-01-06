@@ -15,6 +15,7 @@ import {
 } from '../packages/core/dist/index.js';
 import { CommunityClient, UserClient } from '../packages/enduser/dist/index.js';
 import { PaymasterOperatorClient } from '../packages/operator/dist/PaymasterOperatorClient.js';
+import { UserOperationBuilder } from './../packages/sdk/src/utils/userOp.js';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 import { loadContract } from './00_utils.js'; 
@@ -324,7 +325,8 @@ async function main() {
             Label: aa.label, 
             Addr: aa.address, 
             ETH: parseFloat(formatEther(ethBal)).toFixed(4), 
-            GToken: parseFloat(formatEther(gtBal)).toFixed(2) 
+            GToken: parseFloat(formatEther(gtBal)).toFixed(2),
+            Explorer: `https://sepolia.etherscan.io/address/${aa.address}`
         });
     }
     printTable("AA Accounts Ready", aaStatus);
@@ -376,18 +378,18 @@ async function main() {
     const ROLE_PAYMASTER_SUPER = await registry(publicClient).ROLE_PAYMASTER_SUPER();
 
     // Map PMs to their owners for stake check
-    const pmToOwner = new Map<Address, Address>();
+    const pmToOwner = new Map<Address, { addr: Address, name: string }>();
     for (const op of operators) {
         const addr = privateKeyToAccount(op.key).address;
         if (communityMap[op.name]?.pmV4) {
-            pmToOwner.set(communityMap[op.name].pmV4 as Address, addr);
+            pmToOwner.set(communityMap[op.name].pmV4 as Address, { addr, name: op.name.split(' ')[0] });
         }
     }
 
     // All Paymasters to check in EntryPoint
     const allPMs = [
-        ...pmV4s.map(addr => ({ addr, owner: pmToOwner.get(addr), type: 'V4', role: ROLE_PAYMASTER_AOA })),
-        { addr: superPM, owner: privateKeyToAccount(operators.find(o => o.name.includes('Anni'))?.key!).address, type: 'SuperPM', role: ROLE_PAYMASTER_SUPER }
+        ...pmV4s.map(addr => ({ addr, owner: pmToOwner.get(addr)?.addr, operatorName: pmToOwner.get(addr)?.name, type: 'V4', role: ROLE_PAYMASTER_AOA })),
+        { addr: superPM, owner: privateKeyToAccount(operators.find(o => o.name.includes('Anni'))?.key!).address, operatorName: 'Anni', type: 'SuperPM', role: ROLE_PAYMASTER_SUPER }
     ];
 
     for (const pmInfo of allPMs) {
@@ -433,7 +435,8 @@ async function main() {
                 Type: 'V4',
                 Address: pm,
                 EP_Deposit: parseFloat(formatEther(epBal < MIN_EP_DEPOSIT ? REFILL_EP_AMOUNT : epBal)).toFixed(4),
-                Stake: stakeVal
+                Stake: stakeVal,
+                Operator: pmInfo.operatorName
             });
         } else {
             // SuperPM basic info (will add Internal_Credit later)
@@ -492,6 +495,49 @@ async function main() {
     }
 
     printTable("Paymaster Status", pmStatus);
+
+    // 6. UserOperation Generation Demo (ERC-4337 v0.7)
+    console.log(`\n📦 6. Preparing Sample PackedUserOperation (v0.7)...`);
+    const targetAA = testAccounts[0]; // Jason_AA1
+    if (targetAA) {
+        const { encodeFunctionData } = await import('viem');
+        
+        // Use standard builder logic
+        const callData = encodeFunctionData({
+            abi: [{ name: 'execute', type: 'function', inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'bytes' }] }],
+            functionName: 'execute',
+            args: [regAddr, 0n, '0x'] // Example: call Registry (noop)
+        });
+
+        const userOp = {
+            sender: targetAA.address,
+            nonce: 0n, // Assuming initial op
+            initCode: '0x' as Hex, // Already deployed in step 3
+            callData,
+            accountGasLimits: UserOperationBuilder.packAccountGasLimits(200000n, 100000n),
+            preVerificationGas: 50000n,
+            gasFees: UserOperationBuilder.packGasFees(2000000000n, 2000000000n), // 2 Gwei
+            paymasterAndData: UserOperationBuilder.packPaymasterAndData(
+                superPM,
+                250000n, // paymasterGasLimit
+                50000n,  // paymasterPostOpGasLimit
+                privateKeyToAccount(operators[0].key).address // Jason as Operator address
+            ),
+            signature: '0x' as Hex
+        };
+
+        console.log(`\n📋 Sample UserOperation for ${targetAA.label}:`);
+        console.log(JSON.stringify(userOp, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
+        
+        const opHash = await UserOperationBuilder.getUserOpHash({
+            userOp,
+            entryPoint: epAddr,
+            chainId: config.chain.id,
+            publicClient
+        });
+        console.log(`\n🔑 UserOp Hash: ${opHash}`);
+    }
+
     console.log(`\n✅ L4 Setup Complete!`);
 }
 
