@@ -364,3 +364,91 @@ API 使用范例: 展示了如何通过 UserOpScenarioBuilder 简单调用即可
   "readyForGaslessTest": true
 }
 ```
+
+---
+
+## 6. L4-Setup SDK API 使用清单
+
+### 6.1 API 覆盖率审查
+
+`l4-setup.ts` 脚本已完全基于 SDK API 实现，无直接合约调用（`writeContract`）。
+
+| 步骤 | 操作 | 使用的 SDK API | 文件位置 | 状态 |
+|------|------|---------------|---------|------|
+| **1. Community 注册** | 注册 ROLE_COMMUNITY | `CommunityClient.registerAsCommunity()` | `packages/community` | ✅ 完整 |
+| **2. Token 部署** | 部署 xPNTs 社区代币 | `xPNTsFactoryActions.createToken()` | `packages/core/actions` | ✅ 完整 |
+| **3. Paymaster V4 部署** | 部署并注册 Paymaster V4 + Owner 验证 | `PaymasterOperatorClient.deployAndRegisterPaymasterV4()` | `packages/operator` | ✅ 已增强验证 |
+| **4. AA 账户部署** | 部署 SimpleAccount v0.7 | `accountFactoryActions.createAccount()` | `packages/core/actions` | ✅ 完整 |
+| **5. Token Mint** | Mint Token 到指定地址 | `tokenActions().mint()` | `packages/core/actions` | ✅ 完整 |
+| **6. Token Approve** | Approve Token 给 Spender | `tokenActions().approve()` | `packages/core/actions` | ✅ 完整 |
+| **7. SuperPaymaster 充值** | 向 SuperPaymaster 充值 aPNTs | `superPaymasterActions().depositAPNTs()` | `packages/core/actions` | ✅ 完整 |
+| **8. Paymaster Owner 验证** | 验证 Paymaster 初始化状态 | `publicClient.readContract()` + PaymasterABI | `scripts/l4-setup.ts` | ✅ 新增防御 |
+
+### 6.2 关键增强
+
+#### 6.2.1 Paymaster Owner 验证
+
+在 `PaymasterOperatorClient.deployAndRegisterPaymasterV4()` 中增加了 SDK 级别的 owner 验证：
+
+```typescript
+// 部署完成后立即验证 owner
+const actualOwner = await publicClient.readContract({
+    address: paymasterAddress,
+    abi: PaymasterABI,
+    functionName: 'owner'
+});
+
+if (actualOwner !== expectedOwner) {
+    throw new Error(
+        `Critical: Paymaster owner mismatch!\n` +
+        `  Expected: ${expectedOwner}\n` +
+        `  Actual:   ${actualOwner}\n` +
+        `  DO NOT USE THIS PAYMASTER!`
+    );
+}
+```
+
+**防御效果**：
+- ✅ 阻止使用未正确初始化的 Paymaster
+- ✅ 及时发现部署问题
+- ✅ 防止 owner 被抢跑（虽然 Factory 是原子操作，理论上不会发生）
+
+#### 6.2.2 Charlie 测试验证
+
+通过新增 Charlie（第 4 个 operator）验证修复效果：
+
+```
+📝 Registering Community for Charlie (Test)...
+🏭 Deploying dPNTs for Charlie (Test)...
+⛽ Deploying Paymaster V4 for Charlie (Test)...
+Deploying Paymaster v4.2...
+🔍 Verifying Paymaster initialization...
+   ✅ Owner verified: 0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D
+```
+
+**结果**：
+- ✅ 使用纯 SDK API 部署
+- ✅ Owner 正确设置（Charlie 地址）
+- ✅ 证明修复后的 API 不会出现 0x000 owner 问题
+
+### 6.3 API 设计原则
+
+1. **封装性**：所有链上操作通过 SDK Actions 封装，脚本层不直接调用合约
+2. **验证性**：关键操作后自动验证状态（如 owner、balance）
+3. **容错性**：自动检查前置条件，避免重复部署
+4. **可观察性**：清晰的日志输出，便于调试
+
+### 6.4 后续优化方向
+
+1. **合约层防御**（长期）：
+   - 在 `PaymasterFactory.sol` 中添加 owner 强制验证
+   - 在 `Paymaster.sol` 的 `initialize` 中添加调用者权限控制
+
+2. **SDK 层增强**（已完成）：
+   - ✅ 部署后自动验证 owner
+   - ✅ 提供详细错误信息
+
+3. **测试覆盖**：
+   - ✅ l4-setup.ts 覆盖所有操作流程
+   - ⏳ 添加单元测试（针对每个 SDK API）
+

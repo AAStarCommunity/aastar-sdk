@@ -265,6 +265,37 @@ export class PaymasterOperatorClient extends BaseClient {
             if (paymasterAddress === '0x0000000000000000000000000000000000000000') {
                 throw new Error('Failed to retrieve Paymaster address after deployment');
             }
+
+            // ✅ SDK Level Defense: Verify owner is correctly set
+            console.log(`🔍 Verifying Paymaster initialization...`);
+            try {
+                const { PaymasterABI } = await import('@aastar/core');
+                const actualOwner = await (this.getStartPublicClient() as any).readContract({
+                    address: paymasterAddress,
+                    abi: PaymasterABI,
+                    functionName: 'owner'
+                }) as Address;
+                
+                const expectedOwner = typeof account === 'string' ? account : account.address;
+                
+                if (actualOwner !== expectedOwner) {
+                    throw new Error(
+                        `Critical: Paymaster owner mismatch!\n` +
+                        `  Expected: ${expectedOwner}\n` +
+                        `  Actual:   ${actualOwner}\n` +
+                        `  Paymaster may have been front-run or initialization failed.\n` +
+                        `  DO NOT USE THIS PAYMASTER!`
+                    );
+                }
+                
+                console.log(`   ✅ Owner verified: ${actualOwner}`);
+            } catch (verifyError: any) {
+                if (verifyError.message.includes('owner mismatch')) {
+                    throw verifyError; // Re-throw critical errors
+                }
+                console.warn(`⚠️  Could not verify owner: ${verifyError.message}`);
+                console.warn(`   Please manually verify Paymaster owner at ${paymasterAddress}`);
+            }
         } else {
             console.log(`Paymaster already deployed at ${paymasterAddress}`);
         }

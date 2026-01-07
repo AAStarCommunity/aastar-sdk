@@ -1,6 +1,6 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-06T15:39:23.698Z",
+  "timestamp": "2026-01-07T05:07:17.569Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
@@ -60,6 +60,20 @@
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "salt": "1",
       "opName": "Anni (Demo)"
+    },
+    {
+      "label": "Charlie (Test)_AA1",
+      "address": "0xAdE1c3B76e6D54276a63e4a9A44a9cD43c6F6918",
+      "owner": "0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D",
+      "salt": "0",
+      "opName": "Charlie (Test)"
+    },
+    {
+      "label": "Charlie (Test)_AA2",
+      "address": "0x313E1037cD3887d27283681d9d16b3986797cbD5",
+      "owner": "0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D",
+      "salt": "1",
+      "opName": "Charlie (Test)"
     }
   ]
 }

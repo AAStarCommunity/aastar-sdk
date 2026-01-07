@@ -72,6 +72,7 @@ async function main() {
         { name: 'Jason (AAStar)', key: process.env.PRIVATE_KEY_JASON as Hex, role: 'Operator', symbol: 'aPNTs', pmType: 'V4' },
         { name: 'Bob (Bread)', key: process.env.PRIVATE_KEY_BOB as Hex, role: 'Operator', symbol: 'bPNTs', pmType: 'V4' },
         { name: 'Anni (Demo)', key: process.env.PRIVATE_KEY_ANNI as Hex, role: 'Operator', symbol: 'cPNTs', pmType: 'Super' },
+        { name: 'Charlie (Test)', key: process.env.PRIVATE_KEY_CHARLIE as Hex, role: 'Operator', symbol: 'dPNTs', pmType: 'V4' },
     ];
 
     const registry = registryActions(config.contracts.registry);
@@ -197,6 +198,28 @@ async function main() {
                     }
                 } catch(e:any) { console.log(`      ⚠️ PM Role Check/Reg Failed: ${e.message}`); }
             }
+            
+            // ✅ Verify Paymaster Owner
+            if(pmV4 && pmV4 !== 'None' && pmV4 !== 'N/A (Super)') {
+                try {
+                    const pmOwner = await publicClient.readContract({
+                        address: pmV4 as Address,
+                        abi: [{ name: 'owner', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' }],
+                        functionName: 'owner'
+                    }) as Address;
+                    
+                    if (pmOwner === acc.address) {
+                        console.log(`   ✅ Paymaster Owner Verified: ${pmOwner}`);
+                    } else if (pmOwner === '0x0000000000000000000000000000000000000000') {
+                        console.log(`   ❌ Paymaster Owner is ZERO! Needs manual initialization.`);
+                    } else {
+                        console.log(`   ⚠️  Paymaster Owner Mismatch! Expected: ${acc.address}, Got: ${pmOwner}`);
+                    }
+                } catch(e:any) { 
+                    console.log(`      ⚠️ Owner Check Failed: ${e.message}`); 
+                }
+            }
+            
             if(pmV4 && pmV4 !== 'None' && communityMap[op.name]) communityMap[op.name].pmV4 = pmV4 as Address;
         } else {
             pmV4 = "N/A (Super)";
