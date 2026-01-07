@@ -43,7 +43,7 @@ const FACTORY_ADDRESS = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985';
 async function main() {
     // Helper to check and fund ETH
     const checkAndFund = async (target: Address, minEth: string) => {
-        const bal = await publicClient.getBalance({ address: target });
+        let bal = await publicClient.getBalance({ address: target });
         if (bal < parseEther(minEth)) {
             console.log(`   ⛽ Funding ${target} with ${minEth} ETH...`);
             const hash = await supplierClient.sendTransaction({
@@ -52,6 +52,19 @@ async function main() {
                 account: supplier
             });
             await publicClient.waitForTransactionReceipt({ hash });
+            
+            // Latency Resilience: Wait and retry check
+            console.log(`      ⏳ Waiting for balance update (latency check)...`);
+            for (let i = 0; i < 5; i++) {
+                await new Promise(r => setTimeout(r, 2000));
+                bal = await publicClient.getBalance({ address: target });
+                if (bal >= parseEther(minEth)) {
+                    console.log(`      ✅ Balance updated: ${formatEther(bal)} ETH`);
+                    return;
+                }
+                console.log(`      ... still waiting (${i+1}/5)`);
+            }
+            throw new Error(`Funding Failed: Balance mismatch for ${target} after 10s`);
         }
     };
     
@@ -124,9 +137,11 @@ async function main() {
 
         // 2b. Check/Register Community
         let community = "None";
-        const isComm = await registry(publicClient).hasRole({ user: acc.address, roleId: await registry(publicClient).ROLE_COMMUNITY() });
+        const ROLE_COMMUNITY_ID = await registry(publicClient).ROLE_COMMUNITY();
+        const isComm = await registry(publicClient).hasRole({ user: acc.address, roleId: ROLE_COMMUNITY_ID });
         if (isComm) {
-            community = "Registered";
+            community = "Registered (Upstream)";
+            console.log(`   ✓ ${op.name} already registered as Community (Upstream)`);
         } else {
              console.log(`   📝 Registering Community for ${op.name}...`);
              const commClient = new CommunityClient({
@@ -404,7 +419,7 @@ async function main() {
         if (!isMember) {
             console.log(`   📝 ${aa.label} joining as ENDUSER...`);
             
-            // Find operator to join
+            // Find operator to join (Jason or Bob)
             const op = operators.find(o => o.name === aa.opName);
             if (!op) {
                 console.log(`      ⚠️ Operator not found for ${aa.label}`);
@@ -413,7 +428,16 @@ async function main() {
             const opAddress = privateKeyToAccount(op.key).address;
 
             try {
+                // Ensure AA has enough GToken for stake
+                const gtBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: aa.address });
+                if (gtBal < parseEther('0.4')) {
+                    console.log(`      🪙 Funding GToken for registration...`);
+                    const h = await gToken(supplierClient).mint({ token: config.contracts.gToken, to: aa.address, amount: parseEther('1'), account: supplier });
+                    await publicClient.waitForTransactionReceipt({hash:h});
+                }
+
                 // Use SDK API: Handles Approve + Register
+                // Registration as EndUser automatically handles staking + SBT minting in UserClient
                 const hash = await userClient.registerAsEndUser(opAddress, parseEther('0.4'), { account: aa.owner });
                 await publicClient.waitForTransactionReceipt({ hash });
                 console.log(`      ✅ Registered via SDK!`);
@@ -430,6 +454,22 @@ async function main() {
                  console.log(`      ❌ Verification Failed: Role not granted`);
             }
         } else {
+            // Check SBT balance anyway to ensure it's not missing despite having role
+            const sbtBal = await publicClient.readContract({
+                address: config.contracts.sbt,
+                abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                functionName: 'balanceOf',
+                args: [aa.address]
+            }) as bigint;
+            
+            if (sbtBal === 0n) {
+                console.log(`   🎫 ${aa.label} has ROLE_ENDUSER but missing SBT. Repairing...`);
+                try {
+                    const hash = await userClient.mintSBT(ROLE_ENDUSER_ID, { account: aa.owner });
+                    await publicClient.waitForTransactionReceipt({ hash });
+                    console.log(`      ✅ SBT Repaired.`);
+                } catch(e:any) { console.log(`      ❌ SBT Repair Failed: ${e.message}`); }
+            }
         }
     }
 

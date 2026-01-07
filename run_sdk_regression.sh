@@ -121,34 +121,9 @@ fi
 # ========================================
 # 4. ABI Synchronization
 # ========================================
-if [ "$SKIP_ABI_SYNC" == "false" ]; then
-    log_section "ABI Synchronization"
-    log_step "Building contracts and synchronizing ABIs"
-    
-    if [ ! -d "../SuperPaymaster" ]; then
-        log_error "SuperPaymaster directory not found"
-        [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
-        exit 1
-    fi
-    
-    # Step 1: Build contracts in SuperPaymaster
-    log_step "Building SuperPaymaster contracts"
-    cd ../SuperPaymaster
-    forge build --force 2>&1 | tee /tmp/forge-build.log
-    
-    FORGE_BUILD_STATUS=${PIPESTATUS[0]}
-    
-    if [ $FORGE_BUILD_STATUS -eq 0 ]; then
-        log_success "Contracts built successfully"
-    else
-        log_error "Forge build failed. Check /tmp/forge-build.log"
-        cd ../aastar-sdk
-        [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
-        exit 1
-    fi
-    
-    cd ../aastar-sdk
-fi
+# Redundant steps removed. We rely on SuperPaymaster/sync_to_sdk.sh 
+# as the single source of truth for ABIs and artifacts.
+# This saves significant time during regression runs.
 
 # ========================================
 # 5. Environment Configuration Sync: now we use config.network.json to load contract addresses, no need to save to .env files
