@@ -1,5 +1,5 @@
 import { type Address, type Hash, parseEther } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterArtifact } from '@aastar/core';
 import { superPaymasterActions, tokenActions, paymasterV4Actions } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
@@ -173,134 +173,52 @@ export class PaymasterOperatorClient extends BaseClient {
             throw new Error('Must have ROLE_COMMUNITY before deploying Paymaster V4');
         }
 
-        // 2. Check Deployment
-        // Note: We use getPaymaster (paymasterByOperator) to check existing deployment
-        // Standard deployment via deployPaymaster (EIP-1167) is non-deterministic (nonce-based)
+        // 2. Direct Deployment (PMV4-Hybrid)
+        // No legacy factory check. Always deploy new instance directly.
         
-        let paymasterAddress = await factory(this.getStartPublicClient()).getPaymaster({
-            owner: typeof account === 'string' ? account : account.address
-        });
+        console.log(`Deploying Paymaster PMV4-Hybrid-1.0.2 (Direct)...`);
         
-        const isDeployed = paymasterAddress !== '0x0000000000000000000000000000000000000000';
+        // const { parseEther } = await import('viem'); // Use top-level import
+        const ownerAddr = typeof account === 'string' ? account : account.address;
+        const treasuryAddr = ownerAddr;
         
-        let deployHash: Hash = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        // Resolve xPNTs Factory
+        const xpntsFactory = this.xpntsFactory !== '0x0000000000000000000000000000000000000000' 
+            ? this.xpntsFactory 
+            : factoryAddr; // Fallback to provided factory address if available, or risk it.
 
-        if (!isDeployed) {
-            // Determine version: User param > Factory Default > Fallback V4.0.0
-            let version = params?.version;
-            if (!version) {
-                try {
-                   version = await factory(this.getStartPublicClient()).defaultVersion();
-                } catch (e) {
-                   console.warn('Failed to fetch default version from Factory:', e);
-                }
-            }
-            if (!version || version === '') {
-                version = 'v4.2'; // Default to v4.2 now
-            }
+        let deployHash: Hash;
+        let paymasterAddress: Address;
 
-            console.log(`Deploying Paymaster ${version}...`);
-            
-            // Construct initData for V4.2
-            let initData: Hash = '0x';
-            if (version && (version.toLowerCase().includes('v4.2'))) {
-                const { PaymasterV4ABI } = await import('@aastar/core');
-                const { encodeFunctionData, parseEther } = await import('viem');
-                
-                const ownerAddr = typeof account === 'string' ? account : account.address;
-                const treasuryAddr = ownerAddr;
-                // Use input args or configured properties
-                const priceFeed = this.ethUsdPriceFeed;
-                const xpntsFactory = this.xpntsFactory !== '0x0000000000000000000000000000000000000000' 
-                    ? this.xpntsFactory 
-                    : factoryAddr; // Fallback unsafe, but maybe better than 0x0
-                
-                initData = encodeFunctionData({
-                    abi: PaymasterV4ABI,
-                    functionName: 'initialize',
-                    args: [
-                         '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7
-                         ownerAddr,
-                         treasuryAddr,
-                         priceFeed,
-                         200n, // serviceFeeRate (2%)
-                         parseEther('0.1'), // maxGasCostCap
-                         parseEther('1'), // minTokenBalance
-                         xpntsFactory,
-                         '0x0000000000000000000000000000000000000000', // initialSBT
-                         '0x0000000000000000000000000000000000000000'  // initialGasToken
-                    ]
-                });
-            }
-
-            try {
-                deployHash = await factory(this.client).deployPaymaster({
-                    owner: typeof account === 'string' ? account : account.address,
-                    version: version, // User requested (or default v4.2)
-                    initData: initData,
-                    account: account
-                });
-            } catch (error: any) {
-                if (error.message.includes('ImplementationNotFound') && version !== 'V4.0.0') {
-                     console.warn(`Version ${version} not found, retrying with V4.0.0...`);
-                     version = 'V4.0.0';
-                     deployHash = await factory(this.client).deployPaymaster({
-                        owner: typeof account === 'string' ? account : account.address,
-                        version: version,
-                        initData: initData,
-                        account: account
-                    });
-                } else {
-                    throw error;
-                }
-            }
-            
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: deployHash });
-            
-            // Retrieve the new address
-            paymasterAddress = await factory(this.getStartPublicClient()).getPaymaster({
-                owner: typeof account === 'string' ? account : account.address
+        try {
+            deployHash = await this.client.deployContract({
+                abi: PaymasterArtifact.abi,
+                bytecode: PaymasterArtifact.bytecode as Hash,
+                account: account,
+                args: [
+                        '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7
+                        ownerAddr,
+                        treasuryAddr,
+                        this.ethUsdPriceFeed,
+                        200n, // serviceFeeRate (2%)
+                        parseEther('0.1'), // maxGasCostCap
+                        xpntsFactory,
+                        registryAddr,
+                        3600n // priceStalenessThreshold
+                ]
             });
             
-            if (paymasterAddress === '0x0000000000000000000000000000000000000000') {
-                throw new Error('Failed to retrieve Paymaster address after deployment');
+            const receipt = await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: deployHash });
+            paymasterAddress = receipt.contractAddress!;
+            
+            if (!paymasterAddress) {
+                throw new Error('Failed to retrieve Paymaster address after direct deployment');
             }
 
-            // ✅ SDK Level Defense: Verify owner is correctly set
-            console.log(`🔍 Verifying Paymaster initialization...`);
-            try {
-                const { PaymasterABI } = await import('@aastar/core');
-                const actualOwner = await (this.getStartPublicClient() as any).readContract({
-                    address: paymasterAddress,
-                    abi: PaymasterABI,
-                    functionName: 'owner'
-                }) as Address;
-                
-                const expectedOwner = typeof account === 'string' ? account : account.address;
-                
-                if (actualOwner !== expectedOwner) {
-                    throw new Error(
-                        `Critical: Paymaster owner mismatch!\n` +
-                        `  Expected: ${expectedOwner}\n` +
-                        `  Actual:   ${actualOwner}\n` +
-                        `  Paymaster may have been front-run or initialization failed.\n` +
-                        `  DO NOT USE THIS PAYMASTER!`
-                    );
-                }
-                
-                console.log(`   ✅ Owner verified: ${actualOwner}`);
-            } catch (verifyError: any) {
-                if (verifyError.message.includes('owner mismatch')) {
-                    throw verifyError; // Re-throw critical errors
-                }
-                console.warn(`⚠️  Could not verify owner: ${verifyError.message}`);
-                console.warn(`   Please manually verify Paymaster owner at ${paymasterAddress}`);
-            }
-        } else {
-            console.log(`Paymaster already deployed at ${paymasterAddress}`);
+            console.log('✅ Paymaster Deployed at:', paymasterAddress);
+        } catch (e: any) {
+             throw new Error(`Paymaster Deployment Failed: ${e.message}`);
         }
-
-        // 3. Register ROLE_PAYMASTER_AOA
         const ROLE_PAYMASTER_AOA = await registry(this.getStartPublicClient()).ROLE_PAYMASTER_AOA();
         const hasAOA = await registry(this.getStartPublicClient()).hasRole({
             user: typeof account === 'string' ? account : account.address,
@@ -313,7 +231,8 @@ export class PaymasterOperatorClient extends BaseClient {
         }
 
         // Prepare stake (Default 30 GToken for AOA)
-        const { parseEther, encodeAbiParameters, parseAbiParameters } = await import('viem');
+        const { encodeAbiParameters, parseAbiParameters } = await import('viem');
+        // stakeAmount uses top-level parseEther
         const stakeAmount = params?.stakeAmount || parseEther('30');
         
         // Approve GToken

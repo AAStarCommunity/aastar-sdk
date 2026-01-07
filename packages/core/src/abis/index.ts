@@ -34,33 +34,60 @@ import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
 // ========== Re-export ABIs - Core System ==========
-export const RegistryABI = RegistryABIData;
-export const GTokenABI = GTokenABIData;
-export const GTokenStakingABI = GTokenStakingABIData;
-export const SuperPaymasterABI = SuperPaymasterABIData;
-export const PaymasterFactoryABI = PaymasterFactoryABIData;
+export const RegistryABI = RegistryABIData.abi;
+export const RegistryArtifact = RegistryABIData;
+
+export const GTokenABI = GTokenABIData.abi;
+export const GTokenArtifact = GTokenABIData;
+
+export const GTokenStakingABI = GTokenStakingABIData.abi;
+export const GTokenStakingArtifact = GTokenStakingABIData;
+
+export const SuperPaymasterABI = SuperPaymasterABIData.abi;
+export const SuperPaymasterArtifact = SuperPaymasterABIData;
+
+export const PaymasterFactoryABI = PaymasterFactoryABIData.abi;
+export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
 
 // Paymaster V4 (使用 Paymaster.json)
-export const PaymasterV4ABI = PaymasterABIData;
-export const PaymasterABI = PaymasterABIData;
+export const PaymasterV4ABI = PaymasterABIData.abi;
+export const PaymasterV4Artifact = PaymasterABIData;
+export const PaymasterABI = PaymasterABIData.abi;
+export const PaymasterArtifact = PaymasterABIData;
 
 // ========== AA Standard ==========
-export const EntryPointABI = EntryPointABIData;
-export const SimpleAccountABI = SimpleAccountABIData;
-export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData;
+export const EntryPointABI = EntryPointABIData.abi;
+export const EntryPointArtifact = EntryPointABIData;
+
+export const SimpleAccountABI = SimpleAccountABIData.abi;
+export const SimpleAccountArtifact = SimpleAccountABIData;
+
+export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData.abi;
+export const SimpleAccountFactoryArtifact = SimpleAccountFactoryABIData;
 
 // ========== Token System ==========
-export const xPNTsTokenABI = xPNTsTokenABIData;
-export const xPNTsFactoryABI = xPNTsFactoryABIData;
-export const MySBTABI = MySBTABIData;
+export const xPNTsTokenABI = xPNTsTokenABIData.abi;
+export const xPNTsTokenArtifact = xPNTsTokenABIData;
+
+export const xPNTsFactoryABI = xPNTsFactoryABIData.abi;
+export const xPNTsFactoryArtifact = xPNTsFactoryABIData;
+
+export const MySBTABI = MySBTABIData.abi;
+export const MySBTArtifact = MySBTABIData;
 
 // ========== Identity & Reputation ==========
-export const ReputationSystemABI = ReputationSystemABIData;
+export const ReputationSystemABI = ReputationSystemABIData.abi;
+export const ReputationSystemArtifact = ReputationSystemABIData;
 
 // ========== Monitoring System ==========
-export const DVTValidatorABI = DVTValidatorABIData;
-export const BLSAggregatorABI = BLSAggregatorABIData;
-export const BLSValidatorABI = BLSValidatorABIData;
+export const DVTValidatorABI = DVTValidatorABIData.abi;
+export const DVTValidatorArtifact = DVTValidatorABIData;
+
+export const BLSAggregatorABI = BLSAggregatorABIData.abi;
+export const BLSAggregatorArtifact = BLSAggregatorABIData;
+
+export const BLSValidatorABI = BLSValidatorABIData.abi;
+export const BLSValidatorArtifact = BLSValidatorABIData;
 
 
 

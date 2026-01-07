@@ -41,6 +41,20 @@ function printTable(title: string, data: any[]) {
 const FACTORY_ADDRESS = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985'; 
 
 async function main() {
+    // Helper to check and fund ETH
+    const checkAndFund = async (target: Address, minEth: string) => {
+        const bal = await publicClient.getBalance({ address: target });
+        if (bal < parseEther(minEth)) {
+            console.log(`   ⛽ Funding ${target} with ${minEth} ETH...`);
+            const hash = await supplierClient.sendTransaction({
+                to: target,
+                value: parseEther(minEth),
+                account: supplier
+            });
+            await publicClient.waitForTransactionReceipt({ hash });
+        }
+    };
+    
     // 1. Load Config & ENV
     const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1];
     if (!networkArg) {
@@ -534,15 +548,15 @@ async function main() {
     }
 
     // 5c. SuperPM Internal Credit (Anni's stake in SuperPM)
-    const anniOp = operators.find(o => o.name.includes('Anni'));
-    if (anniOp) {
-        const anniAddr = privateKeyToAccount(anniOp.key).address;
+    const anniOpForCredit = operators.find(o => o.name.includes('Anni'));
+    if (anniOpForCredit) {
+        const anniAddr = privateKeyToAccount(anniOpForCredit.key).address;
         let internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
         
         if (internalBal < parseEther('50000')) {
             console.log(`   🔄 Refilling SuperPaymaster Credit for Anni...`);
             const globalAPNTs = config.contracts.aPNTs;
-            const anniAcc = privateKeyToAccount(anniOp.key);
+            const anniAcc = privateKeyToAccount(anniOpForCredit.key);
             const anniClient = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
             
             try {
@@ -675,13 +689,87 @@ async function main() {
             opName: aa.opName
         }))
     };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2));
-    console.log(`   ✅ State Saved!`);
+    // 6. Verify Paymaster Token Support & Funding
+    console.log(`\n🪙 6. Verifying Paymaster Token Support & AA Funding...`);
+    const pmAbi = parseAbi([
+        'function getSupportedGasTokens() external view returns (address[])',
+        'function priceStalenessThreshold() external view returns (uint256)'
+    ]);
+    const erc20MintAbi = parseAbi([
+        'function mint(address to, uint256 amount) external',
+        'function balanceOf(address) external view returns (uint256)',
+        'function transfer(address to, uint256 amount) external returns (bool)'
+    ]);
 
-    console.log(`\n✅ L4 Setup Complete!`);
+    for (const [name, data] of Object.entries(communityMap)) {
+        if (!data.pmV4 || !data.aaAddr) continue;
+        
+        const pmContract = getContract({
+            address: data.pmV4,
+            abi: pmAbi,
+            client: publicClient
+        });
+        
+        try {
+            const tokens = await pmContract.read.getSupportedGasTokens() as Address[];
+            const staleness = await pmContract.read.priceStalenessThreshold().catch(() => 900n) as bigint;
+            console.log(`   🏦 ${name} Paymaster (${trimAddress(data.pmV4)})`);
+            console.log(`      - Staleness Threshold: ${staleness}s`);
+            console.log(`      - Supported Tokens: ${tokens.map(t => trimAddress(t)).join(', ')}`);
+            
+            if (tokens.length > 0) {
+                const token = tokens[0];
+                const tokenContract = getContract({ address: token, abi: erc20MintAbi, client: publicClient });
+                const balance = await tokenContract.read.balanceOf([data.aaAddr]) as bigint;
+                
+                console.log(`      👤 AA ${name} (${trimAddress(data.aaAddr)}) Balance: ${formatEther(balance)}`);
+                
+                if (balance < parseEther('10')) {
+                    console.log(`      ⚠️ Low Balance! Funding...`);
+                    // Try Mint first (if GToken or Test Token)
+                    try {
+                        const { request } = await publicClient.simulateContract({
+                            account: walletClient.account,
+                            address: token,
+                            abi: erc20MintAbi,
+                            functionName: 'mint',
+                            args: [data.aaAddr, parseEther('100')]
+                        });
+                        const mintHash = await walletClient.writeContract(request);
+                        await publicClient.waitForTransactionReceipt({ hash: mintHash });
+                        console.log(`      ✅ Minted 100 Tokens to AA`);
+                    } catch (e) {
+                         // Fallback to Transfer
+                         console.log(`      trying transfer...`);
+                         try {
+                             const { request } = await publicClient.simulateContract({
+                                 account: walletClient.account,
+                                 address: token,
+                                 abi: erc20MintAbi,
+                                 functionName: 'transfer',
+                                 args: [data.aaAddr, parseEther('10')]
+                             });
+                             const txHash = await walletClient.writeContract(request);
+                             await publicClient.waitForTransactionReceipt({ hash: txHash });
+                             console.log(`      ✅ Transferred 10 Tokens to AA`);
+                         } catch (err: any) {
+                             console.log(`      ❌ Funding Failed: ${err.message}`);
+                         }
+                    }
+                }
+            }
+        } catch (e: any) {
+            console.log(`   ❌ Failed to verify PM ${name}: ${e.message}`);
+        }
+    }
+
+    console.log(`   ✅ State Saved!`);
+    fs.writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2));
+    console.log(`\n✅ L4 Setup Verified Complete.\n`);
 }
 
-main().catch((e) => {
-    console.error(e);
+main().catch(err => {
+    console.error(err);
     process.exit(1);
 });
+
