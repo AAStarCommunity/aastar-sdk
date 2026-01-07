@@ -365,8 +365,23 @@ async function main() {
 
     // 4. Register Multi - Cross Join (Idempotent)
     console.log(`\n🤝 4. Registering AAs into Communities...`);
+    
     for (const aa of testAccounts) {
+        const client = createWalletClient({ account: aa.owner, chain: config.chain, transport: http(config.rpcUrl) });
+        
+        const userClient = new UserClient({
+            client, 
+            publicClient,
+            accountAddress: aa.address,
+            registryAddress: config.contracts.registry,
+            gTokenStakingAddress: config.contracts.gTokenStaking,
+            gTokenAddress: config.contracts.gToken,
+            sbtAddress: config.contracts.sbt,
+            entryPointAddress: config.contracts.entryPoint
+        });
+
         // Check if AA is already a community member (ENDUSER)
+        // Note: UserClient doesn't expose hasRole directly, using Registry Action
         const isMember = await registry(publicClient).hasRole({ 
             user: aa.address,
             roleId: ROLE_ENDUSER_ID
@@ -374,39 +389,54 @@ async function main() {
         
         if (!isMember) {
             console.log(`   📝 ${aa.label} joining as ENDUSER...`);
-            const client = createWalletClient({ account: aa.owner, chain: config.chain, transport: http(config.rpcUrl) });
             
-            // Refactor: Use UserClient for registration if possible, 
-            // but since it's an AA account, we need to call from the AA.
-            // For now, we keep the manual execute but use registry actions for roleId
-            const ROLE_ENDUSER = await registry(publicClient).ROLE_ENDUSER();
-            
-            const registerData = encodeFunctionData({
-                abi: RegistryABI,
-                functionName: 'registerRoleSelf', 
-                args: [ROLE_ENDUSER, '0x']
-            });
-            const executeData = encodeFunctionData({
-                abi: [{name:'execute', type:'function', inputs:[{type:'address'},{type:'uint256'},{type:'bytes'}], outputs:[], stateMutability:'nonpayable'}],
-                functionName: 'execute', args: [config.contracts.registry, 0n, registerData]
-            });
+            // Find operator to join
+            const op = operators.find(o => o.name === aa.opName);
+            if (!op) {
+                console.log(`      ⚠️ Operator not found for ${aa.label}`);
+                continue;
+            }
+            const opAddress = privateKeyToAccount(op.key).address;
+
             try {
-                const hash = await client.sendTransaction({ to: aa.address, data: executeData, account: aa.owner });
+                // Use SDK API: Handles Approve + Register
+                const hash = await userClient.registerAsEndUser(opAddress, parseEther('0.4'), { account: aa.owner });
                 await publicClient.waitForTransactionReceipt({ hash });
-            } catch(e:any) { }
+                console.log(`      ✅ Registered via SDK!`);
+            } catch(e:any) { 
+                console.log(`      ❌ Register Failed: ${e.message}`);
+                continue;
+            }
+
+            // Verify again
+            const isMemberNow = await registry(publicClient).hasRole({ user: aa.address, roleId: ROLE_ENDUSER_ID });
+            if (isMemberNow) {
+                 console.log(`      ✅ Verification Passed: ${aa.label} is ENDUSER`);
+            } else {
+                 console.log(`      ❌ Verification Failed: Role not granted`);
+            }
         } else {
-            console.log(`   ✓ ${aa.label} already an ENDUSER`);
         }
     }
 
 
-    // 5. Check Paymaster & Deposits (EntryPoint + Internal Credit)
+    // 5. Paymaster & Chainlink Setup
     console.log(`\n💳 5. Checking Paymaster Configuration...`);
     const pmStatus: any[] = [];
     const pmV4s = Object.values(communityMap).map(c => c.pmV4).filter(Boolean) as Address[];
     const superPM = config.contracts.superPaymaster;
     const epAddr = config.contracts.entryPoint;
     const regAddr = config.contracts.registry;
+
+    // Ensure Anni has ETH (SuperPaymaster owner)
+    const anniOp = operators.find(o => o.name.includes('Anni'));
+    if (anniOp) {
+        const balance = await publicClient.getBalance({ address: privateKeyToAccount(anniOp.key).address });
+        if (balance < parseEther('0.5')) {
+             console.log(`   ⛽ Funding ETH to Anni (SuperPM)...`);
+             await checkAndFund(privateKeyToAccount(anniOp.key).address, '0.5');
+        }
+    }
     
     // Default to v0.7
     const ep = entryPointActions(epAddr, EntryPointVersion.V07);
@@ -459,6 +489,31 @@ async function main() {
                     user: pmInfo.owner 
                 });
                 stakeVal = parseFloat(formatEther(stake)).toFixed(2);
+                
+                // 5b-2. Paymaster EntryPoint Stake Check (Critical for Storage Access)
+                // Use SDK getDepositInfo
+                const depositInfo = await ep(publicClient).getDepositInfo({ account: pm });
+                console.log(`      💰 Deposit: ${formatEther(depositInfo.deposit)} ETH | 🧱 Stake: ${formatEther(depositInfo.stake)} ETH (Staked: ${depositInfo.staked})`);
+
+                if (depositInfo.stake < parseEther('0.1')) {
+                    console.log(`   🧱 Staking 0.2 ETH for Paymaster ${pmInfo.operatorName} to allow storage access...`);
+                    // Call addStake(uint32 unstakeDelaySec) payable
+                    const ownerAcc = privateKeyToAccount(operators.find(o => o.name.includes(pmInfo.operatorName!))?.key!);
+                    const ownerClient = createWalletClient({ account: ownerAcc, chain: config.chain, transport: http(config.rpcUrl) });
+                    
+                    try {
+                        const h = await ownerClient.writeContract({
+                            address: pm,
+                            abi: [{name: 'addStake', type: 'function', inputs: [{type:'uint32'}], outputs: [], stateMutability: 'payable'}],
+                            functionName: 'addStake',
+                            args: [86400], // 1 day
+                            value: parseEther('0.2')
+                        });
+                        console.log(`      ⏳ Stake Tx Sent: ${h}`);
+                        await publicClient.waitForTransactionReceipt({hash:h});
+                        console.log(`      ✅ Staked.`);
+                    } catch(e:any) { console.log(`      ❌ Stake Failed: ${e.message}`); }
+                }
             } catch(e) { }
         }
 

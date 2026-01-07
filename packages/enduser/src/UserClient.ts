@@ -11,6 +11,7 @@ export interface UserClientConfig extends ClientConfig {
     superPaymasterAddress?: Address; // For sponsorship queries
     gTokenStakingAddress?: Address; // For staking/investing
     registryAddress?: Address; // For role management
+    gTokenAddress?: Address; // For fee payment approval
 }
 
 export class UserClient extends BaseClient {
@@ -19,6 +20,7 @@ export class UserClient extends BaseClient {
     public entryPointAddress?: Address;
     public gTokenStakingAddress?: Address;
     public registryAddress?: Address;
+    public gTokenAddress?: Address;
 
     constructor(config: UserClientConfig) {
         super(config);
@@ -27,6 +29,7 @@ export class UserClient extends BaseClient {
         this.entryPointAddress = config.entryPointAddress;
         this.gTokenStakingAddress = config.gTokenStakingAddress;
         this.registryAddress = config.registryAddress;
+        this.gTokenAddress = config.gTokenAddress;
     }
 
     // ========================================
@@ -219,6 +222,83 @@ export class UserClient extends BaseClient {
             community,
             account: options?.account
         });
+    }
+
+    /**
+     * Register as EndUser (One-click: Approve + Register)
+     * Handles GToken approval to Staking contract and Role registration.
+     */
+    async registerAsEndUser(communityAddress: Address, stakeAmount: bigint, options?: TransactionOptions): Promise<Hash> {
+        if (!this.registryAddress) throw new Error('Registry address required');
+        if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required');
+        if (!this.gTokenAddress) throw new Error('GToken address required');
+
+        const { encodeAbiParameters, keccak256, toBytes, parseEther } = await import('viem');
+        const ROLE_ENDUSER = keccak256(toBytes("ENDUSER"));
+        const registry = registryActions(this.registryAddress);
+        const tokens = tokenActions()(this.getStartPublicClient()); // Use public client for reading
+
+        // 1. Check Allowance
+        const allowance = await tokens.allowance({
+            token: this.gTokenAddress,
+            owner: this.accountAddress,
+            spender: this.gTokenStakingAddress
+        });
+
+        // 2. Approve if needed (Batch if possible, but executeBatch logic assumes we constructed calls manually?)
+        // UserClient.executeBatch takes arrays. Let's try to batch if possible.
+        // But wait, executeBatch returns Hash.
+        // If we want atomic, we should batch.
+        
+        const txs: { target: Address, value: bigint, data: Hex }[] = [];
+
+        if (allowance < stakeAmount) {
+             const approveData = encodeFunctionData({
+                 abi: [{name:'approve', type:'function', inputs:[{type:'address'},{type:'uint256'}], outputs:[{type:'bool'}], stateMutability:'nonpayable'}],
+                 functionName: 'approve',
+                 args: [this.gTokenStakingAddress, parseEther('1000')] // Safe high amount
+             });
+             txs.push({ target: this.gTokenAddress, value: 0n, data: approveData });
+        }
+
+        // 3. Construct Register Call
+        // struct EndUserRoleData { address account; address community; string avatarURI; string ensName; uint256 stakeAmount; }
+        const roleData = encodeAbiParameters(
+            [
+                { type: 'address', name: 'account' },
+                { type: 'address', name: 'community' },
+                { type: 'string', name: 'avatarURI' },
+                { type: 'string', name: 'ensName' },
+                { type: 'uint256', name: 'stakeAmount' }
+            ],
+            [
+                this.accountAddress, // account (Self)
+                communityAddress,    // community
+                '',                  // avatarURI
+                '',                  // ensName
+                stakeAmount          // stakeAmount
+            ]
+        );
+
+        const registerData = encodeFunctionData({
+            abi: [{ name: 'registerRoleSelf', type: 'function', inputs: [{type:'bytes32'}, {type:'bytes'}], outputs: [{type:'uint256'}], stateMutability: 'nonpayable' }],
+            functionName: 'registerRoleSelf',
+            args: [ROLE_ENDUSER, roleData]
+        });
+        
+        txs.push({ target: this.registryAddress, value: 0n, data: registerData });
+
+        // 4. Execute
+        if (txs.length === 1) {
+            return this.execute(txs[0].target, txs[0].value, txs[0].data, options);
+        } else {
+            return this.executeBatch(
+                txs.map(t => t.target), 
+                txs.map(t => t.value), 
+                txs.map(t => t.data), 
+                options
+            );
+        }
     }
 
     // ========================================

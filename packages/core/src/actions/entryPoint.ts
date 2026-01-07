@@ -9,6 +9,7 @@ export type EntryPointActions = {
     balanceOf: (args: { account: Address }) => Promise<bigint>;
     depositTo: (args: { account: Address, amount: bigint, txAccount?: Account | Address }) => Promise<Hash>;
     getNonce: (args: { sender: Address, key: bigint }) => Promise<bigint>;
+    getDepositInfo: (args: { account: Address }) => Promise<{ deposit: bigint, staked: boolean, stake: bigint, unstakeDelaySec: number, withdrawTime: number }>;
     version: EntryPointVersion;
 };
 
@@ -55,5 +56,34 @@ export const entryPointActions = (address: Address, version: EntryPointVersion =
                 args: [sender, key]
             }) as Promise<bigint>;
         }
+    },
+
+    async getDepositInfo({ account }) {
+        const result = await (client as PublicClient).readContract({
+            address,
+            abi: [{
+                name: 'getDepositInfo',
+                type: 'function',
+                inputs: [{ type: 'address', name: 'account' }],
+                outputs: [
+                    { type: 'uint112', name: 'deposit' },
+                    { type: 'bool', name: 'staked' },
+                    { type: 'uint112', name: 'stake' },
+                    { type: 'uint32', name: 'unstakeDelaySec' },
+                    { type: 'uint48', name: 'withdrawTime' }
+                ],
+                stateMutability: 'view'
+            }],
+            functionName: 'getDepositInfo',
+            args: [account]
+        }) as [bigint, boolean, bigint, number, number];
+
+        return {
+            deposit: result[0],
+            staked: result[1],
+            stake: result[2],
+            unstakeDelaySec: result[3],
+            withdrawTime: result[4]
+        };
     }
 });

@@ -11,7 +11,7 @@ import {
     type ScenarioParams,
     UserOperationBuilder // Ensure this is imported
 } from '../../packages/sdk/dist/index.js'; // Correct import source
-import { tokenActions } from '../../packages/core/dist/index.js';
+import { tokenActions, entryPointActions, EntryPointVersion } from '../../packages/core/dist/index.js';
 import { fileURLToPath } from 'url';
 
 // Load L4 State
@@ -183,7 +183,7 @@ export async function runGaslessTests(config: NetworkConfig) {
             label: '2. Gasless V4 (Jason Community - aPNTs)',
             expectedPayer: 'PaymasterV4 (Jason)',
             params: { 
-                tokenAddress: bobState.tokenAddress, 
+                tokenAddress: jasonState.tokenAddress, 
                 paymaster: jasonState.paymasterV4 
             }
         }
@@ -348,34 +348,58 @@ export async function runGaslessTests(config: NetworkConfig) {
                         console.log(`   💰 Deposited 0.1 ETH to New Paymaster`);
                     }
 
+                    // Ensure Paymaster Stake (Critical for accessing Oracle/Tokens)
+                    // Ensure Paymaster Stake (Critical for accessing Oracle/Tokens)
+                    try {
+                        const ep = entryPointActions(config.contracts.entryPoint, EntryPointVersion.V07)(publicClient);
+                        const depositInfo = await ep.getDepositInfo({ account: currentPM });
+                        const stakeVal = depositInfo.stake;
+                        
+                        // Check if stake is low (e.g. < 0.1 ETH)
+                        if (stakeVal < parseEther('0.1')) {
+                            console.log(`   🔸 Low Stake (${formatEther(stakeVal)}), Staking 0.2 ETH...`);
+                            const stakeHash = await chainClient.writeContract({
+                                address: currentPM,
+                                abi: [{name: 'addStake', type: 'function', inputs: [{type:'uint32'}], outputs: [], stateMutability: 'payable'}],
+                                functionName: 'addStake',
+                                args: [86400], // 1 day
+                                value: parseEther('0.2'),
+                                account: jasonAcc
+                            });
+                            await publicClient.waitForTransactionReceipt({ hash: stakeHash });
+                            console.log(`   ✅ Added 0.2 ETH Stake to Paymaster`);
+                        } else {
+                            console.log(`   ✅ Stake Sufficient: ${formatEther(stakeVal)} ETH (Staked: ${depositInfo.staked})`);
+                        }
+                    } catch (e: any) {
+                        console.log(`   ⚠️ Failed to check/add stake: ${e.message}`);
+                    }
+
                     // Ensure SBT Support
                     // We assume if I am owner, I can/need to add SBT if missing
                     try {
                         const supportedSBTs = await publicClient.readContract({
                             address: currentPM,
-                            abi: [{name: 'isSBTSupported', type: 'function', inputs: [{type:'address'}], outputs: [{type:'bool'}], stateMutability:'view'}], // Guessing function name or check array
-                            // Actually PaymasterV4 often has `supportedSBTs(uint256)` array.
-                            // Let's just TRY adding it. If it reverts with "Already Added" (unlikely) or valid, it's fine.
-                            // Or check `supportedSBTs` array length?
-                            // Safest: Just Add It.
-                            functionName: 'ignored', // skipping read
+                            abi: [{name: 'isSBTSupported', type: 'function', inputs: [{type:'address'}], outputs: [{type:'bool'}], stateMutability:'view'}],
+                            functionName: 'isSBTSupported',
+                            args: [config.contracts.sbt]
                         });
-                    } catch {}
-                    
-                    // Blindly Add SBT (Cost gas but safe)
-                    try {
-                        const sbtHash = await chainClient.writeContract({
-                            address: currentPM,
-                            abi: [{name: 'addSBT', type: 'function', inputs: [{type:'address'}], outputs: [], stateMutability: 'nonpayable'}],
-                            functionName: 'addSBT',
-                            args: [config.contracts.sbt],
-                            account: jasonAcc
-                        });
-                        await publicClient.waitForTransactionReceipt({ hash: sbtHash });
-                        console.log(`   ✅ Added SBT to Paymaster`);
-                    } catch (e: any) {
-                        // Ignore if already added (might revert)
-                        // console.log('   (SBT add skipped/failed)');
+                        if (!supportedSBTs) throw new Error("Not supported");
+                    } catch {
+                         // Blindly Add SBT
+                        try {
+                            const sbtHash = await chainClient.writeContract({
+                                address: currentPM,
+                                abi: [{name: 'addSBT', type: 'function', inputs: [{type:'address'}], outputs: [], stateMutability: 'nonpayable'}],
+                                functionName: 'addSBT',
+                                args: [config.contracts.sbt],
+                                account: jasonAcc
+                            });
+                            await publicClient.waitForTransactionReceipt({ hash: sbtHash });
+                            console.log(`   ✅ Added SBT to Paymaster`);
+                        } catch (e: any) {
+                            // Ignore
+                        }
                     }
 
                     // Ensure Token Support
