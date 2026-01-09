@@ -17,7 +17,7 @@ import * as fs from 'fs';
 // Anvil Default Private Key (Account #0)
 const ANVIL_DEFAULT_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
-type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
+export type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
 
 /**
  * Load contract addresses from SuperPaymaster deployments

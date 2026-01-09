@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.sepolia' });
 import * as fs from 'fs';
 import * as path from 'path';
-import { type Address, type Hash, type Hex, parseEther, formatEther, createWalletClient, http, createPublicClient, encodeFunctionData, keccak256, encodeAbiParameters, toHex, stringToBytes } from 'viem';
+import { type Address, type Hash, type Hex, parseEther, formatEther, createWalletClient, http, createPublicClient, encodeFunctionData, keccak256, encodeAbiParameters, toHex, stringToBytes, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig, type NetworkConfig } from './config';
 import { 
@@ -248,6 +248,22 @@ export async function runGaslessTests(config: NetworkConfig) {
         console.log(`🎬 EXEC: ${scene.label}`);
         console.log(`   Context: Jason_AA1 -> Bob (${formatEther(amount)} bPNTs)`);
         console.log(`   Payer: ${scene.expectedPayer}`);
+
+        // SBT Pre-check (AA33 Root Cause) - Added verification
+        if (scene.type === UserOpScenarioType.GASLESS_V4) {
+            const sbtBal = await publicClient.readContract({
+                address: config.contracts.sbt,
+                abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                functionName: 'balanceOf',
+                args: [targetAA.address]
+            }) as bigint;
+            console.log(`   🔍 Member SBT Balance: ${sbtBal.toString()}`);
+            if (sbtBal === 0n) {
+                console.error('   ❌ Error: sender missing required SBT membership for gasless tests.');
+                console.log('      Please run: pnpm tsx scripts/l4-setup.ts --network=sepolia first.');
+                process.exit(1);
+            }
+        }
         
         try {
             // A. Construction

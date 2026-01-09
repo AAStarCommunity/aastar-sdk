@@ -47,62 +47,9 @@ export async function runTransactionTests(config: NetworkConfig) {
     console.log(`    💰 Balance: ${formatEther(balance)} ETH`);
 
     if (balance === 0n) {
-        console.log(`    🔍 Debug: Supplier Configured? ${!!config.supplierAccount}`);
-        if (config.supplierAccount) {
-            console.log('\n    ⚠️  WARNING: No ETH balance on Sepolia.');
-            console.log('    ⛽ Auto-funding from Supplier Account...');
-            
-            const supplier = privateKeyToAccount(config.supplierAccount.privateKey);
-            const supplierClient = createWalletClient({
-                account: supplier,
-                chain: config.chain,
-                transport: http(config.rpcUrl)
-            });
-
-            try {
-                const fundingHash = await supplierClient.sendTransaction({
-                    to: account.address,
-                    value: parseEther('0.01'),
-                    account: supplier
-                });
-                
-                logEtherscan(fundingHash, 'Funding Transaction');
-                console.log('    ⏳ Waiting for funding confirmation...');
-                const receipt = await publicClient.waitForTransactionReceipt({ hash: fundingHash });
-                console.log(`    ✅ Funding Confirmed (Status: ${receipt.status}). Waiting for balance update...`);
-                
-                // Poll for balance update
-                let attempts = 0;
-                let newBalance = 0n;
-                while (attempts < 30) {
-                    newBalance = await publicClient.getBalance({ address: account.address });
-                    if (newBalance > 0n) break;
-                    await new Promise(r => setTimeout(r, 5000)); // Wait 5s
-                    process.stdout.write('.');
-                    attempts++;
-                }
-                console.log('\n');
-
-                if (newBalance === 0n) {
-                    throw new Error('Balance mismatch: Funds confirmed but balance is still 0. Possible node latency.');
-                }
-
-                console.log(`    💰 New Balance: ${formatEther(newBalance)} ETH`);
-                
-                const gasPrice = await publicClient.getGasPrice();
-                console.log(`    ⛽ Current Gas Price: ${formatEther(gasPrice, 'gwei')} gwei`);
-
-            } catch (error) {
-                console.log(`    ❌ Funding Failed: ${(error as Error).message}`);
-                console.log('    ⏭️  Skipping write tests due to lack of funds.\n');
-                return;
-            }
-        } else {
-            console.log('\n    ⚠️  WARNING: No ETH balance on Sepolia.');
-            console.log('    ⏭️  Skipping write tests. Please fund this address or configure PRIVATE_KEY_SUPPLIER.');
-            console.log('    Faucet: https://sepoliafaucet.com/\n');
-            return;
-        }
+        console.log(`    ⚠️  WARNING: No ETH balance for ${account.address}`);
+        console.log('    ⏭️  Skipping write tests. Please run l4-setup.ts first to fund this account.\n');
+        return;
     }
 
     // ========================================

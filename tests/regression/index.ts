@@ -57,10 +57,14 @@ async function main() {
     await runL2Tests(config);
     await runL3Tests(config);
     // Run L4 Transaction Tests (Writer)
-    await runTransactionTests(config);
-    
-    // Run L4 Gasless Verification
-    await runGaslessTests(config);
+    if (network !== 'anvil') {
+        await runTransactionTests(config);
+        
+        // Run L4 Gasless Verification
+        await runGaslessTests(config);
+    } else {
+        console.log('\n⏩ Skipping L4 Tests on Anvil (Account/UserOp logic skipped as requested)');
+    }
 
     console.log('═══════════════════════════════════════════════');
     console.log('✅ Test Suite Complete');

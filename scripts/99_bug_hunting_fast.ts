@@ -38,9 +38,9 @@ async function runBugHuntingTests() {
     const MOCK_CONTRACT_ADMIN = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as Address;
 
     // 4. Load ABIs
-    const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/Registry.json'), 'utf-8'));
-    const SuperPaymasterABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/SuperPaymaster.json'), 'utf-8'));
-    const PaymasterFactoryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/PaymasterFactory.json'), 'utf-8'));
+    const RegistryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/Registry.json'), 'utf-8')).abi;
+    const SuperPaymasterABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/SuperPaymaster.json'), 'utf-8')).abi;
+    const PaymasterFactoryABI = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../packages/core/src/abis/PaymasterFactory.json'), 'utf-8')).abi;
 
     // 5. Setup Clients
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
