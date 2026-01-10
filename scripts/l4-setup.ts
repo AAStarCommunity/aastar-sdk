@@ -617,6 +617,24 @@ async function main() {
         }
     }
 
+    // Summary output for step 4
+    console.log('\n   ✅ Registration Summary:');
+    let registeredCount = 0;
+    let skippedCount = 0;
+    for (const aa of testAccounts) {
+        const hasRole = await registry(publicClient).hasRole({
+            roleId: ROLE_ENDUSER_ID,
+            user: aa.address
+        });
+        if (hasRole) {
+            registeredCount++;
+            console.log(`      ✅ ${aa.label}: ENDUSER (SBT minted to AA)`);
+        } else {
+            skippedCount++;
+            console.log(`      ⏭️  ${aa.label}: Skipped`);
+        }
+    }
+    console.log(`\n   📊 Total: ${registeredCount} registered, ${skippedCount} skipped`);
 
     // 5. Paymaster & Chainlink Setup
     console.log(`\n💳 5. Checking Paymaster Configuration...`);
@@ -695,8 +713,24 @@ async function main() {
 
                 if (depositInfo.stake < parseEther('0.1')) {
                     console.log(`   🧱 Staking 0.2 ETH for Paymaster ${pmInfo.operatorName} to allow storage access...`);
-                    // Call addStake(uint32 unstakeDelaySec) payable
-                    const ownerAcc = privateKeyToAccount(operators.find(o => o.name.includes(pmInfo.operatorName!))?.key!);
+                    
+                    // Query the actual owner of the Paymaster contract
+                    const actualOwner = await publicClient.readContract({
+                        address: pm,
+                        abi: parseAbi(['function owner() view returns (address)']),
+                        functionName: 'owner'
+                    }) as Address;
+                    
+                    console.log(`      🔑 Paymaster Owner: ${actualOwner}`);
+                    
+                    // Find the operator account that matches the owner
+                    const ownerOp = operators.find(o => privateKeyToAccount(o.key).address.toLowerCase() === actualOwner.toLowerCase());
+                    if (!ownerOp) {
+                        console.log(`      ❌ Owner ${actualOwner} not found in operators list. Skipping stake.`);
+                        continue;
+                    }
+                    
+                    const ownerAcc = privateKeyToAccount(ownerOp.key);
                     const ownerClient = createWalletClient({ account: ownerAcc, chain: config.chain, transport: http(config.rpcUrl) });
                     
                     try {
