@@ -1,16 +1,13 @@
 #!/usr/bin/env ts-node
 import { loadNetworkConfig, validateConfig, type NetworkName } from './config';
-import { runL1Tests } from './l1-tests';
-import { runL2Tests } from './l2-tests';
-import { runL3Tests } from './l3-tests';
+import { runTransactionTests } from './l4-transactions';
+import { runGaslessTests } from './l4-gasless';
 
 /**
- * SDK Regression Test Runner
+ * L4 Regression Test Runner
  * 
  * Usage:
- *   pnpm test:regression --network=sepolia
- *   pnpm test:regression --network=anvil
- *   pnpm test:regression --network=op-sepolia
+ *   pnpm tsx tests/regression/l4-runner.ts --network=sepolia
  */
 
 async function main() {
@@ -20,13 +17,12 @@ async function main() {
     
     if (!networkArg) {
         console.error('❌ Missing --network argument');
-        console.log('\nUsage: pnpm test:regression --network=<network>');
-        console.log('Networks: anvil, sepolia, op-sepolia, op-mainnet, mainnet');
+        console.log('\nUsage: pnpm tsx tests/regression/l4-runner.ts --network=<network>');
         process.exit(1);
     }
 
     const network = networkArg.split('=')[1] as NetworkName;
-    const validNetworks: NetworkName[] = ['anvil', 'sepolia', 'op-sepolia', 'op-mainnet', 'mainnet'];
+    const validNetworks: NetworkName[] = ['sepolia', 'op-sepolia', 'op-mainnet', 'mainnet', 'anvil'];
     
     if (!validNetworks.includes(network)) {
         console.error(`❌ Invalid network: ${network}`);
@@ -35,33 +31,26 @@ async function main() {
     }
 
     console.log('═══════════════════════════════════════════════');
-    console.log('🧪 AAStar SDK Regression Test Suite');
+    console.log(`⛽ AAStar SDK L4 Gasless Verification (${network})`);
     console.log('═══════════════════════════════════════════════\n');
 
     // Load config
     const config = loadNetworkConfig(network);
     validateConfig(config);
 
-    // Display Contract Versions
-    const { displayContractVersions } = await import('./display-versions.js');
-    await displayContractVersions(config);
-
-    console.log('\n═══════════════════════════════════════════════');
-    console.log('Starting Test Suite...');
-    console.log('═══════════════════════════════════════════════');
-
-    // Run tests
-    await runL1Tests(config);
-    await runL2Tests(config);
-    await runL3Tests(config);
+    // Run L4 Transaction Tests (Writer)
+    await runTransactionTests(config);
+    
+    // Run L4 Gasless Verification
+    await runGaslessTests(config);
 
     console.log('═══════════════════════════════════════════════');
-    console.log('✅ Test Suite Complete');
+    console.log('✅ L4 Verification Complete');
     console.log('═══════════════════════════════════════════════\n');
 }
 
 main().catch((error) => {
-    console.error('\n❌ Test Suite Failed:');
+    console.error('\n❌ L4 Verification Failed:');
     console.error(error);
     process.exit(1);
 });

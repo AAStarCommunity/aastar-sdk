@@ -31,11 +31,18 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
     },
 
     async executeBatch({ dest, value, func, account }) {
+        // Zip arguments into Call[] struct format
+        const calls = dest.map((t, i) => ({
+            target: t,
+            value: value[i],
+            data: func[i]
+        }));
+        
         return (client as any).writeContract({
             address,
             abi: SimpleAccountABI,
             functionName: 'executeBatch',
-            args: [dest, value, func],
+            args: [calls],
             account: account as any,
             chain: (client as any).chain
         });

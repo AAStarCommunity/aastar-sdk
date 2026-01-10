@@ -1,7 +1,20 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { createPublicClient, createWalletClient, http, type Hex, parseEther, formatEther, type Address, encodeAbiParameters, parseAbiParameters, getContractAddress, encodeFunctionData } from 'viem';
+import { 
+    createPublicClient, 
+    createWalletClient, 
+    http, 
+    parseEther, 
+    formatEther, 
+    type Address, 
+    type Hex,
+    parseAbi,
+    type Hash,
+    getContract,
+    keccak256,
+    toBytes
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
 import { 

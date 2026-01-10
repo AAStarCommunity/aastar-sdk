@@ -174,10 +174,12 @@ export class PaymasterOperatorClient extends BaseClient {
         }
 
         // 2. Direct Deployment (PMV4-Hybrid)
-        // No legacy factory check. Always deploy new instance directly.
+        // No legacy factory check. Always deploy new instance directly via Factory.
         
-        console.log(`Deploying Paymaster PMV4-Hybrid-1.0.2 (Direct)...`);
-        
+        let deployHash: Hash;
+        let paymasterAddress: Address;
+
+        // Restore missing variables
         // const { parseEther } = await import('viem'); // Use top-level import
         const ownerAddr = typeof account === 'string' ? account : account.address;
         const treasuryAddr = ownerAddr;
@@ -185,34 +187,46 @@ export class PaymasterOperatorClient extends BaseClient {
         // Resolve xPNTs Factory
         const xpntsFactory = this.xpntsFactory !== '0x0000000000000000000000000000000000000000' 
             ? this.xpntsFactory 
-            : factoryAddr; // Fallback to provided factory address if available, or risk it.
-
-        let deployHash: Hash;
-        let paymasterAddress: Address;
+            : factoryAddr; 
 
         try {
-            deployHash = await this.client.deployContract({
+            // Encode initialize data
+            const { encodeFunctionData, parseEther } = await import('viem');
+            const initData = encodeFunctionData({
                 abi: PaymasterArtifact.abi,
-                bytecode: PaymasterArtifact.bytecode as Hash,
-                account: account,
+                functionName: 'initialize',
                 args: [
-                        '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7
-                        ownerAddr,
-                        treasuryAddr,
-                        this.ethUsdPriceFeed,
-                        200n, // serviceFeeRate (2%)
-                        parseEther('0.1'), // maxGasCostCap
-                        xpntsFactory,
-                        registryAddr,
-                        3600n // priceStalenessThreshold
+                    '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7
+                    ownerAddr,
+                    treasuryAddr,
+                    this.ethUsdPriceFeed,
+                    200n, // serviceFeeRate (2%)
+                    parseEther('0.1'), // maxGasCostCap
+                    0n, // minTokenBalance
+                    xpntsFactory,
+                    '0x0000000000000000000000000000000000000000', // initialGasToken
+                    3600n // priceStalenessThreshold
                 ]
+            });
+
+            console.log(`Using PaymasterFactory at ${factoryAddr} to deploy...`);
+            
+            // Use PaymasterFactory
+            deployHash = await factory(this.client).deployPaymaster({
+                owner: ownerAddr, // Required by action interface
+                version: params?.version, 
+                initData,
+                account
             });
             
             const receipt = await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: deployHash });
-            paymasterAddress = receipt.contractAddress!;
             
-            if (!paymasterAddress) {
-                throw new Error('Failed to retrieve Paymaster address after direct deployment');
+            // Fallback: Query factory for our paymaster
+            // Use getPaymaster action (which maps to paymasterByOperator in contract)
+            paymasterAddress = await factory(this.getStartPublicClient()).getPaymaster({ owner: ownerAddr });
+            
+            if (!paymasterAddress || paymasterAddress === '0x0000000000000000000000000000000000000000') {
+                 throw new Error('Failed to retrieve Paymaster address from Factory');
             }
 
             console.log('✅ Paymaster Deployed at:', paymasterAddress);
