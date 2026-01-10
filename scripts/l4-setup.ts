@@ -13,7 +13,9 @@ import {
     type Hash,
     getContract,
     keccak256,
-    toBytes
+    toBytes,
+    encodeFunctionData,
+    encodeAbiParameters
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
@@ -26,6 +28,7 @@ import {
     paymasterV4Actions,
     superPaymasterActions,
     entryPointActions,
+    accountActions,
     EntryPointVersion,
     RegistryABI
 } from '../packages/core/dist/index.js';
@@ -492,19 +495,96 @@ async function main() {
             const opAddress = privateKeyToAccount(op.key).address;
 
             try {
-                // Ensure AA has enough GToken for stake
-                const gtBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: aa.address });
-                if (gtBal < parseEther('0.4')) {
-                    console.log(`      🪙 Funding GToken for registration...`);
-                    const h = await gToken(supplierClient).mint({ token: config.contracts.gToken, to: aa.address, amount: parseEther('1'), account: supplier });
+                // Step 0: Check if already registered (Idempotency)
+                const hasRole = await registry(publicClient).hasRole({
+                    roleId: ROLE_ENDUSER_ID,
+                    user: aa.address,
+                    community: opAddress
+                });
+
+                if (hasRole) {
+                    console.log(`      ⏭️  Already registered as ENDUSER, skipping...`);
+                    continue;
+                }
+
+                // Step 1: Fund AA with GToken
+                const gtBal = await gToken(publicClient).balanceOf({ 
+                    token: config.contracts.gToken, 
+                    account: aa.address 
+                });
+                
+                if (gtBal < parseEther('0.5')) {
+                    console.log(`      🪙 Funding GToken to AA...`);
+                    const h = await gToken(supplierClient).mint({ 
+                        token: config.contracts.gToken, 
+                        to: aa.address, 
+                        amount: parseEther('1'), 
+                        account: supplier 
+                    });
                     await publicClient.waitForTransactionReceipt({hash:h});
                 }
 
-                // Use SDK API: Handles Approve + Register
-                // Registration as EndUser automatically handles staking + SBT minting in UserClient
-                const hash = await userClient.registerAsEndUser(opAddress, parseEther('0.4'), { account: aa.owner });
-                await publicClient.waitForTransactionReceipt({ hash });
-                console.log(`      ✅ Registered via SDK!`);
+                // Step 2: Approve GToken from AA to GTokenStaking
+                const ownerClient = createWalletClient({ 
+                    account: aa.owner, 
+                    chain: config.chain, 
+                    transport: http(config.rpcUrl) 
+                });
+
+                const allowance = await gToken(publicClient).allowance({
+                    token: config.contracts.gToken,
+                    owner: aa.address,
+                    spender: config.contracts.gTokenStaking
+                });
+
+                if (allowance < parseEther('0.5')) {
+                    console.log(`      ✅ Approving GToken from AA...`);
+                    // AA account approves GToken to GTokenStaking via owner-signed execute
+                    const accountClient = accountActions(aa.address);
+                    const approveData = encodeFunctionData({
+                        abi: parseAbi(['function approve(address spender, uint256 amount) returns (bool)']),
+                        functionName: 'approve',
+                        args: [config.contracts.gTokenStaking, parseEther('1000')]
+                    });
+                    
+                    const approveHash = await accountClient(ownerClient).execute({
+                        dest: config.contracts.gToken,
+                        value: 0n,
+                        func: approveData,
+                        account: aa.owner
+                    });
+                    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                }
+
+                // Step 3: Register as EndUser using L1 Core Action
+                const roleData = encodeAbiParameters(
+                    [
+                        { type: 'address', name: 'account' },
+                        { type: 'address', name: 'community' },
+                        { type: 'string', name: 'avatarURI' },
+                        { type: 'string', name: 'ensName' },
+                        { type: 'uint256', name: 'stakeAmount' }
+                    ],
+                    [
+                        aa.address,      // AA account address
+                        opAddress,       // community
+                        '',              // avatarURI
+                        '',              // ensName
+                        parseEther('0.4') // stakeAmount
+                    ]
+                );
+
+                console.log(`      📝 Registering ${aa.address} as ENDUSER via owner...`);
+                // Use L1 Core Action: registry.registerRole from owner
+                // This will transfer GToken from AA address (payer = user in Registry.sol:204)
+                const registerHash = await registry(ownerClient).registerRole({
+                    roleId: ROLE_ENDUSER_ID,
+                    user: aa.address,
+                    data: roleData,
+                    account: aa.owner
+                });
+                await publicClient.waitForTransactionReceipt({ hash: registerHash });
+                console.log(`      ✅ Registered via L1 Core Action!`);
             } catch(e:any) { 
                 console.log(`      ❌ Register Failed: ${e.message}`);
                 continue;

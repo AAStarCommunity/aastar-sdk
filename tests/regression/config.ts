@@ -20,33 +20,45 @@ const ANVIL_DEFAULT_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae7
 export type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
 
 /**
- * Load contract addresses from SuperPaymaster deployments
+ * Load contract addresses from config files
+ * Priority: SDK root config.{network}.json > SuperPaymaster deployments > .env
  */
 function loadDeployments(network: NetworkName): Record<string, Address> {
+    // Priority 1: SDK root config.{network}.json
+    const sdkConfigPath = path.resolve(process.cwd(), `config.${network}.json`);
+    
+    if (fs.existsSync(sdkConfigPath)) {
+        try {
+            const config = JSON.parse(fs.readFileSync(sdkConfigPath, 'utf8'));
+            console.log(`✅ Loaded contract addresses from: ${sdkConfigPath}`);
+            console.log(`   Keys found: ${Object.keys(config).join(', ')}`);
+            return config as Record<string, Address>;
+        } catch (error) {
+            console.warn(`⚠️  Failed to parse SDK config: ${error}`);
+        }
+    }
+    
+    // Priority 2: SuperPaymaster deployments (fallback)
     const SUPERPAYMASTER_ROOT = path.resolve(process.cwd(), '../SuperPaymaster');
     const deploymentsPath = path.join(SUPERPAYMASTER_ROOT, `deployments/config.${network}.json`);
     
-    if (!fs.existsSync(deploymentsPath)) {
-        console.warn(`⚠️  Deployments file not found: ${deploymentsPath}`);
-        console.warn(`   Using fallback addresses from .env`);
-        return {};
+    if (fs.existsSync(deploymentsPath)) {
+        try {
+            const deployments = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
+            console.log(`✅ Loaded contract addresses from: ${deploymentsPath} (fallback)`);
+            console.log(`   Keys found: ${Object.keys(deployments).join(', ')}`);
+            return deployments as Record<string, Address>;
+        } catch (error) {
+            console.warn(`⚠️  Failed to parse SuperPaymaster deployments: ${error}`);
+        }
     }
     
-    try {
-        const deployments = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
-        console.log(`✅ Loaded contract addresses from: ${deploymentsPath}`);
-        console.log(`   Keys found: ${Object.keys(deployments).join(', ')}`);
-        // Check xPNTsFactory specifically
-        if ('xPNTsFactory' in deployments) {
-            console.log(`   🎯 xPNTsFactory in JSON: ${deployments['xPNTsFactory']}`);
-        } else {
-            console.error(`   ❌ xPNTsFactory NOT found in JSON keys!`);
-        }
-        return deployments as Record<string, Address>;
-    } catch (error) {
-        console.error(`❌ Failed to load deployments: ${error}`);
-        return {};
-    }
+    // Priority 3: .env (final fallback)
+    console.warn(`⚠️  No config files found for network: ${network}`);
+    console.warn(`   Checked: ${sdkConfigPath}`);
+    console.warn(`   Checked: ${deploymentsPath}`);
+    console.warn(`   Using addresses from .env`);
+    return {};
 }
 
 export interface ContractAddresses {
