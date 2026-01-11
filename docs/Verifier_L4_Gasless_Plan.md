@@ -132,7 +132,7 @@ xPNTsFactory合约初始化会设置SuperPaymaster内置为超级账户，可以
 以下规则在aastar-sdk 项目生效
 第一，禁止创建便利性的脚本或者临时性的脚本用来什么检查余额、部署token、资助账户，这些都禁止，如果需要便利性脚本，参考第二条
 第二，所有过程必须使用使用我们的API，我们API有L1L2L3级别的API，都封装了基础能力，你为什么不用API，需要便利性脚本了，在test，utils模块下新增工具api，转化为可重复使用的api，为全回归测试做准备
-。第三个，禁止产生任何编译的过程文件，产生后马上清理这些过程文件，你如果需要运行ts，使用npx tsx来运行，禁止编译。
+第三个，禁止产生任何编译的过程文件（如 .js, .d.ts, .map）。如果运行 ts 脚本，**必须使用 `npx tsx` 直接运行**，**绝不执行 `tsc` 或其他会产生文件的编译命令**。如果不慎产生，必须随后立即清理。
 第四，所有的环境变量配置，在根目录的.env.sepolia（不同网络，不同配置名称，例如.env.anvil, .env.op-sepolia, .env.mainnet，目前我们重点是在sepolia跑通全回归测试）。
 第五，全回归测试必须包含三个阶段，必须一步步完成，禁止未完成第一阶段，进入第二阶段，以此类推。
 其中，第一阶段，定义为合约环境检查，第二阶段，定义为初始化账户（EOA和AA）、社区、token、paymaster和superpaymaster，第三阶段，准备forge script dry run测试useroperation是否合格，然后测试和fix，完成gasless测试。

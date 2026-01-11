@@ -222,7 +222,8 @@ async function main() {
                  console.log(`   ⛽ Deploying Paymaster V4 for ${op.name}...`);
                  try {
                      const res = await operatorSdk.deployAndRegisterPaymasterV4({ 
-                         stakeAmount: parseEther('30') 
+                         stakeAmount: parseEther('30'),
+                         version: 'v4.0.2' 
                      });
                      pAddr = res.paymasterAddress;
                      pmV4 = pAddr;
@@ -238,7 +239,8 @@ async function main() {
                     if (!hasRole) {
                         console.log(`   📝 Registering Paymaster V4 Role for ${op.name}...`);
                         await operatorSdk.deployAndRegisterPaymasterV4({
-                            stakeAmount: parseEther('30')
+                            stakeAmount: parseEther('30'),
+                            version: 'v4.0.2'
                         });
                     }
                 } catch(e:any) { console.log(`      ⚠️ PM Role Check/Reg Failed: ${e.message}`); }

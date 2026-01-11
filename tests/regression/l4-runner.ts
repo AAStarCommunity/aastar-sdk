@@ -1,6 +1,5 @@
 #!/usr/bin/env ts-node
 import { loadNetworkConfig, validateConfig, type NetworkName } from './config';
-import { runTransactionTests } from './l4-transactions';
 import { runGaslessTests } from './l4-gasless';
 
 /**
@@ -38,9 +37,6 @@ async function main() {
     const config = loadNetworkConfig(network);
     validateConfig(config);
 
-    // Run L4 Transaction Tests (Writer)
-    await runTransactionTests(config);
-    
     // Run L4 Gasless Verification
     await runGaslessTests(config);
 

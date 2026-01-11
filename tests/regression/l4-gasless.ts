@@ -298,7 +298,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                 }
             }
 
-            const { userOp, opHash } = await UserOpScenarioBuilder.buildTransferScenario(scene.type, {
+            let { userOp, opHash } = await UserOpScenarioBuilder.buildTransferScenario(scene.type, {
                 sender: targetAA.address,
                 ownerAccount: jasonAcc, // Jason signs for his AA
                 recipient: recipient,
@@ -783,14 +783,35 @@ export async function runGaslessTests(config: NetworkConfig) {
                 // Pack Account Limits
                 adjustedOp.accountGasLimits = packAccount(newVerification, newCall);
                 
-                // For GASLESS_V4, also adjust Paymaster Limits (curr 300k -> 100k)
+                // For GASLESS_V4, also adjust Paymaster Limits (curr 300k -> 200k)
                 if (scene.type === UserOpScenarioType.GASLESS_V4) {
                     const pm = scene.params.paymaster!;
-                    const pmVerif = BigInt(100000); // 100k
+                    const pmVerif = BigInt(200000); // 200k (Increased to strict rule out OOG)
                     const pmPost = BigInt(50000);   // 50k
                     adjustedOp.paymasterAndData = packPM(pm, pmVerif, pmPost, '0x');
                 }
-                
+
+                // --- 2x Gas Boost (User Request) ---
+                console.log(`   ⛽ Boosting Gas (2x)...`);
+                const currentGasFees = BigInt(adjustedOp.gasFees);
+                const maxPriority = currentGasFees & BigInt("0xffffffffffffffffffffffffffffffff");
+                const maxFee = currentGasFees >> 128n;
+
+                // Ensure minimums (Sepolia defaults)
+                const minPriority = BigInt(2000000000); // 2 gwei min priority
+                const targetPriority = (maxPriority * 2n) > minPriority ? (maxPriority * 2n) : minPriority;
+                const targetMaxFee = (maxFee * 2n) > (targetPriority + minPriority) ? (maxFee * 2n) : (targetPriority + minPriority + BigInt(2000000000));
+
+                const packGasFees = (prio: bigint, max: bigint): Hex => {
+                    return ('0x' + 
+                        max.toString(16).padStart(32, '0') + 
+                        prio.toString(16).padStart(32, '0')
+                    ) as Hex;
+                };
+                adjustedOp.gasFees = packGasFees(targetPriority, targetMaxFee);
+                console.log(`      Old: ${formatEther(maxFee)} / ${formatEther(maxPriority)}`);
+                console.log(`      New: ${formatEther(targetMaxFee)} / ${formatEther(targetPriority)}`);
+
                 // Re-calculate Hash
                 const newHash = await UserOperationBuilder.getUserOpHash({
                     userOp: adjustedOp, 
@@ -798,6 +819,8 @@ export async function runGaslessTests(config: NetworkConfig) {
                     chainId: config.chain.id,
                     publicClient
                 });
+                opHash = newHash; // Correctly update for polling
+                console.log(`   🔑 New Hash: ${opHash}`);
                 // Re-sign
                 const newSig = await jasonAcc.signMessage({ message: { raw: newHash } }); // ECDSA sign
                 adjustedOp.signature = newSig;
@@ -848,6 +871,13 @@ export async function runGaslessTests(config: NetworkConfig) {
                     if (receipt.success) {
                         console.log(`   🎉 SUCCESS! Receipt found in block ${receipt.receipt.blockNumber}`);
                         console.log(`      ⛽ Actual Gas Cost: ${receipt.actualGasCost}`);
+                        
+                        // Log to file for easy reference
+                        const logDir = path.resolve(__dirname, '../../tests/regression/logs');
+                        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+                        fs.appendFileSync(path.join(logDir, 'l4-transaction.log'), `[${new Date().toISOString()}] SUCCESS | Op: ${opHash} | Tx: ${receipt.receipt.transactionHash} | Gas: ${receipt.actualGasCost}\n`);
+                        console.log(`      📝 Logged to tests/regression/logs/l4-transaction.log`);
+
                     } else {
                         console.log(`   ❌ REVERTED on-chain!`);
                         console.log(`      Reason: ${receipt.reason || 'Unknown'}`);
