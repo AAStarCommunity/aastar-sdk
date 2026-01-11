@@ -78,14 +78,16 @@ export class UserOpScenarioBuilder {
         if (type === UserOpScenarioType.NATIVE) {
             userOp.paymasterAndData = '0x';
         } else if (type === UserOpScenarioType.GASLESS_V4) {
-             if (!paymaster) throw new Error('Paymaster address required for GASLESS_V4');
-             if (!tokenAddress) throw new Error('Token address required for GASLESS_V4 (Deposit-Only model)');
+             if (!paymasterV4Proxy) throw new Error('paymasterV4Proxy address required for GASLESS_V4');
+             if (!dPNTs) throw new Error('dPNTs address required for GASLESS_V4 (Deposit-Only model)');
              // PaymasterV4 Deposit-Only Model: includes payment token address
              userOp.paymasterAndData = UserOperationBuilder.packPaymasterV4DepositData(
-                paymaster,
-                paymasterGasLimit,
-                paymasterPostOpGasLimit,
-                tokenAddress // Payment token for Deposit-Only model
+                paymasterV4Proxy,
+                paymasterGasLimit, // paymasterVerificationGasLimit
+                paymasterPostOpGasLimit, // paymasterPostOpGasLimit
+                validUntil,
+                validAfter,
+                dPNTs // Payment token for Deposit-Only model
              );
         } else if (type.startsWith('SUPER_')) {
             if (!paymaster || !operator) throw new Error('Paymaster and Operator required for SuperPM scenarios');

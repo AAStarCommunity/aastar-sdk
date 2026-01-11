@@ -223,7 +223,7 @@ async function main() {
                  try {
                      const res = await operatorSdk.deployAndRegisterPaymasterV4({ 
                          stakeAmount: parseEther('30'),
-                         version: 'v4.0.2' 
+                         version: 'v4.2' 
                      });
                      pAddr = res.paymasterAddress;
                      pmV4 = pAddr;
@@ -240,7 +240,7 @@ async function main() {
                         console.log(`   📝 Registering Paymaster V4 Role for ${op.name}...`);
                         await operatorSdk.deployAndRegisterPaymasterV4({
                             stakeAmount: parseEther('30'),
-                            version: 'v4.0.2'
+                            version: 'v4.2'
                         });
                     }
                 } catch(e:any) { console.log(`      ⚠️ PM Role Check/Reg Failed: ${e.message}`); }
@@ -780,23 +780,68 @@ async function main() {
             const anniClient = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
             
             try {
-                const anniApntsBal = await tokenActions()(publicClient).balanceOf({ token: globalAPNTs, account: anniAddr });
+                // Verify SuperPaymaster's expected APNTs token
+                const spExpectedToken = await superPaymasterActions(superPM)(publicClient).APNTS_TOKEN();
+                console.log(`      ℹ️ SuperPM expects Token: ${spExpectedToken}, Using: ${globalAPNTs}`);
+                
+                if (spExpectedToken.toLowerCase() !== globalAPNTs.toLowerCase()) {
+                    console.log(`      ⚠️ Token Mismatch! Switching to use ${spExpectedToken}...`);
+                     // If mismatch, we must use what SP expects, but we might not have balance there?
+                     // Assuming globalAPNTs (from config) should be correct. If not, config is wrong.
+                }
+
+                const checkToken = spExpectedToken;
+                const anniApntsBal = await tokenActions()(publicClient).balanceOf({ token: checkToken, account: anniAddr });
                 const requiredForDeposit = parseEther('60000');
+                
                 if (anniApntsBal < requiredForDeposit) {
+                    console.log(`      💸 Minting ${formatEther(requiredForDeposit - anniApntsBal)} of ${checkToken} to Anni...`);
                     const mintAmount = requiredForDeposit - anniApntsBal;
                     const mintHash = await tokenActions()(supplierClient).mint({
-                        token: globalAPNTs, to: anniAddr, amount: mintAmount, account: supplier
+                        token: checkToken, to: anniAddr, amount: mintAmount, account: supplier
                     });
                     await publicClient.waitForTransactionReceipt({ hash: mintHash });
                 }
                 
-                const currentAllowance = await tokenActions()(publicClient).allowance({ token: globalAPNTs, owner: anniAddr, spender: superPM });
-                if (currentAllowance < parseEther('50000')) {
-                    const approveHash = await tokenActions()(anniClient).approve({ token: globalAPNTs, spender: superPM, amount: parseEther('100000'), account: anniAcc });
+                
+                // Check and set spending limit for SuperPaymaster
+                // xPNTsToken has a default limit of 5000 aPNTs, we need to increase it
+                console.log(`      🔧 Setting spending limit for SuperPM to 100,000...`);
+                const setLimitHash = await (publicClient as any).writeContract({
+                    address: checkToken,
+                    abi: [{
+                        "type": "function",
+                        "name": "setPaymasterLimit",
+                        "inputs": [
+                            {"name": "spender", "type": "address"},
+                            {"name": "limit", "type": "uint256"}
+                        ],
+                        "outputs": [],
+                        "stateMutability": "nonpayable"
+                    }],
+                    functionName: 'setPaymasterLimit',
+                    args: [superPM, parseEther('100000')],
+                    account: anniAcc,
+                    chain: config.chain
+                });
+                await publicClient.waitForTransactionReceipt({ hash: setLimitHash });
+                
+                const currentAllowance = await tokenActions()(publicClient).allowance({ token: checkToken, owner: anniAddr, spender: superPM });
+                const depositAmount = parseEther('50000');
+
+                if (currentAllowance < depositAmount) {
+                    console.log(`      📝 Approving SuperPM to spend ${formatEther(depositAmount)}...`);
+                    const approveHash = await tokenActions()(anniClient).approve({ token: checkToken, spender: superPM, amount: parseEther('100000'), account: anniAcc });
                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                    
+                    // Double check allowance
+                    const newAllowance = await tokenActions()(publicClient).allowance({ token: checkToken, owner: anniAddr, spender: superPM });
+                    console.log(`      ✅ New Allowance: ${formatEther(newAllowance)}`);
                 }
                 
-                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: parseEther('50000'), account: anniAcc });
+                console.log(`      🔄 Depositing 50,000 into SuperPM...`);
+                // Use explicit depositAPNTs which maps to deposit(uint256)
+                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: depositAmount, account: anniAcc });
                 await publicClient.waitForTransactionReceipt({ hash: depositHash });
                 
                 internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });

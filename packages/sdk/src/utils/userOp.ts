@@ -67,26 +67,31 @@ export class UserOperationBuilder {
     }
 
     /**
-     * Packs PaymasterV4 Deposit-Only Model parameters.
-     * Format: [paymaster(20)][paymasterVerificationGasLimit(16)][paymasterPostOpGasLimit(16)][validUntil(6)][validAfter(6)][token(20)]
-     * Note: The contract expects token at offset 52, which means:
-     * - paymaster: 20 bytes (0-20)
-     * - paymasterVerificationGasLimit: 16 bytes (20-36)
-     * - paymasterPostOpGasLimit: 16 bytes (36-52)
-     * - token: 20 bytes (52-72)
+     * Pack PaymasterV4 Deposit-Only paymasterAndData
+     * 
+     * v0.7 EntryPoint packs: [paymaster(20)][verificationGas(16)][postOpGas(16)][paymasterData]
+     * Contract extracts token at offset 52 = paymasterData[0:20]
+     * 
+     * So paymasterData format must be: [token(20)][validUntil(6)][validAfter(6)]
+     * 
+     * @param paymaster - Paymaster address (20 bytes)
+     * @param paymentToken - ERC20 token address (20 bytes, FIRST in paymasterData!)
+     * @param validUntil - Validity end timestamp (6 bytes)
+     * @param validAfter - Validity start timestamp (6 bytes)
      */
     static packPaymasterV4DepositData(
         paymaster: Address,
-        paymasterGasLimit: bigint,
-        paymasterPostOpGasLimit: bigint,
-        paymentToken: Address
+        paymentToken: Address,
+        validUntil: bigint,
+        validAfter: bigint
     ): Hex {
-        return concat([
-            paymaster,
-            pad(`0x${paymasterGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
-            pad(`0x${paymasterPostOpGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
-            paymentToken
-        ]) as Hex;
+        const paymasterHex = paymaster.slice(2); // 20 bytes
+        const tokenHex = paymentToken.slice(2); // 20 bytes - FIRST!
+        const validUntilHex = validUntil.toString(16).padStart(12, '0'); // 6 bytes
+        const validAfterHex = validAfter.toString(16).padStart(12, '0'); // 6 bytes
+        
+        // Format: [paymaster][token][validUntil][validAfter]
+        return ('0x' + paymasterHex + tokenHex + validUntilHex + validAfterHex) as Hex;
     }
 
     /**
@@ -183,10 +188,16 @@ export class UserOperationBuilder {
     }
 
     /**
-     * Converts a PackedUserOperation to the Alchemy-specific v0.7 JSON format
-     * which uses unpacked fields (legacy-style names) instead of packed bytes.
+     * Converts a PackedUserOperation to the Alchemy-specific v0.7 JSON format.
+     * @param userOp - The packed UserOperation
+     * @param options - Optional configuration
+     * @param options.paymasterVerificationGasLimit - Gas limit for paymaster verification (default: 200000)
+     * @param options.paymasterPostOpGasLimit - Gas limit for paymaster postOp (default: 200000)
      */
-    static toAlchemyUserOperation(userOp: any): any {
+    static toAlchemyUserOperation(userOp: any, options?: {
+        paymasterVerificationGasLimit?: bigint;
+        paymasterPostOpGasLimit?: bigint;
+    }): any {
         const result: any = {
             sender: userOp.sender,
             nonce: userOp.nonce,
@@ -194,11 +205,9 @@ export class UserOperationBuilder {
             signature: userOp.signature
         };
 
-        // 1. Unpack accountGasLimits
-        // bytes32 = [16 bytes verificationGasLimit][16 bytes callGasLimit]
+        // 1. Unpack accountGasLimits: [verificationGasLimit(16)][callGasLimit(16)]
         if (userOp.accountGasLimits && userOp.accountGasLimits !== '0x') {
             const val = userOp.accountGasLimits.toString().startsWith('0x') ? userOp.accountGasLimits.slice(2) : userOp.accountGasLimits;
-            // Pad to 64 chars
             const padded = val.padStart(64, '0');
             const verificationGasLimit = BigInt('0x' + padded.slice(0, 32));
             const callGasLimit = BigInt('0x' + padded.slice(32, 64));
@@ -207,8 +216,7 @@ export class UserOperationBuilder {
             result.callGasLimit = `0x${callGasLimit.toString(16)}`;
         }
 
-        // 2. Unpack gasFees
-        // bytes32 = [16 bytes maxPriorityFee][16 bytes maxFee]
+        // 2. Unpack gasFees: [maxPriorityFee(16)][maxFee(16)]
         if (userOp.gasFees && userOp.gasFees !== '0x') {
              const val = userOp.gasFees.toString().startsWith('0x') ? userOp.gasFees.slice(2) : userOp.gasFees;
              const padded = val.padStart(64, '0');
@@ -227,38 +235,32 @@ export class UserOperationBuilder {
         // 4. Unpack initCode -> factory + factoryData
         if (userOp.initCode && userOp.initCode !== '0x') {
             const initCode = userOp.initCode.toString();
-            // Factory is first 20 bytes (40 hex chars) + 0x = 42 chars
-            result.factory = initCode.slice(0, 42);
+            result.factory = initCode.slice(0, 42); // First 20 bytes
             result.factoryData = '0x' + initCode.slice(42);
         }
 
-        // 5. Unpack paymasterAndData -> paymaster + vars
-        // Packed: [20 bytes paymaster][16 bytes gasLimit][16 bytes postOpGasLimit][paymasterData]
+        // 5. Unpack paymasterAndData -> paymaster + gas limits + paymasterData
+        // Full format: [paymaster(20)][verificationGas(16)][postOpGas(16)][paymasterData]
+        // paymasterData = [token(20)][validUntil(6)][validAfter(6)] = 32 bytes
         if (userOp.paymasterAndData && userOp.paymasterAndData !== '0x') {
             const pmd = userOp.paymasterAndData.toString().startsWith('0x') ? userOp.paymasterAndData.slice(2) : userOp.paymasterAndData;
-            // Need at least 20 bytes (40 chars)
-            if (pmd.length >= 40) {
+            
+            // Check if we have full format with gas limits (at least 20+16+16 = 52 bytes = 104 hex chars)
+            if (pmd.length >= 104) {
+                // Full v0.7 packed format
+                result.paymaster = '0x' + pmd.slice(0, 40); // bytes 0-19 (20 bytes)
+                const vGas = BigInt('0x' + pmd.slice(40, 72)); // bytes 20-35 (16 bytes)
+                const pGas = BigInt('0x' + pmd.slice(72, 104)); // bytes 36-51 (16 bytes)
+                result.paymasterVerificationGasLimit = `0x${vGas.toString(16)}`;
+                result.paymasterPostOpGasLimit = `0x${pGas.toString(16)}`;
+                result.paymasterData = '0x' + pmd.slice(104); // bytes 52+ (token + timestamps)
+            } else if (pmd.length >= 40) {
+                // Fallback: assume 52-byte format without gas limits (old format)
                 result.paymaster = '0x' + pmd.slice(0, 40);
-                
-                // v0.7 spec: paymasterAndData IS packed.
-                // But Alchemy wants unpacked.
-                // [20 bytes paymaster]
-                // [16 bytes paymasterVerificationGasLimit]
-                // [16 bytes paymasterPostOpGasLimit]
-                // [paymasterData]
-                
-                if (pmd.length >= 40 + 32 + 32) {
-                     const pvgl = BigInt('0x' + pmd.slice(40, 72));
-                     const ppogl = BigInt('0x' + pmd.slice(72, 104));
-                     result.paymasterVerificationGasLimit = `0x${pvgl.toString(16)}`;
-                     result.paymasterPostOpGasLimit = `0x${ppogl.toString(16)}`;
-                     result.paymasterData = '0x' + pmd.slice(104);
-                } else {
-                    // Fallback if not fully 0.7 packed? (Should typically be)
-                    // If native payment, pmd is 0x.
-                    // If just paymaster (v0.6 style?), length might be just 40 chars.
-                    result.paymasterData = '0x';
-                }
+                result.paymasterData = '0x' + pmd.slice(40);
+                const defaultGasLimit = 200000n;
+                result.paymasterVerificationGasLimit = `0x${(options?.paymasterVerificationGasLimit || defaultGasLimit).toString(16)}`;
+                result.paymasterPostOpGasLimit = `0x${(options?.paymasterPostOpGasLimit || defaultGasLimit).toString(16)}`;
             }
         }
 

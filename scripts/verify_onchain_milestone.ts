@@ -53,13 +53,32 @@ async function verify() {
     console.log(`\n[AAStar Community] (Expected Owner: ${jason})\n`);
     const addrByName = await client.readContract({ address: config.registry, abi: RegistryABI, functionName: 'communityByName', args: ['AAStar'] });
     const hasCommRole = await client.readContract({ address: config.registry, abi: RegistryABI, functionName: 'hasRole', args: [ROLE_COMMUNITY, jason] });
+    // Check if Jason has AOA role (V4)
+    const ROLE_PAYMASTER_AOA = parseAbi(['function ROLE_PAYMASTER_AOA() view returns (bytes32)']);
+    const aoaRoleHash = await client.readContract({ address: config.registry, abi: ROLE_PAYMASTER_AOA, functionName: 'ROLE_PAYMASTER_AOA' });
+    const hasAOARole = await client.readContract({ address: config.registry, abi: RegistryABI, functionName: 'hasRole', args: [aoaRoleHash, jason] });
+    
     const opConfig = await client.readContract({ address: config.superPaymaster, abi: SuperPaymasterABI, functionName: 'operators', args: [jason] });
 
     console.log(`Registered Address: ${addrByName} ${addrByName === jason ? '✅' : '❌'}`);
     console.log(`Has COMMUNITY Role: ${hasCommRole} ${hasCommRole ? '✅' : '❌'}`);
-    console.log(`SuperPaymaster Configured: ${opConfig[2]} ${opConfig[2] ? '✅' : '❌'}`);
-    console.log(`Points Token (aPNTs): ${opConfig[4]} ${opConfig[4].toLowerCase() === config.aPNTs.toLowerCase() ? '✅' : '❌'}`);
-    console.log(`aPNTs Balance: ${opConfig[0]} (Should be > 0)`);
+    console.log(`Has PAYMASTER_AOA Role: ${hasAOARole} ${hasAOARole ? '✅' : '(Not V4)'}`);
+    
+    // For V4 users, we don't strictly require SuperPaymaster (V3) config
+    const isConfigured = opConfig[2] || hasAOARole; 
+    console.log(`Paymaster Configured: ${isConfigured} ${(opConfig[2] || hasAOARole) ? '✅' : '❌'} ${hasAOARole ? '(V4 Mode)' : '(V3 Mode)'}`);
+    const isV4 = hasAOARole;
+    const isV3 = opConfig[2];
+
+    if (isV3) {
+        console.log(`Points Token (aPNTs): ${opConfig[4]} ${opConfig[4].toLowerCase() === config.aPNTs.toLowerCase() ? '✅' : '❌'}`);
+        console.log(`aPNTs Balance: ${opConfig[0]} (Should be > 0)`);
+    } else if (isV4) {
+        console.log(`Points Token (aPNTs): Skiped for V4 (Managed by Paymaster Proxy)`);
+        console.log(`aPNTs Balance: Skiped for V4`);
+    } else {
+        console.log(`Points Token (aPNTs): ❌ Not Configured`);
+    }
 
     // 2. 验证 DemoCommunity (Anni)
     const anni = '0xEcAACb915f7D92e9916f449F7ad42BD0408733c9' as Hex;
@@ -73,8 +92,19 @@ async function verify() {
     console.log(`SuperPaymaster Configured: ${demoOpConfig[2]} ${demoOpConfig[2] ? '✅' : '❌'} (Note: Skipping SP config for Anni in DeployAnvil.s.sol)`);
     console.log(`Points Token (dPNTs): ${demoOpConfig[4]} ${demoOpConfig[4] !== '0x0000000000000000000000000000000000000000' ? '✅' : '❌'}`);
 
-    if (network !== 'anvil' && (opConfig[4].toLowerCase() !== config.aPNTs.toLowerCase() || demoOpConfig[4] === '0x0000000000000000000000000000000000000000')) {
-        const msg = "❌ Validation Failed: Token Mismatch or Missing Configuration";
+    // Update Validation Logic
+    // If V3 configured, MUST match token.
+    if (isV3 && opConfig[4].toLowerCase() !== config.aPNTs.toLowerCase()) {
+         throw new Error("❌ Validation Failed: V3 Operator Token Mismatch");
+    }
+    // If NEITHER V3 nor V4, Fail.
+    if (!isV3 && !isV4) {
+         throw new Error("❌ Validation Failed: AAStar not configured as V3 or V4 Paymaster");
+    }
+    
+    // Anni check (Demo is usually legacy/hybrid, ensure it hasn't regressed if expected)
+    if (network !== 'anvil' && demoOpConfig[4] === '0x0000000000000000000000000000000000000000') {
+        const msg = "❌ Validation Failed: DemoCommunity Token Mismatch or Missing Configuration";
         throw new Error(msg);
     }
 

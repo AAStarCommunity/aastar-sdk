@@ -1,25 +1,41 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { PaymasterV4ABI } from '../abis/index.js';
 
-// PaymasterV4 Actions (comprehensive stub for 100% coverage)
+// PaymasterV4 Actions (Deposit-Only Model v4.3.0)
 export type PaymasterV4Actions = {
-    // Gas Token Management
-    addGasToken: (args: { token: Address, priceFeed: Address, account?: Account | Address }) => Promise<Hash>;
-    removeGasToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
-    getSupportedGasTokens: () => Promise<Address[]>;
-    isGasTokenSupported: (args: { token: Address }) => Promise<boolean>;
+    // === NEW: Deposit-Only Model ===
+    // Deposit Management
+    depositFor: (args: { user: Address, token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    withdraw: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    balances: (args: { user: Address, token: Address }) => Promise<bigint>;
     
-    // SBT Management
+    // Token Price Management (Operator/Owner only)
+    setTokenPrice: (args: { token: Address, price: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenPrices: (args: { token: Address }) => Promise<bigint>;
+    
+    // === DEPRECATED: Legacy V3 APIs (Not in V4 Deposit-Only) ===
+    /** @deprecated V4 uses depositFor + tokenPrices instead */
+    addGasToken: (args: { token: Address, priceFeed: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated V4 uses depositFor + tokenPrices instead */
+    removeGasToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated V4 uses depositFor + tokenPrices instead */
+    getSupportedGasTokens: () => Promise<Address[]>;
+    /** @deprecated V4 uses depositFor + tokenPrices instead */
+    isGasTokenSupported: (args: { token: Address }) => Promise<boolean>;
+    /** @deprecated V4 does not use SBT whitelist */
     addSBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated V4 does not use SBT whitelist */
     removeSBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated V4 does not use SBT whitelist */
     getSupportedSBTs: () => Promise<Address[]>;
+    /** @deprecated V4 does not use SBT whitelist */
     isSBTSupported: (args: { sbt: Address }) => Promise<boolean>;
     
     // Validation (EntryPoint calls)
     validatePaymasterUserOp: (args: { userOp: any, userOpHash: Hex, maxCost: bigint }) => Promise<any>;
     postOp: (args: { mode: number, context: Hex, actualGasCost: bigint, actualUserOpFeePerGas: bigint }) => Promise<void>;
     
-    // Deposit & Withdrawal
+    // Deposit & Withdrawal (EntryPoint accounting)
     deposit: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     addStake: (args: { unstakeDelaySec: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -38,7 +54,59 @@ export type PaymasterV4Actions = {
 };
 
 export const paymasterV4Actions = (address: Address) => (client: PublicClient | WalletClient): PaymasterV4Actions => ({
-    // Gas Token Management
+    // === NEW: Deposit-Only Model ===
+    async depositFor({ user, token, amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'depositFor',
+            args: [user, token, amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdraw({ token, amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'withdraw',
+            args: [token, amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async balances({ user, token }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'balances',
+            args: [user, token]
+        }) as Promise<bigint>;
+    },
+
+    async setTokenPrice({ token, price, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'setTokenPrice',
+            args: [token, price],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async tokenPrices({ token }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: PaymasterV4ABI,
+            functionName: 'tokenPrices',
+            args: [token]
+        }) as Promise<bigint>;
+    },
+
+    // === DEPRECATED: Legacy Gas Token Management ===
     async addGasToken({ token, priceFeed, account }) {
         return (client as any).writeContract({
             address,

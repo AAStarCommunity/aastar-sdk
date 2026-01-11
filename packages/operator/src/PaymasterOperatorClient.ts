@@ -202,9 +202,6 @@ export class PaymasterOperatorClient extends BaseClient {
                     this.ethUsdPriceFeed,
                     200n, // serviceFeeRate (2%)
                     parseEther('0.1'), // maxGasCostCap
-                    0n, // minTokenBalance
-                    xpntsFactory,
-                    '0x0000000000000000000000000000000000000000', // initialGasToken
                     3600n // priceStalenessThreshold
                 ]
             });
