@@ -125,6 +125,70 @@ const SUPER_PAYMASTER_ABI = [
   }
 ] as const;
 
+// PaymasterV4 Deposit-Only Model ABI (v4.3.0)
+const PAYMASTER_V4_DEPOSIT_ABI = [
+  // Token Price Management
+  {
+    "name": "tokenPrices",
+    "inputs": [{ "name": "token", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "name": "setTokenPrice",
+    "inputs": [{ "name": "token", "type": "address" }, { "name": "price", "type": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // User Balance Management
+  {
+    "name": "balances",
+    "inputs": [{ "name": "user", "type": "address" }, { "name": "token", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "name": "depositFor",
+    "inputs": [
+      { "name": "user", "type": "address" },
+      { "name": "token", "type": "address" },
+      { "name": "amount", "type": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Oracle/Price
+  {
+    "name": "updatePrice",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "name": "cachedPrice",
+    "inputs": [],
+    "outputs": [
+      { "name": "price", "type": "uint208" },
+      { "name": "updatedAt", "type": "uint48" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Owner/Admin
+  {
+    "name": "owner",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
 export async function runGaslessTests(config: NetworkConfig) {
     console.log('\n═══════════════════════════════════════════════');
     console.log('⛽ Running L4 Gasless Verification Tests (Stage 3)');
@@ -391,45 +455,87 @@ export async function runGaslessTests(config: NetworkConfig) {
                         console.log(`   ⚠️ Failed to check/add stake: ${e.message}`);
                     }
 
-                    // Ensure SBT Support
-                    // We assume if I am owner, I can/need to add SBT if missing
-                    try {
-                        const supportedSBTs = await publicClient.readContract({
+                    // =====================================================
+                    // PaymasterV4 Deposit-Only Model (v4.3.0) Validation
+                    // =====================================================
+                    
+                    // 1. Check Token Price Support (replaces addGasToken)
+                    const tokenPrice = await publicClient.readContract({
+                        address: currentPM,
+                        abi: PAYMASTER_V4_DEPOSIT_ABI,
+                        functionName: 'tokenPrices',
+                        args: [scene.params.tokenAddress!]
+                    }) as bigint;
+                    
+                    if (tokenPrice === 0n) {
+                        console.log(`   ⚠️  Token ${scene.params.tokenAddress} not supported (price=0). Setting price...`);
+                        // Auto-set token price (1e8 = $1 USD per token unit - adjust as needed)
+                        const defaultPrice = BigInt(1e8); // $1 per token unit (8 decimals)
+                        const setPriceHash = await chainClient.writeContract({
                             address: currentPM,
-                            abi: [{name: 'isSBTSupported', type: 'function', inputs: [{type:'address'}], outputs: [{type:'bool'}], stateMutability:'view'}],
-                            functionName: 'isSBTSupported',
-                            args: [config.contracts.sbt]
-                        });
-                        if (!supportedSBTs) throw new Error("Not supported");
-                    } catch {
-                         // Blindly Add SBT
-                        try {
-                            const sbtHash = await chainClient.writeContract({
-                                address: currentPM,
-                                abi: [{name: 'addSBT', type: 'function', inputs: [{type:'address'}], outputs: [], stateMutability: 'nonpayable'}],
-                                functionName: 'addSBT',
-                                args: [config.contracts.sbt],
-                                account: jasonAcc
-                            });
-                            await publicClient.waitForTransactionReceipt({ hash: sbtHash });
-                            console.log(`   ✅ Added SBT to Paymaster`);
-                        } catch (e: any) {
-                            // Ignore
-                        }
-                    }
-
-                    // Ensure Token Support
-                    try {
-                        const tokenHash = await chainClient.writeContract({
-                            address: currentPM,
-                            abi: [{name: 'addGasToken', type: 'function', inputs: [{type:'address'}], outputs: [], stateMutability: 'nonpayable'}],
-                            functionName: 'addGasToken',
-                            args: [scene.params.tokenAddress!],
+                            abi: PAYMASTER_V4_DEPOSIT_ABI,
+                            functionName: 'setTokenPrice',
+                            args: [scene.params.tokenAddress!, defaultPrice],
                             account: jasonAcc
                         });
-                        await publicClient.waitForTransactionReceipt({ hash: tokenHash });
-                        console.log(`   ✅ Added Gas Token to Paymaster`);
-                    } catch (e) { }
+                        await publicClient.waitForTransactionReceipt({ hash: setPriceHash });
+                        console.log(`   ✅ Token Price Set: $1.00 (${defaultPrice})`);
+                    } else {
+                        console.log(`   ✅ Token Price: $${Number(tokenPrice) / 1e8} USD`);
+                    }
+                    
+                    // 2. Check AA User's Internal Balance in Paymaster (replaces external token allowance)
+                    const internalBalance = await publicClient.readContract({
+                        address: currentPM,
+                        abi: PAYMASTER_V4_DEPOSIT_ABI,
+                        functionName: 'balances',
+                        args: [targetAA.address, scene.params.tokenAddress!]
+                    }) as bigint;
+                    console.log(`   💰 AA Internal Balance: ${formatEther(internalBalance)} tokens`);
+                    
+                    // 3. Auto-deposit if balance is too low
+                    const minRequiredBalance = parseEther('100'); // Require at least 100 tokens
+                    if (internalBalance < minRequiredBalance) {
+                        console.log(`   ⚠️  Low internal balance! Depositing tokens...`);
+                        
+                        // First approve Paymaster to pull tokens
+                        const depositAmount = parseEther('500'); // Deposit 500 tokens
+                        const approveHash = await chainClient.writeContract({
+                            address: scene.params.tokenAddress!,
+                            abi: ERC20_ABI,
+                            functionName: 'approve',
+                            args: [currentPM, depositAmount],
+                            account: jasonAcc
+                        });
+                        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                        console.log(`   ✅ Approved ${formatEther(depositAmount)} tokens to Paymaster`);
+                        
+                        // Then call depositFor
+                        const depositHash = await chainClient.writeContract({
+                            address: currentPM,
+                            abi: PAYMASTER_V4_DEPOSIT_ABI,
+                            functionName: 'depositFor',
+                            args: [targetAA.address, scene.params.tokenAddress!, depositAmount],
+                            account: jasonAcc
+                        });
+                        await publicClient.waitForTransactionReceipt({ hash: depositHash });
+                        console.log(`   ✅ Deposited ${formatEther(depositAmount)} tokens for AA: ${targetAA.address}`);
+                    }
+                    
+                    // 4. Update Oracle Price Cache (Optional but recommended)
+                    try {
+                        const updatePriceHash = await chainClient.writeContract({
+                            address: currentPM,
+                            abi: PAYMASTER_V4_DEPOSIT_ABI,
+                            functionName: 'updatePrice',
+                            args: [],
+                            account: jasonAcc
+                        });
+                        await publicClient.waitForTransactionReceipt({ hash: updatePriceHash });
+                        console.log(`   ✅ Oracle Price Cache Updated`);
+                    } catch (e: any) {
+                        console.log(`   ⚠️  Failed to update price cache: ${e.message?.slice(0, 50)}...`);
+                    }
 
                     // Resume checks using currentPM
                     const pmDeposit = await publicClient.readContract({
@@ -541,86 +647,12 @@ export async function runGaslessTests(config: NetworkConfig) {
                          }
                     }
                     
-                    // 2.1 Check Supported Gas Tokens (Auto-Fix)
-                    // Ensure the token we are paying with is supported by Paymaster
-                    const pmTokensABI = [{name: 'getSupportedGasTokens', type: 'function', inputs: [], outputs: [{type:'address[]'}], stateMutability:'view'}];
-                    const supportedTokens = await publicClient.readContract({
-                        address: scene.params.paymaster!,
-                        abi: pmTokensABI,
-                        functionName: 'getSupportedGasTokens'
-                    }) as Address[];
-                    
-                    const tokenAddrLower = scene.params.tokenAddress!.toLowerCase() as Address;
-                    const isSupported = supportedTokens.some(t => t.toLowerCase() === tokenAddrLower);
-                    
-                    if (!isSupported) {
-                         console.log(`   ⚠️  Paymaster does NOT support Token ${tokenAddrLower}! Auto-Adding...`);
-                         try {
-                              const hash = await chainClient.writeContract({
-                                  address: scene.params.paymaster!,
-                                  abi: [{name: 'addGasToken', type: 'function', inputs: [{type:'address'}], outputs: [], stateMutability: 'nonpayable'}],
-                                  functionName: 'addGasToken',
-                                  args: [scene.params.tokenAddress!],
-                                  account: jasonAcc,
-                                  chain: config.chain
-                              });
-                              console.log(`   ⏳ Adding GasToken tx: ${hash}`);
-                              let mined = false;
-                              for(let i=0; i<30; i++) {
-                                  const r = await publicClient.getTransactionReceipt({ hash });
-                                  if (r) { mined = true; break; }
-                                  await new Promise(res => setTimeout(res, 1000));
-                              }
-                              if(!mined) throw new Error("Add GasToken timed out");
-                              console.log(`   ✅ GasToken Added.`);
-                         } catch (e: any) {
-                              console.log(`   🔥 Failed to add GasToken: ${e.message}`);
-                         }
-                    }
-
-                    // 3. Check SBT Balance (Required by V4)
-                    console.log(`   🐛 Checkpoint: Initializing ABI...`);
-                    const pmV4ABI = [
-                        {name: 'getSupportedSBTs', type: 'function', inputs: [], outputs: [{type:'address[]'}], stateMutability:'view'},
-                        {name: 'addSBT', type: 'function', inputs: [{type:'address'}], outputs: [], stateMutability:'nonpayable'}
-                    ];
-                    const sbts = await publicClient.readContract({
-                        address: scene.params.paymaster!,
-                        abi: pmV4ABI,
-                        functionName: 'getSupportedSBTs'
-                    }) as string[];
-                    
-                    if (sbts.length > 0) {
-                        const sbtBal = await publicClient.readContract({
-                            address: sbts[0],
-                            abi: [{name: 'balanceOf', type: 'function', inputs: [{type:'address'}], outputs: [{type:'uint256'}], stateMutability:'view'}],
-                            functionName: 'balanceOf',
-                            args: [targetAA.address]
-                        });
-                        console.log(`   🎫 Sender SBT Balance: ${sbtBal} (SBT: ${sbts[0]})`);
-                    } else {
-                        console.log(`   ⚠️  Paymaster has NO supported SBTs! Auto-Adding SBT...`);
-                        // Auto-Add SBT (SBT address from Config)
-                        const sbtAddr = config.contracts.sbt;
-                        console.log(`   🐛 Debug: SBT Addr=${sbtAddr}, PM=${scene.params.paymaster}`);
-                        
-                        if (!sbtAddr) throw new Error("SBT Address not found in config");
-                        
-                        try {
-                            const hash = await chainClient.writeContract({
-                                address: scene.params.paymaster!,
-                                abi: pmV4ABI,
-                                functionName: 'addSBT',
-                                args: [sbtAddr]
-                            });
-                            console.log(`   🛠️  Added SBT: ${hash}. Waiting for mine...`);
-                            await publicClient.waitForTransactionReceipt({ hash });
-                            console.log(`   ✅ SBT Added.`);
-                        } catch (e2: any) {
-                             console.log(`   🔥 Error in addSBT: ${e2.message} \n ${e2.stack}`);
-                             throw e2; 
-                        }
-                    }
+                    // =====================================================
+                    // NOTE: PaymasterV4 Deposit-Only Model (v4.3.0)
+                    // SBT/Token whitelist checks are REMOVED.
+                    // Token support is controlled via tokenPrices mapping.
+                    // Gas payment uses internal balances (depositFor).
+                    // =====================================================
 
                     // 3.1 Check SBT Balance (Again, after potential addSBT)
                     // We need ensure Sender HAS the SBT.
@@ -829,6 +861,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                 // Update local var for submission
                 userOp.accountGasLimits = adjustedOp.accountGasLimits;
                 userOp.paymasterAndData = adjustedOp.paymasterAndData;
+                userOp.gasFees = adjustedOp.gasFees; // CRITICAL: Must sync gasFees to match signature
                 userOp.signature = adjustedOp.signature;
             }
 

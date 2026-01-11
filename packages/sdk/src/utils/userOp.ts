@@ -67,6 +67,29 @@ export class UserOperationBuilder {
     }
 
     /**
+     * Packs PaymasterV4 Deposit-Only Model parameters.
+     * Format: [paymaster(20)][paymasterVerificationGasLimit(16)][paymasterPostOpGasLimit(16)][validUntil(6)][validAfter(6)][token(20)]
+     * Note: The contract expects token at offset 52, which means:
+     * - paymaster: 20 bytes (0-20)
+     * - paymasterVerificationGasLimit: 16 bytes (20-36)
+     * - paymasterPostOpGasLimit: 16 bytes (36-52)
+     * - token: 20 bytes (52-72)
+     */
+    static packPaymasterV4DepositData(
+        paymaster: Address,
+        paymasterGasLimit: bigint,
+        paymasterPostOpGasLimit: bigint,
+        paymentToken: Address
+    ): Hex {
+        return concat([
+            paymaster,
+            pad(`0x${paymasterGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
+            pad(`0x${paymasterPostOpGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
+            paymentToken
+        ]) as Hex;
+    }
+
+    /**
      * Computes the UserOperation hash for signing.
      */
     static async getUserOpHash({
