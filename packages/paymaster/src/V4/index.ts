@@ -300,4 +300,129 @@ export class PaymasterV4Client {
             chain: wallet.chain
         } as any);
     }
+
+    /**
+     * Submit a gasless UserOperation using Paymaster V4.
+     * This method handles building paymasterData, signing, and submitting to the bundler.
+     * Note: This requires the AA account to already have a deposit in the Paymaster.
+     * @param client - Viem public client
+     * @param account - The owner EOA account object (for signing)
+     * @param aaAddress - The AA wallet address
+     * @param entryPoint - EntryPoint address
+     * @param paymasterAddress - Paymaster V4 address
+     * @param token - Gas token address (e.g., bPNTs)
+     * @param bundlerUrl - Bundler RPC URL
+     * @param callData - The callData for the UserOp
+     * @param options - Optional UserOp parameters
+     * @returns UserOperation hash
+     */
+    static async submitGaslessUserOperation(
+        client: any,
+        account: any,
+        aaAddress: Address,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        token: Address,
+        bundlerUrl: string,
+        callData: `0x${string}`,
+        options?: {
+            validityWindow?: number;
+            verificationGasLimit?: bigint;
+            callGasLimit?: bigint;
+            preVerificationGas?: bigint;
+            maxFeePerGas?: bigint;
+            maxPriorityFeePerGas?: bigint;
+        }
+    ): Promise<`0x${string}`> {
+        // 1. Get Nonce
+        const nonce = await client.readContract({
+            address: aaAddress,
+            abi: [{ name: 'getNonce', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+            functionName: 'getNonce'
+        });
+
+        // 2. Build paymasterAndData
+        const paymasterAndData = this.buildPaymasterData(paymasterAddress, token, {
+            validityWindow: options?.validityWindow,
+            verificationGasLimit: options?.verificationGasLimit
+        });
+
+        // 3. Construct UserOp
+        const userOp = {
+            sender: aaAddress,
+            nonce: BigInt(nonce),
+            initCode: '0x' as `0x${string}`,
+            callData,
+            accountGasLimits: concat([
+                pad(toHex(options?.verificationGasLimit ?? 100000n), { size: 16 }), // Verification
+                pad(toHex(options?.callGasLimit ?? 1000000n), { size: 16 })       // Call
+            ]),
+            preVerificationGas: options?.preVerificationGas ?? 100000n,
+            gasFees: concat([
+                pad(toHex(options?.maxPriorityFeePerGas ?? 2000000000n), { size: 16 }),
+                pad(toHex(options?.maxFeePerGas ?? 4000000000n), { size: 16 })
+            ]),
+            paymasterAndData,
+            signature: '0x' as `0x${string}`
+        };
+
+        // 4. Calculate Hash (Simplified v0.7 format)
+        // [sender, nonce, initCode, callData, accountGasLimits, preVerificationGas, gasFees, paymasterAndData]
+        const hashedUserOp = keccak256(encodeAbiParameters(
+            ['address', 'uint256', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes32', 'bytes32'].map(t => ({ type: t } as any)),
+            [
+                userOp.sender,
+                userOp.nonce,
+                keccak256(userOp.initCode),
+                keccak256(userOp.callData),
+                userOp.accountGasLimits,
+                userOp.preVerificationGas,
+                userOp.gasFees,
+                keccak256(userOp.paymasterAndData)
+            ]
+        ));
+        const userOpHash = keccak256(encodeAbiParameters(
+            ['bytes32', 'address', 'uint256'].map(t => ({ type: t } as any)),
+            [hashedUserOp, entryPoint, BigInt(client.chain.id)]
+        ));
+
+        // 5. Sign
+        const signature = await account.signMessage({ message: { raw: userOpHash } });
+        userOp.signature = signature;
+
+        // 6. Submit to Bundler
+        const response = await fetch(bundlerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'eth_sendUserOperation',
+                params: [this.toAlchemyFormat(userOp), entryPoint]
+            }, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)
+        });
+
+        const result = await response.json();
+        if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
+        return result.result;
+    }
+
+    /**
+     * Internal helper to format UserOp for Alchemy/Standard Bundlers
+     */
+    private static toAlchemyFormat(userOp: any) {
+        return {
+            sender: userOp.sender,
+            nonce: '0x' + userOp.nonce.toString(16),
+            initCode: userOp.initCode,
+            callData: userOp.callData,
+            accountGasLimits: userOp.accountGasLimits,
+            preVerificationGas: '0x' + userOp.preVerificationGas.toString(16),
+            gasFees: userOp.gasFees,
+            paymasterAndData: userOp.paymasterAndData,
+            signature: userOp.signature
+        };
+    }
 }
+
+import { keccak256, encodeAbiParameters } from 'viem';
