@@ -1,20 +1,23 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-12T09:49:27.727Z",
+  "timestamp": "2026-01-12T10:27:24.196Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
       "tokenAddress": "0xb725452998da5645024B1a99e4D1DF52204875FB",
+      "symbol": "aPNTs",
       "paymasterV4": "0x9ee268a6E14CBA69f3d0c0C47119cddb2bB87FD6"
     },
     "bob": {
       "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
       "tokenAddress": "0x010cB68B869E4E8eab8D1De14F31DD9AFaEA27ee",
+      "symbol": "bPNTs",
       "paymasterV4": "0x218332c1f7357e66D3387356b81f9270F9A9beC4"
     },
     "anni": {
       "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "tokenAddress": "0xF8865BB197d3cD7533b012f3D613e43886c0eB38",
+      "symbol": "cPNTs",
       "superPaymaster": "0x6E288562AD284e903e0d0291d52c73a7dC36cB4C"
     }
   },

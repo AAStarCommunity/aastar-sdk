@@ -126,6 +126,9 @@ async function main() {
             dPNTs,
             config.bundlerUrl!,
             transferCalldata
+            // {
+            //    // Let SDK determine dynamic gas prices
+            // }
         );
 
         console.log(`   ✅ UserOp submitted! Hash: ${userOpHash}`);
@@ -152,7 +155,7 @@ async function main() {
         }
 
         if (receipt) {
-            console.log(`   🎉 UserOp Executed! Transaction: ${receipt.transactionHash}`);
+            console.log(`   🎉 UserOp Executed! Transaction: ${receipt.receipt.transactionHash}`);
             console.log(`   ⛽ Gas Used: ${BigInt(receipt.actualGasUsed).toString()}`);
             console.log(`   💸 Fee Paid: ${formatEther(BigInt(receipt.actualGasCost))} ETH (sponsored by dPNTs)`);
         } else {

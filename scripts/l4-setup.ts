@@ -986,16 +986,19 @@ async function main() {
             jason: {
                 address: privateKeyToAccount(operators[0].key).address,
                 tokenAddress: communityMap['Jason (AAStar)']?.token,
+                symbol: 'aPNTs',
                 paymasterV4: communityMap['Jason (AAStar)']?.pmV4
             },
             bob: {
                 address: privateKeyToAccount(operators[1].key).address,
                 tokenAddress: communityMap['Bob (Bread)']?.token,
+                symbol: 'bPNTs',
                 paymasterV4: communityMap['Bob (Bread)']?.pmV4
             },
             anni: {
                 address: privateKeyToAccount(operators[2].key).address,
                 tokenAddress: communityMap['Anni (Demo)']?.token,
+                symbol: 'cPNTs',
                 superPaymaster: superPM
             }
         },

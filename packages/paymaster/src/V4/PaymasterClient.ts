@@ -85,6 +85,7 @@ export class PaymasterClient {
             const feeData = await client.estimateFeesPerGas();
             maxFeePerGas = (feeData.maxFeePerGas ?? 30000000000n) * 150n / 100n; // 1.5x buffer
             maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n / 100n;
+            if (maxPriorityFeePerGas < 500000000n) maxPriorityFeePerGas = 500000000n; // Min 0.5 Gwei
         } catch (e) {
             // Use defaults if estimation fails
         }
@@ -201,6 +202,7 @@ export class PaymasterClient {
                 // Apply 1.5x buffer for network volatility
                 maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 30000000000n) * 150n) / 100n;
                 maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n) / 100n;
+                if (maxPriorityFeePerGas < 500000000n) maxPriorityFeePerGas = 500000000n; // Min 0.5 Gwei
             } catch (e) {
                 // Fallback to safer defaults if estimation fails
                 maxFeePerGas = maxFeePerGas ?? 50000000000n; // 50 Gwei
