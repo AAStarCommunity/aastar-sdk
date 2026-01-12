@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, type Address, type Hex, concat, decodeErrorResult } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, pad, toHex, type Address, type Hex, concat, decodeErrorResult } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.ts';
@@ -130,6 +130,29 @@ async function main() {
     } else {
         console.log(`   ⚠️  Token Mismatch! Expected: ${cPNTs}, Got: ${operatorConfig[4]}`);
     }
+
+    // ✅ AUTO-FIX: If exchangeRate is 0, configure it now
+    if (operatorConfig[1] === 0n || !operatorConfig[2] || operatorConfig[4] === '0x0000000000000000000000000000000000000000') {
+        console.log('\n🔧 AUTO-FIX: Operator not fully configured. Fixing now...');
+        const spAbi = [
+            { name: 'configureOperator', type: 'function', inputs: [{ name: 'xPNTsToken', type: 'address' }, { name: 'owner', type: 'address' }, { name: 'exchangeRate', type: 'uint96' }], outputs: [], stateMutability: 'nonpayable' }
+        ];
+        try {
+            const fixTx = await anniWallet.writeContract({
+                address: anniPM,
+                abi: spAbi,
+                functionName: 'configureOperator',
+                args: [cPNTs, anniAccount.address, parseEther('1')], // 1:1 Rate
+                chain: sepolia,
+                account: anniAccount
+            });
+            console.log(`   📝 Fix Transaction Sent: ${fixTx}`);
+            await publicClient.waitForTransactionReceipt({ hash: fixTx });
+            console.log('   ✅ Operator Configured Successfully.');
+        } catch (e: any) {
+            console.warn('   ❌ Auto-fix failed:', e.message);
+        }
+    }
     
     // Query Cache Price and Token Prices
     const cachePriceAbi = [{
@@ -145,17 +168,48 @@ async function main() {
         stateMutability: 'view'
     }];
     
-    const cacheData = await publicClient.readContract({
-        address: anniPM,
-        abi: cachePriceAbi,
+    const cachedPrice = await publicClient.readContract({
+        address: anniPM, // Assuming superPM is anniPM
+        abi: cachePriceAbi, // Using cachePriceAbi for now, will combine later if needed
         functionName: 'cachedPrice'
-    }) as [bigint, bigint, bigint, number];
+    }) as [bigint, bigint, bigint, number]; // Type assertion for cachedPrice
     
-    const cacheAgeSeconds = Math.floor(Date.now() / 1000) - Number(cacheData[1]);
+    // Define a combined ABI for SuperPaymaster for new checks
+    const SuperPaymasterABI = [
+        ...cachePriceAbi, // cachedPrice
+        ...spAbi, // operators, configureOperator
+        { name: 'sbtHolders', type: 'function', inputs: [{ name: '', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+        { name: 'userOpState', type: 'function', inputs: [{ name: '', type: 'address' }, { name: '', type: 'address' }], outputs: [{ name: 'blocked', type: 'bool' }, { name: 'lastTimestamp', type: 'uint48' }], stateMutability: 'view' },
+        { name: 'aPNTsPriceUSD', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+        { name: 'updatePrice', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+        { name: 'depositAPNTs', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' }
+    ];
+
+    // Check SBT status in SuperPaymaster mapping
+    const sbtStatusInPM = await publicClient.readContract({
+        address: anniPM, // Assuming superPM is anniPM
+        abi: SuperPaymasterABI,
+        functionName: 'sbtHolders',
+        args: [anniAccount.address]
+    }) as boolean;
+
+    const operatorState = await publicClient.readContract({
+        address: anniPM, // Assuming superPM is anniPM
+        abi: SuperPaymasterABI,
+        functionName: 'userOpState',
+        args: [anniAccount.address, anniAccount.address] // operator, user (both are anni accounts/eoa/aa)
+    }) as [boolean, bigint]; // Type assertion for operatorState
+
+    const [ethUsdPrice, updatedAt, roundId, priceDecimals] = cachedPrice;
+    console.log(`\n🔍 DIAGNOSTIC: SuperPaymaster Validation States`);
+    console.log(`   SBT Holder in PM: ${sbtStatusInPM ? '✅ Yes' : '❌ No'}`);
+    console.log(`   User Blocked: ${operatorState[0] ? '❌ Yes' : '✅ No'}`);
+    console.log(`   Last Timestamp: ${operatorState[1]}`);
+    const cacheAgeSeconds = Math.floor(Date.now() / 1000) - Number(cachedPrice[1]); // Corrected from cacheData[1]
     const cacheAgeMinutes = Math.floor(cacheAgeSeconds / 60);
-    console.log(`\n   💹 Cache Price (ETH/USD): $${Number(cacheData[0]) / 1e8}`);
-    console.log(`   🕒 Cache Age: ${cacheAgeMinutes} minutes ago (${new Date(Number(cacheData[1]) * 1000).toISOString()})`);
-    console.log(`   🔢 Decimals: ${cacheData[3]}`);
+    console.log(`\n   💹 Cache Price (ETH/USD): $${Number(cachedPrice[0]) / 1e8}`);
+    console.log(`   🕒 Cache Age: ${cacheAgeMinutes} minutes ago (${new Date(Number(cachedPrice[1]) * 1000).toISOString()})`);
+    console.log(`   🔢 Decimals: ${cachedPrice[3]}`);
     
     // Query aPNTs Price from xPNTsFactory
     const apntsPriceAbi = [{
@@ -293,28 +347,29 @@ async function main() {
              */
          }
 
-
-
-         // Step 2.5: Ensure Oracle Cache is valid (fixes AA33 OracleError)
-         console.log('Step 2.5: Ensuring Oracle Price Cache...');
-         const updateAbi = [{ name: 'updatePrice', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' }];
-         try {
-             console.log('   🔄 Calling updatePrice() with explicit 500k gas...');
-             const hash = await anniWallet.writeContract({
-                 address: anniPM,
-                 abi: updateAbi,
-                 functionName: 'updatePrice',
-                 args: [],
-                 chain: sepolia,
-                 account: anniAccount,
-                 gas: 500000n
-             });
-             console.log(`   Oracle Update Tx Sent: ${hash}`);
-             await publicClient.waitForTransactionReceipt({ hash });
-             console.log('   ✓ Oracle Cache Updated.');
-         } catch (e) {
-             console.warn('   ⚠️ Failed to update Oracle Price (might be already valid or reverted):', e);
-         }
+        // Step 2.5: Ensure Oracle Price Cache is fresh
+        console.log('\nStep 2.5: Ensuring Oracle Price Cache...');
+        const currentCacheAgeSeconds = BigInt(Math.floor(Date.now() / 1000)) - cacheData[1]; // Using cacheData[1] from earlier read
+        if (currentCacheAgeSeconds > 3600n) { // Over 1 hour
+            console.log(`   🕒 Cache Age: ${currentCacheAgeSeconds}s. Refreshing...`);
+            try {
+                const upHash = await anniWallet.writeContract({
+                    address: anniPM,
+                    abi: [{ name: 'updatePrice', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' }],
+                    functionName: 'updatePrice',
+                    gas: 500000n,
+                    chain: sepolia,
+                    account: anniAccount
+                });
+                console.log(`   📝 Oracle Update Tx Sent: ${upHash}`);
+                await publicClient.waitForTransactionReceipt({ hash: upHash });
+                console.log('   ✅ Oracle Price Cache Updated.');
+            } catch (e: any) {
+                console.warn('   ⚠️ Oracle Update failed (might be gas issue):', e.message);
+            }
+        } else {
+            console.log(`   ✅ Cache is fresh (Age: ${currentCacheAgeSeconds}s). Skipping update.`);
+        }
 
           // Check aPNTsPriceUSD in Paymaster Storage (DivZero check)
          console.log('   Checking SuperPaymaster aPNTsPriceUSD...');
@@ -380,6 +435,29 @@ async function main() {
             })
         ]
     });
+    
+    // 🔍 DEBUG: Show packed paymasterAndData
+    const dummyUserOp = {
+        paymasterAndData: '0x'
+    };
+    const verGas = 150000n;
+    const postGas = 100000n;
+    const maxRate = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    
+    const debugPMD = concat([
+        anniPM,
+        pad(toHex(verGas), { size: 16 }),
+        pad(toHex(postGas), { size: 16 }),
+        anniAccount.address,
+        pad(toHex(maxRate), { size: 32 })
+    ]);
+    console.log(`\n🔍 DEBUG: Constructed paymasterAndData (${(debugPMD.length - 2) / 2} bytes):`);
+    console.log(`   PM: ${anniPM}`);
+    console.log(`   VerGas (offset 20-36): ${pad(toHex(verGas), { size: 16 })}`);
+    console.log(`   PostGas (offset 36-52): ${pad(toHex(postGas), { size: 16 })}`);
+    console.log(`   Operator (offset 52-72): ${anniAccount.address}`);
+    console.log(`   MaxRate (offset 72-104): ${toHex(maxRate)}`);
+    // console.log(`   Full: ${debugPMD}\n`);
 
     try {
         const userOpHash = await PaymasterClient.submitGaslessUserOperation(

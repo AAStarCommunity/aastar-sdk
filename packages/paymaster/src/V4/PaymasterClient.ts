@@ -1,4 +1,4 @@
-import { type Address, concat, pad, toHex, parseAbi, parseAbiItem, encodeFunctionData } from 'viem';
+import { type Address, type Hex, concat, pad, toHex, parseAbi, parseAbiItem, encodeFunctionData } from 'viem';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
 
 /**

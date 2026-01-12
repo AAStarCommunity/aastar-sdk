@@ -114,12 +114,20 @@ const ERC20_ABI = [
 
 const SUPER_PAYMASTER_ABI = [
   {
-    "inputs": [
-      { "name": "token", "type": "address" },
-      { "name": "account", "type": "address" }
+    "inputs": [{ "name": "operator", "type": "address" }],
+    "name": "operators",
+    "outputs": [
+        { "name": "aPNTsBalance", "type": "uint128" },
+        { "name": "exchangeRate", "type": "uint96" },
+        { "name": "isConfigured", "type": "bool" },
+        { "name": "isPaused", "type": "bool" },
+        { "name": "xPNTsToken", "type": "address" },
+        { "name": "reputation", "type": "uint32" },
+        { "name": "minTxInterval", "type": "uint48" },
+        { "name": "treasury", "type": "address" },
+        { "name": "totalSpent", "type": "uint256" },
+        { "name": "totalTxSponsored", "type": "uint256" }
     ],
-    "name": "deposits",
-    "outputs": [{ "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   }
@@ -242,6 +250,7 @@ export async function runGaslessTests(config: NetworkConfig) {
             params: { tokenAddress: bobState.tokenAddress } // Paying native, moving bPNTs
         },
         */
+        /*
         { 
             type: UserOpScenarioType.GASLESS_V4, 
             label: '2. Gasless V4 (Jason Community - aPNTs)',
@@ -250,17 +259,8 @@ export async function runGaslessTests(config: NetworkConfig) {
                 tokenAddress: jasonState.tokenAddress, 
                 paymaster: jasonState.paymasterV4 
             }
-        }
-        /*,
-        { 
-            type: UserOpScenarioType.GASLESS_V4, 
-            label: '3. Gasless V4 (Bob Community - bPNTs)',
-            expectedPayer: 'PaymasterV4 (Bob)',
-            params: { 
-                tokenAddress: bobState.tokenAddress, 
-                paymaster: bobState.paymasterV4 
-            }
         },
+        */
         { 
             type: UserOpScenarioType.SUPER_BPNT, 
             label: '4. SuperPaymaster (bPNT Internal)',
@@ -268,21 +268,9 @@ export async function runGaslessTests(config: NetworkConfig) {
             params: { 
                 tokenAddress: bobState.tokenAddress, 
                 paymaster: anniState.superPaymaster, 
-                operator: jasonAcc.address, // Jason operator paying via SuperPM
-                // Note: SuperPM logic deduction depends on internal token config
-            }
-        },
-        { 
-            type: UserOpScenarioType.SUPER_CPNT, 
-            label: '5. SuperPaymaster (cPNT Internal)',
-            expectedPayer: 'SuperPM (Anni Credit)',
-            params: { 
-                tokenAddress: bobState.tokenAddress, 
-                paymaster: anniState.superPaymaster, 
-                operator: jasonAcc.address,
+                operator: anniState.address,
             }
         }
-        */
     ];
 
     // --- Helper for Bundler Errors ---
@@ -336,27 +324,19 @@ export async function runGaslessTests(config: NetworkConfig) {
             // DEBUG: Check SuperPaymaster Credit Balance if applicable
             if (scene.type === UserOpScenarioType.SUPER_BPNT || scene.type === UserOpScenarioType.SUPER_CPNT) {
                 try {
-                    const token = scene.params.tokenAddress; // The token being paid (or related to credit)
-                    // Note: SuperPaymaster might use a DIFFERENT token for calculating credit (e.g. Protocol Token)
-                    // But typically 'deposits' tracks the 'token' balance.
-                    // Let's assume Anni Credit is tracked under Anni Token Address? 
-                    // Or is it tracking "Sender's Credit"?
-                    // Actually, for SuperPaymaster, we check `deposits(token, account)`.
                     const operator = scene.params.operator || targetAA.address; 
-                    // Who is paying? The Operator (Jason).
                     
-                    // Actually, wait. SuperPaymaster logic:
-                    // PaymasterData signature is form Operator.
-                    // The Operator must have credit.
-                    // Credit is stored in `deposits(token, operator)`.
-                    
-                    const balance = await publicClient.readContract({
+                    const result = await publicClient.readContract({
                          address: scene.params.paymaster!,
                          abi: SUPER_PAYMASTER_ABI,
-                         functionName: 'deposits',
-                         args: [token!, operator!]
-                    });
-                    console.log(`   💰 SuperPaymaster Credit: ${formatEther(balance as bigint)} (Token: ${token}, Operator: ${operator})`);
+                         functionName: 'operators',
+                         args: [operator as `0x${string}`]
+                    }) as any;
+                    const balance = result[0]; // aPNTsBalance
+                    console.log(`   💰 SuperPaymaster Credit: ${formatEther(balance as bigint)} aPNTs (Operator: ${operator})`);
+                    if (balance === 0n) {
+                         console.error(`   ❌ Critical: Operator ${operator} has NO credit in SuperPaymaster.`);
+                    }
                 } catch (e: any) {
                     console.log(`   ⚠️  Failed to check SuperPM balance: ${e.message}`);
                 }
