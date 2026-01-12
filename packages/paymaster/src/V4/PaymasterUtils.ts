@@ -83,6 +83,32 @@ export function buildPaymasterData(
 }
 
 /**
+ * Build paymasterAndData for SuperPaymaster V3.
+ * Layout: [Paymaster(20)] [verGas(16)] [postGas(16)] [operator(20)] [maxRate(32)]
+ */
+export function buildSuperPaymasterData(
+    paymasterAddress: Address,
+    operator: Address,
+    options?: {
+        verificationGasLimit?: bigint;
+        postOpGasLimit?: bigint;
+    }
+): `0x${string}` {
+    const verGas = options?.verificationGasLimit ?? 80000n;
+    const postGas = options?.postOpGasLimit ?? 100000n;
+    // maxRate = type(uint256).max (Infinite rate tolerance for now)
+    const maxRate = 115792089237316195423570985008687907853269984665640564039457584007913129639935n; 
+
+    return concat([
+        paymasterAddress,
+        pad(toHex(verGas), { size: 16 }),
+        pad(toHex(postGas), { size: 16 }),
+        operator,
+        pad(toHex(maxRate), { size: 32 })
+    ]);
+}
+
+/**
  * Helper to format UserOp for Alchemy/Standard Bundlers (v0.7 Decomposed)
  */
 export function formatUserOpV07(userOp: any) {

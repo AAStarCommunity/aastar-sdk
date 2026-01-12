@@ -9,7 +9,7 @@
 Test accounts are dynamically configured via `l4-setup.ts` and stored in `scripts/l4-state.json`.
 
 Key test personas:
-- **Jason**: Uses PaymasterV4, Token: dPNTs (cPNTs)
+- **Jason**: Uses PaymasterV4, Token: aPNTs
 - **Bob**: Uses PaymasterV4, Token: bPNTs  
 - **Anni**: Uses SuperPaymaster, Token: dPNTs
 - **Charlie**: Uses PaymasterV4, Token: cPNTs

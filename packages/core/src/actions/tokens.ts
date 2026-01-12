@@ -47,6 +47,56 @@ function getTokenABI(token: Address): any {
     return xPNTsTokenABI;
 }
 
+export const gTokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
+    // Use GTokenABI for everything
+    ...tokenActions()(client),
+    async totalSupply({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'totalSupply', args: [] }) as Promise<bigint>;
+    },
+    async balanceOf({ token, account }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'balanceOf', args: [account] }) as Promise<bigint>;
+    },
+    async transfer({ token, to, amount, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
+    },
+    async transferFrom({ token, from, to, amount, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferFrom', args: [from, to, amount], account: account as any, chain: (client as any).chain });
+    },
+    async approve({ token, spender, amount, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
+    },
+    async allowance({ token, owner, spender }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'allowance', args: [owner, spender] }) as Promise<bigint>;
+    },
+    async mint({ token, to, amount, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
+    },
+    async burn({ token, amount, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
+    },
+    async burnFrom({ token, from, amount, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burnFrom', args: [from, amount], account: account as any, chain: (client as any).chain });
+    },
+    async name({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'name', args: [] }) as Promise<string>;
+    },
+    async symbol({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'symbol', args: [] }) as Promise<string>;
+    },
+    async decimals({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'decimals', args: [] }) as Promise<number>;
+    },
+    async owner({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'owner', args: [] }) as Promise<Address>;
+    },
+    async transferOwnership({ token, newOwner, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferOwnership', args: [newOwner], account: account as any, chain: (client as any).chain });
+    },
+    async renounceOwnership({ token, account }) {
+        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'renounceOwnership', args: [], account: account as any, chain: (client as any).chain });
+    },
+});
+
 export const tokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
     // ERC20 Standard
     async totalSupply({ token }) {

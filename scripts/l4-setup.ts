@@ -21,6 +21,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
 import { 
     tokenActions, 
+    gTokenActions,
     registryActions, 
     xPNTsFactoryActions,
     paymasterFactoryActions,
@@ -31,9 +32,9 @@ import {
     accountActions,
     EntryPointVersion,
     RegistryABI
-} from '../packages/core/dist/index.js';
-import { CommunityClient, UserClient } from '../packages/enduser/dist/index.js';
-import { PaymasterOperatorClient } from '../packages/operator/dist/PaymasterOperatorClient.js';
+} from '../packages/core/src/index.js';
+import { CommunityClient, UserClient } from '../packages/enduser/src/index.js';
+import { PaymasterOperatorClient } from '../packages/operator/src/PaymasterOperatorClient.js';
 import {
     UserOperationBuilder,
     UserOpScenarioBuilder,
@@ -119,7 +120,8 @@ async function main() {
     ].filter(op => op.key && op.key.startsWith('0x'));
 
     const registry = registryActions(config.contracts.registry);
-    const gToken = tokenActions();
+    const gToken = gTokenActions();
+    const xPNTsToken = tokenActions();
     const xpntsFactory = xPNTsFactoryActions(config.contracts.xPNTsFactory);
     const pmFactory = paymasterFactoryActions(config.contracts.paymasterFactory);
 
@@ -185,19 +187,44 @@ async function main() {
             console.log(`   ✓ ${op.name} using pre-deployed aPNTs: ${tAddr}`);
         } else {
             // Bob and Anni deploy their own community tokens via xPNTsFactory
-            tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
-            if (!tAddr || tAddr === '0x0000000000000000000000000000000000000000') {
-                 console.log(`   🏭 Deploying ${op.symbol} for ${op.name}...`);
-                 try {
-                     const h = await xpntsFactory(opClient).createToken({
-                        name: `${op.symbol} Token`, symbol: op.symbol, community: acc.address, account: acc
-                     });
-                     await publicClient.waitForTransactionReceipt({hash:h});
-                     tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
-                     token = tAddr ?? 'Error';
-                 } catch(e:any) { token = `Error`; }
+            // Pre-check: Ensure Community role is granted (required by factory contract)
+            const hasCommRole = await registry(publicClient).hasRole({ 
+                user: acc.address, 
+                roleId: ROLE_COMMUNITY_ID 
+            });
+            
+            if (!hasCommRole) {
+                console.error(`   ❌ CRITICAL: ${op.name} NOT registered as Community! Skipping token deployment.`);
+                token = "Community Role Missing";
+                tAddr = null;
             } else {
-                token = tAddr;
+                tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
+                if (!tAddr || tAddr === '0x0000000000000000000000000000000000000000') {
+                     console.log(`   🏭 Deploying ${op.symbol} for ${op.name}...`);
+                     try {
+                         const h = await xpntsFactory(opClient).createToken({
+                            name: `${op.symbol} Token`, symbol: op.symbol, community: acc.address, account: acc
+                         });
+                         console.log(`      📝 Deploy Tx: ${h}`);
+                         await publicClient.waitForTransactionReceipt({hash:h});
+                         
+                         // Verify deployment
+                         tAddr = await xpntsFactory(publicClient).getTokenAddress({ community: acc.address });
+                         if (!tAddr || tAddr === '0x0000000000000000000000000000000000000000') {
+                             throw new Error(`Token address still null after deployment`);
+                         }
+                         
+                         console.log(`      ✅ Token Deployed: ${tAddr}`);
+                         token = tAddr;
+                     } catch(e:any) { 
+                         console.error(`      ❌ Deployment FAILED: ${e.message}`);
+                         if (e.data) console.error(`         Revert Data: ${e.data}`);
+                         token = `Error: ${e.message.substring(0, 50)}...`;
+                     }
+                } else {
+                    token = tAddr;
+                    console.log(`   ✓ ${op.name} already has token: ${tAddr}`);
+                }
             }
         }
         if(tAddr && token !== 'Error' && token !== 'None') communityMap[op.name] = { token: tAddr };
@@ -279,7 +306,16 @@ async function main() {
                         stakeAmount: parseEther('50'),
                         depositAmount: parseEther('50000')
                     });
+                } else {
+                    console.log(`   ✓ Anni already registered as SuperPaymaster Operator`);
                 }
+                
+                // Verify operator config in SuperPaymaster
+                const spActions = superPaymasterActions(config.contracts.superPaymaster);
+                const opConfig = await spActions(publicClient).operators({ operator: acc.address });
+                console.log(`      💰 aPNTs Balance: ${formatEther(opConfig.aPNTsBalance || 0n)}`);
+                console.log(`      🎫 xPNTs Token: ${opConfig.xPNTsToken || 'Not Set'}`);
+                console.log(`      ⚙️  Configured: ${opConfig.isConfigured}`);
             } catch(e:any) { console.log(`      ⚠️ SuperPM Role Check/Reg Failed: ${e.message}`); }
         }
 

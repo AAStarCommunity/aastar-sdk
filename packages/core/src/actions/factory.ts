@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther } from 'viem';
 import { xPNTsFactoryABI, PaymasterFactoryABI } from '../abis/index.js';
 
 // xPNTs Factory Actions (基于地址调用的通用接口)
@@ -83,7 +83,7 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
                 symbol, 
                 name, // communityName
                 symbol, // communityENS
-                1n, // exchangeRate (1 w/ 0 decimals? or 1e18? Assuming 1 for now)
+                parseEther('1'), // exchangeRate: 1:1 with 18 decimals (1e18)
                 '0x0000000000000000000000000000000000000000' // paymasterAOA
             ],
             account: account as any,
