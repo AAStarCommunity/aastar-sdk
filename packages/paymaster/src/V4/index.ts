@@ -1,4 +1,4 @@
-import { type Address, concat, pad, toHex, keccak256, encodeAbiParameters, parseAbi } from 'viem';
+import { type Address, concat, pad, toHex, keccak256, encodeAbiParameters, parseAbi, type Hex, toBytes } from 'viem';
 
 export type PaymasterV4MiddlewareConfig = {
     paymasterAddress: Address;
@@ -21,8 +21,8 @@ export type GaslessReadinessReport = {
     };
 };
 
-const DEFAULT_VERIFICATION_GAS_V4 = 100000n;
-const DEFAULT_POSTOP_GAS_V4 = 50000n;
+const DEFAULT_VERIFICATION_GAS_V4 = 80000n;
+const DEFAULT_POSTOP_GAS_V4 = 100000n;
 
 /**
  * Constructs the middleware for Paymaster V4.
@@ -140,34 +140,37 @@ export class PaymasterV4Client {
         // 1. Stake
         if (report.details.paymasterStake < (options.minStake || 100000000000000000n)) {
             const hash = await this.addStake(operatorWallet, paymasterAddress, options.minStake || 200000000000000000n, 86400);
-            results.push({ step: 'Stake', hash, status: 'Sent' });
+            await publicClient.waitForTransactionReceipt({ hash });
+            results.push({ step: 'Stake', hash, status: 'Confirmed' });
         }
 
         // 2. Deposit (EntryPoint)
         if (report.details.paymasterDeposit < (options.minDeposit || 100000000000000000n)) {
             const hash = await this.addDeposit(operatorWallet, paymasterAddress, options.minDeposit || 300000000000000000n);
-            results.push({ step: 'Deposit', hash, status: 'Sent' });
+            await publicClient.waitForTransactionReceipt({ hash });
+            results.push({ step: 'Deposit', hash, status: 'Confirmed' });
         }
 
         // 3. Oracle Price
         if (report.details.ethUsdPrice === 0n) {
             const hash = await this.updatePrice(operatorWallet, paymasterAddress);
-            results.push({ step: 'OraclePrice', hash, status: 'Sent' });
+            await publicClient.waitForTransactionReceipt({ hash });
+            results.push({ step: 'OraclePrice', hash, status: 'Confirmed' });
         }
 
         // 4. Token Support & Price
         if (report.details.tokenPrice === 0n) {
-            // Try to add token if it might not be supported
+            // Try to add token
             try {
                 const hash = await this.addGasToken(operatorWallet, paymasterAddress, token);
-                results.push({ step: 'AddGasToken', hash, status: 'Sent' });
-            } catch (e) {
-                // Ignore if already added
-            }
+                await publicClient.waitForTransactionReceipt({ hash });
+                results.push({ step: 'AddGasToken', hash, status: 'Confirmed' });
+            } catch (e) {}
 
             if (options.tokenPriceUSD) {
                 const hash = await this.setTokenPrice(operatorWallet, paymasterAddress, token, options.tokenPriceUSD);
-                results.push({ step: 'TokenPrice', hash, status: 'Sent' });
+                await publicClient.waitForTransactionReceipt({ hash });
+                results.push({ step: 'TokenPrice', hash, status: 'Confirmed' });
             }
         }
 
@@ -373,8 +376,8 @@ export class PaymasterV4Client {
         }
     ): `0x${string}` {
         const validityWindow = options?.validityWindow ?? 3600;
-        const verGas = options?.verificationGasLimit ?? 60000n;
-        const postGas = options?.postOpGasLimit ?? 50000n;
+        const verGas = options?.verificationGasLimit ?? 80000n;
+        const postGas = options?.postOpGasLimit ?? 100000n;
         
         const now = Math.floor(Date.now() / 1000);
         const validUntil = now + validityWindow;
@@ -435,6 +438,20 @@ export class PaymasterV4Client {
     }
 
     /**
+     * Approve the Paymaster (or any spender) to spend gas tokens.
+     * Essential before calling `depositFor`.
+     */
+    static async approveGasToken(wallet: any, token: Address, spender: Address, amount: bigint) {
+        return wallet.writeContract({
+            address: token,
+            abi: parseAbi(['function approve(address spender, uint256 amount) external returns (bool)']),
+            functionName: 'approve',
+            args: [spender, amount],
+            chain: wallet.chain
+        } as any);
+    }
+
+    /**
      * Add ETH stake to EntryPoint for this Paymaster.
      * Required for storage access (e.g. checking user token balance).
      */
@@ -464,23 +481,88 @@ export class PaymasterV4Client {
     }
 
     /**
-     * Submit a gasless UserOperation using Paymaster V4.
-     * This method handles building paymasterData, signing, and submitting to the bundler.
-     * Note: This requires the AA account to already have a deposit in the Paymaster.
-     * @param client - Viem public client
-     * @param account - The owner EOA account object (for signing)
-     * @param aaAddress - The AA wallet address
-     * @param entryPoint - EntryPoint address
-     * @param paymasterAddress - Paymaster V4 address
-     * @param token - Gas token address (e.g., bPNTs)
-     * @param bundlerUrl - Bundler RPC URL
-     * @param callData - The callData for the UserOp
-     * @param options - Optional UserOp parameters
-     * @returns UserOperation hash
+     * Estimate Gas for a UserOperation.
+     */
+    static async estimateUserOperationGas(
+        client: any,
+        wallet: any,
+        aaAddress: Address,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        token: Address,
+        bundlerUrl: string,
+        callData: `0x${string}`,
+        options?: {
+            validityWindow?: number;
+        }
+    ) {
+        // 1. Construct a dummy UserOp for estimation
+        const paymasterAndData = this.buildPaymasterData(paymasterAddress, token, {
+            validityWindow: options?.validityWindow,
+            verificationGasLimit: 60000n, // Placeholder
+            postOpGasLimit: 60000n        // Placeholder
+        });
+
+        const partialUserOp = {
+            sender: aaAddress,
+            nonce: 0n,
+            initCode: '0x' as `0x${string}`,
+            callData,
+            accountGasLimits: concat([pad(toHex(60000n), { size: 16 }), pad(toHex(100000n), { size: 16 })]), // 60k verification, 100k call
+            preVerificationGas: 50000n, // 50k PVG
+            gasFees: concat([pad(toHex(1000000000n), { size: 16 }), pad(toHex(10000000000n), { size: 16 })]), // 1Gwei / 10Gwei
+            paymasterAndData,
+            signature: '0x' as `0x${string}`
+        };
+
+        // Get actual nonce
+        try {
+            const nonce = await client.readContract({
+                address: aaAddress,
+                abi: parseAbi(['function getNonce() view returns (uint256)']),
+                functionName: 'getNonce'
+            });
+            partialUserOp.nonce = BigInt(nonce);
+        } catch (e) {}
+
+        const userOpHash = this.getUserOpHashV07(partialUserOp, entryPoint, BigInt(client.chain.id));
+        partialUserOp.signature = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
+
+        const payload = {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_estimateUserOperationGas',
+            params: [this.toAlchemyFormat(partialUserOp), entryPoint]
+        };
+
+        const response = await fetch(bundlerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)
+        });
+
+        const result = await response.json();
+
+        if (result.error) throw new Error(`Estimation Error: ${JSON.stringify(result.error)}`);
+
+        const data = result.result;
+        
+        // Dynamic tuning based on "Efficiency Guard" formulas
+        return {
+            preVerificationGas: BigInt(data.preVerificationGas),
+            verificationGasLimit: (BigInt(data.verificationGasLimit) * 120n) / 100n, // 1.2x safety buffer (Efficiency > 0.4)
+            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n,                // 1.1x safety buffer
+            paymasterPostOpGasLimit: 100000n                                       // Explicitly high for Oracle
+        };
+    }
+
+    /**
+     * High-level API to submit a gasless UserOperation.
+     * Automatically handles nonce fetching, gas estimation (if not provided), signing, and submission.
      */
     static async submitGaslessUserOperation(
         client: any,
-        account: any,
+        wallet: any,
         aaAddress: Address,
         entryPoint: Address,
         paymasterAddress: Address,
@@ -494,19 +576,40 @@ export class PaymasterV4Client {
             preVerificationGas?: bigint;
             maxFeePerGas?: bigint;
             maxPriorityFeePerGas?: bigint;
+            autoEstimate?: boolean;
         }
     ): Promise<`0x${string}`> {
+        // 0. Auto-Estimate if requested or if limits missing
+        let gasLimits = {
+            preVerificationGas: options?.preVerificationGas,
+            verificationGasLimit: options?.verificationGasLimit,
+            callGasLimit: options?.callGasLimit,
+            paymasterPostOpGasLimit: 100000n
+        };
+
+        if (options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
+            const est = await this.estimateUserOperationGas(
+                client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, 
+                { validityWindow: options?.validityWindow }
+            );
+            gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
+            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;
+            gasLimits.callGasLimit = options?.callGasLimit ?? est.callGasLimit;
+            gasLimits.paymasterPostOpGasLimit = est.paymasterPostOpGasLimit;
+        }
+
         // 1. Get Nonce
         const nonce = await client.readContract({
             address: aaAddress,
-            abi: [{ name: 'getNonce', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+            abi: parseAbi(['function getNonce() view returns (uint256)']),
             functionName: 'getNonce'
         });
 
         // 2. Build paymasterAndData
         const paymasterAndData = this.buildPaymasterData(paymasterAddress, token, {
             validityWindow: options?.validityWindow,
-            verificationGasLimit: options?.verificationGasLimit
+            verificationGasLimit: gasLimits.verificationGasLimit ?? 150000n, // Use tuned value
+            postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
         });
 
         // 3. Construct UserOp
@@ -516,10 +619,10 @@ export class PaymasterV4Client {
             initCode: '0x' as `0x${string}`,
             callData,
             accountGasLimits: concat([
-                pad(toHex(options?.verificationGasLimit ?? 80000n), { size: 16 }), // Verification
-                pad(toHex(options?.callGasLimit ?? 300000n), { size: 16 })       // Call
+                pad(toHex(gasLimits.verificationGasLimit ?? 150000n), { size: 16 }), // Verification (Tuned or Default)
+                pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })        // Call (Tuned or Default)
             ]),
-            preVerificationGas: options?.preVerificationGas ?? 50000n,
+            preVerificationGas: gasLimits.preVerificationGas ?? 50000n,
             gasFees: concat([
                 pad(toHex(options?.maxPriorityFeePerGas ?? 100000000n), { size: 16 }),
                 pad(toHex(options?.maxFeePerGas ?? 2000000000n), { size: 16 })
@@ -528,28 +631,9 @@ export class PaymasterV4Client {
             signature: '0x' as `0x${string}`
         };
 
-        // 4. Calculate Hash (Simplified v0.7 format)
-        // [sender, nonce, initCode, callData, accountGasLimits, preVerificationGas, gasFees, paymasterAndData]
-        const hashedUserOp = keccak256(encodeAbiParameters(
-            ['address', 'uint256', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes32', 'bytes32'].map(t => ({ type: t } as any)),
-            [
-                userOp.sender,
-                userOp.nonce,
-                keccak256(userOp.initCode),
-                keccak256(userOp.callData),
-                userOp.accountGasLimits,
-                userOp.preVerificationGas,
-                userOp.gasFees,
-                keccak256(userOp.paymasterAndData)
-            ]
-        ));
-        const userOpHash = keccak256(encodeAbiParameters(
-            ['bytes32', 'address', 'uint256'].map(t => ({ type: t } as any)),
-            [hashedUserOp, entryPoint, BigInt(client.chain.id)]
-        ));
-
-        // 5. Sign
-        const signature = await account.signMessage({ message: { raw: userOpHash } });
+        // 4. Final Hashing and Signing
+        const userOpHash = this.getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
+        const signature = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
         userOp.signature = signature;
 
         // 6. Submit to Bundler
@@ -614,6 +698,26 @@ export class PaymasterV4Client {
         }
 
         return result;
+    }
+
+    static getUserOpHashV07(userOp: any, entryPoint: Address, chainId: bigint): Hex {
+        const hashedUserOp = keccak256(encodeAbiParameters(
+            ['address', 'uint256', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes32', 'bytes32'].map(t => ({ type: t } as any)),
+            [
+                userOp.sender,
+                userOp.nonce,
+                keccak256(toBytes(userOp.initCode as Hex)),
+                keccak256(toBytes(userOp.callData as Hex)),
+                userOp.accountGasLimits as Hex,
+                toHex(userOp.preVerificationGas),
+                userOp.gasFees as Hex,
+                keccak256(toBytes(userOp.paymasterAndData as Hex))
+            ]
+        ));
+        return keccak256(encodeAbiParameters(
+            ['bytes32', 'address', 'uint256'].map(t => ({ type: t } as any)),
+            [hashedUserOp, entryPoint, chainId]
+        ));
     }
 }
 
