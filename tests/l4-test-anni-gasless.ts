@@ -138,17 +138,31 @@ async function main() {
             { name: 'configureOperator', type: 'function', inputs: [{ name: 'xPNTsToken', type: 'address' }, { name: 'owner', type: 'address' }, { name: 'exchangeRate', type: 'uint96' }], outputs: [], stateMutability: 'nonpayable' }
         ];
         try {
-            const fixTx = await anniWallet.writeContract({
-                address: anniPM,
-                abi: spAbi,
-                functionName: 'configureOperator',
-                args: [cPNTs, anniAccount.address, parseEther('1')], // 1:1 Rate
-                chain: sepolia,
-                account: anniAccount
-            });
-            console.log(`   📝 Fix Transaction Sent: ${fixTx}`);
-            await publicClient.waitForTransactionReceipt({ hash: fixTx });
-            console.log('   ✅ Operator Configured Successfully.');
+            if (operatorConfig[1] === 0n) {
+                console.log('   🔧 Auto-fixing zero Exchange Rate...');
+                const tx = await anniWallet.writeContract({
+                    address: anniPM,
+                    abi: spAbi,
+                    functionName: 'configureOperator',
+                    args: [cPNTs, anniAccount.address, 10n**18n], // 1:1
+                    chain: sepolia,
+                    account: anniAccount
+                });
+                await publicClient.waitForTransactionReceipt({ hash: tx });
+                console.log('   ✅ Exchange Rate fixed to 1:1.');
+            } else {
+                const fixTx = await anniWallet.writeContract({
+                    address: anniPM,
+                    abi: spAbi,
+                    functionName: 'configureOperator',
+                    args: [cPNTs, anniAccount.address, operatorConfig[1]], // Use existing rate if not zero
+                    chain: sepolia,
+                    account: anniAccount
+                });
+                console.log(`   📝 Fix Transaction Sent: ${fixTx}`);
+                await publicClient.waitForTransactionReceipt({ hash: fixTx });
+                console.log('   ✅ Operator Configured Successfully.');
+            }
         } catch (e: any) {
             console.warn('   ❌ Auto-fix failed:', e.message);
         }
@@ -187,17 +201,17 @@ async function main() {
 
     // Check SBT status in SuperPaymaster mapping
     const sbtStatusInPM = await publicClient.readContract({
-        address: anniPM, // Assuming superPM is anniPM
+        address: anniPM,
         abi: SuperPaymasterABI,
         functionName: 'sbtHolders',
-        args: [anniAccount.address]
+        args: [anniAA]
     }) as boolean;
 
     const operatorState = await publicClient.readContract({
-        address: anniPM, // Assuming superPM is anniPM
+        address: anniPM,
         abi: SuperPaymasterABI,
         functionName: 'userOpState',
-        args: [anniAccount.address, anniAccount.address] // operator, user (both are anni accounts/eoa/aa)
+        args: [anniAccount.address, anniAA] // operator, user
     }) as [boolean, bigint]; // Type assertion for operatorState
 
     const [ethUsdPrice, updatedAt, roundId, priceDecimals] = cachedPrice;
@@ -348,10 +362,10 @@ async function main() {
          }
 
         // Step 2.5: Ensure Oracle Price Cache is fresh
-        console.log('\nStep 2.5: Ensuring Oracle Price Cache...');
-        const currentCacheAgeSeconds = BigInt(Math.floor(Date.now() / 1000)) - cacheData[1]; // Using cacheData[1] from earlier read
-        if (currentCacheAgeSeconds > 3600n) { // Over 1 hour
-            console.log(`   🕒 Cache Age: ${currentCacheAgeSeconds}s. Refreshing...`);
+    console.log('\nStep 2.5: Ensuring Oracle Price Cache...');
+    const cacheAgeSeconds2 = Math.floor(Date.now() / 1000) - Number(cachedPrice[1]);
+    if (cacheAgeSeconds2 > 3600) {
+            console.log(`   🕒 Cache Age: ${cacheAgeSeconds2}s. Refreshing...`);
             try {
                 const upHash = await anniWallet.writeContract({
                     address: anniPM,
@@ -367,8 +381,7 @@ async function main() {
             } catch (e: any) {
                 console.warn('   ⚠️ Oracle Update failed (might be gas issue):', e.message);
             }
-        } else {
-            console.log(`   ✅ Cache is fresh (Age: ${currentCacheAgeSeconds}s). Skipping update.`);
+            console.log(`   ✅ Cache is fresh (Age: ${cacheAgeSeconds2}s). Skipping update.`);
         }
 
           // Check aPNTsPriceUSD in Paymaster Storage (DivZero check)
@@ -459,6 +472,116 @@ async function main() {
     console.log(`   MaxRate (offset 72-104): ${toHex(maxRate)}`);
     // console.log(`   Full: ${debugPMD}\n`);
 
+    // 🔍 SIMULATION: Call validatePaymasterUserOp explicitly
+    console.log('\n🔍 ESTIMATION: Estimating UserOp Gas...');
+    
+    // Explicit estimation first
+    const est = await PaymasterClient.estimateUserOperationGas(
+         publicClient,
+         anniWallet,
+         anniAA,
+         config.contracts.entryPoint as Address,
+         anniPM,
+         cPNTs,
+         process.env.BUNDLER_URL!,
+         transferCalldata,
+         {
+             operator: anniAccount.address
+         }
+    );
+    console.log('   ⛽ Estimated Gas Limits:', est);
+
+    // Use estimated limits for sim and submission
+    const simGasLimits = {
+        verificationGasLimit: 150000n, // Match submission
+        callGasLimit: est.callGasLimit,
+        preVerificationGas: est.preVerificationGas,
+        paymasterVerificationGasLimit: 150000n, // Hardcode safe limit
+        paymasterPostOpGasLimit: est.paymasterPostOpGasLimit
+    };
+    
+    const MAX_FEE = 501000000n;
+    const PRIO_FEE = 500000000n;
+
+    const simPaymasterAndData = concat([
+        anniPM,
+        pad(toHex(simGasLimits.paymasterVerificationGasLimit), { size: 16 }),
+        pad(toHex(simGasLimits.paymasterPostOpGasLimit), { size: 16 }),
+        anniAccount.address
+    ]);
+
+    // Construct packed struct for v0.7
+    // sender, nonce, initCode, callData, accountGasLimits, preVerificationGas, gasFees, paymasterAndData, signature
+    const simUserOp = {
+        sender: anniAA,
+        nonce: 0n, // Assuming 0 check
+        initCode: '0x' as Hex,
+        callData: transferCalldata as Hex,
+        accountGasLimits: concat([pad(toHex(simGasLimits.verificationGasLimit), { size: 16 }), pad(toHex(simGasLimits.callGasLimit), { size: 16 })]),
+        preVerificationGas: simGasLimits.preVerificationGas,
+        gasFees: concat([pad(toHex(PRIO_FEE), { size: 16 }), pad(toHex(MAX_FEE), { size: 16 })]),
+        paymasterAndData: simPaymasterAndData,
+        signature: '0x' as Hex
+    };
+    
+    try {
+        // Fetch actual nonce for accurate simulation
+        const nonce = await publicClient.readContract({
+            address: anniAA,
+            abi: [{ name: 'getNonce', type: 'function', inputs: [], outputs: [{ type: 'uint256' }] }],
+            functionName: 'getNonce'
+        }) as bigint;
+        simUserOp.nonce = nonce;
+
+        const entryPointAddr = config.contracts.entryPoint as Address;
+        const maxCost = (simGasLimits.preVerificationGas + simGasLimits.verificationGasLimit + simGasLimits.callGasLimit + simGasLimits.paymasterVerificationGasLimit + simGasLimits.paymasterPostOpGasLimit) * MAX_FEE;
+        
+        console.log(`   Calling validatePaymasterUserOp as EntryPoint (${entryPointAddr})...`);
+        const result = await publicClient.readContract({
+            address: anniPM,
+            abi: [{
+                name: 'validatePaymasterUserOp',
+                type: 'function',
+                inputs: [
+                    {
+                        components: [
+                            { name: 'sender', type: 'address' },
+                            { name: 'nonce', type: 'uint256' },
+                            { name: 'initCode', type: 'bytes' },
+                            { name: 'callData', type: 'bytes' },
+                            { name: 'accountGasLimits', type: 'bytes32' },
+                            { name: 'preVerificationGas', type: 'uint256' },
+                            { name: 'gasFees', type: 'bytes32' },
+                            { name: 'paymasterAndData', type: 'bytes' },
+                            { name: 'signature', type: 'bytes' }
+                        ],
+                        name: 'userOp',
+                        type: 'tuple'
+                    },
+                    { name: 'userOpHash', type: 'bytes32' },
+                    { name: 'maxCost', type: 'uint256' }
+                ],
+                outputs: [{ type: 'bytes', name: 'context' }, { type: 'uint256', name: 'validationData' }],
+                stateMutability: 'nonpayable'
+            }],
+            functionName: 'validatePaymasterUserOp',
+            args: [simUserOp, '0x0000000000000000000000000000000000000000000000000000000000000000', maxCost],
+            account: entryPointAddr
+        }) as [string, bigint];
+
+        console.log(`   ✅ Simulation Result: context=${result[0]}, validationData=${result[1]}`);
+        if (result[1] !== 0n) {
+            console.error(`   ❌ Simulation FAILED! sigFailed=${result[1]}`);
+        } else {
+             console.log(`   🎉 Simulation PASSED!`);
+        }
+
+    } catch (e: any) {
+        console.error(`   ❌ Simulation REVERTED: ${e.message}`);
+        if (e.reason) console.error(`      Reason: ${e.reason}`);
+        if (e.data) console.error(`      Data: ${e.data}`);
+    }
+
     try {
         const userOpHash = await PaymasterClient.submitGaslessUserOperation(
             publicClient,
@@ -470,7 +593,12 @@ async function main() {
             process.env.BUNDLER_URL!,
             transferCalldata,
             {
-                operator: anniAccount.address // Enable SuperPaymaster logic
+                operator: anniAccount.address,
+                // Pass Explicit Limits from Estimation with Safe PM Limit
+                verificationGasLimit: 150000n, // Tuned for Efficiency > 0.4
+                callGasLimit: est.callGasLimit,
+                preVerificationGas: est.preVerificationGas,
+                autoEstimate: false // Already estimated
             }
         );
 
