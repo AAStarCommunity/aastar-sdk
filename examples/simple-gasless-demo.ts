@@ -27,19 +27,17 @@ async function main() {
     const client = createPublicClient({ chain: sepolia, transport: http(APP_CONFIG.rpcUrl) });
 
     // 2. Define Your Action (e.g. Transfer Token)
-    const callData = encodeFunctionData({
-        abi: [{ name: 'execute', type: 'function', inputs: [{ name: 'dest', type: 'address' }, { name: 'value', type: 'uint256' }, { name: 'func', type: 'bytes' }], outputs: [], stateMutability: 'nonpayable' }],
-        functionName: 'execute',
-        args: [
-            APP_CONFIG.gasToken as `0x${string}`, 
-            0n, 
-            encodeFunctionData({
-                abi: [{ name: 'transfer', type: 'function', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
-                functionName: 'transfer',
-                args: [account.address, parseEther('0.01')]
-            })
-        ]
-    });
+    // 💡 New Semantic Helpers: No more raw ABI encoding!
+    
+    // A. Inner Action: Transfer 0.01 dPNTs to Owner
+    const innerCall = PaymasterClient.encodeTokenTransfer(account.address, parseEther('0.01'));
+
+    // B. Outer Action: Execute via AA (SimpleAccount.execute)
+    const callData = PaymasterClient.encodeExecution(
+        APP_CONFIG.gasToken as `0x${string}`, 
+        0n,                                    
+        innerCall
+    );
 
     // 3. ✨ ONE-LINER SUBMISSION ✨
     // (Auto: Gas Estimation, 1.2x Efficiency Guard, Signing, Submission)

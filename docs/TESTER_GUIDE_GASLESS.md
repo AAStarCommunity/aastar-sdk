@@ -97,36 +97,112 @@ npx tsx examples/prepare-gasless.ts
 - Checks Token Support & Price
 - Auto-seeds user deposit if low
 
-### 2. App Developer: One-Liner Submission
-Submit a gasless transaction without worrying about Gas limits, fees, or Paymaster data encoding.
+### 2. App Developer: One-Liner Submission (Code Walkthrough)
+
+To understand how to integrate Gasless features into your app, look at `examples/simple-gasless-demo.ts`. This script demonstrates the "Zero-Friction" Developer Experience (DX).
+
+**Reference Script**: [`examples/simple-gasless-demo.ts`](../examples/simple-gasless-demo.ts)
+
+#### Step 1: Setup Client & Wallet
+Standard `viem` setup. You need a `WalletClient` (to sign the UserOp) and a `PublicClient` (to read data).
 
 ```typescript
-```typescript
-// examples/simple-gasless-demo.ts
-import { PaymasterClient } from '@aastar/paymaster';
-
-// ... (Client setup) ...
-
-// ✨ The Magic Line
-const userOpHash = await PaymasterClient.submitGaslessUserOperation(
-    publicClient,
-    walletClient,      // Wrapper around User Private Key
-    aaAccountAddress,  // Sender Address
-    entryPointAddress,
-    paymasterAddress,
-    tokenAddress,
-    bundlerUrl,
-    callData
-);
-
-console.log("UserOp Hash:", userOpHash);
-// Note: To see the Transaction Hash, you must wait for the Bundler to mine the UserOp.
+// 1. Setup Clients
+const wallet = createWalletClient({ account, chain: sepolia, transport: http(rpcUrl) });
+const client = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
 ```
 
-**Key Features:**
-- **Auto-Gas Estimation**: Automatically simulates the UserOp with the Bundler.
-- **Efficiency Guard**: Applies tuned gas limits (no buffer for verification, 1.1x for call) to satisfy Bundler efficiency rules (>0.4).
-- **Auto-Signing**: Handles the v0.7 UserOp hashing and signing internally.
+#### Step 2: Define "User Intent" (CallData)
+Instead of dealing with raw ABI encoding, use the SDK's semantic builders.
+
+```typescript
+// 2A. Inner Action: Transfer 0.01 dPNTs
+const innerCall = PaymasterClient.encodeTokenTransfer(recipient, parseEther('0.01'));
+
+// 2B. Outer Action: Execute via AA
+const callData = PaymasterClient.encodeExecution(
+    tokenAddress, 
+    0n, 
+    innerCall
+);
+```
+
+#### Step 3: ✨ The Magic Line (Submission) ✨
+This is the core of the SDK. The `submitGaslessUserOperation` function handles all the complexity of Account Abstraction:
+1.  **Gas Estimation**: Automatically calls the Bundler to estimate usage.
+2.  **Efficiency Guard**: Applies optimized gas limits (no buffer for verification, 1.1x for execution) to pass strict Bundler rules.
+3.  **Data Encoding**: Packs the Paymaster data (time validity, deposit info).
+4.  **Signing**: Signs the UserOp with the user's private key (v0.7 compliant).
+5.  **Submission**: Sends the packet to the Bundler.
+
+```typescript
+// 3. Submit Gasless UserOp (One-Liner)
+const userOpHash = await PaymasterClient.submitGaslessUserOperation(
+    client,            // Public Client for reads
+    wallet,            // Wallet Client for signing
+    aaAccountAddress,  // The User's AA Wallet Address
+    entryPointAddress, // Global EntryPoint
+    paymasterAddress,  // The Paymaster paying the fees
+    tokenAddress,      // The Token the user is "spending" (conceptually)
+    bundlerUrl,        // Where to send the UserOp
+    callData           // The action from Step 2
+);
+```
+
+#### Step 4: Wait for Receipt
+The `userOpHash` is just a tracking ID. You must wait for the Bundler to bundle it into a real Ethereum Transaction.
+
+```typescript
+// 4. Wait for Execution
+const receipt = await bundlerClient.waitForUserOperationReceipt({ 
+    hash: userOpHash 
+});
+console.log(`mined in tx: ${receipt.receipt.transactionHash}`);
+```
+
+#### Step 5: Instant Bill (Get Cost)
+Since the fee is deducted from an internal Paymaster balance (not an external ERC-20 transfer), users might wonder "How much did I pay?".
+The `getTransactionFee` helper instantly decodes the `PostOpProcessed` log from the receipt to give you the exact cost.
+
+```typescript
+// 5. Instant Bill (No scanning required)
+const feeInfo = PaymasterClient.getFeeFromReceipt(receipt.receipt, paymasterAddress);
+console.log(`[Instant Bill] Cost: ${formatEther(feeInfo.tokenCost)} dPNTs`);
+```
+
+---
+
+---
+
+## Advanced: Remote Signing (KMS / MPC)
+
+If your AA Account's private key is stored in a KMS (AWS, Google) or MPC Node, you cannot export it. **Good news**: The SDK is compatible with any signer.
+
+**How to integrate:**
+1.  Create a custom `viem` Account that calls your KMS.
+2.  Pass this account to `createWalletClient`.
+3.  The SDK uses `wallet.account.signMessage(...)` internally.
+
+```typescript
+// Example: Custom KMS Account
+import { toAccount } from 'viem/accounts';
+
+const kmsAccount = toAccount({
+    address: '0xYourAAAddress',
+    async signMessage({ message }) {
+        // 1. Send 'message.raw' (the UserOpHash) to your KMS API
+        const signature = await myKmsClient.sign(message.raw); 
+        // 2. Return the signature
+        return signature; 
+    },
+    // Implement other required methods (signTransaction, etc.) if needed
+});
+
+const wallet = createWalletClient({ account: kmsAccount, ... });
+
+// Now just call the SDK as normal!
+await PaymasterClient.submitGaslessUserOperation(..., wallet, ...);
+```
 
 ---
 

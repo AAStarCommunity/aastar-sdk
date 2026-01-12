@@ -1,4 +1,4 @@
-import { type Address, concat, pad, toHex, parseAbi, parseAbiItem } from 'viem';
+import { type Address, concat, pad, toHex, parseAbi, parseAbiItem, encodeFunctionData } from 'viem';
 import { buildPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
 
 /**
@@ -261,5 +261,34 @@ export class PaymasterClient {
     static async getTransactionFee(publicClient: any, txHash: `0x${string}`, paymasterAddress: Address) {
         const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
         return this.getFeeFromReceipt(receipt, paymasterAddress);
+    }
+
+    // ===========================================
+    // 🛠️ Semantic CallData Builders (For DX)
+    // ===========================================
+
+    /**
+     * Helper: Encode a standardized ERC-20 Transfer.
+     * Returns the raw function data: `transfer(to, amount)`
+     */
+    static encodeTokenTransfer(recipient: Address, amount: bigint): `0x${string}` {
+        return encodeFunctionData({
+            abi: parseAbi(['function transfer(address to, uint256 amount) external returns (bool)']),
+            functionName: 'transfer',
+            args: [recipient, amount]
+        });
+    }
+
+    /**
+     * Helper: Encode a SimpleAccount execution.
+     * Wraps the inner call into: `execute(target, value, data)`
+     * This is the payload signed by the user.
+     */
+    static encodeExecution(target: Address, value: bigint, data: `0x${string}`): `0x${string}` {
+        return encodeFunctionData({
+            abi: parseAbi(['function execute(address dest, uint256 value, bytes func) external']),
+            functionName: 'execute',
+            args: [target, value, data]
+        });
     }
 }
