@@ -1,10 +1,24 @@
-import { type Address, concat, pad, toHex } from 'viem';
+import { type Address, concat, pad, toHex, keccak256, encodeAbiParameters, parseAbi } from 'viem';
 
 export type PaymasterV4MiddlewareConfig = {
     paymasterAddress: Address;
     gasToken: Address;
     verificationGasLimit?: bigint;
     postOpGasLimit?: bigint;
+};
+
+export type GaslessReadinessReport = {
+    isReady: boolean;
+    issues: string[];
+    details: {
+        paymasterStake: bigint;
+        paymasterDeposit: bigint;
+        ethUsdPrice: bigint;
+        tokenSupported: boolean;
+        tokenPrice: bigint;
+        userTokenBalance: bigint;
+        userPaymasterDeposit: bigint;
+    };
 };
 
 const DEFAULT_VERIFICATION_GAS_V4 = 100000n;
@@ -41,6 +55,125 @@ export function getPaymasterV4Middleware(config: PaymasterV4MiddlewareConfig) {
  * Admin Client for Paymaster V4
  */
 export class PaymasterV4Client {
+    /**
+     * Comprehensive check to verify if a gasless transaction is likely to succeed.
+     */
+    static async checkGaslessReadiness(
+        publicClient: any,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        user: Address,
+        token: Address
+    ): Promise<GaslessReadinessReport> {
+        const issues: string[] = [];
+        
+        // 1. EntryPoint Stake/Deposit (using v0.7 getDepositInfo)
+        const depositInfo = await publicClient.readContract({
+            address: entryPoint,
+            abi: parseAbi(['function getDepositInfo(address account) external view returns (uint256 deposit, bool staked, uint256 stake, uint32 unstakeDelaySec, uint48 withdrawTime)']),
+            functionName: 'getDepositInfo',
+            args: [paymasterAddress]
+        });
+
+        if (depositInfo[2] < 100000000000000000n) issues.push('Paymaster stake in EntryPoint is less than 0.1 ETH');
+        if (depositInfo[3] < 86400) issues.push('Paymaster unstake delay is less than 1 day');
+        if (depositInfo[0] < 100000000000000000n) issues.push('Paymaster deposit in EntryPoint is less than 0.1 ETH');
+
+        // 2. Oracle Price
+        const ethPrice = await publicClient.readContract({
+            address: paymasterAddress,
+            abi: parseAbi(['function cachedPrice() external view returns (uint208 price, uint48 updatedAt)']),
+            functionName: 'cachedPrice'
+        }).catch(() => [0n, 0n] as const);
+
+        if (ethPrice[0] === 0n) issues.push('Paymaster ETH/USD price not initialized');
+
+        // 3. Token Support & Price
+        const [tokenPrice, userTokenBal, userPMDeposit] = await Promise.all([
+            this.getTokenPrice(publicClient, paymasterAddress, token),
+            publicClient.readContract({
+                address: token,
+                abi: parseAbi(['function balanceOf(address account) external view returns (uint256)']),
+                functionName: 'balanceOf',
+                args: [user]
+            }),
+            this.getDepositedBalance(publicClient, paymasterAddress, user, token)
+        ]);
+
+        if (tokenPrice === 0n) issues.push('Token price not set in Paymaster');
+        if (userPMDeposit === 0n) issues.push('User has no deposit in Paymaster');
+
+        return {
+            isReady: issues.length === 0,
+            issues,
+            details: {
+                paymasterStake: depositInfo[2],
+                paymasterDeposit: depositInfo[0],
+                ethUsdPrice: ethPrice.price,
+                tokenSupported: true, // If getTokenPrice didn't revert, it's supported
+                tokenPrice: tokenPrice,
+                userTokenBalance: userTokenBal,
+                userPaymasterDeposit: userPMDeposit
+            }
+        };
+    }
+
+    /**
+     * Automated preparation of the Paymaster environment.
+     * Performs missing stake, deposit, and price initialization steps.
+     */
+    static async prepareGaslessEnvironment(
+        operatorWallet: any,
+        publicClient: any,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        token: Address,
+        options: {
+            minStake?: bigint;
+            minDeposit?: bigint;
+            tokenPriceUSD?: bigint;
+        } = {}
+    ) {
+        const report = await this.checkGaslessReadiness(publicClient, entryPoint, paymasterAddress, operatorWallet.account.address, token);
+        const results: { step: string, hash?: string, status: string }[] = [];
+
+        // 1. Stake
+        if (report.details.paymasterStake < (options.minStake || 100000000000000000n)) {
+            const hash = await this.addStake(operatorWallet, paymasterAddress, options.minStake || 200000000000000000n, 86400);
+            results.push({ step: 'Stake', hash, status: 'Sent' });
+        }
+
+        // 2. Deposit (EntryPoint)
+        if (report.details.paymasterDeposit < (options.minDeposit || 100000000000000000n)) {
+            const hash = await this.addDeposit(operatorWallet, paymasterAddress, options.minDeposit || 300000000000000000n);
+            results.push({ step: 'Deposit', hash, status: 'Sent' });
+        }
+
+        // 3. Oracle Price
+        if (report.details.ethUsdPrice === 0n) {
+            const hash = await this.updatePrice(operatorWallet, paymasterAddress);
+            results.push({ step: 'OraclePrice', hash, status: 'Sent' });
+        }
+
+        // 4. Token Support & Price
+        if (report.details.tokenPrice === 0n) {
+            // Try to add token if it might not be supported
+            try {
+                const hash = await this.addGasToken(operatorWallet, paymasterAddress, token);
+                results.push({ step: 'AddGasToken', hash, status: 'Sent' });
+            } catch (e) {
+                // Ignore if already added
+            }
+
+            if (options.tokenPriceUSD) {
+                const hash = await this.setTokenPrice(operatorWallet, paymasterAddress, token, options.tokenPriceUSD);
+                results.push({ step: 'TokenPrice', hash, status: 'Sent' });
+            }
+        }
+
+        return results;
+    }
+    
     static async addGasToken(wallet: any, address: Address, token: Address) {
         return wallet.writeContract({
             address,
@@ -133,7 +266,7 @@ export class PaymasterV4Client {
     static async updatePrice(wallet: any, address: Address) {
         return wallet.writeContract({
             address,
-            abi: ['function updatePrice() external'],
+            abi: parseAbi(['function updatePrice() external']),
             functionName: 'updatePrice',
             chain: wallet.chain
         } as any);
@@ -149,7 +282,7 @@ export class PaymasterV4Client {
     static async setTokenPrice(wallet: any, address: Address, token: Address, priceUSD: bigint) {
         return wallet.writeContract({
             address,
-            abi: ['function setTokenPrice(address token, uint256 price) external'],
+            abi: parseAbi(['function setTokenPrice(address token, uint256 price) external']),
             functionName: 'setTokenPrice',
             args: [token, priceUSD],
             chain: wallet.chain
@@ -294,9 +427,38 @@ export class PaymasterV4Client {
     static async depositFor(wallet: any, address: Address, user: Address, token: Address, amount: bigint) {
         return wallet.writeContract({
             address,
-            abi: ['function depositFor(address user, address token, uint256 amount) external'],
+            abi: parseAbi(['function depositFor(address user, address token, uint256 amount) external']),
             functionName: 'depositFor',
             args: [user, token, amount],
+            chain: wallet.chain
+        } as any);
+    }
+
+    /**
+     * Add ETH stake to EntryPoint for this Paymaster.
+     * Required for storage access (e.g. checking user token balance).
+     */
+    static async addStake(wallet: any, address: Address, amount: bigint, unstakeDelaySec: number) {
+        return wallet.writeContract({
+            address,
+            abi: parseAbi(['function addStake(uint32 unstakeDelaySec) external payable']),
+            functionName: 'addStake',
+            args: [unstakeDelaySec],
+            value: amount,
+            chain: wallet.chain
+        } as any);
+    }
+
+    /**
+     * Add ETH deposit to EntryPoint for this Paymaster.
+     * This ETH is used to pay for the gas of sponsored UserOperations.
+     */
+    static async addDeposit(wallet: any, address: Address, amount: bigint) {
+        return wallet.writeContract({
+            address,
+            abi: parseAbi(['function addDeposit() external payable']),
+            functionName: 'addDeposit',
+            value: amount,
             chain: wallet.chain
         } as any);
     }
@@ -354,13 +516,13 @@ export class PaymasterV4Client {
             initCode: '0x' as `0x${string}`,
             callData,
             accountGasLimits: concat([
-                pad(toHex(options?.verificationGasLimit ?? 100000n), { size: 16 }), // Verification
-                pad(toHex(options?.callGasLimit ?? 1000000n), { size: 16 })       // Call
+                pad(toHex(options?.verificationGasLimit ?? 80000n), { size: 16 }), // Verification
+                pad(toHex(options?.callGasLimit ?? 300000n), { size: 16 })       // Call
             ]),
-            preVerificationGas: options?.preVerificationGas ?? 100000n,
+            preVerificationGas: options?.preVerificationGas ?? 50000n,
             gasFees: concat([
-                pad(toHex(options?.maxPriorityFeePerGas ?? 2000000000n), { size: 16 }),
-                pad(toHex(options?.maxFeePerGas ?? 4000000000n), { size: 16 })
+                pad(toHex(options?.maxPriorityFeePerGas ?? 100000000n), { size: 16 }),
+                pad(toHex(options?.maxFeePerGas ?? 2000000000n), { size: 16 })
             ]),
             paymasterAndData,
             signature: '0x' as `0x${string}`
@@ -408,21 +570,51 @@ export class PaymasterV4Client {
     }
 
     /**
-     * Internal helper to format UserOp for Alchemy/Standard Bundlers
+     * Internal helper to format UserOp for Alchemy/Standard Bundlers (v0.7 Decomposed)
      */
     private static toAlchemyFormat(userOp: any) {
-        return {
+        const result: any = {
             sender: userOp.sender,
-            nonce: '0x' + userOp.nonce.toString(16),
-            initCode: userOp.initCode,
+            nonce: toHex(userOp.nonce),
             callData: userOp.callData,
-            accountGasLimits: userOp.accountGasLimits,
-            preVerificationGas: '0x' + userOp.preVerificationGas.toString(16),
-            gasFees: userOp.gasFees,
-            paymasterAndData: userOp.paymasterAndData,
-            signature: userOp.signature
+            preVerificationGas: toHex(userOp.preVerificationGas),
+            signature: userOp.signature,
+            initCode: userOp.initCode
         };
+
+        // Extract Factory/FactoryData if present
+        if (userOp.initCode && userOp.initCode !== '0x') {
+            result.factory = userOp.initCode.slice(0, 42);
+            result.factoryData = '0x' + userOp.initCode.slice(42);
+        }
+
+        // Unpack accountGasLimits: [verificationGasLimit(16)][callGasLimit(16)]
+        if (userOp.accountGasLimits && userOp.accountGasLimits !== '0x') {
+            const packed = userOp.accountGasLimits.replace('0x', '').padStart(64, '0');
+            result.verificationGasLimit = '0x' + BigInt('0x' + packed.slice(0, 32)).toString(16);
+            result.callGasLimit = '0x' + BigInt('0x' + packed.slice(32, 64)).toString(16);
+        }
+
+        // Unpack gasFees: [maxPriorityFee(16)][maxFee(16)]
+        if (userOp.gasFees && userOp.gasFees !== '0x') {
+            const packed = userOp.gasFees.replace('0x', '').padStart(64, '0');
+            result.maxPriorityFeePerGas = '0x' + BigInt('0x' + packed.slice(0, 32)).toString(16);
+            result.maxFeePerGas = '0x' + BigInt('0x' + packed.slice(32, 64)).toString(16);
+        }
+
+        // Unpack paymasterAndData: [paymaster(20)][verificationGas(16)][postOpGas(16)][paymasterData]
+        if (userOp.paymasterAndData && userOp.paymasterAndData !== '0x') {
+            const packed = userOp.paymasterAndData.replace('0x', '');
+            if (packed.length >= 104) {
+                result.paymaster = '0x' + packed.slice(0, 40);
+                result.paymasterVerificationGasLimit = '0x' + BigInt('0x' + packed.slice(40, 72)).toString(16);
+                result.paymasterPostOpGasLimit = '0x' + BigInt('0x' + packed.slice(72, 104)).toString(16);
+                result.paymasterData = '0x' + packed.slice(104);
+            }
+        }
+
+        return result;
     }
 }
 
-import { keccak256, encodeAbiParameters } from 'viem';
+
