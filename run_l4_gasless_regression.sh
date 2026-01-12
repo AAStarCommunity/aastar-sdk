@@ -1,37 +1,78 @@
 #!/bin/bash
-# L4 Gasless Regression Test Suite
-# Usage: ./run_l4_gasless_regression.sh [--env sepolia|op-sepolia]
-
 set -e
 
-# Configuration
-ENV="sepolia"
+echo "🧪 L4 Gasless Regression Test Suite"
+echo "===================================="
+echo ""
+
+# Parse arguments
+NETWORK="sepolia"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --env) ENV="$2"; shift ;;
-        *) echo "Unknown parameter: $1"; exit 1 ;;
+        --env|--network) NETWORK="$2"; shift ;;
+        *) NETWORK="$1" ;;
     esac
     shift
 done
 
-NETWORK="$ENV"
-BLUE='\033[0;34m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+echo "📡 Network: $NETWORK"
+echo ""
 
-echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║          AAStar SDK L4 Gasless Regression                    ║${NC}"
-echo -e "${BLUE}║          Environment: ${ENV}                                    ║${NC}"
-echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}\n"
-
-# 1. Setup Phase
-echo -e "${YELLOW}Stage 1: Setup & Funding...${NC}"
+# Ensure setup is run first
+echo "🔧 Step 0: Running l4-setup to ensure environment is ready..."
 pnpm tsx scripts/l4-setup.ts --network=$NETWORK
 
-# 2. Verification Phase
-echo -e "\n${YELLOW}Stage 2: Verification Tests...${NC}"
-pnpm tsx tests/regression/l4-runner.ts --network=$NETWORK
+echo ""
+echo "✅ Setup complete. Starting test execution..."
+echo ""
 
-echo -e "\n${GREEN}✅ L4 Gasless Regression Complete${NC}"
+# Track results
+PASSED=0
+FAILED=0
+FAILED_TESTS=""
+
+# Helper function to run test
+run_test() {
+    local test_name="$1"
+    local test_file="$2"
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📋 Test: $test_name"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    if pnpm tsx "$test_file"; then
+        echo "✅ PASSED: $test_name"
+        PASSED=$((PASSED + 1))
+    else
+        echo "❌ FAILED: $test_name"
+        FAILED=$((FAILED + 1))
+        FAILED_TESTS="$FAILED_TESTS\\n  - $test_name"
+    fi
+    echo ""
+}
+
+# Run tests
+run_test "Jason AA1 Gasless" "tests/l4-test-jason1-gasless.ts"
+run_test "Jason AA2 Gasless" "tests/l4-test-jason2-gasless.ts"
+run_test "Anni Gasless" "tests/l4-test-anni-gasless.ts"
+run_test "Simple Gasless Demo" "examples/simple-gasless-demo.ts"
+
+# Summary
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📊 Test Results Summary"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ Passed: $PASSED"
+echo "❌ Failed: $FAILED"
+
+if [ $FAILED -gt 0 ]; then
+    echo ""
+    echo "Failed Tests:$FAILED_TESTS"
+    echo ""
+    exit 1
+else
+    echo ""
+    echo "🎉 All tests passed!"
+    echo ""
+    exit 0
+fi

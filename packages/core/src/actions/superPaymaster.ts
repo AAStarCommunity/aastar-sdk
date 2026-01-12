@@ -7,7 +7,7 @@ export type SuperPaymasterActions = {
     /** @deprecated Use depositAPNTs for clarity */
     depositAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>; // Semantic alias for deposit(uint256)
     depositETH: (args: { value: bigint, account?: Account | Address }) => Promise<Hash>; // For payable deposit()
-    depositFor: (args: { operator: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    depositForOperator: (args: { operator: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     addSuperStake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     unlockSuperStake: (args: { account?: Account | Address }) => Promise<Hash>;
@@ -74,7 +74,7 @@ export type SuperPaymasterActions = {
     onTransferReceived: (args: { from: Address, amount: bigint, data: Hex }) => Promise<any>;
     
     // Withdraw alias
-    withdraw: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    withdrawAPNTs: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Constants
     APNTS_TOKEN: () => Promise<Address>;
@@ -136,7 +136,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         });
     },
 
-    async depositFor({ operator, amount, account }) {
+    async depositForOperator({ operator, amount, account }) {
         return (client as any).writeContract({
             address,
             abi: SuperPaymasterABI,
@@ -726,7 +726,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
     },
 
     // Withdraw alias
-    async withdraw({ amount, account }) {
+    async withdrawAPNTs({ amount, account }) {
         return (client as any).writeContract({
             address,
             abi: SuperPaymasterABI,
