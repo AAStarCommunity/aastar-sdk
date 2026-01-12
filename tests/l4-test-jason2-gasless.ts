@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterV4Client } from '../packages/paymaster/src/V4/index.js';
+import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 
@@ -32,7 +32,7 @@ async function main() {
 
     // --- STEP 1: PRE-FLIGHT CHECK ---
     console.log('🔍 Step 1: Running SDK Readiness Check...');
-    const report = await PaymasterV4Client.checkGaslessReadiness(
+    const report = await PaymasterOperator.checkGaslessReadiness(
         publicClient,
         entryPoint,
         anniPM,
@@ -46,7 +46,7 @@ async function main() {
         
         // --- STEP 2: AUTOMATED PREPARATION ---
         console.log('\n🛠️ Step 2: Running Automated Environment Preparation...');
-        const steps = await PaymasterV4Client.prepareGaslessEnvironment(
+        const steps = await PaymasterOperator.prepareGaslessEnvironment(
             anniWallet,
             publicClient,
             entryPoint,
@@ -75,7 +75,7 @@ async function main() {
 
     // --- STEP 3: USER DEPOSIT (If missing) ---
     console.log('\n💰 Step 3: Checking User Paymaster Deposit...');
-    let userDeposit = await PaymasterV4Client.getDepositedBalance(publicClient, anniPM, jasonAA2, dPNTs);
+    let userDeposit = await PaymasterClient.getDepositedBalance(publicClient, anniPM, jasonAA2, dPNTs);
     console.log(`   Jason AA2 Deposit: ${formatEther(userDeposit)} dPNTs`);
 
     if (userDeposit < parseEther('10')) {
@@ -89,7 +89,7 @@ async function main() {
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-        const depositHash = await PaymasterV4Client.depositFor(anniWallet, anniPM, jasonAA2, dPNTs, parseEther('50'));
+        const depositHash = await PaymasterClient.depositFor(anniWallet, anniPM, jasonAA2, dPNTs, parseEther('50'));
         await publicClient.waitForTransactionReceipt({ hash: depositHash });
         console.log('   ✅ 50 dPNTs deposited.');
     }
@@ -111,9 +111,9 @@ async function main() {
     });
 
     try {
-        const userOpHash = await PaymasterV4Client.submitGaslessUserOperation(
+        const userOpHash = await PaymasterClient.submitGaslessUserOperation(
             publicClient,
-            jasonAccount,
+            jasonWallet,
             jasonAA2,
             entryPoint,
             anniPM,

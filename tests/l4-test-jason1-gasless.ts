@@ -1,7 +1,8 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData, createClient } from 'viem';
+import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterV4Client } from '../packages/paymaster/src/V4/index.js';
+import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 
@@ -29,7 +30,7 @@ async function main() {
 
     // --- STEP 1: ONE-CLICK READINESS & Fix ---
     console.log('🔍 Step 1: SDK Readiness Check...');
-    const report = await PaymasterV4Client.checkGaslessReadiness(
+    const report = await PaymasterOperator.checkGaslessReadiness(
         publicClient,
         entryPoint,
         anniPM,
@@ -40,7 +41,7 @@ async function main() {
     if (!report.isReady) {
         console.log('   ⚠️ Issues Detected:', report.issues.join(', '));
         console.log('\n🛠️ Step 2: Automated Self-Healing (Operator Action)...');
-        const steps = await PaymasterV4Client.prepareGaslessEnvironment(
+        const steps = await PaymasterOperator.prepareGaslessEnvironment(
             anniWallet,
             publicClient,
             entryPoint,
@@ -58,7 +59,7 @@ async function main() {
     }
 
     // --- STEP 3: USER DEPOSIT ---
-    const userDeposit = await PaymasterV4Client.getDepositedBalance(publicClient, anniPM, jasonAA1, dPNTs);
+    const userDeposit = await PaymasterClient.getDepositedBalance(publicClient, anniPM, jasonAA1, dPNTs);
     if (userDeposit < parseEther('50')) {
         console.log(`\n🏦 Seeding User Deposit (Current: ${formatEther(userDeposit)} dPNTs)...`);
         
@@ -70,7 +71,8 @@ async function main() {
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-        const depHash = await PaymasterV4Client.depositFor(anniWallet, anniPM, jasonAA1, dPNTs, parseEther('100'));
+        // User deposit action is usually done by Client, but funded by Operator in this script
+        const depHash = await PaymasterClient.depositFor(anniWallet, anniPM, jasonAA1, dPNTs, parseEther('100'));
         await publicClient.waitForTransactionReceipt({ hash: depHash as `0x${string}` });
         console.log('   ✅ User deposit seeded (100 dPNTs).');
     }
@@ -93,7 +95,7 @@ async function main() {
 
     const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(rpcUrl) });
 
-    const userOpHash = await PaymasterV4Client.submitGaslessUserOperation(
+    const userOpHash = await PaymasterClient.submitGaslessUserOperation(
         publicClient,
         jasonWallet,
         jasonAA1,
@@ -107,26 +109,24 @@ async function main() {
     console.log(`   ✅ UserOp Hash: ${userOpHash}`);
     console.log('   ⏳ Waiting for block confirmation...');
 
-    // Polling for receipt
-    let txHash = null;
-    for (let i = 0; i < 15; i++) {
-        const res = await fetch(process.env.BUNDLER_URL!, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [userOpHash] })
-        });
-        const data = await res.json();
-        if (data.result) {
-            txHash = data.result.transactionHash;
-            break;
-        }
-        await new Promise(r => setTimeout(r, 5000));
-    }
+    // Polling for receipt using Bundler Client
+    const bundlerClient = createPublicClient({ 
+        chain: sepolia, 
+        transport: http(process.env.BUNDLER_URL!) 
+    }).extend(bundlerActions);
 
-    if (txHash) {
-        console.log(`\n🎉 SUCCESS! Transaction confirmed: ${txHash}`);
-    } else {
-        console.log('\n⌛ Still pending... check on-chain later.');
+    console.log('   ⏳ Waiting for execution (can take up to 60s)...');
+    try {
+        const receipt = await bundlerClient.waitForUserOperationReceipt({ 
+            hash: userOpHash,
+            timeout: 120000 // 2 minutes timeout
+        });
+        
+        console.log(`\n🎉 SUCCESS! Transaction confirmed: ${receipt.receipt.transactionHash}`);
+        console.log(`🔗 Etherscan: https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
+    } catch (e) {
+        console.log('\n⌛ Still pending or timed out... check on jiffyscan later.');
+        console.error(e);
     }
 }
 

@@ -24,6 +24,7 @@ export interface ScenarioParams {
     paymasterGasLimit?: bigint;
     paymasterPostOpGasLimit?: bigint;
     nonceKey?: bigint;
+    gasToken?: Address;            // Optional: Explicit Gas Token (if different from transfer token)
 }
 
 export class UserOpScenarioBuilder {
@@ -39,7 +40,8 @@ export class UserOpScenarioBuilder {
             entryPoint, chainId, publicClient, paymaster, operator,
             paymasterGasLimit = 300000n,
             paymasterPostOpGasLimit = 50000n,
-            nonceKey = 0n
+            nonceKey = 0n,
+            gasToken
         } = params;
 
         // 1. Build Token Transfer CallData
@@ -78,16 +80,22 @@ export class UserOpScenarioBuilder {
         if (type === UserOpScenarioType.NATIVE) {
             userOp.paymasterAndData = '0x';
         } else if (type === UserOpScenarioType.GASLESS_V4) {
-             if (!paymasterV4Proxy) throw new Error('paymasterV4Proxy address required for GASLESS_V4');
-             if (!dPNTs) throw new Error('dPNTs address required for GASLESS_V4 (Deposit-Only model)');
+             const pm = paymaster;
+             const token = gasToken || tokenAddress;
+             const validUntil = BigInt(Math.floor(Date.now() / 1000) + 3600);
+             const validAfter = BigInt(Math.floor(Date.now() / 1000) - 100);
+
+             if (!pm) throw new Error('paymaster address required for GASLESS_V4');
+             if (!token) throw new Error('gasToken or tokenAddress required for GASLESS_V4');
+
              // PaymasterV4 Deposit-Only Model: includes payment token address
              userOp.paymasterAndData = UserOperationBuilder.packPaymasterV4DepositData(
-                paymasterV4Proxy,
+                pm,
                 paymasterGasLimit, // paymasterVerificationGasLimit
                 paymasterPostOpGasLimit, // paymasterPostOpGasLimit
+                token, // Payment token
                 validUntil,
-                validAfter,
-                dPNTs // Payment token for Deposit-Only model
+                validAfter
              );
         } else if (type.startsWith('SUPER_')) {
             if (!paymaster || !operator) throw new Error('Paymaster and Operator required for SuperPM scenarios');

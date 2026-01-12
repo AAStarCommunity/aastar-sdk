@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterV4Client } from '../packages/paymaster/src/V4/index.js';
+import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
 
@@ -30,7 +30,7 @@ async function main() {
 
     // 1. Diagnose
     console.log('\n🔍 Check 1: Diagnosing SDK Readiness...');
-    const report = await PaymasterV4Client.checkGaslessReadiness(
+    const report = await PaymasterOperator.checkGaslessReadiness(
         client,
         APP_CONFIG.entryPoint,
         APP_CONFIG.paymaster,
@@ -47,7 +47,7 @@ async function main() {
     console.log('⚠️  Environment Not Ready. Fixing...');
     console.log('Issues:', report.issues);
 
-    const steps = await PaymasterV4Client.prepareGaslessEnvironment(
+    const steps = await PaymasterOperator.prepareGaslessEnvironment(
         operatorWallet,
         client,
         APP_CONFIG.entryPoint,
@@ -64,12 +64,12 @@ async function main() {
     }
 
     // 3. User Deposit Check (Optional Seeding)
-    const userDeposit = await PaymasterV4Client.getDepositedBalance(client, APP_CONFIG.paymaster, APP_CONFIG.aaAccount, APP_CONFIG.gasToken);
+    const userDeposit = await PaymasterClient.getDepositedBalance(client, APP_CONFIG.paymaster, APP_CONFIG.aaAccount, APP_CONFIG.gasToken);
     if (userDeposit < parseEther('50')) {
         console.log(`\n🏦 Seeding User Deposit (Current: ${userDeposit})...`);
         
         // Approve
-        const hashApprove = await PaymasterV4Client.approveGasToken(
+        const hashApprove = await PaymasterClient.approveGasToken(
             operatorWallet,
             APP_CONFIG.gasToken,
             APP_CONFIG.paymaster,
@@ -78,7 +78,7 @@ async function main() {
         await client.waitForTransactionReceipt({ hash: hashApprove });
 
         // Deposit
-        const hashDep = await PaymasterV4Client.depositFor(operatorWallet, APP_CONFIG.paymaster, APP_CONFIG.aaAccount, APP_CONFIG.gasToken, parseEther('50'));
+        const hashDep = await PaymasterClient.depositFor(operatorWallet, APP_CONFIG.paymaster, APP_CONFIG.aaAccount, APP_CONFIG.gasToken, parseEther('50'));
         await client.waitForTransactionReceipt({ hash: hashDep as `0x${string}` });
         console.log('   ✅ Seeded 50 dPNTs.');
     }

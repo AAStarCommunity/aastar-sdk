@@ -1,7 +1,8 @@
-import { createPublicClient, createWalletClient, http, encodeFunctionData, parseEther } from 'viem';
+import { createPublicClient, createWalletClient, http, encodeFunctionData, parseEther, formatEther, createClient } from 'viem';
+import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterV4Client } from '../packages/paymaster/src/V4/index.js';
+import { PaymasterClient } from '../packages/paymaster/src/V4/index.js';
 import * as dotenv from 'dotenv';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 
@@ -42,7 +43,7 @@ async function main() {
 
     // 3. ✨ ONE-LINER SUBMISSION ✨
     // (Auto: Gas Estimation, 1.2x Efficiency Guard, Signing, Submission)
-    const txHash = await PaymasterV4Client.submitGaslessUserOperation(
+    const txHash = await PaymasterClient.submitGaslessUserOperation(
         client,
         wallet,
         APP_CONFIG.aaAccount as `0x${string}`,
@@ -57,8 +58,28 @@ async function main() {
         }
     );
 
-    console.log(`\n🎉 Done! UserOp Hash: ${txHash}`);
-    console.log(`🔗 Tracking: https://sepolia.etherscan.io/tx/${txHash} (After bundle)`);
+    // 4. Wait for Execution (Optional but recommended for confirmation)
+    console.log(`\n⏳ Waiting for execution...`);
+    const bundlerClient = createClient({
+        chain: sepolia,
+        transport: http(APP_CONFIG.bundlerUrl)
+    }).extend(bundlerActions);
+
+    const receipt = await bundlerClient.waitForUserOperationReceipt({ 
+        hash: txHash 
+    });
+
+    console.log(`\n🎉 Done! Transaction Hash: ${receipt.receipt.transactionHash}`);
+    console.log(`🔗 Tracking: https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
+
+    // 5. Decode Protocol Fee (for User Visibility)
+    const feeInfo = PaymasterClient.getFeeFromReceipt(receipt.receipt, APP_CONFIG.paymaster as `0x${string}`);
+    if (feeInfo) {
+        console.log(`\n🧾 [Instant Bill] Cost: ${formatEther(feeInfo.tokenCost)} dPNTs`);
+        console.log(`   (Sponsored ETH: ${formatEther(feeInfo.actualGasCostWei)} ETH)`);
+    } else {
+        console.log('\n⚠️ Could not decode fee from logs.');
+    }
 }
 
 main().catch(console.error);

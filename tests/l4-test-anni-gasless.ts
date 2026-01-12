@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterV4Client } from '../packages/paymaster/dist/index.js';
+import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/dist/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import path from 'path';
@@ -44,12 +44,12 @@ async function main() {
         
         if (ethBal > parseEther('0.5')) {
             console.log('   🪜 Adding 0.11 ETH Stake (1 day delay)...');
-            const stakeHash = await PaymasterV4Client.addStake(anniWallet, anniPM, parseEther('0.11'), 86400);
+            const stakeHash = await PaymasterOperator.addStake(anniWallet, anniPM, parseEther('0.11'), 86400);
             await publicClient.waitForTransactionReceipt({ hash: stakeHash });
             console.log('   ✅ Stake added.');
 
             console.log('   💰 Adding 0.3 ETH Deposit to EntryPoint...');
-            const depositEntryPointHash = await PaymasterV4Client.addDeposit(anniWallet, anniPM, parseEther('0.3'));
+            const depositEntryPointHash = await PaymasterOperator.addDeposit(anniWallet, anniPM, parseEther('0.3'));
             await publicClient.waitForTransactionReceipt({ hash: depositEntryPointHash });
             console.log('   ✅ Deposit added.');
         } else {
@@ -59,11 +59,11 @@ async function main() {
         console.log(`   ✓ Stake/Deposit check done (might already be configured).`);
     }
     console.log('Step 1: Checking Paymaster Price Cache...');
-    const initialized = await PaymasterV4Client.ensurePriceInitialized(anniWallet, publicClient, anniPM);
+    const initialized = await PaymasterOperator.ensurePriceInitialized(anniWallet, publicClient, anniPM);
     if (initialized) {
         console.log('   ✅ Price cache updated.');
     } else {
-        const { price } = await PaymasterV4Client.getCachedPrice(publicClient, anniPM);
+        const { price } = await PaymasterOperator.getCachedPrice(publicClient, anniPM);
         console.log(`   ✓ Price cache already initialized: ${price}`);
     }
 
@@ -72,11 +72,11 @@ async function main() {
     
     // Check if token is supported
     // Since there's no public query for supportedTokens in PaymasterBase (it's internal mapping)
-    // We can just try to add it or skip if we are sure.
+    // We can just try to add it or skip if we are unsure.
     // Actually, PaymasterV4Client has addGasToken.
     console.log(`   Ensuring ${dPNTs} is supported...`);
     try {
-        const gasTokenHash = await PaymasterV4Client.addGasToken(anniWallet, anniPM, dPNTs);
+        const gasTokenHash = await PaymasterOperator.addGasToken(anniWallet, anniPM, dPNTs);
         if (gasTokenHash) {
             console.log(`   📝 Sent addGasToken transaction: ${gasTokenHash}`);
             await publicClient.waitForTransactionReceipt({ hash: gasTokenHash });
@@ -88,17 +88,17 @@ async function main() {
 
     // Check token price
     console.log(`   Checking ${dPNTs} price...`);
-    const tokenPrice = await PaymasterV4Client.getTokenPrice(publicClient, anniPM, dPNTs);
+    const tokenPrice = await PaymasterOperator.getTokenPrice(publicClient, anniPM, dPNTs);
     if (tokenPrice === 0n) {
         console.log(`   ⚠️ Token price is 0. Setting to $1.00 (1e8)...`);
-        const setPriceHash = await PaymasterV4Client.setTokenPrice(anniWallet, anniPM, dPNTs, 100000000n);
+        const setPriceHash = await PaymasterOperator.setTokenPrice(anniWallet, anniPM, dPNTs, 100000000n);
         await publicClient.waitForTransactionReceipt({ hash: setPriceHash });
         console.log(`   ✅ Token price set.`);
     } else {
         console.log(`   ✓ Token price: ${tokenPrice}`);
     }
 
-    let balance = await PaymasterV4Client.getDepositedBalance(publicClient, anniPM, anniAA, dPNTs);
+    let balance = await PaymasterClient.getDepositedBalance(publicClient, anniPM, anniAA, dPNTs);
     console.log(`   Current deposit: ${formatEther(balance)} dPNTs`);
 
     if (balance < parseEther('50')) {
@@ -115,10 +115,10 @@ async function main() {
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
         console.log('   🏦 Depositing into Paymaster...');
-        const depositHash = await PaymasterV4Client.depositFor(anniWallet, anniPM, anniAA, dPNTs, parseEther('100'));
+        const depositHash = await PaymasterClient.depositFor(anniWallet, anniPM, anniAA, dPNTs, parseEther('100'));
         await publicClient.waitForTransactionReceipt({ hash: depositHash });
         
-        balance = await PaymasterV4Client.getDepositedBalance(publicClient, anniPM, anniAA, dPNTs);
+        balance = await PaymasterClient.getDepositedBalance(publicClient, anniPM, anniAA, dPNTs);
         console.log(`   ✅ New deposit balance: ${formatEther(balance)} dPNTs`);
     }
 
@@ -140,9 +140,9 @@ async function main() {
     });
 
     try {
-        const userOpHash = await PaymasterV4Client.submitGaslessUserOperation(
+        const userOpHash = await PaymasterClient.submitGaslessUserOperation(
             publicClient,
-            anniAccount,
+            anniWallet,
             anniAA,
             config.contracts.entryPoint as Address,
             anniPM,
@@ -150,8 +150,6 @@ async function main() {
             process.env.BUNDLER_URL!,
             transferCalldata,
             {
-                verificationGasLimit: 100000n,
-                callGasLimit: 100000n,
                 maxFeePerGas: 3000000000n, // 3 gwei
                 maxPriorityFeePerGas: 100000000n // 0.1 gwei
             }

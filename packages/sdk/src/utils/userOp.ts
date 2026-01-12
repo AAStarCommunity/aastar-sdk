@@ -81,17 +81,20 @@ export class UserOperationBuilder {
      */
     static packPaymasterV4DepositData(
         paymaster: Address,
+        paymasterVerificationGasLimit: bigint,
+        paymasterPostOpGasLimit: bigint,
         paymentToken: Address,
         validUntil: bigint,
         validAfter: bigint
     ): Hex {
-        const paymasterHex = paymaster.slice(2); // 20 bytes
-        const tokenHex = paymentToken.slice(2); // 20 bytes - FIRST!
-        const validUntilHex = validUntil.toString(16).padStart(12, '0'); // 6 bytes
-        const validAfterHex = validAfter.toString(16).padStart(12, '0'); // 6 bytes
-        
-        // Format: [paymaster][token][validUntil][validAfter]
-        return ('0x' + paymasterHex + tokenHex + validUntilHex + validAfterHex) as Hex;
+        return concat([
+            paymaster,
+            pad(`0x${paymasterVerificationGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
+            pad(`0x${paymasterPostOpGasLimit.toString(16)}`, { dir: 'left', size: 16 }),
+            paymentToken,
+            pad(`0x${validUntil.toString(16)}`, { dir: 'left', size: 6 }),
+            pad(`0x${validAfter.toString(16)}`, { dir: 'left', size: 6 })
+        ]) as Hex;
     }
 
     /**
