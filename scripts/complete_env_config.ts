@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Complete .env.v3 with data from SuperPaymaster project
+ * Complete .env.anvil with data from SuperPaymaster project
  */
 
 import * as fs from 'fs';
@@ -10,12 +10,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const ENV_FILE = path.resolve(__dirname, '../.env.v3');
-const SUPERPM_ENV = path.resolve(__dirname, '../../SuperPaymaster/.env.v3.bak');
+const ENV_FILE = path.resolve(__dirname, '../.env.anvil');
+const SUPERPM_ENV = path.resolve(__dirname, '../../SuperPaymaster/.env.anvil.bak');
 const TEST_ACCOUNTS = path.resolve(__dirname, '../../SuperPaymaster/test-accounts/accounts.json');
 
 async function main() {
-    console.log('🔧 Completing .env.v3 configuration...\n');
+    console.log('🔧 Completing .env.anvil configuration...\n');
     
     // Load current env
     let envContent = fs.readFileSync(ENV_FILE, 'utf-8');

@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../.env.anvil') });
 
 const loadAbi = (name: string) => {
     const abiPath = path.resolve(__dirname, `../abis/${name}.abi.json`);

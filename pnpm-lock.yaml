@@ -8,9 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@types/cheerio':
-        specifier: 1.0.0
-        version: 1.0.0
+      '@noble/bls12-381':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@noble/curves':
+        specifier: ^1.9.7
+        version: 1.9.7
       axios:
         specifier: 1.13.2
         version: 1.13.2
@@ -22,17 +25,17 @@ importers:
         version: 1.6.0
       viem:
         specifier: 2.41.2
-        version: 2.41.2(typescript@5.9.3)
+        version: 2.41.2(typescript@5.7.2)
     devDependencies:
       '@types/node':
         specifier: 20.11.5
         version: 20.11.5
       '@typescript-eslint/eslint-plugin':
         specifier: 8.50.1
-        version: 8.50.1(@typescript-eslint/parser@8.50.1(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3)
+        version: 8.50.1(@typescript-eslint/parser@8.50.1(eslint@9.39.2)(typescript@5.7.2))(eslint@9.39.2)(typescript@5.7.2)
       '@typescript-eslint/parser':
         specifier: 8.50.1
-        version: 8.50.1(eslint@9.39.2)(typescript@5.9.3)
+        version: 8.50.1(eslint@9.39.2)(typescript@5.7.2)
       cross-env:
         specifier: 10.1.0
         version: 10.1.0
@@ -44,19 +47,19 @@ importers:
         version: 9.39.2
       ts-node:
         specifier: 10.9.2
-        version: 10.9.2(@types/node@20.11.5)(typescript@5.9.3)
+        version: 10.9.2(@types/node@20.11.5)(typescript@5.7.2)
       tsx:
         specifier: 4.21.0
         version: 4.21.0
       typedoc:
         specifier: ^0.28.15
-        version: 0.28.15(typescript@5.9.3)
+        version: 0.28.15(typescript@5.7.2)
       typedoc-plugin-markdown:
         specifier: ^4.9.0
-        version: 4.9.0(typedoc@0.28.15(typescript@5.9.3))
+        version: 4.9.0(typedoc@0.28.15(typescript@5.7.2))
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/account:
     dependencies:
@@ -65,11 +68,40 @@ importers:
         version: link:../core
       viem:
         specifier: 2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
+
+  packages/analytics:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+
+  packages/community:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      '@aastar/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/core:
     dependencies:
@@ -77,12 +109,15 @@ importers:
         specifier: ^1.6.0
         version: 1.9.1
       viem:
-        specifier: ^2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
+      abitype:
+        specifier: 1.2.3
+        version: 1.2.3(typescript@5.7.2)
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/dapp:
     dependencies:
@@ -100,7 +135,7 @@ importers:
         version: 18.2.0(react@18.2.0)
       viem:
         specifier: 2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       '@types/react':
         specifier: 18.2.0
@@ -109,8 +144,21 @@ importers:
         specifier: 18.2.0
         version: 18.2.0
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
+
+  packages/enduser:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/identity:
     dependencies:
@@ -119,11 +167,43 @@ importers:
         version: link:../core
       viem:
         specifier: 2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
+
+  packages/operator:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+
+  packages/patterns:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      '@aastar/enduser':
+        specifier: workspace:*
+        version: link:../enduser
+      '@aastar/operator':
+        specifier: workspace:*
+        version: link:../operator
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/paymaster:
     dependencies:
@@ -132,11 +212,11 @@ importers:
         version: link:../core
       viem:
         specifier: 2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/sdk:
     dependencies:
@@ -160,11 +240,11 @@ importers:
         version: link:../tokens
       viem:
         specifier: 2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
 
   packages/tokens:
     dependencies:
@@ -173,11 +253,11 @@ importers:
         version: link:../core
       viem:
         specifier: 2.43.3
-        version: 2.43.3(typescript@5.9.3)
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       typescript:
-        specifier: 5.9.3
-        version: 5.9.3
+        specifier: 5.7.2
+        version: 5.7.2
 
 packages:
 
@@ -414,12 +494,20 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
+  '@noble/bls12-381@1.4.0':
+    resolution: {integrity: sha512-mIYqC2jMX7Lcu1QtU/FFftMPDSXNCdlGex6BSf5nPojHjnzzBgs1klFWpB1R8YjqHmOO9xrCzF19f2c42+z3vg==}
+    deprecated: Switch to @noble/curves for security updates
+
   '@noble/ciphers@1.3.0':
     resolution: {integrity: sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==}
     engines: {node: ^14.21.3 || >=16}
 
   '@noble/curves@1.9.1':
     resolution: {integrity: sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/curves@1.9.7':
+    resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
     engines: {node: ^14.21.3 || >=16}
 
   '@noble/hashes@1.8.0':
@@ -461,10 +549,6 @@ packages:
 
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
-
-  '@types/cheerio@1.0.0':
-    resolution: {integrity: sha512-zAaImHWoh5RY2CLgU2mvg3bl2k3F65B0N5yphuII3ythFLPmJhL7sj1RDu6gSxcgqHlETbr/lhA2OBY+WF1fXQ==}
-    deprecated: This is a stub types definition. cheerio provides its own type definitions, so you do not need this installed.
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -1124,8 +1208,8 @@ packages:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
     engines: {node: '>=12.0.0'}
 
-  ts-api-utils@2.1.0:
-    resolution: {integrity: sha512-CUgTZL1irw8u29bzrOD/nH85jqyc74D6SshFgujOIA7osm2Rz7dYH77agkx7H4FBNxDq7Cjf+IjaX/8zwFW+ZQ==}
+  ts-api-utils@2.2.0:
+    resolution: {integrity: sha512-L6f5oQRAoLU1RwXz0Ab9mxsE7LtxeVB6AIR1lpkZMsOyg/JXeaxBaXa/FVCBZyNr9S9I4wkHrlZTklX+im+WMw==}
     engines: {node: '>=18.12'}
     peerDependencies:
       typescript: '>=4.8.4'
@@ -1166,8 +1250,8 @@ packages:
     peerDependencies:
       typescript: 5.0.x || 5.1.x || 5.2.x || 5.3.x || 5.4.x || 5.5.x || 5.6.x || 5.7.x || 5.8.x || 5.9.x
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@5.7.2:
+    resolution: {integrity: sha512-i5t66RHxDvVN40HfDd1PsEThGNnlMCMT3jMUuoh9/0TaqWevNontacunWyN02LA9/fIbEWlcHZcgTKb9QoaLfg==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -1206,6 +1290,7 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
+    deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
@@ -1407,9 +1492,15 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@noble/bls12-381@1.4.0': {}
+
   '@noble/ciphers@1.3.0': {}
 
   '@noble/curves@1.9.1':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
+  '@noble/curves@1.9.7':
     dependencies:
       '@noble/hashes': 1.8.0
 
@@ -1419,7 +1510,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
@@ -1456,10 +1547,6 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
-  '@types/cheerio@1.0.0':
-    dependencies:
-      cheerio: 1.1.2
-
   '@types/estree@1.0.8': {}
 
   '@types/hast@3.0.4':
@@ -1488,40 +1575,40 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@typescript-eslint/eslint-plugin@8.50.1(@typescript-eslint/parser@8.50.1(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3)':
+  '@typescript-eslint/eslint-plugin@8.50.1(@typescript-eslint/parser@8.50.1(eslint@9.39.2)(typescript@5.7.2))(eslint@9.39.2)(typescript@5.7.2)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.50.1(eslint@9.39.2)(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.50.1(eslint@9.39.2)(typescript@5.7.2)
       '@typescript-eslint/scope-manager': 8.50.1
-      '@typescript-eslint/type-utils': 8.50.1(eslint@9.39.2)(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.50.1(eslint@9.39.2)(typescript@5.9.3)
+      '@typescript-eslint/type-utils': 8.50.1(eslint@9.39.2)(typescript@5.7.2)
+      '@typescript-eslint/utils': 8.50.1(eslint@9.39.2)(typescript@5.7.2)
       '@typescript-eslint/visitor-keys': 8.50.1
       eslint: 9.39.2
       ignore: 7.0.5
       natural-compare: 1.4.0
-      ts-api-utils: 2.1.0(typescript@5.9.3)
-      typescript: 5.9.3
+      ts-api-utils: 2.2.0(typescript@5.7.2)
+      typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/parser@8.50.1(eslint@9.39.2)(typescript@5.9.3)':
+  '@typescript-eslint/parser@8.50.1(eslint@9.39.2)(typescript@5.7.2)':
     dependencies:
       '@typescript-eslint/scope-manager': 8.50.1
       '@typescript-eslint/types': 8.50.1
-      '@typescript-eslint/typescript-estree': 8.50.1(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.50.1(typescript@5.7.2)
       '@typescript-eslint/visitor-keys': 8.50.1
       debug: 4.4.3
       eslint: 9.39.2
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/project-service@8.50.1(typescript@5.9.3)':
+  '@typescript-eslint/project-service@8.50.1(typescript@5.7.2)':
     dependencies:
-      '@typescript-eslint/tsconfig-utils': 8.50.1(typescript@5.9.3)
+      '@typescript-eslint/tsconfig-utils': 8.50.1(typescript@5.7.2)
       '@typescript-eslint/types': 8.50.1
       debug: 4.4.3
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
 
@@ -1530,47 +1617,47 @@ snapshots:
       '@typescript-eslint/types': 8.50.1
       '@typescript-eslint/visitor-keys': 8.50.1
 
-  '@typescript-eslint/tsconfig-utils@8.50.1(typescript@5.9.3)':
+  '@typescript-eslint/tsconfig-utils@8.50.1(typescript@5.7.2)':
     dependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
 
-  '@typescript-eslint/type-utils@8.50.1(eslint@9.39.2)(typescript@5.9.3)':
+  '@typescript-eslint/type-utils@8.50.1(eslint@9.39.2)(typescript@5.7.2)':
     dependencies:
       '@typescript-eslint/types': 8.50.1
-      '@typescript-eslint/typescript-estree': 8.50.1(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.50.1(eslint@9.39.2)(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.50.1(typescript@5.7.2)
+      '@typescript-eslint/utils': 8.50.1(eslint@9.39.2)(typescript@5.7.2)
       debug: 4.4.3
       eslint: 9.39.2
-      ts-api-utils: 2.1.0(typescript@5.9.3)
-      typescript: 5.9.3
+      ts-api-utils: 2.2.0(typescript@5.7.2)
+      typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
 
   '@typescript-eslint/types@8.50.1': {}
 
-  '@typescript-eslint/typescript-estree@8.50.1(typescript@5.9.3)':
+  '@typescript-eslint/typescript-estree@8.50.1(typescript@5.7.2)':
     dependencies:
-      '@typescript-eslint/project-service': 8.50.1(typescript@5.9.3)
-      '@typescript-eslint/tsconfig-utils': 8.50.1(typescript@5.9.3)
+      '@typescript-eslint/project-service': 8.50.1(typescript@5.7.2)
+      '@typescript-eslint/tsconfig-utils': 8.50.1(typescript@5.7.2)
       '@typescript-eslint/types': 8.50.1
       '@typescript-eslint/visitor-keys': 8.50.1
       debug: 4.4.3
       minimatch: 9.0.5
       semver: 7.7.3
       tinyglobby: 0.2.15
-      ts-api-utils: 2.1.0(typescript@5.9.3)
-      typescript: 5.9.3
+      ts-api-utils: 2.2.0(typescript@5.7.2)
+      typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/utils@8.50.1(eslint@9.39.2)(typescript@5.9.3)':
+  '@typescript-eslint/utils@8.50.1(eslint@9.39.2)(typescript@5.7.2)':
     dependencies:
       '@eslint-community/eslint-utils': 4.9.0(eslint@9.39.2)
       '@typescript-eslint/scope-manager': 8.50.1
       '@typescript-eslint/types': 8.50.1
-      '@typescript-eslint/typescript-estree': 8.50.1(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.50.1(typescript@5.7.2)
       eslint: 9.39.2
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - supports-color
 
@@ -1579,13 +1666,13 @@ snapshots:
       '@typescript-eslint/types': 8.50.1
       eslint-visitor-keys: 4.2.1
 
-  abitype@1.1.0(typescript@5.9.3):
+  abitype@1.1.0(typescript@5.7.2):
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
 
-  abitype@1.2.3(typescript@5.9.3):
+  abitype@1.2.3(typescript@5.7.2):
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
 
   acorn-jsx@5.3.2(acorn@8.15.0):
     dependencies:
@@ -2068,7 +2155,7 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
-  ox@0.11.1(typescript@5.9.3):
+  ox@0.11.1(typescript@5.7.2):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
@@ -2076,14 +2163,14 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@5.9.3)
+      abitype: 1.2.3(typescript@5.7.2)
       eventemitter3: 5.0.1
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - zod
 
-  ox@0.9.6(typescript@5.9.3):
+  ox@0.9.6(typescript@5.7.2):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
@@ -2091,10 +2178,10 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@5.9.3)
+      abitype: 1.2.3(typescript@5.7.2)
       eventemitter3: 5.0.1
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - zod
 
@@ -2176,11 +2263,11 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
 
-  ts-api-utils@2.1.0(typescript@5.9.3):
+  ts-api-utils@2.2.0(typescript@5.7.2):
     dependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
 
-  ts-node@10.9.2(@types/node@20.11.5)(typescript@5.9.3):
+  ts-node@10.9.2(@types/node@20.11.5)(typescript@5.7.2):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.12
@@ -2194,7 +2281,7 @@ snapshots:
       create-require: 1.1.1
       diff: 4.0.2
       make-error: 1.3.6
-      typescript: 5.9.3
+      typescript: 5.7.2
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
 
@@ -2209,20 +2296,20 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
 
-  typedoc-plugin-markdown@4.9.0(typedoc@0.28.15(typescript@5.9.3)):
+  typedoc-plugin-markdown@4.9.0(typedoc@0.28.15(typescript@5.7.2)):
     dependencies:
-      typedoc: 0.28.15(typescript@5.9.3)
+      typedoc: 0.28.15(typescript@5.7.2)
 
-  typedoc@0.28.15(typescript@5.9.3):
+  typedoc@0.28.15(typescript@5.7.2):
     dependencies:
       '@gerrit0/mini-shiki': 3.20.0
       lunr: 2.3.9
       markdown-it: 14.1.0
       minimatch: 9.0.5
-      typescript: 5.9.3
+      typescript: 5.7.2
       yaml: 2.8.2
 
-  typescript@5.9.3: {}
+  typescript@5.7.2: {}
 
   uc.micro@2.1.0: {}
 
@@ -2236,35 +2323,35 @@ snapshots:
 
   v8-compile-cache-lib@3.0.1: {}
 
-  viem@2.41.2(typescript@5.9.3):
+  viem@2.41.2(typescript@5.7.2):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.1.0(typescript@5.9.3)
+      abitype: 1.1.0(typescript@5.7.2)
       isows: 1.0.7(ws@8.18.3)
-      ox: 0.9.6(typescript@5.9.3)
+      ox: 0.9.6(typescript@5.7.2)
       ws: 8.18.3
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
       - zod
 
-  viem@2.43.3(typescript@5.9.3):
+  viem@2.43.3(typescript@5.7.2):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@5.9.3)
+      abitype: 1.2.3(typescript@5.7.2)
       isows: 1.0.7(ws@8.18.3)
-      ox: 0.11.1(typescript@5.9.3)
+      ox: 0.11.1(typescript@5.7.2)
       ws: 8.18.3
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.7.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate

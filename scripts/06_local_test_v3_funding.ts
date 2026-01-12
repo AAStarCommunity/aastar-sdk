@@ -6,21 +6,21 @@ import * as path from 'path';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
 const SUPER_PAYMASTER = process.env.SUPERPAYMASTER_ADDR as Hex;
-const SIGNER_KEY = process.env.ADMIN_KEY as Hex;
+const SIGNER_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const APNTS = process.env.XPNTS_ADDR as Hex;
 
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !APNTS) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)',
-    'function deposit(uint256)',
-    'function notifyDeposit(uint256)',
-    'function withdraw(uint256)',
+    'function operators(address) view returns (uint128 aPNTsBalance, uint96 exchangeRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
+    'function deposit(uint256) external',
+    'function depositFor(address, uint256) external',
+    'function withdraw(uint256) external',
     'function withdrawProtocolRevenue(address, uint256)',
     'function protocolRevenue() view returns (uint256)'
 ]);
@@ -39,21 +39,15 @@ async function runFundingTest() {
     const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(RPC_URL) });
 
     // 1. Check Initial Balance
-    // Structural Index (V3.1.1):
-    // 0: xPNTsToken, 1: isConfigured, 2: isPaused, 3: treasury (wait, let's re-verify)
-    // Solidity Struct:
-    // Slot 0: address xPNTsToken, bool isConfigured, bool isPaused, uint80 _reserved
-    // Slot 1: address treasury, uint96 exchangeRate
-    // Slot 2: uint256 aPNTsBalance
-    // ...
-    // Returns Tuple: (xPNTsToken, treasury, isConfigured, isPaused, exRate, exFull, balance, spent, txSponsored, reputation)
-    // Wait, the tuple return might differ from struct order. 
+    // Structural Index (V3.2 Packed):
+    // 0: uint128 aPNTsBalance, 1: uint96 exchangeRate, 2: bool isConfigured, 3: bool isPaused, 
+    // 4: address xPNTsToken, 5: uint32 reputation, 6: address treasury, 7: totalSpent, 8: totalTxSponsored 
     // Let's log full opData to see.
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
     console.log("   Full OpData:", opData);
     
-    // ABI returns: xPNTsToken(0), isConfigured(1), isPaused(2), treasury(3), exchangeRate(4), aPNTsBalance(5), totalSpent(6), totalTxSponsored(7), reputation(8)
-    const initialBalance = BigInt(opData[5]);
+    // V3.2 Packed: 0: balance, 1: exRate, 2: isConfigured, 3: isPaused, 4: token, 5: reputation, 6: treasury, 7: spent, 8: txSponsored
+    const initialBalance = BigInt(opData[0]);
     console.log(`   Initial Operator Balance: ${formatEther(initialBalance)} aPNTs`);
 
     // 2. Test Deposit (The official way)
@@ -74,14 +68,22 @@ async function runFundingTest() {
         await publicClient.waitForTransactionReceipt({ hash: hashMint });
     }
 
-    // V3.1.1 Policy: Use Push Model (Transfer + notifyDeposit) if direct deposit is restricted
-    console.log("   🚀 Using notifyDeposit (Push Model)...");
-    const hashTrans = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'transfer', args: [SUPER_PAYMASTER, depositAmount] });
-    await publicClient.waitForTransactionReceipt({ hash: hashTrans });
+    // V3.1.1 Policy: Use Push Model (Approve + DepositFor)
+    console.log("   Calling depositFor(100 aPNTs)...");
     
-    const hashNotif = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'notifyDeposit', args: [depositAmount] });
-    await publicClient.waitForTransactionReceipt({ hash: hashNotif });
-    console.log("   ✅ notifyDeposit Success.");
+    // Ensure Approval
+    const allowPM = await publicClient.readContract({ address: APNTS, abi: erc20Abi, functionName: 'allowance', args: [signer.address, SUPER_PAYMASTER] });
+    if (allowPM < depositAmount) {
+         const txApp = await wallet.writeContract({ address: APNTS, abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("1000")] });
+         await publicClient.waitForTransactionReceipt({ hash: txApp });
+    }
+
+    const txDep = await wallet.writeContract({
+        address: SUPER_PAYMASTER, abi: pmAbi,
+        functionName: 'depositFor', args: [signer.address, depositAmount]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: txDep });
+    console.log("   ✅ deposit Success.");
 
     // 3. Test Withdraw
     console.log("   🏧 Testing withdraw...");

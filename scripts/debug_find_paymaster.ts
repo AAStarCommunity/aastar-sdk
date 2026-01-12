@@ -2,14 +2,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, http, Hex } from 'viem';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 // @ts-ignore
 import { CONTRACTS } from '@aastar/shared-config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../env/.env.v3');
+const envPath = path.resolve(__dirname, '../../env/.env.anvil');
 dotenv.config({ path: envPath });
 
 const PUBLIC_RPC = process.env.SEPOLIA_RPC_URL;
@@ -23,7 +23,7 @@ async function main() {
     console.log("🔍 Finding Paymaster for bPNTs (Group B)...");
     
     if (!PUBLIC_RPC) throw new Error("Missing RPC");
-    const client = createPublicClient({ chain: sepolia, transport: http(PUBLIC_RPC) });
+    const client = createPublicClient({ chain: foundry, transport: http(PUBLIC_RPC) });
 
     console.log(`   Registry: ${REGISTRY_ADDRESS}`);
     console.log(`   bPNTs:    ${BPNTS_ADDRESS}`);
@@ -84,7 +84,7 @@ async function main() {
 
         if (paymaster && paymaster !== "0x0000000000000000000000000000000000000000") {
             console.log(`\n✅ FOUND PAYMASTER V4: ${paymaster}`);
-            console.log(`👉 Update .env.v3: PAYMASTER_V4_ADDRESS=${paymaster}`);
+            console.log(`👉 Update .env.anvil: PAYMASTER_V4_ADDRESS=${paymaster}`);
         } else {
             console.warn("   ⚠️  Paymaster address in Registry is 0x0 or not found.");
             console.log("       This implies the Paymaster is NOT deployed or not registered.");

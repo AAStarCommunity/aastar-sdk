@@ -7,67 +7,84 @@
  */
 
 import { type Address } from 'viem';
+import {
+  REGISTRY_ADDRESS,
+  GTOKEN_ADDRESS,
+  GTOKEN_STAKING_ADDRESS,
+  SUPER_PAYMASTER_ADDRESS,
+  PAYMASTER_FACTORY_ADDRESS,
+  PAYMASTER_V4_IMPL_ADDRESS,
+  APNTS_ADDRESS,
+  SBT_ADDRESS,
+  DVT_VALIDATOR_ADDRESS,
+  ENTRY_POINT_ADDRESS,
+  XPNTS_FACTORY_ADDRESS,
+  BLS_AGGREGATOR_ADDRESS
+} from './constants.js';
 
 /**
  * Core System Addresses
  */
 export const CORE_ADDRESSES = {
-  registry: process.env.REGISTRY_ADDRESS as Address,
-  gToken: process.env.GTOKEN_ADDRESS as Address,
-  gTokenStaking: process.env.GTOKENSTAKING_ADDRESS as Address,
-  superPaymaster: process.env.SUPER_PAYMASTER as Address,
-  paymasterFactory: (process.env.PAYMASTER_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000') as Address,
-  aPNTs: process.env.APNTS_ADDRESS as Address,
-  mySBT: process.env.MYSBT_ADDRESS as Address,
-  paymasterV4: process.env.PAYMASTER_V4_ADDRESS as Address | undefined,
-  dvtValidator: process.env.DVT_VALIDATOR_ADDRESS as Address | undefined,
-  xPNTsFactory: process.env.XPNTS_FACTORY_ADDRESS as Address | undefined,
+  registry: REGISTRY_ADDRESS,
+  gToken: GTOKEN_ADDRESS,
+  gTokenStaking: GTOKEN_STAKING_ADDRESS,
+  superPaymaster: SUPER_PAYMASTER_ADDRESS,
+  paymasterFactory: PAYMASTER_FACTORY_ADDRESS,
+  aPNTs: APNTS_ADDRESS,
+  mySBT: SBT_ADDRESS,
+  // Fallback to Env if not in config (or use Implementation)
+  paymasterV4: (process.env.PAYMASTER_V4_PROXY || PAYMASTER_V4_IMPL_ADDRESS) as Address,
+  dvtValidator: DVT_VALIDATOR_ADDRESS,
+  entryPoint: ENTRY_POINT_ADDRESS,
+  xPNTsFactory: XPNTS_FACTORY_ADDRESS,
 } as const;
 
 /**
  * Token System Addresses
  */
 export const TOKEN_ADDRESSES = {
-  xPNTsFactory: '0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd',
+  xPNTsFactory: XPNTS_FACTORY_ADDRESS,
 } as const;
 
 /**
  * Test Token Addresses (For Development & Testing)
  */
 export const TEST_TOKEN_ADDRESSES = {
-  mockUSDT: '0x14EaC6C3D49AEDff3D59773A7d7bfb50182bCfDc',
-  aPNTs: '0xBD0710596010a157B88cd141d797E8Ad4bb2306b',
-  bPNTs: '0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3',
+  mockUSDT: process.env.TEST_MOCK_USDT as Address,
+  aPNTs: process.env.TEST_APNTS as Address,
+  bPNTs: process.env.TEST_BPNTS as Address,
 } as const;
 
 /**
  * Test Account Addresses (For Development & Testing)
  */
 export const TEST_ACCOUNT_ADDRESSES = {
-  simpleAccountFactory: '0x8B516A71c134a4b5196775e63b944f88Cc637F2b',
+  // Official EntryPoint 0.6 Factory for Sepolia
+  simpleAccountFactory: (process.env.SIMPLE_ACCOUNT_FACTORY || '0x9406Cc6185a346906296840746125a0E44976454') as Address,
 } as const;
 
 /**
  * Paymaster Addresses
  */
 export const PAYMASTER_ADDRESSES = {
-  paymasterV4_1: '0x4D6A367aA183903968833Ec4AE361CFc8dDDBA38',
-  paymasterV4_1iImplementation: '0x3E1C6a741f4b3f8bE24f324342539982324a6f8a',
+  paymasterV4_1: process.env.PAYMASTER_V4_ADDRESS as Address,
+  paymasterV4_1iImplementation: PAYMASTER_V4_IMPL_ADDRESS,
 } as const;
 
 /**
  * Monitoring System Addresses
  */
 export const MONITORING_ADDRESSES = {
-  dvtValidator: '0x937CdD172fb0674Db688149093356F6dA95498FD',
-  blsAggregator: '0x3Cf0587912c692aa0f5FEEEDC52959ABEEEFaEc6',
+  dvtValidator: DVT_VALIDATOR_ADDRESS,
+  blsAggregator: BLS_AGGREGATOR_ADDRESS,
 } as const;
 
 /**
  * Official Contract Addresses
  */
 export const OFFICIAL_ADDRESSES = {
-  entryPoint: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  entryPoint: (ENTRY_POINT_ADDRESS || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address,
 } as const;
 
 /**
@@ -82,9 +99,9 @@ export const COMMUNITY_OWNERS = {
  * Test Community Addresses (Registered in Registry v2.2.0 on 2025-11-08)
  */
 export const TEST_COMMUNITIES = {
-  aastar: '0x411BD567E46C0781248dbB6a9211891C032885e5', // AAstar community (PAYMASTER_SUPER, aPNTs, MySBT, 50 GT staked)
-  bread: '0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA', // Bread community (PAYMASTER_AOA, bPNTs, MySBT, 50 GT staked)
-  mycelium: '0x411BD567E46C0781248dbB6a9211891C032885e5', // Legacy alias for aastar
+  aastar: process.env.TEST_COMMUNITY_AASTAR as Address,
+  bread: process.env.TEST_COMMUNITY_BREAD as Address,
+  mycelium: process.env.TEST_COMMUNITY_MYCELIUM as Address,
 } as const;
 
 /**

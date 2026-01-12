@@ -1,10 +1,10 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const RELAYER_KEY = process.env.PRIVATE_KEY_RELAYER as Hex || process.env.PRIVATE_KEY_JASON as Hex;
@@ -18,11 +18,11 @@ async function main() {
     const account = privateKeyToAccount(RELAYER_KEY);
     const client = createWalletClient({
         account,
-        chain: sepolia,
+        chain: foundry,
         transport: http(RPC_URL)
     });
     const publicClient = createPublicClient({ 
-        chain: sepolia, 
+        chain: foundry, 
         transport: http(RPC_URL) 
     });
 

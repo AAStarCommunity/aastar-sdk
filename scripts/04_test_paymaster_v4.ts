@@ -1,11 +1,11 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
@@ -25,8 +25,8 @@ function packUint(high128: bigint, low128: bigint): Hex {
 
 async function main() {
     console.log("🚀 Starting Group B: Paymaster V4 (AOA Mode)...");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
 
     const erc20Abi = parseAbi([
@@ -67,8 +67,11 @@ async function main() {
     // Or just PaymasterAddress?
     // UserOp v0.7 paymasterAndData = [paymaster (20)] [gasLimits (32)] [data (?)]
     // We pre-pack a placeholder
+    // We pre-pack a placeholder
     const pmGasLimitsPlaceholder = packUint(300000n, 10000n);
-    const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder]);
+    // V3 requires [PM(20)][Limits(32)][Operator(20)]
+    const operator = signer.address;
+    const pmAndDataForEst = concat([PAYMASTER_V4, pmGasLimitsPlaceholder, operator]);
 
     await sendUserOp(
         publicClient, bundlerClient, signer, ACCOUNT_B,

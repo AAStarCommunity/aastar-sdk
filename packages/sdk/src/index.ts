@@ -10,3 +10,13 @@ export * from './clients/endUser.js';
 export * from './clients/operator.js';
 export * from './clients/community.js';
 export * from './clients/admin.js';
+export * from './clients/ExperimentClient.js';
+
+// Export Utils & Errors
+export * from './utils/roleData.js';
+export * from './utils/keys.js';
+export * from './utils/funding.js';
+export * from './utils/userOp.js';
+export * from './utils/testScenarios.js';
+export * from './errors/decoder.js';
+

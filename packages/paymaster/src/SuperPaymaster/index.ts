@@ -1,9 +1,10 @@
 import { type Address, concat, pad, toHex } from 'viem';
-import { SuperPaymasterV3ABI as SUPERPAYMASTER_ABI } from '@aastar/core';
+import { SuperPaymasterABI as SUPERPAYMASTER_ABI } from '@aastar/core';
 
 export type PaymasterConfig = {
     paymasterAddress: Address;
     operator: Address;
+    maxRate?: bigint;
     verificationGasLimit?: bigint;
     postOpGasLimit?: bigint;
 };
@@ -20,21 +21,22 @@ export function getSuperPaymasterMiddleware(config: PaymasterConfig) {
         sponsorUserOperation: async (args: { userOperation: any }) => {
             const verGas = config.verificationGasLimit ?? DEFAULT_VERIFICATION_GAS;
             const postGas = config.postOpGasLimit ?? DEFAULT_POSTOP_GAS;
+            const maxRate = config.maxRate ?? 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn;
 
-            // Layout: [Paymaster(20)] [VerGas(16)] [PostOpGas(16)] [Operator(20)]
+            // V3.2.1 Layout: [Paymaster(20)] [VerGas(16)] [PostOpGas(16)] [Operator(20)] [MaxRate(32)]
+            // Offset 72 starts MaxRate.
             const paymasterAndData = concat([
                 config.paymasterAddress,
                 pad(toHex(verGas), { size: 16 }),
                 pad(toHex(postGas), { size: 16 }),
-                config.operator
+                config.operator,
+                pad(toHex(maxRate), { size: 32 })
             ]);
 
             return {
                 paymasterAndData,
                 verificationGasLimit: verGas,
                 preVerificationGas: args.userOperation.preVerificationGas, 
-                // Note: userOp gas limits might need broader estimation, but this middleware 
-                // focuses on packing the P&D.
             };
         }
     };
@@ -91,7 +93,13 @@ export async function checkEligibility(
  * Admin Client for SuperPaymaster V3
  */
 export class SuperPaymasterClient {
-    constructor(private client: any, private paymasterAddress: Address) {}
+    private client: any;
+    private paymasterAddress: Address;
+
+    constructor(client: any, paymasterAddress: Address) {
+        this.client = client;
+        this.paymasterAddress = paymasterAddress;
+    }
 
     async getOperator(operator: Address) {
         return this.client.readContract({

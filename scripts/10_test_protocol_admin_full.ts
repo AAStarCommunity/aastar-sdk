@@ -11,11 +11,11 @@ const __dirname = path.dirname(__filename);
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL!;
-const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const SUPER_PAYMASTER_ADDR = process.env.SUPER_PAYMASTER as Hex;
 const REPUTATION_SYSTEM_ADDR = process.env.REPUTATION_SYSTEM_ADDR as Hex;

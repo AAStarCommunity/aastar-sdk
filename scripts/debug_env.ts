@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 // Load Environment
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env.v3'), override: true });
+dotenv.config({ path: path.resolve(__dirname, '../.env.anvil'), override: true });
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const LOCAL_ADDRESSES = {

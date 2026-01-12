@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
+if (!(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -24,10 +28,10 @@ const MaliciousABI = {
     bytecode: { object: "0x608060405234801561001057600080fd5b50610100565b600080fd5b" } // Simplified bytecode placeholder
 };
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const RPC_URL = process.env.RPC_URL!;
-const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 
 async function runReentrancyTest() {

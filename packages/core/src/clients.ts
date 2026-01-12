@@ -9,5 +9,5 @@ export function createAAStarPublicClient(rpcUrl: string, chain: Chain = sepolia)
     return createPublicClient({
         chain,
         transport: http(rpcUrl)
-    });
+    }) as unknown as PublicClient;
 }

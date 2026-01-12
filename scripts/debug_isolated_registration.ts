@@ -2,7 +2,7 @@
 import { createPublicClient, createWalletClient, http, defineChain, Hex, toHex, keccak256, stringToBytes, parseEther, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env.v3', override: true });
+dotenv.config({ path: '.env.anvil', override: true });
 
 // --- CONFIG ---
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
@@ -16,7 +16,7 @@ const ANVIL_CHAIN = defineChain({
 
 const ROLE_PAYMASTER_SUPER = keccak256(stringToBytes('PAYMASTER_SUPER'));
 
-// Addresses from .env.v3
+// Addresses from .env.anvil
 const localAddresses = {
     registry: process.env.REGISTRY_ADDRESS as Address,
     gToken: process.env.GTOKEN_ADDRESS as Address,
@@ -148,13 +148,12 @@ async function main() {
     // 3. Approve Staking (Operator must approve since they are the payer)
     const APPROVE_AMOUNT = parseEther('100'); // Stake 50 + Burn 5 + buffer
     console.log('   Approving GToken (Operator)...');
-    const appTx = await operatorClient.writeContract({
-        address: localAddresses.gToken,
-        abi: ERC20ABI,
-        functionName: 'approve',
-        args: [localAddresses.gTokenStaking, APPROVE_AMOUNT]
+    const txApprove = await operatorClient.writeContract({
+        address: localAddresses.gToken, abi: ERC20ABI,
+        functionName: 'approve', args: [localAddresses.gTokenStaking, APPROVE_AMOUNT]
     });
-    await client.waitForTransactionReceipt({ hash: appTx });
+    await client.waitForTransactionReceipt({ hash: txApprove });
+    await client.waitForTransactionReceipt({ hash: txApprove });
     console.log('   Approved (Operator).');
 
     // 3.1 Approve Staking (Admin - Critical Fix)
@@ -243,8 +242,8 @@ async function main() {
             const notTx = await operatorClient.writeContract({
                 address: localAddresses.superPaymaster,
                 abi: SuperPaymasterABI,
-                functionName: 'notifyDeposit',
-                args: [DEPOSIT]
+                functionName: 'depositFor',
+                args: [operatorAccount.address, DEPOSIT]
             });
             await client.waitForTransactionReceipt({ hash: notTx });
             console.log('✅ Deposit Notified Successfully');

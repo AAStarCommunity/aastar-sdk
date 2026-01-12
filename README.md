@@ -26,7 +26,6 @@
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
   - [Academic Research / 学术研究](#academic-research--学术研究)
   - [Support / 支援](#support--支援)
-- [SDK Coverage TODO / SDK 测试未覆盖项](docs/TODO_SDK_COVERAGE.md)
 
 ---
 
@@ -95,10 +94,68 @@ await user.sendGaslessTransaction({
 pnpm run test:full_sdk
 ```
 
+
 ### Full Protocol Regression (Anvil Dedicated)
 ```bash
 pnpm run test:full_anvil
 ```
+
+---
+
+## Development Guides / 开发指南
+
+### ABI Maintenance / ABI 维护
+- [ABI Maintenance Plan](./docs/ABI_MAINTENANCE_PLAN.md) - 合约 ABI 自动同步和维护策略
+
+---
+
+## Development Workflow / 开发者工作流
+
+A step-by-step guide for contributors from contract modification to Sepolia deployment.
+
+### Step 1: Modify Contracts / 修改合约
+Edit Solidity files in `superpaymaster/contracts/src`.
+```bash
+cd projects/SuperPaymaster
+# Edit .sol files...
+```
+
+### Step 2: Local Build & Deploy (Anvil) / 本地构建与部署
+Auto-start Anvil, compile contracts, deploy, and sync config to SDK.
+```bash
+cd projects/aastar-sdk
+# Runs Anvil + Deploy + Sync .env.anvil
+./run_full_regression.sh --env anvil
+```
+
+### Step 3: Run Local Tests / 运行本地测试
+Validate your changes with the full regression suite.
+```bash
+# Run all SDK & Protocol tests
+./run_sdk_regression.sh
+```
+
+### Step 4: Deploy to Sepolia / 部署至 Sepolia
+1. Configure `aastar-sdk/.env.sepolia` with `ADMIN_KEY` and `SEPOLIA_RPC_URL`.
+2. Run the deployment script (with resume capability).
+```bash
+cd projects/SuperPaymaster/contracts
+# Deploy Core + Modules
+export $(grep -v '^#' ../../aastar-sdk/.env.sepolia | xargs) && \
+export PRIVATE_KEY=$ADMIN_KEY && \
+forge script script/DeployV3FullSepolia.s.sol \
+  --rpc-url $SEPOLIA_RPC_URL \
+  --broadcast --verify --slow --resume
+```
+3. Update `aastar-sdk/.env.sepolia` with new contract addresses from `script/v3/config.json`.
+
+### Step 5: Verify on Sepolia / Sepolia 验证
+Run the regression suite against the live testnet.
+```bash
+cd projects/aastar-sdk
+./run_full_regression.sh --env sepolia
+```
+
 
 ---
 
@@ -107,6 +164,8 @@ pnpm run test:full_anvil
 The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.
 
 本 SDK 支撑了 SuperPaymaster 论文的博士实验数据采集。官方实验记录器位于 `scripts/19_sdk_experiment_runner.ts`。
+
+- [Stage 3 Scenario Experiment Plan](./docs/STAGE_3_SCENARIO_EXP_PLAN.md)
 
 ---
 

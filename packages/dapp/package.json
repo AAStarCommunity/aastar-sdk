@@ -17,7 +17,7 @@
   "devDependencies": {
     "@types/react": "18.2.0",
     "@types/react-dom": "18.2.0",
-    "typescript": "5.9.3"
+    "typescript": "5.7.2"
   },
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",

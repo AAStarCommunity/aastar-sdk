@@ -3,14 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createPublicClient, createWalletClient, http, parseAbi, parseEther, formatEther, getContract, maxUint256, Hex, Address, encodeAbiParameters, keccak256, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import { getNetworkConfig } from './00_utils.js';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 async function main() {
     const network = process.env.EXPERIMENT_NETWORK || 'sepolia';

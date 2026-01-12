@@ -1,5 +1,10 @@
 /**
- * Smart Contract ABIs (Standardized Naming)
+ * Smart Contract ABIs (Unified Naming)
+ * 
+ * 命名策略：
+ * - 文件名：统一无版本号（如 BLSAggregator.json）
+ * - 版本信息：通过 ABI 中的 version() 函数获取
+ * - 同步时自动去除版本号后缀（V3 等）
  */
 
 // Core System
@@ -8,7 +13,12 @@ import GTokenABIData from './GToken.json' with { type: 'json' };
 import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
 import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
 import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
+import PaymasterABIData from './Paymaster.json' with { type: 'json' };
+
+// AA Standard (从 out/ 提取)
 import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
+import SimpleAccountABIData from './SimpleAccount.json' with { type: 'json' };
+import SimpleAccountFactoryABIData from './SimpleAccountFactory.json' with { type: 'json' };
 
 // Token System
 import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
@@ -21,48 +31,63 @@ import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json
 // Monitoring System
 import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
+import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
-// Legacy/Third-party (Standardized)
-import PaymasterABIData from './Paymaster.json' with { type: 'json' };
-import SimpleAccountABIData from './SimpleAccount.json' with { type: 'json' };
-import SimpleAccountFactoryABIData from './SimpleAccountFactory.json' with { type: 'json' };
+// ========== Re-export ABIs - Core System ==========
+export const RegistryABI = RegistryABIData.abi;
+export const RegistryArtifact = RegistryABIData;
 
-// New Versions & Extensions
-import SimpleAccountV08ABIData from './SimpleAccountV08.json' with { type: 'json' };
-import SimpleAccountFactoryV08ABIData from './SimpleAccountFactoryV08.json' with { type: 'json' };
-import Simple7702AccountABIData from './Simple7702Account.json' with { type: 'json' };
+export const GTokenABI = GTokenABIData.abi;
+export const GTokenArtifact = GTokenABIData;
 
-// Re-export ABIs - Core System
-export const RegistryABI = RegistryABIData;
-export const GTokenABI = GTokenABIData;
-export const GTokenStakingABI = GTokenStakingABIData;
-export const SuperPaymasterABI = SuperPaymasterABIData;
-export const PaymasterFactoryABI = PaymasterFactoryABIData;
-export const EntryPointABI = EntryPointABIData;
+export const GTokenStakingABI = GTokenStakingABIData.abi;
+export const GTokenStakingArtifact = GTokenStakingABIData;
 
-// Re-export ABIs - Token System
-export const xPNTsTokenABI = xPNTsTokenABIData;
-export const xPNTsFactoryABI = xPNTsFactoryABIData;
-export const MySBTABI = MySBTABIData;
+export const SuperPaymasterABI = SuperPaymasterABIData.abi;
+export const SuperPaymasterArtifact = SuperPaymasterABIData;
 
-// Re-export ABIs - Identity & Reputation
-export const ReputationSystemABI = ReputationSystemABIData;
+export const PaymasterFactoryABI = PaymasterFactoryABIData.abi;
+export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
 
-// Re-export ABIs - Monitoring System
-export const DVTValidatorABI = DVTValidatorABIData;
-export const BLSAggregatorABI = BLSAggregatorABIData;
+// Paymaster V4 (使用 Paymaster.json)
+export const PaymasterV4ABI = PaymasterABIData.abi;
+export const PaymasterV4Artifact = PaymasterABIData;
+export const PaymasterABI = PaymasterABIData.abi;
+export const PaymasterArtifact = PaymasterABIData;
 
-// Re-export ABIs - Legacy/Third-party
-export const PaymasterABI = PaymasterABIData;
-export const SimpleAccountABI = SimpleAccountABIData;
-export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData;
+// ========== AA Standard ==========
+export const EntryPointABI = EntryPointABIData.abi;
+export const EntryPointArtifact = EntryPointABIData;
 
-// Re-export ABIs - New Versions & Extensions
-export const SimpleAccountV08ABI = SimpleAccountV08ABIData;
-export const SimpleAccountFactoryV08ABI = SimpleAccountFactoryV08ABIData;
-export const Simple7702AccountABI = Simple7702AccountABIData;
+export const SimpleAccountABI = SimpleAccountABIData.abi;
+export const SimpleAccountArtifact = SimpleAccountABIData;
 
-// Legacy Aliases for compatibility (if needed)
-export const SuperPaymasterV3ABI = SuperPaymasterABIData;
-export const ReputationSystemV3ABI = ReputationSystemABIData;
-export const PaymasterV4ABI = PaymasterABIData;
+export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData.abi;
+export const SimpleAccountFactoryArtifact = SimpleAccountFactoryABIData;
+
+// ========== Token System ==========
+export const xPNTsTokenABI = xPNTsTokenABIData.abi;
+export const xPNTsTokenArtifact = xPNTsTokenABIData;
+
+export const xPNTsFactoryABI = xPNTsFactoryABIData.abi;
+export const xPNTsFactoryArtifact = xPNTsFactoryABIData;
+
+export const MySBTABI = MySBTABIData.abi;
+export const MySBTArtifact = MySBTABIData;
+
+// ========== Identity & Reputation ==========
+export const ReputationSystemABI = ReputationSystemABIData.abi;
+export const ReputationSystemArtifact = ReputationSystemABIData;
+
+// ========== Monitoring System ==========
+export const DVTValidatorABI = DVTValidatorABIData.abi;
+export const DVTValidatorArtifact = DVTValidatorABIData;
+
+export const BLSAggregatorABI = BLSAggregatorABIData.abi;
+export const BLSAggregatorArtifact = BLSAggregatorABIData;
+
+export const BLSValidatorABI = BLSValidatorABIData.abi;
+export const BLSValidatorArtifact = BLSValidatorABIData;
+
+
+

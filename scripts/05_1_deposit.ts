@@ -1,10 +1,10 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER_ADDRESS as Hex;
@@ -13,8 +13,8 @@ const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
 async function main() {
     console.log("🏦 [05.1] Executing Manual Deposit for SuperPaymaster...");
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const wallet = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const wallet = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: foundry, transport: http(RPC_URL) });
 
     const epAbi = parseAbi(['function depositTo(address) payable', 'function balanceOf(address) view returns (uint256)']);
 

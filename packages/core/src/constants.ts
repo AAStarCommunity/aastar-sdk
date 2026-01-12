@@ -1,3 +1,36 @@
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+
+const network = process.env.NETWORK || 'anvil';
+let config: any = {};
+try {
+  config = require(`../../../config.${network}.json`);
+} catch (e) {
+  console.warn(`Warning: Could not load config.${network}.json. Contract addresses may be undefined.`);
+}
+
+/**
+ * Contract Addresses (loaded from config.{network}.json)
+ */
+export const CONTRACT_SRC_HASH = config.srcHash;
+export const REGISTRY_ADDRESS = config.registry as `0x${string}`;
+export const GTOKEN_ADDRESS = config.gToken as `0x${string}`;
+export const GTOKEN_STAKING_ADDRESS = config.staking as `0x${string}`;
+export const SBT_ADDRESS = config.sbt as `0x${string}`;
+export const REPUTATION_SYSTEM_ADDRESS = config.reputationSystem as `0x${string}`;
+export const SUPER_PAYMASTER_ADDRESS = config.superPaymaster as `0x${string}`;
+export const PAYMASTER_FACTORY_ADDRESS = config.paymasterFactory as `0x${string}`;
+export const PAYMASTER_V4_IMPL_ADDRESS = config.paymasterV4Impl as `0x${string}`;
+export const XPNTS_FACTORY_ADDRESS = config.xPNTsFactory as `0x${string}`;
+export const BLS_AGGREGATOR_ADDRESS = config.blsAggregator as `0x${string}`;
+export const BLS_VALIDATOR_ADDRESS = config.blsValidator as `0x${string}`;
+export const DVT_VALIDATOR_ADDRESS = config.dvtValidator as `0x${string}`;
+export const ENTRY_POINT_ADDRESS = config.entryPoint as `0x${string}`;
+export const ENTRY_POINT_0_8_ADDRESS = config.entryPoint08 as `0x${string}`;
+export const ENTRY_POINT_0_9_ADDRESS = config.entryPoint09 as `0x${string}`;
+export const APNTS_ADDRESS = config.aPNTs as `0x${string}`;
+
 /**
  * Common Constants
  */
@@ -38,7 +71,7 @@ export const DEFAULT_USDT_MINT_AMOUNT = "10";
 export const TEST_ACCOUNT_POOL_SIZE = 20;
 
 /**
- * Minimum stake amount for different node types (in sGT)
+ * Minimum stake amounts for different node types (in sGT)
  */
 export const NODE_STAKE_AMOUNTS = {
   /** Lite Node: 30 sGT minimum stake */
@@ -57,11 +90,25 @@ export const NODE_STAKE_AMOUNTS = {
 export const DEFAULT_APNTS_PRICE_USD = "0.02";
 
 /**
- * Registry V3 Role Identifiers (Keccak256)
+ * Network Chain IDs
  */
-export const ROLE_ENDUSER = "0x0c34ecc75d3bf122e0609d2576e167f53fb42429262ce8c9b33cab91ff670e3a";
-export const ROLE_COMMUNITY = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
-export const ROLE_PAYMASTER_AOA = "0xf86d13979a91272f2c54c4147e588ecbeaad32dd1e0a5332a77356847049a70e";
-export const ROLE_PAYMASTER_SUPER = "0xe94d78b6d8fb99b2c21131eb4552924a60f564d8515a3cc90ef300fc9735c074";
-export const ROLE_KMS = "0x6fb2b25080d21c908f32ff8ff99eb1d552c210854f7de48a40406764c09c68f8";
-export const ROLE_ANODE = "0x3aa2e9509f29532b71f822e18bcde843a8070a508d564188ec8a6adf59eff28a";
+export const CHAIN_SEPOLIA = 11155111;
+export const CHAIN_MAINNET = 1;
+
+/**
+ * Default Values
+ */
+export const DEFAULT_TOKEN_SYMBOL = 'GT';
+export const DEFAULT_TOKEN_NAME = 'Governance Token';
+
+/**
+ * Gas Limits
+ */
+export const DEFAULT_VERIFICATION_GAS_LIMIT = 200000n;
+export const DEFAULT_CALL_GAS_LIMIT = 100000n;
+export const DEFAULT_PRE_VERIFICATION_GAS = 50000n;
+
+/**
+ * Timeouts
+ */
+export const DEFAULT_TIMEOUT_MS = 30000;

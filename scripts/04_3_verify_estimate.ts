@@ -1,11 +1,11 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
@@ -19,8 +19,8 @@ if (!BUNDLER_RPC) throw new Error("Missing Bundler Config");
 
 async function main() {
     console.log("☁️  [04.3] Estimation via Bundler...");
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
 
     const erc20Abi = parseAbi(['function transfer(address, uint256) returns (bool)', 'function approve(address, uint256) returns (bool)']);
     const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);

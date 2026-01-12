@@ -10,7 +10,7 @@ import { getSuperPaymasterMiddleware } from '../packages/paymaster/src/index.js'
 // import { createAAStarPublicClient } from '../packages/core/src/index.js'; 
 // (We use direct imports for now as TS alias might not be set in ts-node context without tsconfig paths)
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const ADMIN_KEY = process.env.ADMIN_KEY as Hex;

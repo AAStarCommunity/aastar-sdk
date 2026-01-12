@@ -7,7 +7,7 @@ import * as path from 'path';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL;
@@ -16,6 +16,7 @@ const ENTRY_POINT = process.env.MOCK_ENTRY_POINT as Hex;
 const APNTS = process.env.APNTS as Hex;
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const ROLE_COMMUNITY = keccak256(toHex('COMMUNITY'));
+const ROLE_PAYMASTER_SUPER = keccak256(toHex('PAYMASTER_SUPER'));
 const SUPER_PAYMASTER = process.env.SUPER_PAYMASTER as Hex;
 const SIGNER_KEY = process.env.PRIVATE_KEY_SUPPLIER as Hex;
 const ACCOUNT_C = process.env.ALICE_AA_ACCOUNT as Hex || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Fallback to Anvil #0 if missing
@@ -91,8 +92,61 @@ async function runFullV3Test() {
         await waitForTx(registerTx);
     }
 
+    // Ensure PAYMASTER_SUPER Role (Required for configureOperator)
+    console.log("🛠  Ensuring PAYMASTER_SUPER Role for Operator...");
+    const hasSuper = await publicClient.readContract({
+        address: REGISTRY_ADDR,
+        abi: parseAbi(['function hasRole(bytes32, address) view returns (bool)']),
+        functionName: 'hasRole',
+        args: [ROLE_PAYMASTER_SUPER, signer.address]
+    });
+
+    if (!hasSuper) {
+        console.log("   Registering PAYMASTER_SUPER...");
+        
+        // Fetch Config for Stake
+        const config = await publicClient.readContract({
+            address: REGISTRY_ADDR,
+            abi: parseAbi(['function roleConfigs(bytes32) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, string)']),
+            functionName: 'roleConfigs',
+            args: [ROLE_PAYMASTER_SUPER]
+        }) as unknown as any[];
+        
+        const stakeNeeded = (config[1] as bigint) + (config[3] as bigint); // entryBurn + stakeAmount
+        console.log(`   Stake Required: ${formatEther(stakeNeeded)} GTokens`);
+
+        const GTOKEN_ADDR = process.env.GTOKEN_ADDR as Hex; // Ensure existing
+        
+        // Mint & Approve
+        const mintTx = await wallet.writeContract({ 
+            address: GTOKEN_ADDR, 
+            abi: parseAbi(['function mint(address, uint256)']), 
+            functionName: 'mint', 
+            args: [signer.address, stakeNeeded] 
+        });
+        await waitForTx(mintTx);
+
+        const approveTx = await wallet.writeContract({
+            address: GTOKEN_ADDR,
+            abi: parseAbi(['function approve(address, uint256)']), 
+            functionName: 'approve', 
+            args: [process.env.STAKING_ADDR as Hex, stakeNeeded] 
+        });
+        await waitForTx(approveTx);
+
+        // Register (No data needed for Super Paymaster)
+        const registerTx = await wallet.writeContract({
+            address: REGISTRY_ADDR,
+            abi: parseAbi(['function registerRoleSelf(bytes32, bytes) external']),
+            functionName: 'registerRoleSelf',
+            args: [ROLE_PAYMASTER_SUPER, "0x"]
+        });
+        await waitForTx(registerTx);
+        console.log("   ✅ Registered PAYMASTER_SUPER.");
+    }
+
     const pmAbi = parseAbi([
-        'function operators(address) view returns (address, address, bool, bool, uint256, uint256, uint256, uint256, uint256)',
+        'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)',
         'function configureOperator(address, address, uint256)',
         'function deposit(uint256)',
         'function notifyDeposit(uint256)',
@@ -103,7 +157,8 @@ async function runFullV3Test() {
         'function setOperatorPaused(address, bool)',
         'function totalTrackedBalance() view returns (uint256)',
         'function protocolRevenue() view returns (uint256)',
-        'function setAPNTsToken(address)'
+        'function setAPNTsToken(address)',
+        'function depositFor(address, uint256)'
     ]);
     const erc20Abi = parseAbi([
         'function balanceOf(address) view returns (uint256)',
@@ -133,33 +188,34 @@ async function runFullV3Test() {
     // Let's log all of them to be safe.
     
     let opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    console.log(`   Initial State: Conf=${opData[2]}, Paused=${opData[3]}, Balance=${formatEther(opData[6])}, Rep=${opData[8]}`); // Using 6 and 8
+    // V3.2 Packed: 0:balance, 1:exRate, 2:isConfigured, 3:isPaused, 4:token, 5:reputation, 6:treasury, 7:spent, 8:txSponsored
+    console.log(`   Initial State: Conf=${opData[2]}, Paused=${opData[3]}, Balance=${formatEther(opData[0])}, Rep=${opData[5]}`); 
 
 
     // Confirm Configured
-    if (!opData[1]) {
-         console.log("   ⚙️ Configuring Operator...");
-         const hash = await wallet.writeContract({
-             address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'configureOperator', 
-             args: [APNTS, signer.address, 1000000000000000000n] 
-         });
-          await publicClient.waitForTransactionReceipt({ hash });
+    if (!opData[2]) {
+         console.log("   Calling depositFor(200)...");
+    const txDep = await wallet.writeContract({
+        address: SUPER_PAYMASTER, abi: pmAbi,
+        functionName: 'depositFor', args: [wallet.account.address, parseEther('200')]
+    });
+          await publicClient.waitForTransactionReceipt({ hash: txDep });
     }
 
     // Test Pause/Unpause
     console.log("   ⏸️  Testing Pause...");
     let pauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPaused', args: [signer.address, true] });
     await publicClient.waitForTransactionReceipt({ hash: pauseHash });
-    opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if(opData[2] !== true) throw new Error("Pause failed");
+    opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] }) as any[];
+    if(opData[3] !== true) throw new Error("Pause failed");
     console.log("   ✅ Paused.");
 
     console.log("   ▶️  Testing Unpause...");
     try {
         let unpauseHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'setOperatorPaused', args: [signer.address, false] });
         await publicClient.waitForTransactionReceipt({ hash: unpauseHash });
-        opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        if(opData[2] !== false) throw new Error("Unpause failed"); 
+        opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] }) as any[];
+        if(opData[3] !== false) throw new Error("Unpause failed"); 
         console.log("   ✅ Unpaused.");
     } catch (e: any) {
         console.warn(`   ⚠️ Unpause failed (Skipping step): ${e.shortMessage || e.message}`);
@@ -170,9 +226,9 @@ async function runFullV3Test() {
     try {
         let repHash = await wallet.writeContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'updateReputation', args: [signer.address, 100n] });
         await publicClient.waitForTransactionReceipt({ hash: repHash });
-        opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        if(BigInt(opData[8] as bigint) !== 100n) throw new Error(`Reputation Config failed: expected 100, got ${opData[8]}`);
-        console.log(`   ✅ Reputation set to ${opData[8]}`);
+        opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] }) as any[];
+        if(Number(opData[5]) !== 100) throw new Error(`Reputation Config failed: expected 100, got ${opData[5]}`);
+        console.log(`   ✅ Reputation set to ${opData[5]}`);
     } catch (e: any) {
         console.warn(`   ⚠️ Reputation update failed (Skipping step): ${e.shortMessage || e.message}`);
     }
@@ -241,7 +297,7 @@ async function runFullV3Test() {
     }
     
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    const balanceAfterDeposit = opData[6] as bigint; // Corrected index to 6
+    const balanceAfterDeposit = opData[0] as bigint; // Corrected index to 0
     console.log(`   ✅ New Balance: ${formatEther(balanceAfterDeposit)}`);
 
     // Test Withdraw
@@ -252,7 +308,7 @@ async function runFullV3Test() {
         await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
         
         opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-        if (balanceAfterDeposit - (opData[6] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch"); // Corrected index to 6
+        if (balanceAfterDeposit - (opData[0] as bigint) !== withdrawAmount) throw new Error("Withdraw calculation mismatch"); 
         console.log("   ✅ Withdrawn.");
     } catch (e: any) {
         console.warn(`   ⚠️ Withdraw failed (Skipping step): ${e.shortMessage || e.message}`);

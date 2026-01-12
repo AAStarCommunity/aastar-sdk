@@ -1,11 +1,11 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL;
@@ -29,9 +29,9 @@ function packUint(high128: bigint, low128: bigint): Hex {
 async function main() {
     console.log("🚀 Starting Standard AA Test (Pimlico ERC20)...");
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const pimlicoClient = createPublicClient({ chain: sepolia, transport: http(PIMLICO_RPC) });
-    const bundlerClient = createPublicClient({ chain: sepolia, transport: http(BUNDLER_RPC) });
+    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+    const pimlicoClient = createPublicClient({ chain: foundry, transport: http(PIMLICO_RPC) });
+    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
     const signer = privateKeyToAccount(SIGNER_KEY);
 
     // ABIs

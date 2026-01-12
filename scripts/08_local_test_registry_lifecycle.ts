@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 };
 
 // Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Load ABIs
 const loadAbi = (name: string) => {
@@ -52,7 +52,7 @@ const ROLE_PAYMASTER_AOA = keccak256(toBytes('PAYMASTER_AOA'));
 // Config
 const ANVIL_RPC = 'http://127.0.0.1:8545';
 // Force Anvil Account #0 for local test to match deployment
-const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'); 
 
 
 // Helper to wait for tx
@@ -128,9 +128,10 @@ async function main() {
         functionName: 'roleConfigs',
         args: [ROLE_PAYMASTER_AOA]
     }) as any;
-    console.log(`   DEBUG: roleConfig:`, roleConfig); // ADDED LOG
-    console.log(`   Role Config (AOA): MinStake=${formatEther(roleConfig[0])}, Active=${roleConfig[6]}`);
-    if(!roleConfig[6]) throw new Error("Paymaster Role not active");
+    console.log(`   DEBUG: roleConfig:`, roleConfig);
+    // V3.2 RoleConfig: 0:minStake, 1:entryBurn... 8:isActive, 9:description
+    console.log(`   Role Config (AOA): MinStake=${formatEther(roleConfig[0])}, Active=${roleConfig[8]}`);
+    if(!roleConfig[8]) throw new Error("Paymaster Role not active");
 
     const requiredStake = roleConfig[0];
 
@@ -145,6 +146,36 @@ async function main() {
         console.log(`   ✅ Funded.`);
     } catch (e: any) {
         console.warn(`   ⚠️ Funding check failed (maybe duplicate run, assuming balance ok): ${e.message.split('\n')[0]}`);
+    }
+
+    // 1.1.5 Helper: Ensure COMMUNITY Role (Prerequisite in V3.2.0)
+    console.log(`   Checking Prerequisite: COMMUNITY Role...`);
+    const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
+    const hasCommunity = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole', args: [ROLE_COMMUNITY, paymasterUser.address]
+    });
+
+    if (!hasCommunity) {
+        console.log(`   ⚠️ Missing COMMUNITY role. Registering...`);
+        // We technically need GTokens for this too if it requires stake.
+        // Assuming Admin funded enough or we fund more.
+        await adminWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'transfer', args: [paymasterUser.address, parseEther('50')] 
+        }); 
+        
+        await pmWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, parseEther('50')] 
+        });
+
+        const commData = encodeAbiParameters(
+             [{ type: 'tuple', components: [{ name: 'name', type: 'string' }, { name: 'ensName', type: 'string' }, { name: 'website', type: 'string' }, { name: 'description', type: 'string' }, { name: 'logoURI', type: 'string' }, { name: 'stakeAmount', type: 'uint256' }] }],
+             [{ name: 'PM Community', ensName: '', website: '', description: '', logoURI: '', stakeAmount: 0n }]
+        );
+        const txComm = await pmWallet.writeContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf', args: [ROLE_COMMUNITY, commData]
+        });
+        await waitForTx(publicClient, txComm);
+        console.log(`   ✅ COMMUNITY Registered.`);
     }
 
     // 1.2 Approve Staking Contract
@@ -231,16 +262,16 @@ async function main() {
     // Increase Min Stake for AOA
     const newMinStake = requiredStake + parseEther('1');
     const roleConfigStruct = [
-        newMinStake,      // minStake
-        roleConfig[1],    // entryBurn
-        roleConfig[2],    // slashThreshold
-        roleConfig[3],    // slashBase
-        roleConfig[4],    // slashIncrement
-        roleConfig[5],    // slashMax
-        roleConfig[6],    // exitFeePercent
-        roleConfig[7],    // minExitFee
-        true,             // isActive
-        "Updated AOA Paymaster" // description
+        newMinStake,      // 0: minStake
+        roleConfig[1],    // 1: entryBurn
+        roleConfig[2],    // 2: slashThreshold
+        roleConfig[3],    // 3: slashBase
+        roleConfig[4],    // 4: slashIncrement
+        roleConfig[5],    // 5: slashMax
+        roleConfig[6],    // 6: exitFeePercent
+        roleConfig[7],    // 7: minExitFee
+        true,             // 8: isActive
+        "Updated AOA Paymaster" // 9: description
     ];
 
     console.log(`   Updating MinStake to ${formatEther(newMinStake)}...`);
@@ -266,16 +297,16 @@ async function main() {
     // Revert config to avoid breaking other tests
     console.log(`   Restoring Config...`);
     const restoreConfigStruct = [
-        requiredStake,
-        roleConfig[1],
-        roleConfig[2],
-        roleConfig[3],
-        roleConfig[4],
-        roleConfig[5],
-        roleConfig[6],
-        roleConfig[7],
-        roleConfig[8],
-        roleConfig[9]
+        requiredStake,    // 0
+        roleConfig[1],    // 1
+        roleConfig[2],    // 2
+        roleConfig[3],    // 3
+        roleConfig[4],    // 4
+        roleConfig[5],    // 5
+        roleConfig[6],    // 6
+        roleConfig[7],    // 7
+        roleConfig[8],    // 8
+        roleConfig[9]     // 9
     ];
      const txRestore = await adminWallet.writeContract({
         address: REGISTRY_ADDR,
@@ -302,6 +333,15 @@ async function main() {
     // Test 4: Role Exit
     // ==========================================
     console.log(`\n🧪 [Test 4] Role Exit (Paymaster)`);
+
+    // NEW in V3.2: Clear lock duration for testing immediate exit
+    console.log(`   Admin clearing lock duration for AOA Paymaster...`);
+    await waitForTx(publicClient, await adminWallet.writeContract({
+        address: REGISTRY_ADDR,
+        abi: RegistryABI,
+        functionName: 'setRoleLockDuration',
+        args: [ROLE_PAYMASTER_AOA, 0n]
+    }));
 
     console.log(`   Exiting Paymaster Role...`);
     const txExit = await pmWallet.writeContract({

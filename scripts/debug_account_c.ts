@@ -1,10 +1,10 @@
 import { createPublicClient, http, Hex, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 async function main() {
     const rpc = process.env.SEPOLIA_RPC_URL;
@@ -13,7 +13,7 @@ async function main() {
 
     console.log(`Checking Account C: ${accountC}`);
     
-    const client = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createPublicClient({ chain: foundry, transport: http(rpc) });
     const jasonAccount = privateKeyToAccount(jasonKey);
     console.log(`Jason Address (Signer): ${jasonAccount.address}`);
 

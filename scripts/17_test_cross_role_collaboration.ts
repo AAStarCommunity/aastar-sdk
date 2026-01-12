@@ -6,7 +6,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
@@ -23,8 +23,8 @@ const regAbi = parseAbi([
 ]);
 
 const spmAbi = parseAbi([
-    'function deposit(uint256)',
-    'function operators(address) view returns (address, bool, bool, address, uint96, uint256, uint256, uint256, uint256)'
+    'function deposit() payable',
+    'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)'
 ]);
 
 async function runCrossRoleTest() {
@@ -62,7 +62,8 @@ async function runCrossRoleTest() {
     const opData = await client.readContract({
         address: SUPER_PAYMASTER, abi: spmAbi, functionName: 'operators', args: [admin.address]
     });
-    console.log(`   ✅ Operator Balance: ${opData[5]}`);
+    console.log(`   ✅ Operator Reputation: ${opData.reputation || opData[5]}`);
+    console.log(`   ✅ Operator Balance: ${opData.balance || opData[0]}`);
 
     // 3. Simulated User Interaction
     // In a full e2e, this would be a UserOp.
@@ -77,7 +78,7 @@ async function runCrossRoleTest() {
     // Try to register a role without permissions (if we were a non-admin)
     // Since we are admin, we test "Registering Duplicate" or "Invalid Data"
     try {
-        const ROLE_COMMUNITY = "0x" + Buffer.from("COMMUNITY").toString('hex').padEnd(64, '0') as Hex;
+        const ROLE_COMMUNITY = keccak256(toHex('COMMUNITY'));
         await wallet.writeContract({
             address: REGISTRY, abi: regAbi, functionName: 'registerRole',
             args: [ROLE_COMMUNITY, admin.address, "0x"] 

@@ -1,1205 +1,1096 @@
-[
-  {
-    "type": "constructor",
-    "inputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "receive",
-    "stateMutability": "payable"
-  },
-  {
-    "type": "function",
-    "name": "MAX_GAS_TOKENS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_SBTS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_SERVICE_FEE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PRICE_STALENESS_THRESHOLD",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "VERSION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "addDeposit",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "payable"
-  },
-  {
-    "type": "function",
-    "name": "addGasToken",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "addSBT",
-    "inputs": [
-      {
-        "name": "sbt",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "addStake",
-    "inputs": [
-      {
-        "name": "unstakeDelaySec",
-        "type": "uint32",
-        "internalType": "uint32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "payable"
-  },
-  {
-    "type": "function",
-    "name": "checkUserQualification",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "estimatedGasCost",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "qualified",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "reason",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "deactivateFromRegistry",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "entryPoint",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IEntryPoint"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "estimatePNTCost",
-    "inputs": [
-      {
-        "name": "gasCostWei",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "gasToken",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "ethUsdPriceFeed",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract AggregatorV3Interface"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "gasTokenIndex",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDeposit",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getSupportedGasTokens",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address[]",
-        "internalType": "address[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getSupportedSBTs",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address[]",
-        "internalType": "address[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "initialize",
-    "inputs": [
-      {
-        "name": "_entryPoint",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_ethUsdPriceFeed",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_serviceFeeRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_maxGasCostCap",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_minTokenBalance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_xpntsFactory",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_initialSBT",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_initialGasToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_registry",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "isActiveInRegistry",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "isGasTokenSupported",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "isRegistrySet",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "isSBTSupported",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "maxGasCostCap",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "owner",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "pause",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "paused",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postOp",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "enum PostOpMode"
-      },
-      {
-        "name": "context",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "actualGasCost",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "registry",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract ISuperPaymasterRegistry"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "removeGasToken",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "removeSBT",
-    "inputs": [
-      {
-        "name": "sbt",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "renounceOwnership",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "sbtIndex",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "serviceFeeRate",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "setMaxGasCostCap",
-    "inputs": [
-      {
-        "name": "_maxGasCostCap",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setServiceFeeRate",
-    "inputs": [
-      {
-        "name": "_serviceFeeRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setTreasury",
-    "inputs": [
-      {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "supportedGasTokens",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "supportedSBTs",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "transferOwnership",
-    "inputs": [
-      {
-        "name": "newOwner",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "treasury",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "unlockStake",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "unpause",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "validatePaymasterUserOp",
-    "inputs": [
-      {
-        "name": "userOp",
-        "type": "tuple",
-        "internalType": "struct PackedUserOperation",
-        "components": [
-          {
-            "name": "sender",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "nonce",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "initCode",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "callData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "accountGasLimits",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "preVerificationGas",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "gasFees",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "paymasterAndData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "signature",
-            "type": "bytes",
-            "internalType": "bytes"
-          }
-        ]
-      },
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "maxCost",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "context",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "validationData",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "version",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "withdrawPNT",
-    "inputs": [
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "withdrawStake",
-    "inputs": [
-      {
-        "name": "withdrawAddress",
-        "type": "address",
-        "internalType": "address payable"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "withdrawTo",
-    "inputs": [
-      {
-        "name": "withdrawAddress",
-        "type": "address",
-        "internalType": "address payable"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "xpntsFactory",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IxPNTsFactory"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "event",
-    "name": "DeactivatedFromRegistry",
-    "inputs": [
-      {
-        "name": "paymaster",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "GasPaymentProcessed",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "gasToken",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pntAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "gasCostWei",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "actualGasCost",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "GasTokenAdded",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "GasTokenRemoved",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Initialized",
-    "inputs": [
-      {
-        "name": "version",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "MaxGasCostCapUpdated",
-    "inputs": [
-      {
-        "name": "oldCap",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "newCap",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OwnershipTransferred",
-    "inputs": [
-      {
-        "name": "previousOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Paused",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PostOpProcessed",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "actualGasCost",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "pntCharged",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SBTAdded",
-    "inputs": [
-      {
-        "name": "sbt",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SBTRemoved",
-    "inputs": [
-      {
-        "name": "sbt",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ServiceFeeUpdated",
-    "inputs": [
-      {
-        "name": "oldRate",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "newRate",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "TreasuryUpdated",
-    "inputs": [
-      {
-        "name": "oldTreasury",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newTreasury",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Unpaused",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AddressEmptyCode",
-    "inputs": [
-      {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "AddressInsufficientBalance",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "FailedInnerCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidInitialization",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotInitializing",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OwnableInvalidOwner",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "OwnableUnauthorizedAccount",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4_1i__RegistryNotSet",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__AlreadyExists",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__EmptyArray",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__InsufficientPNT",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__InvalidPaymasterData",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__InvalidServiceFee",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__InvalidTokenBalance",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__MaxLimitReached",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__NoValidSBT",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__NotFound",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__OnlyEntryPoint",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__Paused",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymasterV4__ZeroAddress",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SafeERC20FailedOperation",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  }
-]
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_registry",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "receive",
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "MAX_ETH_USD_PRICE",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int256",
+          "internalType": "int256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_GAS_TOKENS",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_SBTS",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_SERVICE_FEE",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MIN_ETH_USD_PRICE",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int256",
+          "internalType": "int256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "addDeposit",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "addStake",
+      "inputs": [
+        {
+          "name": "unstakeDelaySec",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "balances",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "cachedPrice",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "uint208",
+          "internalType": "uint208"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint48",
+          "internalType": "uint48"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "deactivateFromRegistry",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "depositFor",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "entryPoint",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IEntryPoint"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "ethUsdPriceFeed",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract AggregatorV3Interface"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRealtimeTokenCost",
+      "inputs": [
+        {
+          "name": "gasCost",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "initialize",
+      "inputs": [
+        {
+          "name": "_entryPoint",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_treasury",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_ethUsdPriceFeed",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_serviceFeeRate",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_maxGasCostCap",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_priceStalenessThreshold",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "isActiveInRegistry",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isRegistrySet",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "maxGasCostCap",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "oracleDecimals",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "paused",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "postOp",
+      "inputs": [
+        {
+          "name": "mode",
+          "type": "uint8",
+          "internalType": "enum PostOpMode"
+        },
+        {
+          "name": "context",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "actualGasCost",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "priceStalenessThreshold",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "registry",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract ISuperPaymasterRegistry"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "renounceOwnership",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "serviceFeeRate",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "setMaxGasCostCap",
+      "inputs": [
+        {
+          "name": "_maxGasCostCap",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPriceStalenessThreshold",
+      "inputs": [
+        {
+          "name": "_priceStalenessThreshold",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setServiceFeeRate",
+      "inputs": [
+        {
+          "name": "_serviceFeeRate",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setTokenPrice",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setTreasury",
+      "inputs": [
+        {
+          "name": "_treasury",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "tokenDecimals",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "tokenPrices",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "transferOwnership",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "treasury",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "unlockStake",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "updatePrice",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "validatePaymasterUserOp",
+      "inputs": [
+        {
+          "name": "userOp",
+          "type": "tuple",
+          "internalType": "struct PackedUserOperation",
+          "components": [
+            {
+              "name": "sender",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initCode",
+              "type": "bytes",
+              "internalType": "bytes"
+            },
+            {
+              "name": "callData",
+              "type": "bytes",
+              "internalType": "bytes"
+            },
+            {
+              "name": "accountGasLimits",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "preVerificationGas",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "gasFees",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "paymasterAndData",
+              "type": "bytes",
+              "internalType": "bytes"
+            },
+            {
+              "name": "signature",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "maxCost",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "context",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "validationData",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "version",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "withdraw",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "withdrawStake",
+      "inputs": [
+        {
+          "name": "withdrawAddress",
+          "type": "address",
+          "internalType": "address payable"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "withdrawTo",
+      "inputs": [
+        {
+          "name": "withdrawAddress",
+          "type": "address",
+          "internalType": "address payable"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "DeactivatedFromRegistry",
+      "inputs": [
+        {
+          "name": "paymaster",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "FundsDeposited",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "FundsWithdrawn",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "Initialized",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "MaxGasCostCapUpdated",
+      "inputs": [
+        {
+          "name": "oldCap",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "newCap",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OwnershipTransferred",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "Paused",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PostOpProcessed",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "actualGasCostWei",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "tokenCost",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "protocolRevenue",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PriceUpdated",
+      "inputs": [
+        {
+          "name": "price",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ServiceFeeUpdated",
+      "inputs": [
+        {
+          "name": "oldRate",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "newRate",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TokenPriceUpdated",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TreasuryUpdated",
+      "inputs": [
+        {
+          "name": "oldTreasury",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newTreasury",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "Unpaused",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AddressEmptyCode",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "AddressInsufficientBalance",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "FailedInnerCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidInitialization",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MathOverflowedMulDiv",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotInitializing",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "OwnableInvalidOwner",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OwnableUnauthorizedAccount",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__InsufficientBalance",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__InvalidOraclePrice",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__InvalidPaymasterData",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__InvalidServiceFee",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__InvalidTokenBalance",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__OnlyEntryPoint",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__Paused",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__RegistryNotSet",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__TokenNotSupported",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Paymaster__ZeroAddress",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ReentrancyGuardReentrantCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SafeERC20FailedOperation",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    }
+  ],
+  "bytecode": "0x60a03461019057601f611f7e38819003918201601f19168301916001600160401b038311848410176101945780849260209460405283398101031261019057516001600160a01b0381169081900361019057331561017d575f8054336001600160a01b0319821681178355604051939290916001600160a01b0316907f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e09080a360018055801561016e576080525f516020611f5e5f395f51905f525460ff8160401c1661015f576002600160401b03196001600160401b0382160161010c575b604051611db590816101a98239608051818181610c0001528181610db8015281816114bd01526118b10152f35b6001600160401b0319166001600160401b039081175f516020611f5e5f395f51905f525581527fc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d290602090a15f806100df565b63f92ee8a960e01b5f5260045ffd5b632462edf160e01b5f5260045ffd5b631e4fbdf760e01b5f525f60045260245ffd5b5f80fd5b634e487b7160e01b5f52604160045260245ffdfe6080604052600436101561001a575b3615610018575f80fd5b005b5f5f3560e01c80630396cb601461168a5780630879c4121461166c57806314d90e1b1461164f578063204120bc14611616578063205c28781461159f578063327266841461157f5780633400ba521461156357806336f897e7146114a257806339788cd91461148157806342f6fb2914611458578063431f63c9146113875780634915a858146113645780634a58db191461130f57806352b7512c14610ffc57806354fd4d5014610fa25780635c975abb14610f7f57806361d027b314610f5657806361d1bc9414610f38578063673a7e2814610e535780636f374b0f14610e2e578063715018a614610de75780637b10399914610da25780637c627b2114610d015780638da5cb5b14610cda5780638ee573ac14610c9d5780639b1d309114610c31578063a032f4b814610bea578063aa51e01514610bce578063b0d691fe14610ba5578063b1f145c51461098b578063b3db428b1461089b578063bb9fe6bf14610845578063bd11187014610827578063c23a5cea14610798578063c23f001f14610745578063c9929dad146106f0578063e68b52e7146106cc578063e77fc7a4146103f0578063f0f442601461036d578063f2fde38b1461031c578063f3fef3a3146102275763f60fdcb3146101f3575061000e565b34610224578060031936011261022457600554604080516001600160d01b038316815260d09290921c602083015290f35b80fd5b50346102245760403660031901126102245761024161170a565b6024359061024d611afc565b338352600a6020526040832060018060a01b0382165f526020528160405f20541061030d57338352600a6020526040832060018060a01b0382165f5260205260405f2061029b83825461180b565b905560018060a01b0316906102da60405163a9059cbb60e01b6020820152336024820152826044820152604481526102d460648261179d565b83611c17565b6040519081527fa92ff919b850e4909ab2261d907ef955f11bc1716733a6cbece38d163a69af8a60203392a36001805580f35b630a18ee5560e41b8352600483fd5b50346102245760203660031901126102245761033661170a565b61033e611ad6565b6001600160a01b038116156103595761035690611b40565b80f35b631e4fbdf760e01b82526004829052602482fd5b50346102245760203660031901126102245761038761170a565b61038f611ad6565b6001600160a01b031680156103e157600654816001600160a01b0382167f4ab5be82436d353e61ca18726e984e561f5c1cc7c6d38b29d2553c790434705a8580a36001600160a01b0319161760065580f35b632462edf160e01b8252600482fd5b50346102245760e03660031901126102245761040a61170a565b610412611720565b6044356001600160a01b038116908190036106c8576064356001600160a01b03811691908290036106c45760843560c435915f516020611d605f395f51905f52549560ff8760401c16159660018060401b038116801590816106bc575b60011490816106b2575b1590816106a9575b5061069a576001600160401b031981166001175f516020611d605f395f51905f525587610672575b506001600160a01b0316938415610663576001600160a01b038616948515610654578215610654578115610654576103e8841161064557600280546001600160a01b0319908116929092179055600380549182168317905560405163313ce56760e01b8152909190602081600481855afa8a9181610614575b506105f25750506003805460ff60a01b1916600160a31b179055505b600680546001600160a01b03191691909117905560075560a43560085580156105e9575b60045560ff196009541660095561057882611b40565b33036105da575b506105875780f35b60ff60401b195f516020611d605f395f51905f5254165f516020611d605f395f51905f52557fc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d2602060405160018152a180f35b6105e390611b40565b5f61057f565b50610e10610562565b6001600160a81b03199092161760a09190911b60ff60a01b161760035561053e565b61063791925060203d60201161063e575b61062f818361179d565b8101906117c0565b905f610522565b503d610625565b632cbc962760e01b8952600489fd5b632462edf160e01b8952600489fd5b632462edf160e01b8852600488fd5b6001600160481b0319166001600160401b01175f516020611d605f395f51905f52555f6104a9565b63f92ee8a960e01b8952600489fd5b9050155f610481565b303b159150610479565b89915061046f565b8480fd5b8380fd5b5034610224578060031936011261022457602060ff60035460a01c16604051908152f35b50346102245760203660031901126102245760043561070d611ad6565b7f49081791577ea5202d6975e5d6ad3a55a49709b1adf70fbd4fbf4b3ffda6e03160406008548151908152836020820152a160085580f35b503461022457604036600319011261022457604061076161170a565b9161076a611720565b9260018060a01b03168152600a602052209060018060a01b03165f52602052602060405f2054604051908152f35b503461022457602036600319011261022457806107b361170a565b6107bb611ad6565b6002546001600160a01b031690813b156108235760405163611d2e7560e11b81526001600160a01b0390911660048201529082908290602490829084905af18015610818576108075750f35b816108119161179d565b6102245780f35b6040513d84823e3d90fd5b5050fd5b50346102245780600319360112610224576020600454604051908152f35b503461022457806003193601126102245761085e611ad6565b60025481906001600160a01b0316803b156108985781809160046040518094819363bb9fe6bf60e01b83525af18015610818576108075750f35b50fd5b5034610224576060366003190112610224576108b561170a565b6108bd611720565b604435906108c9611afc565b6001600160a01b0316808452600b60205260408420549092901561097c5760207ff0d0e99cae184d0187b093b48894117462462379674a6e11d89c3fbb618e96b0916109446040516323b872dd60e01b8482015261093e816109308830336024850161182c565b03601f19810183528261179d565b86611c17565b60018060a01b031692838652600a825260408620855f52825260405f2061096c828254611945565b9055604051908152a36001805580f35b635f77d0bd60e01b8452600484fd5b5034610224576040366003190112610224576109a5611720565b303303610b96576001600160a01b0316808252600b60205260408220549091908015610b8757600354604051633fabe5a360e21b81529060a090829060049082906001600160a01b03165afa908115610b7c578391610b49575b5082811315610b2b576402540be40081128015610b3a575b610b2b5760ff60035460a01c16936007548061271001908161271011610b1757908592918193610ae8575b5050610a70610a7c9392610a76928752600c602052610a6b60ff60408920541694600435611b1c565b611b1c565b91611b2f565b90611b1c565b92600a0160ff8111610ad457610a9190611b2f565b91612710820291820461271003610ac0576020610ab885610ab28686611b1c565b90611b73565b604051908152f35b634e487b7160e01b81526011600452602490fd5b634e487b7160e01b83526011600452602483fd5b612af89192935001809111610b035790610a70610a76610a42565b634e487b7160e01b85526011600452602485fd5b634e487b7160e01b86526011600452602486fd5b6344e30e0360e11b8352600483fd5b506509184e72a0008113610a17565b610b6b915060a03d60a011610b75575b610b63818361179d565b810190611862565b50925050906109ff565b503d610b59565b6040513d85823e3d90fd5b635f77d0bd60e01b8252600482fd5b634fd3f39560e01b8252600482fd5b50346102245780600319360112610224576002546040516001600160a01b039091168152602090f35b5034610224578060031936011261022457602060405160058152f35b50346102245780600319360112610224576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031615158152602090f35b503461022457602036600319011261022457600435610c4e611ad6565b6103e88111610c8e577e3b413cf14a67407425bd0b5c065b2de08876554d8489ad7dd4aa95604d280c60406007548151908152836020820152a160075580f35b632cbc962760e01b8252600482fd5b50346102245760203660031901126102245760209060ff906040906001600160a01b03610cc861170a565b168152600c8452205416604051908152f35b5034610224578060031936011261022457546040516001600160a01b039091168152602090f35b50346102245760803660031901126102245760036004351015610224576024356001600160401b038111610d9e5736602382011215610d9e5760048101356001600160401b038111610d9a573660248284010111610d9a576002546001600160a01b03163303610d8b5790610d8491610d78611afc565b60246044359201611952565b6001805580f35b637f3c57b560e01b8352600483fd5b8280fd5b5080fd5b50346102245780600319360112610224576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5034610224578060031936011261022457610e00611ad6565b80546001600160a01b03198116825581906001600160a01b03165f516020611d405f395f51905f528280a380f35b50346102245780600319360112610224576020610e496118af565b6040519015158152f35b5034610224578060031936011261022457600354604051633fabe5a360e21b81529060a090829060049082906001600160a01b03165afa80156108185782918391610f12575b5082821315610b2b57604080517f945c1c4e99aa89f648fbfe3df471b916f719e16d960fcec0737d4d56bd696838939192906001600160d01b03831690610edf8161176e565b81815265ffffffffffff831660209182015260d083901b6001600160d01b0319169091176005558351928352820152a180f35b9050610f2d915060a03d60a011610b7557610b63818361179d565b50925050905f610e99565b50346102245780600319360112610224576020600754604051908152f35b50346102245780600319360112610224576006546040516001600160a01b039091168152602090f35b5034610224578060031936011261022457602060ff600954166040519015158152f35b503461022457806003193601126102245750610ff8604051610fc560408261179d565b60128152710504d56342d4465706f7369742d342e332e360741b602082015260405191829160208352602083019061174a565b0390f35b5034610224576060366003190112610224576004356001600160401b038111610d9e5780600401906101206003198236030112610d9a5760025460443591906001600160a01b031633036113005760ff600954166112f15760e49061105f611afc565b0190603461106d83856117d9565b9050106112e2578235916001600160a01b038316918284036112de5760085490818111156112d65750935b60486110a483836117d9565b905010155f146112c757906110b8916117d9565b6048116106c4576034013560601c808552600b60205260408520549093849180156112b857604051916110ea8361176e565b6005549260018060d01b038416808252602082019460d01c8552156112a957516001600160d01b031692508783131561128b576402540be4008312801561129a575b61128b5760ff60035460a01c169260075490816127100191826127101161127757612af80180921161126357610a7082610a6b610a769360ff60408f61117f9998508c8152600c60205220541695611b1c565b91600a0160ff811161124f5761119490611b2f565b9061271081029081046127100361124f576111b39291610ab291611b1c565b91808652600a60205260408620825f526020528260405f2054106112405761121e92869492611210926112369852600a60205260408620905f5260205260405f206111ff82825461180b565b90556040519586936020850161182c565b03601f19810184528361179d565b6001805560405192839260408452604084019061174a565b9060208301520390f35b630a18ee5560e41b8652600486fd5b634e487b7160e01b88526011600452602488fd5b634e487b7160e01b8a52601160045260248afd5b634e487b7160e01b8b52601160045260248bfd5b6344e30e0360e11b8852600488fd5b506509184e72a000831361112c565b6344e30e0360e11b8952600489fd5b635f77d0bd60e01b8752600487fd5b634fd3f39560e01b8652600486fd5b905093611098565b8580fd5b634fd3f39560e01b8452600484fd5b63026ee64160e51b8452600484fd5b637f3c57b560e01b8452600484fd5b508060031936011261022457611323611ad6565b60025481906001600160a01b0316803b1561089857816024916040519283809263b760faf960e01b825230600483015234905af18015610818576108075750f35b50346102245760203660031901126102245761137e611ad6565b60043560045580f35b5034610224576040366003190112610224576113a161170a565b7fceb40be0a58aa33916c199e469842b614ef313295573c15d82f85cc9d1a89d3260206024356113cf611ad6565b60405163313ce56760e01b81526001600160a01b03909416936012908381600481895afa879181611439575b50611431575b50848652600c835260ff60408720911660ff19825416179055838552600b8252806040862055604051908152a280f35b90505f611401565b611451919250853d871161063e5761062f818361179d565b905f6113fb565b50346102245780600319360112610224576003546040516001600160a01b039091168152602090f35b503461022457806003193601126102245760206040516509184e72a0008152f35b50346102245780600319360112610224576114bb611ad6565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168015611554578082913b15610898578180916004604051809481936251b42b60e81b83525af180156108185761153f575b50307fca323d32ea3ada728fbc5a470183af7d4cc49a426cb2bdf68847d6e298576f208280a280f35b816115499161179d565b61022457805f611516565b630c96deb560e11b8252600482fd5b50346102245780600319360112610224576020604051600a8152f35b503461022457806003193601126102245760206040516402540be4008152f35b503461022457604036600319011261022457806115ba61170a565b6115c2611ad6565b6002546001600160a01b031690813b156108235760405163040b850f60e31b81526001600160a01b03909116600482015260248035908201529082908290604490829084905af18015610818576108075750f35b5034610224576020366003190112610224576020906040906001600160a01b0361163e61170a565b168152600b83522054604051908152f35b503461022457806003193601126102245760206040516103e88152f35b50346102245780600319360112610224576020600854604051908152f35b5060203660031901126117065760043563ffffffff8116809103611706576116b0611ad6565b6002546001600160a01b031690813b15611706575f90602460405180948193621cb65b60e51b8352600483015234905af180156116fb576116ef575080f35b61001891505f9061179d565b6040513d5f823e3d90fd5b5f80fd5b600435906001600160a01b038216820361170657565b602435906001600160a01b038216820361170657565b35906001600160a01b038216820361170657565b805180835260209291819084018484015e5f828201840152601f01601f1916010190565b604081019081106001600160401b0382111761178957604052565b634e487b7160e01b5f52604160045260245ffd5b601f909101601f19168101906001600160401b0382119082101761178957604052565b90816020910312611706575160ff811681036117065790565b903590601e198136030182121561170657018035906001600160401b0382116117065760200191813603831361170657565b9190820391821161181857565b634e487b7160e01b5f52601160045260245ffd5b6001600160a01b03918216815291166020820152604081019190915260600190565b51906001600160501b038216820361170657565b908160a0910312611706576118768161184e565b9160208201519160408101519161189460806060840151930161184e565b90565b90816020910312611706575180151581036117065790565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316801561194057602060249160405192838092634943841160e11b82523060048301525afa5f918161190f575b5061189457505f90565b61193291925060203d602011611939575b61192a818361179d565b810190611897565b905f611905565b503d611920565b505f90565b9190820180921161181857565b908015611ad15781606091810103126117065761196e81611736565b604061197c60208401611736565b60405163b1f145c560e01b8152600481018690526001600160a01b0391821660248201819052959190931693919091013591602081604481305afa5f9181611a8a575b5092606092915f516020611d205f395f51905f5294155f14611a845750805b808211611a7c575b816119f09161180b565b80611a4b575b5080611a11575b6040519182528060208301526040820152a3565b60018060a01b03600654165f52600a60205260405f2060018060a01b0387165f5260205260405f20611a44828254611945565b90556119fd565b855f52600a60205260405f2060018060a01b0388165f52602052611a7460405f20918254611945565b90555f6119f6565b9050806119e6565b906119de565b929150926020833d602011611ac9575b81611aa76020938361179d565b8101031261170657915191929091905f516020611d205f395f51905f526119bf565b3d9150611a9a565b505050565b5f546001600160a01b03163303611ae957565b63118cdaa760e01b5f523360045260245ffd5b600260015414611b0d576002600155565b633ee5aeb560e01b5f5260045ffd5b8181029291811591840414171561181857565b60ff16604d811161181857600a0a90565b5f80546001600160a01b039283166001600160a01b03198216811783559216905f516020611d405f395f51905f529080a3565b5f196001820991818084109303928084039314611bf75782811115611be8578060018309815f0382168092046002816003021880820260020302808202600203028082026002030280820260020302808202600203028091026002030293600183805f03040190848311900302920304170290565b63227bc15360e01b5f5260045ffd5b80925015611c03570490565b634e487b7160e01b5f52601260045260245ffd5b81516001600160a01b03909116915f91829160200182855af13d15611cb5573d6001600160401b03811161178957604051611c72929091611c62601f8201601f19166020018461179d565b82523d5f602084013e5b83611cc1565b8051908115159182611c9a575b5050611c885750565b635274afe760e01b5f5260045260245ffd5b611cad9250602080918301019101611897565b155f80611c7f565b611c7290606090611c6c565b90611ce55750805115611cd657805190602001fd5b630a12f52160e11b5f5260045ffd5b81511580611d16575b611cf6575090565b639996b31560e01b5f9081526001600160a01b0391909116600452602490fd5b50803b15611cee56fe62544d7f48b11c32334310ebd306b47224fca220163218d4a7264322c52ae0738be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0f0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00a26469706673582212204a6c07af779c641d6d29938d627a53b0f438be81f2797b276637637f213515b064736f6c634300081c0033f0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00"
+}

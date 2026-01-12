@@ -1,10 +1,10 @@
 import { createPublicClient, createWalletClient, http, parseAbi, parseEther, formatEther, getContract, Hex, Address, encodeAbiParameters, keccak256, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 if (!RPC_URL) throw new Error("Missing SEPOLIA_RPC_URL");
 

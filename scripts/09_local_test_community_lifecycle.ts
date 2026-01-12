@@ -6,7 +6,7 @@ import * as path from 'path';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 // Configuration
 const RPC_URL = process.env.RPC_URL!;
@@ -16,7 +16,7 @@ const STAKING_ADDR = process.env.STAKING_ADDR as Hex;
 const SBT_ADDR = process.env.SBT_ADDR as Hex;
 const REPUTATION_SYSTEM_ADDR = process.env.REPUTATION_SYSTEM_ADDR as Hex;
 const XPNTS_FACTORY_ADDR = process.env.XPNTS_FACTORY_ADDR as Hex;
-const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
+const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
 
 if (!REGISTRY_ADDR || !GTOKEN_ADDR || !STAKING_ADDR || !SBT_ADDR || !ADMIN_KEY) {
     throw new Error("Missing required environment variables");
@@ -60,7 +60,7 @@ const reputationAbi = parseAbi([
 ]);
 
 const xpntsFactoryAbi = parseAbi([
-    'function createToken(string, string, string, string, uint256) external returns (address)',
+    'function deployxPNTsToken(string, string, string, string, uint256, address) external returns (address)',
     'function communityTokens(address) view returns (address)'
 ]);
 
@@ -339,13 +339,14 @@ async function runCommunityLifecycleTest() {
                 const createTokenTx = await walletClient.writeContract({
                     address: XPNTS_FACTORY_ADDR,
                     abi: xpntsFactoryAbi,
-                    functionName: 'createToken',
+                    functionName: 'deployxPNTsToken',
                     args: [
                         'Test Community PNTs',
                         'tcPNTs',
                         'Test DAO',
                         'testdao.eth',
-                        parseEther('1')
+                        parseEther('1'),
+                        '0x0000000000000000000000000000000000000000' // No specific AOA Paymaster in this test
                     ]
                 });
                 await publicClient.waitForTransactionReceipt({ hash: createTokenTx });

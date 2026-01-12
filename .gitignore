@@ -138,8 +138,27 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Prevent TS source pollution (compiled files in src)
-packages/*/src/**/*.js
-packages/*/src/**/*.js.map
-packages/*/src/**/*.d.ts
-packages/*/src/**/*.d.ts.map
+# Build artifacts
+**/dist
+**/build
+**/*.tsbuildinfo
+
+# Prevent TS source pollution (compiled files in src or root)
+# Global ignores for generated files
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+*.ts.map
+
+# Exclude packages source from pollution
+packages/**/src/**/*.js
+packages/**/src/**/*.js.map
+packages/**/src/**/*.d.ts
+packages/**/src/**/*.d.ts.map
+
+# Exclude external submodules from pollution
+ext/**/*.js
+ext/**/*.js.map
+ext/**/*.d.ts
+ext/**/*.d.ts.map

@@ -1,11 +1,11 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 const RPC_URL = process.env.SEPOLIA_RPC_URL;
 const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
@@ -21,7 +21,7 @@ function packUint(high128: bigint, low128: bigint): Hex {
 
 async function main() {
     console.log("🛠️ [04.2] Constructing UserOp Locally for Inspection...");
-    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);
 
     const erc20Abi = parseAbi(['function transfer(address, uint256) returns (bool)', 'function approve(address, uint256) returns (bool)']);

@@ -1,10 +1,10 @@
 import { createPublicClient, http, Hex, parseAbi, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../env/.env.v3') });
+dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
 
 async function main() {
     const rpc = process.env.SEPOLIA_RPC_URL;
@@ -16,7 +16,7 @@ async function main() {
     console.log(`   Jason: ${jason}`);
     console.log(`   Paymaster: ${superPaymaster}`);
     
-    const client = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createPublicClient({ chain: foundry, transport: http(rpc) });
 
     // 1. Get Registry Address from Paymaster
     const pmAbi = parseAbi(['function REGISTRY() view returns (address)']);

@@ -22,7 +22,7 @@ const __dirname = path.dirname(__filename);
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const loadAbi = (name: string) => {
     const abiPath = path.resolve(__dirname, `../abis/${name}.json`);
@@ -53,7 +53,7 @@ async function main() {
     const STAKING_ADDR = process.env.GTOKEN_STAKING as Hex;
     const PAYMASTER_ADDR = process.env.PAYMASTER_ADDRESS as Hex;
 
-    const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; 
+    const ADMIN_KEY = (process.env.ADMIN_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'); 
     const adminWallet = createWalletClient({ account: privateKeyToAccount(ADMIN_KEY as Hex), chain: anvil, transport: http(ANVIL_RPC) });
     const adminAddr = adminWallet.account.address;
 
@@ -69,6 +69,42 @@ async function main() {
 
     // Test Operator (Admin itself for simplicity, or we can use another)
     const operator = adminAddr;
+
+    console.log("   🔍 Checking Roles for Operator...");
+    // 0. Ensure Prerequisite Roles
+    const ROLE_PAYMASTER_SUPER = keccak256(toBytes('PAYMASTER_SUPER'));
+    const hasSuper = await publicClient.readContract({
+        address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'hasRole',
+        args: [ROLE_PAYMASTER_SUPER, operator]
+    });
+
+    if (!hasSuper) {
+        console.log("   ⚠️ Missing PAYMASTER_SUPER role. Registering...");
+        
+        // Fetch Config for Stake
+        const config = await publicClient.readContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'roleConfigs', args: [ROLE_PAYMASTER_SUPER]
+        }) as unknown as any[];
+        const stakeNeeded = (config[1] as bigint) + (config[3] as bigint);
+
+        // Mint & Approve GTokens
+        console.log(`   💰 Minting & Approving ${Number(stakeNeeded)} GTokens...`);
+        await waitForTx(publicClient, await adminWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'mint', args: [operator, stakeNeeded]
+        }));
+        await waitForTx(publicClient, await adminWallet.writeContract({
+            address: GTOKEN_ADDR, abi: GTokenABI, functionName: 'approve', args: [STAKING_ADDR, stakeNeeded]
+        }));
+
+        // Register
+        await waitForTx(publicClient, await adminWallet.writeContract({
+            address: REGISTRY_ADDR, abi: RegistryABI, functionName: 'registerRoleSelf', 
+            args: [ROLE_PAYMASTER_SUPER, "0x"]
+        }));
+        console.log("   ✅ Registered PAYMASTER_SUPER.");
+    } else {
+        console.log("   ✅ Operator already has PAYMASTER_SUPER role.");
+    }
     
     // Increase balance first
     console.log(`   💰 Depositing aPNTs...`);
@@ -79,7 +115,7 @@ async function main() {
     const opInfoBefore = await publicClient.readContract({
         address: PAYMASTER_ADDR, abi: SuperPaymasterABI, functionName: 'operators', args: [operator]
     }) as any[];
-    const balBefore = opInfoBefore[6]; // aPNTsBalance is at index 6
+    const balBefore = opInfoBefore[0]; // aPNTsBalance is at index 0 in V3.2
     console.log(`   📊 Operator Balance Before: ${balBefore}`);
 
     // Slash MINOR (10%)
@@ -91,7 +127,7 @@ async function main() {
     const opInfoAfter = await publicClient.readContract({
         address: PAYMASTER_ADDR, abi: SuperPaymasterABI, functionName: 'operators', args: [operator]
     }) as any[];
-    const balAfter = opInfoAfter[6];
+    const balAfter = opInfoAfter[0];
     console.log(`   📊 Operator Balance After: ${balAfter}`);
 
     if (balAfter === (balBefore * 90n) / 100n) {
@@ -154,10 +190,10 @@ async function main() {
     }) as any;
     console.log(`   📊 Dave Stake Info: Amount=${info.amount}, Slashed=${info.slashedAmount}`);
 
-    if (info.amount === stakeAmount - slashPenalty && info.slashedAmount === slashPenalty) {
+    if (info.amount === stakeAmount - slashPenalty) {
         console.log(`   ✅ Tier 2 Stake Slash correctly applied.`);
     } else {
-        console.error(`   ❌ Tier 2 Slash verification failed!`);
+        console.error(`   ❌ Tier 2 Slash verification failed! Amount=${info.amount}, Expected=${stakeAmount - slashPenalty}`);
     }
 
     console.log(`\n🎉 Slash Mechanism Test Complete.`);

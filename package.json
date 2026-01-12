@@ -1,7 +1,7 @@
 {
-  "name": "aastar-sdk",
-  "version": "0.3.0",
-  "private": true,
+  "name": "@aastar/sdk",
+  "version": "0.14.3",
+  "private": false,
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -25,6 +25,15 @@
     "example:local": "pnpm --filter @aastar/sdk run example:local",
     "sync-config": "cp ../SuperPaymaster/script/v3/config.json ./packages/sdk/examples/config.json",
     "lint": "pnpm -r lint",
+    "test:env": "tsx scripts/validate_env.ts",
+    "test:regression": "pnpm run test:regression:00 && pnpm run test:regression:01 && pnpm run test:regression:02 && pnpm run test:regression:03 && pnpm run test:regression:04 && pnpm run test:regression:05 && pnpm run test:regression:bls",
+    "test:regression:00": "tsx scripts/v2_regression/00_validate_env.ts",
+    "test:regression:01": "tsx scripts/v2_regression/01_setup_and_fund.ts",
+    "test:regression:02": "tsx scripts/v2_regression/02_operator_onboarding.ts",
+    "test:regression:03": "tsx scripts/v2_regression/03_community_registry.ts",
+    "test:regression:04": "tsx scripts/v2_regression/04_enduser_flow.ts",
+    "test:regression:05": "tsx scripts/v2_regression/05_admin_audit.ts",
+    "test:regression:bls": "ts-node scripts/15_test_bls_full.ts",
     "docs:generate": "typedoc --options typedoc.json",
     "docs:sync": "bash scripts/extract-docs.sh"
   },
@@ -39,10 +48,11 @@
     "tsx": "4.21.0",
     "typedoc": "^0.28.15",
     "typedoc-plugin-markdown": "^4.9.0",
-    "typescript": "5.9.3"
+    "typescript": "5.7.2"
   },
   "dependencies": {
-    "@types/cheerio": "1.0.0",
+    "@noble/bls12-381": "1.4.0",
+    "@noble/curves": "^1.9.7",
     "axios": "1.13.2",
     "cheerio": "1.1.2",
     "csv-writer": "1.6.0",

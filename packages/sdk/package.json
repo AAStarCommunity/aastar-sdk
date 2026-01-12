@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.14.0",
+  "version": "0.14.3",
   "description": "AAStar SDK - The all-in-one package for Mycelium Network",
   "type": "module",
   "publishConfig": {
@@ -21,7 +21,7 @@
     "viem": "2.43.3"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "typescript": "5.7.2"
   },
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",

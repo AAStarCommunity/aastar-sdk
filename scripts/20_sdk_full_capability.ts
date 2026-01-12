@@ -11,14 +11,14 @@ import { http, type Hex, parseEther } from 'viem';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.v3') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
 
 const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
 const REPUTATION_ADDR = process.env.REPUTATION_SYSTEM_ADDR as Hex; // Check env var name
 const PAYMASTER_ADDR = process.env.SUPERPAYMASTER_ADDR as Hex;
-const DVT_ADDR = process.env.DVT_VALIDATOR_ADDR as Hex; // Assuming this might be missing in .env.v3, check later
+const DVT_ADDR = process.env.DVT_VALIDATOR_ADDR as Hex; // Assuming this might be missing in .env.anvil, check later
 
 async function runFullCapabilityTest() {
     console.log("🚀 Running Full Capability SDK Test (v1.0 Preview)...");

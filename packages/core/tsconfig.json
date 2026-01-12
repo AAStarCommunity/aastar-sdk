@@ -6,7 +6,8 @@
     "noEmit": false,
     "declaration": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
   "include": ["src", "src/abis/*.json"]
 }
