@@ -1,9 +1,11 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData, concat, type Hex, decodeErrorResult } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 
 dotenv.config({ path: '.env.sepolia' });
 
@@ -19,15 +21,19 @@ async function main() {
     const anniWallet = createWalletClient({ account: anniAccount, chain: sepolia, transport: http(rpcUrl) });
     const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(rpcUrl) });
 
-    const anniPM = '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82' as Address;
-    const dPNTs = '0x424DA26B172994f98D761a999fa2FD744CaF812b' as Address;
-    const jasonAA2 = '0x179Faf25600c01DBFcEf7971f15DcFa3FbE5d31C' as Address;
+    // Load AA addresses from l4-state.json
+    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const jasonAA2 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA2')?.address as Address;
+    const jasonPM = state.operators.jason.paymasterV4 as Address;
+    
+    const dPNTs = config.contracts.aPNTs as Address;
     const entryPoint = config.contracts.entryPoint as Address;
 
-    console.log('🚀 JASON AA2 Gasless Transaction via ANNI Paymaster');
+    console.log('🚀 JASON AA2 Gasless Transaction via JASON OWN Paymaster');
     console.log(`Jason AA2: ${jasonAA2}`);
-    console.log(`Operator (Anni): ${anniAccount.address}`);
-    console.log(`Paymaster: ${anniPM}`);
+    console.log(`Operator (Jason): ${jasonAccount.address}`);
+    console.log(`Paymaster: ${jasonPM}`);
     console.log(`Token: ${dPNTs}\n`);
 
     // --- STEP 1: PRE-FLIGHT CHECK ---
@@ -35,7 +41,7 @@ async function main() {
     const report = await PaymasterOperator.checkGaslessReadiness(
         publicClient,
         entryPoint,
-        anniPM,
+        jasonPM,
         jasonAA2,
         dPNTs
     );
@@ -46,11 +52,11 @@ async function main() {
         
         // --- STEP 2: AUTOMATED PREPARATION ---
         console.log('\n🛠️ Step 2: Running Automated Environment Preparation...');
-        const steps = await PaymasterOperator.prepareGaslessEnvironment(
-            anniWallet,
+        const results = await PaymasterOperator.prepareGaslessEnvironment(
+            jasonWallet,
             publicClient,
             entryPoint,
-            anniPM,
+            jasonPM,
             dPNTs,
             {
                 tokenPriceUSD: 100000000n, // $1.00
@@ -59,9 +65,9 @@ async function main() {
             }
         );
 
-        if (steps.length > 0) {
-            console.log(`   📝 Sent ${steps.length} preparation transactions.`);
-            for (const s of steps) {
+        if (results.length > 0) {
+            console.log(`   📝 Sent ${results.length} preparation transactions.`);
+            for (const s of results) {
                 console.log(`      - ${s.step}: ${s.hash}`);
                 await publicClient.waitForTransactionReceipt({ hash: s.hash as `0x${string}` });
             }
@@ -75,7 +81,7 @@ async function main() {
 
     // --- STEP 3: USER DEPOSIT (If missing) ---
     console.log('\n💰 Step 3: Checking User Paymaster Deposit...');
-    let userDeposit = await PaymasterClient.getDepositedBalance(publicClient, anniPM, jasonAA2, dPNTs);
+    let userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA2, dPNTs);
     console.log(`   Jason AA2 Deposit: ${formatEther(userDeposit)} dPNTs`);
 
     if (userDeposit < parseEther('10')) {
@@ -85,11 +91,11 @@ async function main() {
             address: dPNTs,
             abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
             functionName: 'approve',
-            args: [anniPM, parseEther('100')]
+            args: [jasonPM, parseEther('100')]
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-        const depositHash = await PaymasterClient.depositFor(anniWallet, anniPM, jasonAA2, dPNTs, parseEther('50'));
+        const depositHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA2, dPNTs, parseEther('50'));
         await publicClient.waitForTransactionReceipt({ hash: depositHash });
         console.log('   ✅ 50 dPNTs deposited.');
     }
@@ -116,9 +122,9 @@ async function main() {
             jasonWallet,
             jasonAA2,
             entryPoint,
-            anniPM,
+            jasonPM,
             dPNTs,
-            process.env.BUNDLER_URL!,
+            config.bundlerUrl!,
             transferCalldata
         );
 

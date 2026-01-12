@@ -5,6 +5,8 @@ import { sepolia } from 'viem/chains';
 import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 
 dotenv.config({ path: '.env.sepolia' });
 
@@ -21,17 +23,22 @@ async function main() {
 
     const entryPoint = config.contracts.entryPoint as Address;
 
-    // Resolve Addresses dynamically from Config
-    const anniPM = config.contracts.paymasterV4Impl as Address;
-    const dPNTs = config.contracts.aPNTs as Address; 
+    // Load AA addresses from l4-state.json
+    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const jasonAA1 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA1')?.address as Address;
     
-    // Calculate AA Address (Don't hardcode)
-    const simpleAccountFactory = config.contracts.simpleAccountFactory;
-    const jasonAA1 = await getAccountAddress(publicClient, entryPoint, simpleAccountFactory, jasonAccount.address, 0n);
+    // CRITICAL: Anni doesn't have PaymasterV4, only SuperPaymaster. 
+    // So we cannot test "Anni sponsoring Jason" with PaymasterV4.
+    // Instead, use Jason's own PaymasterV4 for this test.
+    const jasonPM = state.operators.jason.paymasterV4 as Address;
+    
+    // Resolve Addresses from Config and State
+    const dPNTs = config.contracts.aPNTs as Address;
 
-    console.log('🚀 [FINAL VERIFICATION] JASON AA1 Gasless via ANNI PM');
+    console.log('🚀 [FIXED] JASON AA1 Gasless via JASON OWN PM');
     console.log(`Sender (Jason AA1): ${jasonAA1}`);
-    console.log(`Sponsor (Anni PM): ${anniPM} (from config)`);
+    console.log(`Sponsor (Jason PM): ${jasonPM} (from l4-state.json)`);
     console.log(`Gas Token: ${dPNTs} (from config)\n`);
 
 
@@ -40,7 +47,7 @@ async function main() {
     const report = await PaymasterOperator.checkGaslessReadiness(
         publicClient,
         entryPoint,
-        anniPM,
+        jasonPM,
         jasonAA1,
         dPNTs
     );
@@ -52,7 +59,7 @@ async function main() {
             anniWallet,
             publicClient,
             entryPoint,
-            anniPM,
+            jasonPM, // Corrected to jasonPM
             dPNTs,
             { tokenPriceUSD: 100000000n } // $1.00
         );
@@ -66,7 +73,7 @@ async function main() {
     }
 
     // --- STEP 3: USER DEPOSIT ---
-    const userDeposit = await PaymasterClient.getDepositedBalance(publicClient, anniPM, jasonAA1, dPNTs);
+    const userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA1, dPNTs); // Corrected to jasonPM
     if (userDeposit < parseEther('50')) {
         console.log(`\n🏦 Seeding User Deposit (Current: ${formatEther(userDeposit)} dPNTs)...`);
         
@@ -74,12 +81,12 @@ async function main() {
             address: dPNTs,
             abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
             functionName: 'approve',
-            args: [anniPM, parseEther('200')]
+            args: [jasonPM, parseEther('200')] // Corrected to jasonPM
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
         // User deposit action is usually done by Client, but funded by Operator in this script
-        const depHash = await PaymasterClient.depositFor(anniWallet, anniPM, jasonAA1, dPNTs, parseEther('100'));
+        const depHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA1, dPNTs, parseEther('100')); // Corrected to jasonPM
         await publicClient.waitForTransactionReceipt({ hash: depHash as `0x${string}` });
         console.log('   ✅ User deposit seeded (100 dPNTs).');
     }
@@ -107,9 +114,9 @@ async function main() {
         jasonWallet,
         jasonAA1,
         entryPoint,
-        anniPM,
+        jasonPM,
         dPNTs,
-        process.env.BUNDLER_URL!,
+        config.bundlerUrl!, // Changed from process.env.BUNDLER_URL!
         transferCalldata
     );
 
@@ -138,38 +145,3 @@ async function main() {
 }
 
 main().catch(console.error);
-
-async function getAccountAddress(
-    client: any, 
-    entryPoint: Address, 
-    factory: Address, 
-    owner: Address, 
-    salt: bigint
-): Promise<Address> {
-    const initCode = concat([
-        factory,
-        encodeFunctionData({
-            abi: [{ name: 'createAccount', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' }], outputs: [{ type: 'address' }], stateMutability: 'nonpayable' }],
-            functionName: 'createAccount',
-            args: [owner, salt]
-        })
-    ]);
-
-    try {
-        await client.call({
-            to: entryPoint,
-            data: encodeFunctionData({
-                abi: [{ name: 'getSenderAddress', type: 'function', inputs: [{ name: 'initCode', type: 'bytes' }], outputs: [], stateMutability: 'nonpayable' }],
-                functionName: 'getSenderAddress',
-                args: [initCode]
-            })
-        });
-    } catch (e: any) {
-        const error = decodeErrorResult({
-            abi: [{ name: 'SenderAddressResult', type: 'error', inputs: [{ name: 'sender', type: 'address' }] }],
-            data: e.data || e.cause?.data || e.response?.data
-        });
-        return error.args[0] as Address;
-    }
-    return '0x' as Address; // Should not reach here
-}

@@ -572,7 +572,7 @@ async function main() {
                         opAddress,       // community
                         '',              // avatarURI
                         '',              // ensName
-                        parseEther('0.4') // stakeAmount
+                        parseEther('0.2') // stakeAmount
                     ]
                 );
 
@@ -678,6 +678,59 @@ async function main() {
         { addr: superPM, owner: privateKeyToAccount(operators.find(o => o.name.includes('Anni'))?.key!).address, operatorName: 'Anni', type: 'SuperPM', role: ROLE_PAYMASTER_SUPER }
     ];
 
+    // ========== CRITICAL CHECK: SuperPaymaster Cache Price ==========
+    console.log('\n🔍 Verifying SuperPaymaster Configuration...');
+    
+    // 1. Cache Price Check (CRITICAL - Prevents "price not set" failures)
+    console.log('   📊 Cache Price Status:');
+    try {
+        const cacheData = await superPaymasterActions(superPM)(publicClient).cachedPrice() as any;
+        const cacheAgeSeconds = Date.now() / 1000 - Number(cacheData.updatedAt || cacheData[1]);
+        const cacheAgeMin = Math.floor(cacheAgeSeconds / 60);
+        const price = cacheData.price || cacheData[0];
+        
+        if (cacheAgeSeconds > 3600 || Number(price) === 0) {
+            console.log(`   ⚠️  Stale or uninitialized (age: ${cacheAgeMin}min, price: ${price})`);
+            console.log('   🔄 Refreshing cache price...');
+            
+            const refreshHash = await superPaymasterActions(superPM)(supplierClient).updatePrice({
+                account: supplier
+            });
+            await publicClient.waitForTransactionReceipt({ hash: refreshHash });
+            
+            const newCache = await superPaymasterActions(superPM)(publicClient).cachedPrice() as any;
+            const newPrice = newCache.price || newCache[0];
+            console.log(`   ✅ Cache Updated: Price=$${Number(newPrice) / 1e8}`);
+        } else {
+            console.log(`   ✅ Fresh (${cacheAgeMin}min old, price: $${Number(price) / 1e8})`);
+        }
+    } catch(e: any) {
+        console.error(`   ❌ Cache check failed: ${e.message}`);
+        console.log('   ⚠️  WARNING: Gasless transactions may fail without valid cache price!');
+    }
+
+    // 2. Token Exchange Rate Check
+    console.log('   💱 aPNTs Exchange Rate:');
+    const globalAPNTs = config.contracts.aPNTs;
+    try {
+        const rate = await publicClient.readContract({
+            address: globalAPNTs,
+            abi: [{ name: 'exchangeRate', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+            functionName: 'exchangeRate'
+        }) as bigint;
+        
+        if (rate === 0n) {
+            console.log('   ❌ CRITICAL: Rate is ZERO! Gasless txs will fail!');
+        } else if (rate !== parseEther('1')) {
+            console.log(`   ⚠️  Non-standard: ${formatEther(rate)} (expected 1.0)`);
+        } else {
+            console.log('   ✅ 1:1 (Standard)');
+        }
+    } catch(e: any) {
+        console.log(`   ℹ️  Could not verify exchange rate: ${e.message}`);
+    }
+
+    console.log('\\n💰 Funding Paymasters (EntryPoint Deposits)...');
     for (const pmInfo of allPMs) {
         const pm = pmInfo.addr;
         
@@ -807,7 +860,7 @@ async function main() {
                 // Check and set spending limit for SuperPaymaster
                 // xPNTsToken has a default limit of 5000 aPNTs, we need to increase it
                 console.log(`      🔧 Setting spending limit for SuperPM to 100,000...`);
-                const setLimitHash = await (publicClient as any).writeContract({
+                const setLimitHash = await (anniClient as any).writeContract({
                     address: checkToken,
                     abi: [{
                         "type": "function",

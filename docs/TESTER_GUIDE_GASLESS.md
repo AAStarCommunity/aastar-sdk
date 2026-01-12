@@ -6,10 +6,15 @@
 
 ## Pre-configured Test Accounts
 
-| Persona | AA Account | Paymaster | Token (Symbol) | Balance |
-|---------|------------|-----------|----------------|---------|
-| **ANNI** | `0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4` | `0x82862...` | `0x424DA...` (dPNTs) | 100+ |
-| **BOB** | `0x975961302a83090B1eb94676E1430B5baCa43F9E` | `0x317b5...` | `0x6007D...` (bPNTs) | 500+ |
+Test accounts are dynamically configured via `l4-setup.ts` and stored in `scripts/l4-state.json`.
+
+Key test personas:
+- **Jason**: Uses PaymasterV4, Token: dPNTs (cPNTs)
+- **Bob**: Uses PaymasterV4, Token: bPNTs  
+- **Anni**: Uses SuperPaymaster, Token: dPNTs
+- **Charlie**: Uses PaymasterV4, Token: cPNTs
+
+Run `pnpm tsx scripts/l4-setup.ts` to view current addresses and status.
 
 ---
 
@@ -47,9 +52,9 @@ const steps = await PaymasterOperator.prepareGaslessEnvironment(
     paymasterAddress,
     tokenAddress,
     {
-        tokenPriceUSD: 100000000n, // $1.00
-        minStake: parseEther('0.1'),
-        minDeposit: parseEther('0.3')
+        tokenPriceUSD: 100000000n, // $1.00 (8 decimals)
+        minStake: parseEther('0.05'),   // Reduced from 0.2 ETH
+        minDeposit: parseEther('0.1')   // Minimum deposit required
     }
 );
 console.log("Steps taken:", steps);
@@ -130,13 +135,15 @@ const callData = PaymasterClient.encodeExecution(
 #### Step 3: ✨ The Magic Line (Submission) ✨
 This is the core of the SDK. The `submitGaslessUserOperation` function handles all the complexity of Account Abstraction:
 1.  **Gas Estimation**: Automatically calls the Bundler to estimate usage.
-2.  **Efficiency Guard**: Applies optimized gas limits (no buffer for verification, 1.1x for execution) to pass strict Bundler rules.
-3.  **Data Encoding**: Packs the Paymaster data (time validity, deposit info).
-4.  **Signing**: Signs the UserOp with the user's private key (v0.7 compliant).
-5.  **Submission**: Sends the packet to the Bundler.
+2.  **Dynamic Gas Pricing**: Fetches current network gas prices and applies 1.5x buffer for volatility (no hardcoded values).
+3.  **Efficiency Guard**: Applies optimized gas limits (no buffer for verification, 1.1x for execution) to pass strict Bundler rules.
+4.  **Data Encoding**: Packs the Paymaster data (time validity, deposit info).
+5.  **Signing**: Signs the UserOp with the user's private key (v0.7 compliant).
+6.  **Submission**: Sends the packet to the Bundler.
 
 ```typescript
 // 3. Submit Gasless UserOp (One-Liner)
+// No need to specify gas prices - SDK auto-fetches from network!
 const userOpHash = await PaymasterClient.submitGaslessUserOperation(
     client,            // Public Client for reads
     wallet,            // Wallet Client for signing
@@ -146,6 +153,7 @@ const userOpHash = await PaymasterClient.submitGaslessUserOperation(
     tokenAddress,      // The Token the user is "spending" (conceptually)
     bundlerUrl,        // Where to send the UserOp
     callData           // The action from Step 2
+    // Optional: Pass custom gas prices via options if needed
 );
 ```
 

@@ -183,7 +183,7 @@ export class PaymasterOperator {
             args: [paymasterAddress]
         });
 
-        if (depositInfo[2] < 100000000000000000n) issues.push('Paymaster stake in EntryPoint is less than 0.1 ETH');
+        if (depositInfo[2] < 50000000000000000n) issues.push('Paymaster stake in EntryPoint is less than 0.05 ETH');
         if (depositInfo[3] < 86400) issues.push('Paymaster unstake delay is less than 1 day');
         if (depositInfo[0] < 100000000000000000n) issues.push('Paymaster deposit in EntryPoint is less than 0.1 ETH');
 
@@ -242,8 +242,8 @@ export class PaymasterOperator {
         const results: { step: string, hash?: string, status: string }[] = [];
 
         // 1. Stake
-        if (report.details.paymasterStake < (options.minStake || 100000000000000000n)) {
-            const hash = await this.addStake(operatorWallet, paymasterAddress, options.minStake || 200000000000000000n, 86400);
+        if (report.details.paymasterStake < (options.minStake || 50000000000000000n)) {
+            const hash = await this.addStake(operatorWallet, paymasterAddress, options.minStake || 50000000000000000n, 86400);
             await publicClient.waitForTransactionReceipt({ hash });
             results.push({ step: 'Stake', hash, status: 'Confirmed' });
         }

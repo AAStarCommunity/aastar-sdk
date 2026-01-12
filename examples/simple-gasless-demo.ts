@@ -49,11 +49,8 @@ async function main() {
         APP_CONFIG.paymaster as `0x${string}`,
         APP_CONFIG.gasToken as `0x${string}`,
         APP_CONFIG.bundlerUrl,
-        callData,
-        {
-            maxFeePerGas: 10000000000n, // 10 Gwei (Optional, usually fetched from network)
-            maxPriorityFeePerGas: 1000000000n // 1 Gwei
-        }
+        callData
+        // Gas prices auto-fetched from network if not specified
     );
 
     // 4. Wait for Execution (Optional but recommended for confirmation)

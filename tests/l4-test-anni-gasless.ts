@@ -1,9 +1,10 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, type Address, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, type Address, type Hex, concat, decodeErrorResult } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/dist/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
@@ -22,50 +23,26 @@ async function main() {
         transport: http(config.rpcUrl) 
     });
 
-    // Known addresses from l4-state.json and manual verification
-    const anniAA = '0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4' as Address;
-    const dPNTs = '0x424DA26B172994f98D761a999fa2FD744CaF812b' as Address;
-    const anniPM = '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82' as Address;
-    const bobEOA = '0xE3D28Aa77c95d5C098170698e5ba68824BFC008d' as Address;
+    // Load AA addresses from l4-state.json
+    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const anniAA = state.aaAccounts.find((aa: any) => aa.label === 'Anni (Demo)_AA1')?.address as Address;
+    
+    const dPNTs = config.contracts.aPNTs as Address;
+    const anniPM = state.operators.anni?.superPaymaster || config.contracts.superPaymaster as Address;
+    const bobEOA = privateKeyToAccount(process.env.PRIVATE_KEY_BOB as `0x${string}`).address;
 
     console.log('🚀 ANNI Gasless Transaction Test\n');
     console.log(`Sender (AA): ${anniAA}`);
     console.log(`Token (dPNTs): ${dPNTs}`);
-    console.log(`Paymaster: ${anniPM}`);
+    console.log(`Paymaster: ${anniPM} (SuperPaymaster)`);
     console.log(`Recipient: ${bobEOA}\n`);
 
-    // Step 1.5: Ensure Paymaster is Staked and has Deposit in EntryPoint
-    console.log('\nStep 1.5: Checking Paymaster Stake/Deposit in EntryPoint...');
-    // We'll just add stake and deposit directly if we are unsure.
-    // Standard requirements: 0.1 ETH stake, 1 day delay.
-    try {
-        const ethBal = await publicClient.getBalance({ address: anniAccount.address });
-        console.log(`   Anni EOA ETH Balance: ${formatEther(ethBal)} ETH`);
-        
-        if (ethBal > parseEther('0.5')) {
-            console.log('   🪜 Adding 0.11 ETH Stake (1 day delay)...');
-            const stakeHash = await PaymasterOperator.addStake(anniWallet, anniPM, parseEther('0.11'), 86400);
-            await publicClient.waitForTransactionReceipt({ hash: stakeHash });
-            console.log('   ✅ Stake added.');
+    // NOTE: Anni uses SuperPaymaster, not PaymasterV4
+    // So we skip the PaymasterV4-specific setup (addStake, updatePrice, etc.)
+    // Those should already be done by l4-setup.ts
 
-            console.log('   💰 Adding 0.3 ETH Deposit to EntryPoint...');
-            const depositEntryPointHash = await PaymasterOperator.addDeposit(anniWallet, anniPM, parseEther('0.3'));
-            await publicClient.waitForTransactionReceipt({ hash: depositEntryPointHash });
-            console.log('   ✅ Deposit added.');
-        } else {
-            console.log('   ⚠️ Insufficient ETH to stake/deposit (needs > 0.5 ETH). skipping...');
-        }
-    } catch (e: any) {
-        console.log(`   ✓ Stake/Deposit check done (might already be configured).`);
-    }
-    console.log('Step 1: Checking Paymaster Price Cache...');
-    const initialized = await PaymasterOperator.ensurePriceInitialized(anniWallet, publicClient, anniPM);
-    if (initialized) {
-        console.log('   ✅ Price cache updated.');
-    } else {
-        const { price } = await PaymasterOperator.getCachedPrice(publicClient, anniPM);
-        console.log(`   ✓ Price cache already initialized: ${price}`);
-    }
+    console.log('📋 Step 1: Preparing transfer calldata...');
 
     // Step 2: Check & Initialize Paymaster Deposit
     console.log('\nStep 2: Checking Paymaster Token Support & Deposit...');

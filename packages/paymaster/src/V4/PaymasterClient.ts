@@ -77,6 +77,18 @@ export class PaymasterClient {
             postOpGasLimit: 60000n        // Placeholder
         });
 
+        // 1.5. Get dynamic gas prices from network
+        let maxFeePerGas = 30000000000n; // 30 Gwei default
+        let maxPriorityFeePerGas = 1000000000n; // 1 Gwei default
+        
+        try {
+            const feeData = await client.estimateFeesPerGas();
+            maxFeePerGas = (feeData.maxFeePerGas ?? 30000000000n) * 150n / 100n; // 1.5x buffer
+            maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n / 100n;
+        } catch (e) {
+            // Use defaults if estimation fails
+        }
+
         const partialUserOp = {
             sender: aaAddress,
             nonce: 0n,
@@ -84,7 +96,7 @@ export class PaymasterClient {
             callData,
             accountGasLimits: concat([pad(toHex(60000n), { size: 16 }), pad(toHex(100000n), { size: 16 })]), // 60k verification, 100k call
             preVerificationGas: 50000n, // 50k PVG
-            gasFees: concat([pad(toHex(1000000000n), { size: 16 }), pad(toHex(10000000000n), { size: 16 })]), // 1Gwei / 10Gwei
+            gasFees: concat([pad(toHex(maxPriorityFeePerGas), { size: 16 }), pad(toHex(maxFeePerGas), { size: 16 })]),
             paymasterAndData,
             signature: '0x' as `0x${string}`
         };
@@ -179,6 +191,23 @@ export class PaymasterClient {
             functionName: 'getNonce'
         });
 
+        // 1.5 Get Gas Prices from Network if not provided
+        let maxFeePerGas = options?.maxFeePerGas;
+        let maxPriorityFeePerGas = options?.maxPriorityFeePerGas;
+        
+        if (!maxFeePerGas || !maxPriorityFeePerGas) {
+            try {
+                const feeData = await client.estimateFeesPerGas();
+                // Apply 1.5x buffer for network volatility
+                maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 30000000000n) * 150n) / 100n;
+                maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n) / 100n;
+            } catch (e) {
+                // Fallback to safer defaults if estimation fails
+                maxFeePerGas = maxFeePerGas ?? 50000000000n; // 50 Gwei
+                maxPriorityFeePerGas = maxPriorityFeePerGas ?? 2000000000n; // 2 Gwei
+            }
+        }
+
         // 2. Build paymasterAndData
         const paymasterAndData = buildPaymasterData(paymasterAddress, token, {
             validityWindow: options?.validityWindow,
@@ -198,8 +227,8 @@ export class PaymasterClient {
             ]),
             preVerificationGas: gasLimits.preVerificationGas ?? 50000n,
             gasFees: concat([
-                pad(toHex(options?.maxPriorityFeePerGas ?? 100000000n), { size: 16 }),
-                pad(toHex(options?.maxFeePerGas ?? 2000000000n), { size: 16 })
+                pad(toHex(maxPriorityFeePerGas), { size: 16 }),
+                pad(toHex(maxFeePerGas), { size: 16 })
             ]),
             paymasterAndData,
             signature: '0x' as `0x${string}`
