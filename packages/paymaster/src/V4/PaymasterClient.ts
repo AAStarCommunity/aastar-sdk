@@ -147,9 +147,10 @@ export class PaymasterClient {
         // Dynamic tuning based on "Efficiency Guard" formulas
         return {
             preVerificationGas: BigInt(data.preVerificationGas),
-            verificationGasLimit: BigInt(data.verificationGasLimit), // No buffer to satisfy efficiency > 0.4
-            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n,                // 1.1x safety buffer
-            paymasterPostOpGasLimit: 100000n                                       // Explicitly high for Oracle
+            verificationGasLimit: BigInt(data.verificationGasLimit), 
+            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n, // 1.1x safety buffer
+            paymasterVerificationGasLimit: data.paymasterVerificationGasLimit ? BigInt(data.paymasterVerificationGasLimit) : undefined,
+            paymasterPostOpGasLimit: data.paymasterPostOpGasLimit ? BigInt(data.paymasterPostOpGasLimit) : 100000n
         };
     }
 
@@ -175,6 +176,8 @@ export class PaymasterClient {
             maxPriorityFeePerGas?: bigint;
             autoEstimate?: boolean;
             operator?: Address; // For SuperPaymaster
+            paymasterVerificationGasLimit?: bigint;
+            paymasterPostOpGasLimit?: bigint;
         }
     ): Promise<`0x${string}`> {
         // 0. Auto-Estimate if requested or if limits missing
@@ -182,7 +185,8 @@ export class PaymasterClient {
             preVerificationGas: options?.preVerificationGas,
             verificationGasLimit: options?.verificationGasLimit,
             callGasLimit: options?.callGasLimit,
-            paymasterPostOpGasLimit: 100000n
+            paymasterVerificationGasLimit: options?.paymasterVerificationGasLimit,
+            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 100000n
         };
 
         if (options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
@@ -196,7 +200,8 @@ export class PaymasterClient {
             gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
             gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;
             gasLimits.callGasLimit = options?.callGasLimit ?? est.callGasLimit;
-            gasLimits.paymasterPostOpGasLimit = est.paymasterPostOpGasLimit;
+            gasLimits.paymasterVerificationGasLimit = options?.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
+            gasLimits.paymasterPostOpGasLimit = options?.paymasterPostOpGasLimit ?? est.paymasterPostOpGasLimit;
         }
 
         // 1. Get Nonce
@@ -240,13 +245,13 @@ export class PaymasterClient {
         let paymasterAndData: Hex;
         if (options?.operator) {
             paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
-                verificationGasLimit: gasLimits.verificationGasLimit ?? 150000n,
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
             });
         } else {
             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
-                verificationGasLimit: gasLimits.verificationGasLimit ?? 150000n, // Use tuned value
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n, // Use tuned value
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
             });
         }

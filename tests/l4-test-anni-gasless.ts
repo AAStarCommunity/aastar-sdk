@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, pad, toHex, type Address, type Hex, concat, decodeErrorResult } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.ts';
+import { PaymasterClient, PaymasterOperator, SuperPaymasterClient } from '../packages/paymaster/src/V4/index.ts';
 import { xPNTsFactoryActions } from '../packages/core/src/actions/factory.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
@@ -449,156 +449,22 @@ async function main() {
         ]
     });
     
-    // 🔍 DEBUG: Show packed paymasterAndData
-    const dummyUserOp = {
-        paymasterAndData: '0x'
-    };
-    const verGas = 150000n;
-    const postGas = 100000n;
-    const maxRate = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
-    
-    const debugPMD = concat([
-        anniPM,
-        pad(toHex(verGas), { size: 16 }),
-        pad(toHex(postGas), { size: 16 }),
-        anniAccount.address,
-        pad(toHex(maxRate), { size: 32 })
-    ]);
-    console.log(`\n🔍 DEBUG: Constructed paymasterAndData (${(debugPMD.length - 2) / 2} bytes):`);
-    console.log(`   PM: ${anniPM}`);
-    console.log(`   VerGas (offset 20-36): ${pad(toHex(verGas), { size: 16 })}`);
-    console.log(`   PostGas (offset 36-52): ${pad(toHex(postGas), { size: 16 })}`);
-    console.log(`   Operator (offset 52-72): ${anniAccount.address}`);
-    console.log(`   MaxRate (offset 72-104): ${toHex(maxRate)}`);
-    // console.log(`   Full: ${debugPMD}\n`);
-
-    // 🔍 SIMULATION: Call validatePaymasterUserOp explicitly
-    console.log('\n🔍 ESTIMATION: Estimating UserOp Gas...');
-    
-    // Explicit estimation first
-    const est = await PaymasterClient.estimateUserOperationGas(
-         publicClient,
-         anniWallet,
-         anniAA,
-         config.contracts.entryPoint as Address,
-         anniPM,
-         cPNTs,
-         process.env.BUNDLER_URL!,
-         transferCalldata,
-         {
-             operator: anniAccount.address
-         }
-    );
-    console.log('   ⛽ Estimated Gas Limits:', est);
-
-    // Use estimated limits for sim and submission
-    const simGasLimits = {
-        verificationGasLimit: 150000n, // Match submission
-        callGasLimit: est.callGasLimit,
-        preVerificationGas: est.preVerificationGas,
-        paymasterVerificationGasLimit: 150000n, // Hardcode safe limit
-        paymasterPostOpGasLimit: est.paymasterPostOpGasLimit
-    };
-    
-    const MAX_FEE = 501000000n;
-    const PRIO_FEE = 500000000n;
-
-    const simPaymasterAndData = concat([
-        anniPM,
-        pad(toHex(simGasLimits.paymasterVerificationGasLimit), { size: 16 }),
-        pad(toHex(simGasLimits.paymasterPostOpGasLimit), { size: 16 }),
-        anniAccount.address
-    ]);
-
-    // Construct packed struct for v0.7
-    // sender, nonce, initCode, callData, accountGasLimits, preVerificationGas, gasFees, paymasterAndData, signature
-    const simUserOp = {
-        sender: anniAA,
-        nonce: 0n, // Assuming 0 check
-        initCode: '0x' as Hex,
-        callData: transferCalldata as Hex,
-        accountGasLimits: concat([pad(toHex(simGasLimits.verificationGasLimit), { size: 16 }), pad(toHex(simGasLimits.callGasLimit), { size: 16 })]),
-        preVerificationGas: simGasLimits.preVerificationGas,
-        gasFees: concat([pad(toHex(PRIO_FEE), { size: 16 }), pad(toHex(MAX_FEE), { size: 16 })]),
-        paymasterAndData: simPaymasterAndData,
-        signature: '0x' as Hex
-    };
+    // Step 3: Execute Gasless Transfer via SuperPaymasterClient
+    console.log('\nStep 3: Submitting Gasless UserOperation via SuperPaymasterClient...');
     
     try {
-        // Fetch actual nonce for accurate simulation
-        const nonce = await publicClient.readContract({
-            address: anniAA,
-            abi: [{ name: 'getNonce', type: 'function', inputs: [], outputs: [{ type: 'uint256' }] }],
-            functionName: 'getNonce'
-        }) as bigint;
-        simUserOp.nonce = nonce;
-
-        const entryPointAddr = config.contracts.entryPoint as Address;
-        const maxCost = (simGasLimits.preVerificationGas + simGasLimits.verificationGasLimit + simGasLimits.callGasLimit + simGasLimits.paymasterVerificationGasLimit + simGasLimits.paymasterPostOpGasLimit) * MAX_FEE;
-        
-        console.log(`   Calling validatePaymasterUserOp as EntryPoint (${entryPointAddr})...`);
-        const result = await publicClient.readContract({
-            address: anniPM,
-            abi: [{
-                name: 'validatePaymasterUserOp',
-                type: 'function',
-                inputs: [
-                    {
-                        components: [
-                            { name: 'sender', type: 'address' },
-                            { name: 'nonce', type: 'uint256' },
-                            { name: 'initCode', type: 'bytes' },
-                            { name: 'callData', type: 'bytes' },
-                            { name: 'accountGasLimits', type: 'bytes32' },
-                            { name: 'preVerificationGas', type: 'uint256' },
-                            { name: 'gasFees', type: 'bytes32' },
-                            { name: 'paymasterAndData', type: 'bytes' },
-                            { name: 'signature', type: 'bytes' }
-                        ],
-                        name: 'userOp',
-                        type: 'tuple'
-                    },
-                    { name: 'userOpHash', type: 'bytes32' },
-                    { name: 'maxCost', type: 'uint256' }
-                ],
-                outputs: [{ type: 'bytes', name: 'context' }, { type: 'uint256', name: 'validationData' }],
-                stateMutability: 'nonpayable'
-            }],
-            functionName: 'validatePaymasterUserOp',
-            args: [simUserOp, '0x0000000000000000000000000000000000000000000000000000000000000000', maxCost],
-            account: entryPointAddr
-        }) as [string, bigint];
-
-        console.log(`   ✅ Simulation Result: context=${result[0]}, validationData=${result[1]}`);
-        if (result[1] !== 0n) {
-            console.error(`   ❌ Simulation FAILED! sigFailed=${result[1]}`);
-        } else {
-             console.log(`   🎉 Simulation PASSED!`);
-        }
-
-    } catch (e: any) {
-        console.error(`   ❌ Simulation REVERTED: ${e.message}`);
-        if (e.reason) console.error(`      Reason: ${e.reason}`);
-        if (e.data) console.error(`      Data: ${e.data}`);
-    }
-
-    try {
-        const userOpHash = await PaymasterClient.submitGaslessUserOperation(
+        const userOpHash = await SuperPaymasterClient.submitGaslessTransaction(
             publicClient,
             anniWallet,
             anniAA,
             config.contracts.entryPoint as Address,
-            anniPM,
-            cPNTs,
             process.env.BUNDLER_URL!,
-            transferCalldata,
             {
+                token: cPNTs,
+                recipient: bobEOA,
+                amount: parseEther('2'),
                 operator: anniAccount.address,
-                // Pass Explicit Limits from Estimation with Safe PM Limit
-                verificationGasLimit: 150000n, // Tuned for Efficiency > 0.4
-                callGasLimit: est.callGasLimit,
-                preVerificationGas: est.preVerificationGas,
-                autoEstimate: false // Already estimated
+                paymasterAddress: anniPM
             }
         );
 
