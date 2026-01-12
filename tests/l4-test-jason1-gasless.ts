@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData, createClient } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData, createClient, concat, type Hex, decodeErrorResult } from 'viem';
 import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
@@ -19,14 +19,21 @@ async function main() {
     const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
     const anniWallet = createWalletClient({ account: anniAccount, chain: sepolia, transport: http(rpcUrl) });
 
-    const anniPM = '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82' as Address;
-    const dPNTs = '0x424DA26B172994f98D761a999fa2FD744CaF812b' as Address;
-    const jasonAA1 = '0xECD9C07f648B09CFb78906302822Ec52Ab87dd70' as Address;
     const entryPoint = config.contracts.entryPoint as Address;
+
+    // Resolve Addresses dynamically from Config
+    const anniPM = config.contracts.paymasterV4Impl as Address;
+    const dPNTs = config.contracts.aPNTs as Address; 
+    
+    // Calculate AA Address (Don't hardcode)
+    const simpleAccountFactory = config.contracts.simpleAccountFactory;
+    const jasonAA1 = await getAccountAddress(publicClient, entryPoint, simpleAccountFactory, jasonAccount.address, 0n);
 
     console.log('🚀 [FINAL VERIFICATION] JASON AA1 Gasless via ANNI PM');
     console.log(`Sender (Jason AA1): ${jasonAA1}`);
-    console.log(`Sponsor (Anni PM): ${anniPM}\n`);
+    console.log(`Sponsor (Anni PM): ${anniPM} (from config)`);
+    console.log(`Gas Token: ${dPNTs} (from config)\n`);
+
 
     // --- STEP 1: ONE-CLICK READINESS & Fix ---
     console.log('🔍 Step 1: SDK Readiness Check...');
@@ -131,3 +138,38 @@ async function main() {
 }
 
 main().catch(console.error);
+
+async function getAccountAddress(
+    client: any, 
+    entryPoint: Address, 
+    factory: Address, 
+    owner: Address, 
+    salt: bigint
+): Promise<Address> {
+    const initCode = concat([
+        factory,
+        encodeFunctionData({
+            abi: [{ name: 'createAccount', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' }], outputs: [{ type: 'address' }], stateMutability: 'nonpayable' }],
+            functionName: 'createAccount',
+            args: [owner, salt]
+        })
+    ]);
+
+    try {
+        await client.call({
+            to: entryPoint,
+            data: encodeFunctionData({
+                abi: [{ name: 'getSenderAddress', type: 'function', inputs: [{ name: 'initCode', type: 'bytes' }], outputs: [], stateMutability: 'nonpayable' }],
+                functionName: 'getSenderAddress',
+                args: [initCode]
+            })
+        });
+    } catch (e: any) {
+        const error = decodeErrorResult({
+            abi: [{ name: 'SenderAddressResult', type: 'error', inputs: [{ name: 'sender', type: 'address' }] }],
+            data: e.data || e.cause?.data || e.response?.data
+        });
+        return error.args[0] as Address;
+    }
+    return '0x' as Address; // Should not reach here
+}
