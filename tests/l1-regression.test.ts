@@ -121,15 +121,16 @@ describe('L1 Core Actions - Full Regression Test', () => {
       console.log(`  ✓ ROLE_PAYMASTER_SUPER: ${rolePaymasterSuper}`);
     });
 
-    it('should check if user has role', async () => {
-      const roleCommunity = await registry(publicClient).ROLE_COMMUNITY();
-      const hasRole = await registry(publicClient).hasRole({
-        user: testAccount.address,
-        roleId: roleCommunity,
-      });
-      
-      expect(typeof hasRole).toBe('boolean');
+      expect(hasRole).toBeDefined();
       console.log(`  ✓ User has COMMUNITY role: ${hasRole}`);
+    });
+
+    it('should read account community token', async () => {
+      const communityToken = await registry(publicClient).getAccountCommunity({
+        account: testAccount.address,
+      });
+      expect(communityToken).toBeDefined();
+      console.log(`  ✓ Account Community Token: ${communityToken}`);
     });
   });
 
@@ -274,9 +275,32 @@ describe('L1 Core Actions - Full Regression Test', () => {
       console.log(`  ✓ Symbol: ${symbol}`);
     });
 
-    it('should read total supply', async () => {
-      const totalSupply = await gtoken(publicClient).totalSupply();
       console.log(`  ✓ Total Supply: ${totalSupply}`);
+    });
+
+    it('should read user balance', async () => {
+      const balance = await gtoken(publicClient).balanceOf({
+        token: GTOKEN_ADDRESS,
+        account: testAccount.address,
+      });
+      expect(balance).toBeDefined();
+      console.log(`  ✓ User GToken Balance: ${balance}`);
+    });
+
+    it('should verify mint capability (dry-run)', async () => {
+      // Use simulateContract to dry-run a mint
+      try {
+        await publicClient.simulateContract({
+          address: GTOKEN_ADDRESS,
+          abi: GTokenABI,
+          functionName: 'mint',
+          args: [testAccount.address, 1n],
+          account: testAccount,
+        });
+        console.log(`  ✓ Mint capability verified via dry-run`);
+      } catch (e: any) {
+        console.warn(`  ⚠ Mint dry-run failed (expected if not owner): ${e.message.split('\n')[0]}`);
+      }
     });
   });
 

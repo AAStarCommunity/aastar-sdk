@@ -97,6 +97,9 @@ export type RegistryActions = {
     isReputationSource: (args: { source: Address }) => Promise<boolean>;
     lastReputationEpoch: () => Promise<bigint>;
     
+    // Community lookup functions
+    getAccountCommunity: (args: { account: Address }) => Promise<Address>;
+    
     // Version
     version: () => Promise<string>;
 };
@@ -713,6 +716,15 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             address,
             abi: RegistryABI,
             functionName: 'accountToUser',
+            args: [userAccount]
+        }) as Promise<Address>;
+    },
+
+    async getAccountCommunity({ account: userAccount }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'accountsCommunity',
             args: [userAccount]
         }) as Promise<Address>;
     },

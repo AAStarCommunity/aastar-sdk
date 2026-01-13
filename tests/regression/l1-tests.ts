@@ -58,6 +58,18 @@ export async function runL1Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
+        console.log('  Test: getAccountCommunity()');
+        const registry = registryActions(config.contracts.registry);
+        const communityToken = await registry(publicClient).getAccountCommunity({ account: account.address });
+        console.log(`    Community Token: ${communityToken}`);
+        console.log('    ✅ PASS\n');
+        passedTests++;
+    } catch (e) {
+        console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
+    }
+
+    totalTests++;
+    try {
         console.log('  Test: getRoleUserCount()');
         const registry = registryActions(config.contracts.registry);
         const roleId = '0x0000000000000000000000000000000000000000000000000000000000000002' as Hex;
@@ -83,6 +95,21 @@ export async function runL1Tests(config: NetworkConfig) {
             account: account.address 
         });
         console.log(`    Balance: ${balance.toString()}`);
+        console.log('    ✅ PASS\n');
+        passedTests++;
+    } catch (e) {
+        console.log(`    ❌ FAIL: ${(e as Error).message}\n`);
+    }
+
+    totalTests++;
+    try {
+        console.log('  Test: tokenActions.balanceOf()');
+        const token = tokenActions(config.contracts.gToken);
+        const balance = await token(publicClient).balanceOf({ 
+            token: config.contracts.gToken,
+            account: account.address 
+        });
+        console.log(`    GToken Balance: ${balance.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {
