@@ -61,7 +61,7 @@ describe('L1 Core Actions - Full Regression Test', () => {
       transport: http(process.env.SEPOLIA_RPC_URL),
     });
 
-    testAccount = privateKeyToAccount(process.env.TEST_PRIVATE_KEY as `0x${string}`);
+    testAccount = privateKeyToAccount(process.env.PRIVATE_KEY_SUPPLIER as `0x${string}`);
     
     walletClient = createWalletClient({
       account: testAccount,
