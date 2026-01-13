@@ -14,20 +14,25 @@ describe('EntryPoint Actions', () => {
 
     describe('getDepositInfo', () => {
         it('should get deposit info for account', async () => {
-            const mockDepositInfo = {
-                deposit: 1000000000000000000n,
-                staked: true,
-                stake: 500000000000000000n,
-                unstakeDelaySec: 86400,
-                withdrawTime: 0,
-            };
-            (mockPublicClient.readContract as any).mockResolvedValue(mockDepositInfo);
+            // EntryPoint returns array that gets destructured into object
+            const mockDepositArray: [bigint, boolean, bigint, number, number] = [
+                1000000000000000000n,  // deposit
+                true,                   // staked
+                500000000000000000n,   // stake
+                86400,                  // unstakeDelaySec
+                0                       // withdrawTime
+            ];
+            (mockPublicClient.readContract as any).mockResolvedValue(mockDepositArray);
 
             const account: Address = '0x1234567890123456789012345678901234567890';
             const actions = entryPointActions(mockEntryPointAddress)(mockPublicClient as PublicClient);
             const depositInfo = await actions.getDepositInfo({ account });
 
-            expect(depositInfo).toEqual(mockDepositInfo);
+            expect(depositInfo.deposit).toBe(1000000000000000000n);
+            expect(depositInfo.staked).toBe(true);
+            expect(depositInfo.stake).toBe(500000000000000000n);
+            expect(depositInfo.unstakeDelaySec).toBe(86400);
+            expect(depositInfo.withdrawTime).toBe(0);
             expect(mockPublicClient.readContract).toHaveBeenCalledWith(
                 expect.objectContaining({
                     functionName: 'getDepositInfo',
@@ -37,14 +42,8 @@ describe('EntryPoint Actions', () => {
         });
 
         it('should handle zero deposit', async () => {
-            const mockDepositInfo = {
-                deposit: 0n,
-                staked: false,
-                stake: 0n,
-                unstakeDelaySec: 0,
-                withdrawTime: 0,
-            };
-            (mockPublicClient.readContract as any).mockResolvedValue(mockDepositInfo);
+            const mockDepositArray: [bigint, boolean, bigint, number, number] = [0n, false, 0n, 0, 0];
+            (mockPublicClient.readContract as any).mockResolvedValue(mockDepositArray);
 
             const account: Address = '0xabcd1234567890123456789012345678901234ab';
             const actions = entryPointActions(mockEntryPointAddress)(mockPublicClient as PublicClient);
