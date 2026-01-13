@@ -13,7 +13,7 @@ import { tokenActions } from '../packages/core/src/actions/tokens.js';
 import { xPNTsFactoryActions, paymasterFactoryActions } from '../packages/core/src/actions/factory.js';
 import { reputationActions } from '../packages/core/src/actions/reputation.js';
 import { dvtActions, blsActions } from '../packages/core/src/actions/validators.js';
-import { accountActions } from '../packages/core/src/actions/account.js';
+import { accountActions, entryPointActions } from '../packages/core/src/actions/account.js';
 
 dotenv.config({ path: '.env.sepolia' });
 
@@ -121,7 +121,9 @@ describe('L1 Core Actions - Full Regression Test', () => {
       console.log(`  ✓ ROLE_PAYMASTER_SUPER: ${rolePaymasterSuper}`);
     });
 
-
+      expect(hasRole).toBeDefined();
+      console.log(`  ✓ User has COMMUNITY role: ${hasRole}`);
+    });
 
     it('should read account community token', async () => {
       const communityToken = await registry(publicClient).getAccountCommunity({
@@ -301,157 +303,3 @@ describe('L1 Core Actions - Full Regression Test', () => {
   });
 
   describe('✅ 6. aPNTs (34 actions)', () => {
-    const apnts = tokenActions(APNTS_ADDRESS);
-
-    it('should read token info', async () => {
-      const [name, symbol, totalSupply] = await Promise.all([
-        apnts(publicClient).name(),
-        apnts(publicClient).symbol(),
-        apnts(publicClient).totalSupply(),
-      ]);
-      
-      console.log(`  ✓ Name: ${name}`);
-      console.log(`  ✓ Symbol: ${symbol}`);
-      console.log(`  ✓ Total Supply: ${totalSupply}`);
-    });
-  });
-
-  describe('✅ 7. xPNTsFactory (22 actions)', () => {
-    const factory = xPNTsFactoryActions(XPNTS_FACTORY_ADDRESS);
-
-    it('should read factory info', async () => {
-      const [owner, registry, impl, count] = await Promise.all([
-        factory(publicClient).owner(),
-        factory(publicClient).REGISTRY(),
-        factory(publicClient).getImplementation(),
-        factory(publicClient).getTokenCount(),
-      ]);
-      
-      console.log(`  ✓ Owner: ${owner}`);
-      console.log(`  ✓ REGISTRY: ${registry}`);
-      console.log(`  ✓ Implementation: ${impl}`);
-      console.log(`  ✓ Token Count: ${count}`);
-    });
-  });
-
-  describe('✅ 8. PaymasterFactory (16 actions)', () => {
-    const factory = paymasterFactoryActions(PAYMASTER_FACTORY_ADDRESS);
-
-    it('should read factory info', async () => {
-      const [owner, registry, entryPoint, count] = await Promise.all([
-        factory(publicClient).owner(),
-        factory(publicClient).REGISTRY(),
-        factory(publicClient).ENTRY_POINT(),
-        factory(publicClient).getPaymasterCount(),
-      ]);
-      
-      console.log(`  ✓ Owner: ${owner}`);
-      console.log(`  ✓ REGISTRY: ${registry}`);
-      console.log(`  ✓ ENTRY_POINT: ${entryPoint}`);
-      console.log(`  ✓ Paymaster Count: ${count}`);
-    });
-  });
-
-  describe('✅ 9. ReputationSystem (20 actions)', () => {
-    const reputation = reputationActions(REPUTATION_SYSTEM_ADDRESS);
-
-    it('should read configuration', async () => {
-      const [owner, registry, version, entropy] = await Promise.all([
-        reputation(publicClient).owner(),
-        reputation(publicClient).REGISTRY(),
-        reputation(publicClient).version(),
-        reputation(publicClient).getEntropyFactor(),
-      ]);
-      
-      console.log(`  ✓ Owner: ${owner}`);
-      console.log(`  ✓ REGISTRY: ${registry}`);
-      console.log(`  ✓ Version: ${version}`);
-      console.log(`  ✓ Entropy Factor: ${entropy}`);
-    });
-  });
-
-  describe('✅ 10. DVTValidator (20 actions)', () => {
-    const dvt = dvtActions(DVT_VALIDATOR_ADDRESS);
-
-    it('should read configuration', async () => {
-      const [owner, threshold, count, version] = await Promise.all([
-        dvt(publicClient).owner(),
-        dvt(publicClient).threshold(),
-        dvt(publicClient).getValidatorCount(),
-        dvt(publicClient).version(),
-      ]);
-      
-      console.log(`  ✓ Owner: ${owner}`);
-      console.log(`  ✓ Threshold: ${threshold}`);
-      console.log(`  ✓ Validator Count: ${count}`);
-      console.log(`  ✓ Version: ${version}`);
-    });
-  });
-
-  describe('✅ 11. BLSAggregator (18 actions)', () => {
-    const bls = blsActions(BLS_AGGREGATOR_ADDRESS);
-
-    it('should read configuration', async () => {
-      const [owner, registry, threshold, count] = await Promise.all([
-        bls(publicClient).owner(),
-        bls(publicClient).REGISTRY(),
-        bls(publicClient).threshold(),
-        bls(publicClient).getRegisteredCount(),
-      ]);
-      
-      console.log(`  ✓ Owner: ${owner}`);
-      console.log(`  ✓ REGISTRY: ${registry}`);
-      console.log(`  ✓ Threshold: ${threshold}`);
-      console.log(`  ✓ Registered Count: ${count}`);
-    });
-  });
-
-  // describe('✅ 12. EntryPoint (5 actions)', () => {
-  //   const entryPoint = entryPointActions(ENTRY_POINT_ADDRESS);
-
-  //   it('should read deposit info', async () => {
-  //     const depositInfo = await entryPoint(publicClient).getDepositInfo({
-  //       account: testAccount.address,
-  //     });
-      
-  //     expect(depositInfo).toBeDefined();
-  //     console.log(`  ✓ Deposit Info:`, depositInfo);
-  //   });
-
-  //   it('should get nonce', async () => {
-  //     const nonce = await entryPoint(publicClient).getNonce({
-  //       sender: testAccount.address,
-  //       key: 0n,
-  //     });
-      
-  //     expect(nonce).toBeDefined();
-  //     console.log(`  ✓ Nonce: ${nonce}`);
-  //   });
-  // });
-
-  describe('📊 Summary', () => {
-    it('should log final test summary', () => {
-      console.log('\n' + '='.repeat(60));
-      console.log('🎉 L1 Core Actions 全回归测试完成！');
-      console.log('='.repeat(60));
-      console.log('\n📊 测试统计:\n');
-      console.log('  ✅ Registry: 73 actions');
-      console.log('  ✅ SuperPaymaster: 61 actions');
-      console.log('  ✅ MySBT: 58 actions');
-      console.log('  ✅ GTokenStaking: 29 actions');
-      console.log('  ✅ GToken: 20 actions');
-      console.log('  ✅ aPNTs: 34 actions');
-      console.log('  ✅ xPNTsFactory: 22 actions');
-      console.log('  ✅ PaymasterFactory: 16 actions');
-      console.log('  ✅ ReputationSystem: 20 actions');
-      console.log('  ✅ DVTValidator: 20 actions');
-      console.log('  ✅ BLSAggregator: 18 actions');
-      console.log('  ✅ EntryPoint: 5 actions');
-      console.log('\n  📦 总计: 366 actions 已验证');
-      console.log('  🎯 覆盖率: 82% (366/446)');
-      console.log('  🏆 自研合约覆盖: 93% (331/355)');
-      console.log('\n✨ 所有 L1 Core Actions 与区块链交互正常！\n');
-      console.log('='.repeat(60) + '\n');
-    });
-  });
-});
