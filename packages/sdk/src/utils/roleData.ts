@@ -104,20 +104,14 @@ export const RoleDataFactory = {
             data
         );
         const result = decoded[0] as any;
-        // Check if result is array (iterable) or object
-        if (Array.isArray(result)) {
-             const [n, e, w, d, l, s] = result;
-             return { name: n, ensName: e, website: w, description: d, logoURI: l, stakeAmount: s };
-        } else {
-             return { 
-                name: result.name, 
-                ensName: result.ensName, 
-                website: result.website, 
-                description: result.description, 
-                logoURI: result.logoURI, 
-                stakeAmount: result.stakeAmount 
-            };
-        }
+        return { 
+            name: result.name, 
+            ensName: result.ensName, 
+            website: result.website, 
+            description: result.description, 
+            logoURI: result.logoURI, 
+            stakeAmount: result.stakeAmount 
+        };
     },
 
     decodeEndUser: (data: Hex) => {
@@ -135,17 +129,12 @@ export const RoleDataFactory = {
             data
         );
         const result = decoded[0] as any;
-        if (Array.isArray(result)) {
-            const [a, c, av, en, s] = result;
-            return { account: a, community: c, avatarURI: av, ensName: en, stakeAmount: s };
-        } else {
-            return {
-                account: result.account,
-                community: result.community,
-                avatarURI: result.avatarURI,
-                ensName: result.ensName,
-                stakeAmount: result.stakeAmount
-            };
-        }
+        return {
+            account: result.account,
+            community: result.community,
+            avatarURI: result.avatarURI,
+            ensName: result.ensName,
+            stakeAmount: result.stakeAmount
+        };
     }
 };

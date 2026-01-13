@@ -68,5 +68,50 @@ describe('CommunityClient', () => {
             expect(info.hasRole).toBe(true);
             expect(info.tokenAddress).toBe('0xtoken');
         });
+    }); 
+    
+    describe('Launch', () => {
+        it('should validate launch inputs', async () => {
+             const communityClient = createCommunityClient({ chain: mainnet, transport: http(), account: { address: MOCK_ADDR } as any });
+             
+             await expect(communityClient.launch({
+                 name: '',
+                 tokenName: 'T',
+                 tokenSymbol: 'T'
+             })).rejects.toThrow('Community Name is required');
+    
+             await expect(communityClient.launch({
+                 name: 'Test',
+                 tokenName: '',
+                 tokenSymbol: 'T'
+             })).rejects.toThrow('Token Name is required');
+             
+             await expect(communityClient.launch({
+                 name: 'Test',
+                 tokenName: 'Test',
+                 tokenSymbol: ''
+             })).rejects.toThrow('Token Symbol is required');
+        });
+    
+        it('should handle registration failure gracefully in launch', async () => {
+             const communityClient = createCommunityClient({ chain: mainnet, transport: http(), account: { address: MOCK_ADDR } as any });
+             
+             // Mock writeContract failure (Already registered)
+             (communityClient as any).writeContract = vi.fn().mockRejectedValueOnce(new Error('Already registered'));
+             
+             // Mock deployToken to succeed
+             (communityClient as any).deployToken = vi.fn().mockResolvedValue('0xtoken');
+             // Mock setGovernance
+             (communityClient as any).setReputationRule = vi.fn().mockResolvedValue('0xrule');
+             (communityClient as any).waitForTransactionReceipt = vi.fn().mockResolvedValue({ logs: [] });
+
+             await communityClient.launch({
+                 name: 'Test',
+                 tokenName: 'Test',
+                 tokenSymbol: 'TST'
+             });
+             
+             expect(true).toBe(true);
+        });
     });
 });

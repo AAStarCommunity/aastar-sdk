@@ -95,6 +95,44 @@ describe('OperatorClient', () => {
              const hash = await client.deployPaymasterV4({ version: 'v4.2' });
              expect(hash).toBe('0xdeployhash');
         });
+        it('should validate inputs in configureOperator', async () => {
+             const opClient = createOperatorClient({
+                  account: { address: MOCK_ADDR } as any,
+                  chain: mainnet,
+                  transport: http()
+             });
+             
+             // No need to mock internal configureOperator for validation testing 
+             // as validation happens before internal call.
+
+             await expect(opClient.configureOperator({
+                 xPNTsToken: '0xInvalid' as any,
+                 treasury: '0x123' as any,
+                 exchangeRate: 100n
+             })).rejects.toThrow('xPNTs Token must be a valid Ethereum address');
+
+             await expect(opClient.configureOperator({
+                 xPNTsToken: MOCK_ADDR,
+                 treasury: '0xInvalid' as any,
+                 exchangeRate: 100n
+             })).rejects.toThrow('Treasury must be a valid Ethereum address');
+        });
+
+        it('should check readiness', async () => {
+             const opClient = createOperatorClient({
+                 account: { address: MOCK_ADDR } as any,
+                 chain: mainnet,
+                 transport: http()
+            });
+            
+            // Global mock for registryActions.hasRole returns false
+            // Global mock for superPaymasterActions.operators returns [1000n, 1000n, true, false]
+            
+            const status = await opClient.checkReadiness();
+            expect(status.isRegistered).toBe(false); // mocked val
+            expect(status.isConfigured).toBe(true);  // mocked val (index 2)
+            expect(status.collateralBalance).toBe(1000n); // mocked val (index 0)
+        });
     });
 
     describe('Operator Status and Queries', () => {

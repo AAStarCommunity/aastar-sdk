@@ -1,0 +1,739 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.17 [39m[90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/sdk[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+[90mstdout[2m | src/clients/clients.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | src/utils/eventDecoder.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | src/clients/operator.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | src/clients/endUser.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m src/utils/testScenarios.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m💸 Funding 0x1111111111111111111111111111111111111111 with 0.1 ETH...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m💸 Funding 0x1111111111111111111111111111111111111111 with 100 tokens...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m   ✅ Token Funded.
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when below threshold
+[22m[39m⚠️  ETH balance (1) below threshold (2.0)
+💸 Funding 0x1111111111111111111111111111111111111111 with 1.0 ETH...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when below threshold
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when below threshold
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund ETH
+[22m[39m💸 Funding 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA with 0.1 ETH...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund ETH
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund ETH
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould save keys to env file
+[22m[39m✅ Keys saved to /mock/.env (1 keys)
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund ETH
+[22m[39m💸 Funding 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB with 0.2 ETH...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund ETH
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund ETH
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund Token
+[22m[39m💸 Funding 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA with 100 tokens...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund Token
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund Token
+[22m[39m   ✅ Token Funded.
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund Token
+[22m[39m💸 Funding 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB with 200 tokens...
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund Token
+[22m[39m   Transaction Sent: 0xhash
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould batch fund Token
+[22m[39m   ✅ Token Funded.
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle ensure funding with token
+[22m[39m✅ Sufficient ETH: 1 ETH
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle ensure funding with token
+[22m[39m✅ Sufficient Token: 100
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle ETH funding errors
+[22m[39m💸 Funding 0x1111111111111111111111111111111111111111 with 0.1 ETH...
+
+[90mstdout[2m | src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould save and load keys from json file
+[22m[39m✅ Keys saved to /mock/keys.json (1 keys)
+
+[90mstdout[2m | src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould print keys with masked private key
+[22m[39m
+🔑 Generated Keys:
+────────────────────────────────────────────────────────────────────────────────
+1. Admin
+   Address: 0xAddress
+   Private Key: 0x12345678...34567890
+────────────────────────────────────────────────────────────────────────────────
+
+[90mstdout[2m | src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould print keys with full private key
+[22m[39m
+🔑 Generated Keys:
+────────────────────────────────────────────────────────────────────────────────
+1. Admin
+   Address: 0xAddress
+   Private Key: 0x1234567890123456789012345678901234567890
+────────────────────────────────────────────────────────────────────────────────
+
+[90mstderr[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle ETH funding errors
+[22m[39m   ❌ ETH Funding Failed: Error: Network error
+    at [90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/sdk/[39msrc/utils/funding.test.ts:100:72
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1209:10)
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:37
+    at Traces.$ (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:12)
+
+[90mstdout[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle Token funding errors
+[22m[39m💸 Funding 0x1111111111111111111111111111111111111111 with 100 tokens...
+
+[90mstderr[2m | src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle Token funding errors
+[22m[39m   ❌ Token Funding Failed: Error: Insufficient balance
+    at [90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/sdk/[39msrc/utils/funding.test.ts:110:73
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1209:10)
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:37
+    at Traces.$ (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:12)
+
+ [32m✓[39m src/utils/funding.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 335[2mms[22m[39m
+ [32m✓[39m src/utils/keys.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 352[2mms[22m[39m
+[90mstdout[2m | src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould measure transaction automatically
+[22m[39m[Experiment: SuperPaymaster] Executing: test-task...
+
+[90mstdout[2m | src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould measure transaction automatically
+[22m[39m   ✅ Success! Gas: 50000 | Cost: 0.0001 ETH
+
+[90mstdout[2m | src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould handle failed measureTx
+[22m[39m[Experiment: EOA] Executing: test-task...
+
+[90mstderr[2m | src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould handle failed measureTx
+[22m[39m   ❌ Failed: test-task Error: tx failed
+    at [90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/sdk/[39msrc/clients/ExperimentClient.test.ts:37:42
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1209:10)
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:37
+    at Traces.$ (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/traces.CCmnQaNT.js:142:27)
+    at trace (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:12)
+
+[90mstdout[2m | src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould record latency in measureTx
+[22m[39m[Experiment: AA] Executing: test...
+
+[90mstdout[2m | src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould record latency in measureTx
+[22m[39m   ✅ Success! Gas: 21000 | Cost: 0.000021 ETH
+
+ [32m✓[39m src/clients/ExperimentClient.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+[90mstdout[2m | src/clients/admin.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m src/utils/roleData.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+[90mstdout[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Fetching role config for entry burn...
+
+[90mstdout[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Approving GToken (Stake: 100, Burn: 0)...
+
+[90mstdout[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Auto-generating roleData for roleId 0x2024516755f401845808190bb830b0e4523d0df0845503cab52130a794699a0f...
+   SDK: Checking if role already granted...
+
+[90mstdout[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Registering role 0x2024516755f401845808190bb830b0e4523d0df0845503cab52130a794699a0f...
+
+[90mstdout[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Depositing aPNTs via depositForOperator...
+
+[90mstdout[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2mAdvanced Setup[2m > [22m[2mshould deploy PaymasterV4
+[22m[39m   SDK: Deploying Paymaster V4 (v4.2)...
+
+[90mstderr[2m | src/utils/eventDecoder.test.ts[2m > [22m[2meventDecoder[2m > [22m[2mshould skip invalid logs
+[22m[39m   ⚠️ Skipping log with invalid data: { data: [32m'invalid'[39m, topics: [] }
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mjoinAndActivate[2m > [22m[2mshould join community and fetch SBT
+[22m[39m   SDK: Joining community 0x1111111111111111111111111111111111111111...
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mjoinAndActivate[2m > [22m[2mshould join community and fetch SBT
+[22m[39m   SDK: User joined. SBT ID: 123
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mexecuteGasless[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Executing gasless via AA 0xaa Sponsored by 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mexecuteGasless[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Submitting UserOp 0...
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mexecuteGaslessBatch[2m > [22m[2mshould execute gasless batch
+[22m[39m   SDK: Executing gasless batch via AA 0xaa Sponsored by 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mexecuteGaslessBatch[2m > [22m[2mshould execute gasless batch
+[22m[39m   SDK: Submitting Batch UserOp 0...
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mRequirements and Credits[2m > [22m[2mshould call onboard (alias for joinAndActivate)
+[22m[39m👤 Onboarding user to community...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Executing gasless via AA 0x1111111111111111111111111111111111111111 Sponsored by 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mRequirements and Credits[2m > [22m[2mshould call onboard (alias for joinAndActivate)
+[22m[39m✅ User onboarded! SBT ID: 1
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Submitting UserOp 0xhash...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m🚀 Launching Community "Test"...
+   Registry: Registering Role...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m   ✅ Registered: 0xhash
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m   ℹ️  Found existing token at 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | src/utils/eventDecoder.test.ts[2m > [22m[2meventDecoder[2m > [22m[2mshould log decoded events
+[22m[39m📡 [Test] Event: Event
+   └─ amount: 100
+   └─ user: 0x0000000000000000000000000000000000000001
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account Management[2m > [22m[2mshould deploy new smart account
+[22m[39m   🏭 Deploying Smart Account for 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266...
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account Management[2m > [22m[2mshould deploy new smart account
+[22m[39m   ✅ Deployed at 0xNewAccount
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account Management[2m > [22m[2mshould deploy new smart account
+[22m[39m   ⛽ Funding account with 0.1 ETH...
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account Management[2m > [22m[2mshould skip deploy if already deployed
+[22m[39m   ℹ️ Account 0xExisting already deployed.
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account Management[2m > [22m[2mshould handle logic when smart account not deployed during batch
+[22m[39m   SDK: Executing gasless batch via AA undefined Sponsored by 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m⚙️ Setting up operator...
+   SDK: Fetching role config for entry burn...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   SDK: Approving GToken (Stake: 100, Burn: 0)...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   SDK: Auto-generating roleData for roleId 0x1...
+   SDK: Checking if role already granted...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   ℹ️  Role already granted, skipping registration
+   SDK: Depositing aPNTs via depositForOperator...
+
+[90mstdout[2m | src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m✅ Operator setup complete! Transactions: 2
+
+[90mstdout[2m | src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account Management[2m > [22m[2mshould handle execution errors in gasless batch
+[22m[39m   SDK: Executing gasless batch via AA 0xhash Sponsored by 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+
+ [32m✓[39m src/utils/eventDecoder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+ [32m✓[39m src/clients/clients.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 128[2mms[22m[39m
+ [31m❯[39m src/clients/endUser.test.ts [2m([22m[2m14 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 172[2mms[22m[39m
+     [32m✓[39m should create end user client[32m 6[2mms[22m[39m
+       [32m✓[39m should join community and fetch SBT[32m 53[2mms[22m[39m
+       [32m✓[39m should execute gasless transaction[32m 5[2mms[22m[39m
+       [32m✓[39m should execute gasless batch[32m 26[2mms[22m[39m
+       [32m✓[39m should call onboard (alias for joinAndActivate)[32m 2[2mms[22m[39m
+       [32m✓[39m should check join requirements[32m 2[2mms[22m[39m
+       [32m✓[39m should get available credit[32m 1[2mms[22m[39m
+       [32m✓[39m should create smart account with prediction[32m 2[2mms[22m[39m
+       [32m✓[39m should detect already deployed smart account[32m 1[2mms[22m[39m
+       [32m✓[39m should throw error if factory not configured[32m 4[2mms[22m[39m
+       [32m✓[39m should deploy new smart account[32m 10[2mms[22m[39m
+       [32m✓[39m should skip deploy if already deployed[32m 2[2mms[22m[39m
+[31m       [31m×[31m should handle logic when smart account not deployed during batch[39m[32m 29[2mms[22m[39m
+[31m       [31m×[31m should handle execution errors in gasless batch[39m[32m 26[2mms[22m[39m
+ [32m✓[39m src/errors/AAStarError.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/utils/errorHandler.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/utils/userOp.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+[90mstderr[2m | src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2mOperator Status and Queries[2m > [22m[2mshould get operator status
+[22m[39m   ⚠️ Failed to fetch V4 info from factory 0xb9bEECD1A582768711dE1EE7B0A1d582D9d72a6C: InvalidParamsRpcError: Invalid parameters were provided to the RPC method.
+Double check you have provided the correct parameters.
+
+URL: https://eth.merkle.io
+Request body: {"method":"eth_getBalance","params":[null,"latest"]}
+
+Details: Invalid params
+Version: viem@2.43.3
+    at withRetry.delay.count.count (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/buildRequest.js:44:31)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+    at attemptRetry (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/promise/withRetry.js:12:30) {
+  details: [32m'Invalid params'[39m,
+  docsPath: [90mundefined[39m,
+  metaMessages: [
+    [32m'URL: https://eth.merkle.io'[39m,
+    [32m'Request body: {"method":"eth_getBalance","params":[null,"latest"]}'[39m
+  ],
+  shortMessage: [32m'Invalid parameters were provided to the RPC method.\n'[39m +
+    [32m'Double check you have provided the correct parameters.'[39m,
+  version: [32m'2.43.3'[39m,
+  code: [33m-32602[39m,
+  [cause]: RpcRequestError: RPC Request failed.
+  
+  URL: https://eth.merkle.io
+  Request body: {"method":"eth_getBalance","params":[null,"latest"]}
+  
+  Details: Invalid params
+  Version: viem@2.43.3
+      at request (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/clients/transports/http.js:55:27)
+  [90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+      at withRetry.delay.count.count (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/buildRequest.js:28:24)
+      at attemptRetry (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/promise/withRetry.js:12:30) {
+    details: [32m'Invalid params'[39m,
+    docsPath: [90mundefined[39m,
+    metaMessages: [
+      [32m'URL: https://eth.merkle.io'[39m,
+      [32m'Request body: {"method":"eth_getBalance","params":[null,"latest"]}'[39m
+    ],
+    shortMessage: [32m'RPC Request failed.'[39m,
+    version: [32m'2.43.3'[39m,
+    code: [33m-32602[39m,
+    data: [32m'invalid type: null, expected 20 bytes, represented as a hex string of length 40, an array of u8, or raw bytes at line 1 column 4'[39m,
+    url: [32m'https://eth.merkle.io'[39m,
+    [cause]: {
+      code: [33m-32602[39m,
+      data: [32m'invalid type: null, expected 20 bytes, represented as a hex string of length 40, an array of u8, or raw bytes at line 1 column 4'[39m,
+      message: [32m'Invalid params'[39m
+    }
+  }
+}
+
+[90mstdout[2m | src/clients/community.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m src/clients/operator.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1339[2mms[22m[39m
+       [33m[2m✓[22m[39m should get operator status [33m 1222[2mms[22m[39m
+[90mstdout[2m | src/errors/decoder.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m src/clients/admin.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m🚀 Launching Community "Test"...
+   Registry: Registering Role...
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   ✅ Registered: 0xhash
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   🏭 Deploying Token via Factory: 0x2a810409872AfC346F9B5b26571Fd6eC42EA4849
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   📤 Deploy Token Tx: 0xhash
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   🪙 Token Deployed: 0x0000000000000000000000000000000000000000
+⚖️ Setting up Governance Rules...
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   ✅ Reputation Rule Set: 0xhash
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mLaunch[2m > [22m[2mshould handle registration failure gracefully in launch
+[22m[39m🚀 Launching Community "Test"...
+   Registry: Registering Role...
+
+[90mstdout[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mLaunch[2m > [22m[2mshould handle registration failure gracefully in launch
+[22m[39m   ✅ Registered: 0xhash
+
+ [32m✓[39m src/errors/decoder.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+[90mstderr[2m | src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mLaunch[2m > [22m[2mshould handle registration failure gracefully in launch
+[22m[39m   ⚠️ Token deployment step issues: ContractFunctionExecutionError: The contract function "getTokenAddress" returned no data ("0x").
+
+This could be due to any of the following:
+  - The contract does not have the function "getTokenAddress",
+  - The parameters passed to the contract function may be invalid, or
+  - The address is not a contract.
+ 
+Contract Call:
+  address:   0x2a810409872AfC346F9B5b26571Fd6eC42EA4849
+  function:  getTokenAddress(address community)
+  args:                     (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+
+Docs: https://viem.sh/docs/contract/readContract
+Version: viem@2.43.3
+    at getContractError (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/errors/getContractError.js:33:12)
+    at readContract (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/actions/public/readContract.js:58:15)
+[90m    ... 3 lines matching cause stack trace ...[39m
+    at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:20 {
+  cause: ContractFunctionZeroDataError: The contract function "getTokenAddress" returned no data ("0x").
+  
+  This could be due to any of the following:
+    - The contract does not have the function "getTokenAddress",
+    - The parameters passed to the contract function may be invalid, or
+    - The address is not a contract.
+  
+  Version: viem@2.43.3
+      at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/errors/getContractError.js:16:20
+      at getContractError (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/utils/errors/getContractError.js:32:7)
+      at readContract (file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/viem@2.43.3_typescript@5.7.2/node_modules/[4mviem[24m/_esm/actions/public/readContract.js:58:15)
+  [90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+      at Object.launch [90m(/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/sdk/[39msrc/clients/community.ts:153:43[90m)[39m
+      at [90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/sdk/[39msrc/clients/community.test.ts:108:14
+      at file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/node_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:20 {
+    details: [90mundefined[39m,
+    docsPath: [90mundefined[39m,
+    metaMessages: [
+      [32m'This could be due to any of the following:'[39m,
+      [32m'  - The contract does not have the function "getTokenAddress",'[39m,
+      [32m'  - The parameters passed to the contract function may be invalid, or'[39m,
+      [32m'  - The address is not a contract.'[39m
+    ],
+    shortMessage: [32m'The contract function "getTokenAddress" returned no data ("0x").'[39m,
+    version: [32m'2.43.3'[39m
+  },
+  details: [90mundefined[39m,
+  docsPath: [32m'/docs/contract/readContract'[39m,
+  metaMessages: [
+    [32m'This could be due to any of the following:'[39m,
+    [32m'  - The contract does not have the function "getTokenAddress",'[39m,
+    [32m'  - The parameters passed to the contract function may be invalid, or'[39m,
+    [32m'  - The address is not a contract.'[39m,
+    [32m' '[39m,
+    [32m'Contract Call:'[39m,
+    [32m'  address:   0x2a810409872AfC346F9B5b26571Fd6eC42EA4849\n'[39m +
+      [32m'  function:  getTokenAddress(address community)\n'[39m +
+      [32m'  args:                     (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)'[39m
+  ],
+  shortMessage: [32m'The contract function "getTokenAddress" returned no data ("0x").'[39m,
+  version: [32m'2.43.3'[39m,
+  abi: [
+    {
+      type: [32m'constructor'[39m,
+      inputs: [36m[Array][39m,
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'DEFAULT_SAFETY_FACTOR'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'MIN_SUGGESTED_AMOUNT'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'REGISTRY'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'SUPERPAYMASTER'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'aPNTsPriceUSD'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'communityToToken'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'deployedTokens'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'deployxPNTsToken'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getAPNTsPrice'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getAllTokens'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getDeployedCount'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getDepositBreakdown'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getIndustryMultiplier'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getPredictionParams'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'getTokenAddress'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'hasToken'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'industryMultipliers'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'owner'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'predictDepositAmount'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'predictions'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'view'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'renounceOwnership'[39m,
+      inputs: [],
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'setIndustryMultiplier'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'setSuperPaymasterAddress'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'transferOwnership'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'updateAPNTsPrice'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'updatePrediction'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'updatePredictionCustom'[39m,
+      inputs: [36m[Array][39m,
+      outputs: [],
+      stateMutability: [32m'nonpayable'[39m
+    },
+    {
+      type: [32m'function'[39m,
+      name: [32m'version'[39m,
+      inputs: [],
+      outputs: [36m[Array][39m,
+      stateMutability: [32m'pure'[39m
+    },
+    {
+      type: [32m'event'[39m,
+      name: [32m'APNTsPriceUpdated'[39m,
+      inputs: [36m[Array][39m,
+      anonymous: [33mfalse[39m
+    },
+    {
+      type: [32m'event'[39m,
+      name: [32m'IndustryMultiplierSet'[39m,
+      inputs: [36m[Array][39m,
+      anonymous: [33mfalse[39m
+    },
+    {
+      type: [32m'event'[39m,
+      name: [32m'OwnershipTransferred'[39m,
+      inputs: [36m[Array][39m,
+      anonymous: [33mfalse[39m
+    },
+    {
+      type: [32m'event'[39m,
+      name: [32m'PredictionUpdated'[39m,
+      inputs: [36m[Array][39m,
+      anonymous: [33mfalse[39m
+    },
+    {
+      type: [32m'event'[39m,
+      name: [32m'xPNTsTokenDeployed'[39m,
+      inputs: [36m[Array][39m,
+      anonymous: [33mfalse[39m
+    },
+    { type: [32m'error'[39m, name: [32m'AlreadyDeployed'[39m, inputs: [36m[Array][39m },
+    { type: [32m'error'[39m, name: [32m'InvalidAddress'[39m, inputs: [36m[Array][39m },
+    { type: [32m'error'[39m, name: [32m'InvalidParameters'[39m, inputs: [] },
+    { type: [32m'error'[39m, name: [32m'OwnableInvalidOwner'[39m, inputs: [36m[Array][39m },
+    {
+      type: [32m'error'[39m,
+      name: [32m'OwnableUnauthorizedAccount'[39m,
+      inputs: [36m[Array][39m
+    }
+  ],
+  args: [ [32m'0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'[39m ],
+  contractAddress: [32m'0x2a810409872AfC346F9B5b26571Fd6eC42EA4849'[39m,
+  formattedArgs: [90mundefined[39m,
+  functionName: [32m'getTokenAddress'[39m,
+  sender: [90mundefined[39m
+}
+
+ [32m✓[39m src/clients/community.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 795[2mms[22m[39m
+       [33m[2m✓[22m[39m should handle registration failure gracefully in launch [33m 776[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/clients/endUser.test.ts[2m > [22mEndUserClient[2m > [22mSmart Account Management[2m > [22mshould handle logic when smart account not deployed during batch
+[31m[1mTypeError[22m: accountToUse.signMessage is not a function[39m
+[36m [2m❯[22m Object.executeGaslessBatch src/clients/endUser.ts:[2m440:60[22m[39m
+    [90m438| [39m             }) [35mas[39m [33mHex[39m[33m;[39m
+    [90m439| [39m
+    [90m440| [39m             const signature = await (accountToUse as any).signMessage…
+    [90m   | [39m                                                           [31m^[39m
+    [90m441| [39m                 message[33m:[39m { raw[33m:[39m userOpHash }
+    [90m442| [39m             })[33m;[39m
+[90m [2m❯[22m src/clients/endUser.test.ts:[2m200:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/clients/endUser.test.ts[2m > [22mEndUserClient[2m > [22mSmart Account Management[2m > [22mshould handle execution errors in gasless batch
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'Contract Reverted' but got 'accountToUse.signMessage is not a fun…'[39m
+
+Expected: [32m"Contract Reverted"[39m
+Received: [31m"accountToUse.signMessage is not a function"[39m
+
+[36m [2m❯[22m src/clients/endUser.test.ts:[2m217:14[22m[39m
+    [90m215| [39m             (client as any).writeContract = vi.fn().mockRejectedValue…
+    [90m216| [39m             
+    [90m217| [39m             [35mawait[39m [34mexpect[39m(client[33m.[39m[34mexecuteGaslessBatch[39m({
+    [90m   | [39m             [31m^[39m
+    [90m218| [39m                 targets[33m:[39m [[33mMOCK_ADDR[39m][33m,[39m
+    [90m219| [39m                 datas[33m:[39m [[32m'0x'[39m][33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m14 passed[39m[22m[90m (15)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m126 passed[39m[22m[90m (128)[39m
+[2m   Start at [22m 23:52:35
+[2m   Duration [22m 7.61s[2m (transform 2.21s, setup 0ms, import 27.56s, tests 3.54s, environment 27ms)[22m
+

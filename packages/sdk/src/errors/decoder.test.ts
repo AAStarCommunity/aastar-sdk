@@ -70,4 +70,38 @@ describe('ErrorDecoder', () => {
     it('should return null for non-error input', () => {
         expect(decodeContractError(null)).toBeNull();
     });
+
+    it('should extract data from nested object structure', () => {
+        // Case A: { data: { data: "0x..." } }
+        const errorA = { data: { data: '0xA1' } };
+        (viem.decodeErrorResult as any).mockReturnValue({ errorName: 'TestA', args: [] });
+        expect(decodeContractError(errorA)).toContain('TestA');
+
+        // Case B: { data: { object: "0x..." } }
+        const errorB = { data: { object: '0xB1' } };
+        (viem.decodeErrorResult as any).mockReturnValue({ errorName: 'TestB', args: [] });
+        expect(decodeContractError(errorB)).toContain('TestB');
+    });
+
+    it('should format all known error types', () => {
+        const testCases = [
+            { name: 'RoleAlreadyGranted', args: ['0xRole', '0xUser'], expected: 'User 0xUser already has role 0xRole' },
+            { name: 'InsufficientStake', args: [100n, 200n], expected: 'Provided 100, Required 200' },
+            { name: 'InvalidParameter', args: ['BadInput'], expected: 'InvalidParameter: BadInput' },
+            { name: 'RoleNotGranted', args: ['0xRole', '0xUser'], expected: 'User 0xUser does not have role 0xRole' },
+            { name: 'UnknownCustom', args: [123n], expected: 'UnknownCustom: ["123"]' }
+        ];
+
+        for (const { name, args, expected } of testCases) {
+            (viem.decodeErrorResult as any).mockReturnValue({ errorName: name, args });
+            const result = decodeContractError({ data: '0x1' });
+            expect(result).toContain(expected);
+        }
+    });
+
+    it('should handle non-string unknown data', () => {
+        (viem.decodeErrorResult as any).mockImplementation(() => { throw new Error('fail'); });
+        const result = decodeContractError({ data: { complex: true } });
+        expect(result).toContain('non-string data');
+    });
 });

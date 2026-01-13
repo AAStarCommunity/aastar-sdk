@@ -68,8 +68,38 @@ describe('KeyManager', () => {
         expect(parseKey('0xabc')).toBe('0xabc');
     });
 
-    it('should throw if file exists and overwrite is false', () => {
+    it('should throw if json file exists and overwrite is false', () => {
         (fs.existsSync as any).mockReturnValue(true);
-        expect(() => KeyManager.saveToEnvFile('/mock/.env', [], false)).toThrow(/File already exists/);
+        expect(() => KeyManager.saveToJsonFile('/mock/keys.json', [], false)).toThrow(/File already exists/);
+    });
+
+    it('should throw if json file not found', () => {
+        (fs.existsSync as any).mockReturnValue(false);
+        expect(() => KeyManager.loadFromJsonFile('/mock/missing.json')).toThrow(/File not found/);
+    });
+
+    it('should print keys with masked private key', () => {
+        const consoleSpy = vi.spyOn(console, 'log');
+        const keys = [
+            { name: 'Admin', privateKey: '0x1234567890123456789012345678901234567890' as `0x${string}`, address: '0xAddress' as `0x${string}` }
+        ];
+        
+        KeyManager.printKeys(keys, false);
+        
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Generated Keys'));
+        // Check for masked key format (start...end)
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/Private Key: 0x12345678\.\.\.34567890/));
+        expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('0x1234567890123456789012345678901234567890'));
+    });
+
+    it('should print keys with full private key', () => {
+        const consoleSpy = vi.spyOn(console, 'log');
+        const keys = [
+            { name: 'Admin', privateKey: '0x1234567890123456789012345678901234567890' as `0x${string}`, address: '0xAddress' as `0x${string}` }
+        ];
+        
+        KeyManager.printKeys(keys, true);
+        
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('0x1234567890123456789012345678901234567890'));
     });
 });
