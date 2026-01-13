@@ -90,7 +90,7 @@ export type SuperPaymasterActions = {
     MIN_ETH_USD_PRICE: () => Promise<bigint>;
     
     // Admin
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferSuperPaymasterOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     owner: () => Promise<Address>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
@@ -477,7 +477,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
     },
 
     // Admin
-    async transferOwnership({ newOwner, account }) {
+    async transferSuperPaymasterOwnership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: SuperPaymasterABI,

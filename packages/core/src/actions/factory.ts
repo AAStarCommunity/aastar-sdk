@@ -30,7 +30,7 @@ export type XPNTsFactoryActions = {
     
     // Ownership
     owner: () => Promise<Address>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferXPNTsFactoryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
@@ -61,7 +61,7 @@ export type PaymasterFactoryActions = {
     
     // Ownership
     owner: () => Promise<Address>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferPaymasterFactoryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Version
     defaultVersion: () => Promise<string>;
@@ -252,7 +252,7 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ newOwner, account }) {
+    async transferXPNTsFactoryOwnership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: xPNTsFactoryABI,
@@ -406,7 +406,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ newOwner, account }) {
+    async transferPaymasterFactoryOwnership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: PaymasterFactoryABI,

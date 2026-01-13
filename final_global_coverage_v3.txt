@@ -1,0 +1,225 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.17 [39m[90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+ [32m✓[39m packages/core/src/actions/staking.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/errors/decoder.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/core/src/roles.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/factory.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 72[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould save keys to env file
+[22m[39m✅ Keys saved to /mock/.env (1 keys)
+
+[90mstdout[2m | packages/sdk/src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould save and load keys from json file
+[22m[39m✅ Keys saved to /mock/keys.json (1 keys)
+
+ [32m✓[39m packages/sdk/src/utils/keys.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 271[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/registry.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 156[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 1 ETH...
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m   Transaction Sent: 0xethhash
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 100 tokens...
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m   Transaction Sent: 0xtokenhash
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m   ✅ Token Funded.
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when balance is low
+[22m[39m⚠️  ETH balance (0) below threshold (0.1)
+💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 0.5 ETH...
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when balance is low
+[22m[39m   Transaction Sent: 0xethhash
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when balance is low
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould skip funding when balance is sufficient
+[22m[39m✅ Sufficient ETH: 100 ETH
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle funding errors gracefully
+[22m[39m💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 1 ETH...
+
+[90mstderr[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle funding errors gracefully
+[22m[39m   ❌ ETH Funding Failed: Error: Failed
+    at [90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mpackages/sdk/src/utils/funding.test.ts:84:60
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1209:10[90m)[39m
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:37
+    at Traces.$ [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/traces.CCmnQaNT.js:142:27[90m)[39m
+    at trace [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/test.B8ej_ZHS.js:239:21[90m)[39m
+    at runTest [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:12[90m)[39m
+
+ [32m✓[39m packages/core/src/actions/superPaymaster.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/utils/funding.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 263[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/utils/roleData.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 69[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Executing gasless via AA 0x1111111111111111111111111111111111111111 Sponsored by 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Submitting UserOp 0xhash...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m🚀 Launching Community "Test"...
+   Registry: Registering Role...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m   ✅ Registered: 0xhash
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m   ℹ️  Found existing token at 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m⚙️ Setting up operator...
+   SDK: Fetching role config for entry burn...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   SDK: Approving GToken (Stake: 100, Burn: 0)...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   SDK: Auto-generating roleData for roleId 0x1...
+   SDK: Checking if role already granted...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   ℹ️  Role already granted, skipping registration
+   SDK: Depositing aPNTs via depositForOperator...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m✅ Operator setup complete! Transactions: 2
+
+ [31m❯[39m packages/sdk/src/errors/decoder.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 62[2mms[22m[39m
+[31m     [31m×[31m should extract data from viem error walk[39m[32m 53[2mms[22m[39m
+     [32m✓[39m should extract data from cause[32m 2[2mms[22m[39m
+     [32m✓[39m should handle specialized formatting for RoleNotConfigured[32m 0[2mms[22m[39m
+     [32m✓[39m should fallback to unknown error message if decoding fails[32m 1[2mms[22m[39m
+     [32m✓[39m should handle raw revert messages[32m 1[2mms[22m[39m
+     [32m✓[39m should return null for non-error input[32m 0[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/clients.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/aggregator.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/account.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+[90mstdout[2m | packages/core/src/RequirementChecker.test.ts[2m > [22m[2mRequirementChecker[2m > [22m[2mshould check full requirements successfully
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/core/src/RequirementChecker.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/sbt.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/validators.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/reputation.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 79[2mms[22m[39m
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mfundETH[2m > [22m[2mshould fund ETH if balance is low
+[22m[39m   💰 Funding ETH... (Before: 0.01)
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mfundETH[2m > [22m[2mshould fund ETH if balance is low
+[22m[39m      -> Sent 0.1 ETH. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mfundETH[2m > [22m[2mshould not fund ETH if balance is sufficient
+[22m[39m   ✅ ETH Balance adequate (0.1 ETH).
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mregisterEndUser[2m > [22m[2mshould register end user if role not held
+[22m[39m   👤 Registering ENDUSER role (Sponsor Mode)...
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mregisterEndUser[2m > [22m[2mshould register end user if role not held
+[22m[39m      -> Role Sponsored & Granted. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mregisterEndUser[2m > [22m[2mshould skip registration if role already held
+[22m[39m   ✅ ENDUSER Role already held.
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mmintTestTokens[2m > [22m[2mshould mint tokens if balance is low
+[22m[39m   🪙 Minting Tokens... (Current: 0)
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mmintTestTokens[2m > [22m[2mshould mint tokens if balance is low
+[22m[39m      -> Minted 1000. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mmintTestTokens[2m > [22m[2mshould skip minting if balance is sufficient
+[22m[39m   ✅ Token Balance adequate.
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2madminDepositForUser[2m > [22m[2mshould perform admin deposit flow
+[22m[39m   🏦 Depositing FOR User...
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2madminDepositForUser[2m > [22m[2mshould perform admin deposit flow
+[22m[39m      -> Deposited 10 to PM. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mprepareTestAccount[2m > [22m[2mshould orchestrate complete setup
+[22m[39m
+🚰 SepoliaFaucetAPI: Preparing 0x2222222222222222222222222222222222222222...
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mprepareTestAccount[2m > [22m[2mshould orchestrate complete setup
+[22m[39m✅ Preparation Complete! {
+  ethFunded: [33mtrue[39m,
+  roleRegistered: [33mtrue[39m,
+  tokenMinted: [33mtrue[39m,
+  paymasterDeposited: [33mtrue[39m
+}
+
+ [32m✓[39m packages/core/src/actions/faucet.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/gtokenExtended.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/errors/AAStarError.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/entryPoint.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/paymasterV4.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/dvt.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/tokens.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/operator.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/core/src/utils/validation.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+[90mstdout[2m | packages/core/src/contracts.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/core/src/contracts.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/sdk/src/utils/userOp.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/utils/eventDecoder.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/sdk/src/utils/errorHandler.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/community.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/StateValidator.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/admin.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/operator.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+[90mstderr[2m | packages/sdk/src/utils/eventDecoder.test.ts[2m > [22m[2mEventDecoder[2m > [22m[2mshould skip invalid logs
+[22m[39m   ⚠️ Skipping log with invalid data: { data: [32m'invalid'[39m, topics: [] }
+
+[90mstdout[2m | packages/sdk/src/utils/eventDecoder.test.ts[2m > [22m[2mEventDecoder[2m > [22m[2mshould log decoded events
+[22m[39m📡 [Test] Event: Event
+   └─ key: val
+   └─ num: 100
+
+ [32m✓[39m packages/sdk/src/utils/eventDecoder.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/endUser.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m packages/sdk/src/errors/decoder.test.ts[2m > [22mErrorDecoder[2m > [22mshould extract data from viem error walk
+[31m[1mAssertionError[22m: the given combination of arguments (null and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string[39m
+[36m [2m❯[22m packages/sdk/src/errors/decoder.test.ts:[2m28:24[22m[39m
+    [90m 26| [39m        
+    [90m 27| [39m        [35mconst[39m result [33m=[39m [34mdecodeContractError[39m(mockError)[33m;[39m
+    [90m 28| [39m        [34mexpect[39m(result)[33m.[39m[34mtoContain[39m([32m'Unauthorized'[39m)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m 29| [39m    })[33m;[39m
+    [90m 30| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m32 passed[39m[22m[90m (33)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m306 passed[39m[22m[90m (307)[39m
+[2m   Start at [22m 22:53:59
+[2m   Duration [22m 10.10s[2m (transform 1.95s, setup 0ms, import 37.11s, tests 1.99s, environment 24ms)[22m
+

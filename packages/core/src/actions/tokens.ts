@@ -23,7 +23,7 @@ export type TokenActions = {
     
     // Ownable
     owner: (args: { token: Address }) => Promise<Address>;
-    transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferTokenOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
     
     // xPNTs/aPNTs specific
@@ -89,7 +89,7 @@ export const gTokenActions = () => (client: PublicClient | WalletClient): TokenA
     async owner({ token }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'owner', args: [] }) as Promise<Address>;
     },
-    async transferOwnership({ token, newOwner, account }) {
+    async transferTokenOwnership({ token, newOwner, account }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferOwnership', args: [newOwner], account: account as any, chain: (client as any).chain });
     },
     async renounceOwnership({ token, account }) {
@@ -194,7 +194,8 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // ERC20 Metadata
-    async name({ token }) {
+    async name({ token } = {} as any) {
+        if (!token) throw new Error("Token address required");
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -203,7 +204,8 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<string>;
     },
 
-    async symbol({ token }) {
+    async symbol({ token } = {} as any) {
+        if (!token) throw new Error("Token address required");
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -231,7 +233,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ token, newOwner, account }) {
+    async transferTokenOwnership({ token, newOwner, account }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),

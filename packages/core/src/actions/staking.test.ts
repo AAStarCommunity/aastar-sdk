@@ -244,7 +244,7 @@ describe('Staking Actions', () => {
             const txHash = '0xhash';
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = stakingActions(mockStakingAddress)(mockWalletClient as WalletClient);
-            const tx1 = await actions.transferOwnership({ newOwner: MOCK_USER, account: mockAccount });
+            const tx1 = await actions.transferStakingOwnership({ newOwner: MOCK_USER, account: mockAccount });
             const tx2 = await actions.renounceOwnership({ account: mockAccount });
             expect(tx1).toBe(txHash);
             expect(tx2).toBe(txHash);

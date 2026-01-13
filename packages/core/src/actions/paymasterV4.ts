@@ -48,7 +48,7 @@ export type PaymasterV4Actions = {
     
     // Ownership
     owner: () => Promise<Address>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferPaymasterV4Ownership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     version: () => Promise<string>;
 };
@@ -287,7 +287,7 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ newOwner, account }) {
+    async transferPaymasterV4Ownership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: PaymasterV4ABI,

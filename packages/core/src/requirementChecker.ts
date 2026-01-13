@@ -21,23 +21,6 @@ const MYSBT_ABI = parseAbi([
 /**
  * Requirement Checker Utility
  * @description Centralized validation for all role requirements
- * 
- * @example
- * ```typescript
- * const checker = new RequirementChecker(publicClient);
- * 
- * // Check community launch requirements
- * const result = await checker.checkRequirements({
- *     address: userAddress,
- *     roleId: ROLE_COMMUNITY,
- *     requiredGToken: parseEther("33"),
- *     requireSBT: false
- * });
- * 
- * if (!result.hasEnoughGToken) {
- *     console.error(result.missingRequirements.join('\n'));
- * }
- * ```
  */
 export class RequirementChecker {
     constructor(
@@ -50,12 +33,6 @@ export class RequirementChecker {
         }
     ) {}
 
-    /**
-     * Check all requirements for a user
-     * 
-     * @param params Check parameters
-     * @returns Detailed requirement status
-     */
     async checkRequirements(params: {
         address: Address;
         roleId?: `0x${string}`;
@@ -73,7 +50,6 @@ export class RequirementChecker {
 
         const missingRequirements: string[] = [];
 
-        // Check role (if specified)
         let hasRole = false;
         if (roleId) {
             const { CORE_ADDRESSES } = await import('./contract-addresses.js');
@@ -89,7 +65,6 @@ export class RequirementChecker {
             }
         }
 
-        // Check GToken balance
         let hasEnoughGToken = true;
         if (requiredGToken > 0n) {
             const { CORE_ADDRESSES } = await import('./contract-addresses.js');
@@ -108,7 +83,6 @@ export class RequirementChecker {
             }
         }
 
-        // Check aPNTs balance
         let hasEnoughAPNTs = true;
         if (requiredAPNTs > 0n) {
             const { CORE_ADDRESSES } = await import('./contract-addresses.js');
@@ -127,7 +101,6 @@ export class RequirementChecker {
             }
         }
 
-        // Check MySBT
         let hasSBT = false;
         if (requireSBT) {
             const { CORE_ADDRESSES } = await import('./contract-addresses.js');
@@ -153,9 +126,6 @@ export class RequirementChecker {
         };
     }
 
-    /**
-     * Check GToken balance only (shortcut)
-     */
     async checkGTokenBalance(address: Address, required: bigint): Promise<{
         balance: bigint;
         hasEnough: boolean;
@@ -174,9 +144,6 @@ export class RequirementChecker {
         };
     }
 
-    /**
-     * Check aPNTs balance only (shortcut)
-     */
     async checkAPNTsBalance(address: Address, required: bigint): Promise<{
         balance: bigint;
         hasEnough: boolean;
@@ -195,9 +162,6 @@ export class RequirementChecker {
         };
     }
 
-    /**
-     * Check if user has MySBT (shortcut)
-     */
     async checkHasSBT(address: Address): Promise<boolean> {
         const { CORE_ADDRESSES } = await import('./contract-addresses.js');
         const balance = await this.publicClient.readContract({
@@ -210,9 +174,6 @@ export class RequirementChecker {
         return balance > 0n;
     }
 
-    /**
-     * Check if user has specific role (shortcut)
-     */
     async checkHasRole(roleId: `0x${string}`, address: Address): Promise<boolean> {
         const { CORE_ADDRESSES } = await import('./contract-addresses.js');
         return await this.publicClient.readContract({

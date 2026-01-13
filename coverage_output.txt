@@ -1,0 +1,1506 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.17 [39m[90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+ [32m✓[39m packages/core/src/actions/paymasterV4.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/gtokenExtended.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/superPaymaster.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 123[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/registry.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould save keys to env file
+[22m[39m✅ Keys saved to /mock/.env (1 keys)
+
+[90mstdout[2m | packages/sdk/src/utils/keys.test.ts[2m > [22m[2mKeyManager[2m > [22m[2mshould save and load keys from json file
+[22m[39m✅ Keys saved to /mock/keys.json (1 keys)
+
+ [32m✓[39m packages/sdk/src/utils/keys.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 299[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/reputation.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/account.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mfundETH[2m > [22m[2mshould fund ETH if balance is low
+[22m[39m   💰 Funding ETH... (Before: 0.01)
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mfundETH[2m > [22m[2mshould fund ETH if balance is low
+[22m[39m      -> Sent 0.1 ETH. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mfundETH[2m > [22m[2mshould not fund ETH if balance is sufficient
+[22m[39m   ✅ ETH Balance adequate (0.1 ETH).
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mregisterEndUser[2m > [22m[2mshould register end user if role not held
+[22m[39m   👤 Registering ENDUSER role (Sponsor Mode)...
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mregisterEndUser[2m > [22m[2mshould register end user if role not held
+[22m[39m      -> Role Sponsored & Granted. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mregisterEndUser[2m > [22m[2mshould skip registration if role already held
+[22m[39m   ✅ ENDUSER Role already held.
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mmintTestTokens[2m > [22m[2mshould mint tokens if balance is low
+[22m[39m   🪙 Minting Tokens... (Current: 0)
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mmintTestTokens[2m > [22m[2mshould mint tokens if balance is low
+[22m[39m      -> Minted 1000. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mmintTestTokens[2m > [22m[2mshould skip minting if balance is sufficient
+[22m[39m   ✅ Token Balance adequate.
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2madminDepositForUser[2m > [22m[2mshould perform admin deposit flow
+[22m[39m   🏦 Depositing FOR User...
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2madminDepositForUser[2m > [22m[2mshould perform admin deposit flow
+[22m[39m      -> Deposited 10 to PM. Tx: 0xhash
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mprepareTestAccount[2m > [22m[2mshould orchestrate complete setup
+[22m[39m
+🚰 SepoliaFaucetAPI: Preparing 0x2222222222222222222222222222222222222222...
+
+[90mstdout[2m | packages/core/src/actions/faucet.test.ts[2m > [22m[2mSepoliaFaucetAPI[2m > [22m[2mprepareTestAccount[2m > [22m[2mshould orchestrate complete setup
+[22m[39m✅ Preparation Complete! {
+  ethFunded: [33mtrue[39m,
+  roleRegistered: [33mtrue[39m,
+  tokenMinted: [33mtrue[39m,
+  paymasterDeposited: [33mtrue[39m
+}
+
+ [32m✓[39m packages/core/src/actions/faucet.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/utils/errorHandler.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 1 ETH...
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m   Transaction Sent: 0xethhash
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with ETH
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 100 tokens...
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m   Transaction Sent: 0xtokenhash
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould fund with Token
+[22m[39m   ✅ Token Funded.
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when balance is low
+[22m[39m⚠️  ETH balance (0) below threshold (0.1)
+💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 0.5 ETH...
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when balance is low
+[22m[39m   Transaction Sent: 0xethhash
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould ensure funding when balance is low
+[22m[39m   ✅ ETH Funded.
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould skip funding when balance is sufficient
+[22m[39m✅ Sufficient ETH: 100 ETH
+
+[90mstdout[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle funding errors gracefully
+[22m[39m💸 Funding 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 with 1 ETH...
+
+[90mstderr[2m | packages/sdk/src/utils/funding.test.ts[2m > [22m[2mFundingManager[2m > [22m[2mshould handle funding errors gracefully
+[22m[39m   ❌ ETH Funding Failed: Error: Failed
+    at [90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mpackages/sdk/src/utils/funding.test.ts:84:60
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1209:10[90m)[39m
+    at [90mfile:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:37
+    at Traces.$ [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/traces.CCmnQaNT.js:142:27[90m)[39m
+    at trace [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/vitest@4.0.17_@types+node@20.11.5_tsx@4.21.0_yaml@2.8.2/node_modules/[4mvitest[24m/dist/chunks/test.B8ej_ZHS.js:239:21[90m)[39m
+    at runTest [90m(file:///Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.0.17/node_modules/[4m@vitest/runner[24m/dist/index.js:1653:12[90m)[39m
+
+ [32m✓[39m packages/core/src/actions/factory.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/utils/funding.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 351[2mms[22m[39m
+     [33m[2m✓[22m[39m should fund with ETH [33m 318[2mms[22m[39m
+[90mstdout[2m | tests/l1-regression.test.ts
+[22m[39m[dotenv@17.2.3] injecting env (20) from .env.sepolia -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+ [32m✓[39m packages/core/src/actions/aggregator.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | tests/l1-regression.test.ts[2m > [22m[2mL1 Core Actions - Full Regression Test
+[22m[39m
+🧪 L1 Core Actions 全回归测试启动...
+
+测试账户: 0xb5600060e6de5E11D3636731964218E53caadf0E
+网络: Sepolia Testnet
+
+
+ [32m✓[39m packages/core/src/actions/dvt.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 124[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/sbt.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 86[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/entryPoint.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/validators.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 99[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/utils/roleData.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/StateValidator.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m packages/core/src/actions/tokens.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 106[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/errors/AAStarError.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+[90mstderr[2m | tests/l1-regression.test.ts[2m > [22m[2mL1 Core Actions - Full Regression Test[2m > [22m[2m✅ 5. GToken (20 actions)[2m > [22m[2mshould verify mint capability (dry-run)
+[22m[39m  ⚠ Mint dry-run failed (expected if not owner): GTokenABI is not defined
+
+ [32m✓[39m packages/core/src/actions/staking.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+[90mstdout[2m | tests/l1-regression.test.ts[2m > [22m[2mL1 Core Actions - Full Regression Test[2m > [22m[2m📊 Summary[2m > [22m[2mshould log final test summary
+[22m[39m
+============================================================
+🎉 L1 Core Actions 全回归测试完成！
+============================================================
+
+📊 测试统计:
+
+  ✅ Registry: 73 actions
+  ✅ SuperPaymaster: 61 actions
+  ✅ MySBT: 58 actions
+  ✅ GTokenStaking: 29 actions
+  ✅ GToken: 20 actions
+  ✅ aPNTs: 34 actions
+  ✅ xPNTsFactory: 22 actions
+  ✅ PaymasterFactory: 16 actions
+  ✅ ReputationSystem: 20 actions
+  ✅ DVTValidator: 20 actions
+  ✅ BLSAggregator: 18 actions
+  ✅ EntryPoint: 5 actions
+
+  📦 总计: 366 actions 已验证
+  🎯 覆盖率: 82% (366/446)
+  🏆 自研合约覆盖: 93% (331/355)
+
+✨ 所有 L1 Core Actions 与区块链交互正常！
+
+============================================================
+
+
+ [31m❯[39m tests/l1-regression.test.ts [2m([22m[2m29 tests[22m[2m | [22m[31m27 failed[39m[2m)[22m[33m 2876[2mms[22m[39m
+[31m       [31m×[31m should read owner[39m[33m 948[2mms[22m[39m
+[31m       [31m×[31m should read version[39m[32m 92[2mms[22m[39m
+[31m       [31m×[31m should read contract references[39m[32m 88[2mms[22m[39m
+[31m       [31m×[31m should read role constants[39m[32m 98[2mms[22m[39m
+[31m       [31m×[31m should read account community token[39m[32m 8[2mms[22m[39m
+[31m       [31m×[31m should read version[39m[32m 103[2mms[22m[39m
+[31m       [31m×[31m should read owner[39m[32m 82[2mms[22m[39m
+[31m       [31m×[31m should read entryPoint[39m[32m 76[2mms[22m[39m
+[31m       [31m×[31m should read constants[39m[32m 115[2mms[22m[39m
+[31m       [31m×[31m should read protocol configuration[39m[32m 86[2mms[22m[39m
+[31m       [31m×[31m should read name and symbol[39m[32m 78[2mms[22m[39m
+[31m       [31m×[31m should read total supply[39m[32m 5[2mms[22m[39m
+[31m       [31m×[31m should read contract references[39m[32m 4[2mms[22m[39m
+[31m       [31m×[31m should check pause status[39m[32m 85[2mms[22m[39m
+[31m       [31m×[31m should read mint configuration[39m[32m 98[2mms[22m[39m
+[31m       [31m×[31m should read total staked[39m[32m 109[2mms[22m[39m
+[31m       [31m×[31m should read reward rate[39m[32m 1[2mms[22m[39m
+[31m       [31m×[31m should read name and symbol[39m[32m 3[2mms[22m[39m
+[31m       [31m×[31m should read user balance[39m[32m 86[2mms[22m[39m
+       [32m✓[39m should verify mint capability (dry-run)[32m 1[2mms[22m[39m
+[31m       [31m×[31m should read token info[39m[32m 1[2mms[22m[39m
+[31m       [31m×[31m should read factory info[39m[32m 5[2mms[22m[39m
+[31m       [31m×[31m should read factory info[39m[32m 5[2mms[22m[39m
+[31m       [31m×[31m should read configuration[39m[32m 8[2mms[22m[39m
+[31m       [31m×[31m should read configuration[39m[32m 8[2mms[22m[39m
+[31m       [31m×[31m should read configuration[39m[32m 6[2mms[22m[39m
+[31m       [31m×[31m should read deposit info[39m[32m 300[2mms[22m[39m
+[31m       [31m×[31m should get nonce[39m[32m 83[2mms[22m[39m
+       [32m✓[39m should log final test summary[32m 11[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/sdk/src/clients/admin.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould perform high-level onboarding (mocked)
+[22m[39m👤 Onboarding user to community...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould perform high-level onboarding (mocked)
+[22m[39m✅ User onboarded! SBT ID: 1
+
+ [32m✓[39m packages/sdk/src/clients/clients.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/community.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/operator.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/sdk/src/utils/userOp.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m packages/core/src/utils/validation.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/utils/eventDecoder.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+ [32m✓[39m packages/sdk/src/clients/endUser.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+[90mstderr[2m | packages/sdk/src/utils/eventDecoder.test.ts[2m > [22m[2mEventDecoder[2m > [22m[2mshould skip invalid logs
+[22m[39m   ⚠️ Skipping log with invalid data: { data: [32m'invalid'[39m, topics: [] }
+
+[90mstdout[2m | packages/sdk/src/utils/eventDecoder.test.ts[2m > [22m[2mEventDecoder[2m > [22m[2mshould log decoded events
+[22m[39m📡 [Test] Event: Event
+   └─ key: val
+   └─ num: 100
+
+ [32m✓[39m packages/sdk/src/utils/eventDecoder.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/operator.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 27 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 1. Registry (73 actions)[2m > [22mshould read owner
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x8da5cb5b
+ 
+Contract Call:
+  function:  owner()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m81:21[22m[39m
+    [90m 79| [39m
+    [90m 80| [39m    [34mit[39m([32m'should read owner'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m 81| [39m      [35mconst[39m owner [33m=[39m [35mawait[39m [34mregistry[39m(publicClient)[33m.[39m[34mowner[39m()[33m;[39m
+    [90m   | [39m                    [31m^[39m
+    [90m 82| [39m      [34mexpect[39m(owner)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m 83| [39m      [34mexpect[39m(owner[33m.[39mlength)[33m.[39m[34mtoBe[39m([34m42[39m)[33m;[39m [90m// 0x + 40 chars[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x8da5cb5b
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m81:21[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x8da5cb5b' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 1. Registry (73 actions)[2m > [22mshould read version
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x54fd4d50
+ 
+Contract Call:
+  function:  version()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m88:23[22m[39m
+    [90m 86| [39m
+    [90m 87| [39m    [34mit[39m([32m'should read version'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m 88| [39m      [35mconst[39m version [33m=[39m [35mawait[39m [34mregistry[39m(publicClient)[33m.[39m[34mversion[39m()[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m 89| [39m      [34mexpect[39m(version)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m 90| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ Registry Version: [39m[36m${[39mversion[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x54fd4d50
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m88:23[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x54fd4d50' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 1. Registry (73 actions)[2m > [22mshould read contract references
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x19c46e81
+ 
+Contract Call:
+  function:  MYSBT()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m94:48[22m[39m
+    [90m 92| [39m
+    [90m 93| [39m    [34mit[39m([32m'should read contract references'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m 94| [39m      [35mconst[39m [mySBT[33m,[39m superPaymaster[33m,[39m staking] [33m=[39m [35mawait[39m [33mPromise[39m[33m.[39m[34mall[39m([
+    [90m   | [39m                                               [31m^[39m
+    [90m 95| [39m        [34mregistry[39m(publicClient)[33m.[39m[34mmySBT[39m()[33m,[39m
+    [90m 96| [39m        [34mregistry[39m(publicClient)[33m.[39m[34msuperPaymaster[39m()[33m,[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x19c46e81
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m94:48[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x19c46e81' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x19c46e81"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 1. Registry (73 actions)[2m > [22mshould read role constants
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0xa2d0020e
+ 
+Contract Call:
+  function:  ROLE_COMMUNITY()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m110:64[22m[39m
+    [90m108| [39m
+    [90m109| [39m    [34mit[39m([32m'should read role constants'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m110| [39m      const [roleCommunity, roleEndUser, rolePaymasterSuper] = await P…
+    [90m   | [39m                                                               [31m^[39m
+    [90m111| [39m        [34mregistry[39m(publicClient)[33m.[39m[33mROLE_COMMUNITY[39m()[33m,[39m
+    [90m112| [39m        [34mregistry[39m(publicClient)[33m.[39m[33mROLE_ENDUSER[39m()[33m,[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0xa2d0020e
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m110:64[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0xa2d0020e' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0xa2d0020e"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 1. Registry (73 actions)[2m > [22mshould read account community token
+[31m[1mAbiFunctionNotFoundError[22m: Function "accountToCommunity" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.getAccountCommunity packages/core/src/actions/registry.ts:[2m724:41[22m[39m
+    [90m722| [39m
+    [90m723| [39m    [35masync[39m [34mgetAccountCommunity[39m({ account[33m:[39m userAccount }) {
+    [90m724| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m725| [39m            address[33m,[39m
+    [90m726| [39m            abi[33m:[39m [33mRegistryABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m128:59[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 2. SuperPaymaster (61 actions)[2m > [22mshould read version
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x54fd4d50
+ 
+Contract Call:
+  function:  version()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m140:23[22m[39m
+    [90m138| [39m
+    [90m139| [39m    [34mit[39m([32m'should read version'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m140| [39m      [35mconst[39m version [33m=[39m [35mawait[39m [34msuperPaymaster[39m(publicClient)[33m.[39m[34mversion[39m()[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m141| [39m      [34mexpect[39m(version)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m142| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ SuperPaymaster Version: [39m[36m${[39mversion[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x54fd4d50
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m140:23[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x54fd4d50' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x54fd4d50"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 2. SuperPaymaster (61 actions)[2m > [22mshould read owner
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x8da5cb5b
+ 
+Contract Call:
+  function:  owner()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m146:21[22m[39m
+    [90m144| [39m
+    [90m145| [39m    [34mit[39m([32m'should read owner'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m146| [39m      [35mconst[39m owner [33m=[39m [35mawait[39m [34msuperPaymaster[39m(publicClient)[33m.[39m[34mowner[39m()[33m;[39m
+    [90m   | [39m                    [31m^[39m
+    [90m147| [39m      [34mexpect[39m(owner)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m148| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ SuperPaymaster Owner: [39m[36m${[39mowner[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x8da5cb5b
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m146:21[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x8da5cb5b' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x8da5cb5b"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 2. SuperPaymaster (61 actions)[2m > [22mshould read entryPoint
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0xb0d691fe
+ 
+Contract Call:
+  function:  entryPoint()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: OpcodeNotFound
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m152:26[22m[39m
+    [90m150| [39m
+    [90m151| [39m    [34mit[39m([32m'should read entryPoint'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m152| [39m      const entryPoint = await superPaymaster(publicClient).entryPoint…
+    [90m   | [39m                         [31m^[39m
+    [90m153| [39m      [34mexpect[39m(entryPoint)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m154| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ EntryPoint: [39m[36m${[39mentryPoint[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0xb0d691fe
+
+Details: EVM error: OpcodeNotFound
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m152:26[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: OpcodeNotFound', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0xb0d691fe' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}
+
+Details: EVM error: OpcodeNotFound
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: OpcodeNotFound', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}
+
+Details: EVM error: OpcodeNotFound
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: OpcodeNotFound', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0xb0d691fe"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 2. SuperPaymaster (61 actions)[2m > [22mshould read constants
+[31m[1mContractFunctionExecutionError[22m: The contract function "APNTS_TOKEN" returned no data ("0x").
+
+This could be due to any of the following:
+  - The contract does not have the function "APNTS_TOKEN",
+  - The parameters passed to the contract function may be invalid, or
+  - The address is not a contract.
+ 
+Contract Call:
+  function:  APNTS_TOKEN()
+
+Docs: https://viem.sh/docs/contract/readContract
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m158:50[22m[39m
+    [90m156| [39m
+    [90m157| [39m    [34mit[39m([32m'should read constants'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m158| [39m      [35mconst[39m [registry[33m,[39m apnts[33m,[39m blsAgg[33m,[39m factory] [33m=[39m [35mawait[39m [33mPromise[39m[33m.[39m[34mall[39m([
+    [90m   | [39m                                                 [31m^[39m
+    [90m159| [39m        [34msuperPaymaster[39m(publicClient)[33m.[39m[33mREGISTRY[39m()[33m,[39m
+    [90m160| [39m        [34msuperPaymaster[39m(publicClient)[33m.[39m[33mAPNTS_TOKEN[39m()[33m,[39m
+
+[31m[1mCaused by: ContractFunctionZeroDataError[22m: The contract function "APNTS_TOKEN" returned no data ("0x").
+
+This could be due to any of the following:
+  - The contract does not have the function "APNTS_TOKEN",
+  - The parameters passed to the contract function may be invalid, or
+  - The address is not a contract.
+
+Version: viem@2.41.2[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m16:20[22m[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m32:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m158:50[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: undefined, docsPath: undefined, metaMessages: [ 'This could be due to any of the following:', '  - The contract does not have the function "APNTS_TOKEN",', '  - The parameters passed to the contract function may be invalid, or', '  - The address is not a contract.' ], shortMessage: 'The contract function "APNTS_TOKEN" returned no data ("0x").', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 2. SuperPaymaster (61 actions)[2m > [22mshould read protocol configuration
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x96daa322
+ 
+Contract Call:
+  function:  protocolFeeBPS()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m175:43[22m[39m
+    [90m173| [39m
+    [90m174| [39m    [34mit[39m([32m'should read protocol configuration'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m175| [39m      [35mconst[39m [feeBPS[33m,[39m revenue[33m,[39m treasury] [33m=[39m [35mawait[39m [33mPromise[39m[33m.[39m[34mall[39m([
+    [90m   | [39m                                          [31m^[39m
+    [90m176| [39m        [34msuperPaymaster[39m(publicClient)[33m.[39m[34mprotocolFeeBPS[39m()[33m,[39m
+    [90m177| [39m        [34msuperPaymaster[39m(publicClient)[33m.[39m[34mprotocolRevenue[39m()[33m,[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x96daa322
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m175:43[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x96daa322' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x96daa322"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 3. MySBT (58 actions)[2m > [22mshould read name and symbol
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x95d89b41
+ 
+Contract Call:
+  function:  symbol()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m195:30[22m[39m
+    [90m193| [39m
+    [90m194| [39m    [34mit[39m([32m'should read name and symbol'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m195| [39m      [35mconst[39m [name[33m,[39m symbol] [33m=[39m [35mawait[39m [33mPromise[39m[33m.[39m[34mall[39m([
+    [90m   | [39m                             [31m^[39m
+    [90m196| [39m        [34msbt[39m(publicClient)[33m.[39m[34mname[39m()[33m,[39m
+    [90m197| [39m        [34msbt[39m(publicClient)[33m.[39m[34msymbol[39m()[33m,[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x95d89b41
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m195:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x95d89b41' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x95d89b41"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 3. MySBT (58 actions)[2m > [22mshould read total supply
+[31m[1mAbiFunctionNotFoundError[22m: Function "totalSupply" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.totalSupply packages/core/src/actions/sbt.ts:[2m253:41[22m[39m
+    [90m251| [39m    [90m// ERC721 Enumerable[39m
+    [90m252| [39m    [35masync[39m [34mtotalSupply[39m() {
+    [90m253| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m254| [39m            address[33m,[39m
+    [90m255| [39m            abi[33m:[39m [33mMySBTABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m208:51[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 3. MySBT (58 actions)[2m > [22mshould read contract references
+[31m[1mAbiFunctionNotFoundError[22m: Function "SUPER_PAYMASTER" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.SUPER_PAYMASTER packages/core/src/actions/sbt.ts:[2m342:41[22m[39m
+    [90m340| [39m
+    [90m341| [39m    [35masync[39m [33mSUPER_PAYMASTER[39m() {
+    [90m342| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m343| [39m            address[33m,[39m
+    [90m344| [39m            abi[33m:[39m [33mMySBTABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m218:27[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 3. MySBT (58 actions)[2m > [22mshould check pause status
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x5c975abb
+ 
+Contract Call:
+  function:  paused()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m229:22[22m[39m
+    [90m227| [39m
+    [90m228| [39m    [34mit[39m([32m'should check pause status'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m229| [39m      [35mconst[39m paused [33m=[39m [35mawait[39m [34msbt[39m(publicClient)[33m.[39m[34mpaused[39m()[33m;[39m
+    [90m   | [39m                     [31m^[39m
+    [90m230| [39m      [34mexpect[39m([35mtypeof[39m paused)[33m.[39m[34mtoBe[39m([32m'boolean'[39m)[33m;[39m
+    [90m231| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ Paused: [39m[36m${[39mpaused[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x5c975abb
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m229:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x5c975abb' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x5c975abb"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 3. MySBT (58 actions)[2m > [22mshould read mint configuration
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x13966db5
+ 
+Contract Call:
+  function:  mintFee()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m235:34[22m[39m
+    [90m233| [39m
+    [90m234| [39m    [34mit[39m([32m'should read mint configuration'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m235| [39m      [35mconst[39m [mintFee[33m,[39m minLock] [33m=[39m [35mawait[39m [33mPromise[39m[33m.[39m[34mall[39m([
+    [90m   | [39m                                 [31m^[39m
+    [90m236| [39m        [34msbt[39m(publicClient)[33m.[39m[34mmintFee[39m()[33m,[39m
+    [90m237| [39m        [34msbt[39m(publicClient)[33m.[39m[34mminLockAmount[39m()[33m,[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x13966db5
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m235:34[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x13966db5' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x13966db5"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 4. GTokenStaking (29 actions)[2m > [22mshould read total staked
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x817b1cd2
+ 
+Contract Call:
+  function:  totalStaked()
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m252:27[22m[39m
+    [90m250| [39m
+    [90m251| [39m    [34mit[39m([32m'should read total staked'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m252| [39m      [35mconst[39m totalStaked [33m=[39m [35mawait[39m [34mstaking[39m(publicClient)[33m.[39m[34mtotalStaked[39m()[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m253| [39m      [34mexpect[39m(totalStaked)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m254| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ Total Staked: [39m[36m${[39mtotalStaked[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x817b1cd2
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m252:27[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x817b1cd2' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}
+
+Details: EVM error: StackOverflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackOverflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x817b1cd2"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 4. GTokenStaking (29 actions)[2m > [22mshould read reward rate
+[31m[1mTypeError[22m: staking(...).rewardRate is not a function[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m258:54[22m[39m
+    [90m256| [39m
+    [90m257| [39m    [34mit[39m([32m'should read reward rate'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m258| [39m      [35mconst[39m rewardRate [33m=[39m [35mawait[39m [34mstaking[39m(publicClient)[33m.[39m[34mrewardRate[39m()[33m;[39m
+    [90m   | [39m                                                     [31m^[39m
+    [90m259| [39m      [34mexpect[39m(rewardRate)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m260| [39m      console[33m.[39m[34mlog[39m([32m`  ✓ Reward Rate: [39m[36m${[39mrewardRate[36m}[39m[32m`[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 5. GToken (20 actions)[2m > [22mshould read name and symbol
+[31m[1mTypeError[22m: Cannot destructure property 'token' of 'undefined' as it is undefined.[39m
+[36m [2m❯[22m Object.name packages/core/src/actions/tokens.ts:[2m197:18[22m[39m
+    [90m195| [39m
+    [90m196| [39m    [90m// ERC20 Metadata[39m
+    [90m197| [39m    [35masync[39m [34mname[39m({ token }) {
+    [90m   | [39m                 [31m^[39m
+    [90m198| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m199| [39m            address[33m:[39m token[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m269:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 5. GToken (20 actions)[2m > [22mshould read user balance
+[31m[1mContractFunctionExecutionError[22m: The contract function "balanceOf" returned no data ("0x").
+
+This could be due to any of the following:
+  - The contract does not have the function "balanceOf",
+  - The parameters passed to the contract function may be invalid, or
+  - The address is not a contract.
+ 
+Contract Call:
+  function:  balanceOf(address account)
+  args:               (0xb5600060e6de5E11D3636731964218E53caadf0E)
+
+Docs: https://viem.sh/docs/contract/readContract
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m279:23[22m[39m
+    [90m277| [39m
+    [90m278| [39m    [34mit[39m([32m'should read user balance'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m279| [39m      [35mconst[39m balance [33m=[39m [35mawait[39m [34mgtoken[39m(publicClient)[33m.[39m[34mbalanceOf[39m({
+    [90m   | [39m                      [31m^[39m
+    [90m280| [39m        token[33m:[39m [33mGTOKEN_ADDRESS[39m[33m,[39m
+    [90m281| [39m        account[33m:[39m testAccount[33m.[39maddress[33m,[39m
+
+[31m[1mCaused by: ContractFunctionZeroDataError[22m: The contract function "balanceOf" returned no data ("0x").
+
+This could be due to any of the following:
+  - The contract does not have the function "balanceOf",
+  - The parameters passed to the contract function may be invalid, or
+  - The address is not a contract.
+
+Version: viem@2.41.2[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m16:20[22m[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m32:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m279:23[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: undefined, docsPath: undefined, metaMessages: [ 'This could be due to any of the following:', '  - The contract does not have the function "balanceOf",', '  - The parameters passed to the contract function may be invalid, or', '  - The address is not a contract.' ], shortMessage: 'The contract function "balanceOf" returned no data ("0x").', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 6. aPNTs (34 actions)[2m > [22mshould read token info
+[31m[1mTypeError[22m: Cannot destructure property 'token' of 'undefined' as it is undefined.[39m
+[36m [2m❯[22m Object.name packages/core/src/actions/tokens.ts:[2m197:18[22m[39m
+    [90m195| [39m
+    [90m196| [39m    [90m// ERC20 Metadata[39m
+    [90m197| [39m    [35masync[39m [34mname[39m({ token }) {
+    [90m   | [39m                 [31m^[39m
+    [90m198| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m199| [39m            address[33m:[39m token[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m309:29[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 7. xPNTsFactory (22 actions)[2m > [22mshould read factory info
+[31m[1mAbiFunctionNotFoundError[22m: Function "getImplementation" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.getImplementation packages/core/src/actions/factory.ts:[2m211:41[22m[39m
+    [90m209| [39m
+    [90m210| [39m    [35masync[39m [34mgetImplementation[39m() {
+    [90m211| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m212| [39m            address[33m,[39m
+    [90m213| [39m            abi[33m:[39m xPNTsFactoryABI[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m327:31[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 8. PaymasterFactory (16 actions)[2m > [22mshould read factory info
+[31m[1mAbiFunctionNotFoundError[22m: Function "REGISTRY" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.REGISTRY packages/core/src/actions/factory.ts:[2m383:41[22m[39m
+    [90m381| [39m
+    [90m382| [39m    [35masync[39m [33mREGISTRY[39m() {
+    [90m383| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m384| [39m            address[33m,[39m
+    [90m385| [39m            abi[33m:[39m [33mPaymasterFactoryABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m344:31[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 9. ReputationSystem (20 actions)[2m > [22mshould read configuration
+[31m[1mAbiFunctionNotFoundError[22m: Function "getEntropyFactor" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.getEntropyFactor packages/core/src/actions/reputation.ts:[2m216:41[22m[39m
+    [90m214| [39m
+    [90m215| [39m    [35masync[39m [34mgetEntropyFactor[39m() {
+    [90m216| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m217| [39m            address[33m,[39m
+    [90m218| [39m            abi[33m:[39m [33mReputationSystemABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m364:34[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 10. DVTValidator (20 actions)[2m > [22mshould read configuration
+[31m[1mAbiFunctionNotFoundError[22m: Function "threshold" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.threshold packages/core/src/actions/validators.ts:[2m207:41[22m[39m
+    [90m205| [39m
+    [90m206| [39m    [35masync[39m [34mthreshold[39m() {
+    [90m207| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m208| [39m            address[33m,[39m
+    [90m209| [39m            abi[33m:[39m [33mDVTValidatorABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m380:27[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 11. BLSAggregator (18 actions)[2m > [22mshould read configuration
+[31m[1mAbiFunctionNotFoundError[22m: Function "threshold" not found on ABI.
+Make sure you are using the correct ABI and that the function exists on it.
+
+Docs: https://viem.sh/docs/contract/encodeFunctionData
+Version: viem@2.41.2[39m
+[90m [2m❯[22m prepareEncodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js:[2m16:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m10:16[22m[39m
+[90m [2m❯[22m encodeFunctionData node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/abi/encodeFunctionData.js:[2m11:7[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m39:22[22m[39m
+[90m [2m❯[22m Object.readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/decorators/public.js:[2m97:33[22m[39m
+[36m [2m❯[22m Object.threshold packages/core/src/actions/validators.ts:[2m374:41[22m[39m
+    [90m372| [39m
+    [90m373| [39m    [35masync[39m [34mthreshold[39m() {
+    [90m374| [39m        [35mreturn[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                                        [31m^[39m
+    [90m375| [39m            address[33m,[39m
+    [90m376| [39m            abi[33m:[39m [33mBLSAggregatorABI[39m[33m,[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m399:27[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 12. EntryPoint (5 actions)[2m > [22mshould read deposit info
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e
+ 
+Contract Call:
+  function:  getDepositInfo(address account)
+  args:                    (0xb5600060e6de5E11D3636731964218E53caadf0E)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m Object.getDepositInfo packages/core/src/actions/entryPoint.ts:[2m62:24[22m[39m
+    [90m 60| [39m
+    [90m 61| [39m    [35masync[39m [34mgetDepositInfo[39m({ account }) {
+    [90m 62| [39m        [35mconst[39m result [33m=[39m [35mawait[39m (client [35mas[39m [33mPublicClient[39m)[33m.[39m[34mreadContract[39m({
+    [90m   | [39m                       [31m^[39m
+    [90m 63| [39m            address[33m,[39m
+    [90m 64| [39m            abi[33m:[39m [{
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m414:27[22m[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m Object.getDepositInfo packages/core/src/actions/entryPoint.ts:[2m62:24[22m[39m
+[90m [2m❯[22m tests/l1-regression.test.ts:[2m414:27[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x5287ce12000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/27]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/l1-regression.test.ts[2m > [22mL1 Core Actions - Full Regression Test[2m > [22m✅ 12. EntryPoint (5 actions)[2m > [22mshould get nonce
+[31m[1mContractFunctionExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  function:  getNonce(address sender, uint192 key)
+  args:              (0xb5600060e6de5E11D3636731964218E53caadf0E, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getContractError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getContractError.js:[2m33:12[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m58:15[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m423:21[22m[39m
+    [90m421| [39m
+    [90m422| [39m    [34mit[39m([32m'should get nonce'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m423| [39m      [35mconst[39m nonce [33m=[39m [35mawait[39m [34mentryPoint[39m(publicClient)[33m.[39m[34mgetNonce[39m({
+    [90m   | [39m                    [31m^[39m
+    [90m424| [39m        sender[33m:[39m testAccount[33m.[39maddress[33m,[39m
+    [90m425| [39m        key[33m:[39m [34m0n[39m[33m,[39m
+
+[31m[1mCaused by: CallExecutionError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}
+ 
+Raw Call Arguments:
+  data:  0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m getCallError node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/errors/getCallError.js:[2m11:12[22m[39m
+[90m [2m❯[22m call node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/call.js:[2m149:15[22m[39m
+[90m [2m❯[22m readContract node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/actions/public/readContract.js:[2m45:26[22m[39m
+[36m [2m❯[22m tests/l1-regression.test.ts:[2m423:21[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}', ' ', 'Raw Call Arguments:', '  data:  0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', walk: 'Function<walk>' }[39m
+[31m[1mCaused by: TransactionRejectedRpcError[22m: Transaction creation failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m59:31[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}' ], shortMessage: 'Transaction creation failed.', version: '2.41.2', code: -32003, walk: 'Function<walk>' }[39m
+[31m[1mCaused by: RpcRequestError[22m: RPC Request failed.
+
+URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}
+
+Details: EVM error: StackUnderflow
+Version: viem@2.41.2[39m
+[90m [2m❯[22m request node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/clients/transports/http.js:[2m55:27[22m[39m
+[90m [2m❯[22m withRetry.delay.count.count node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/buildRequest.js:[2m28:24[22m[39m
+[90m [2m❯[22m attemptRetry node_modules/.pnpm/viem@2.41.2_typescript@5.7.2/node_modules/viem/_esm/utils/promise/withRetry.js:[2m12:30[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ details: 'EVM error: StackUnderflow', docsPath: undefined, metaMessages: [ 'URL: https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', 'Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000b5600060e6de5e11d3636731964218e53caadf0e0000000000000000000000000000000000000000000000000000000000000000"},"latest"]}' ], shortMessage: 'RPC Request failed.', version: '2.41.2', code: -32003, data: undefined, url: 'https://eth-sepolia.g.alchemy.com/v2/Bx4QRW1-vnwJUePSAAD7N', walk: 'Function<walk>' }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/27]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m29 passed[39m[22m[90m (30)[39m
+[2m      Tests [22m [1m[31m27 failed[39m[22m[2m | [22m[1m[32m297 passed[39m[22m[90m (324)[39m
+[2m   Start at [22m 22:46:52
+[2m   Duration [22m 11.95s[2m (transform 2.15s, setup 0ms, import 41.76s, tests 4.91s, environment 12ms)[22m
+

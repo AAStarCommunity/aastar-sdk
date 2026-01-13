@@ -84,7 +84,7 @@ export type SBTActions = {
     
     // Ownership
     owner: () => Promise<Address>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferSBTOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
 };
 
@@ -357,7 +357,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ newOwner, account }) {
+    async transferSBTOwnership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,

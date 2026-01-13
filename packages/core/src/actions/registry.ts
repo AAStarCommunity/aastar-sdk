@@ -47,7 +47,7 @@ export type RegistryActions = {
     reputationSource: () => Promise<Address>;
     
     // Admin
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferRegistryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     owner: () => Promise<Address>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
@@ -413,7 +413,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     // Admin
-    async transferOwnership({ newOwner, account }) {
+    async transferRegistryOwnership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: RegistryABI,

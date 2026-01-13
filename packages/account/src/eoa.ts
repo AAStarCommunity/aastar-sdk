@@ -18,13 +18,15 @@ export const createEOAWalletClient = (
         transport
     });
 
+    const baseSendTransaction = client.sendTransaction.bind(client);
+
     return Object.assign(client, {
         async sendTransaction(args: { to: Address, value?: bigint, data?: Hex }) {
-            return client.sendTransaction({
+            return baseSendTransaction({
                 ...args,
                 account,
                 chain
-            });
+            } as any);
         },
         getAddress: () => account.address
     }) as EOAWalletClient;

@@ -26,7 +26,7 @@ import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
 import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
 
-export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & {
+export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & TokenActions & {
     /**
      * High-level API: Setup operator with automatic funding and onboarding
      */
@@ -106,6 +106,7 @@ export function createOperatorClient({
         ...spActions,
         ...pmV4Actions,
         ...regActions,
+        ...tkActions,
 
         async setup(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             console.log('⚙️ Setting up operator...');

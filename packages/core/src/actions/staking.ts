@@ -38,7 +38,7 @@ export type StakingActions = {
     owner: () => Promise<Address>;
     
     // Ownership
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferStakingOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
@@ -298,7 +298,7 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     // Ownership
-    async transferOwnership({ newOwner, account }) {
+    async transferStakingOwnership({ newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: GTokenStakingABI,

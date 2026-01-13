@@ -1,0 +1,134 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.17 [39m[90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | packages/sdk/src/clients/admin.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | packages/sdk/src/clients/operator.test.ts
+[22m[39m[SDK] Loaded contract config from: config.anvil.json
+
+[90mstdout[2m | packages/sdk/src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould measure transaction automatically
+[22m[39m[Experiment: SuperPaymaster] Executing: test-task...
+
+[90mstdout[2m | packages/sdk/src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould measure transaction automatically
+[22m[39m   ✅ Success! Gas: 50000 | Cost: 0.0001 ETH
+
+[90mstdout[2m | packages/sdk/src/clients/ExperimentClient.test.ts[2m > [22m[2mExperimentClient[2m > [22m[2mshould handle failed measureTx
+[22m[39m[Experiment: EOA] Executing: test-task...
+
+ [32m✓[39m packages/sdk/src/clients/ExperimentClient.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 103[2mms[22m[39m
+[90mstdout[2m | packages/sdk/src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Fetching role config for entry burn...
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m🚀 Launching Community "Test"...
+   Registry: Registering Role...
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   ✅ Registered: 0xhash
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   🏭 Deploying Token via Factory: 0x2a810409872AfC346F9B5b26571Fd6eC42EA4849
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   📤 Deploy Token Tx: 0xhash
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   🪙 Token Deployed: 0x0000000000000000000000000000000000000000
+⚖️ Setting up Governance Rules...
+
+[90mstdout[2m | packages/sdk/src/clients/community.test.ts[2m > [22m[2mCommunityClient[2m > [22m[2mlaunch[2m > [22m[2mshould launch community with token and governance
+[22m[39m   ✅ Reputation Rule Set: 0xhash
+
+[90mstdout[2m | packages/sdk/src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2monboardFully[2m > [22m[2mshould complete onboarding flow
+[22m[39m   SDK: Approving GToken (Stake: 100, Burn: 0)...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Executing gasless via AA 0x1111111111111111111111111111111111111111 Sponsored by 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mEndUserClient[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Submitting UserOp 0xhash...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m🚀 Launching Community "Test"...
+   Registry: Registering Role...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m   ✅ Registered: 0xhash
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mCommunityClient[2m > [22m[2mshould launch community
+[22m[39m   ℹ️  Found existing token at 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m⚙️ Setting up operator...
+   SDK: Fetching role config for entry burn...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   SDK: Approving GToken (Stake: 100, Burn: 0)...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   SDK: Auto-generating roleData for roleId 0x1...
+   SDK: Checking if role already granted...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m   ℹ️  Role already granted, skipping registration
+   SDK: Depositing aPNTs via depositForOperator...
+
+[90mstdout[2m | packages/sdk/src/clients/clients.test.ts[2m > [22m[2mSDK L2 Clients[2m > [22m[2mOperatorClient[2m > [22m[2mshould setup operator
+[22m[39m✅ Operator setup complete! Transactions: 2
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mjoinAndActivate[2m > [22m[2mshould join community and fetch SBT
+[22m[39m   SDK: Joining community 0x1111111111111111111111111111111111111111...
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mjoinAndActivate[2m > [22m[2mshould join community and fetch SBT
+[22m[39m   SDK: User joined. SBT ID: 0x0000000000000000000000000000000000000000
+
+[90mstdout[2m | packages/sdk/src/clients/operator.test.ts[2m > [22m[2mOperatorClient[2m > [22m[2mMaintenance Operations[2m > [22m[2mshould deploy paymaster v4
+[22m[39m   SDK: Deploying Paymaster V4 (v4.1)...
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mexecuteGasless[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Executing gasless via AA 0xaa Sponsored by 0x1111111111111111111111111111111111111111
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mexecuteGasless[2m > [22m[2mshould execute gasless transaction
+[22m[39m   SDK: Submitting UserOp 0...
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account[2m > [22m[2mshould deploy smart account
+[22m[39m   🏭 Deploying Smart Account for 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266...
+
+[90mstdout[2m | packages/sdk/src/clients/endUser.test.ts[2m > [22m[2mEndUserClient[2m > [22m[2mSmart Account[2m > [22m[2mshould deploy smart account
+[22m[39m   ✅ Deployed at 0xaa
+
+ [31m❯[39m packages/sdk/src/clients/community.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 48[2mms[22m[39m
+     [32m✓[39m should create community client[32m 10[2mms[22m[39m
+[31m       [31m×[31m should launch community with token and governance[39m[32m 23[2mms[22m[39m
+       [32m✓[39m should return info for registered community[32m 11[2mms[22m[39m
+       [32m✓[39m should return nulls for non-registered community[32m 1[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/clients.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m packages/sdk/src/clients/admin.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [31m❯[39m packages/sdk/src/clients/endUser.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 44[2mms[22m[39m
+     [32m✓[39m should create end user client[32m 12[2mms[22m[39m
+[31m       [31m×[31m should join community and fetch SBT[39m[32m 21[2mms[22m[39m
+       [32m✓[39m should execute gasless transaction[32m 5[2mms[22m[39m
+       [32m✓[39m should deploy smart account[32m 3[2mms[22m[39m
+ [31m❯[39m packages/sdk/src/clients/operator.test.ts [2m([22m[2m5 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 1249[2mms[22m[39m
+     [32m✓[39m should create operator client[32m 15[2mms[22m[39m
+[31m       [31m×[31m should complete onboarding flow[39m[32m 30[2mms[22m[39m
+       [32m✓[39m should deploy paymaster v4[32m 1[2mms[22m[39m
+       [32m✓[39m should configure operator[32m 0[2mms[22m[39m
+[31m       [31m×[31m should check operator readiness[39m[33m 1199[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m24 passed[39m[22m[90m (28)[39m
+[2m   Start at [22m 23:05:16
+[2m   Duration [22m 6.00s[2m (transform 2.09s, setup 0ms, import 18.54s, tests 1.53s, environment 2ms)[22m
+

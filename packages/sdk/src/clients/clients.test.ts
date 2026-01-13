@@ -3,7 +3,7 @@ import { createEndUserClient } from './endUser.js';
 import { createCommunityClient } from './community.js';
 import { createOperatorClient } from './operator.js';
 import { createAdminClient } from './admin.js';
-import { type Chain, type Transport, type Account, type Address, parseEther } from 'viem';
+import { type Chain, type Transport, type Account, type Address, parseEther, http } from 'viem';
 import { mainnet } from 'viem/chains';
 
 describe('SDK L2 Clients', () => {
@@ -14,72 +14,91 @@ describe('SDK L2 Clients', () => {
     const MOCK_ADDR: Address = '0x1111111111111111111111111111111111111111';
 
     beforeEach(() => {
-        mockTransport = vi.fn() as any;
+        mockTransport = http('http://localhost:8545');
         mockChain = mainnet;
-        mockAccount = { address: MOCK_ADDR, type: 'json-rpc' } as Account;
+        mockAccount = { 
+            address: MOCK_ADDR, 
+            type: 'json-rpc',
+            signMessage: vi.fn().mockResolvedValue('0xsignature')
+        } as any;
     });
 
     describe('EndUserClient', () => {
-        it('should create EndUserClient with extended actions', () => {
-            const client = createEndUserClient({
-                chain: mockChain,
-                transport: mockTransport,
-                account: mockAccount
-            });
-            expect(client.onboard).toBeDefined();
-            expect(client.joinAndActivate).toBeDefined();
-            expect(client.executeGasless).toBeDefined();
-            // Core actions extension check
-            expect(client.registerRoleSelf).toBeDefined();
+        let client: any;
+        beforeEach(() => {
+            client = createEndUserClient({ chain: mockChain, transport: mockTransport, account: mockAccount });
+            client.readContract = vi.fn();
+            client.writeContract = vi.fn().mockResolvedValue('0xhash');
+            client.waitForTransactionReceipt = vi.fn().mockResolvedValue({ logs: [] });
+            client.getBytecode = vi.fn().mockResolvedValue('0x123');
         });
 
-        it('should perform high-level onboarding (mocked)', async () => {
-             const client = createEndUserClient({
-                chain: mockChain,
-                transport: mockTransport,
-                account: mockAccount
-            });
-            // Mock internal call
-            (client as any).joinAndActivate = vi.fn().mockResolvedValue({ hash: '0xhash', events: [], sbtId: 1n });
-            const result = await client.onboard({ community: MOCK_ADDR, roleId: '0x1', roleData: '0x' });
-            expect(result.sbtId).toBe(1n);
-            expect(client.joinAndActivate).toHaveBeenCalled();
+        it('should create EndUserClient', () => {
+            expect(client.onboard).toBeDefined();
+        });
+
+        it('should create smart account', async () => {
+             client.readContract.mockResolvedValue(MOCK_ADDR);
+             const result = await client.createSmartAccount({ owner: MOCK_ADDR });
+             expect(result.accountAddress).toBe(MOCK_ADDR);
+             expect(result.initCode).toBeDefined();
+        });
+
+        it('should execute gasless transaction', async () => {
+             client.readContract.mockResolvedValue(0n); // nonce
+             client.readContract.mockResolvedValueOnce(0n).mockResolvedValueOnce('0xhash'); // nonce, userOpHash
+             client.createSmartAccount = vi.fn().mockResolvedValue({ accountAddress: MOCK_ADDR, initCode: '0x' });
+             
+             const result = await client.executeGasless({
+                 target: MOCK_ADDR,
+                 data: '0x',
+                 operator: MOCK_ADDR
+             });
+             expect(result.hash).toBe('0xhash');
         });
     });
 
     describe('CommunityClient', () => {
-        it('should create CommunityClient with business logic', () => {
-            const client = createCommunityClient({
-                chain: mockChain,
-                transport: mockTransport,
-                account: mockAccount
+        it('should launch community', async () => {
+            const client = createCommunityClient({ chain: mockChain, transport: mockTransport, account: mockAccount });
+            client.writeContract = vi.fn().mockResolvedValue('0xhash');
+            client.simulateContract = vi.fn().mockResolvedValue({ request: {} });
+            client.waitForTransactionReceipt = vi.fn().mockResolvedValue({ logs: [] });
+            client.readContract = vi.fn().mockResolvedValue(MOCK_ADDR);
+
+            const result = await client.launch({
+                name: 'Test',
+                tokenName: 'TT',
+                tokenSymbol: 'TT'
             });
-            expect(client.launchCommunity).toBeDefined();
-            expect(client.setupCommunityReputation).toBeDefined();
+            expect(result.tokenAddress).toBe(MOCK_ADDR);
+            expect(result.results.length).toBeGreaterThan(0);
         });
     });
 
     describe('OperatorClient', () => {
-        it('should create OperatorClient with staking logic', () => {
-            const client = createOperatorClient({
-                chain: mockChain,
-                transport: mockTransport,
-                account: mockAccount
+        it('should setup operator', async () => {
+            const client = createOperatorClient({ chain: mockChain, transport: mockTransport, account: mockAccount });
+            client.readContract = vi.fn().mockResolvedValue(['', 0n]); // roleConfig
+            client.writeContract = vi.fn().mockResolvedValue('0xhash');
+            client.waitForTransactionReceipt = vi.fn().mockResolvedValue({ logs: [] });
+            client.hasRole = vi.fn().mockResolvedValue(false);
+
+            const result = await client.setup({
+                stakeAmount: 100n,
+                depositAmount: 100n,
+                roleId: '0x1'
             });
-            expect(client.registerAsOperator).toBeDefined();
-            expect(client.stakeAndActivate).toBeDefined();
+            expect(result.txs.length).toBeGreaterThan(0);
         });
     });
 
     describe('AdminClient', () => {
-        it('should create AdminClient with global management', () => {
-            const client = createAdminClient({
-                chain: mockChain,
-                transport: mockTransport,
-                account: mockAccount
-            });
-            expect(client.setGlobalProtocolFee).toBeDefined();
-            expect(client.authorizeSlasher).toBeDefined();
+        it('should have namespaces', () => {
+            const client = createAdminClient({ chain: mockChain, transport: mockTransport, account: mockAccount });
+            expect(client.system).toBeDefined();
+            expect(client.finance).toBeDefined();
+            expect(client.operators).toBeDefined();
         });
     });
 });

@@ -24,7 +24,31 @@ describe('RoleDataFactory', () => {
         expect(decoded.stakeAmount).toBe(params.stakeAmount);
     });
 
+    it('should encode and decode community data with different params', () => {
+        const params = {
+            name: 'VibeCommunity',
+            ensName: 'vibe.eth',
+            website: 'https://vibe.io',
+            description: 'Good vibes only',
+            logoURI: 'ipfs://logo',
+            stakeAmount: 100n
+        };
+        const encoded = RoleDataFactory.community(params);
+        const decoded = RoleDataFactory.decodeCommunity(encoded);
+        
+        expect(decoded.name).toBe(params.name);
+        expect(decoded.ensName).toBe(params.ensName);
+        expect(decoded.stakeAmount).toBe(params.stakeAmount);
+    });
+
     it('should encode community with default values', () => {
+        const encoded = RoleDataFactory.community();
+        const decoded = RoleDataFactory.decodeCommunity(encoded);
+        expect(decoded.name).toBe('TestCommunity');
+        expect(decoded.stakeAmount).toBe(0n);
+    });
+
+    it('should use default values for community', () => {
         const encoded = RoleDataFactory.community();
         const decoded = RoleDataFactory.decodeCommunity(encoded);
         expect(decoded.name).toBe('TestCommunity');

@@ -1,27 +1,72 @@
-import { describe, it, expect } from 'vitest';
-import { AAStarError, AAStarErrorCode } from '../errors/AAStarError.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createCommunityClient } from './community.js';
+import { mainnet } from 'viem/chains';
+import { http, type Address } from 'viem';
+
+vi.mock('@aastar/core', async () => {
+    const actual = await vi.importActual('@aastar/core');
+    return {
+        ...actual,
+        registryActions: vi.fn(() => vi.fn(() => ({
+            registerRoleSelf: vi.fn().mockResolvedValue('0xhash'),
+            hasRole: vi.fn(),
+            roleMetadata: vi.fn()
+        }))),
+        sbtActions: vi.fn(() => vi.fn(() => ({
+            getUserSBT: vi.fn().mockResolvedValue(123n)
+        }))),
+        reputationActions: vi.fn(() => vi.fn(() => ({
+            setReputationRule: vi.fn().mockResolvedValue('0xhash')
+        }))),
+    };
+});
 
 describe('CommunityClient', () => {
-    describe('Error Handling', () => {
-        it('should throw AAStarError for validation failures', () => {
-            const error = new AAStarError('Missing required parameter: name', AAStarErrorCode.VALIDATION_ERROR);
-            expect(error).toBeInstanceOf(AAStarError);
-            expect(error.code).toBe(AAStarErrorCode.VALIDATION_ERROR);
-        });
+    const MOCK_ADDR = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address;
 
-        it('should throw AAStarError for contract errors', () => {
-            const error = new AAStarError('Contract execution failed', AAStarErrorCode.CONTRACT_ERROR);
-            expect(error.code).toBe(AAStarErrorCode.CONTRACT_ERROR);
+    it('should create community client', () => {
+        const client = createCommunityClient({ chain: mainnet, transport: http() });
+        expect(client.launch).toBeDefined();
+    });
+
+    describe('launch', () => {
+        it('should launch community with token and governance', async () => {
+            const client = createCommunityClient({ 
+                chain: mainnet, 
+                transport: http(), 
+                account: { address: MOCK_ADDR } as any 
+            });
+            
+            // Mock base client methods
+            (client as any).readContract = vi.fn().mockResolvedValue('0x0000000000000000000000000000000000000000');
+            (client as any).simulateContract = vi.fn().mockResolvedValue({ request: {} });
+            (client as any).writeContract = vi.fn().mockResolvedValue('0xhash');
+            (client as any).waitForTransactionReceipt = vi.fn().mockResolvedValue({ logs: [] });
+
+            const result = await client.launch({
+                name: 'Test',
+                tokenName: 'T',
+                tokenSymbol: 'T',
+                governance: { initialReputationRule: true }
+            });
+
+            expect(result.results).toHaveLength(3); 
+            expect(client.writeContract).toHaveBeenCalled();
         });
     });
 
-    describe('Validation Requirements', () => {
-        it('should require name for launch', () => {
-            // This test documents the requirement
-            const requiredParams = ['name', 'tokenName', 'tokenSymbol'];
-            expect(requiredParams).toContain('name');
-            expect(requiredParams).toContain('tokenName');
-            expect(requiredParams).toContain('tokenSymbol');
+    describe('getCommunityInfo', () => {
+        it('should return info for registered community', async () => {
+            const client = createCommunityClient({ chain: mainnet, transport: http() });
+            
+            (client as any).readContract = vi.fn()
+                .mockResolvedValueOnce(true) // hasRole
+                .mockResolvedValueOnce('0xtoken') // getTokenAddress
+                .mockResolvedValueOnce('0x'); // roleMetadata
+
+            const info = await client.getCommunityInfo(MOCK_ADDR);
+            expect(info.hasRole).toBe(true);
+            expect(info.tokenAddress).toBe('0xtoken');
         });
     });
 });
