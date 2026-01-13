@@ -69,6 +69,8 @@ export class PaymasterClient {
         options?: {
             validityWindow?: number;
             operator?: Address; // For SuperPaymaster
+            factory?: Address;
+            factoryData?: Hex;
         }
     ) {
         // 1. Construct a dummy UserOp for estimation
@@ -103,7 +105,9 @@ export class PaymasterClient {
         const partialUserOp = {
             sender: aaAddress,
             nonce: 0n,
-            initCode: '0x' as `0x${string}`,
+            initCode: (options?.factory && options?.factoryData) 
+                ? concat([options.factory, options.factoryData]) 
+                : '0x' as Hex,
             callData,
             accountGasLimits: concat([pad(toHex(60000n), { size: 16 }), pad(toHex(100000n), { size: 16 })]), // 60k verification, 100k call
             preVerificationGas: 50000n, // 50k PVG
@@ -178,6 +182,8 @@ export class PaymasterClient {
             operator?: Address; // For SuperPaymaster
             paymasterVerificationGasLimit?: bigint;
             paymasterPostOpGasLimit?: bigint;
+            factory?: Address;
+            factoryData?: Hex;
         }
     ): Promise<`0x${string}`> {
         // 0. Auto-Estimate if requested or if limits missing
@@ -194,7 +200,9 @@ export class PaymasterClient {
                 client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, 
                 { 
                     validityWindow: options?.validityWindow,
-                    operator: options?.operator 
+                    operator: options?.operator,
+                    factory: options?.factory,
+                    factoryData: options?.factoryData
                 }
             );
             gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
@@ -260,7 +268,9 @@ export class PaymasterClient {
         const userOp = {
             sender: aaAddress,
             nonce: BigInt(nonce),
-            initCode: '0x' as `0x${string}`,
+            initCode: (options?.factory && options?.factoryData) 
+                ? concat([options.factory, options.factoryData]) 
+                : '0x' as Hex,
             callData,
             accountGasLimits: concat([
                 pad(toHex(gasLimits.verificationGasLimit ?? 150000n), { size: 16 }), // Verification (Tuned or Default)

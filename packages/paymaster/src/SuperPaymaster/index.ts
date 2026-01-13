@@ -92,7 +92,7 @@ export async function checkEligibility(
 /**
  * Admin Client for SuperPaymaster V3
  */
-export class SuperPaymasterClient {
+export class SuperPaymasterAdminClient {
     private client: any;
     private paymasterAddress: Address;
 

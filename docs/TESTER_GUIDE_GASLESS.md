@@ -283,6 +283,33 @@ If your User keys are in a KMS (AWS, Google, Fireblocks):
 
 ---
 
+---
+
+## Automated Faucet & Verification Script (New)
+
+We have implemented a **SepoliaFaucetAPI** that automates the tedious setup process for new test accounts (Funding ETH, Registering EndUser, Minting Tokens, Depositing to Paymaster).
+
+### Verification Script
+Run the following script to create a fresh AA account, fund it, and execute a gasless transaction immediately:
+
+```bash
+npx tsx scripts/test-faucet-and-gasless.ts
+```
+
+**What it does:**
+1.  **Identity**: Generates a random private key (Brand new user).
+2.  **Faucet**: Uses `SepoliaFaucetAPI.prepareTestAccount` to:
+    -   Fund 0.02 ETH (if needed).
+    -   Register `ENDUSER` role (attempts via Admin key; logs warning if no permission).
+    -   Mint `cPNTs` tokens (for SuperPaymaster).
+    -   Deposit tokens to Paymaster V4 (if needed).
+3.  **Action**: Calculates the AA address (undeployed).
+4.  **Submission**: Uses `SuperPaymasterClient` (with factory support) to deploy and execute a gasless transaction in one step.
+
+> **Note**: Requires `PRIVATE_KEY` (Deployer) or `PRIVATE_KEY_ANNI` in `.env.sepolia` to have Admin/Minter privileges. If specific permissions fail (like GrantRole), the script attempts to proceed.
+
+---
+
 ## Appendix: Real Transaction Analysis
 
 Below is an analysis of a fulfilled Gasless Transaction (executed via `l4-test-jason1-gasless.ts` on Sepolia).

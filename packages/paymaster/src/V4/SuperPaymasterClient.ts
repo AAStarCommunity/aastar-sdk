@@ -8,6 +8,8 @@ export type GaslessTransactionConfig = {
     amount: bigint;
     operator: Address;
     paymasterAddress: Address;
+    factory?: Address;
+    factoryData?: Hex;
 };
 
 /**
@@ -55,7 +57,11 @@ export class SuperPaymasterClient {
             config.token,
             bundlerUrl,
             callData,
-            { operator: config.operator }
+            { 
+                operator: config.operator,
+                factory: config.factory,
+                factoryData: config.factoryData
+            }
         );
 
         console.log('[SuperPaymasterClient] ☁️  Bundler Estimates:', est);
@@ -101,7 +107,9 @@ export class SuperPaymasterClient {
                 callGasLimit: est.callGasLimit, 
                 preVerificationGas: est.preVerificationGas,
                 paymasterPostOpGasLimit: tunedPostOp,       // Pass specific PM limits if supported
-                autoEstimate: false // We did it ourselves
+                autoEstimate: false, // We did it ourselves
+                factory: config.factory,
+                factoryData: config.factoryData
             }
         );
     }
