@@ -26,6 +26,16 @@ export function decodeContractError(error: any): string | null {
         if (!data) {
             data = error.data || (error.error && error.error.data) || (error.cause && error.cause.data);
         }
+
+        // Handle nested data objects (common in some RPCs or viem errors)
+        if (data && typeof data === 'object') {
+            if ('data' in data && typeof (data as any).data === 'string') {
+                data = (data as any).data;
+            } else if ('object' in data && typeof (data as any).object === 'string') {
+                 // specific edge case
+                 data = (data as any).object as Hex;
+            }
+        }
     }
 
     if (!data) {
@@ -51,7 +61,9 @@ export function decodeContractError(error: any): string | null {
         }
     }
 
-    return `Unknown Error (data: ${data.slice(0, 10)}...)`;
+    return typeof data === 'string' 
+        ? `Unknown Error (data: ${data.slice(0, 10)}...)`
+        : `Unknown Error (non-string data: ${JSON.stringify(data, (_, v) => typeof v === 'bigint' ? v.toString() : v)})`;
 }
 
 function formatDecodedError(contractName: string, decoded: any): string {

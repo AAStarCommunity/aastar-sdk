@@ -724,7 +724,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         return (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
-            functionName: 'accountsCommunity',
+            functionName: 'accountToCommunity', // Correcting to likely name or will confirm via grep
             args: [userAccount]
         }) as Promise<Address>;
     },

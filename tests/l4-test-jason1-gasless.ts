@@ -2,7 +2,7 @@ import { createPublicClient, createWalletClient, http, parseEther, formatEther, 
 import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
+// import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -13,6 +13,9 @@ dotenv.config({ path: '.env.sepolia' });
 async function main() {
     const config = await loadNetworkConfig('sepolia');
     const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
+    
+    const { PaymasterClient, PaymasterOperator } = await import('../packages/paymaster/src/V4/index.js');
+
     
     // 1. Roles & Accounts
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
@@ -31,7 +34,7 @@ async function main() {
     // CRITICAL: Anni doesn't have PaymasterV4, only SuperPaymaster. 
     // So we cannot test "Anni sponsoring Jason" with PaymasterV4.
     // Instead, use Jason's own PaymasterV4 for this test.
-    const jasonPM = state.operators.jason.paymasterV4 as Address;
+    const jasonPM = state.operators["Jason (AAStar)"].pmV4 as Address;
     
     // Resolve Addresses from Config and State
     const dPNTs = config.contracts.aPNTs as Address;

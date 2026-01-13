@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData, concat, type Hex, decodeErrorResult } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.ts';
+// import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.ts';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -12,6 +12,10 @@ dotenv.config({ path: '.env.sepolia' });
 async function main() {
     const config = await loadNetworkConfig('sepolia');
     const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
+    
+    // Dynamic import to avoid config mismatch
+    const { PaymasterClient, PaymasterOperator } = await import('../packages/paymaster/src/V4/index.js');
+
     
     // 1. Roles & Accounts
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
@@ -25,7 +29,7 @@ async function main() {
     const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     const jasonAA2 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA2')?.address as Address;
-    const jasonPM = state.operators.jason.paymasterV4 as Address;
+    const jasonPM = state.operators["Jason (AAStar)"].pmV4 as Address;
     
     const dPNTs = config.contracts.aPNTs as Address;
     const entryPoint = config.contracts.entryPoint as Address;

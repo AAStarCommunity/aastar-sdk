@@ -30,7 +30,7 @@ export function decodeContractEvents(logs: any[]): DecodedEvent[] {
                 const decoded = decodeEventLog({
                     abi: abi as Abi,
                     data: log.data as Hex,
-                    topics: log.topics
+                    topics: log.topics as any
                 });
 
                 if (decoded && decoded.eventName) {
@@ -41,8 +41,11 @@ export function decodeContractEvents(logs: any[]): DecodedEvent[] {
                     });
                     break; // Found the right ABI for this log
                 }
-            } catch (e) {
-                // Mismatch, continue
+            } catch (e: any) {
+               // Ignore mismatch errors, but log weird ones
+               if (e.message && Object.values(e.message).some((m: any) => m?.includes?.('slice'))) {
+                   console.warn(`   ⚠️ decodeEventLog failed (slice error) for ${name}:`, e.message);
+               }
             }
         }
     }
