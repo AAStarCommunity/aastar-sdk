@@ -12,17 +12,18 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
-import { 
-    createAdminClient, 
-    createEndUserClient, 
-    createOperatorClient,
-    createCommunityClient,
-    RoleIds,
-    CORE_ADDRESSES,
-    TEST_TOKEN_ADDRESSES,
-    parseKey,
-    RoleDataFactory
-} from '../packages/sdk/src/index.ts';
+// Dynamic import later
+// import { 
+//     createAdminClient, 
+//     createEndUserClient, 
+//     createOperatorClient,
+//     createCommunityClient,
+//     RoleIds,
+//     CORE_ADDRESSES,
+//     TEST_TOKEN_ADDRESSES,
+//     parseKey,
+//     RoleDataFactory
+// } from '../packages/sdk/src/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -108,6 +109,19 @@ Examples:
     const ANVIL_ADMIN = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     const supplierKey = process.env.PRIVATE_KEY_SUPPLIER || process.env.ADMIN_KEY || (networkArg === 'anvil' ? ANVIL_ADMIN : undefined);
     if (!supplierKey) throw new Error('PRIVATE_KEY_SUPPLIER required');
+    // Dynamically import SDK after ENV is set
+    const { 
+        createAdminClient, 
+        createEndUserClient, 
+        createOperatorClient,
+        createCommunityClient,
+        RoleIds,
+        CORE_ADDRESSES,
+        TEST_TOKEN_ADDRESSES,
+        parseKey,
+        RoleDataFactory
+    } = await import('../packages/sdk/src/index.ts');
+
     const supplierAccount = privateKeyToAccount(parseKey(supplierKey));
 
     const admin = createAdminClient({ transport: http(getRpcUrl()), account: supplierAccount });
@@ -227,6 +241,55 @@ Examples:
         } else {
             // SuperPaymaster Logic (Anni)
             console.log(`   🛡️  Registering as SuperPaymaster Operator...`);
+            
+            // Ensure aPNTs for deposit
+            const apntsRequired = parseEther('20000');
+            const currentApnts = await admin.readContract({
+                address: TEST_TOKEN_ADDRESSES.apnts,
+                abi: [{ name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+                functionName: 'balanceOf',
+                args: [acc.address]
+            }) as bigint;
+
+            if (currentApnts < apntsRequired) {
+                console.log(`   🪙 Minting ${formatEther(apntsRequired)} aPNTs for SuperPaymaster...`);
+                console.log(`      Address: ${TEST_TOKEN_ADDRESSES.apnts}`);
+                
+                let success = false;
+                for (let i = 0; i < 3; i++) {
+                    try {
+                        const mintHash = await admin.mint({
+                            token: TEST_TOKEN_ADDRESSES.apnts,
+                            to: acc.address,
+                            amount: apntsRequired,
+                            account: supplierAccount
+                        });
+                        await admin.waitForTransactionReceipt({ hash: mintHash });
+                        success = true;
+                        break;
+                    } catch (e: any) {
+                        console.warn(`      ⚠️ Mint failed (Attempt ${i+1}/3): ${e.shortMessage || e.message}. Retrying...`);
+                        await delayMs(2000 * (i + 1));
+                    }
+                }
+                if (!success) {
+                    throw new Error(`Failed to mint aPNTs for ${acc.address} after 3 attempts`);
+                }
+                await delayMs(TX_DELAY);
+            }
+
+            // Approve aPNTs for SuperPaymaster
+            console.log('   🔓 Approving SuperPaymaster for aPNTs...');
+            const approveHash = await opClient.writeContract({
+                address: TEST_TOKEN_ADDRESSES.apnts,
+                abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
+                functionName: 'approve',
+                args: [CORE_ADDRESSES.superPaymaster, parseEther('100000')], // Generous approval
+                chain: (opClient as any).chain,
+                account: acc
+            });
+            await opClient.waitForTransactionReceipt({ hash: approveHash });
+
             await opClient.onboardFully({
                 stakeAmount: parseEther('50'),
                 depositAmount: parseEther('10000'),
@@ -334,12 +397,20 @@ Examples:
         // Find community to join (e.g., join the "next" operator's community for cross-testing)
         const opIdx = operators.findIndex(o => o.name === aa.opName);
         const targetOp = operators[(opIdx + 1) % operators.length];
-        const targetComm = communityData[targetOp.name].token;
+        
+        // Fix: Community ID is the Operator Address, not the Token Address
+        const targetOpAccount = privateKeyToAccount(parseKey(targetOp.key!));
+        const targetComm = targetOpAccount.address;
 
         // Check idempotency: is the account already in this community?
         try {
-            const currentComm = await user.getAccountCommunity({ account: aa.address });
-            if (currentComm.toLowerCase() === targetComm.toLowerCase()) {
+            // Use isCommunityMember instead of deprecated/missing getAccountCommunity
+            const isMember = await user.isCommunityMember({ 
+                community: targetComm, 
+                user: aa.address 
+            });
+            
+            if (isMember) {
                 console.log(`      ⏭️  Already in ${targetOp.name}'s community. Skipping.`);
                 continue;
             }
