@@ -14,6 +14,7 @@ import { xPNTsFactoryActions, paymasterFactoryActions } from '../packages/core/s
 import { reputationActions } from '../packages/core/src/actions/reputation.js';
 import { dvtActions, blsActions } from '../packages/core/src/actions/validators.js';
 import { accountActions } from '../packages/core/src/actions/account.js';
+import { entryPointActions } from '../packages/core/src/actions/entryPoint.js';
 
 dotenv.config({ path: '.env.sepolia' });
 
@@ -60,7 +61,7 @@ describe('L1 Core Actions - Full Regression Test', () => {
       transport: http(process.env.SEPOLIA_RPC_URL),
     });
 
-    testAccount = privateKeyToAccount(process.env.DEPLOYER_PRIVATE_KEY as `0x${string}`);
+    testAccount = privateKeyToAccount(process.env.TEST_PRIVATE_KEY as `0x${string}`);
     
     walletClient = createWalletClient({
       account: testAccount,
@@ -406,28 +407,28 @@ describe('L1 Core Actions - Full Regression Test', () => {
     });
   });
 
-  // describe('✅ 12. EntryPoint (5 actions)', () => {
-  //   const entryPoint = entryPointActions(ENTRY_POINT_ADDRESS);
+  describe('✅ 12. EntryPoint (5 actions)', () => {
+    const entryPoint = entryPointActions(ENTRY_POINT_ADDRESS);
 
-  //   it('should read deposit info', async () => {
-  //     const depositInfo = await entryPoint(publicClient).getDepositInfo({
-  //       account: testAccount.address,
-  //     });
+    it('should read deposit info', async () => {
+      const depositInfo = await entryPoint(publicClient).getDepositInfo({
+        account: testAccount.address,
+      });
       
-  //     expect(depositInfo).toBeDefined();
-  //     console.log(`  ✓ Deposit Info:`, depositInfo);
-  //   });
+      expect(depositInfo).toBeDefined();
+      console.log(`  ✓ Deposit Info:`, depositInfo);
+    });
 
-  //   it('should get nonce', async () => {
-  //     const nonce = await entryPoint(publicClient).getNonce({
-  //       sender: testAccount.address,
-  //       key: 0n,
-  //     });
+    it('should get nonce', async () => {
+      const nonce = await entryPoint(publicClient).getNonce({
+        sender: testAccount.address,
+        key: 0n,
+      });
       
-  //     expect(nonce).toBeDefined();
-  //     console.log(`  ✓ Nonce: ${nonce}`);
-  //   });
-  // });
+      expect(nonce).toBeDefined();
+      console.log(`  ✓ Nonce: ${nonce}`);
+    });
+  });
 
   describe('📊 Summary', () => {
     it('should log final test summary', () => {
