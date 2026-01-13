@@ -2,10 +2,41 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
-const network = process.env.NETWORK || 'anvil';
+// 智能网络检测: 优先级 EXPERIMENT_NETWORK > NETWORK > RPC URL检测 > anvil
+function detectNetwork(): string {
+  // 1. 优先使用 EXPERIMENT_NETWORK (脚本常用)
+  if (process.env.EXPERIMENT_NETWORK) {
+    return process.env.EXPERIMENT_NETWORK;
+  }
+  
+  // 2. 其次使用 NETWORK
+  if (process.env.NETWORK && process.env.NETWORK !== 'anvil') {
+    return process.env.NETWORK;
+  }
+  
+  // 3. 通过 RPC URL 推断
+  const rpcUrl = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL || process.env.OP_SEPOLIA_RPC_URL;
+  if (rpcUrl) {
+    if (rpcUrl.includes('sepolia') && !rpcUrl.includes('op-sepolia')) {
+      return 'sepolia';
+    }
+    if (rpcUrl.includes('op-sepolia') || rpcUrl.includes('optimism-sepolia')) {
+      return 'op-sepolia';
+    }
+    if (rpcUrl.includes('optimism') && !rpcUrl.includes('sepolia')) {
+      return 'optimism';
+    }
+  }
+  
+  // 4. 默认 anvil
+  return 'anvil';
+}
+
+const network = detectNetwork();
 let config: any = {};
 try {
   config = require(`../../../config.${network}.json`);
+  console.log(`[SDK] Loaded contract config from: config.${network}.json`);
 } catch (e) {
   console.warn(`Warning: Could not load config.${network}.json. Contract addresses may be undefined.`);
 }
