@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { type Address, type PublicClient, type WalletClient, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Account, parseEther } from 'viem';
 import { superPaymasterActions } from './superPaymaster.js';
 
 describe('SuperPaymaster Actions', () => {
     const mockPaymasterAddress: Address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
-    let mockPublicClient: Partial<PublicClient>;
-    let mockWalletClient: Partial<WalletClient>;
-    let mockAccount: Account;
-
     const MOCK_OPERATOR: Address = '0x1234567890123456789012345678901234567890';
+    const MOCK_USER: Address = '0x2222222222222222222222222222222222222222';
+    
+    let mockPublicClient: Partial<PublicClient>;
+    let mockWalletClient: any;
+    let mockAccount: Account;
 
     beforeEach(() => {
         mockAccount = {
@@ -22,8 +23,9 @@ describe('SuperPaymaster Actions', () => {
 
         mockWalletClient = {
             writeContract: vi.fn(),
+            readContract: vi.fn(),
             account: mockAccount,
-        };
+        } as any;
     });
 
     describe('Deposit operations', () => {
@@ -181,34 +183,174 @@ describe('SuperPaymaster Actions', () => {
         });
     });
 
-    describe('Query operations', () => {
-        it('should get operator config', async () => {
-            const mockConfig = { aPNTsBalance: 1000n, exchangeRate: 100000n };
-            (mockPublicClient.readContract as any).mockResolvedValue(mockConfig);
+    describe('Advanced Operator & User Management', () => {
+        it('should perform slashing operations', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
 
-            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const config = await actions.operators({ operator: MOCK_OPERATOR });
+            const res1 = await actions.slashOperator({ operator: MOCK_OPERATOR, amount: 100n, reason: 'Test', account: mockAccount });
+            const res2 = await actions.executeSlashWithBLS({
+                operator: MOCK_OPERATOR,
+                roleId: '0xROLE',
+                amount: 100n,
+                reason: 'Test',
+                blsSignature: '0xSIG',
+                account: mockAccount
+            });
 
-            expect(config).toEqual(mockConfig);
+            expect(res1).toBe(txHash);
+            expect(res2).toBe(txHash);
         });
 
-        it('should check if operator is paused', async () => {
-            (mockPublicClient.readContract as any).mockResolvedValue(false);
+        it('should manage blocked users', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            (mockWalletClient.readContract as any).mockResolvedValue(true);
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
 
-            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const isPaused = await actions.isOperatorPaused({ operator: MOCK_OPERATOR });
+            const tx1 = await actions.blockUser({ user: MOCK_USER, blocked: true, account: mockAccount });
+            const tx2 = await actions.updateBlockedStatus({ user: MOCK_USER, blocked: true, account: mockAccount });
+            const isBlocked = await actions.blockedUsers({ user: MOCK_USER });
 
-            expect(isPaused).toBe(false);
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+            expect(isBlocked).toBe(true);
+        });
+    });
+
+    describe('System Config & Price Management', () => {
+        it('should manage protocol fees', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            (mockWalletClient.readContract as any).mockResolvedValueOnce(100n).mockResolvedValueOnce(500n);
+
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
+            const tx = await actions.setProtocolFee({ feeRecipient: MOCK_USER, feeBps: 100n, account: mockAccount });
+            const bps = await actions.protocolFeeBPS();
+            const revenue = await actions.protocolRevenue();
+
+            expect(tx).toBe(txHash);
+            expect(bps).toBe(100n);
+            expect(revenue).toBe(500n);
         });
 
-        it('should get contract references', async () => {
-            const mockRegistry: Address = '0x5555555555555555555555555555555555555555';
-            (mockPublicClient.readContract as any).mockResolvedValue(mockRegistry);
+        it('should manage price updates', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            (mockWalletClient.readContract as any).mockResolvedValue(2000n);
+
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
+            const tx1 = await actions.updatePrice({ account: mockAccount });
+            const tx2 = await actions.updatePriceDVT({ price: 2000n, proof: '0x', account: mockAccount });
+            const price = await actions.aPNTsPriceUSD();
+
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+            expect(price).toBe(2000n);
+        });
+
+        it('should manage treasury and factory settings', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
+
+            const tx1 = await actions.setTreasury({ treasury: MOCK_USER, account: mockAccount });
+            const tx2 = await actions.setXPNTsFactory({ factory: MOCK_USER, account: mockAccount });
+            const tx3 = await actions.setAPNTsToken({ token: MOCK_USER, account: mockAccount });
+            const tx4 = await actions.setBLSAggregator({ aggregator: MOCK_USER, account: mockAccount });
+
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+            expect(tx3).toBe(txHash);
+            expect(tx4).toBe(txHash);
+        });
+    });
+
+    describe('Slash History & Views', () => {
+        it('should query slash history', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(5n) // count
+                .mockResolvedValueOnce([]) // history
+                .mockResolvedValueOnce({ amount: 100n }); // latest
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const registry = await actions.REGISTRY();
+            const count = await actions.getSlashCount({ operator: MOCK_OPERATOR });
+            const history = await actions.getSlashHistory({ operator: MOCK_OPERATOR });
+            const latest = await actions.getLatestSlash({ operator: MOCK_OPERATOR });
 
-            expect(registry).toBe(mockRegistry);
+            expect(count).toBe(5n);
+            expect(Array.isArray(history)).toBe(true);
+            expect(latest.amount).toBe(100n);
+        });
+
+        it('should query various balance and status views', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(parseEther('10')) // getDeposit
+                .mockResolvedValueOnce(parseEther('1')) // getAvailableCredit
+                .mockResolvedValueOnce(123456n) // totalTrackedBalance
+                .mockResolvedValueOnce(999999n); // lastUserOpTimestamp
+
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
+            const deposit = await actions.getDeposit();
+            const credit = await actions.getAvailableCredit({ operator: MOCK_OPERATOR, user: MOCK_USER });
+            const tracked = await actions.totalTrackedBalance();
+            const ts = await actions.lastUserOpTimestamp({ user: MOCK_USER });
+
+            expect(deposit).toBe(parseEther('10'));
+            expect(credit).toBe(parseEther('1'));
+            expect(tracked).toBe(123456n);
+            expect(ts).toBe(999999n);
+        });
+
+        it('should get operator balance using convenience function', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue([parseEther('5'), '0x...']); // operators returns struct
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
+            const balance = await actions.balanceOfOperator({ operator: MOCK_OPERATOR });
+            expect(balance).toBe(parseEther('5'));
+        });
+
+        it('should query slashes specifically', async () => {
+            const mockSlash = { amount: 100n, reason: 'Test' };
+            (mockPublicClient.readContract as any).mockResolvedValue(mockSlash);
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
+            const slash = await actions.slashHistory({ operator: MOCK_OPERATOR, index: 0n });
+            expect(slash.amount).toBe(100n);
+        });
+
+        it('should query price feed and parameters', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(100n);
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
+            const bps = await actions.BPS_DENOMINATOR();
+            const rate = await actions.RATE_OFFSET();
+            expect(bps).toBe(100n);
+            expect(rate).toBe(100n);
+        });
+    });
+
+    describe('Constants & System References', () => {
+        it('should query all system constants', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
+
+            const results = await Promise.all([
+                actions.APNTS_TOKEN(),
+                actions.BLS_AGGREGATOR(),
+                actions.ETH_USD_PRICE_FEED(),
+                actions.xpntsFactory(),
+                actions.treasury(),
+                actions.entryPoint(),
+                actions.owner()
+            ]);
+
+            results.forEach(res => expect(res).toBe(MOCK_USER));
+        });
+
+        it('should get version', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue('v0.16.4');
+            const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
+            const v = await actions.version();
+            expect(v).toBe('v0.16.4');
         });
     });
 });

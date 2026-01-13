@@ -123,6 +123,7 @@ pnpm run test:full_anvil
 
 ### ABI Maintenance / ABI 维护
 - [ABI Maintenance Plan](./docs/ABI_MAINTENANCE_PLAN.md) - 合约 ABI 自动同步和维护策略
+- [ABI Change Tracking Workflow](./docs/ABI_Change_Tracking_Workflow.md) - ABI 变动追踪与 SDK 自动化审计流程
 
 ---
 

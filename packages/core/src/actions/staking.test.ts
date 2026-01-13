@@ -184,30 +184,90 @@ describe('Staking Actions', () => {
         });
     });
 
-    describe('Admin functions', () => {
-        it('should set registry', async () => {
-            const txHash = '0xstu...';
-            const registry: Address = '0x88888888888888888888888888888888888888';
-            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-
-            const actions = stakingActions(mockStakingAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setRegistry({ registry, account: mockAccount });
-
-            expect(result).toBe(txHash);
+    describe('Advanced Query Functions', () => {
+        it('should get stake info', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue({ amount: 100n });
+            const actions = stakingActions(mockStakingAddress)(mockPublicClient as PublicClient);
+            const info = await actions.getStakeInfo({ operator: MOCK_USER, roleId: MOCK_ROLE_ID });
+            expect(info.amount).toBe(100n);
         });
 
-        it('should set role exit fee', async () => {
-            const txHash = '0xvwx...';
+        it('should query stakes and role locks', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce({ amount: 100n }) // stakes
+                .mockResolvedValueOnce({ amount: 50n }); // roleLocks
+            const actions = stakingActions(mockStakingAddress)(mockPublicClient as PublicClient);
+            const stake = await actions.stakes({ user: MOCK_USER });
+            const lock = await actions.roleLocks({ user: MOCK_USER, roleId: MOCK_ROLE_ID });
+            expect(stake.amount).toBe(100n);
+            expect(lock.amount).toBe(50n);
+        });
+
+        it('should query exit configs and active roles', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce({ feePercent: 10n }) // roleExitConfigs
+                .mockResolvedValueOnce(MOCK_ROLE_ID); // userActiveRoles
+            const actions = stakingActions(mockStakingAddress)(mockPublicClient as PublicClient);
+            const config = await actions.roleExitConfigs({ roleId: MOCK_ROLE_ID });
+            const role = await actions.userActiveRoles({ user: MOCK_USER, index: 0n });
+            expect(config.feePercent).toBe(10n);
+            expect(role).toBe(MOCK_ROLE_ID);
+        });
+
+        it('should query total staked and system status', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(1000n) // totalStaked
+                .mockResolvedValueOnce(1000n) // totalStaked (via getTotalStaked)
+                .mockResolvedValueOnce(true); // authorizedSlashers
+            const actions = stakingActions(mockStakingAddress)(mockPublicClient as PublicClient);
+            const total = await actions.totalStaked();
+            const total2 = await actions.getTotalStaked();
+            const authorized = await actions.authorizedSlashers({ slasher: MOCK_USER });
+            expect(total).toBe(1000n);
+            expect(total2).toBe(1000n);
+            expect(authorized).toBe(true);
+        });
+    });
+
+    describe('System Configuration & Ownership', () => {
+        it('should manage treasury and registry', async () => {
+            const txHash = '0xhash';
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-
             const actions = stakingActions(mockStakingAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setRoleExitFee({
-                roleId: MOCK_ROLE_ID,
-                feePercent: 100n, // 1%
-                account: mockAccount
-            });
+            const tx1 = await actions.setTreasury({ treasury: MOCK_USER, account: mockAccount });
+            const tx2 = await actions.setRegistry({ registry: MOCK_USER, account: mockAccount });
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+        });
 
-            expect(result).toBe(txHash);
+        it('should handle ownership transfers', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            const actions = stakingActions(mockStakingAddress)(mockWalletClient as WalletClient);
+            const tx1 = await actions.transferOwnership({ newOwner: MOCK_USER, account: mockAccount });
+            const tx2 = await actions.renounceOwnership({ account: mockAccount });
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+        });
+
+        it('should query system references', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
+            const actions = stakingActions(mockStakingAddress)(mockPublicClient as PublicClient);
+            const r = await actions.REGISTRY();
+            const g = await actions.GTOKEN();
+            const t = await actions.treasury();
+            const o = await actions.owner();
+            expect(r).toBe(MOCK_USER);
+            expect(g).toBe(MOCK_USER);
+            expect(t).toBe(MOCK_USER);
+            expect(o).toBe(MOCK_USER);
+        });
+
+        it('should get version', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue('v1');
+            const actions = stakingActions(mockStakingAddress)(mockPublicClient as PublicClient);
+            const v = await actions.version();
+            expect(v).toBe('v1');
         });
     });
 });

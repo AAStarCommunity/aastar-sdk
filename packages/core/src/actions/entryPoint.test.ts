@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { type Address, type PublicClient } from 'viem';
+import { type Address, type PublicClient, parseEther } from 'viem';
 import { entryPointActions, EntryPointVersion } from './entryPoint.js';
 
 describe('EntryPoint Actions', () => {
     const mockEntryPointAddress: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+    const MOCK_USER: Address = '0x1234567890123456789012345678901234567890';
     let mockPublicClient: Partial<PublicClient>;
 
     beforeEach(() => {
@@ -147,6 +148,29 @@ describe('EntryPoint Actions', () => {
                     address: customAddress,
                 })
             );
+        });
+    });
+
+    describe('depositTo', () => {
+        it('should deposit to account', async () => {
+            const txHash = '0xhash';
+            (mockPublicClient as any).writeContract = vi.fn().mockResolvedValue(txHash);
+            const actions = entryPointActions(mockEntryPointAddress)(mockPublicClient as any);
+            const result = await actions.depositTo({
+                account: MOCK_USER,
+                amount: parseEther('1'),
+                txAccount: MOCK_USER
+            });
+            expect(result).toBe(txHash);
+        });
+    });
+
+    describe('getNonce V06', () => {
+        it('should get nonce for V06', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(10n);
+            const actions = entryPointActions(mockEntryPointAddress, EntryPointVersion.V06)(mockPublicClient as PublicClient);
+            const nonce = await actions.getNonce({ sender: MOCK_USER, key: 0n });
+            expect(nonce).toBe(10n);
         });
     });
 });

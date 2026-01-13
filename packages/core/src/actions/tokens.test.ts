@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { type Address, type PublicClient, type WalletClient, type Account } from 'viem';
-import { tokenActions } from './tokens.js';
+import { tokenActions, gTokenActions } from './tokens.js';
 
 describe('Token Actions', () => {
     const mockTokenAddress: Address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
+    const MOCK_USER: Address = '0xabcd1234567890123456789012345678901234ab';
+    const MOCK_SPENDER: Address = '0x2222222222222222222222222222222222222222';
     let mockPublicClient: Partial<PublicClient>;
-    let mockWalletClient: Partial<WalletClient>;
+    let mockWalletClient: any;
     let mockAccount: Account;
 
     beforeEach(() => {
@@ -20,47 +22,145 @@ describe('Token Actions', () => {
 
         mockWalletClient = {
             writeContract: vi.fn(),
+            readContract: vi.fn(),
             account: mockAccount,
-        };
+        } as any;
     });
 
-    describe('Read Operations', () => {
-        it('should read token name', async () => {
-            const expectedName = 'Test Token';
-            (mockPublicClient.readContract as any).mockResolvedValue(expectedName);
+    describe('Metadata & Ownership', () => {
+        it('should get name, symbol, and decimals', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce('Test Token')
+                .mockResolvedValueOnce('TST')
+                .mockResolvedValueOnce(18);
 
             const actions = tokenActions()(mockPublicClient as PublicClient);
             const name = await actions.name({ token: mockTokenAddress });
+            const symbol = await actions.symbol({ token: mockTokenAddress });
+            const decimals = await actions.decimals({ token: mockTokenAddress });
 
-            expect(name).toBe(expectedName);
+            expect(name).toBe('Test Token');
+            expect(symbol).toBe('TST');
+            expect(decimals).toBe(18);
+        });
+
+        it('should manage ownership', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.readContract as any).mockResolvedValue(MOCK_USER);
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+
+            const actions = tokenActions()(mockWalletClient as WalletClient);
+            const owner = await actions.owner({ token: mockTokenAddress });
+            const tx1 = await actions.transferOwnership({ token: mockTokenAddress, newOwner: MOCK_SPENDER, account: mockAccount });
+            const tx2 = await actions.renounceOwnership({ token: mockTokenAddress, account: mockAccount });
+
+            expect(owner).toBe(MOCK_USER);
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+        });
+    });
+
+    describe('xPNTs / aPNTs Specific Features', () => {
+        it('should update exchange rate', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+
+            const actions = tokenActions()(mockWalletClient as WalletClient);
+            const result = await actions.updateExchangeRate({
+                token: mockTokenAddress,
+                newRate: 1500000000000000000n,
+                account: mockAccount
+            });
+
+            expect(result).toBe(txHash);
+        });
+
+        it('should manage debt', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.readContract as any).mockResolvedValue(500n);
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+
+            const actions = tokenActions()(mockWalletClient as WalletClient);
+            const debt = await actions.getDebt({ token: mockTokenAddress, user: MOCK_USER });
+            const result = await actions.repayDebt({ token: mockTokenAddress, amount: 200n, account: mockAccount });
+
+            expect(debt).toBe(500n);
+            expect(result).toBe(txHash);
+        });
+
+        it('should transfer and call', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+
+            const actions = tokenActions()(mockWalletClient as WalletClient);
+            const result = await actions.transferAndCall({
+                token: mockTokenAddress,
+                to: MOCK_SPENDER,
+                amount: 100n,
+                data: '0x1234',
+                account: mockAccount
+            });
+
+            expect(result).toBe(txHash);
+        });
+
+        it('should manage auto-approved spenders', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            (mockWalletClient.readContract as any).mockResolvedValue(true);
+
+            const actions = tokenActions()(mockWalletClient as WalletClient);
+            const tx1 = await actions.addAutoApprovedSpender({ token: mockTokenAddress, spender: MOCK_SPENDER, account: mockAccount });
+            const tx2 = await actions.removeAutoApprovedSpender({ token: mockTokenAddress, spender: MOCK_SPENDER, account: mockAccount });
+            const isApproved = await actions.isAutoApprovedSpender({ token: mockTokenAddress, spender: MOCK_SPENDER });
+
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
+            expect(isApproved).toBe(true);
+        });
+
+        it('should query constants', async () => {
+            const mockAddr: Address = '0xConstAddr';
+            (mockPublicClient.readContract as any).mockResolvedValue(mockAddr);
+
+            const actions = tokenActions()(mockPublicClient as PublicClient);
+            const pm = await actions.SUPERPAYMASTER_ADDRESS({ token: mockTokenAddress });
+            const factory = await actions.FACTORY({ token: mockTokenAddress });
+
+            expect(pm).toBe(mockAddr);
+            expect(factory).toBe(mockAddr);
+        });
+    });
+
+    describe('gTokenActions', () => {
+        it('should use GTokenABI for standard methods', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(1000n);
+            
+            const actions = gTokenActions()(mockPublicClient as PublicClient);
+            const balance = await actions.balanceOf({ token: mockTokenAddress, account: MOCK_USER });
+            
+            expect(balance).toBe(1000n);
             expect(mockPublicClient.readContract).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    address: mockTokenAddress,
-                    functionName: 'name',
+                    abi: expect.arrayContaining([expect.objectContaining({ name: 'balanceOf' })]),
                 })
             );
         });
 
-        it('should read token symbol', async () => {
-            const expectedSymbol = 'TST';
-            (mockPublicClient.readContract as any).mockResolvedValue(expectedSymbol);
+        it('should support mint and burn in gTokenActions', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
-            const actions = tokenActions()(mockPublicClient as PublicClient);
-            const symbol = await actions.symbol({ token: mockTokenAddress });
+            const actions = gTokenActions()(mockWalletClient as WalletClient);
+            const tx1 = await actions.mint({ token: mockTokenAddress, to: MOCK_USER, amount: 1000n, account: mockAccount });
+            const tx2 = await actions.burn({ token: mockTokenAddress, amount: 500n, account: mockAccount });
 
-            expect(symbol).toBe(expectedSymbol);
+            expect(tx1).toBe(txHash);
+            expect(tx2).toBe(txHash);
         });
+    });
 
-        it('should read decimals', async () => {
-            const expectedDecimals = 18;
-            (mockPublicClient.readContract as any).mockResolvedValue(expectedDecimals);
-
-            const actions = tokenActions()(mockPublicClient as PublicClient);
-            const decimals = await actions.decimals({ token: mockTokenAddress });
-
-            expect(decimals).toBe(expectedDecimals);
-        });
-
+    describe('Read Operations', () => {
         it('should read total supply', async () => {
             const expectedSupply = 1000000000000000000000n;
             (mockPublicClient.readContract as any).mockResolvedValue(expectedSupply);

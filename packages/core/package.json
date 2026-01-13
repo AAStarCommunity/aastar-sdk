@@ -10,7 +10,8 @@
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
     "prebuild": "pnpm clean",
-    "build": "tsc"
+    "build": "tsc",
+    "audit:abi": "npx tsx scripts/audit-abi-coverage.ts"
   },
   "dependencies": {
     "@noble/curves": "^1.6.0",
