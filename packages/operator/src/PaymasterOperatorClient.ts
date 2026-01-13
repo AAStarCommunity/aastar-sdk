@@ -294,25 +294,27 @@ export class PaymasterOperatorClient extends BaseClient {
     }
 
     /**
-     * Deposit collateral (GToken/cPNTs) to SuperPaymaster.
+     * Deposit collateral (aPNTs/GToken) to SuperPaymaster.
      * This is a helper method used by registerAsSuperPaymasterOperator.
      */
     async depositCollateral(amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        const gTokenAddr = this.requireGToken();
         const { tokenActions, superPaymasterActions } = await import('@aastar/core');
-        const gToken = tokenActions();
         const pm = superPaymasterActions(this.superPaymasterAddress);
         
-        // Approve SuperPaymaster to spend GToken
-        const allowance = await gToken(this.getStartPublicClient()).allowance({
-            token: gTokenAddr,
+        // V3.7: Dynamically fetch the token expected by SuperPaymaster
+        const depositToken = await pm(this.getStartPublicClient()).APNTS_TOKEN();
+        const token = tokenActions();
+        
+        // Approve SuperPaymaster to spend the token (usually aPNTs on Sepolia)
+        const allowance = await token(this.getStartPublicClient()).allowance({
+            token: depositToken,
             owner: this.getAddress(),
             spender: this.superPaymasterAddress
         });
         
         if (allowance < amount) {
-            const approveHash = await gToken(this.client).approve({
-                token: gTokenAddr,
+            const approveHash = await token(this.client).approve({
+                token: depositToken,
                 spender: this.superPaymasterAddress,
                 amount,
                 account: options?.account

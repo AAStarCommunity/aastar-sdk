@@ -9,7 +9,7 @@
 Test accounts are dynamically configured via `l4-setup.ts` and stored in `scripts/l4-state.json`.
 
 Key test personas:
-- **Jason**: Uses PaymasterV4, Token: dPNTs (cPNTs)
+- **Jason**: Uses PaymasterV4, Token: aPNTs
 - **Bob**: Uses PaymasterV4, Token: bPNTs  
 - **Anni**: Uses SuperPaymaster, Token: dPNTs
 - **Charlie**: Uses PaymasterV4, Token: cPNTs
@@ -214,7 +214,71 @@ await PaymasterClient.submitGaslessUserOperation(..., wallet, ...);
 
 ---
 
-## Contact
+---
+
+## SuperPaymaster Integration (Credit-Based Gasless)
+
+SuperPaymaster allows users to pay gas using credits provided by an **Operator**. This model is ideal for ecosystem projects where a central entity (the Operator) sponsors transactions for its users.
+
+### 1. The SuperPaymaster Flow
+1.  **Operator Config**: An Operator (e.g., Anni) configures a credit line in the SuperPaymaster contract.
+2.  **User Action**: A user (UserOp Sender) initiates a transaction.
+3.  **Submission**: The app submits the UserOp specifying the `operator` address.
+4.  **Execution**: SuperPaymaster verifies the Operator's credit and sponsors the gas.
+
+### 2. Developer Workflow
+
+We provide a dedicated `SuperPaymasterClient` that abstracts gas estimation and operator data packing.
+
+**Reference Script**: [`examples/simple-superpaymaster-demo.ts`](../examples/simple-superpaymaster-demo.ts)
+
+#### Step 1: Configure App & Operator
+You need the **User's** account (Signer) and the **Operator's** address.
+
+```typescript
+import { SuperPaymasterClient } from '@aastar/paymaster';
+
+const APP_CONFIG = {
+    superPaymaster: '0x...',       // Contract Address
+    operator: '0x...',             // Operator Address (Provider)
+    token: '0x...'                 // Logic Token (optional context)
+};
+```
+
+#### Step 2: Submit with Dynamic Gas Tuning
+The `SuperPaymasterClient.submitGaslessTransaction` method automatically:
+-   **Estimates Gas**: Queries the Bundler.
+-   **Tunes Limits**: Adjusts `verificationGasLimit` to satisfy Bundler efficiency rules (> 0.4 ratio) while ensuring safe execution for Paymaster logic.
+-   **Packs Data**: Encodes the Operator address into the `paymasterAndData` field.
+
+```typescript
+const userOpHash = await SuperPaymasterClient.submitGaslessTransaction(
+    client,            // Public Client
+    wallet,            // Wallet (Signer - Local or KMS)
+    userAA,            // User's AA Address
+    entryPoint,        // EntryPoint Address
+    bundlerUrl,        // Bundler RPC
+    {
+        token: APP_CONFIG.token,
+        recipient: recipientAddress,
+        amount: parseEther('1'),
+        operator: APP_CONFIG.operator,
+        paymasterAddress: APP_CONFIG.superPaymaster
+    }
+);
+```
+
+### 3. Using KMS / MPC Signers
+Just like the standard Paymaster usage, `SuperPaymasterClient` supports any `viem` Wallet Client.
+
+If your User keys are in a KMS (AWS, Google, Fireblocks):
+1.  Create a custom `viem` Account that forwards `signMessage` calls to your KMS.
+2.  Pass this account to `createWalletClient`.
+3.  Pass the `wallet` to `SuperPaymasterClient`.
+
+*(See "Advanced: Remote Signing" section above for code example).*
+
+---
 
 
 ---

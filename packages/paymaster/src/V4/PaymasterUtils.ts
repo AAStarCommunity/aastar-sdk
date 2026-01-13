@@ -83,6 +83,28 @@ export function buildPaymasterData(
 }
 
 /**
+ * Build paymasterAndData for SuperPaymaster V3.
+ * Layout: [Paymaster(20)] [verGas(16)] [postGas(16)] [operator(20)] [maxRate(32)]
+ */
+export function buildSuperPaymasterData(
+    paymasterAddress: Address,
+    operator: Address,
+    options?: {
+        verificationGasLimit?: bigint;
+        postOpGasLimit?: bigint;
+    }
+): `0x${string}` {
+    const verGas = options?.verificationGasLimit ?? 80000n;
+    const postGas = options?.postOpGasLimit ?? 100000n;
+    return concat([
+        paymasterAddress,
+        pad(toHex(verGas), { size: 16 }),
+        pad(toHex(postGas), { size: 16 }),
+        operator
+    ]);
+}
+
+/**
  * Helper to format UserOp for Alchemy/Standard Bundlers (v0.7 Decomposed)
  */
 export function formatUserOpV07(userOp: any) {

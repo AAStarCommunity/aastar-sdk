@@ -1,5 +1,5 @@
-import { type Address, concat, pad, toHex, parseAbi, parseAbiItem, encodeFunctionData } from 'viem';
-import { buildPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
+import { type Address, type Hex, concat, pad, toHex, parseAbi, parseAbiItem, encodeFunctionData } from 'viem';
+import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
 
 /**
  * PaymasterClient
@@ -68,14 +68,24 @@ export class PaymasterClient {
         callData: `0x${string}`,
         options?: {
             validityWindow?: number;
+            operator?: Address; // For SuperPaymaster
         }
     ) {
         // 1. Construct a dummy UserOp for estimation
-        const paymasterAndData = buildPaymasterData(paymasterAddress, token, {
-            validityWindow: options?.validityWindow,
-            verificationGasLimit: 60000n, // Placeholder
-            postOpGasLimit: 60000n        // Placeholder
-        });
+        let paymasterAndData: Hex;
+        
+        if (options?.operator) {
+             paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
+                verificationGasLimit: 300000n,
+                postOpGasLimit: 300000n
+             });
+        } else {
+             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
+                validityWindow: options?.validityWindow,
+                verificationGasLimit: 60000n, // Placeholder
+                postOpGasLimit: 60000n        // Placeholder
+            });
+        }
 
         // 1.5. Get dynamic gas prices from network
         let maxFeePerGas = 30000000000n; // 30 Gwei default
@@ -137,9 +147,10 @@ export class PaymasterClient {
         // Dynamic tuning based on "Efficiency Guard" formulas
         return {
             preVerificationGas: BigInt(data.preVerificationGas),
-            verificationGasLimit: BigInt(data.verificationGasLimit), // No buffer to satisfy efficiency > 0.4
-            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n,                // 1.1x safety buffer
-            paymasterPostOpGasLimit: 100000n                                       // Explicitly high for Oracle
+            verificationGasLimit: BigInt(data.verificationGasLimit), 
+            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n, // 1.1x safety buffer
+            paymasterVerificationGasLimit: data.paymasterVerificationGasLimit ? BigInt(data.paymasterVerificationGasLimit) : undefined,
+            paymasterPostOpGasLimit: data.paymasterPostOpGasLimit ? BigInt(data.paymasterPostOpGasLimit) : 100000n
         };
     }
 
@@ -164,6 +175,9 @@ export class PaymasterClient {
             maxFeePerGas?: bigint;
             maxPriorityFeePerGas?: bigint;
             autoEstimate?: boolean;
+            operator?: Address; // For SuperPaymaster
+            paymasterVerificationGasLimit?: bigint;
+            paymasterPostOpGasLimit?: bigint;
         }
     ): Promise<`0x${string}`> {
         // 0. Auto-Estimate if requested or if limits missing
@@ -171,18 +185,23 @@ export class PaymasterClient {
             preVerificationGas: options?.preVerificationGas,
             verificationGasLimit: options?.verificationGasLimit,
             callGasLimit: options?.callGasLimit,
-            paymasterPostOpGasLimit: 100000n
+            paymasterVerificationGasLimit: options?.paymasterVerificationGasLimit,
+            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 100000n
         };
 
         if (options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
             const est = await this.estimateUserOperationGas(
                 client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, 
-                { validityWindow: options?.validityWindow }
+                { 
+                    validityWindow: options?.validityWindow,
+                    operator: options?.operator 
+                }
             );
             gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
             gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;
             gasLimits.callGasLimit = options?.callGasLimit ?? est.callGasLimit;
-            gasLimits.paymasterPostOpGasLimit = est.paymasterPostOpGasLimit;
+            gasLimits.paymasterVerificationGasLimit = options?.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
+            gasLimits.paymasterPostOpGasLimit = options?.paymasterPostOpGasLimit ?? est.paymasterPostOpGasLimit;
         }
 
         // 1. Get Nonce
@@ -202,8 +221,20 @@ export class PaymasterClient {
                 // Apply 1.5x buffer for network volatility
                 maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 30000000000n) * 150n) / 100n;
                 maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n) / 100n;
-                if (maxPriorityFeePerGas < 500000000n) maxPriorityFeePerGas = 500000000n; // Min 0.5 Gwei
+                if (maxPriorityFeePerGas < 500000000n) {
+                    console.log(`[PaymasterClient] Priority Fee ${maxPriorityFeePerGas} too low, clamping to 0.5 Gwei`);
+                    maxPriorityFeePerGas = 500000000n; // Min 0.5 Gwei
+                }
+                
+                // Ensure MaxFee >= Priority
+                if (maxFeePerGas < maxPriorityFeePerGas) {
+                     maxFeePerGas = maxPriorityFeePerGas + 1000000n; // Add small buffer
+                     console.log(`[PaymasterClient] MaxFee bumped to accommodate Priority Fee`);
+                }
+
+                console.log(`[PaymasterClient] Fees Set: MaxFee=${maxFeePerGas}, Priority=${maxPriorityFeePerGas}`);
             } catch (e) {
+                console.log('[PaymasterClient] Fee Estimation Failed:', e);
                 // Fallback to safer defaults if estimation fails
                 maxFeePerGas = maxFeePerGas ?? 50000000000n; // 50 Gwei
                 maxPriorityFeePerGas = maxPriorityFeePerGas ?? 2000000000n; // 2 Gwei
@@ -211,11 +242,19 @@ export class PaymasterClient {
         }
 
         // 2. Build paymasterAndData
-        const paymasterAndData = buildPaymasterData(paymasterAddress, token, {
-            validityWindow: options?.validityWindow,
-            verificationGasLimit: gasLimits.verificationGasLimit ?? 150000n, // Use tuned value
-            postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
-        });
+        let paymasterAndData: Hex;
+        if (options?.operator) {
+            paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
+            });
+        } else {
+            paymasterAndData = buildPaymasterData(paymasterAddress, token, {
+                validityWindow: options?.validityWindow,
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n, // Use tuned value
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
+            });
+        }
 
         // 3. Construct UserOp
         const userOp = {
@@ -235,6 +274,17 @@ export class PaymasterClient {
             paymasterAndData,
             signature: '0x' as `0x${string}`
         };
+        
+        // Debug logs (Commented out for production)
+        /*
+        console.log("DEBUG: UserOp Gas Limits:", {
+            accountGasLimits: userOp.accountGasLimits,
+            preVerificationGas: userOp.preVerificationGas,
+            gasFees: userOp.gasFees,
+            paymasterAndData: userOp.paymasterAndData
+        });
+        */
+
 
         // 4. Final Hashing and Signing
         const userOpHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));

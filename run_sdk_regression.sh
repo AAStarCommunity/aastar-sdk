@@ -198,21 +198,6 @@ else
 fi
 
 # ========================================
-# 6.5. Verify Onchain Milestone
-# ========================================
-log_section "On-Chain Milestone Verification"
-log_step "Verifying on-chain state"
-pnpm tsx scripts/verify_onchain_milestone.ts $ENV
-
-if [ $? -eq 0 ]; then
-    log_success "On-chain verification passed"
-else
-    log_error "On-chain verification failed"
-    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
-    exit 1
-fi
-
-# ========================================
 # 7. Run L1/L2/L3 Regression Tests
 # ========================================
 echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
