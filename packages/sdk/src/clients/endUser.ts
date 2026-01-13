@@ -1,4 +1,4 @@
-import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, type Hash, parseAbi } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, type Hash, parseAbi, parseEther } from 'viem';
 import { 
     registryActions, 
     sbtActions,
@@ -106,8 +106,6 @@ export function createEndUserClient({
     .extend(walletActions);
 
     const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...addresses };
-    console.log('   SDK Debug: simpleAccountFactory from usedAddresses:', (usedAddresses as any).simpleAccountFactory);
-    console.log('   SDK Debug: process.env.SIMPLE_ACCOUNT_FACTORY:', process.env.SIMPLE_ACCOUNT_FACTORY);
 
     const actions = {
         ...registryActions(usedAddresses.registry)(client as any),
@@ -207,6 +205,7 @@ export function createEndUserClient({
                 };
             } catch (error: any) {
                 const decodedMsg = decodeContractError(error);
+                console.error(`   ❌ joinAndActivate failed:`, decodedMsg || error.message);
                 if (decodedMsg) {
                     throw new Error(`Joining Community Failed: ${decodedMsg}`);
                 }
@@ -548,8 +547,7 @@ export function createEndUserClient({
             
             // Fallback to official v0.7 factory if not provided
             if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                console.warn("   ⚠️  SimpleAccountFactory not found in configuration. Using default fallback.");
-                factoryAddress = '0x9406Cc6185a346906296840746125a0E44976454';
+                throw new Error("SimpleAccountFactory not found in configuration or override. Please check SIMPLE_ACCOUNT_FACTORY or SimpleAccountFactoryv0.7 in your .env file.");
             }
 
             const accountAddress = await (client as any).readContract({
@@ -583,7 +581,7 @@ export function createEndUserClient({
                 const { SimpleAccountFactoryABI } = await import('@aastar/core');
                 let factoryAddress = (usedAddresses as any).simpleAccountFactory;
                 if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                    factoryAddress = '0x9406Cc6185a346906296840746125a0E44976454';
+                    throw new Error("SimpleAccountFactory not found in configuration or override. Please check SIMPLE_ACCOUNT_FACTORY or SimpleAccountFactoryv0.7 in your .env file.");
                 }
 
                 console.log(`   🏭 Deploying Smart Account for ${owner}...`);
@@ -600,14 +598,19 @@ export function createEndUserClient({
             }
 
             if (fundWithETH > 0n) {
-                console.log(`   ⛽ Funding account with ${formatEther(fundWithETH)} ETH...`);
-                const tx = await (client as any).sendTransaction({
-                    to: accountAddress,
-                    value: fundWithETH,
-                    account,
-                    chain
-                });
-                await (client as any).waitForTransactionReceipt({ hash: tx });
+                const balance = await (client as any).getBalance({ address: accountAddress });
+                if (balance < parseEther('0.01')) { // 只有在余额少于 0.01 ETH 时才注入
+                    console.log(`   ⛽ Funding account with ${formatEther(fundWithETH)} ETH...`);
+                    const tx = await (client as any).sendTransaction({
+                        to: accountAddress,
+                        value: fundWithETH,
+                        account,
+                        chain
+                    });
+                    await (client as any).waitForTransactionReceipt({ hash: tx });
+                } else {
+                    console.log(`   ℹ️ Account already funded (Balance: ${formatEther(balance)} ETH). Skipping.`);
+                }
             }
 
             return { accountAddress, deployTxHash: deployHash, isDeployed: true }; 

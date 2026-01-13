@@ -11,7 +11,8 @@ import {
     type ScenarioParams,
     UserOperationBuilder // Ensure this is imported
 } from '../../packages/sdk/dist/index.js'; // Correct import source
-import { tokenActions, entryPointActions, EntryPointVersion } from '../../packages/core/dist/index.js';
+import { tokenActions, entryPointActions, EntryPointVersion, SuperPaymasterABI, RegistryABI, EntryPointABI } from '../../packages/core/dist/index.js';
+import { erc20Abi } from 'viem';
 import { fileURLToPath } from 'url';
 
 // Load L4 State
@@ -26,112 +27,9 @@ function loadState(): any {
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
 }
 
-const ENTRYPOINT_ABI = [
-  {
-    "inputs": [
-      {
-        "components": [
-          { "name": "sender", "type": "address" },
-          { "name": "nonce", "type": "uint256" },
-          { "name": "initCode", "type": "bytes" },
-          { "name": "callData", "type": "bytes" },
-          { "name": "accountGasLimits", "type": "bytes32" },
-          { "name": "preVerificationGas", "type": "uint256" },
-          { "name": "gasFees", "type": "bytes32" },
-          { "name": "paymasterAndData", "type": "bytes" },
-          { "name": "signature", "type": "bytes" }
-        ],
-        "name": "op",
-        "type": "tuple"
-      },
-      { "name": "target", "type": "address" },
-      { "name": "targetCallData", "type": "bytes" }
-    ],
-    "name": "simulateHandleOp",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "name": "opIndex", "type": "uint256" },
-      { "name": "reason", "type": "string" }
-    ],
-    "name": "FailedOp",
-    "type": "error"
-  },
-  {
-      "inputs": [
-        { "name": "preOpGas", "type": "uint256" },
-        { "name": "paid", "type": "uint256" },
-        { "name": "validAfter", "type": "uint48" },
-        { "name": "validUntil", "type": "uint48" },
-        { "name": "targetSuccess", "type": "bool" },
-        { "name": "targetResult", "type": "bytes" }
-      ],
-      "name": "ExecutionResult",
-      "type": "error"
-  },
-  {
-    "inputs": [{ "name": "account", "type": "address" }],
-    "name": "balanceOf",
-    "outputs": [{ "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-      "inputs": [{ "name": "sender", "type": "address" }, { "name": "key", "type": "uint192" }],
-      "name": "getNonce",
-      "outputs": [{ "name": "nonce", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-  }
-] as const;
+// Used from imports: EntryPointABI, erc20Abi, SuperPaymasterABI
 
-const ERC20_ABI = [
-  {
-    "inputs": [{ "name": "account", "type": "address" }],
-    "name": "balanceOf",
-    "outputs": [{ "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-      "inputs": [{ "name": "spender", "type": "address" }, { "name": "amount", "type": "uint256" }],
-      "name": "approve",
-      "outputs": [{ "name": "", "type": "bool" }],
-      "stateMutability": "nonpayable",
-      "type": "function"
-  },
-  {
-      "inputs": [{ "name": "owner", "type": "address" }, { "name": "spender", "type": "address" }],
-      "name": "allowance",
-      "outputs": [{ "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-  }
-] as const;
-
-const SUPER_PAYMASTER_ABI = [
-  {
-    "inputs": [{ "name": "operator", "type": "address" }],
-    "name": "operators",
-    "outputs": [
-        { "name": "aPNTsBalance", "type": "uint128" },
-        { "name": "exchangeRate", "type": "uint96" },
-        { "name": "isConfigured", "type": "bool" },
-        { "name": "isPaused", "type": "bool" },
-        { "name": "xPNTsToken", "type": "address" },
-        { "name": "reputation", "type": "uint32" },
-        { "name": "minTxInterval", "type": "uint48" },
-        { "name": "treasury", "type": "address" },
-        { "name": "totalSpent", "type": "uint256" },
-        { "name": "totalTxSponsored", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const;
+// definition removed
 
 // PaymasterV4 Deposit-Only Model ABI (v4.3.0)
 const PAYMASTER_V4_DEPOSIT_ABI = [
@@ -328,7 +226,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                     
                     const result = await publicClient.readContract({
                          address: scene.params.paymaster!,
-                         abi: SUPER_PAYMASTER_ABI,
+                         abi: SuperPaymasterABI,
                          functionName: 'operators',
                          args: [operator as `0x${string}`]
                     }) as any;
@@ -482,7 +380,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                         const depositAmount = parseEther('500'); // Deposit 500 tokens
                         const approveHash = await chainClient.writeContract({
                             address: scene.params.tokenAddress!,
-                            abi: ERC20_ABI,
+                            abi: erc20Abi,
                             functionName: 'approve',
                             args: [currentPM, depositAmount],
                             account: jasonAcc
@@ -520,7 +418,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                     // Resume checks using currentPM
                     const pmDeposit = await publicClient.readContract({
                         address: config.contracts.entryPoint,
-                        abi: ENTRYPOINT_ABI,
+                        abi: EntryPointABI,
                         functionName: 'balanceOf',
                         args: [scene.params.paymaster!]
                     });
@@ -533,7 +431,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                          const senderParams = { sender: targetAA.address }; 
                          const tokenBal = await publicClient.readContract({
                              address: scene.params.tokenAddress,
-                             abi: ERC20_ABI,
+                             abi: erc20Abi,
                              functionName: 'balanceOf',
                              args: [senderParams.sender]
                          });
@@ -552,7 +450,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                              console.log(`   🚨 Allowance is 0! Submitting Approve Op first...`);
                              
                              const approveData = encodeFunctionData({
-                                 abi: ERC20_ABI,
+                                 abi: erc20Abi,
                                  functionName: 'approve',
                                  args: [scene.params.paymaster!, BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935')] // MaxUint256
                              });
@@ -562,7 +460,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                                  sender: targetAA.address,
                                  nonce: `0x${(await publicClient.readContract({
                                      address: config.contracts.entryPoint,
-                                     abi: ENTRYPOINT_ABI,
+                                     abi: EntryPointABI,
                                      functionName: 'getNonce',
                                      args: [targetAA.address, 0n]
                                  })).toString(16)}` as Hex,
@@ -910,7 +808,7 @@ export async function runGaslessTests(config: NetworkConfig) {
                     console.log(`\n   🕵️  Running explicit simulation (debug_revert)...`);
                     await publicClient.simulateContract({
                         address: config.contracts.entryPoint,
-                        abi: ENTRYPOINT_ABI,
+                        abi: EntryPointABI,
                         functionName: 'simulateHandleOp',
                         args: [userOp, '0x0000000000000000000000000000000000000000', '0x'],
                         account: userOp.sender
@@ -975,7 +873,7 @@ function generateDebugCommand(userOp: any, entryPoint: Address) {
     console.log(`   # 2. Simulate validation (Local Foundry/Cast)`);
     // Utilize encodeFunctionData to avoid shell parsing issues with complex tuples
     const calldata = encodeFunctionData({
-        abi: ENTRYPOINT_ABI,
+        abi: EntryPointABI,
         functionName: 'simulateHandleOp',
         args: [userOp, '0x0000000000000000000000000000000000000000', '0x']
     });

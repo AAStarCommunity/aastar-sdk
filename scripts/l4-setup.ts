@@ -20,7 +20,8 @@ import {
     RoleIds,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES,
-    parseKey
+    parseKey,
+    RoleDataFactory
 } from '../packages/sdk/src/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -193,10 +194,10 @@ Examples:
                     tokenAddr = existingToken;
                 } else {
                     // 只有没有 token 时才 launch
-                    console.log(`   🆕 Launching new community...`);
                     const launchResult = await commClient.launch({
                         name: op.name.split(' ')[0],
-                        symbol: op.name.split(' ')[0].toUpperCase().slice(0, 4) + 'P',
+                        tokenName: `${op.name.split(' ')[0]} PNTs`,
+                        tokenSymbol: op.name.split(' ')[0].toUpperCase().slice(0, 4) + 'P',
                         governance: { initialReputationRule: false } // 跳过 reputation rule 设置（避免 ABI 错误）
                     });
                     tokenAddr = launchResult.tokenAddress;
@@ -205,7 +206,8 @@ Examples:
                 console.warn(`   ⚠️  Failed to check Registry, attempting launch...`);
                 const launchResult = await commClient.launch({
                     name: op.name.split(' ')[0],
-                    symbol: op.name.split(' ')[0].toUpperCase().slice(0, 4) + 'P',
+                    tokenName: `${op.name.split(' ')[0]} PNTs`,
+                    tokenSymbol: op.name.split(' ')[0].toUpperCase().slice(0, 4) + 'P',
                     governance: { initialReputationRule: false }
                 });
                 tokenAddr = launchResult.tokenAddress;
@@ -242,6 +244,12 @@ Examples:
             Token: tokenAddr,
             PM: pmAddr || 'None'
         });
+
+        // Store only essential data, exclude client to protect secrets
+        communityData[op.name] = { 
+            token: tokenAddr, 
+            pmV4: pmAddr 
+        };
     }
     printTable("Operator Setup", operatorStatus);
 
@@ -260,26 +268,42 @@ Examples:
     
     for (const op of operators) {
         const owner = privateKeyToAccount(parseKey(op.key!));
-        const user = createEndUserClient({ transport: http(getRpcUrl()), account: owner });
+        const user = createEndUserClient({ 
+            transport: http(getRpcUrl()), 
+            account: owner,
+            addresses: {
+                simpleAccountFactory: (process.env.SIMPLE_ACCOUNT_FACTORY || process.env["SimpleAccountFactoryv0.7"]) as Address
+            }
+        });
 
         for (let i = 0; i < 2; i++) {
             const salt = BigInt(i);
             const label = `${op.name}_AA${i+1}`;
             
-            const { accountAddress, isDeployed } = await user.deploySmartAccount({
-                owner: owner.address,
-                salt,
-                fundWithETH: parseEther('0.05')
+                const { accountAddress, isDeployed } = await user.deploySmartAccount({
+                    owner: owner.address,
+                    salt,
+                    fundWithETH: parseEther('0.05')
+                });
+
+            // Fund with some GTokens (idempotent check)
+            const gTokenBalance = await admin.balanceOf({ 
+                token: TEST_TOKEN_ADDRESSES.gToken, 
+                account: accountAddress 
             });
 
-            // Fund with some GTokens
-            const hash = await admin.mint({
-                token: TEST_TOKEN_ADDRESSES.gToken,
-                to: accountAddress,
-                amount: parseEther('1000'),
-                account: supplierAccount
-            });
-            await admin.waitForTransactionReceipt({ hash });
+            if (gTokenBalance < parseEther('500')) {
+                console.log(`   ⛽ Minting 1000 GTokens for ${label}...`);
+                const hash = await admin.mint({
+                    token: TEST_TOKEN_ADDRESSES.gToken,
+                    to: accountAddress,
+                    amount: parseEther('1000'),
+                    account: supplierAccount
+                });
+                await admin.waitForTransactionReceipt({ hash });
+            } else {
+                console.log(`   ℹ️ ${label} already has enough GTokens (${formatEther(gTokenBalance)}). Skipping.`);
+            }
             await delayMs(TX_DELAY);
 
             aaAccounts.push({ label, address: accountAddress, owner: owner.address, salt, opName: op.name });
@@ -299,19 +323,40 @@ Examples:
         console.log(`\n🤝 4. Cross-Joining AAs to Communities...`);
         for (const aa of aaAccounts) {
         const owner = privateKeyToAccount(parseKey(operators.find(o => o.name === aa.opName)!.key!));
-        const user = createEndUserClient({ transport: http(getRpcUrl()), account: owner });
+        const user = createEndUserClient({ 
+            transport: http(getRpcUrl()), 
+            account: owner,
+            addresses: {
+                simpleAccountFactory: (process.env.SIMPLE_ACCOUNT_FACTORY || process.env["SimpleAccountFactoryv0.7"]) as Address
+            }
+        });
         
         // Find community to join (e.g., join the "next" operator's community for cross-testing)
         const opIdx = operators.findIndex(o => o.name === aa.opName);
         const targetOp = operators[(opIdx + 1) % operators.length];
         const targetComm = communityData[targetOp.name].token;
 
+        // Check idempotency: is the account already in this community?
+        try {
+            const currentComm = await user.getAccountCommunity({ account: aa.address });
+            if (currentComm.toLowerCase() === targetComm.toLowerCase()) {
+                console.log(`      ⏭️  Already in ${targetOp.name}'s community. Skipping.`);
+                continue;
+            }
+        } catch (e) {
+            // If check fails, we proceed to try onboard anyway
+        }
+
         console.log(`   🔗 ${aa.label} joining ${targetOp.name}'s community...`);
         try {
+            // onboard 内部已处理了默认 roleData 的编码
             await user.onboard({
                 community: targetComm,
                 roleId: RoleIds.ENDUSER,
-                roleData: '0x' as Hex // Minimal data
+                roleData: RoleDataFactory.endUser({
+                    account: aa.address,
+                    community: targetComm
+                })
             });
             console.log(`      ✅ Joined`);
         } catch (e: any) {
@@ -322,13 +367,14 @@ Examples:
 
     // 5. Final State Save
     console.log(`\n💾 Saving State to ${STATE_FILE}...`);
-    const state = {
+    const finalState = {
         network: networkArg,
         timestamp: new Date().toISOString(),
         operators: communityData,
         aaAccounts
     };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+    fs.writeFileSync(STATE_FILE, JSON.stringify(finalState, (key, value) => 
+        typeof value === 'bigint' ? value.toString() : value, 2), 'utf-8');
 
     console.log(`\n✅ L4 Setup Complete.`);
 }
