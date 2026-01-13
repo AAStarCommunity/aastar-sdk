@@ -4,7 +4,7 @@
 
 AAStar SDK is a comprehensive TypeScript SDK for interacting with the AAStar Public Goods Infrastructure and create Your Own Protocol (YOP), providing Account Abstraction (ERC-4337) capabilities with advanced features like gasless SuperPaymaster(AOA+), EOA RainBow Bridge and community management, and reputation systems.
 
-**Version**: 0.14.0  
+**Version**: 0.16.4  
 **License**: MIT  
 **Repository**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)
 
@@ -14,13 +14,14 @@ AAStar SDK is a comprehensive TypeScript SDK for interacting with the AAStar Pub
 
 1. [Installation](#installation)
 2. [Quick Start](#quick-start)
-3. [Core Module](#core-module)
-4. [Account Module](#account-module)
-5. [Paymaster Module](#paymaster-module)
-6. [Tokens Module](#tokens-module)
-7. [Identity Module](#identity-module)
-8. [DApp Module](#dapp-module)
-9. [Complete Examples](#complete-examples)
+3. [Error Handling - AAStarError](#error-handling---aastarerror)
+4. [Core Module](#core-module)
+5. [Account Module](#account-module)
+6. [Paymaster Module](#paymaster-module)
+7. [Tokens Module](#tokens-module)
+8. [Identity Module](#identity-module)
+9. [DApp Module](#dapp-module)
+10. [Complete Examples](#complete-examples)
 
 ---
 
@@ -51,6 +52,156 @@ const operatorClient = createOperatorClient({
 const stakeTx = await operatorClient.stake({
   amount: parseEther('100'),
 });
+```
+
+---
+
+## Error Handling - AAStarError
+
+### Overview
+
+All SDK clients throw `AAStarError` for better error handling and debugging. `AAStarError` provides structured error information with error codes, messages, and optional details.
+
+### AAStarErrorCode Enum
+
+```typescript
+export enum AAStarErrorCode {
+    VALIDATION_ERROR = 'VALIDATION_ERROR',     // Invalid input parameters
+    CONTRACT_ERROR = 'CONTRACT_ERROR',          // Smart contract execution failed
+    NETWORK_ERROR = 'NETWORK_ERROR',            // RPC or network issues
+    CONFIGURATION_ERROR = 'CONFIGURATION_ERROR', // Missing or invalid configuration
+    UNKNOWN_ERROR = 'UNKNOWN_ERROR',            // Unclassified errors
+}
+```
+
+### AAStarError Class
+
+```typescript
+class AAStarError extends Error {
+    code: AAStarErrorCode;
+    details?: any;
+    
+    constructor(message: string, code: AAStarErrorCode, details?: any);
+}
+```
+
+### Usage Example
+
+```typescript
+import { createEndUserClient, AAStarError, AAStarErrorCode } from '@aastar/sdk';
+
+try {
+    await client.executeGasless({
+        to: '0xinvalid',  // Invalid address
+        value: 1000n,
+    });
+} catch (error) {
+    if (error instanceof AAStarError) {
+        switch (error.code) {
+            case AAStarErrorCode.VALIDATION_ERROR:
+                console.error(`Validation failed: ${error.message}`);
+                console.error(`Details:`, error.details);
+                break;
+            case AAStarErrorCode.CONTRACT_ERROR:
+                console.error(`Contract execution failed: ${error.message}`);
+                break;
+            case AAStarErrorCode.NETWORK_ERROR:
+                console.error(`Network error: ${error.message}`);
+                // Retry logic here
+                break;
+            case AAStarErrorCode.CONFIGURATION_ERROR:
+                console.error(`Configuration error: ${error.message}`);
+                break;
+            default:
+                console.error(`Unknown error: ${error.message}`);
+        }
+    } else {
+        // Handle non-AAStarError exceptions
+        console.error('Unexpected error:', error);
+    }
+}
+```
+
+### Error Code Reference
+
+| Error Code | Description | Common Causes | Recommended Action |
+|------------|-------------|---------------|-------------------|
+| `VALIDATION_ERROR` | Invalid input parameters | Invalid address format, negative amounts, missing required fields | Validate inputs before calling SDK methods |
+| `CONTRACT_ERROR` | Smart contract execution failed | Insufficient gas, reverted transaction, access denied | Check contract state, user permissions, and gas limits |
+| `NETWORK_ERROR` | RPC or network communication failed | Timeout, connection refused, invalid RPC endpoint | Retry with exponential backoff, check network status |
+| `CONFIGURATION_ERROR` | SDK configuration is invalid | Missing contract addresses, invalid network configuration | Verify SDK initialization parameters |
+| `UNKNOWN_ERROR` | Unclassified error | Unexpected runtime errors | Report to SDK maintainers with error details |
+
+### Best Practices
+
+#### 1. Always Check Error Type
+
+```typescript
+try {
+    await sdkMethod();
+} catch (error) {
+    if (error instanceof AAStarError) {
+        // Handle AAStarError
+    } else {
+        // Handle other errors
+    }
+}
+```
+
+#### 2. Use Error Details for Debugging
+
+```typescript
+catch (error) {
+    if (error instanceof AAStarError) {
+        console.error({
+            code: error.code,
+            message: error.message,
+            details: error.details,  // Additional context
+        });
+    }
+}
+```
+
+####3. Implement Retry Logic for Network Errors
+
+```typescript
+async function withRetry(fn: () => Promise<any>, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (error instanceof AAStarError && 
+                error.code === AAStarErrorCode.NETWORK_ERROR && 
+                i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+                continue;
+            }
+            throw error;
+        }
+    }
+}
+
+// Usage
+await withRetry(() => client.executeGasless({...}));
+```
+
+#### 4. Provide User-Friendly Messages
+
+```typescript
+function getUserFriendlyMessage(error: AAStarError): string {
+    switch (error.code) {
+        case AAStarErrorCode.VALIDATION_ERROR:
+            return 'Please check your input and try again.';
+        case AAStarErrorCode.CONTRACT_ERROR:
+            return 'Transaction failed. Please try again later.';
+        case AAStarErrorCode.NETWORK_ERROR:
+            return 'Network connection issue. Please check your internet.';
+        case AAStarErrorCode.CONFIGURATION_ERROR:
+            return 'SDK configuration error. Please contact support.';
+        default:
+            return 'An unexpected error occurred. Please try again.';
+    }
+}
 ```
 
 ---
