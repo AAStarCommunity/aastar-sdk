@@ -11,22 +11,22 @@ import {
     type PublicActions,
     type WalletActions,
     type Address,
-    keccak256,
-    stringToBytes,
-    erc20Abi
 } from 'viem';
 
 import { 
     registryActions, 
-    RegistryABI, 
+    RegistryABI,
+    xPNTsFactoryABI, 
     sbtActions,
     reputationActions,
     type RegistryActions,
     type SBTActions,
     type ReputationActions,
     CORE_ADDRESSES,
-    TEST_TOKEN_ADDRESSES
+    TEST_TOKEN_ADDRESSES,
+    validateAddress
 } from '@aastar/core';
+import { AAStarError, AAStarErrorCode as AAStarErrorType } from '../errors/AAStarError.js';
 import { RoleDataFactory, RoleIds } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
 import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
@@ -101,150 +101,58 @@ export function createCommunityClient({
             minStake?: bigint;
             initialReputationRule?: boolean;
         }
-    }): Promise<{ tokenAddress: Address; results: { hash: Hash, events: DecodedEvent[] }[] }> => {
+    }) => {
+        if (!account) throw new Error("Account required for launch");
+        
+        // Input Validation
+        if (!args.name) throw new AAStarError("Community Name is required", AAStarErrorType.VALIDATION_ERROR);
+        if (!args.tokenName) throw new AAStarError("Token Name is required", AAStarErrorType.VALIDATION_ERROR);
+        if (!args.tokenSymbol) throw new AAStarError("Token Symbol is required", AAStarErrorType.VALIDATION_ERROR);
+
+        const results: { hash: Hash, events: DecodedEvent[] }[] = [];
+        let tokenAddress: Address = '0x0000000000000000000000000000000000000000';
+
         try {
-            console.log(`🚀 Launching community: ${args.name}`);
-            
-            if (!account) {
-                throw new Error('Account is required for launch()');
-            }
+            console.log(`🚀 Launching Community "${args.name}"...`);
 
-            // Generate unique community name with timestamp
-            const uniqueName = `${args.name}_${Date.now()}`;
-            console.log(`   📝 Unique name: ${uniqueName}`);
-
-            // Generate roleData using RoleDataFactory
-            const roleData = RoleDataFactory.community({
-                name: uniqueName,
+            // 1. Register Role (Community)
+            // Using helper logic to reuse data encoding
+            const communityRoleData = {
+                name: args.name,
                 ensName: '',
                 website: args.website || '',
                 description: args.description || '',
                 logoURI: args.logoURI || '',
-                stakeAmount: 0n
-            });
-            console.log(`   ✅ RoleData generated:`, roleData);
-            console.log(`   📊 RoleData type:`, typeof roleData);
-            console.log(`   📏 RoleData length:`, roleData?.length);
+                stakeAmount: args.governance?.minStake || 0n
+            };
 
-            // 1. Check if already has role
-            const hasRole = await client.readContract({
-                address: usedAddresses.registry,
-                abi: RegistryABI,
-                functionName: 'hasRole',
-                args: [RoleIds.COMMUNITY, account.address]
-            }) as boolean;
-
-            let registerTx: Hex | undefined;
-            const results: { hash: Hash, events: DecodedEvent[] }[] = [];
-
-            if (hasRole) {
-                console.log(`   ℹ️  Account already has COMMUNITY role. Skipping registration.`);
-            } else {
-                // 2. Check GToken Allowance and Balance
-                if (usedAddresses.gToken && usedAddresses.gTokenStaking) {
-                    console.log(`   💰 Checking GToken allowance...`);
-                    const balance = await client.readContract({
-                        address: usedAddresses.gToken,
-                        abi: erc20Abi,
-                        functionName: 'balanceOf',
-                        args: [account.address]
-                    }) as bigint;
-
-                    if (balance < 50000000000000000000n) { // 50 GT assumption, should ideally check minStake
-                         console.warn(`   ⚠️ Warning: Low GToken balance (${balance}). Registration may fail if minStake > balance.`);
-                    }
-
-                    const allowance = await client.readContract({
-                        address: usedAddresses.gToken,
-                        abi: erc20Abi,
-                        functionName: 'allowance',
-                        args: [account.address, usedAddresses.gTokenStaking]
-                    }) as bigint;
-
-                    if (allowance < 50000000000000000000n) {
-                        console.log(`   🔓 Approving GToken for Staking...`);
-                        const approveTx = await client.writeContract({
-                            address: usedAddresses.gToken,
-                            abi: erc20Abi,
-                            functionName: 'approve',
-                            args: [usedAddresses.gTokenStaking, 115792089237316195423570985008687907853269984665640564039457584007913129639935n], // MaxUint256
-                            account: account
-                        });
-                        console.log(`   ✅ Approved: ${approveTx}`);
-                        const receipt = await client.waitForTransactionReceipt({ hash: approveTx });
-                        const events = decodeContractEvents(receipt.logs);
-                        logDecodedEvents(events);
-                        results.push({ hash: approveTx, events });
-                    }
-                }
-
-                // Register community role
-                console.log(`   📤 Registering community role...`);
-                try {
-                    registerTx = await registryActionsObj.registerRole({
-                        roleId: RoleIds.COMMUNITY,
-                        user: account.address,
-                        data: roleData,
-                        account: account
-                    });
-                    console.log(`   ✅ Community registered: ${registerTx}`);
-                    const receipt = await client.waitForTransactionReceipt({ hash: registerTx });
-                    const events = decodeContractEvents(receipt.logs);
-                    logDecodedEvents(events);
-                    results.push({ hash: registerTx, events });
-                } catch (e: any) {
-                     // Check for RoleAlreadyGranted (just in case hasRole returned false but race condition or cache)
-                     const isRoleError = e.message?.includes('RoleAlreadyGranted') || 
-                                        (e.cause as any)?.data?.errorName === 'RoleAlreadyGranted' ||
-                                        (e as any).name === 'RoleAlreadyGranted' || 
-                                        (e as any).name === 'RoleAlreadyGranted';
-
-                    if (isRoleError) {
-                        console.log(`   ℹ️  Role already granted (caught in tx). Skipping.`);
-                    } else {
-                        throw e;
-                    }
-                }
+            const roleDataHex = RoleDataFactory.community(communityRoleData);
+            
+            // Register Role
+            console.log('   Registry: Registering Role...');
+            try {
+                const regTx = await registryActionsObj.registerRoleSelf({
+                    roleId: RoleIds.COMMUNITY,
+                    data: roleDataHex,
+                    account
+                });
+                console.log(`   ✅ Registered: ${regTx}`);
+                const receipt = await client.waitForTransactionReceipt({ hash: regTx });
+                const events = decodeContractEvents(receipt.logs);
+                logDecodedEvents(events);
+                results.push({ hash: regTx, events });
+            } catch (e: any) {
+                // If already registered, we continue
+                console.log('   ℹ️ Role registration check:', e.message || 'Already registered');
             }
 
-            // Deploy xPNTs token if factory is available
-            let tokenAddress: Address = '0x0000000000000000000000000000000000000000' as Address;
-
+            // 2. Deploy xPNTs Token via Factory
             if (usedAddresses.xPNTsFactory) {
-                if (!client.account) {
-                    throw new Error("Client account is required for token deployment");
-                }
-
-                // ABI from xPNTsFactory.sol
-                const factoryAbi = [
-                    {
-                        type: 'function',
-                        name: 'deployxPNTsToken',
-                        inputs: [
-                            { name: 'name', type: 'string' },
-                            { name: 'symbol', type: 'string' },
-                            { name: 'communityName', type: 'string' },
-                            { name: 'communityENS', type: 'string' },
-                            { name: 'exchangeRate', type: 'uint256' },
-                            { name: 'paymasterAOA', type: 'address' }
-                        ],
-                        outputs: [{ name: 'token', type: 'address' }],
-                        stateMutability: 'nonpayable'
-                    },
-                    {
-                        type: 'function',
-                        name: 'getTokenAddress',
-                        inputs: [{ name: 'community', type: 'address' }],
-                        outputs: [{ name: 'token', type: 'address' }],
-                        stateMutability: 'view'
-                    }
-                ] as const;
-
-                // 1. Check if token already exists
+                // Check if token already exists
                 try {
                     const existingToken = await client.readContract({
                         address: usedAddresses.xPNTsFactory,
-                        abi: factoryAbi,
+                        abi: xPNTsFactoryABI,
                         functionName: 'getTokenAddress',
                         args: [account.address]
                     }) as Address;
@@ -258,7 +166,7 @@ export function createCommunityClient({
                         // deployxPNTsToken(name, symbol, communityName, communityENS, exchangeRate, paymasterAOA)
                         const { request } = await client.simulateContract({
                             address: usedAddresses.xPNTsFactory,
-                            abi: factoryAbi,
+                            abi: xPNTsFactoryABI,
                             functionName: 'deployxPNTsToken',
                             args: [
                                 args.tokenName, 
@@ -281,7 +189,7 @@ export function createCommunityClient({
                         // After deployment, fetch the address again
                         tokenAddress = await client.readContract({
                             address: usedAddresses.xPNTsFactory,
-                            abi: factoryAbi,
+                            abi: xPNTsFactoryABI,
                             functionName: 'getTokenAddress',
                             args: [account.address]
                         }) as Address;
@@ -291,6 +199,8 @@ export function createCommunityClient({
                 } catch (e) {
                     console.warn(`   ⚠️ Token deployment step issues:`, e);
                 }
+            } else {
+                console.warn(`   ⚠️ xPNTsFactory address missing, skipping token deployment.`);
             }
 
             // 3. Setup Governance (Reputation Rule) - Pattern logic
@@ -323,7 +233,7 @@ export function createCommunityClient({
         } catch (error: any) {
             const decodedMsg = decodeContractError(error);
             if (decodedMsg) {
-                throw new Error(`Community Launch Failed: ${decodedMsg}`);
+                throw new AAStarError(`Community Launch Failed: ${decodedMsg}`, AAStarErrorType.CONTRACT_ERROR);
             }
             throw error;
         }
@@ -332,6 +242,8 @@ export function createCommunityClient({
     // State query method - check before operations
     const getCommunityInfo = async (accountAddress: Address) => {
         try {
+            validateAddress(accountAddress, 'Account Address');
+
             // 1. Check if account has COMMUNITY role
             const hasRole = await client.readContract({
                 address: usedAddresses.registry,
@@ -349,62 +261,53 @@ export function createCommunityClient({
             }
 
             // 2. Get token address from factory
-            const factoryAbi = [
-                {
-                    inputs: [{ name: 'community', type: 'address' }],
-                    name: 'getTokenAddress',
-                    outputs: [{ name: '', type: 'address' }],
-                    stateMutability: 'view',
-                    type: 'function'
-                }
-            ] as const;
-
-            const tokenAddress = await client.readContract({
-                address: usedAddresses.xPNTsFactory!,
-                abi: factoryAbi,
-                functionName: 'getTokenAddress',
-                args: [accountAddress]
-            }) as Address;
+            let tokenAddress: Address | null = null;
+            if (usedAddresses.xPNTsFactory) {
+                 tokenAddress = await client.readContract({
+                    address: usedAddresses.xPNTsFactory,
+                    abi: xPNTsFactoryABI,
+                    functionName: 'getTokenAddress',
+                    args: [accountAddress]
+                }) as Address;
+            }
 
             // 3. Get community metadata from Registry
-        const metadata = await client.readContract({
-            address: usedAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'roleMetadata',
-            args: [RoleIds.COMMUNITY, accountAddress]
-        }) as Hex;
+            const metadata = await client.readContract({
+                address: usedAddresses.registry,
+                abi: RegistryABI,
+                functionName: 'roleMetadata',
+                args: [RoleIds.COMMUNITY, accountAddress]
+            }) as Hex;
 
-        let communityData = {
-            name: 'Community',
-            ensName: '',
-            website: '',
-            description: '',
-            logoURI: ''
-        };
+            let communityData = {
+                name: 'Community',
+                ensName: '',
+                website: '',
+                description: '',
+                logoURI: ''
+            };
 
-        if (metadata && metadata !== '0x') {
-            try {
-                // RoleMetadata is encoded as CommunityRoleData struct:
-                // (string name, string ensName, string website, string description, string logoURI, uint256 stakeAmount)
-                const decoded = RoleDataFactory.decodeCommunity(metadata);
-                communityData = {
-                    name: decoded.name || 'Community',
-                    ensName: decoded.ensName || '',
-                    website: decoded.website || '',
-                    description: decoded.description || '',
-                    logoURI: decoded.logoURI || ''
-                };
-            } catch (e) {
-                console.warn('   ⚠️ Failed to decode community metadata:', e);
+            if (metadata && metadata !== '0x') {
+                try {
+                    const decoded = RoleDataFactory.decodeCommunity(metadata);
+                    communityData = {
+                        name: decoded.name || 'Community',
+                        ensName: decoded.ensName || '',
+                        website: decoded.website || '',
+                        description: decoded.description || '',
+                        logoURI: decoded.logoURI || ''
+                    };
+                } catch (e) {
+                    console.warn('   ⚠️ Failed to decode community metadata:', e);
+                }
             }
-        }
 
-        return {
-            hasRole: true,
-            tokenAddress: (tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000') ? tokenAddress : null,
-            communityData: (metadata && metadata !== '0x') ? communityData : null
-        };
-    } catch (error) {
+            return {
+                hasRole: true,
+                tokenAddress: (tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000') ? tokenAddress : null,
+                communityData: (metadata && metadata !== '0x') ? communityData : null
+            };
+        } catch (error) {
             console.error('Error fetching community info:', error);
             return {
                 hasRole: false,

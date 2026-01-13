@@ -112,12 +112,12 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async getUserSBT({ user, roleId }) {
+    async getUserSBT({ user }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
             functionName: 'getUserSBT',
-            args: [user, roleId]
+            args: [user]
         }) as Promise<bigint>;
     },
 

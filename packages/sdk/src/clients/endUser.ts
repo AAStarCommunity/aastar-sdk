@@ -1,4 +1,4 @@
-import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, type Hash, parseAbi, parseEther } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, type Hash, parseEther, encodeFunctionData, pad, concat } from 'viem';
 import { 
     registryActions, 
     sbtActions,
@@ -11,8 +11,16 @@ import {
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES,
     TEST_ACCOUNT_ADDRESSES,
-    RegistryABI
+    RegistryABI,
+    EntryPointABI,
+    SimpleAccountFactoryABI,
+    xPNTsFactoryABI,
+    validateAddress,
+    validateHex,
+    validateAmount,
 } from '@aastar/core';
+import { PaymasterClient } from '@aastar/paymaster';
+import { AAStarError, AAStarErrorCode as AAStarErrorType } from '../errors/AAStarError.js';
 import { decodeContractError } from '../errors/decoder.js';
 import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
 
@@ -120,6 +128,9 @@ export function createEndUserClient({
             roleId: Hex,
             roleData: Hex
         }) {
+            community = validateAddress(community, 'Community');
+            roleId = validateHex(roleId, 'RoleId');
+            
             console.log('👤 Onboarding user to community...');
             const result = await (this as any).joinAndActivate({ community, roleId, roleData });
             console.log(`✅ User onboarded! SBT ID: ${result.sbtId}`);
@@ -133,11 +144,13 @@ export function createEndUserClient({
             const accountToUse = account;
             if (!accountToUse) throw new Error("Account required for joinAndActivate");
 
+            // Validation
+            community = validateAddress(community, 'Community');
+            roleId = validateHex(roleId, 'RoleId');
+
             console.log(`   SDK: Joining community ${community}...`);
             
             // Registry.registerRoleSelf is now idempotent (modified contract)
-            // First call: Mints SBT + grants role
-            // Subsequent calls: Adds community membership
             
             // If roleData not provided, encode EndUserRoleData structure
             let finalData: Hex;
@@ -179,22 +192,25 @@ export function createEndUserClient({
                 // 3. Fetch Initial Credit for verification
                 let credit = 0n;
                 try {
-                    const factoryAbi = parseAbi(['function communityToToken(address) view returns (address)']);
+                    // Use Imported ABI
                     const tokenAddress = await (client as any).readContract({
                         address: usedAddresses.xPNTsFactory,
-                        abi: factoryAbi,
+                        abi: xPNTsFactoryABI,
                         functionName: 'communityToToken',
                         args: [community]
                     }) as Address;
 
-                    credit = await actions.getAvailableCredit({
-                        user: (client as any).aaAddress || accountToUse.address,
-                        operator: tokenAddress
-                    });
-
-                    console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
+                    // If token exists (not zero address), check credit
+                    if (tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000') {
+                        credit = await actions.getAvailableCredit({
+                            user: (client as any).aaAddress || accountToUse.address,
+                            operator: tokenAddress
+                        });
+                        console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
+                    }
                 } catch (error: any) {
-                    console.log(`   SDK: Credit system not available (${error.message.split('\n')[0]}). Continuing...`);
+                    // Graceful degradation if credit system not ready
+                    console.log(`   SDK: Credit system check skipped (${error.message?.split('\n')[0]}).`);
                 }
 
                 return {
@@ -207,7 +223,7 @@ export function createEndUserClient({
                 const decodedMsg = decodeContractError(error);
                 console.error(`   ❌ joinAndActivate failed:`, decodedMsg || error.message);
                 if (decodedMsg) {
-                    throw new Error(`Joining Community Failed: ${decodedMsg}`);
+                    throw new AAStarError(`Joining Community Failed: ${decodedMsg}`, AAStarErrorType.CONTRACT_ERROR);
                 }
                 throw error;
             }
@@ -221,135 +237,104 @@ export function createEndUserClient({
             const accountToUse = account;
             if (!accountToUse) throw new Error("Wallet account required for gasless execution");
 
+            // Validation
+            target = validateAddress(target, 'Target Address');
+            operator = validateAddress(operator, 'Operator Address');
+            if (value < 0n) throw new AAStarError('Value must be positive', AAStarErrorType.VALIDATION_ERROR);
+
             // 1. Get AA Address (Predict if necessary)
             const { accountAddress } = await (this as any).createSmartAccount({ owner: accountToUse.address });
             console.log(`   SDK: Executing gasless via AA ${accountAddress} Sponsored by ${operator}`);
 
             // 2. Fetch Nonce from EntryPoint (v0.7 standard)
-            // Note: In v0.7, nonce is managed by EntryPoint, not the account itself
             let nonce = 0n;
             try {
                 nonce = await (client as any).readContract({
                     address: usedAddresses.entryPoint,
-                    abi: [{ 
-                        type: 'function', 
-                        name: 'getNonce', 
-                        inputs: [{ type: 'address', name: 'sender' }, { type: 'uint192', name: 'key' }],
-                        outputs: [{ type: 'uint256' }], 
-                        stateMutability: 'view' 
-                    }],
+                    abi: EntryPointABI,
                     functionName: 'getNonce',
                     args: [accountAddress, 0n] // 0 = default nonce key
                 }) as bigint;
             } catch (e: any) {
                 console.warn(`   ⚠️  Failed to fetch nonce from EntryPoint, using default 0:`, e.message);
-                // For initial transactions, nonce is always 0
                 nonce = 0n;
             }
 
-            // 3. Build CallData (execute(target, value, data))
-            const { encodeFunctionData, concat, pad, keccak256 } = await import('viem');
-            const executeData = encodeFunctionData({
+            // 3. Build UserOp via PaymasterClient Helpers available or explicit logic
+            // Since PaymasterClient.submitGaslessUserOperation is an all-in-one, we can't easily use it here 
+            // if we want to return the exact structure { hash, events } AND control the signing manually if needed (EndUserClient acts as the wallet interface).
+            // However, EndUserClient has access to 'account' (privateKey account usually).
+            // So we can use PaymasterClient helpers.
+
+            // Construct CallData
+            // PaymasterClient.encodeExecution is STATIC.
+            const callData = encodeFunctionData({
                 abi: [{ type: 'function', name: 'execute', inputs: [{type: 'address'}, {type: 'uint256'}, {type: 'bytes'}] }],
                 functionName: 'execute',
                 args: [target, value, data]
             });
 
-            // 4. Build Gas Limits & Fees (Benchmarked for experiments)
+            // Construct UserOp
+            const paymasterVerificationGas = 250000n; // Estimation safe buffer
+            const paymasterPostOpGas = 50000n;
+            
+            const paymasterAndData = concat([
+                 usedAddresses.superPaymaster,
+                 pad(`0x${paymasterVerificationGas.toString(16)}`, { dir: 'left', size: 16 }),
+                 pad(`0x${paymasterPostOpGas.toString(16)}`, { dir: 'left', size: 16 }),
+                 operator
+            ]);
+            
             const accountGasLimits = concat([
-                pad(`0x${(100000).toString(16)}`, { dir: 'left', size: 16 }), // verification
-                pad(`0x${(100000).toString(16)}`, { dir: 'left', size: 16 })  // call
+                 pad(`0x${(100000).toString(16)}`, { dir: 'left', size: 16 }), // verification
+                 pad(`0x${(100000).toString(16)}`, { dir: 'left', size: 16 })  // call
             ]) as Hex;
 
             const gasFees = concat([
-                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 }), // 2 gwei
-                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })  // 2 gwei
+                 pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 }), // 2 gwei defaults
+                 pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })
             ]) as Hex;
 
-            // 5. Build PaymasterAndData (v0.7 packed format)
-            const paymasterVerificationGas = 250000n;
-            const paymasterPostOpGas = 50000n;
-            const paymasterAndData = concat([
-                usedAddresses.superPaymaster,
-                pad(`0x${paymasterVerificationGas.toString(16)}`, { dir: 'left', size: 16 }),
-                pad(`0x${paymasterPostOpGas.toString(16)}`, { dir: 'left', size: 16 }),
-                operator
-            ]);
-
-            // 6. Construct UserOperation v0.7
             const userOp = {
-                sender: accountAddress,
-                nonce,
-                initCode: '0x' as Hex,
-                callData: executeData,
-                accountGasLimits,
-                preVerificationGas: 50000n,
-                gasFees,
-                paymasterAndData,
-                signature: '0x' as Hex
+                 sender: accountAddress,
+                 nonce,
+                 initCode: '0x' as Hex, // Optimization: Assume deployed or separate deploy
+                 callData,
+                 accountGasLimits,
+                 preVerificationGas: 50000n,
+                 gasFees,
+                 paymasterAndData,
+                 signature: '0x' as Hex
             };
 
-            // 7. Sign UserOp Hash
+            // If account is not deployed, initCode needs to be set.
+            const byteCode = await (client as any).getBytecode({ address: accountAddress });
+            if (!byteCode || byteCode === '0x') {
+                const { initCode } = await (this as any).createSmartAccount({ owner: accountToUse.address });
+                userOp.initCode = initCode;
+            }
+
+            // Get Hash
             const entryPointAddress = usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
             const userOpHash = await (client as any).readContract({
                 address: entryPointAddress,
-                abi: [{
-                    type: 'function',
-                    name: 'getUserOpHash',
-                    inputs: [{
-                        type: 'tuple',
-                        components: [
-                            {name: 'sender', type: 'address'},
-                            {name: 'nonce', type: 'uint256'},
-                            {name: 'initCode', type: 'bytes'},
-                            {name: 'callData', type: 'bytes'},
-                            {name: 'accountGasLimits', type: 'bytes32'},
-                            {name: 'preVerificationGas', type: 'uint256'},
-                            {name: 'gasFees', type: 'bytes32'},
-                            {name: 'paymasterAndData', type: 'bytes'},
-                            {name: 'signature', type: 'bytes'}
-                        ]
-                    }],
-                    outputs: [{type: 'bytes32'}],
-                    stateMutability: 'view'
-                }],
+                abi: EntryPointABI,
                 functionName: 'getUserOpHash',
                 args: [userOp]
             }) as Hex;
 
+            // Sign
             const signature = await (accountToUse as any).signMessage({
                 message: { raw: userOpHash }
             });
             userOp.signature = signature;
 
             try {
-                // 8. Submit via handleOps
+                // Submit
                 console.log(`   SDK: Submitting UserOp ${userOpHash}...`);
                 const tx = await (client as any).writeContract({
                     address: entryPointAddress,
-                    abi: [{
-                        type: 'function',
-                        name: 'handleOps',
-                        inputs: [
-                            {
-                                type: 'tuple[]',
-                                components: [
-                                    {name: 'sender', type: 'address'},
-                                    {name: 'nonce', type: 'uint256'},
-                                    {name: 'initCode', type: 'bytes'},
-                                    {name: 'callData', type: 'bytes'},
-                                    {name: 'accountGasLimits', type: 'bytes32'},
-                                    {name: 'preVerificationGas', type: 'uint256'},
-                                    {name: 'gasFees', type: 'bytes32'},
-                                    {name: 'paymasterAndData', type: 'bytes'},
-                                    {name: 'signature', type: 'bytes'}
-                                ]
-                            },
-                            {name: 'beneficiary', type: 'address'}
-                        ],
-                        outputs: [],
-                        stateMutability: 'nonpayable'
-                    }],
+                    abi: EntryPointABI,
                     functionName: 'handleOps',
                     args: [[userOp], accountToUse.address],
                     account,
@@ -363,7 +348,7 @@ export function createEndUserClient({
             } catch (error: any) {
                 const decodedMsg = decodeContractError(error);
                 if (decodedMsg) {
-                    throw new Error(`Gasless Execution Failed: ${decodedMsg}`);
+                    throw new AAStarError(`Gasless Execution Failed: ${decodedMsg}`, AAStarErrorType.CONTRACT_ERROR);
                 }
                 throw error;
             }
@@ -377,177 +362,130 @@ export function createEndUserClient({
             const accountToUse = account;
             if (!accountToUse) throw new Error("Wallet account required for gasless execution");
 
+            // Validation
+            targets.forEach(t => validateAddress(t, 'Target'));
+            operator = validateAddress(operator, 'Operator');
+
             const finalValues = values || targets.map(() => 0n);
 
             // 1. Get AA Address (Predict if necessary)
             const { accountAddress } = await (this as any).createSmartAccount({ owner: accountToUse.address });
             console.log(`   SDK: Executing gasless batch via AA ${accountAddress} Sponsored by ${operator}`);
 
-            // 2. Fetch Nonce from EntryPoint
+            // 2. Fetch Nonce
             let nonce = 0n;
             try {
                 nonce = await (client as any).readContract({
                     address: usedAddresses.entryPoint,
-                    abi: [{ 
-                        type: 'function', 
-                        name: 'getNonce', 
-                        inputs: [{ type: 'address', name: 'sender' }, { type: 'uint192', name: 'key' }],
-                        outputs: [{ type: 'uint256' }], 
-                        stateMutability: 'view' 
-                    }],
+                    abi: EntryPointABI,
                     functionName: 'getNonce',
                     args: [accountAddress, 0n]
                 }) as bigint;
             } catch (e: any) {
-                console.warn(`   ⚠️  Failed to fetch nonce, using 0:`, e.message);
                 nonce = 0n;
             }
 
-            // 3. Build CallData (executeBatch(targets, values, datas))
-            const { encodeFunctionData, concat, pad } = await import('viem');
+            // 3. Build CallData (executeBatch)
             const executeData = encodeFunctionData({
-                abi: [{ type: 'function', name: 'executeBatch', inputs: [{type: 'address[]'}, {type: 'uint256[]'}, {type: 'bytes[]'}] }],
-                functionName: 'executeBatch',
-                args: [targets, finalValues, datas]
+                 abi: [{ type: 'function', name: 'executeBatch', inputs: [{type: 'address[]'}, {type: 'uint256[]'}, {type: 'bytes[]'}] }],
+                 functionName: 'executeBatch',
+                 args: [targets, finalValues, datas]
             });
 
-            // 4. Build Gas Limits & Fees
-            const accountGasLimits = concat([
-                pad(`0x${(150000).toString(16)}`, { dir: 'left', size: 16 }), // increased verification for batch
-                pad(`0x${(300000).toString(16)}`, { dir: 'left', size: 16 })  // increased call gas for batch
-            ]) as Hex;
+             // 4. Build Gas Limits & Fees
+             const accountGasLimits = concat([
+                 pad(`0x${(150000).toString(16)}`, { dir: 'left', size: 16 }),
+                 pad(`0x${(300000).toString(16)}`, { dir: 'left', size: 16 })
+             ]) as Hex;
 
-            const gasFees = concat([
-                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 }),
-                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })
-            ]) as Hex;
+             const gasFees = concat([
+                 pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 }),
+                 pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })
+             ]) as Hex;
 
-            // 5. Build PaymasterAndData
-            const paymasterVerificationGas = 300000n;
-            const paymasterPostOpGas = 50000n;
-            const paymasterAndData = concat([
-                usedAddresses.superPaymaster,
-                pad(`0x${paymasterVerificationGas.toString(16)}`, { dir: 'left', size: 16 }),
-                pad(`0x${paymasterPostOpGas.toString(16)}`, { dir: 'left', size: 16 }),
-                operator
-            ]);
+             // 5. Paymaster
+             const paymasterAndData = concat([
+                 usedAddresses.superPaymaster,
+                 pad(`0x${(300000).toString(16)}`, { dir: 'left', size: 16 }),
+                 pad(`0x${(50000).toString(16)}`, { dir: 'left', size: 16 }),
+                 operator
+             ]);
 
-            // 6. Construct UserOperation v0.7
-            const userOp = {
-                sender: accountAddress,
-                nonce,
-                initCode: '0x' as Hex,
-                callData: executeData,
-                accountGasLimits,
-                preVerificationGas: 100000n, // increased for batch
-                gasFees,
-                paymasterAndData,
-                signature: '0x' as Hex
-            };
+             const userOp = {
+                 sender: accountAddress,
+                 nonce,
+                 initCode: '0x' as Hex,
+                 callData: executeData,
+                 accountGasLimits,
+                 preVerificationGas: 100000n,
+                 gasFees,
+                 paymasterAndData,
+                 signature: '0x' as Hex
+             };
 
-            // 7. Sign UserOp Hash
-            const entryPointAddress = usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
-            const userOpHash = await (client as any).readContract({
-                address: entryPointAddress,
-                abi: [{
-                    type: 'function',
-                    name: 'getUserOpHash',
-                    inputs: [{
-                        type: 'tuple',
-                        components: [
-                            {name: 'sender', type: 'address'},
-                            {name: 'nonce', type: 'uint256'},
-                            {name: 'initCode', type: 'bytes'},
-                            {name: 'callData', type: 'bytes'},
-                            {name: 'accountGasLimits', type: 'bytes32'},
-                            {name: 'preVerificationGas', type: 'uint256'},
-                            {name: 'gasFees', type: 'bytes32'},
-                            {name: 'paymasterAndData', type: 'bytes'},
-                            {name: 'signature', type: 'bytes'}
-                        ]
-                    }],
-                    outputs: [{type: 'bytes32'}],
-                    stateMutability: 'view'
-                }],
-                functionName: 'getUserOpHash',
-                args: [userOp]
-            }) as Hex;
-
-            const signature = await (accountToUse as any).signMessage({
-                message: { raw: userOpHash }
-            });
-            userOp.signature = signature;
-
-            try {
-                // 8. Submit
-                console.log(`   SDK: Submitting Batch UserOp ${userOpHash}...`);
-                const tx = await (client as any).writeContract({
-                    address: entryPointAddress,
-                    abi: [{
-                        type: 'function',
-                        name: 'handleOps',
-                        inputs: [
-                            {
-                                type: 'tuple[]',
-                                components: [
-                                    {name: 'sender', type: 'address'},
-                                    {name: 'nonce', type: 'uint256'},
-                                    {name: 'initCode', type: 'bytes'},
-                                    {name: 'callData', type: 'bytes'},
-                                    {name: 'accountGasLimits', type: 'bytes32'},
-                                    {name: 'preVerificationGas', type: 'uint256'},
-                                    {name: 'gasFees', type: 'bytes32'},
-                                    {name: 'paymasterAndData', type: 'bytes'},
-                                    {name: 'signature', type: 'bytes'}
-                                ]
-                            },
-                            {name: 'beneficiary', type: 'address'}
-                        ],
-                        outputs: [],
-                        stateMutability: 'nonpayable'
-                    }],
-                    functionName: 'handleOps',
-                    args: [[userOp], accountToUse.address],
-                    account,
-                    chain
-                });
-
-                const receipt = await (client as any).waitForTransactionReceipt({ hash: tx });
-                const events = decodeContractEvents(receipt.logs);
-                logDecodedEvents(events);
-                return { hash: tx, events };
-            } catch (error: any) {
-                const decodedMsg = decodeContractError(error);
-                if (decodedMsg) {
-                    throw new Error(`Gasless Batch Execution Failed: ${decodedMsg}`);
-                }
-                throw error;
+             const byteCode = await (client as any).getBytecode({ address: accountAddress });
+            if (!byteCode || byteCode === '0x') {
+                const { initCode } = await (this as any).createSmartAccount({ owner: accountToUse.address });
+                userOp.initCode = initCode;
             }
+
+             const entryPointAddress = usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+             const userOpHash = await (client as any).readContract({
+                 address: entryPointAddress,
+                 abi: EntryPointABI,
+                 functionName: 'getUserOpHash',
+                 args: [userOp]
+             }) as Hex;
+
+             const signature = await (accountToUse as any).signMessage({
+                 message: { raw: userOpHash }
+             });
+             userOp.signature = signature;
+
+             try {
+                 console.log(`   SDK: Submitting Batch UserOp ${userOpHash}...`);
+                 const tx = await (client as any).writeContract({
+                     address: entryPointAddress,
+                     abi: EntryPointABI,
+                     functionName: 'handleOps',
+                     args: [[userOp], accountToUse.address],
+                     account,
+                     chain
+                 });
+
+                 const receipt = await (client as any).waitForTransactionReceipt({ hash: tx });
+                 const events = decodeContractEvents(receipt.logs);
+                 logDecodedEvents(events);
+                 return { hash: tx, events };
+             } catch (error: any) {
+                 const decodedMsg = decodeContractError(error);
+                 if (decodedMsg) {
+                     throw new AAStarError(`Gasless Batch Execution Failed: ${decodedMsg}`, AAStarErrorType.CONTRACT_ERROR);
+                 }
+                 throw error;
+             }
         },
         async checkJoinRequirements(address?: Address) {
             const accountToUse = address || account?.address;
             if (!accountToUse) throw new Error("Account address required for requirement check");
+            validateAddress(accountToUse, 'Check Address');
             
             const { RequirementChecker } = await import('@aastar/core');
             const checker = new RequirementChecker(client as any, usedAddresses);
             
-            // Default requirements for standard community joining
             return await checker.checkRequirements({
                 address: accountToUse,
-                requiredGToken: 440000000000000000n, // 0.44 GT (stake + burn)
+                requiredGToken: 440000000000000000n, // 0.44 GT
                 requireSBT: false
             });
         },
         async createSmartAccount({ owner, salt = 0n }: { owner: Address, salt?: bigint }) {
-            const { SimpleAccountFactoryABI } = await import('@aastar/core');
-            const { encodeFunctionData, concat } = await import('viem');
-
-            let factoryAddress = (usedAddresses as any).simpleAccountFactory; 
-            console.log(`   SDK: Using SimpleAccountFactory: ${factoryAddress} (Owner: ${owner}, Salt: ${salt})`);
+            // Using Imported ABI
+            owner = validateAddress(owner, 'Owner');
             
-            // Fallback to official v0.7 factory if not provided
+            let factoryAddress = (usedAddresses as any).simpleAccountFactory; 
             if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                throw new Error("SimpleAccountFactory not found in configuration or override. Please check SIMPLE_ACCOUNT_FACTORY or SimpleAccountFactoryv0.7 in your .env file.");
+                throw new AAStarError("SimpleAccountFactory not found", AAStarErrorType.CONFIGURATION_ERROR);
             }
 
             const accountAddress = await (client as any).readContract({
@@ -578,12 +516,8 @@ export function createEndUserClient({
             if (isDeployed) {
                 console.log(`   ℹ️ Account ${accountAddress} already deployed.`);
             } else {
-                const { SimpleAccountFactoryABI } = await import('@aastar/core');
                 let factoryAddress = (usedAddresses as any).simpleAccountFactory;
-                if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                    throw new Error("SimpleAccountFactory not found in configuration or override. Please check SIMPLE_ACCOUNT_FACTORY or SimpleAccountFactoryv0.7 in your .env file.");
-                }
-
+                
                 console.log(`   🏭 Deploying Smart Account for ${owner}...`);
                 deployHash = await (client as any).writeContract({
                     address: factoryAddress,
@@ -599,7 +533,7 @@ export function createEndUserClient({
 
             if (fundWithETH > 0n) {
                 const balance = await (client as any).getBalance({ address: accountAddress });
-                if (balance < parseEther('0.01')) { // 只有在余额少于 0.01 ETH 时才注入
+                if (balance < parseEther('0.01')) { 
                     console.log(`   ⛽ Funding account with ${formatEther(fundWithETH)} ETH...`);
                     const tx = await (client as any).sendTransaction({
                         to: accountAddress,
@@ -608,8 +542,6 @@ export function createEndUserClient({
                         chain
                     });
                     await (client as any).waitForTransactionReceipt({ hash: tx });
-                } else {
-                    console.log(`   ℹ️ Account already funded (Balance: ${formatEther(balance)} ETH). Skipping.`);
                 }
             }
 
