@@ -45,7 +45,9 @@ async function main() {
     console.log(`  📂 Loading ENV from: ${envPath}`);
     dotenv.config({ path: envPath, override: true });
 
-    const rpcUrl = networkArg === 'sepolia' ? process.env.SEPOLIA_RPC_URL : "http://127.0.0.1:8545";
+    const rpcUrl = networkArg === 'sepolia' 
+        ? (process.env.SEPOLIA_RPC_URL || process.env.RPC_URL) 
+        : "http://127.0.0.1:8545";
     if (!rpcUrl) throw new Error(`Missing RPC URL for ${networkArg}`);
 
     // Accounts
