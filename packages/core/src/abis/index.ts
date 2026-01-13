@@ -34,23 +34,32 @@ import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
 // ========== Re-export ABIs (Raw Arrays) ==========
-export const RegistryABI = RegistryABIData.abi;
-export const GTokenABI = GTokenABIData.abi;
-export const GTokenStakingABI = GTokenStakingABIData.abi;
-export const SuperPaymasterABI = SuperPaymasterABIData.abi;
-export const PaymasterFactoryABI = PaymasterFactoryABIData.abi;
-export const PaymasterV4ABI = PaymasterABIData.abi;
-export const PaymasterABI = PaymasterABIData.abi;
-export const EntryPointABI = EntryPointABIData.abi;
-export const SimpleAccountABI = SimpleAccountABIData.abi;
-export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData.abi;
-export const xPNTsTokenABI = xPNTsTokenABIData.abi;
-export const xPNTsFactoryABI = xPNTsFactoryABIData.abi;
-export const MySBTABI = MySBTABIData.abi;
-export const ReputationSystemABI = ReputationSystemABIData.abi;
-export const DVTValidatorABI = DVTValidatorABIData.abi;
-export const BLSAggregatorABI = BLSAggregatorABIData.abi;
-export const BLSValidatorABI = BLSValidatorABIData.abi;
+// ========== Re-export ABIs (Raw Arrays) ==========
+
+function extractAbi(artifact: any) {
+  // If it's an array, it IS the ABI. If it's an object, try .abi. 
+  // If .abi is undefined but it's not an array, it might be an older format or unexpected, 
+  // but strictly checking Array.isArray helps standard foundry artifacts vs hardhat artifacts.
+  return Array.isArray(artifact) ? artifact : artifact.abi;
+}
+
+export const RegistryABI = extractAbi(RegistryABIData);
+export const GTokenABI = extractAbi(GTokenABIData);
+export const GTokenStakingABI = extractAbi(GTokenStakingABIData);
+export const SuperPaymasterABI = extractAbi(SuperPaymasterABIData);
+export const PaymasterFactoryABI = extractAbi(PaymasterFactoryABIData);
+export const PaymasterV4ABI = extractAbi(PaymasterABIData);
+export const PaymasterABI = extractAbi(PaymasterABIData);
+export const EntryPointABI = extractAbi(EntryPointABIData);
+export const SimpleAccountABI = extractAbi(SimpleAccountABIData);
+export const SimpleAccountFactoryABI = extractAbi(SimpleAccountFactoryABIData);
+export const xPNTsTokenABI = extractAbi(xPNTsTokenABIData);
+export const xPNTsFactoryABI = extractAbi(xPNTsFactoryABIData);
+export const MySBTABI = extractAbi(MySBTABIData);
+export const ReputationSystemABI = extractAbi(ReputationSystemABIData);
+export const DVTValidatorABI = extractAbi(DVTValidatorABIData);
+export const BLSAggregatorABI = extractAbi(BLSAggregatorABIData);
+export const BLSValidatorABI = extractAbi(BLSValidatorABIData);
 
 // ========== Artifacts (Flattened) ==========
 export const RegistryArtifact = RegistryABIData;

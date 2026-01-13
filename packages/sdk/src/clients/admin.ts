@@ -19,7 +19,10 @@ import {
     type TokenActions,
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES,
-    tokenActions
+    tokenActions,
+    validateAddress,
+    validateAmount,
+    validateHex
 } from '@aastar/core';
 import { decodeContractError } from '../errors/decoder.js';
 
@@ -46,14 +49,19 @@ class SystemModule {
 
     // Registry / Configuration Management
     async grantRole(args: { roleId: `0x${string}`; user: Address; data: `0x${string}`; account?: Account }) {
+        validateHex(args.roleId, 'Role ID');
+        validateAddress(args.user, 'User Address');
         return wrapAdminCall(() => this.client.registerRole(args), 'grantRole'); 
     }
     
     async revokeRole(args: { roleId: `0x${string}`; user: Address; account?: Account }) {
+        validateHex(args.roleId, 'Role ID');
+        validateAddress(args.user, 'User Address');
         return wrapAdminCall(() => this.client.unRegisterRole(args), 'revokeRole');
     }
 
     async setSuperPaymaster(paymaster: Address) {
+        validateAddress(paymaster, 'SuperPaymaster Address');
         return wrapAdminCall(() => this.client.setSuperPaymaster({ paymaster }), 'setSuperPaymaster');
     }
 }
@@ -62,14 +70,19 @@ class FinanceModule {
     constructor(private client: AdminClient) {}
 
     async deposit(args: { amount: bigint; account?: Account | Address }) {
+        validateAmount(args.amount, 'Deposit Amount');
         return wrapAdminCall(() => this.client.deposit(args), 'deposit');
     }
 
     async depositForOperator(args: { operator: Address; amount: bigint; account?: Account | Address }) {
+        validateAddress(args.operator, 'Operator Address');
+        validateAmount(args.amount, 'Deposit Amount');
         return wrapAdminCall(() => this.client.depositForOperator(args), 'depositForOperator');
     }
 
     async withdrawTo(args: { to: Address; amount: bigint; account?: Account | Address }) {
+        validateAddress(args.to, 'To Address');
+        validateAmount(args.amount, 'Withdraw Amount');
         return wrapAdminCall(() => this.client.withdrawTo(args), 'withdrawTo');
     }
 }
@@ -78,14 +91,17 @@ class OperatorsModule {
     constructor(private client: AdminClient) {}
 
     async ban(operator: Address) {
+        validateAddress(operator, 'Operator Address');
         return wrapAdminCall(() => this.client.updateOperatorBlacklist({ operator, isBlacklisted: true }), 'ban');
     }
 
     async unban(operator: Address) {
+        validateAddress(operator, 'Operator Address');
         return wrapAdminCall(() => this.client.updateOperatorBlacklist({ operator, isBlacklisted: false }), 'unban');
     }
 
     async setPaused(operator: Address, paused: boolean) {
+        validateAddress(operator, 'Operator Address');
         return wrapAdminCall(() => this.client.setOperatorPaused({ operator, paused }), 'setPaused');
     }
 }

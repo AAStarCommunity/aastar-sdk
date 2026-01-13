@@ -16,7 +16,11 @@ import {
     type TokenActions,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES,
-    TEST_ACCOUNT_ADDRESSES
+    TEST_ACCOUNT_ADDRESSES,
+    validateAddress,
+    validateAmount,
+    validateHex,
+    SuperPaymasterABI
 } from '@aastar/core';
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
@@ -119,6 +123,13 @@ export function createOperatorClient({
         },
 
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex, gasTokens?: Address[] }) {
+            validateAmount(args.stakeAmount, 'Stake Amount');
+            validateAmount(args.depositAmount, 'Deposit Amount');
+            validateHex(args.roleId, 'Role ID');
+            if (args.gasTokens) {
+                args.gasTokens.forEach((token, index) => validateAddress(token, `Gas Token [${index}]`));
+            }
+
             const results: { hash: Hash, events: DecodedEvent[] }[] = [];
             const accountToUse = account; 
             if (!accountToUse) throw new Error("Account required for onboarding");
@@ -222,6 +233,10 @@ export function createOperatorClient({
         },
 
         async configureOperator({ xPNTsToken, treasury, exchangeRate, account: accountOverride }: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) {
+            validateAddress(xPNTsToken, 'xPNTs Token');
+            validateAddress(treasury, 'Treasury');
+            validateAmount(exchangeRate, 'Exchange Rate');
+
             const tx = await spActions.configureOperator({ 
                 xPNTsToken, 
                 treasury, 
@@ -265,10 +280,9 @@ export function createOperatorClient({
                 let paymasterV4Info = null;
 
                 if (hasRole && usedAddresses.superPaymaster) {
-                    const pmAbi = parseAbi(['function operators(address) view returns (uint128 balance, uint96 exchangeRate, bool isConfigured, bool isPaused, address token, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)']);
                     const operatorData = await client.readContract({
                         address: usedAddresses.superPaymaster!,
-                        abi: pmAbi,
+                        abi: SuperPaymasterABI,
                         functionName: 'operators',
                         args: [accountAddress]
                     }) as any;
@@ -288,10 +302,9 @@ export function createOperatorClient({
                 // 检查 Paymaster V4 (Direct)
                 if (usedAddresses.paymasterFactory && usedAddresses.paymasterFactory !== '0x0000000000000000000000000000000000000000') {
                     try {
-                        const factoryAbi = parseAbi(['function getPaymasterByOperator(address) view returns (address)']);
                         const pmAddr = await client.readContract({
                             address: usedAddresses.paymasterFactory,
-                            abi: factoryAbi,
+                            abi: PaymasterFactoryABI,
                             functionName: 'getPaymasterByOperator',
                             args: [accountAddress]
                         }) as Address;
