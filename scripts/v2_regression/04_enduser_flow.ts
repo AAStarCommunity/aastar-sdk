@@ -85,55 +85,22 @@ async function enduserFlow() {
     await ensureFunds(userAccount.address, parseEther('0.05'), parseEther('20'));
 
 
-    // 1. Check if user already has ENDUSER role
-    console.log('\n👤 Checking ENDUSER Role...');
-    const hasRole = await userClient.readContract({
-        address: localAddresses.registry,
-        abi: RegistryABI,
-        functionName: 'hasRole',
-        args: [ROLE_ENDUSER, userAccount.address]
-    });
-
-    if (hasRole) {
-        console.log('   ✅ User already has ENDUSER role');
-    } else {
-        console.log('   📝 Registering ENDUSER role...');
-        
-        // Approve GToken for staking
-        const approveTx = await userClient.writeContract({
-            address: localAddresses.gToken,
-            abi: erc20Abi,
-            functionName: 'approve',
-            args: [localAddresses.gTokenStaking, parseEther('10')],
-            account: userAccount
+    // 1. Join Community & Activate Credit (Using SDK)
+    console.log('\n👤 Joining Community via SDK...');
+    
+    try {
+        const joinResult = await userClient.joinAndActivate({
+            community: communityAccount.address,
+            roleId: ROLE_ENDUSER
         });
-        await userClient.waitForTransactionReceipt({ hash: approveTx });
-
-        // ENDUSER roleData: (account, community, avatarURI, ensName, stakeAmount)
-        const enduserData = encodeAbiParameters(
-            [{
-                type: 'tuple',
-                components: [
-                    { name: 'account', type: 'address' },
-                    { name: 'community', type: 'address' },
-                    { name: 'avatarURI', type: 'string' },
-                    { name: 'ensName', type: 'string' },
-                    { name: 'stakeAmount', type: 'uint256' }
-                ]
-            }],
-            [{ account: userAccount.address, community: communityAccount.address, avatarURI: '', ensName: '', stakeAmount: parseEther('0.3') }]
-        );
-
-        // Register ENDUSER role using writeContract
-        const registerTx = await userClient.writeContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [ROLE_ENDUSER, enduserData],
-            account: userAccount
-        });
-        await userClient.waitForTransactionReceipt({ hash: registerTx });
-        console.log('   ✅ ENDUSER Role Registered');
+        console.log(`   ✅ User Joined. SBT ID: ${joinResult.sbtId}`);
+        console.log(`   ✅ Initial Credit: ${joinResult.initialCredit}`);
+    } catch (e: any) {
+        if (e.message.includes('already has') || e.message.includes('RoleAlreadyGranted')) {
+            console.log('   ✅ User already has ENDUSER role');
+        } else {
+            console.warn('   ⚠️ Join error:', e.message);
+        }
     }
 
     // 2. Verify SBT was minted

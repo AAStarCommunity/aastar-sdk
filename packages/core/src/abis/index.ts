@@ -33,61 +33,63 @@ import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
-// ========== Re-export ABIs - Core System ==========
+// ========== Re-export ABIs (Raw Arrays) ==========
 export const RegistryABI = RegistryABIData.abi;
-export const RegistryArtifact = RegistryABIData;
-
 export const GTokenABI = GTokenABIData.abi;
-export const GTokenArtifact = GTokenABIData;
-
 export const GTokenStakingABI = GTokenStakingABIData.abi;
-export const GTokenStakingArtifact = GTokenStakingABIData;
-
 export const SuperPaymasterABI = SuperPaymasterABIData.abi;
-export const SuperPaymasterArtifact = SuperPaymasterABIData;
-
 export const PaymasterFactoryABI = PaymasterFactoryABIData.abi;
-export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
-
-// Paymaster V4 (使用 Paymaster.json)
 export const PaymasterV4ABI = PaymasterABIData.abi;
-export const PaymasterV4Artifact = PaymasterABIData;
 export const PaymasterABI = PaymasterABIData.abi;
-export const PaymasterArtifact = PaymasterABIData;
-
-// ========== AA Standard ==========
 export const EntryPointABI = EntryPointABIData.abi;
-export const EntryPointArtifact = EntryPointABIData;
-
 export const SimpleAccountABI = SimpleAccountABIData.abi;
-export const SimpleAccountArtifact = SimpleAccountABIData;
-
 export const SimpleAccountFactoryABI = SimpleAccountFactoryABIData.abi;
-export const SimpleAccountFactoryArtifact = SimpleAccountFactoryABIData;
-
-// ========== Token System ==========
 export const xPNTsTokenABI = xPNTsTokenABIData.abi;
-export const xPNTsTokenArtifact = xPNTsTokenABIData;
-
 export const xPNTsFactoryABI = xPNTsFactoryABIData.abi;
-export const xPNTsFactoryArtifact = xPNTsFactoryABIData;
-
 export const MySBTABI = MySBTABIData.abi;
-export const MySBTArtifact = MySBTABIData;
-
-// ========== Identity & Reputation ==========
 export const ReputationSystemABI = ReputationSystemABIData.abi;
-export const ReputationSystemArtifact = ReputationSystemABIData;
-
-// ========== Monitoring System ==========
 export const DVTValidatorABI = DVTValidatorABIData.abi;
-export const DVTValidatorArtifact = DVTValidatorABIData;
-
 export const BLSAggregatorABI = BLSAggregatorABIData.abi;
-export const BLSAggregatorArtifact = BLSAggregatorABIData;
-
 export const BLSValidatorABI = BLSValidatorABIData.abi;
+
+// ========== Artifacts (Flattened) ==========
+export const RegistryArtifact = RegistryABIData;
+export const GTokenArtifact = GTokenABIData;
+export const GTokenStakingArtifact = GTokenStakingABIData;
+export const SuperPaymasterArtifact = SuperPaymasterABIData;
+export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
+export const PaymasterV4Artifact = PaymasterABIData;
+export const PaymasterArtifact = PaymasterABIData;
+export const EntryPointArtifact = EntryPointABIData;
+export const SimpleAccountArtifact = SimpleAccountABIData;
+export const SimpleAccountFactoryArtifact = SimpleAccountFactoryABIData;
+export const xPNTsTokenArtifact = xPNTsTokenABIData;
+export const xPNTsFactoryArtifact = xPNTsFactoryABIData;
+export const MySBTArtifact = MySBTABIData;
+export const ReputationSystemArtifact = ReputationSystemABIData;
+export const DVTValidatorArtifact = DVTValidatorABIData;
+export const BLSAggregatorArtifact = BLSAggregatorABIData;
 export const BLSValidatorArtifact = BLSValidatorABIData;
+
+// ========== Abis Namespace (Unified Access) ==========
+export const Abis = {
+    Registry: RegistryABI,
+    GToken: GTokenABI,
+    GTokenStaking: GTokenStakingABI,
+    SuperPaymaster: SuperPaymasterABI,
+    PaymasterFactory: PaymasterFactoryABI,
+    Paymaster: PaymasterABI,
+    EntryPoint: EntryPointABI,
+    SimpleAccount: SimpleAccountABI,
+    SimpleAccountFactory: SimpleAccountFactoryABI,
+    xPNTsToken: xPNTsTokenABI,
+    xPNTsFactory: xPNTsFactoryABI,
+    MySBT: MySBTABI,
+    ReputationSystem: ReputationSystemABI,
+    DVTValidator: DVTValidatorABI,
+    BLSAggregator: BLSAggregatorABI,
+    BLSValidator: BLSValidatorABI,
+} as const;
 
 
 

@@ -1,6 +1,7 @@
 import { type Address, type Hex, concat, pad, toHex, encodeFunctionData, parseAbi } from 'viem';
 import { PaymasterClient } from './PaymasterClient';
 import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
+import { validateAddress, validateAmount } from '@aastar/core';
 
 export type GaslessTransactionConfig = {
     token: Address;
@@ -30,6 +31,12 @@ export class SuperPaymasterClient {
         bundlerUrl: string,
         config: GaslessTransactionConfig
     ): Promise<Hex> {
+        // Validation (Phase 0 Hardening)
+        validateAddress(config.token, 'Token Address');
+        validateAddress(config.recipient, 'Recipient Address');
+        validateAddress(config.operator, 'Operator Address');
+        validateAddress(config.paymasterAddress, 'Paymaster Address');
+        validateAmount(config.amount, 'Amount', 1n); // Must be > 0
         
         // 1. Prepare Calldata (Standard ERC20 Transfer)
         const callData = encodeFunctionData({

@@ -157,3 +157,11 @@ export class KeyManager {
         console.log('─'.repeat(80));
     }
 }
+
+/**
+ * 解析私钥，确保其带有 0x 前缀
+ * @param key - 私钥字符串
+ */
+export function parseKey(key: string): Hex {
+    return (key.startsWith('0x') ? key : `0x${key}`) as Hex;
+}

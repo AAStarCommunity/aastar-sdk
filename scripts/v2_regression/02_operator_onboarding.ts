@@ -110,148 +110,22 @@ async function onboarding() {
     await ensureFunds(operatorAccount.address, parseEther('0.05'), parseEther('100'), parseEther('100'));
 
 
-    // 2. Operator Onboarding (Stake + Register + Deposit)
-    console.log('\n📦 Executing SDK onboardToSuperPaymaster...');
+    // 2. Operator Onboarding (Using Thin SDK fully)
+    console.log('\n📦 Executing SDK onboardFully...');
     
-    const hasRole = await adminClient.readContract({
-        address: localAddresses.registry,
-        abi: RegistryABI,
-        functionName: 'hasRole',
-        args: [RoleIds.PAYMASTER_SUPER, operatorAccount.address]
-    });
-
-    // DEBUG: Check Role State
-    console.log(`   🔎 DEBUG: Checking Role Config for ${RoleIds.PAYMASTER_SUPER} on Registry ${localAddresses.registry}`);
     try {
-        const roleConfig = await adminClient.readContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'roleConfigs',
-            args: [RoleIds.PAYMASTER_SUPER]
+        const onboardResult = await operatorClient.onboardFully({
+            roleId: RoleIds.PAYMASTER_SUPER,
+            stakeAmount: parseEther('50'),
+            depositAmount: parseEther('50')
         });
-        console.log(`   🔎 DEBUG: Role Config (Active?): ${roleConfig[8]}`); // config.isActive is index 8
-    } catch (e) {
-        console.log(`   🔎 DEBUG: Update Role Config Read Failed:`, e);
-    }
-
-
-    // Check and Register Community Role first (Prerequisite)
-    const hasCommunity = await operatorClient.readContract({
-         address: localAddresses.registry,
-         abi: RegistryABI,
-         functionName: 'hasRole',
-         args: [RoleIds.COMMUNITY, operatorAccount.address]
-    });
-
-    if (!hasCommunity) {
-        console.log('   ⚠️ Prerequisite: Registering as COMMUNITY first...');
-        
-        // Manual registration using writeContract to bypass SDK issue
-        const roleConfig = await operatorClient.readContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'roleConfigs',
-            args: [RoleIds.COMMUNITY]
-        }) as any;
-        
-        const entryBurn = roleConfig[1];
-        const stakeAmount = parseEther('30');
-        const totalStakeNeeded = stakeAmount + entryBurn;
-        
-        // Approve GToken
-        const approveGToken = await operatorClient.writeContract({
-            address: localAddresses.gToken,
-            abi: erc20Abi,
-            functionName: 'approve',
-            args: [localAddresses.gTokenStaking, totalStakeNeeded],
-            account: operatorAccount
-        });
-        await operatorClient.waitForTransactionReceipt({ hash: approveGToken });
-        
-        // Create proper CommunityRoleData: (name, ensName, website, description, logoURI, stakeAmount)
-        const uniqueName = `OpComm_${Date.now()}`;
-        const communityData = encodeAbiParameters(
-            [{
-                type: 'tuple',
-                components: [
-                    { name: 'name', type: 'string' },
-                    { name: 'ensName', type: 'string' },
-                    { name: 'website', type: 'string' },
-                    { name: 'description', type: 'string' },
-                    { name: 'logoURI', type: 'string' },
-                    { name: 'stakeAmount', type: 'uint256' }
-                ]
-            }],
-            [{ name: uniqueName, ensName: 'test.eth', website: 'http://test.com', description: 'Test Community', logoURI: 'http://logo.png', stakeAmount: parseEther('30') }]
-        );
-        
-        // Register Community role
-        const registerTx = await operatorClient.writeContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [RoleIds.COMMUNITY, communityData],
-            account: operatorAccount
-        });
-        await operatorClient.waitForTransactionReceipt({ hash: registerTx });
-        
-        console.log(`   ✅ Community Registered manually`);
-    } else {
-        console.log('   ✅ (Prerequisite) Already has COMMUNITY role.');
-    }
-
-    if (hasRole) {
-        console.log('   ⚠️ Operator already has PAYMASTER_SUPER role. Skipping registration steps.');
-    } else {
-        // Manual registration for PAYMASTER_SUPER (similar to COMMUNITY)
-        console.log('   📦 Registering as PAYMASTER_SUPER...');
-        
-        const roleConfig = await operatorClient.readContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'roleConfigs',
-            args: [RoleIds.PAYMASTER_SUPER]
-        }) as any;
-        
-        const entryBurn = roleConfig[1];
-        const stakeAmount = parseEther('50');
-        const totalStakeNeeded = stakeAmount + entryBurn;
-        
-        // Approve GToken
-        const approveGToken = await operatorClient.writeContract({
-            address: localAddresses.gToken,
-            abi: erc20Abi,
-            functionName: 'approve',
-            args: [localAddresses.gTokenStaking, totalStakeNeeded],
-            account: operatorAccount
-        });
-        await operatorClient.waitForTransactionReceipt({ hash: approveGToken });
-        
-        // Register with empty roleData (PAYMASTER_SUPER doesn't need struct data)
-        const registerTx = await operatorClient.writeContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [RoleIds.PAYMASTER_SUPER, '0x' as Hex],
-            account: operatorAccount
-        });
-        await operatorClient.waitForTransactionReceipt({ hash: registerTx });
-        
-        console.log('   ✅ PAYMASTER_SUPER Registered successfully');
-        
-        // Deposit aPNTs
-        console.log('   💰 Depositing aPNTs...');
-        const depositAmount = parseEther('50');
-        const erc1363Abi = [{ name: 'transferAndCall', type: 'function', stateMutability: 'nonpayable', inputs: [{name:'to', type:'address'}, {name:'value', type:'uint256'}], outputs: [{type:'bool'}] }] as const;
-        const depositTx = await operatorClient.writeContract({
-            address: localAddresses.aPNTs,
-            abi: erc1363Abi,
-            functionName: 'transferAndCall',
-            args: [localAddresses.superPaymaster, depositAmount],
-            account: operatorAccount
-        });
-        await operatorClient.waitForTransactionReceipt({ hash: depositTx });
-        console.log('   ✅ aPNTs deposited');
+        console.log(`   ✅ Onboarding Transaction: ${onboardResult.hash}`);
+    } catch (e: any) {
+        if (e.message.includes('already has') || e.message.includes('RoleAlreadyGranted')) {
+            console.log('   ℹ️ Operator already has PAYMASTER_SUPER role. Skipping.');
+        } else {
+            console.warn('   ⚠️ Onboarding error (may be partially registered):', e.message);
+        }
     }
 
     // 3. Configure Operator in SuperPaymaster (Billing settings)

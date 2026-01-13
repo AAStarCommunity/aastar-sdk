@@ -1,0 +1,57 @@
+import { decodeEventLog, type Hex, type Abi } from 'viem';
+import { RegistryABI, SuperPaymasterABI, GTokenStakingABI, MySBTABI, xPNTsTokenABI } from '../index.js';
+
+const ABIS_TO_TRY = [
+    { name: 'Registry', abi: RegistryABI },
+    { name: 'SuperPaymaster', abi: SuperPaymasterABI },
+    { name: 'GTokenStaking', abi: GTokenStakingABI },
+    { name: 'MySBT', abi: MySBTABI },
+    { name: 'xPNTsToken', abi: xPNTsTokenABI }
+];
+
+export interface DecodedEvent {
+    contractName: string;
+    eventName: string;
+    args: any;
+}
+
+export function decodeContractEvents(logs: any[]): DecodedEvent[] {
+    const decodedEvents: DecodedEvent[] = [];
+
+    for (const log of logs) {
+        for (const { name, abi } of ABIS_TO_TRY) {
+            try {
+                const decoded = decodeEventLog({
+                    abi: abi as Abi,
+                    data: log.data,
+                    topics: log.topics
+                });
+
+                if (decoded && decoded.eventName) {
+                    decodedEvents.push({
+                        contractName: name,
+                        eventName: decoded.eventName,
+                        args: decoded.args
+                    });
+                    break; // Found the right ABI for this log
+                }
+            } catch (e) {
+                // Mismatch, continue
+            }
+        }
+    }
+
+    return decodedEvents;
+}
+
+export function logDecodedEvents(events: DecodedEvent[]) {
+    for (const event of events) {
+        console.log(`📡 [${event.contractName}] Event: ${event.eventName}`);
+        if (event.args) {
+            Object.entries(event.args).forEach(([key, value]) => {
+                const displayValue = typeof value === 'bigint' ? value.toString() : value;
+                console.log(`   └─ ${key}: ${displayValue}`);
+            });
+        }
+    }
+}

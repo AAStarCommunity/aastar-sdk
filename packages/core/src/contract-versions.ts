@@ -190,7 +190,7 @@ export const SEPOLIA_V2_VERSIONS = {
       version: '2.0.0',
       versionCode: 20000,
       deployedAt: '2025-11-01',
-      address: TEST_TOKEN_ADDRESSES.aPNTs,
+      address: TEST_TOKEN_ADDRESSES.apnts,
       features: [
         'VERSION interface',
         'AAStar community gas token',
@@ -204,7 +204,7 @@ export const SEPOLIA_V2_VERSIONS = {
       version: '2.0.0',
       versionCode: 20000,
       deployedAt: '2025-11-03',
-      address: TEST_TOKEN_ADDRESSES.bPNTs,
+      address: TEST_TOKEN_ADDRESSES.bpnts,
       features: [
         'VERSION interface',
         'BreadCommunity gas token',

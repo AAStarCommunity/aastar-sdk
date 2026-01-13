@@ -13,6 +13,8 @@ import {
     TEST_ACCOUNT_ADDRESSES,
     RegistryABI
 } from '@aastar/core';
+import { decodeContractError } from '../errors/decoder.js';
+import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterV4Actions & {
     /**
@@ -22,7 +24,7 @@ export type EndUserClient = Client<Transport, Chain, Account | undefined> & Publ
         community: Address,
         roleId: Hex,
         roleData: Hex
-    }) => Promise<{ tx: Hash, sbtId: bigint }>
+    }) => Promise<{ hash: Hash, events: DecodedEvent[], sbtId: bigint }>
     /**
      * Orchestrates the user joining a community and activating gas credit flow:
      * 1. Mint SBT for the community (Register ENDUSER role)
@@ -32,7 +34,7 @@ export type EndUserClient = Client<Transport, Chain, Account | undefined> & Publ
         community: Address,
         roleId: Hex,
         roleData?: Hex
-    }) => Promise<{ tx: Hash, sbtId: bigint, initialCredit: bigint }>
+    }) => Promise<{ hash: Hash, events: DecodedEvent[], sbtId: bigint, initialCredit: bigint }>
     /**
      * Executes a gasless transaction via SuperPaymaster.
      */
@@ -41,7 +43,16 @@ export type EndUserClient = Client<Transport, Chain, Account | undefined> & Publ
         data: Hex,
         value?: bigint,
         operator: Address
-    }) => Promise<Hash>;
+    }) => Promise<{ hash: Hash, events: DecodedEvent[] }>;
+    /**
+     * Executes a batch of gasless transactions via SuperPaymaster.
+     */
+    executeGaslessBatch: (args: {
+        targets: Address[],
+        datas: Hex[],
+        values?: bigint[],
+        operator: Address
+    }) => Promise<{ hash: Hash, events: DecodedEvent[] }>;
     /**
      * Check if the user meets the requirements to join a community (stake, sbt, etc.)
      */
@@ -114,7 +125,7 @@ export function createEndUserClient({
             console.log('👤 Onboarding user to community...');
             const result = await (this as any).joinAndActivate({ community, roleId, roleData });
             console.log(`✅ User onboarded! SBT ID: ${result.sbtId}`);
-            return { tx: result.tx, sbtId: result.sbtId };
+            return { hash: result.hash, events: result.events, sbtId: result.sbtId };
         },
         async joinAndActivate({ community, roleId, roleData }: { 
             community: Address, 
@@ -149,47 +160,58 @@ export function createEndUserClient({
                 ) as Hex;
             }
             
-            const regTx = await (client as any).writeContract({
-                address: usedAddresses.registry,
-                abi: RegistryABI,
-                functionName: 'registerRoleSelf',
-                args: [roleId, finalData],
-                account: accountToUse,
-                chain
-            });
-            
-            await (client as any).waitForTransactionReceipt({ hash: regTx });
-
-            // 2. Fetch SBT ID
-            const sbtId = await actions.getUserSBT({ user: accountToUse.address, roleId });
-            console.log(`   SDK: User joined. SBT ID: ${sbtId}`);
-
-            // 3. Fetch Initial Credit for verification
-            let credit = 0n;
             try {
-                const factoryAbi = parseAbi(['function communityToToken(address) view returns (address)']);
-                const tokenAddress = await (client as any).readContract({
-                    address: usedAddresses.xPNTsFactory,
-                    abi: factoryAbi,
-                    functionName: 'communityToToken',
-                    args: [community]
-                }) as Address;
-
-                credit = await actions.getAvailableCredit({
-                    user: (client as any).aaAddress || accountToUse.address,
-                    operator: tokenAddress
+                const regTx = await (client as any).writeContract({
+                    address: usedAddresses.registry,
+                    abi: RegistryABI,
+                    functionName: 'registerRoleSelf',
+                    args: [roleId, finalData],
+                    account: accountToUse,
+                    chain
                 });
+                
+                const receipt = await (client as any).waitForTransactionReceipt({ hash: regTx });
+                const events = decodeContractEvents(receipt.logs);
+                logDecodedEvents(events);
 
-                console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
+                // 2. Fetch SBT ID
+                const sbtId = await actions.getUserSBT({ user: accountToUse.address, roleId });
+                console.log(`   SDK: User joined. SBT ID: ${sbtId}`);
+
+                // 3. Fetch Initial Credit for verification
+                let credit = 0n;
+                try {
+                    const factoryAbi = parseAbi(['function communityToToken(address) view returns (address)']);
+                    const tokenAddress = await (client as any).readContract({
+                        address: usedAddresses.xPNTsFactory,
+                        abi: factoryAbi,
+                        functionName: 'communityToToken',
+                        args: [community]
+                    }) as Address;
+
+                    credit = await actions.getAvailableCredit({
+                        user: (client as any).aaAddress || accountToUse.address,
+                        operator: tokenAddress
+                    });
+
+                    console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
+                } catch (error: any) {
+                    console.log(`   SDK: Credit system not available (${error.message.split('\n')[0]}). Continuing...`);
+                }
+
+                return {
+                    hash: regTx,
+                    events,
+                    sbtId,
+                    initialCredit: credit
+                };
             } catch (error: any) {
-                console.log(`   SDK: Credit system not available (${error.message.split('\n')[0]}). Continuing...`);
+                const decodedMsg = decodeContractError(error);
+                if (decodedMsg) {
+                    throw new Error(`Joining Community Failed: ${decodedMsg}`);
+                }
+                throw error;
             }
-
-            return {
-                tx: regTx,
-                sbtId,
-                initialCredit: credit
-            };
         },
         async executeGasless({ target, data, value = 0n, operator }: { 
             target: Address, 
@@ -301,41 +323,207 @@ export function createEndUserClient({
             });
             userOp.signature = signature;
 
-            // 8. Submit via handleOps
-            console.log(`   SDK: Submitting UserOp ${userOpHash}...`);
-            const tx = await (client as any).writeContract({
+            try {
+                // 8. Submit via handleOps
+                console.log(`   SDK: Submitting UserOp ${userOpHash}...`);
+                const tx = await (client as any).writeContract({
+                    address: entryPointAddress,
+                    abi: [{
+                        type: 'function',
+                        name: 'handleOps',
+                        inputs: [
+                            {
+                                type: 'tuple[]',
+                                components: [
+                                    {name: 'sender', type: 'address'},
+                                    {name: 'nonce', type: 'uint256'},
+                                    {name: 'initCode', type: 'bytes'},
+                                    {name: 'callData', type: 'bytes'},
+                                    {name: 'accountGasLimits', type: 'bytes32'},
+                                    {name: 'preVerificationGas', type: 'uint256'},
+                                    {name: 'gasFees', type: 'bytes32'},
+                                    {name: 'paymasterAndData', type: 'bytes'},
+                                    {name: 'signature', type: 'bytes'}
+                                ]
+                            },
+                            {name: 'beneficiary', type: 'address'}
+                        ],
+                        outputs: [],
+                        stateMutability: 'nonpayable'
+                    }],
+                    functionName: 'handleOps',
+                    args: [[userOp], accountToUse.address],
+                    account,
+                    chain
+                });
+
+                const receipt = await (client as any).waitForTransactionReceipt({ hash: tx });
+                const events = decodeContractEvents(receipt.logs);
+                logDecodedEvents(events);
+                return { hash: tx, events };
+            } catch (error: any) {
+                const decodedMsg = decodeContractError(error);
+                if (decodedMsg) {
+                    throw new Error(`Gasless Execution Failed: ${decodedMsg}`);
+                }
+                throw error;
+            }
+        },
+        async executeGaslessBatch({ targets, datas, values, operator }: { 
+            targets: Address[], 
+            datas: Hex[], 
+            values?: bigint[], 
+            operator: Address 
+        }) {
+            const accountToUse = account;
+            if (!accountToUse) throw new Error("Wallet account required for gasless execution");
+
+            const finalValues = values || targets.map(() => 0n);
+
+            // 1. Get AA Address (Predict if necessary)
+            const { accountAddress } = await (this as any).createSmartAccount({ owner: accountToUse.address });
+            console.log(`   SDK: Executing gasless batch via AA ${accountAddress} Sponsored by ${operator}`);
+
+            // 2. Fetch Nonce from EntryPoint
+            let nonce = 0n;
+            try {
+                nonce = await (client as any).readContract({
+                    address: usedAddresses.entryPoint,
+                    abi: [{ 
+                        type: 'function', 
+                        name: 'getNonce', 
+                        inputs: [{ type: 'address', name: 'sender' }, { type: 'uint192', name: 'key' }],
+                        outputs: [{ type: 'uint256' }], 
+                        stateMutability: 'view' 
+                    }],
+                    functionName: 'getNonce',
+                    args: [accountAddress, 0n]
+                }) as bigint;
+            } catch (e: any) {
+                console.warn(`   ⚠️  Failed to fetch nonce, using 0:`, e.message);
+                nonce = 0n;
+            }
+
+            // 3. Build CallData (executeBatch(targets, values, datas))
+            const { encodeFunctionData, concat, pad } = await import('viem');
+            const executeData = encodeFunctionData({
+                abi: [{ type: 'function', name: 'executeBatch', inputs: [{type: 'address[]'}, {type: 'uint256[]'}, {type: 'bytes[]'}] }],
+                functionName: 'executeBatch',
+                args: [targets, finalValues, datas]
+            });
+
+            // 4. Build Gas Limits & Fees
+            const accountGasLimits = concat([
+                pad(`0x${(150000).toString(16)}`, { dir: 'left', size: 16 }), // increased verification for batch
+                pad(`0x${(300000).toString(16)}`, { dir: 'left', size: 16 })  // increased call gas for batch
+            ]) as Hex;
+
+            const gasFees = concat([
+                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 }),
+                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })
+            ]) as Hex;
+
+            // 5. Build PaymasterAndData
+            const paymasterVerificationGas = 300000n;
+            const paymasterPostOpGas = 50000n;
+            const paymasterAndData = concat([
+                usedAddresses.superPaymaster,
+                pad(`0x${paymasterVerificationGas.toString(16)}`, { dir: 'left', size: 16 }),
+                pad(`0x${paymasterPostOpGas.toString(16)}`, { dir: 'left', size: 16 }),
+                operator
+            ]);
+
+            // 6. Construct UserOperation v0.7
+            const userOp = {
+                sender: accountAddress,
+                nonce,
+                initCode: '0x' as Hex,
+                callData: executeData,
+                accountGasLimits,
+                preVerificationGas: 100000n, // increased for batch
+                gasFees,
+                paymasterAndData,
+                signature: '0x' as Hex
+            };
+
+            // 7. Sign UserOp Hash
+            const entryPointAddress = usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+            const userOpHash = await (client as any).readContract({
                 address: entryPointAddress,
                 abi: [{
                     type: 'function',
-                    name: 'handleOps',
-                    inputs: [
-                        {
-                            type: 'tuple[]',
-                            components: [
-                                {name: 'sender', type: 'address'},
-                                {name: 'nonce', type: 'uint256'},
-                                {name: 'initCode', type: 'bytes'},
-                                {name: 'callData', type: 'bytes'},
-                                {name: 'accountGasLimits', type: 'bytes32'},
-                                {name: 'preVerificationGas', type: 'uint256'},
-                                {name: 'gasFees', type: 'bytes32'},
-                                {name: 'paymasterAndData', type: 'bytes'},
-                                {name: 'signature', type: 'bytes'}
-                            ]
-                        },
-                        {name: 'beneficiary', type: 'address'}
-                    ],
-                    outputs: [],
-                    stateMutability: 'nonpayable'
+                    name: 'getUserOpHash',
+                    inputs: [{
+                        type: 'tuple',
+                        components: [
+                            {name: 'sender', type: 'address'},
+                            {name: 'nonce', type: 'uint256'},
+                            {name: 'initCode', type: 'bytes'},
+                            {name: 'callData', type: 'bytes'},
+                            {name: 'accountGasLimits', type: 'bytes32'},
+                            {name: 'preVerificationGas', type: 'uint256'},
+                            {name: 'gasFees', type: 'bytes32'},
+                            {name: 'paymasterAndData', type: 'bytes'},
+                            {name: 'signature', type: 'bytes'}
+                        ]
+                    }],
+                    outputs: [{type: 'bytes32'}],
+                    stateMutability: 'view'
                 }],
-                functionName: 'handleOps',
-                args: [[userOp], accountToUse.address],
-                account,
-                chain
-            });
+                functionName: 'getUserOpHash',
+                args: [userOp]
+            }) as Hex;
 
-            await (client as any).waitForTransactionReceipt({ hash: tx });
-            return tx;
+            const signature = await (accountToUse as any).signMessage({
+                message: { raw: userOpHash }
+            });
+            userOp.signature = signature;
+
+            try {
+                // 8. Submit
+                console.log(`   SDK: Submitting Batch UserOp ${userOpHash}...`);
+                const tx = await (client as any).writeContract({
+                    address: entryPointAddress,
+                    abi: [{
+                        type: 'function',
+                        name: 'handleOps',
+                        inputs: [
+                            {
+                                type: 'tuple[]',
+                                components: [
+                                    {name: 'sender', type: 'address'},
+                                    {name: 'nonce', type: 'uint256'},
+                                    {name: 'initCode', type: 'bytes'},
+                                    {name: 'callData', type: 'bytes'},
+                                    {name: 'accountGasLimits', type: 'bytes32'},
+                                    {name: 'preVerificationGas', type: 'uint256'},
+                                    {name: 'gasFees', type: 'bytes32'},
+                                    {name: 'paymasterAndData', type: 'bytes'},
+                                    {name: 'signature', type: 'bytes'}
+                                ]
+                            },
+                            {name: 'beneficiary', type: 'address'}
+                        ],
+                        outputs: [],
+                        stateMutability: 'nonpayable'
+                    }],
+                    functionName: 'handleOps',
+                    args: [[userOp], accountToUse.address],
+                    account,
+                    chain
+                });
+
+                const receipt = await (client as any).waitForTransactionReceipt({ hash: tx });
+                const events = decodeContractEvents(receipt.logs);
+                logDecodedEvents(events);
+                return { hash: tx, events };
+            } catch (error: any) {
+                const decodedMsg = decodeContractError(error);
+                if (decodedMsg) {
+                    throw new Error(`Gasless Batch Execution Failed: ${decodedMsg}`);
+                }
+                throw error;
+            }
         },
         async checkJoinRequirements(address?: Address) {
             const accountToUse = address || account?.address;

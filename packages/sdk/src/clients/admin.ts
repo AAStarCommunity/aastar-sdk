@@ -19,8 +19,74 @@ import {
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES 
 } from '@aastar/core';
+import { decodeContractError } from '../errors/decoder.js';
 
-export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & SBTActions & DVTActions & XPNTsFactoryActions & AggregatorActions;
+export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & SBTActions & DVTActions & XPNTsFactoryActions & AggregatorActions & {
+    system: SystemModule;
+    finance: FinanceModule;
+    operators: OperatorsModule;
+};
+
+async function wrapAdminCall<T>(fn: () => Promise<T>, operationName: string): Promise<T> {
+    try {
+        return await fn();
+    } catch (error: any) {
+        const decodedMsg = decodeContractError(error);
+        if (decodedMsg) {
+            throw new Error(`Admin Operation [${operationName}] Failed: ${decodedMsg}`);
+        }
+        throw error;
+    }
+}
+
+class SystemModule {
+    constructor(private client: AdminClient) {}
+
+    // Registry / Configuration Management
+    async grantRole(args: { roleId: `0x${string}`; user: Address; data: `0x${string}`; account?: Account }) {
+        return wrapAdminCall(() => this.client.registerRole(args), 'grantRole'); 
+    }
+    
+    async revokeRole(args: { roleId: `0x${string}`; user: Address; account?: Account }) {
+        return wrapAdminCall(() => this.client.unRegisterRole(args), 'revokeRole');
+    }
+
+    async setSuperPaymaster(paymaster: Address) {
+        return wrapAdminCall(() => this.client.setSuperPaymaster({ paymaster }), 'setSuperPaymaster');
+    }
+}
+
+class FinanceModule {
+    constructor(private client: AdminClient) {}
+
+    async deposit(args: { amount: bigint; account?: Account | Address }) {
+        return wrapAdminCall(() => this.client.deposit(args), 'deposit');
+    }
+
+    async depositForOperator(args: { operator: Address; amount: bigint; account?: Account | Address }) {
+        return wrapAdminCall(() => this.client.depositForOperator(args), 'depositForOperator');
+    }
+
+    async withdrawTo(args: { to: Address; amount: bigint; account?: Account | Address }) {
+        return wrapAdminCall(() => this.client.withdrawTo(args), 'withdrawTo');
+    }
+}
+
+class OperatorsModule {
+    constructor(private client: AdminClient) {}
+
+    async ban(operator: Address) {
+        return wrapAdminCall(() => this.client.updateOperatorBlacklist({ operator, isBlacklisted: true }), 'ban');
+    }
+
+    async unban(operator: Address) {
+        return wrapAdminCall(() => this.client.updateOperatorBlacklist({ operator, isBlacklisted: false }), 'unban');
+    }
+
+    async setPaused(operator: Address, paused: boolean) {
+        return wrapAdminCall(() => this.client.setOperatorPaused({ operator, paused }), 'setPaused');
+    }
+}
 
 export function createAdminClient({ 
     chain, 
@@ -50,5 +116,12 @@ export function createAdminClient({
         ...aggregatorActions()(baseClient as any),
     };
 
-    return Object.assign(baseClient, actions) as AdminClient;
+    const client = Object.assign(baseClient, actions) as any;
+    
+    // Attach Namespaces
+    client.system = new SystemModule(client as AdminClient);
+    client.finance = new FinanceModule(client as AdminClient);
+    client.operators = new OperatorsModule(client as AdminClient);
+
+    return client as AdminClient;
 }

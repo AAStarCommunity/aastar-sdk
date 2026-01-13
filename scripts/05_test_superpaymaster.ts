@@ -1,380 +1,58 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, Hex, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256, Address, pad, toBytes } from 'viem';
+
+import { http, parseEther, formatEther, type Hex, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { 
+    createEndUserClient, 
+    parseKey, 
+    CORE_ADDRESSES 
+} from '../packages/sdk/src/index.ts';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
-(BigInt.prototype as any).toJSON = function () { return this.toString(); };
-dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const RPC_URL = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL;
-const BUNDLER_RPC = process.env.ALCHEMY_BUNDLER_RPC_URL || process.env.BUNDLER_RPC;
-const ENTRY_POINT = (process.env.ENTRY_POINT_ADDR || "0x0000000071727De22E5E9d8BAf0edAc6f37da032") as Hex;
+// Dynamic Env Loading
+const NETWORK = process.env.EXPERIMENT_NETWORK || 'anvil';
+const envFile = NETWORK === 'sepolia' ? '.env.sepolia' : '.env.anvil';
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-const ACCOUNT_C = (process.env.TEST_SIMPLE_ACCOUNT_C || process.env.ACCOUNT_C) as Hex; 
-const SIGNER_KEY = (process.env.PRIVATE_KEY_JASON || process.env.USER_KEY) as Hex; 
-const BPNTS = (process.env.BPNTS_ADDRESS || process.env.GTOKEN_ADDRESS) as Hex;
-const APNTS = process.env.APNTS_ADDRESS as Hex;
-const SUPER_PAYMASTER = (process.env.SUPER_PAYMASTER_ADDRESS || process.env.SUPER_PAYMASTER) as Hex;
-const ANNI_KEY = (process.env.PRIVATE_KEY_ANNI || process.env.OPERATOR_KEY) as Hex;  
+const RPC_URL = process.env.RPC_URL || (NETWORK === 'sepolia' ? process.env.SEPOLIA_RPC_URL : "http://127.0.0.1:8545");
+const SIGNER_KEY = (process.env.PRIVATE_KEY_JASON || process.env.USER_KEY) as Hex;
+const ACCOUNT_ADDRESS = (process.env.TEST_SIMPLE_ACCOUNT_C) as Address;
 const RECEIVER = "0x93E67dbB7B2431dE61a9F6c7E488e7F0E2eD2B3e";
 
-if (!BUNDLER_RPC || !BPNTS || !SUPER_PAYMASTER) throw new Error("Missing Config for Group C");
-
-// Helper: Pack 128-bit values for PaymasterAndData (Legacy view for packing)
-function packUint(high128: bigint, low128: bigint): Hex {
-    return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
-}
-
-export async function runSuperPaymasterTest() {
-    console.log("🚀 Starting Group C: SuperPaymaster...");
-    const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
-    const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });
-    const signer = privateKeyToAccount(SIGNER_KEY);
-    const anniWallet = createWalletClient({ account: privateKeyToAccount(ANNI_KEY), chain: foundry, transport: http(RPC_URL) });
-
-    const erc20Abi = parseAbi([
-        'function balanceOf(address) view returns (uint256)',
-        'function transfer(address, uint256) returns (bool)',
-        'function approve(address, uint256) returns (bool)',
-        'function allowance(address, address) view returns (uint256)'
-    ]);
-    const epAbi = parseAbi(['function balanceOf(address) view returns (uint256)', 'function depositTo(address) payable']);
-
-    // 1. Check SuperPaymaster Deposit
-    const pmDeposit = await publicClient.readContract({ address: ENTRY_POINT, abi: epAbi, functionName: 'balanceOf', args: [SUPER_PAYMASTER] });
-    console.log(`   🏦 PM Deposit: ${formatEther(pmDeposit)} ETH`);
-    if (pmDeposit < parseEther("0.05")) {
-        console.log("   ⚠️  Low Deposit. Converting Anni ETH -> EntryPoint Deposit...");
-        const feeData = await publicClient.estimateFeesPerGas();
-        const maxPriority = (feeData.maxPriorityFeePerGas || parseEther("1.5", "gwei")) * 2n;
-        const maxFee = (feeData.maxFeePerGas || parseEther("20", "gwei")) * 2n;
-        
-        try {
-            const hash = await anniWallet.writeContract({
-                address: ENTRY_POINT, abi: epAbi, functionName: 'depositTo', args: [SUPER_PAYMASTER], value: parseEther("0.05"),
-                maxPriorityFeePerGas: maxPriority, maxFeePerGas: maxFee
-            });
-            console.log(`   ⏳ Deposited: ${hash}`);
-            await publicClient.waitForTransactionReceipt({ hash });
-        } catch (e) {
-            console.warn("Deposit failed, hoping existing balance is enough.");
-        }
-    }
-
-    // 2. Check Allowance
-    const allow = await publicClient.readContract({ address: BPNTS, abi: erc20Abi, functionName: 'allowance', args: [ACCOUNT_C, SUPER_PAYMASTER] });
-    console.log(`   🔓 bPNTs Allowance: ${formatEther(allow)}`);
-
-    if (allow < parseEther("100")) {
-        console.log("   ⚠️  Allowance low. Sending Approve Ops...");
-        await sendUserOp(
-            publicClient, bundlerClient, signer, ACCOUNT_C,
-            BPNTS, 0n, 
-            encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [SUPER_PAYMASTER, parseEther("1000000")] }),
-            undefined, // No Paymaster, use ETH
-            true // isApproval
-        );
-        console.log("   ✅ Approved.");
-    }
-
-    // 3. Prepare Transfer UserOp (aPNTs Transfer, bPNTs Gas)
-    console.log("   🔄 Sending Test Transfer...");
+async function main() {
+    console.log(`🚀 Group C: SuperPaymaster (Network: ${NETWORK})`);
     
-    const transferData = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [RECEIVER, parseEther("1")] });
-    
-    // 4. Setup Operator (Self-Sponsorship)
-    await setupOperator(publicClient, bundlerClient, signer, SUPER_PAYMASTER, APNTS, signer.address);
+    if (!SIGNER_KEY) throw new Error("Missing Private Key (PRIVATE_KEY_JASON)");
+    if (!ACCOUNT_ADDRESS) throw new Error("Missing TEST_SIMPLE_ACCOUNT_C");
 
-    // 5. Prepare Transfer UserOp (aPNTs Transfer, bPNTs Gas)
-    console.log("   🔄 Sending Test Transfer...");
-    
-    // For V4/SuperPaymaster, we construct the Paymaster struct.
-    const pmStruct = {
-        paymaster: SUPER_PAYMASTER,
-        paymasterVerificationGasLimit: 300000n,
-        paymasterPostOpGasLimit: 10000n,
-        paymasterData: signer.address // Use OUR address as Operator
-    };
+    const account = privateKeyToAccount(parseKey(SIGNER_KEY));
+    const user = createEndUserClient({ transport: http(RPC_URL), account });
 
-    const metrics = await sendUserOp(
-        publicClient, bundlerClient, signer, ACCOUNT_C,
-        APNTS, 0n, transferData, 
-        pmStruct // Pass struct, NOT packed hex
-    );
-    console.log("   ✅ Group C Test Passed!");
-    
-    return {
-        group: 'SuperPaymaster',
-        ...metrics
-    };
-}
+    console.log(`   👤 Signer: ${account.address}`);
+    console.log(`   🏭 Smart Account: ${ACCOUNT_ADDRESS}`);
 
-// Ensure Signer is a valid Operator
-async function setupOperator(publicClient: any, bundlerClient: any, signer: any, pm: Hex, token: Hex, treasury: Hex) {
-    console.log("   🛠️  Setting up Operator...");
-    const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(process.env.SEPOLIA_RPC_URL) });
-    
-    const pmAbi = parseAbi([
-        'function operators(address) view returns (uint128, uint96, bool, bool, address, uint32, address, uint256, uint256)',
-        'function configureOperator(address, address, uint256)',
-        'function deposit(uint256)',
-        'function depositFor(address, uint256)',
-        'function notifyDeposit(uint256)',
-        'function REGISTRY() view returns (address)'
-    ]);
-    const registryAbi = parseAbi(['function hasRole(bytes32, address) view returns (bool)']);
-    const erc20Abi = parseAbi(['function approve(address, uint256) returns (bool)', 'function allowance(address, address) view returns (uint256)', 'function transfer(address, uint256) returns (bool)']);
-
-    // 1. Check Role
-    const regAddr = await publicClient.readContract({ address: pm, abi: pmAbi, functionName: 'REGISTRY' });
-    const COMMUNITY = keccak256(new TextEncoder().encode("COMMUNITY"));
-    const hasRole = await publicClient.readContract({ address: regAddr, abi: registryAbi, functionName: 'hasRole', args: [COMMUNITY, signer.address] });
-    
-    if (!hasRole) {
-        console.warn("   ⚠️  Signer missing COMMUNITY role! Assuming Admin key can grant it or ignoring (might fail).");
-        // Try to grant? Need Admin Key. Assuming signer IS admin for now.
-    }
-
-    // 2. Check Config
-    const opData = await publicClient.readContract({ address: pm, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    // struct OperatorAccount { balance, exchangeRate, isConfigured, isPaused, token, reputation, treasury, spent, txSponsored }
-    // New Tuple Return: (uint128, uint96, bool, bool, address, uint32, address, uint256, uint256)
-    // 0: balance, 1: exRate, 2: isConfigured, 3: isPaused, 4: token, 5: reputation, 6: treasury, 7: spent, 8: txSponsored
-    const isConfigured = opData[2];
-    const balance = opData[0];
-
-    if (!isConfigured) {
-        console.log("   ⚙️  Configuring Operator...");
-        const hash = await wallet.writeContract({
-            address: pm, abi: pmAbi, functionName: 'configureOperator', 
-            args: [token, treasury, 1000000000000000000n], // 1:1 Rate
-            account: signer
+    try {
+        console.log("   ⚡ Executing Gasless Transfer (via SuperPaymaster)...");
+        // The SDK will probe the Registry and find the SuperPaymaster role.
+        // It handles all the packing and estimation internally.
+        const result = await user.executeGasless({
+            target: RECEIVER,
+            data: '0x',
+            value: parseEther("0")
         });
-        await publicClient.waitForTransactionReceipt({ hash });
-        console.log("   ✅ Configured.");
-    }
 
-    // 3. Check Balance & Deposit
-    if (balance < parseEther("75")) {
-        console.log(`   💰 Operator Balance Low (${formatEther(balance)}). Depositing...`);
-        // Approve
-        const allow = await publicClient.readContract({ address: token, abi: erc20Abi, functionName: 'allowance', args: [signer.address, pm] });
-        if (allow < parseEther("100")) {
-            const tx = await wallet.writeContract({ address: token, abi: erc20Abi, functionName: 'approve', args: [pm, parseEther("1000")], account: signer });
-            await publicClient.waitForTransactionReceipt({ hash: tx });
-            console.log("   🔓 Approved.");
-        }
+        console.log(`   ⏳ UserOp Hash: ${result.hash}`);
         
-        // Try Legacy Deposit first
-        try {
-            const hash = await wallet.writeContract({ address: pm, abi: pmAbi, functionName: 'deposit', args: [parseEther("100")], account: signer });
-            await publicClient.waitForTransactionReceipt({ hash });
-            console.log("   ✅ Deposited (Legacy): 100 aPNTs");
-        } catch (e: any) {
-            console.warn(`   ⚠️ Legacy Deposit failed (Likely blocked by Token). Switching to Push Mode...`);
-            
-            // Push Mode: Transfer + Notify
-            // 1. Transfer
-            const txTrans = await wallet.writeContract({ 
-                address: token, abi: erc20Abi, functionName: 'transfer', 
-                args: [pm, parseEther("100")],
-                account: signer
-            });
-            await publicClient.waitForTransactionReceipt({ hash: txTrans });
-            console.log("   ➡ Transferred tokens.");
-
-            // 2. Deposit via depositFor (Push)
-            const txDep = await wallet.writeContract({
-                address: pm,
-                abi: pmAbi,
-                functionName: 'depositFor',
-                args: [wallet.account.address, parseEther('100')],
-                account: signer
-            });
-            await publicClient.waitForTransactionReceipt({ hash: txDep });
-            console.log("   ✅ Deposited (Push + DepositFor): 100 aPNTs");
-        }
+        const receipt = await user.waitForTransactionReceipt({ hash: result.hash });
+        console.log(`   ✅ Success! Tx: ${receipt.transactionHash}`);
+        console.log(`   ⛽ Gas Used: ${receipt.gasUsed.toString()}`);
+    } catch (error: any) {
+        console.error("   ❌ SuperPaymaster Test Failed:", error.message.split('\n')[0]);
     }
 }
 
-// Support both struct (for Paymaster) and undefined (for ETH)
-async function sendUserOp(
-    client: any, 
-    bundler: any, 
-    signer: any, 
-    sender: Address, 
-    target: Address, 
-    value: bigint, 
-    innerData: Hex, 
-    paymasterStruct?: { paymaster: Address, paymasterVerificationGasLimit: bigint, paymasterPostOpGasLimit: bigint, paymasterData: Hex }, 
-    isApproval = false
-) {
-    const executeAbi = parseAbi(['function execute(address, uint256, bytes)']);
-    const callData = encodeFunctionData({ abi: executeAbi, functionName: 'execute', args: [target, value, innerData] });
-    
-    const nonce = await client.readContract({
-        address: ENTRY_POINT, 
-        abi: [{ inputs: [{ name: "sender", type: "address" }, { name: "key", type: "uint192" }], name: "getNonce", outputs: [{ name: "nonce", type: "uint256" }], stateMutability: "view", type: "function" }],
-        functionName: 'getNonce', args: [sender, 0n]
-    });
-
-    // 1. Estimation
-    // MUST unpack Paymaster fields for Alchemy v0.7
-    let estOp: any = {
-        sender,
-        nonce: toHex(nonce),
-        initCode: "0x",
-        callData,
-        signature: "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex
-    };
-
-    if (paymasterStruct) {
-        estOp.paymaster = paymasterStruct.paymaster;
-        estOp.paymasterVerificationGasLimit = toHex(paymasterStruct.paymasterVerificationGasLimit);
-        estOp.paymasterPostOpGasLimit = toHex(paymasterStruct.paymasterPostOpGasLimit);
-        estOp.paymasterData = paymasterStruct.paymasterData;
-    }
-
-    console.log("   ☁️  Estimating...");
-    const estRes: any = await bundler.request({
-        method: 'eth_estimateUserOperationGas',
-        params: [estOp, ENTRY_POINT]
-    });
-
-    const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? estRes.verificationGas ?? 500000n);
-    const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n);
-    const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
-    
-    // Update PM limits from estimation if available, else keep defaults
-    const pmVerif = estRes.paymasterVerificationGasLimit ? BigInt(estRes.paymasterVerificationGasLimit) : (paymasterStruct?.paymasterVerificationGasLimit ?? 0n);
-    const pmPost = estRes.paymasterPostOpGasLimit ? BigInt(estRes.paymasterPostOpGasLimit) : (paymasterStruct?.paymasterPostOpGasLimit ?? 0n);
-
-    // Add buffer
-    const finalPmVerif = pmVerif + 50000n;
-    const finalPmPost = pmPost + 10000n;
-
-    const block = await client.getBlock();
-    const priority = parseEther("5", "gwei");
-    const maxFee = block.baseFeePerGas! * 2n + priority;
-
-    // 2. Hashing (Requires Packed Fields)
-    const accountGasLimits = packUint(verificationGasLimit + 50000n, callGasLimit + 20000n);
-    // FIX: gasFees = (maxPriorityFeePerGas << 128) | maxFeePerGas
-    const gasFees = packUint(priority, maxFee);
-    
-    let paymasterAndData = "0x" as Hex;
-    if (paymasterStruct) {
-        // Re-pack for the hash
-        const pmLimits = packUint(finalPmVerif, finalPmPost);
-        // Supports Operator(20) + optional MaxRate(32)
-        // If paymasterData is JUST address, concat works.
-        // If we want maxRate, we append it.
-        // Let's assume paymasterStruct can have 'paymasterMaxRate'
-        let extraData = paymasterStruct.paymasterData;
-        if ((paymasterStruct as any).paymasterMaxRate) {
-            extraData = concat([paymasterStruct.paymasterData, pad(toHex((paymasterStruct as any).paymasterMaxRate as bigint), { size: 32 })]);
-        }
-        paymasterAndData = concat([paymasterStruct.paymaster, pmLimits, extraData]);
-    }
-
-    const packedUserOp = {
-        sender,
-        nonce, 
-        initCode: "0x" as Hex,
-        callData,
-        accountGasLimits,
-        preVerificationGas,
-        gasFees,
-        paymasterAndData,
-        signature: "0x" as Hex
-    };
-
-    // Debug: Use Local Hashing to be 100% sure of what we are signing
-    const userOpHash = entryPointGetUserOpHash(packedUserOp, ENTRY_POINT, sepolia.id);
-    console.log(`   #️⃣  UserOpHash (Local): ${userOpHash}`);
-
-    // Standard SimpleAccount expects EIP-191 signature (toEthSignedMessageHash)
-    const sig = await signer.signMessage({ message: { raw: userOpHash } });
-
-
-    // 3. Sending (Requires Unpacked Fields)
-    const unpackedUserOp: any = {
-        sender,
-        nonce: toHex(nonce),
-        initCode: "0x",
-        callData,
-        callGasLimit: toHex(callGasLimit + 20000n),
-        verificationGasLimit: toHex(verificationGasLimit + 50000n),
-        preVerificationGas: toHex(preVerificationGas),
-        maxFeePerGas: toHex(maxFee),
-        maxPriorityFeePerGas: toHex(priority),
-        signature: sig
-    };
-
-    if (paymasterStruct) {
-        unpackedUserOp.paymaster = paymasterStruct.paymaster;
-        unpackedUserOp.paymasterVerificationGasLimit = toHex(finalPmVerif);
-        unpackedUserOp.paymasterPostOpGasLimit = toHex(finalPmPost);
-        unpackedUserOp.paymasterData = paymasterStruct.paymasterData;
-    }
-
-    console.log("   🚀 Sending Unpacked...");
-    const userOpHashRes = await bundler.request({
-        method: 'eth_sendUserOperation',
-        params: [unpackedUserOp, ENTRY_POINT]
-    });
-    console.log(`   ✅ Sent: ${userOpHashRes}`);
-    
-    const startTime = Date.now();
-    let receipt: any = null;
-    
-    for(let i=0; i<60; i++) {
-        const r = await bundler.request({ method: 'eth_getUserOperationReceipt', params: [userOpHashRes] });
-        if(r) {
-            receipt = (r as any).receipt;
-            console.log(`   ✅ Mined: ${receipt.transactionHash}`);
-            break;
-        }
-        await new Promise(res => setTimeout(res, 2000));
-    }
-
-    if (!receipt) throw new Error("Timeout waiting for receipt");
-
-    // Return Metrics
-    return {
-        gasUsed: BigInt(receipt.gasUsed),
-        l1Fee: BigInt(receipt.l1Fee || 0), // Alchemy specific field?
-        gasPrice: BigInt(receipt.effectiveGasPrice),
-        totalCost: BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice),
-        status: receipt.status === '0x1' ? 'Success' : 'Failed',
-        txHash: receipt.transactionHash,
-        time: (Date.now() - startTime) / 1000
-    };
-}
-
-function entryPointGetUserOpHash(op: any, ep: Address, chainId: number): Hex {
-    const packed = encodeAbiParameters(
-        [
-            { type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' },
-            { type: 'bytes32' }, { type: 'uint256' }, { type: 'bytes32' }, { type: 'bytes32' }
-        ],
-        [
-            op.sender, BigInt(op.nonce), 
-            keccak256(op.initCode && op.initCode !== "0x" ? op.initCode : '0x'), 
-            keccak256(op.callData),
-            op.accountGasLimits, BigInt(op.preVerificationGas), op.gasFees,
-            keccak256(op.paymasterAndData)
-        ]
-    );
-    const enc = encodeAbiParameters(
-        [{ type: 'bytes32' }, { type: 'address' }, { type: 'uint256' }],
-        [keccak256(packed), ep, BigInt(chainId)]
-    );
-    return keccak256(enc);
-}
-
-import { fileURLToPath } from 'url';
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    runSuperPaymasterTest().catch(console.error);
-}
+main().catch(console.error);

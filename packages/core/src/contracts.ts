@@ -78,7 +78,7 @@ export const SEPOLIA_CONTRACTS = {
     /** AAStar Community - Test community for development (registered: 2025-11-01) */
     aastar: {
       owner: COMMUNITY_OWNERS.aastarOwner,
-      gasToken: TEST_TOKEN_ADDRESSES.aPNTs,
+      gasToken: TEST_TOKEN_ADDRESSES.apnts,
       ensName: 'aastar.eth',
       name: 'AAStar',
       stake: '50', // 50 GToken staked in Registry
@@ -87,7 +87,7 @@ export const SEPOLIA_CONTRACTS = {
     /** BreadCommunity - Test community for development (registered: 2025-11-03) */
     breadCommunity: {
       owner: COMMUNITY_OWNERS.breadCommunityOwner,
-      gasToken: TEST_TOKEN_ADDRESSES.bPNTs,
+      gasToken: TEST_TOKEN_ADDRESSES.bpnts,
       ensName: 'bread.eth',
       name: 'BreadCommunity',
       stake: '50', // 50 GToken staked in Registry

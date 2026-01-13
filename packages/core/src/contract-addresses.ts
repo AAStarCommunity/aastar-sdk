@@ -19,7 +19,8 @@ import {
   DVT_VALIDATOR_ADDRESS,
   ENTRY_POINT_ADDRESS,
   XPNTS_FACTORY_ADDRESS,
-  BLS_AGGREGATOR_ADDRESS
+  BLS_AGGREGATOR_ADDRESS,
+  REPUTATION_SYSTEM_ADDRESS
 } from './constants.js';
 
 /**
@@ -38,6 +39,7 @@ export const CORE_ADDRESSES = {
   dvtValidator: DVT_VALIDATOR_ADDRESS,
   entryPoint: ENTRY_POINT_ADDRESS,
   xPNTsFactory: XPNTS_FACTORY_ADDRESS,
+  reputationSystem: (process.env.REPUTATION_SYSTEM_ADDRESS || REPUTATION_SYSTEM_ADDRESS) as Address,
 } as const;
 
 /**
@@ -45,6 +47,9 @@ export const CORE_ADDRESSES = {
  */
 export const TOKEN_ADDRESSES = {
   xPNTsFactory: XPNTS_FACTORY_ADDRESS,
+  aPNTs: APNTS_ADDRESS,
+  gToken: GTOKEN_ADDRESS,
+  pimToken: (process.env.PIM_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000') as Address, // Often custom per deployment
 } as const;
 
 /**
@@ -52,8 +57,10 @@ export const TOKEN_ADDRESSES = {
  */
 export const TEST_TOKEN_ADDRESSES = {
   mockUSDT: process.env.TEST_MOCK_USDT as Address,
-  aPNTs: process.env.TEST_APNTS as Address,
-  bPNTs: process.env.TEST_BPNTS as Address,
+  apnts: APNTS_ADDRESS,
+  gToken: GTOKEN_ADDRESS,
+  bpnts: GTOKEN_ADDRESS, // bPNTs is often GToken in simple setups
+  pimToken: TOKEN_ADDRESSES.pimToken,
 } as const;
 
 /**

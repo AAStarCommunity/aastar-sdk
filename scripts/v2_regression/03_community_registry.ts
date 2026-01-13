@@ -82,67 +82,33 @@ async function communityRegistry() {
     await ensureFunds(communityAccount.address, parseEther('0.05'), parseEther('100'));
 
 
-    // 1. Register Community Role
-    console.log('\n🏘️ Registering Community in Registry...');
-    const hasRole = await adminClient.readContract({
-        address: localAddresses.registry,
-        abi: RegistryABI,
-        functionName: 'hasRole',
-        args: [ROLE_COMMUNITY, communityAccount.address]
-    });
-
-    if (hasRole) {
-        console.log('   ✅ Community already registered');
-    } else {
-        // Check allowance first
-        const allowance = await communityClient.readContract({
-            address: localAddresses.gToken, abi: erc20Abi, functionName: 'allowance', args: [communityAccount.address, localAddresses.gTokenStaking]
-        });
-        if (allowance < parseEther('100')) {
-            console.log('   📝 Approving GToken...');
-            const approveTx = await communityClient.writeContract({
-                address: localAddresses.gToken,
-                abi: erc20Abi,
-                functionName: 'approve',
-                args: [localAddresses.gTokenStaking, parseEther('100')],
-                account: communityAccount
-            });
-            await adminClient.waitForTransactionReceipt({ hash: approveTx });
-        } else {
-            console.log('   ✅ GToken Allowance OK');
-        }
-
-        // Create unique name to avoid "Name taken"
+    // 1. Register Community Role (Using SDK Launch)
+    console.log('\n🏘️ Launching Community via SDK...');
+    
+    try {
         const uniqueName = `RegTest_${Date.now()}`;
         console.log(`   📝 Using unique community name: ${uniqueName}`);
 
-        // Create proper CommunityRoleData: (name, ensName, website, description, logoURI, stakeAmount)
-        const communityData = encodeAbiParameters(
-            [{
-                type: 'tuple',
-                components: [
-                    { name: 'name', type: 'string' },
-                    { name: 'ensName', type: 'string' },
-                    { name: 'website', type: 'string' },
-                    { name: 'description', type: 'string' },
-                    { name: 'logoURI', type: 'string' },
-                    { name: 'stakeAmount', type: 'uint256' }
-                ]
-            }],
-            [{ name: uniqueName, ensName: '', website: 'https://test.com', description: 'A test community for regression tests', logoURI: '', stakeAmount: parseEther('30') }]
-        );
-
-        // Register using writeContract directly
-        console.log(`   📝 Role Data Hex: ${communityData}`);
-        const registerTx = await communityClient.writeContract({
-            address: localAddresses.registry,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [ROLE_COMMUNITY, communityData],
-            account: communityAccount
+        const launchResult = await communityClient.launch({
+            name: uniqueName,
+            tokenName: `${uniqueName} Token`,
+            tokenSymbol: 'CTK',
+            description: 'A test community for regression',
+            website: 'https://test.com',
+            governance: {
+                minStake: parseEther('30'),
+                initialReputationRule: true
+            }
         });
-        await communityClient.waitForTransactionReceipt({ hash: registerTx });
-        console.log('   ✅ Community Registered Successfully');
+        
+        console.log(`   ✅ Community Launched! Token: ${launchResult.tokenAddress}`);
+        console.log(`   ✅ Transactions: ${launchResult.txs.length}`);
+    } catch (e: any) {
+        if (e.message.includes('already registered')) {
+            console.log('   ✅ Community already registered');
+        } else {
+            console.warn('   ⚠️ Launch error:', e.message);
+        }
     }
 
     // 2. Setup Reputation for Community (Admin side)

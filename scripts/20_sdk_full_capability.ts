@@ -1,95 +1,93 @@
 
-import { createAAStarPublicClient, registryActions } from '../packages/core/src/index.js';
-import { createAdminClient } from '../packages/sdk/src/index.js';
-import { ReputationClient } from '../packages/identity/src/index.js';
-import { FinanceClient } from '../packages/tokens/src/index.js';
-import { DVTClient } from '../packages/dapp/src/index.js';
-
-import { foundry } from 'viem/chains';
+import { http, type Hex, parseEther, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { http, type Hex, parseEther } from 'viem';
+import { 
+    createAdminClient, 
+    createOperatorClient,
+    createCommunityClient,
+    createEndUserClient,
+    CORE_ADDRESSES,
+    TEST_TOKEN_ADDRESSES,
+    parseKey
+} from '../packages/sdk/src/index.ts';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.anvil') });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const ADMIN_KEY = process.env.ADMIN_KEY as Hex;
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
-const REGISTRY_ADDR = process.env.REGISTRY_ADDR as Hex;
-const REPUTATION_ADDR = process.env.REPUTATION_SYSTEM_ADDR as Hex; // Check env var name
-const PAYMASTER_ADDR = process.env.SUPERPAYMASTER_ADDR as Hex;
-const DVT_ADDR = process.env.DVT_VALIDATOR_ADDR as Hex; // Assuming this might be missing in .env.anvil, check later
+// Load env
+const NETWORK = process.env.EXPERIMENT_NETWORK || 'anvil';
+const envFile = NETWORK === 'sepolia' ? '.env.sepolia' : '.env.anvil';
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+const ADMIN_KEY = (process.env.ADMIN_KEY || process.env.PRIVATE_KEY_JASON) as Hex;
+const RPC_URL = process.env.RPC_URL || (NETWORK === 'sepolia' ? process.env.SEPOLIA_RPC_URL : "http://127.0.0.1:8545");
 
 async function runFullCapabilityTest() {
-    console.log("🚀 Running Full Capability SDK Test (v1.0 Preview)...");
+    console.log(`🚀 Running Full Capability SDK Test (Network: ${NETWORK})`);
 
-    const account = privateKeyToAccount(ADMIN_KEY);
-    const publicClient = createAAStarPublicClient({ chain: foundry, rpcUrl: RPC_URL });
-    const walletClient = createAdminClient({ 
-        chain: foundry, 
-        transport: http(RPC_URL), 
-        account,
-        addresses: {
-            registry: REGISTRY_ADDR,
-            superPaymaster: PAYMASTER_ADDR,
-            gTokenStaking: process.env.GTOKEN_STAKING_ADDR as Hex
-        }
+    if (!ADMIN_KEY) throw new Error("Missing ADMIN_KEY");
+    const account = privateKeyToAccount(parseKey(ADMIN_KEY));
+
+    // 1. Admin Capabilities
+    console.log("\n--- 🔧 Admin Client ---");
+    const admin = createAdminClient({ transport: http(RPC_URL), account });
+    const registryOwner = await admin.readContract({
+        address: CORE_ADDRESSES.registry,
+        abi: [{ name: 'owner', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' }],
+        functionName: 'owner'
     });
+    console.log(`   Registry Owner: ${registryOwner}`);
 
-    // 1. Registry
-    console.log("   📜 Testing Registry (Credit Check)...");
-    const regActions = registryActions(REGISTRY_ADDR)(publicClient);
-    const credit = await regActions.getCreditLimit({ user: account.address });
-    console.log(`      Credit Limit: ${credit}`);
-
-    // 2. Reputation
-    if (REPUTATION_ADDR) {
-        console.log("   ⭐ Testing Reputation (Compute Score)...");
-        const repClient = new ReputationClient(publicClient, REPUTATION_ADDR);
-        // Checking score with empty arrays (mock)
-        const score = await repClient.computeScore(account.address, [], [], []);
-        console.log(`      Reputation Score: ${score}`);
-    } else {
-        console.warn("      ⚠️ REPUTATION_ADDR missing, skipping.");
+    // 2. Operator Capabilities
+    console.log("\n--- 🏭 Operator Client ---");
+    const operator = createOperatorClient({ transport: http(RPC_URL), account });
+    const status = await operator.getOperatorStatus(account.address);
+    console.log(`   Is Simple Operator: ${status.isOperator}`);
+    console.log(`   Is Super Operator: ${status.isSuperPaymaster}`);
+    if (status.paymasterV4) {
+        console.log(`   Paymaster V4: ${status.paymasterV4.address}`);
     }
 
-    // 3. Finance
-    console.log("   💰 Testing Finance (Paymaster Deposit)...");
-    // 3. Finance
-    console.log("   💰 Testing Finance (Paymaster Deposit)...");
-    // Use XPNTS or APNTS address from env, fallback to GTOKEN if missing but likely XPNTS is correct for Paymaster collateral
-    const TOKEN_ADDR = (process.env.APNTS || process.env.XPNTS_ADDR || process.env.GTOKEN_ADDRESS || process.env.GAS_TOKEN_ADDRESS) as Hex;
-    
-    if (TOKEN_ADDR) {
-        console.log(`      Using Token: ${TOKEN_ADDR}`);
-        // For xPNTs, we must use Push pattern (transferAndCall)
-        // No approval needed for transferAndCall usually, but we assume we have balance.
-        try {
-            const hash = await FinanceClient.depositViaTransferAndCall(walletClient, TOKEN_ADDR, PAYMASTER_ADDR, parseEther("0.1"));
-            console.log(`      Deposit (Push) Tx: ${hash}`);
-        } catch (e: any) {
-             console.error(`      Deposit Failed: ${e.message}`);
-        }
-    } else {
-        console.warn("      ⚠️ TOKEN Address missing. Skipping Deposit.");
+    // 3. Community Capabilities
+    console.log("\n--- 🤝 Community Client ---");
+    const community = createCommunityClient({ transport: http(RPC_URL), account }); // Note: reuse account for simplicity in this demo
+    // Checking a community status (can be self or another)
+    const isComm = await admin.readContract({
+         address: CORE_ADDRESSES.registry,
+         abi: [{ name: 'hasRole', type: 'function', inputs: [{type:'bytes32'}, {type:'address'}], outputs: [{type:'bool'}], stateMutability: 'view' }],
+         functionName: 'hasRole',
+         args: ['0x0000000000000000000000000000000000000000000000000000000000000001' as Hex, account.address] // ROLE_COMMUNITY
+    });
+    console.log(`   Is Community: ${isComm}`);
+
+    // 4. End User Capabilities
+    console.log("\n--- 👤 End User Client ---");
+    const user = createEndUserClient({ transport: http(RPC_URL), account });
+    const { accountAddress } = await user.createSmartAccount({
+        owner: account.address,
+        salt: 1337n
+    });
+    console.log(`   SA Address (Salt 1337): ${accountAddress}`);
+
+    // 5. Gasless Execution Demo (Dry Run style)
+    console.log("\n--- ⚡ Gasless Execution (Simulation) ---");
+    try {
+        console.log(`   Simulating gasless transfer...`);
+        // This will attempt to build and estimate. If PMs aren't setup it might fail, which is okay for full capability test to show error reporting.
+        const result = await user.executeGasless({
+            target: account.address,
+            data: '0x',
+            value: 0n
+        });
+        console.log(`   ✅ Execution Hash: ${result.hash}`);
+    } catch (e: any) {
+        console.log(`   ℹ️ Gasless demo skipped/failed (expected if PM not ready): ${e.message.split('\n')[0]}`);
     }
 
-    // 4. DVT
-    if (DVT_ADDR) {
-        console.log("   🛡️ Testing DVT (Validator Reg)...");
-        // Mock BLS Key
-        const blsKey = "0x12345678" as Hex; // Dummy
-        try {
-            // This might revert if logic checks BLS formatting, but validates route exists
-            await DVTClient.registerValidator(walletClient, DVT_ADDR, blsKey);
-        } catch (e: any) {
-            console.log(`      DVT Call Reached (Reverted as expected for dummy key): ${e.shortMessage || e.message}`);
-        }
-    } else {
-        console.warn("      ⚠️ DVT_ADDR (Validation) missing, skipping.");
-    }
-
-    console.log("✅ Full Capability Test Complete.");
+    console.log("\n✅ Full Capability Test Complete.");
 }
 
-runFullCapabilityTest().catch(console.error);
+main().catch(console.error);

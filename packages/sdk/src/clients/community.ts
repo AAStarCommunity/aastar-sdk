@@ -20,14 +20,18 @@ import {
     registryActions, 
     RegistryABI, 
     sbtActions,
+    reputationActions,
     type RegistryActions,
     type SBTActions,
+    type ReputationActions,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES
 } from '@aastar/core';
 import { RoleDataFactory, RoleIds } from '../utils/roleData.js';
+import { decodeContractError } from '../errors/decoder.js';
+import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
 
-export type CommunityClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & {
+export type CommunityClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & ReputationActions & {
     /**
      * Query community registration status and token information
      * Returns null if not registered, otherwise returns community details
@@ -52,8 +56,13 @@ export type CommunityClient = Client<Transport, Chain, Account | undefined> & Pu
         description?: string;
         logoURI?: string;
         website?: string;
-    }) => Promise<{ tokenAddress: Address; txs: Hex[] }>;
+        governance?: {
+            minStake?: bigint;
+            initialReputationRule?: boolean;
+        }
+    }) => Promise<{ tokenAddress: Address; results: { hash: Hash, events: DecodedEvent[] }[] }>;
 };
+
 
 export function createCommunityClient({ 
     chain, 
@@ -78,6 +87,8 @@ export function createCommunityClient({
 
     const registryActionsObj = registryActions(usedAddresses.registry)(client as any);
     const sbtActionsObj = sbtActions(usedAddresses.mySBT)(client as any);
+    const reputationActionsObj = reputationActions(usedAddresses.reputationSystem)(client as any);
+
 
     const launch = async (args: {
         name: string;
@@ -86,7 +97,11 @@ export function createCommunityClient({
         description?: string;
         logoURI?: string;
         website?: string;
-    }): Promise<{ tokenAddress: Address; txs: Hex[] }> => {
+        governance?: {
+            minStake?: bigint;
+            initialReputationRule?: boolean;
+        }
+    }): Promise<{ tokenAddress: Address; results: { hash: Hash, events: DecodedEvent[] }[] }> => {
         try {
             console.log(`🚀 Launching community: ${args.name}`);
             
@@ -120,6 +135,7 @@ export function createCommunityClient({
             }) as boolean;
 
             let registerTx: Hex | undefined;
+            const results: { hash: Hash, events: DecodedEvent[] }[] = [];
 
             if (hasRole) {
                 console.log(`   ℹ️  Account already has COMMUNITY role. Skipping registration.`);
@@ -155,7 +171,10 @@ export function createCommunityClient({
                             account: account
                         });
                         console.log(`   ✅ Approved: ${approveTx}`);
-                        await client.waitForTransactionReceipt({ hash: approveTx });
+                        const receipt = await client.waitForTransactionReceipt({ hash: approveTx });
+                        const events = decodeContractEvents(receipt.logs);
+                        logDecodedEvents(events);
+                        results.push({ hash: approveTx, events });
                     }
                 }
 
@@ -169,6 +188,10 @@ export function createCommunityClient({
                         account: account
                     });
                     console.log(`   ✅ Community registered: ${registerTx}`);
+                    const receipt = await client.waitForTransactionReceipt({ hash: registerTx });
+                    const events = decodeContractEvents(receipt.logs);
+                    logDecodedEvents(events);
+                    results.push({ hash: registerTx, events });
                 } catch (e: any) {
                      // Check for RoleAlreadyGranted (just in case hasRole returned false but race condition or cache)
                      const isRoleError = e.message?.includes('RoleAlreadyGranted') || 
@@ -186,8 +209,6 @@ export function createCommunityClient({
 
             // Deploy xPNTs token if factory is available
             let tokenAddress: Address = '0x0000000000000000000000000000000000000000' as Address;
-            const txs: Hex[] = [];
-            if (registerTx) txs.push(registerTx);
 
             if (usedAddresses.xPNTsFactory) {
                 if (!client.account) {
@@ -231,82 +252,79 @@ export function createCommunityClient({
                     if (existingToken && existingToken !== '0x0000000000000000000000000000000000000000') {
                         console.log(`   ℹ️  Found existing token at ${existingToken}`);
                         tokenAddress = existingToken;
-                        // Return early or continue? Logic expects result.
-                        // If we found it, we don't need to deploy.
-                        return { tokenAddress, txs };
-                    }
-                } catch (e) {
-                    console.warn(`   ⚠️ Failed to check for existing token:`, e);
-                }
+                    } else {
+                        console.log(`   🏭 Deploying Token via Factory: ${usedAddresses.xPNTsFactory}`);
+                        
+                        // deployxPNTsToken(name, symbol, communityName, communityENS, exchangeRate, paymasterAOA)
+                        const { request } = await client.simulateContract({
+                            address: usedAddresses.xPNTsFactory,
+                            abi: factoryAbi,
+                            functionName: 'deployxPNTsToken',
+                            args: [
+                                args.tokenName, 
+                                args.tokenSymbol, 
+                                args.name, // communityName
+                                args.website || '', // communityENS (mapping website to ENS param for now)
+                                1000000000000000000n, // exchangeRate 1e18 (1:1)
+                                '0x0000000000000000000000000000000000000000' // paymasterAOA (optional)
+                            ],
+                            account: client.account
+                        } as any);
 
-                console.log(`   🏭 Deploying Token via Factory: ${usedAddresses.xPNTsFactory}`);
-                
-                try {
-                    // deployxPNTsToken(name, symbol, communityName, communityENS, exchangeRate, paymasterAOA)
-                    const { request } = await client.simulateContract({
-                        address: usedAddresses.xPNTsFactory,
-                        abi: factoryAbi,
-                        functionName: 'deployxPNTsToken',
-                        args: [
-                            args.tokenName, 
-                            args.tokenSymbol, 
-                            args.name, // communityName
-                            args.website || '', // communityENS (mapping website to ENS param for now)
-                            1000000000000000000n, // exchangeRate 1e18 (1:1)
-                            '0x0000000000000000000000000000000000000000' // paymasterAOA (optional)
-                        ],
-                        account: client.account
-                    } as any);
-
-                    const deployTx = await client.writeContract(request as any);
-                    console.log(`   📤 Deploy Token Tx: ${deployTx}`);
-                    txs.push(deployTx);
-                    
-                    const receipt = await client.waitForTransactionReceipt({ hash: deployTx });
-                    
-                    // After deployment, fetch the address again
-                    const newTokenAddress = await client.readContract({
-                        address: usedAddresses.xPNTsFactory,
-                        abi: factoryAbi,
-                        functionName: 'getTokenAddress',
-                        args: [account.address]
-                    }) as Address;
-                    
-                    if (newTokenAddress) {
-                        tokenAddress = newTokenAddress;
+                        const deployTx = await client.writeContract(request as any);
+                        console.log(`   📤 Deploy Token Tx: ${deployTx}`);
+                        const receipt = await client.waitForTransactionReceipt({ hash: deployTx });
+                        const events = decodeContractEvents(receipt.logs);
+                        logDecodedEvents(events);
+                        results.push({ hash: deployTx, events });
+                        
+                        // After deployment, fetch the address again
+                        tokenAddress = await client.readContract({
+                            address: usedAddresses.xPNTsFactory,
+                            abi: factoryAbi,
+                            functionName: 'getTokenAddress',
+                            args: [account.address]
+                        }) as Address;
+                        
                         console.log(`   🪙 Token Deployed: ${tokenAddress}`);
                     }
-
-                } catch (deployError) {
-                    console.warn('   ⚠️ Failed to deploy token, but community registered:', deployError);
+                } catch (e) {
+                    console.warn(`   ⚠️ Token deployment step issues:`, e);
                 }
             }
 
-            return { tokenAddress, txs };
+            // 3. Setup Governance (Reputation Rule) - Pattern logic
+            if (args.governance?.initialReputationRule) {
+                console.log('⚖️ Setting up Governance Rules...');
+                try {
+                    const ruleId = '0x0000000000000000000000000000000000000000000000000000000000000001' as Hex; // Default Rule ID 1
+                    const ruleConfig = {
+                        topic: '0x0000000000000000000000000000000000000000' as Address, // Topic 0
+                        weight: 100n,
+                        maxScore: 1000n,
+                        customData: '0x' as Hex
+                    };
+                    const govTx = await reputationActionsObj.setReputationRule({
+                        ruleId,
+                        rule: ruleConfig,
+                        account
+                    });
+                    console.log(`   ✅ Reputation Rule Set: ${govTx}`);
+                    const receipt = await client.waitForTransactionReceipt({ hash: govTx });
+                    const events = decodeContractEvents(receipt.logs);
+                    logDecodedEvents(events);
+                    results.push({ hash: govTx, events });
+                } catch (e) {
+                    console.warn('   ⚠️ Failed to set reputation rule:', e);
+                }
+            }
+
+            return { tokenAddress, results };
         } catch (error: any) {
-            console.error('❌ Error in launch():', error);
-            
-            // 检查是否是 RoleAlreadyGranted 错误
-            const errorMessage = error.message || '';
-            const errorData = error.data?.errorName || '';
-            const errorString = JSON.stringify(error);
-            
-            if (errorMessage.includes('RoleAlreadyGranted') || 
-                errorData === 'RoleAlreadyGranted' ||
-                errorString.includes('RoleAlreadyGranted')) {
-                throw new Error(`Account ${account?.address || 'unknown'} already has COMMUNITY role. Please use a different account or exit the role first.`);
+            const decodedMsg = decodeContractError(error);
+            if (decodedMsg) {
+                throw new Error(`Community Launch Failed: ${decodedMsg}`);
             }
-            
-            // 检查其他常见错误
-            if (errorMessage.includes('InsufficientStake')) {
-                throw new Error('Insufficient stake. Please ensure you have enough GToken staked.');
-            }
-            
-            if (errorMessage.includes('RoleNotConfigured')) {
-                throw new Error('COMMUNITY role is not configured in the Registry contract.');
-            }
-            
-            // 重新抛出原始错误
             throw error;
         }
     };
@@ -396,7 +414,7 @@ export function createCommunityClient({
         }
     };
 
-    return Object.assign(client, registryActionsObj, sbtActionsObj, { 
+    return Object.assign(client, registryActionsObj, sbtActionsObj, reputationActionsObj, { 
         launch,
         getCommunityInfo
     }) as CommunityClient;

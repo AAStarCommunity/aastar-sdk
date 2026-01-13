@@ -1,4 +1,5 @@
 import { type Address, concat, pad, toHex, keccak256, encodeAbiParameters, type Hex, toBytes } from 'viem';
+import { validateAddress, validateUint128 } from '@aastar/core';
 
 export type PaymasterV4MiddlewareConfig = {
     paymasterAddress: Address;
@@ -68,6 +69,11 @@ export function buildPaymasterData(
     const verGas = options?.verificationGasLimit ?? 80000n;
     const postGas = options?.postOpGasLimit ?? 100000n;
     
+    // Hardening: uint128 bounds check
+    validateUint128(verGas, 'verificationGasLimit');
+    validateUint128(postGas, 'postOpGasLimit');
+
+    
     const now = Math.floor(Date.now() / 1000);
     const validUntil = now + validityWindow;
     const validAfter = now - 100; // 100 seconds grace period
@@ -96,6 +102,13 @@ export function buildSuperPaymasterData(
 ): `0x${string}` {
     const verGas = options?.verificationGasLimit ?? 80000n;
     const postGas = options?.postOpGasLimit ?? 100000n;
+
+    // Hardening
+    validateAddress(paymasterAddress, 'Paymaster Address');
+    validateAddress(operator, 'Operator Address');
+    validateUint128(verGas, 'verificationGasLimit');
+    validateUint128(postGas, 'postOpGasLimit');
+
     return concat([
         paymasterAddress,
         pad(toHex(verGas), { size: 16 }),

@@ -1,19 +1,23 @@
 import { createObjectCsvWriter } from 'csv-writer';
-import { createPublicClient, http, Hex } from 'viem';
+import { http, Hex } from 'viem';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { 
+    createEndUserClient, 
+    parseKey, 
+    CORE_ADDRESSES 
+} from '../packages/sdk/src/index.ts';
 import { getNetworkConfig } from './00_utils.js';
-import { runEOAExperiment, runPimlicoExperiment, runAOAExperiment, runSuperExperiment, TestMetrics } from './test_groups.js';
+import { runEOAExperiment, runPimlicoExperiment, runAOAExperiment, runSuperExperiment } from './test_groups.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Dynamic Env Loading
-const NETWORK = process.env.EXPERIMENT_NETWORK || 'sepolia';
-const envPath = NETWORK === 'sepolia' 
-    ? path.resolve(__dirname, '../.env.sepolia') 
-    : path.resolve(__dirname, '../../env/.env.anvil');
+const NETWORK = process.env.EXPERIMENT_NETWORK || 'anvil';
+const envFile = NETWORK === 'sepolia' ? '.env.sepolia' : '.env.anvil';
+const envPath = path.resolve(process.cwd(), envFile);
 
 console.log(`Loading Env from: ${envPath}`);
 dotenv.config({ path: envPath });
@@ -25,111 +29,28 @@ async function main() {
     console.log(`🧪 PhD Experiment Runner (Network: ${NETWORK}, Runs: ${RUNS})`);
     const { chain, rpc } = getNetworkConfig(NETWORK);
     
-    // Fallback for keys
+    // Key Fallback
     const pk = (process.env.PRIVATE_KEY_JASON || process.env.ADMIN_KEY || process.env.USER_KEY) as Hex;
     if (!pk) throw new Error("Missing Private Key (PRIVATE_KEY_JASON or ADMIN_KEY)");
 
-const config = {
+    const config = {
         chain,
         rpc,
-        bundlerRpc: process.env.SEPOLIA_RPC_URL2 || process.env.ALCHEMY_BUNDLER_RPC_URL,
-        pimlicoRpc: `https://api.pimlico.io/v2/sepolia/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
         privateKey: pk,
-        accountAddress: (process.env.TEST_SIMPLE_ACCOUNT_B || "0x0000000000000000000000000000000000000000") as Hex, 
-        pimToken: "0xFC3e86566895Fb007c6A0d3809eb2827DF94F751" 
+        accountAddress: (process.env.TEST_SIMPLE_ACCOUNT_B || "0x0000000000000000000000000000000000000000") as Hex,
+        superPaymaster: CORE_ADDRESSES.superPaymaster
     };
 
-    // Load or Generate Test Accounts using SDK API
+    // Use SDK to probe account if missing
     if (config.accountAddress === "0x0000000000000000000000000000000000000000") {
-        const { TestAccountManager } = await import('../packages/enduser/src/index.js');
-        const savedAccount = TestAccountManager.getTestAccount('A');
-        
-        if (savedAccount) {
-            console.log("✅ Using saved test account from .env.sepolia");
-            console.log(`   🔑 Test Account A: ${savedAccount.aaAddress}`);
-            config.accountAddress = savedAccount.aaAddress;
-            config.privateKey = savedAccount.ownerKey;
-        } else {
-            console.log("⚠️ No saved test accounts found. Generating ephemeral account...");
-            console.log("💡 Tip: Run 'pnpm tsx scripts/setup_test_accounts.ts' to create persistent test accounts.");
-        try {
-            const { generatePrivateKey, privateKeyToAccount } = await import('viem/accounts');
-            const { EndUserClient } = await import('../packages/enduser/src/index.js');
-            const { createWalletClient, createPublicClient, http, parseEther } = await import('viem');
-            
-            // Setup Clients
-            const account = privateKeyToAccount(pk);
-            const publicClient = createPublicClient({ chain, transport: http(rpc) });
-            const walletClient = createWalletClient({ account, chain, transport: http(rpc) });
-            const endUser = new EndUserClient(publicClient, walletClient);
-
-
-            // Generate Owner
-            const ephemeralKey = generatePrivateKey();
-            const ephemeralOwner = privateKeyToAccount(ephemeralKey);
-            console.log(`   🔑 Ephemeral Owner: ${ephemeralOwner.address}`);
-
-            // Use SUPPLIER account for deployment and funding
-            const supplierKey = process.env.PRIVATE_KEY_SUPPLIER || pk;
-            const supplierAccount = privateKeyToAccount(supplierKey as Hex);
-            const supplierWallet = createWalletClient({ account: supplierAccount, chain, transport: http(rpc) });
-            const endUserWithSupplier = new EndUserClient(publicClient, supplierWallet);
-
-            // Deploy Real AA Account
-            console.log(`   🏭 Deploying AA Account on-chain...`);
-            const deployResult = await endUserWithSupplier.deploySmartAccount({ 
-                owner: ephemeralOwner.address, 
-                salt: BigInt(Math.floor(Math.random() * 100000)),
-                fundWithETH: parseEther("0.01") // Fund with 0.01 ETH
-            });
-            console.log(`   ✅ Deployed SA: ${deployResult.accountAddress}`);
-            console.log(`   📝 Deploy Tx: ${deployResult.deployTxHash}`);
-
-            // Update Config
-            config.privateKey = ephemeralKey;
-            config.accountAddress = deployResult.accountAddress;
-            
-            // Fund EOA Owner for Group 1
-            const eoaBalance = await publicClient.getBalance({ address: ephemeralOwner.address });
-            if (eoaBalance < parseEther("0.005")) {
-                 console.log("   ⛽ Funding EOA Owner...");
-                 const tx = await supplierWallet.sendTransaction({
-                    to: ephemeralOwner.address,
-                    value: parseEther("0.005")
-                });
-                await publicClient.waitForTransactionReceipt({ hash: tx });
-                console.log("   ✅ Funded EOA.");
-            }
-
-            // Fund PIM Token
-            const pimTokenAddr = (process.env.PIM_TOKEN_ADDRESS || config.pimToken) as Hex;
-            if (pimTokenAddr) {
-                const erc20Abi = [{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}, {"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}];
-                
-                // Check SA PIM balance
-                const pimBalance = await publicClient.readContract({ 
-                    address: pimTokenAddr, abi: erc20Abi, functionName: 'balanceOf', args: [saInfo.accountAddress] 
-                }) as bigint;
-
-                if (pimBalance < parseEther("100")) {
-                     console.log("   ⛽ Funding SA with PIM Tokens...");
-                     try { // Ignore errors if admin has no PIM
-                        const tx = await walletClient.writeContract({
-                            address: pimTokenAddr, abi: erc20Abi, functionName: 'transfer', args: [saInfo.accountAddress, parseEther("100")],
-                            chain
-                        });
-                        await publicClient.waitForTransactionReceipt({ hash: tx });
-                        console.log("   ✅ PIM Funded.");
-                     } catch(e) { 
-                        console.log("   ⚠️ Failed to fund PIM (Admin might lack tokens). Continuing..."); 
-                     }
-                }
-            }
-
-        } catch (e: any) {
-            console.error(`   ❌ Auto-generation failed: ${e.message}`);
-        }
-        }
+        console.log("⚠️ No test account found. Using owner directly as EOA for now or trying to deploy SA...");
+        const user = createEndUserClient({ transport: http(rpc), account: pk });
+        const { accountAddress } = await user.createSmartAccount({
+            owner: user.account.address,
+            salt: 0n
+        });
+        config.accountAddress = accountAddress;
+        console.log(`   📍 SA Address: ${accountAddress}`);
     }
 
     const csvWriter = createObjectCsvWriter({
@@ -160,43 +81,29 @@ const config = {
             console.log(`   ✅ EOA: ${res.gasUsed} gas, ${res.latencyMs}ms`);
         } catch (e: any) { console.error(`   ❌ EOA Failed: ${e.message}`); }
 
-        // Group 2: Pimlico
-        if (config.accountAddress && config.accountAddress !== "0x0000000000000000000000000000000000000000") {
-            try {
-                console.log("   --- Group 2: Pimlico ---");
-                const res = await runPimlicoExperiment({ ...config });
-                allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
-                console.log(`   ✅ Pimlico: ${res.gasUsed} gas, ${res.latencyMs}ms`);
-            } catch (e: any) { console.error(`   ❌ Pimlico Failed: ${e.message}`); }
-        } else {
-            console.log("   ⚠️ Skipping Pimlico (Missing TEST_SIMPLE_ACCOUNT_B)");
-        }
+        // Group 2: Standard AA
+        try {
+            console.log("   --- Group 2: AA (Standard) ---");
+            const res = await runPimlicoExperiment(config);
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ AA: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ AA Failed: ${e.message}`); }
 
         // Group 3: AOA (Paymaster V4)
-        const paymasterV4 = process.env.PAYMASTER_V4_PROXY || process.env.PAYMASTER_ADDRESS;
-        if (config.accountAddress && paymasterV4 && config.accountAddress !== "0x0000000000000000000000000000000000000000") {
-            try {
-                console.log("   --- Group 3: AOA (V4) ---");
-                const res = await runAOAExperiment({ ...config, accountAddress: process.env.TEST_SIMPLE_ACCOUNT_B || config.accountAddress, paymasterV4 });
-                allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
-                console.log(`   ✅ AOA: ${res.gasUsed} gas, ${res.latencyMs}ms`);
-            } catch (e: any) { console.error(`   ❌ AOA Failed: ${e.message}`); }
-        } else {
-            console.log("   ⚠️ Skipping AOA (Missing Account or Paymaster Config)");
-        }
+        try {
+            console.log("   --- Group 3: AOA (V4) ---");
+            const res = await runAOAExperiment(config);
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ AOA: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ AOA Failed: ${e.message}`); }
 
         // Group 4: SuperPaymaster
-        const superPaymaster = process.env.SUPER_PAYMASTER_ADDRESS || process.env.SUPER_PAYMASTER;
-        if (config.accountAddress && superPaymaster && config.accountAddress !== "0x0000000000000000000000000000000000000000") {
-            try {
-                console.log("   --- Group 4: SuperPaymaster ---");
-                const res = await runSuperExperiment({ ...config, accountAddress: process.env.TEST_SIMPLE_ACCOUNT_C || config.accountAddress, superPaymaster });
-                allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
-                console.log(`   ✅ Super: ${res.gasUsed} gas, ${res.latencyMs}ms`);
-            } catch (e: any) { console.error(`   ❌ Super Failed: ${e.message}`); }
-        } else {
-            console.log("   ⚠️ Skipping SuperPaymaster (Missing Account or Paymaster Config)");
-        }
+        try {
+            console.log("   --- Group 4: SuperPaymaster ---");
+            const res = await runSuperExperiment(config);
+            allResults.push({ ...res, runId: i + 1, timestamp: new Date().toISOString() });
+            console.log(`   ✅ Super: ${res.gasUsed} gas, ${res.latencyMs}ms`);
+        } catch (e: any) { console.error(`   ❌ Super Failed: ${e.message}`); }
         
         await csvWriter.writeRecords(allResults.slice(-4)); // Write batch
     }
