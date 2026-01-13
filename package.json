@@ -20,6 +20,7 @@
     "audit:fix": "pnpm audit --fix",
     "security:check": "bash scripts/security_audit.sh",
     "security:full": "pnpm audit && bash scripts/security_audit.sh",
+    "audit:abi": "pnpm --filter @aastar/core run audit:abi",
     "precommit": "pnpm security:check",
     "prepare": "pnpm install --frozen-lockfile",
     "example:local": "pnpm --filter @aastar/sdk run example:local",

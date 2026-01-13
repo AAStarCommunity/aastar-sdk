@@ -70,6 +70,25 @@ async function run() {
         : {};
     const currentHashes: HashCache = {};
     
+    // Map of ABI filenames to Action filenames
+    const ABI_ACTION_MAP: { [key: string]: string } = {
+        'GToken.json': 'tokens.ts',
+        'xPNTsToken.json': 'tokens.ts',
+        'xPNTsFactory.json': 'factory.ts',
+        'PaymasterFactory.json': 'factory.ts',
+        'SimpleAccountFactory.json': 'account.ts',
+        'SimpleAccount.json': 'account.ts',
+        'BLSAggregator.json': 'validators.ts',
+        'DVTValidator.json': 'validators.ts',
+        'GTokenStaking.json': 'staking.ts',
+        'MySBT.json': 'sbt.ts',
+        'Paymaster.json': 'paymasterV4.ts',
+        'ReputationSystem.json': 'reputation.ts',
+        'EntryPoint.json': 'entryPoint.ts',
+        'Registry.json': 'registry.ts',
+        'SuperPaymaster.json': 'superPaymaster.ts'
+    };
+    
     let totalAbiFuncs = 0;
     let totalCovered = 0;
     const reports: string[] = [];
@@ -81,13 +100,19 @@ async function run() {
         currentHashes[abiFile] = hash;
 
         // Determine matching action file
-        // Mapping: Registry.json -> registry.ts, SuperPaymaster.json -> superPaymaster.ts
-        let actionBase = abiFile.replace('.json', '');
-        actionBase = actionBase.charAt(0).toLowerCase() + actionBase.slice(1);
-        const actionPath = path.join(ACTIONS_DIR, `${actionBase}.ts`);
+        let actionFileName = ABI_ACTION_MAP[abiFile];
+        
+        if (!actionFileName) {
+            // Fallback to simple name matching
+            let actionBase = abiFile.replace('.json', '');
+            actionBase = actionBase.charAt(0).toLowerCase() + actionBase.slice(1);
+            actionFileName = `${actionBase}.ts`;
+        }
+
+        const actionPath = path.join(ACTIONS_DIR, actionFileName);
 
         if (!fs.existsSync(actionPath)) {
-            // console.warn(`[SKIP] No matching action file for ${abiFile} (${actionBase}.ts)`);
+            // console.warn(`[SKIP] No matching action file for ${abiFile} (${actionFileName})`);
             continue;
         }
 
@@ -102,7 +127,7 @@ async function run() {
 
         const coverage = abiFuncs.length === 0 ? 100 : Math.round(((abiFuncs.length - missing.length) / abiFuncs.length) * 100);
         
-        reports.push(`\n[${abiFile}] -> [${actionBase}.ts] ${isChanged ? '⚡ CHANGED' : '✅ UNCHANGED'}`);
+        reports.push(`\n[${abiFile}] -> [${actionFileName}] ${isChanged ? '⚡ CHANGED' : '✅ UNCHANGED'}`);
         reports.push(`  Coverage: ${coverage}% (${abiFuncs.length - missing.length}/${abiFuncs.length})`);
         
         if (missing.length > 0) {
