@@ -308,6 +308,52 @@ npx tsx scripts/test-faucet-and-gasless.ts
 
 > **Note**: Requires `PRIVATE_KEY` (Deployer) or `PRIVATE_KEY_ANNI` in `.env.sepolia` to have Admin/Minter privileges. If specific permissions fail (like GrantRole), the script attempts to proceed.
 
+### 4. Code Sample: Using Faucet & KMS
+For a complete example of how to combine the Faucet (for setup) and a Mock KMS (for signing), refer to `scripts/test-kms-gasless.ts`.
+
+#### Faucet Setup (One-Time)
+```typescript
+import { SepoliaFaucetAPI } from '@aastar/core';
+
+await SepoliaFaucetAPI.prepareTestAccount(
+    adminWallet, // WalletClient with Admin Key
+    publicClient,
+    {
+        targetAA: '0x...', 
+        token: '0x...',       // GToken Address
+        registry: '0x...',    // Registry Address
+        // Optional:
+        tokenAmount: parseEther('1000') 
+    }
+);
+```
+
+#### KMS / Remote Signer Integration
+To use a remote signer (AWS KMS, Fireblocks, MPC), creates a custom `viem` account.
+
+```typescript
+import { toAccount } from 'viem/accounts';
+
+const remoteSigner = toAccount({
+    address: '0xYourWalletAddress',
+    async signMessage({ message }) {
+        // message.raw is the UserOpHash
+        const sig = await myKmsClient.sign(message.raw); 
+        // Ensure signature is valid 65-byte hex (r, s, v)
+        return sig; 
+    },
+    async signTransaction(tx) {
+        throw new Error("Not supported for Gasless");
+    }
+});
+
+const wallet = createWalletClient({ account: remoteSigner, ... });
+
+// Pass this wallet to SuperPaymasterClient
+const userOpHash = await SuperPaymasterClient.submitGaslessTransaction(..., wallet, ...);
+```
+
+
 ---
 
 ## Appendix: Real Transaction Analysis
