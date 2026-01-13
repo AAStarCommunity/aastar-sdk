@@ -148,25 +148,68 @@ const tx = await tokenActions(client.client).approve({
 
 ### Step 4: 发送 Gasless 交易 (User Actions)
 
-使用 `executeGasless` 自动构建 UserOp。
+> **⚠️ CAUTION / 注意**: 
+> 目前 `EndUserClient` 处于重构阶段 (Refactoring)，其内部的 `executeGasless` 方法可能包含硬编码的 ABI 或缺乏完整的输入验证。
+> 推荐使用 **SDK Refactored API** (`PaymasterClient` / `SuperPaymasterClient`) 进行构建和提交。
+
+使用 `PaymasterClient` 的静态 Helper 方法来自动处理 UserOp 构建、Gas 估算和签名提交。
 
 ```typescript
-import { encodeFunctionData } from 'viem';
+import { PaymasterClient } from '@aastar/sdk';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { sepolia } from 'viem/chains';
 
-// 1. 业务逻辑 (如: 注册自己)
-const callData = encodeFunctionData({
-    abi: RegistryABI,
-    functionName: 'registerRoleSelf',
-    args: [ROLE_COMMUNITY, '0x']
-});
+// 1. 初始化 Viem Clients
+const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+const wallet = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
 
-// 2. 提交
-const hash = await client.executeGasless({
-    target: registryAddress,
-    value: 0n,
-    data: callData,
-    paymaster: paymasterAddress,
-    paymasterType: 'V4' // 或 'Super'
-});
-console.log(`UserOp Hash: ${hash}`);
+// 2. 构建业务逻辑 (CallData)
+// Helper: 编码 Token Transfer
+const innerCall = PaymasterClient.encodeTokenTransfer(
+    '0xRecipient...', 
+    parseEther('0.1')
+);
+
+// Helper: 编码 Execute (通过 AA 执行)
+const callData = PaymasterClient.encodeExecution(
+    aPNTsAddress, 
+    0n, 
+    innerCall
+);
+
+// 3. ✨ 一键提交 (One-Liner Submission)
+// 自动处理: Gas 估算 (1.2x Buffer), Paymaster Data Packing (V4), 签名, 提交
+const txHash = await PaymasterClient.submitGaslessUserOperation(
+    client,
+    wallet,
+    aaAccountAddress,
+    CONFIG.contracts.entryPoint,
+    paymasterAddress,
+    aPNTsAddress,      // Gas Token
+    BUNDLER_URL,
+    callData
+);
+
+console.log(`UserOp Hash: ${txHash}`);
+```
+
+如果使用 **SuperPaymaster**，请使用 `SuperPaymasterClient`：
+
+```typescript
+import { SuperPaymasterClient } from '@aastar/sdk';
+
+const txHash = await SuperPaymasterClient.submitGaslessTransaction(
+    client,
+    wallet,
+    aaAccountAddress,
+    CONFIG.contracts.entryPoint,
+    BUNDLER_URL,
+    {
+        token: cPNTsAddress,
+        recipient: '0xTarget...',
+        amount: parseEther('1'),
+        operator: operatorAddress,         // SuperPaymaster Operator
+        paymasterAddress: superPaymasterAddress
+    }
+);
 ```

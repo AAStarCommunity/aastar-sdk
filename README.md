@@ -1,19 +1,19 @@
-# AAStar SDK (Mycelium Network)
-
+# AAStar SDK
+**AAStar: Empower Community, Simplify Development**
 <p align="left">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" style="display:inline-block; margin-right: 10px;" />
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 10px;" />
   <img src="https://img.shields.io/badge/Status-0.14.0-green" alt="Status" style="display:inline-block;" />
 </p>
 
-**Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
-**完整的账户抽象基础设施 SDK - 为 Mycelium 网络提供动力**
+**Comprehensive Account Abstraction Infrastructure SDK - Mycelium Network Cornerstone**
+**完整的账户抽象基础设施 SDK - Mycelium 网络基石**
 
 ---
 
 ## 📚 Contents / 目录
 
-- [AAStar SDK (Mycelium Network)](#aastar-sdk-mycelium-network)
+- [AAStar SDK](#aastar-sdk)
   - [📚 Contents / 目录](#-contents--目录)
   - [Introduction / 简介](#introduction--简介)
     - [Core Features / 核心特性](#core-features--核心特性)
@@ -24,6 +24,14 @@
   - [Testing Commands / 测试命令](#testing-commands--测试命令)
     - [SDK Regression (Using SDK Clients)](#sdk-regression-using-sdk-clients)
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
+  - [Development Guides / 开发指南](#development-guides--开发指南)
+    - [ABI Maintenance / ABI 维护](#abi-maintenance--abi-维护)
+  - [Development Workflow / 开发者工作流](#development-workflow--开发者工作流)
+    - [Step 1: Modify Contracts / 修改合约](#step-1-modify-contracts--修改合约)
+    - [Step 2: Local Build \& Deploy (Anvil) / 本地构建与部署](#step-2-local-build--deploy-anvil--本地构建与部署)
+    - [Step 3: Run Local Tests / 运行本地测试](#step-3-run-local-tests--运行本地测试)
+    - [Step 4: Deploy to Sepolia / 部署至 Sepolia](#step-4-deploy-to-sepolia--部署至-sepolia)
+    - [Step 5: Verify on Sepolia / Sepolia 验证](#step-5-verify-on-sepolia--sepolia-验证)
   - [Academic Research / 学术研究](#academic-research--学术研究)
   - [Support / 支援](#support--支援)
 
@@ -67,22 +75,31 @@ pnpm install @aastar/sdk @aastar/core viem
 ---
 
 ## Quick Start / 快速开始
-
 ### End User Gasless Transaction / 终端用户 Gasless 流程
 
+Recommended way using the new **PaymasterClient** API (Semantic Helpers):
+
 ```typescript
-import { createEndUserClient } from '@aastar/sdk';
+import { PaymasterClient } from '@aastar/sdk';
 
-const user = createEndUserClient({ 
-  account, 
-  paymasterUrl: 'https://paymaster.aastar.io' 
-});
+// 1. Build CallData (e.g., Transfer Token)
+const callData = PaymasterClient.encodeExecution(
+  tokenAddress,
+  0n,
+  PaymasterClient.encodeTokenTransfer(recipient, amount)
+);
 
-// Send sponsored transaction / 使用社区信用代付 Gas
-await user.sendGaslessTransaction({
-  to: TARGET_ADDR,
-  data: CALL_DATA
-});
+// 2. Submit (Auto Gas Estimation & Signing)
+const hash = await PaymasterClient.submitGaslessUserOperation(
+  client,
+  wallet,
+  aaAccount,
+  entryPoint,
+  paymasterAddress,
+  gasTokenAddress,
+  bundlerUrl,
+  callData
+);
 ```
 
 ---
