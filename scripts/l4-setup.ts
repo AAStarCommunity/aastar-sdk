@@ -199,9 +199,9 @@ Examples:
         if (op.name.includes('Jason')) {
             tokenAddr = TEST_TOKEN_ADDRESSES.apnts; // Global aPNTs
         } else {
-            // 直接从 Registry 查询 community token（更可靠）
+            // 直接从 xPNTsFactory 查询 community token（单次调用）
             try {
-                const existingToken = await admin.getAccountCommunity({ account: acc.address });
+                const existingToken = await admin.getTokenAddress({ community: acc.address });
                 
                 if (existingToken && existingToken !== '0x0000000000000000000000000000000000000000') {
                     console.log(`   ✅ Found existing community token: ${existingToken}`);
