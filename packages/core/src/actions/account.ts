@@ -11,12 +11,22 @@ export type AccountActions = {
     withdrawDepositTo: (args: { withdrawAddress: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     getDeposit: () => Promise<bigint>;
     owner: () => Promise<Address>;
+    
+    // Missing
+    initialize: (args: { owner: Address, account?: Account | Address }) => Promise<Hash>;
+    upgradeToAndCall: (args: { newImplementation: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
+    proxiableUUID: () => Promise<Hex>;
+    supportsInterface: (args: { interfaceId: Hex }) => Promise<boolean>;
+    UPGRADE_INTERFACE_VERSION: () => Promise<string>;
 };
 
 // SimpleAccountFactory Actions
 export type AccountFactoryActions = {
     createAccount: (args: { owner: Address, salt: bigint, account?: Account | Address }) => Promise<Hash>;
     getAddress: (args: { owner: Address, salt: bigint }) => Promise<Address>;
+    
+    // Missing
+    accountImplementation: () => Promise<Address>;
 };
 
 export const accountActions = (address: Address) => (client: PublicClient | WalletClient): AccountActions => ({
@@ -105,6 +115,40 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
             functionName: 'owner',
             args: []
         }) as Promise<Address>;
+    },
+
+    async initialize({ owner, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SimpleAccountABI,
+            functionName: 'initialize',
+            args: [owner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async upgradeToAndCall({ newImplementation, data, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SimpleAccountABI,
+            functionName: 'upgradeToAndCall',
+            args: [newImplementation, data],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async proxiableUUID() {
+        return (client as PublicClient).readContract({ address, abi: SimpleAccountABI, functionName: 'proxiableUUID', args: [] }) as Promise<Hex>;
+    },
+
+    async supportsInterface({ interfaceId }) {
+         return (client as PublicClient).readContract({ address, abi: SimpleAccountABI, functionName: 'supportsInterface', args: [interfaceId] }) as Promise<boolean>;
+    },
+    
+    async UPGRADE_INTERFACE_VERSION() {
+         return (client as PublicClient).readContract({ address, abi: SimpleAccountABI, functionName: 'UPGRADE_INTERFACE_VERSION', args: [] }) as Promise<string>;
     }
 });
 
@@ -127,5 +171,9 @@ export const accountFactoryActions = (address: Address) => (client: PublicClient
             functionName: 'getAddress',
             args: [owner, salt]
         }) as Promise<Address>;
+    },
+
+    async accountImplementation() {
+        return (client as PublicClient).readContract({ address, abi: SimpleAccountFactoryABI, functionName: 'accountImplementation', args: [] }) as Promise<Address>;
     }
 });

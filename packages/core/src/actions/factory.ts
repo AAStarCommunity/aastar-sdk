@@ -37,6 +37,30 @@ export type XPNTsFactoryActions = {
     // Aliases
     deployxPNTsToken: (args: { name: string, symbol: string, community: Address, account?: Account | Address }) => Promise<Hash>; // Alias
     
+    // Prediction & Economics
+    predictDepositAmount: (args: { community: Address, userCount: bigint }) => Promise<bigint>;
+    getPredictionParams: (args: { community: Address }) => Promise<any>;
+    getDepositBreakdown: (args: { community: Address }) => Promise<any>;
+    getAPNTsPrice: () => Promise<bigint>;
+    aPNTsPriceUSD: () => Promise<bigint>;
+    
+    // Admin & Config
+    setIndustryMultiplier: (args: { industry: string, multiplier: bigint, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymasterAddress: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    updateAPNTsPrice: (args: { newPrice: bigint, account?: Account | Address }) => Promise<Hash>;
+    updatePrediction: (args: { community: Address, userCount: bigint, account?: Account | Address }) => Promise<Hash>;
+    updatePredictionCustom: (args: { community: Address, params: any, account?: Account | Address }) => Promise<Hash>;
+    
+    // Views
+    hasToken: (args: { token: Address }) => Promise<boolean>;
+    getDeployedCount: () => Promise<bigint>;
+    industryMultipliers: (args: { industry: string }) => Promise<bigint>;
+    predictions: (args: { community: Address }) => Promise<any>;
+    
+    // Constants
+    DEFAULT_SAFETY_FACTOR: () => Promise<bigint>;
+    MIN_SUGGESTED_AMOUNT: () => Promise<bigint>;
+    
     // Version
     version: () => Promise<string>;
 };
@@ -46,6 +70,8 @@ export type PaymasterFactoryActions = {
     // Deployment
     // Deployment
     deployPaymaster: (args: { owner: Address, version?: string, initData?: Hex, account?: Account | Address }) => Promise<Hash>; // initData 支持
+    deployPaymasterDeterministic: (args: { owner: Address, version?: string, initData?: Hex, salt: Hex, account?: Account | Address }) => Promise<Hash>;
+    predictPaymasterAddress: (args: { owner: Address, salt: Hex }) => Promise<Address>;
     
     // Query
     calculateAddress: (args: { owner: Address }) => Promise<Address>;
@@ -54,10 +80,28 @@ export type PaymasterFactoryActions = {
     getAllPaymasters: () => Promise<Address[]>;
     isPaymasterDeployed: (args: { owner: Address }) => Promise<boolean>;
     
+    hasPaymaster: (args: { owner: Address }) => Promise<boolean>;
+    getPaymasterList: (args: { offset: bigint, limit: bigint }) => Promise<Address[]>;
+    paymasterList: (args: { index: bigint }) => Promise<Address>;
+    totalDeployed: () => Promise<bigint>;
+    
+    getOperatorByPaymaster: (args: { paymaster: Address }) => Promise<Address>;
+    operatorByPaymaster: (args: { paymaster: Address }) => Promise<Address>;
+    getPaymasterByOperator: (args: { operator: Address }) => Promise<Address>;
+    paymasterByOperator: (args: { operator: Address }) => Promise<Address>;
+    getPaymasterInfo: (args: { paymaster: Address }) => Promise<any>;
+    
+    hasImplementation: (args: { version: string }) => Promise<boolean>;
+    implementations: (args: { version: string }) => Promise<Address>;
+    
     // Config
     setImplementationV4: (args: { impl: Address, account?: Account | Address }) => Promise<Hash>;
     getImplementationV4: () => Promise<Address>;
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    addImplementation: (args: { version: string, implementation: Address, account?: Account | Address }) => Promise<Hash>;
+    upgradeImplementation: (args: { version: string, newImplementation: Address, account?: Account | Address }) => Promise<Hash>;
+    setDefaultVersion: (args: { version: string, account?: Account | Address }) => Promise<Hash>;
     
     // Constants
     REGISTRY: () => Promise<Address>;
@@ -276,6 +320,62 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         return this.createToken(args);
     },
 
+    // Prediction & Economics
+    async predictDepositAmount({ community, userCount }) {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'predictDepositAmount', args: [community, userCount] }) as Promise<bigint>;
+    },
+    async getPredictionParams({ community }) {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'getPredictionParams', args: [community] });
+    },
+    async getDepositBreakdown({ community }) {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'getDepositBreakdown', args: [community] });
+    },
+    async getAPNTsPrice() {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'getAPNTsPrice', args: [] }) as Promise<bigint>;
+    },
+    async aPNTsPriceUSD() {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'aPNTsPriceUSD', args: [] }) as Promise<bigint>;
+    },
+
+    // Admin & Config
+    async setIndustryMultiplier({ industry, multiplier, account }) {
+        return (client as any).writeContract({ address, abi: xPNTsFactoryABI, functionName: 'setIndustryMultiplier', args: [industry, multiplier], account: account as any, chain: (client as any).chain });
+    },
+    async setSuperPaymasterAddress({ paymaster, account }) {
+        return (client as any).writeContract({ address, abi: xPNTsFactoryABI, functionName: 'setSuperPaymasterAddress', args: [paymaster], account: account as any, chain: (client as any).chain });
+    },
+    async updateAPNTsPrice({ newPrice, account }) {
+        return (client as any).writeContract({ address, abi: xPNTsFactoryABI, functionName: 'updateAPNTsPrice', args: [newPrice], account: account as any, chain: (client as any).chain });
+    },
+    async updatePrediction({ community, userCount, account }) {
+        return (client as any).writeContract({ address, abi: xPNTsFactoryABI, functionName: 'updatePrediction', args: [community, userCount], account: account as any, chain: (client as any).chain });
+    },
+    async updatePredictionCustom({ community, params, account }) {
+        return (client as any).writeContract({ address, abi: xPNTsFactoryABI, functionName: 'updatePredictionCustom', args: [community, params], account: account as any, chain: (client as any).chain });
+    },
+
+    // Views
+    async hasToken({ token }) {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'hasToken', args: [token] }) as Promise<boolean>;
+    },
+    async getDeployedCount() {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'getDeployedCount', args: [] }) as Promise<bigint>;
+    },
+    async industryMultipliers({ industry }) {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'industryMultipliers', args: [industry] }) as Promise<bigint>;
+    },
+    async predictions({ community }) {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'predictions', args: [community] });
+    },
+
+    // Constants
+    async DEFAULT_SAFETY_FACTOR() {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'DEFAULT_SAFETY_FACTOR', args: [] }) as Promise<bigint>;
+    },
+    async MIN_SUGGESTED_AMOUNT() {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'MIN_SUGGESTED_AMOUNT', args: [] }) as Promise<bigint>;
+    },
+
     async renounceOwnership({ account }) {
         return (client as any).writeContract({
             address,
@@ -311,6 +411,16 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async deployPaymasterDeterministic({ owner, version, initData, salt, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterFactoryABI, functionName: 'deployPaymasterDeterministic', args: [version || 'v4.2', initData || '0x', salt], account: account as any, chain: (client as any).chain });
+    },
+    
+    async predictPaymasterAddress({ owner, salt }) {
+        // Note: Contract might not have this function exposed directly or it is separate logic
+        // But ABI says it's missing, so let's try calling it if it exists in ABI
+        return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'predictPaymasterAddress', args: [owner, salt] }) as Promise<Address>;
     },
 
     async calculateAddress({ owner }) {
@@ -361,6 +471,38 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         }) as Promise<boolean>;
     },
 
+    async hasPaymaster({ owner }) { return this.isPaymasterDeployed({ owner }); },
+    async getPaymasterList({ offset, limit }) {
+        return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'getPaymasterList', args: [offset, limit] }) as Promise<Address[]>;
+    },
+    async paymasterList({ index }) {
+        return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'paymasterList', args: [index] }) as Promise<Address>;
+    },
+    async totalDeployed() {
+         return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'totalDeployed', args: [] }) as Promise<bigint>;
+    },
+
+    async getOperatorByPaymaster({ paymaster }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'getOperatorByPaymaster', args: [paymaster] }) as Promise<Address>;
+    },
+    async operatorByPaymaster({ paymaster }) { return this.getOperatorByPaymaster({ paymaster }); },
+    
+    async getPaymasterByOperator({ operator }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator] }) as Promise<Address>;
+    },
+    async paymasterByOperator({ operator }) { return this.getPaymasterByOperator({ operator }); },
+    
+    async getPaymasterInfo({ paymaster }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'getPaymasterInfo', args: [paymaster] });
+    },
+    
+    async hasImplementation({ version }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'hasImplementation', args: [version] }) as Promise<boolean>;
+    },
+    async implementations({ version }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterFactoryABI, functionName: 'implementations', args: [version] }) as Promise<Address>;
+    },
+
     async setImplementationV4({ impl, account }) {
         return (client as any).writeContract({
             address,
@@ -390,6 +532,16 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async addImplementation({ version, implementation, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterFactoryABI, functionName: 'addImplementation', args: [version, implementation], account: account as any, chain: (client as any).chain });
+    },
+    async upgradeImplementation({ version, newImplementation, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterFactoryABI, functionName: 'upgradeImplementation', args: [version, newImplementation], account: account as any, chain: (client as any).chain });
+    },
+    async setDefaultVersion({ version, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterFactoryABI, functionName: 'setDefaultVersion', args: [version], account: account as any, chain: (client as any).chain });
     },
 
     async REGISTRY() {

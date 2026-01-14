@@ -68,6 +68,27 @@ export type PaymasterV4Actions = {
     addDeposit: (args: { account?: Account | Address }) => Promise<Hash>; // Alias for deposit
     unlockStake: (args: { account?: Account | Address }) => Promise<Hash>; // Alias for unlockPaymasterStake
     
+    // View Functions & Constants (Missing)
+    ethUsdPriceFeed: () => Promise<Address>;
+    oracleDecimals: () => Promise<number>;
+    tokenDecimals: (args: { token: Address }) => Promise<number>;
+    serviceFeeRate: () => Promise<bigint>;
+    calculateCost: (args: { token: Address, gasCost: bigint, param: any }) => Promise<bigint>;
+    getRealtimeTokenCost: (args: { token: Address, gasCost: bigint }) => Promise<bigint>;
+    isActiveInRegistry: () => Promise<boolean>;
+    isRegistrySet: () => Promise<boolean>;
+    cachedPrice: (args: { token: Address }) => Promise<bigint>;
+    
+    // Admin (Missing)
+    setCachedPrice: (args: { token: Address, price: bigint, account?: Account | Address }) => Promise<Hash>;
+    setServiceFeeRate: (args: { rate: bigint, account?: Account | Address }) => Promise<Hash>;
+    setMaxGasCostCap: (args: { cap: bigint, account?: Account | Address }) => Promise<Hash>;
+    setPriceStalenessThreshold: (args: { threshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
+    updatePrice: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    deactivateFromRegistry: (args: { account?: Account | Address }) => Promise<Hash>;
+    initialize: (args: { owner: Address, account?: Account | Address }) => Promise<Hash>;
+    
     version: () => Promise<string>;
 };
 
@@ -369,6 +390,61 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
     },
     async unlockStake(args) {
         return this.unlockPaymasterStake(args);
+    },
+
+    // View Functions & Constants (Missing)
+    async ethUsdPriceFeed() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'ethUsdPriceFeed', args: [] }) as Promise<Address>;
+    },
+    async oracleDecimals() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'oracleDecimals', args: [] }) as Promise<number>;
+    },
+    async tokenDecimals({ token }) {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'tokenDecimals', args: [token] }) as Promise<number>;
+    },
+    async serviceFeeRate() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'serviceFeeRate', args: [] }) as Promise<bigint>;
+    },
+    async calculateCost({ token, gasCost, param }) {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'calculateCost', args: [token, gasCost, param] }) as Promise<bigint>;
+    },
+    async getRealtimeTokenCost({ token, gasCost }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'getRealtimeTokenCost', args: [token, gasCost] }) as Promise<bigint>;
+    },
+    async isActiveInRegistry() {
+         return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'isActiveInRegistry', args: [] }) as Promise<boolean>;
+    },
+    async isRegistrySet() {
+         return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'isRegistrySet', args: [] }) as Promise<boolean>;
+    },
+    async cachedPrice({ token }) {
+         return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'cachedPrice', args: [token] }) as Promise<bigint>;
+    },
+
+    // Admin (Missing)
+    async setCachedPrice({ token, price, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'setCachedPrice', args: [token, price], account: account as any, chain: (client as any).chain });
+    },
+    async setServiceFeeRate({ rate, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'setServiceFeeRate', args: [rate], account: account as any, chain: (client as any).chain });
+    },
+    async setMaxGasCostCap({ cap, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'setMaxGasCostCap', args: [cap], account: account as any, chain: (client as any).chain });
+    },
+    async setPriceStalenessThreshold({ threshold, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'setPriceStalenessThreshold', args: [threshold], account: account as any, chain: (client as any).chain });
+    },
+    async setTreasury({ treasury, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'setTreasury', args: [treasury], account: account as any, chain: (client as any).chain });
+    },
+    async updatePrice({ token, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'updatePrice', args: [token], account: account as any, chain: (client as any).chain });
+    },
+    async deactivateFromRegistry({ account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'deactivateFromRegistry', args: [], account: account as any, chain: (client as any).chain });
+    },
+    async initialize({ owner, account }) {
+         return (client as any).writeContract({ address, abi: PaymasterV4ABI, functionName: 'initialize', args: [owner], account: account as any, chain: (client as any).chain });
     },
 
     async version() {

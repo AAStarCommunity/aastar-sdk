@@ -21,6 +21,8 @@ export type DVTActions = {
     getProposalState: (args: { proposalId: bigint }) => Promise<number>;
     getSignatureCount: (args: { proposalId: bigint }) => Promise<bigint>;
     hasVoted: (args: { proposalId: bigint, validator: Address }) => Promise<boolean>;
+    proposals: (args: { proposalId: bigint }) => Promise<any>; // View
+    nextProposalId: () => Promise<bigint>; // View
     
     // Threshold
     threshold: () => Promise<bigint>;
@@ -28,22 +30,31 @@ export type DVTActions = {
     
     // Admin
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
+    setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
+    markProposalExecuted: (args: { proposalId: bigint, account?: Account | Address }) => Promise<Hash>;
+    
+    // Constants
+    BLS_AGGREGATOR: () => Promise<Address>;
+    
     owner: () => Promise<Address>;
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     version: () => Promise<string>;
 };
 
-// BLS Aggregator Actions (完整 15 个函数)
+// BLSAggregator Actions (完整 15 个函数)
 export type BLSAggregatorActions = {
     // 密钥注册
     registerBLSPublicKey: (args: { publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
     deregisterBLSPublicKey: (args: { account?: Account | Address }) => Promise<Hash>;
     updatePublicKey: (args: { newKey: Hex, account?: Account | Address }) => Promise<Hash>;
     
-    // 签名聚合
+    // 签名聚合 & 执行
     aggregateSignatures: (args: { signatures: Hex[] }) => Promise<Hex>;
     verifyAggregatedSignature: (args: { message: Hex, aggregatedSignature: Hex, publicKeys: Hex[] }) => Promise<boolean>;
     validateSignature: (args: { message: Hex, signature: Hex, publicKey: Hex }) => Promise<boolean>;
+    executeProposal: (args: { proposalId: bigint, signatures: Hex[], account?: Account | Address }) => Promise<Hash>; // Often via verifyAndExecute
+    verifyAndExecute: (args: { proposalId: bigint, signatures: Hex[], account?: Account | Address }) => Promise<Hash>;
     
     // 公钥查询
     getPublicKey: (args: { address: Address }) => Promise<Hex>;
@@ -51,14 +62,32 @@ export type BLSAggregatorActions = {
     getAggregatedPublicKey: (args: { addresses: Address[] }) => Promise<Hex>;
     isKeyRegistered: (args: { address: Address }) => Promise<boolean>;
     getRegisteredCount: () => Promise<bigint>;
+    blsPublicKeys: (args: { address: Address }) => Promise<Hex[]>; // mapping view shim
     
     // Threshold
     threshold: () => Promise<bigint>;
+    minThreshold: () => Promise<bigint>;
+    defaultThreshold: () => Promise<bigint>;
+    
     setThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    setMinThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    setDefaultThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Admin
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
+    setDVTValidator: (args: { validator: Address, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    
+    // Constants
     REGISTRY: () => Promise<Address>;
+    DVT_VALIDATOR: () => Promise<Address>;
+    SUPERPAYMASTER: () => Promise<Address>;
+    MAX_VALIDATORS: () => Promise<bigint>;
+    
+    executedProposals: (args: { proposalId: bigint }) => Promise<boolean>;
+    proposalNonces: (args: { proposalId: bigint }) => Promise<bigint>;
+    
     owner: () => Promise<Address>;
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     version: () => Promise<string>;
@@ -203,6 +232,14 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<boolean>;
     },
 
+    async proposals({ proposalId }) {
+        return (client as PublicClient).readContract({ address, abi: DVTValidatorABI, functionName: 'proposals', args: [proposalId] }) as Promise<any>;
+    },
+
+    async nextProposalId() {
+        return (client as PublicClient).readContract({ address, abi: DVTValidatorABI, functionName: 'nextProposalId', args: [] }) as Promise<bigint>;
+    },
+
     async threshold() {
         return (client as PublicClient).readContract({
             address,
@@ -234,6 +271,18 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
+    async setBLSAggregator({ aggregator, account }) {
+         return (client as any).writeContract({ address, abi: DVTValidatorABI, functionName: 'setBLSAggregator', args: [aggregator], account: account as any, chain: (client as any).chain });
+    },
+
+    async markProposalExecuted({ proposalId, account }) {
+         return (client as any).writeContract({ address, abi: DVTValidatorABI, functionName: 'markProposalExecuted', args: [proposalId], account: account as any, chain: (client as any).chain });
+    },
+
+    async BLS_AGGREGATOR() {
+        return (client as PublicClient).readContract({ address, abi: DVTValidatorABI, functionName: 'BLS_AGGREGATOR', args: [] }) as Promise<Address>;
+    },
+
     async owner() {
         return (client as PublicClient).readContract({
             address,
@@ -249,6 +298,17 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
             abi: DVTValidatorABI,
             functionName: 'transferOwnership',
             args: [newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async renounceOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: DVTValidatorABI,
+            functionName: 'renounceOwnership',
+            args: [],
             account: account as any,
             chain: (client as any).chain
         });
@@ -325,6 +385,14 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<boolean>;
     },
 
+    async executeProposal({ proposalId, signatures, account }) {
+         return (client as any).writeContract({ address, abi: BLSAggregatorABI, functionName: 'executeProposal', args: [proposalId, signatures], account: account as any, chain: (client as any).chain });
+    },
+
+    async verifyAndExecute({ proposalId, signatures, account }) {
+         return (client as any).writeContract({ address, abi: BLSAggregatorABI, functionName: 'verifyAndExecute', args: [proposalId, signatures], account: account as any, chain: (client as any).chain });
+    },
+
     async getPublicKey({ address: userAddress }) {
         return (client as PublicClient).readContract({
             address,
@@ -370,6 +438,10 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
+    async blsPublicKeys({ address: userAddress }) {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'blsPublicKeys', args: [userAddress] }) as Promise<Hex[]>;
+    },
+
     async threshold() {
         return (client as PublicClient).readContract({
             address,
@@ -377,6 +449,13 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
             functionName: 'threshold',
             args: []
         }) as Promise<bigint>;
+    },
+
+    async minThreshold() {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'minThreshold', args: [] }) as Promise<bigint>;
+    },
+    async defaultThreshold() {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'defaultThreshold', args: [] }) as Promise<bigint>;
     },
 
     async setThreshold({ newThreshold, account }) {
@@ -388,6 +467,13 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
             account: account as any,
             chain: (client as any).chain
         });
+    },
+    
+    async setMinThreshold({ newThreshold, account }) {
+        return (client as any).writeContract({address, abi: BLSAggregatorABI, functionName: 'setMinThreshold', args: [newThreshold], account: account as any, chain: (client as any).chain });
+    },
+    async setDefaultThreshold({ newThreshold, account }) {
+         return (client as any).writeContract({address, abi: BLSAggregatorABI, functionName: 'setDefaultThreshold', args: [newThreshold], account: account as any, chain: (client as any).chain });
     },
 
     async setRegistry({ registry, account }) {
@@ -401,6 +487,17 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
+    async setDVTValidator({ validator, account }) {
+         return (client as any).writeContract({address, abi: BLSAggregatorABI, functionName: 'setDVTValidator', args: [validator], account: account as any, chain: (client as any).chain });
+    },
+    async setSuperPaymaster({ paymaster, account }) {
+         return (client as any).writeContract({address, abi: BLSAggregatorABI, functionName: 'setSuperPaymaster', args: [paymaster], account: account as any, chain: (client as any).chain });
+    },
+
+    async renounceOwnership({ account }) {
+         return (client as any).writeContract({address, abi: BLSAggregatorABI, functionName: 'renounceOwnership', args: [], account: account as any, chain: (client as any).chain });
+    },
+
     async REGISTRY() {
         return (client as PublicClient).readContract({
             address,
@@ -408,6 +505,23 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
             functionName: 'REGISTRY',
             args: []
         }) as Promise<Address>;
+    },
+
+    async DVT_VALIDATOR() {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'DVT_VALIDATOR', args: [] }) as Promise<Address>;
+    },
+    async SUPERPAYMASTER() {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'SUPERPAYMASTER', args: [] }) as Promise<Address>;
+    },
+    async MAX_VALIDATORS() {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'MAX_VALIDATORS', args: [] }) as Promise<bigint>;
+    },
+    
+    async executedProposals({ proposalId }) {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'executedProposals', args: [proposalId] }) as Promise<boolean>;
+    },
+    async proposalNonces({ proposalId }) {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'proposalNonces', args: [proposalId] }) as Promise<bigint>;
     },
 
     async owner() {

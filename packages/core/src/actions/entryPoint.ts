@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { EntryPointABI } from '../abis/index.js';
 
 export enum EntryPointVersion {
     V06 = '0.6',
@@ -16,6 +16,19 @@ export type EntryPointActions = {
     unlockStake: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawStake: (args: { withdrawAddress: Address, account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { withdrawAddress: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    
+    // Core Handlers
+    handleOps: (args: { ops: any[], beneficiary: Address, account?: Account | Address }) => Promise<Hash>;
+    handleAggregatedOps: (args: { opsPerAggregator: any[], beneficiary: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    // Views & Helpers
+    getUserOpHash: (args: { op: any }) => Promise<Hash>;
+    getSenderAddress: (args: { initCode: Hex }) => Promise<Address>;
+    senderCreator: () => Promise<Address>;
+    incrementNonce: (args: { key: bigint, account?: Account | Address }) => Promise<Hash>;
+    nonceSequenceNumber: (args: { sender: Address, key: bigint }) => Promise<bigint>;
+    supportsInterface: (args: { interfaceId: Hex }) => Promise<boolean>;
+    eip712Domain: () => Promise<any>;
     
     version: EntryPointVersion;
 };
@@ -92,5 +105,75 @@ export const entryPointActions = (address: Address, version: EntryPointVersion =
             unstakeDelaySec: result[3],
             withdrawTime: result[4]
         };
+    },
+
+    async handleOps({ ops, beneficiary, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'handleOps',
+            args: [ops, beneficiary],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async handleAggregatedOps({ opsPerAggregator, beneficiary, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'handleAggregatedOps',
+            args: [opsPerAggregator, beneficiary],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async getUserOpHash({ op }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'getUserOpHash',
+            args: [op]
+        }) as Promise<Hash>;
+    },
+
+    async getSenderAddress({ initCode }) {
+         // getSenderAddress usually reverts with the address. Viem might throw.
+         // But let's assume standard call first.
+         // Actually in EP v0.7 it might return if called off-chain or revert.
+         // We will try readContract. 
+         try {
+             return await (client as PublicClient).readContract({
+                address,
+                abi: EntryPointABI,
+                functionName: 'getSenderAddress',
+                args: [initCode]
+            }) as Promise<Address>;
+         } catch (e: any) {
+             // Extract address from error if needed, but for now just implementing the method call.
+             // Usually this method reverts with SenderAddressResult(address)
+             throw e;
+         }
+    },
+
+    async senderCreator() {
+        return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'senderCreator', args: [] }) as Promise<Address>;
+    },
+
+    async incrementNonce({ key, account }) {
+        return (client as any).writeContract({ address, abi: EntryPointABI, functionName: 'incrementNonce', args: [key], account: account as any, chain: (client as any).chain });
+    },
+
+    async nonceSequenceNumber({ sender, key }) {
+        return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'nonceSequenceNumber', args: [sender, key] }) as Promise<bigint>;
+    },
+
+    async supportsInterface({ interfaceId }) {
+        return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'supportsInterface', args: [interfaceId] }) as Promise<boolean>;
+    },
+    
+    async eip712Domain() {
+         return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'eip712Domain', args: [] });
     }
 });

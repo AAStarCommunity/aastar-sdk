@@ -44,6 +44,37 @@ export type TokenActions = {
     // Aliases & Missing
     transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     transferCommunityOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    // xPNTs Views
+    communityName: (args: { token: Address }) => Promise<string>;
+    communityENS: (args: { token: Address }) => Promise<string>;
+    exchangeRate: (args: { token: Address }) => Promise<bigint>;
+    spendingLimits: (args: { token: Address, user: Address }) => Promise<bigint>; // struct return shim
+    defaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
+    cumulativeSpent: (args: { token: Address, user: Address }) => Promise<bigint>;
+    debts: (args: { token: Address, user: Address }) => Promise<bigint>; // mapping
+    usedOpHashes: (args: { token: Address, hash: Hex }) => Promise<boolean>;
+    
+    // EIP2612
+    DOMAIN_SEPARATOR: (args: { token: Address }) => Promise<Hex>;
+    nonces: (args: { token: Address, owner: Address }) => Promise<bigint>;
+    permit: (args: { token: Address, owner: Address, spender: Address, value: bigint, deadline: bigint, v: number, r: Hex, s: Hex, account?: Account | Address }) => Promise<Hash>;
+    
+    // xPNTs Additional
+    autoApprovedSpenders: (args: { token: Address, spender: Address }) => Promise<boolean>;
+    burnFromWithOpHash: (args: { token: Address, account: Address, amount: bigint, opHash: Hex, userOpAccount?: Account | Address }) => Promise<Hash>;
+    communityOwner: (args: { token: Address }) => Promise<Address>;
+    eip712Domain: (args: { token: Address }) => Promise<any>;
+    getDefaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
+    getMetadata: (args: { token: Address }) => Promise<string>;
+    needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
+    recordDebt: (args: { token: Address, user: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    DEFAULT_SPENDING_LIMIT_APNTS: (args: { token: Address }) => Promise<bigint>;
+    
+    // Admin
+    setPaymasterLimit: (args: { token: Address, user: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymasterAddress: (args: { token: Address, superPaymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    version: (args: { token: Address }) => Promise<string>;
 };
 
 function getTokenABI(token: Address): any {
@@ -366,5 +397,114 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    // xPNTs Views
+    async communityName({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'communityName', args: [] }) as Promise<string>;
+    },
+    async communityENS({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'communityENS', args: [] }) as Promise<string>;
+    },
+    async exchangeRate({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'exchangeRate', args: [] }) as Promise<bigint>;
+    },
+    async spendingLimits({ token, user }) {
+        // Struct return, usually returns tuple. We force basic type or handle tuple if needed.
+        // For logic simplicity we return raw result, caller handles formatting if needs validation.
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'spendingLimits', args: [user] }) as Promise<bigint>; 
+    },
+    async defaultSpendingLimitXPNTs({ token }) {
+        // Note: the ABI might name it differently, check audit report -> getDefaultSpendingLimitXPNTs
+        // Actually audit report says "getDefaultSpendingLimitXPNTs" is missing.
+        // Let's implement the getter if it effectively matches.
+        // Wait, 'getDefaultSpendingLimitXPNTs' (function) vs 'defaultSpendingLimitXPNTs' (public var).
+        // Let's try public var getter first.
+        try {
+             return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'defaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
+        } catch {
+             return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'getDefaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
+        }
+    },
+    async cumulativeSpent({ token, user }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'cumulativeSpent', args: [user] }) as Promise<bigint>;
+    },
+    async debts({ token, user }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'debts', args: [user] }) as Promise<bigint>;
+    },
+    async usedOpHashes({ token, hash }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'usedOpHashes', args: [hash] }) as Promise<boolean>;
+    },
+
+    // EIP2612
+    async DOMAIN_SEPARATOR({ token }) { // Fixed typo
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'DOMAIN_SEPARATOR', args: [] }) as Promise<Hex>;
+    },
+    async nonces({ token, owner }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'nonces', args: [owner] }) as Promise<bigint>;
+    },
+    async permit({ token, owner, spender, value, deadline, v, r, s, account }) {
+        return (client as any).writeContract({
+            address: token,
+            abi: xPNTsTokenABI,
+            functionName: 'permit',
+            args: [owner, spender, value, deadline, v, r, s],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // xPNTs Additional
+    async autoApprovedSpenders({ token, spender }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'autoApprovedSpenders', args: [spender] }) as Promise<boolean>;
+    },
+    async burnFromWithOpHash({ token, account: user, amount, opHash, userOpAccount }) {
+         return (client as any).writeContract({ address: token, abi: xPNTsTokenABI, functionName: 'burnFromWithOpHash', args: [user, amount, opHash], account: userOpAccount as any, chain: (client as any).chain });
+    },
+    async communityOwner({ token }) {
+         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'communityOwner', args: [] }) as Promise<Address>;
+    },
+    async eip712Domain({ token }) {
+         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'eip712Domain', args: [] }) as Promise<any>;
+    },
+    async getDefaultSpendingLimitXPNTs({ token }) {
+         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'getDefaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
+    },
+    async getMetadata({ token }) {
+         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'getMetadata', args: [] }) as Promise<string>;
+    },
+    async needsApproval({ token, owner, spender, amount }) {
+         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'needsApproval', args: [owner, spender, amount] }) as Promise<boolean>;
+    },
+    async recordDebt({ token, user, amount, account }) {
+         return (client as any).writeContract({ address: token, abi: xPNTsTokenABI, functionName: 'recordDebt', args: [user, amount], account: account as any, chain: (client as any).chain });
+    },
+    async DEFAULT_SPENDING_LIMIT_APNTS({ token }) {
+         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'DEFAULT_SPENDING_LIMIT_APNTS', args: [] }) as Promise<bigint>;
+    },
+
+    // Admin
+    async setPaymasterLimit({ token, user, limit, account }) {
+        return (client as any).writeContract({
+            address: token,
+            abi: xPNTsTokenABI,
+            functionName: 'setPaymasterLimit',
+            args: [user, limit],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+    async setSuperPaymasterAddress({ token, superPaymaster, account }) {
+        return (client as any).writeContract({
+            address: token,
+            abi: xPNTsTokenABI,
+            functionName: 'setSuperPaymasterAddress',
+            args: [superPaymaster],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+    async version({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'version', args: [] }) as Promise<string>;
     }
 });
