@@ -6,6 +6,8 @@ export type TokenActions = {
     // ERC20 Standard (all tokens)
     totalSupply: (args: { token: Address }) => Promise<bigint>;
     balanceOf: (args: { token: Address, account: Address }) => Promise<bigint>;
+    cap: (args: { token: Address }) => Promise<bigint>;
+    remainingMintableSupply: (args: { token: Address }) => Promise<bigint>;
     transfer: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     transferFrom: (args: { token: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     approve: (args: { token: Address, spender: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -130,6 +132,12 @@ export const gTokenActions = () => (client: PublicClient | WalletClient): TokenA
     async renounceOwnership({ token, account }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'renounceOwnership', args: [], account: account as any, chain: (client as any).chain });
     },
+    async cap({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'cap', args: [] }) as Promise<bigint>;
+    },
+    async remainingMintableSupply({ token }) {
+        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'remainingMintableSupply', args: [] }) as Promise<bigint>;
+    },
 });
 
 export const tokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
@@ -139,6 +147,24 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
             address: token,
             abi: getTokenABI(token),
             functionName: 'totalSupply',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async cap({ token }) {
+        return (client as PublicClient).readContract({
+            address: token,
+            abi: getTokenABI(token),
+            functionName: 'cap',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async remainingMintableSupply({ token }) {
+        return (client as PublicClient).readContract({
+            address: token,
+            abi: getTokenABI(token),
+            functionName: 'remainingMintableSupply',
             args: []
         }) as Promise<bigint>;
     },

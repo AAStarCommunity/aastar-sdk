@@ -20,6 +20,8 @@ export type EntryPointActions = {
     // Core Handlers
     handleOps: (args: { ops: any[], beneficiary: Address, account?: Account | Address }) => Promise<Hash>;
     handleAggregatedOps: (args: { opsPerAggregator: any[], beneficiary: Address, account?: Account | Address }) => Promise<Hash>;
+    innerHandleOp: (args: { callData: Hex, opInfo: any, context: Hex, account?: Account | Address }) => Promise<Hash>;
+    delegateAndRevert: (args: { target: Address, data: Hex, account?: Account | Address }) => Promise<void>; // usually reverts
     
     // Views & Helpers
     getUserOpHash: (args: { op: any }) => Promise<Hash>;
@@ -29,6 +31,9 @@ export type EntryPointActions = {
     nonceSequenceNumber: (args: { sender: Address, key: bigint }) => Promise<bigint>;
     supportsInterface: (args: { interfaceId: Hex }) => Promise<boolean>;
     eip712Domain: () => Promise<any>;
+    getCurrentUserOpHash: () => Promise<Hash>;
+    getDomainSeparatorV4: () => Promise<Hex>;
+    getPackedUserOpTypeHash: () => Promise<Hex>;
     
     version: EntryPointVersion;
 };
@@ -107,6 +112,51 @@ export const entryPointActions = (address: Address, version: EntryPointVersion =
         };
     },
 
+    async addStake({ unstakeDelaySec, amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'addStake',
+            args: [unstakeDelaySec],
+            value: amount,
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async unlockStake({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'unlockStake',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdrawStake({ withdrawAddress, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'withdrawStake',
+            args: [withdrawAddress],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async withdrawTo({ withdrawAddress, amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'withdrawTo',
+            args: [withdrawAddress, amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
     async handleOps({ ops, beneficiary, account }) {
         return (client as any).writeContract({
             address,
@@ -124,6 +174,29 @@ export const entryPointActions = (address: Address, version: EntryPointVersion =
             abi: EntryPointABI,
             functionName: 'handleAggregatedOps',
             args: [opsPerAggregator, beneficiary],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async innerHandleOp({ callData, opInfo, context, account }) {
+         return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'innerHandleOp',
+            args: [callData, opInfo, context],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async delegateAndRevert({ target, data, account }) {
+         // This typically reverts, but we act as a writer
+         return (client as any).writeContract({
+            address,
+            abi: EntryPointABI,
+            functionName: 'delegateAndRevert',
+            args: [target, data],
             account: account as any,
             chain: (client as any).chain
         });
@@ -175,5 +248,18 @@ export const entryPointActions = (address: Address, version: EntryPointVersion =
     
     async eip712Domain() {
          return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'eip712Domain', args: [] });
+    },
+
+    async getCurrentUserOpHash() {
+         // View that returns 'bytes32'
+          return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'getCurrentUserOpHash', args: [] }) as Promise<Hash>;
+    },
+
+    async getDomainSeparatorV4() {
+           return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'getDomainSeparatorV4', args: [] }) as Promise<Hex>;
+    },
+
+    async getPackedUserOpTypeHash() {
+           return (client as PublicClient).readContract({ address, abi: EntryPointABI, functionName: 'getPackedUserOpTypeHash', args: [] }) as Promise<Hex>;
     }
 });

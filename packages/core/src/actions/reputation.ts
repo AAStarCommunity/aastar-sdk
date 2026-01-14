@@ -58,6 +58,9 @@ export type ReputationActions = {
     entropyFactors: (args: { factorId: bigint }) => Promise<bigint>;
     nftHoldStart: (args: { user: Address, collection: Address }) => Promise<bigint>;
     boostedCollections: (args: { collection: Address }) => Promise<bigint>;
+    communityActiveRules: (args: { community: Address, ruleId: Hex }) => Promise<boolean>;
+    getReputationBreakdown: (args: { user: Address, community: Address }) => Promise<any>;
+    setNFTBoost: (args: { collection: Address, boost: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Version
     version: () => Promise<string>;
@@ -342,6 +345,25 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
     async boostedCollections({ collection }) {
         return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'boostedCollections', args: [collection] }) as Promise<bigint>;
+    },
+
+    async communityActiveRules({ community, ruleId }) {
+         return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'communityActiveRules', args: [community, ruleId] }) as Promise<boolean>;
+    },
+
+    async getReputationBreakdown({ user, community }) {
+         return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'getReputationBreakdown', args: [user, community] });
+    },
+
+    async setNFTBoost({ collection, boost, account }) {
+          return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'setNFTBoost',
+            args: [collection, boost],
+            account: account as any,
+            chain: (client as any).chain
+        });
     },
 
     // Version

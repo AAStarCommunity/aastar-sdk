@@ -58,6 +58,13 @@ export type BLSAggregatorActions = {
     
     // 公钥查询
     getPublicKey: (args: { address: Address }) => Promise<Hex>;
+    aggregatedSignatures: (args: { requestId: bigint }) => Promise<any>;
+    getRequestStatus: (args: { requestId: bigint }) => Promise<any>;
+    getOperatorId: (args: { operator: Address }) => Promise<Hex>;
+    
+    // Operator Management
+    registerOperator: (args: { operator: Address, blsPublicKey: Hex, account?: Account | Address }) => Promise<Hash>;
+
     getPublicKeys: (args: { addresses: Address[] }) => Promise<Hex[]>;
     getAggregatedPublicKey: (args: { addresses: Address[] }) => Promise<Hex>;
     isKeyRegistered: (args: { address: Address }) => Promise<boolean>;
@@ -325,12 +332,32 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
 });
 
 export const blsActions = (address: Address) => (client: PublicClient | WalletClient): BLSAggregatorActions => ({
+    async aggregatedSignatures({ requestId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: BLSAggregatorABI,
+            functionName: 'aggregatedSignatures',
+            args: [requestId]
+        });
+    },
+
     async registerBLSPublicKey({ publicKey, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
             functionName: 'registerBLSPublicKey',
             args: [publicKey],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async registerOperator({ operator, blsPublicKey, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: BLSAggregatorABI,
+            functionName: 'registerOperator',
+            args: [operator, blsPublicKey],
             account: account as any,
             chain: (client as any).chain
         });
@@ -522,6 +549,14 @@ export const blsActions = (address: Address) => (client: PublicClient | WalletCl
     },
     async proposalNonces({ proposalId }) {
         return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'proposalNonces', args: [proposalId] }) as Promise<bigint>;
+    },
+
+    async getRequestStatus({ requestId }) {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'getRequestStatus', args: [requestId] });
+    },
+
+    async getOperatorId({ operator }) {
+        return (client as PublicClient).readContract({ address, abi: BLSAggregatorABI, functionName: 'getOperatorId', args: [operator] }) as Promise<Hex>;
     },
 
     async owner() {

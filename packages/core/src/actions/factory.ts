@@ -55,11 +55,13 @@ export type XPNTsFactoryActions = {
     hasToken: (args: { token: Address }) => Promise<boolean>;
     getDeployedCount: () => Promise<bigint>;
     industryMultipliers: (args: { industry: string }) => Promise<bigint>;
+    getIndustryMultiplier: (args: { industry: string }) => Promise<bigint>;
     predictions: (args: { community: Address }) => Promise<any>;
     
     // Constants
-    DEFAULT_SAFETY_FACTOR: () => Promise<bigint>;
     MIN_SUGGESTED_AMOUNT: () => Promise<bigint>;
+    DEFAULT_SAFETY_FACTOR: () => Promise<bigint>;
+    SUPERPAYMASTER: () => Promise<Address>; // Alias for SUPER_PAYMASTER due to ABI naming
     
     // Version
     version: () => Promise<string>;
@@ -274,14 +276,7 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         }) as Promise<Address>;
     },
 
-    async SUPER_PAYMASTER() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'SUPER_PAYMASTER',
-            args: []
-        }) as Promise<Address>;
-    },
+
 
     async tokenImplementation() {
         return (client as PublicClient).readContract({
@@ -336,6 +331,13 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
     async aPNTsPriceUSD() {
         return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'aPNTsPriceUSD', args: [] }) as Promise<bigint>;
     },
+    async SUPER_PAYMASTER() {
+        return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'SUPER_PAYMASTER', args: [] }) as Promise<Address>;
+    },
+
+    async SUPERPAYMASTER() {
+         return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'SUPERPAYMASTER', args: [] }) as Promise<Address>;
+    },
 
     // Admin & Config
     async setIndustryMultiplier({ industry, multiplier, account }) {
@@ -363,6 +365,9 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
     },
     async industryMultipliers({ industry }) {
         return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'industryMultipliers', args: [industry] }) as Promise<bigint>;
+    },
+    async getIndustryMultiplier({ industry }) {
+         return this.industryMultipliers({ industry });
     },
     async predictions({ community }) {
         return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'predictions', args: [community] });

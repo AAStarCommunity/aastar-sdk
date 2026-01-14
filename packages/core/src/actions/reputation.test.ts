@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { type Address, type PublicClient, type WalletClient, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Account, type Hex } from 'viem';
 import { reputationActions } from './reputation.js';
 
 describe('Reputation Actions', () => {
@@ -184,8 +184,8 @@ describe('Reputation Actions', () => {
             const result = await actions.syncToRegistry({
                 user: MOCK_USER,
                 communities: [MOCK_COMMUNITY],
-                ruleIds: [MOCK_RULE_ID],
-                activities: [100n],
+                ruleIds: [[MOCK_RULE_ID]],
+                activities: [[100n]],
                 epoch: 1n,
                 proof: '0x' as `0x${string}`,
                 account: mockAccount

@@ -6,6 +6,9 @@ export type StakingActions = {
     lockStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, entryBurn: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
     unlockStake: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     unlockAndTransfer: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    stake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    topUpStake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    unstake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Slashing
     slash: (args: { user: Address, roleId: Hex, amount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
@@ -23,6 +26,7 @@ export type StakingActions = {
     
     // Admin Functions
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     setRoleExitFee: (args: { roleId: Hex, feePercent: bigint, account?: Account | Address }) => Promise<Hash>;
     setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
     
@@ -32,6 +36,8 @@ export type StakingActions = {
     roleExitConfigs: (args: { roleId: Hex }) => Promise<any>;
     userActiveRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
     authorizedSlashers: (args: { slasher: Address }) => Promise<boolean>;
+    getStake: (args: { account: Address }) => Promise<bigint>;
+    balanceOf: (args: { account: Address }) => Promise<bigint>; // Alias or underlying token balance if applicable
     totalStaked: () => Promise<bigint>;
     getTotalStaked: () => Promise<bigint>; // Alias for totalStaked
     treasury: () => Promise<Address>;
@@ -83,6 +89,40 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
             abi: GTokenStakingABI,
             functionName: 'unlockAndTransfer',
             args: [user, roleId],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async stake({ amount, account }: { amount: bigint, account?: Account | Address }) {
+        return (client as any).writeContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'stake',
+            args: [amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async topUpStake({ amount, account }) {
+        // topUpStake typically calls stake internally or is a distinct function. Assuming distinct based on request.
+        return (client as any).writeContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'topUpStake',
+            args: [amount],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async unstake({ amount, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'unstake',
+            args: [amount],
             account: account as any,
             chain: (client as any).chain
         });
@@ -198,6 +238,17 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         });
     },
 
+    async transferOwnership({ newOwner, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'transferOwnership',
+            args: [newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
     async setRoleExitFee({ roleId, feePercent, account }) {
         return (client as any).writeContract({
             address,
@@ -264,6 +315,25 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
             functionName: 'authorizedSlashers',
             args: [slasher]
         }) as Promise<boolean>;
+    },
+
+    async getStake({ account }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'getStake',
+            args: [account]
+        }) as Promise<bigint>;
+    },
+
+    async balanceOf({ account }) {
+        // GTokenStaking might implement balanceOf if it's an ERC20-like or just tracking stakes
+        return (client as PublicClient).readContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'balanceOf',
+            args: [account]
+        }) as Promise<bigint>;
     },
 
     async totalStaked() {

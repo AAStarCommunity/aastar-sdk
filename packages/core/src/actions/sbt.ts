@@ -43,6 +43,7 @@ export type SBTActions = {
     mint: (args: { to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
     burn: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
     burnSBT: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    deactivateAllMemberships: (args: { user: Address, account?: Account | Address }) => Promise<Hash>;
     setBaseURI: (args: { baseURI: string, account?: Account | Address }) => Promise<Hash>;
     
     // Membership Management
@@ -294,6 +295,19 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
             abi: MySBTABI,
             functionName: 'burn',
             args: [tokenId],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+
+
+    async deactivateAllMemberships({ user, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: MySBTABI,
+            functionName: 'deactivateAllMemberships',
+            args: [user],
             account: account as any,
             chain: (client as any).chain
         });

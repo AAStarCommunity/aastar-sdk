@@ -15,6 +15,10 @@ export type RegistryActions = {
     
     // Community Management
     communityToToken: (args: { community: Address }) => Promise<Address>;
+    getCommunity: (args: { community: Address }) => Promise<any>;
+    communityByENS: (args: { ensName: string }) => Promise<Address>;
+    communityByName: (args: { name: string }) => Promise<Address>;
+    executedProposals: (args: { proposalId: bigint }) => Promise<boolean>;
     getCommunityRoleData: (args: { community: Address }) => Promise<any>;
     isCommunityMember: (args: { community: Address, user: Address }) => Promise<boolean>;
     communityByNameV3: (args: { name: string }) => Promise<Address>;
@@ -199,6 +203,42 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             functionName: 'communityToToken',
             args: [community]
         }) as Promise<Address>;
+    },
+
+    async getCommunity({ community }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getCommunity',
+            args: [community]
+        });
+    },
+
+    async communityByENS({ ensName }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'communityByENS',
+            args: [ensName]
+        }) as Promise<Address>;
+    },
+
+    async communityByName({ name }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'communityByName',
+            args: [name]
+        }) as Promise<Address>;
+    },
+
+    async executedProposals({ proposalId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'executedProposals',
+            args: [proposalId]
+        }) as Promise<boolean>;
     },
 
     async getCommunityRoleData({ community }) {
