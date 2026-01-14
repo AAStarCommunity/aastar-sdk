@@ -17,7 +17,7 @@
   "hidePageTitle": true,
   "hideBreadcrumbs": true,
   "cleanOutputDir": true,
-  "logLevel": "Error",
+  "logLevel": "Info",
   "validation": {
     "notDocumented": false,
     "invalidLink": false,
