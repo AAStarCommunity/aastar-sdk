@@ -11,7 +11,8 @@ NETWORK="sepolia"
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --env|--network) NETWORK="$2"; shift ;;
-        *) NETWORK="$1" ;;
+        --env=*|--network=*) NETWORK="${1#*=}" ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
 done
