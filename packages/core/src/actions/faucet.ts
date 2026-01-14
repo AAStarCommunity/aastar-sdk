@@ -160,6 +160,9 @@ export class SepoliaFaucetAPI {
 
             // 3. Admin Approves Staking Contract (if needed)
             const adminAddr = adminWallet.account!.address;
+            console.log(`      🔎 Debug Staking: Registry=${registryAddr}, Staking=${stakingAddr}`);
+            console.log(`      🔎 Debug Token: Contract=${stakingToken}`);
+            
             // Check allowance for the STAKING TOKEN
             const allowance = await publicClient.readContract({
                 address: stakingToken,
@@ -167,6 +170,7 @@ export class SepoliaFaucetAPI {
                 functionName: 'allowance',
                 args: [adminAddr, stakingAddr]
             });
+            console.log(`      🔎 Debug Allowance: ${formatEther(allowance)} (Needed: >0.5)`);
 
             // Approve if needed (standard stake ~0.3 ETH, verify enough)
             if (allowance < parseEther('500')) {
@@ -180,6 +184,30 @@ export class SepoliaFaucetAPI {
                     account: adminWallet.account!
                 });
                 await publicClient.waitForTransactionReceipt({ hash });
+                console.log(`      ✅ Approved Staking. Tx: ${hash}`);
+            }
+
+            // ALSO Approve Registry (just in case it pulls first)
+            const allowReg = await publicClient.readContract({
+                address: stakingToken,
+                abi: ERC20_ABI,
+                functionName: 'allowance',
+                args: [adminAddr, registryAddr]
+            });
+            if (allowReg < parseEther('500')) {
+                console.log('      🔓 Approving Registry Contract...');
+                const hash = await adminWallet.writeContract({
+                    address: stakingToken,
+                    abi: ERC20_ABI,
+                    functionName: 'approve',
+                    args: [registryAddr, parseEther('1000')],
+                    chain: sepolia,
+                    account: adminWallet.account!
+                });
+                await publicClient.waitForTransactionReceipt({ hash });
+                console.log(`      ✅ Approved Registry. Tx: ${hash}`);
+            } else {
+                 console.log('      ✅ Allowance sufficient.');
             }
 
             // 4. Register Role (registerRole)
