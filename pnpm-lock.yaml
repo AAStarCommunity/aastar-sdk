@@ -24,8 +24,8 @@ importers:
         specifier: 1.6.0
         version: 1.6.0
       viem:
-        specifier: 2.41.2
-        version: 2.41.2(typescript@5.7.2)
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
     devDependencies:
       '@types/node':
         specifier: 20.11.5
@@ -93,22 +93,6 @@ importers:
         specifier: 5.7.2
         version: 5.7.2
 
-  packages/community:
-    dependencies:
-      '@aastar/core':
-        specifier: workspace:*
-        version: link:../core
-      '@aastar/tokens':
-        specifier: workspace:*
-        version: link:../tokens
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)
-    devDependencies:
-      typescript:
-        specifier: 5.7.2
-        version: 5.7.2
-
   packages/core:
     dependencies:
       '@noble/curves':
@@ -159,56 +143,11 @@ importers:
         specifier: 5.7.2
         version: 5.7.2
 
-  packages/enduser:
-    dependencies:
-      '@aastar/core':
-        specifier: workspace:*
-        version: link:../core
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)
-    devDependencies:
-      typescript:
-        specifier: 5.7.2
-        version: 5.7.2
-
   packages/identity:
     dependencies:
       '@aastar/core':
         specifier: workspace:*
         version: link:../core
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)
-    devDependencies:
-      typescript:
-        specifier: 5.7.2
-        version: 5.7.2
-
-  packages/operator:
-    dependencies:
-      '@aastar/core':
-        specifier: workspace:*
-        version: link:../core
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)
-    devDependencies:
-      typescript:
-        specifier: 5.7.2
-        version: 5.7.2
-
-  packages/patterns:
-    dependencies:
-      '@aastar/core':
-        specifier: workspace:*
-        version: link:../core
-      '@aastar/enduser':
-        specifier: workspace:*
-        version: link:../enduser
-      '@aastar/operator':
-        specifier: workspace:*
-        version: link:../operator
       viem:
         specifier: 2.43.3
         version: 2.43.3(typescript@5.7.2)
@@ -844,17 +783,6 @@ packages:
   '@vitest/utils@4.0.17':
     resolution: {integrity: sha512-RG6iy+IzQpa9SB8HAFHJ9Y+pTzI+h8553MrciN9eC6TFBErqrQaTas4vG+MVj8S4uKk8uTT2p0vgZPnTdxd96w==}
 
-  abitype@1.1.0:
-    resolution: {integrity: sha512-6Vh4HcRxNMLA0puzPjM5GBgT4aAcFGKZzSgAXvuZ27shJP6NEpielTuqbBmZILR5/xd0PizkBGy5hReKz9jl5A==}
-    peerDependencies:
-      typescript: '>=5.0.4'
-      zod: ^3.22.0 || ^4.0.0
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-      zod:
-        optional: true
-
   abitype@1.2.3:
     resolution: {integrity: sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg==}
     peerDependencies:
@@ -1370,14 +1298,6 @@ packages:
       typescript:
         optional: true
 
-  ox@0.9.6:
-    resolution: {integrity: sha512-8SuCbHPvv2eZLYXrNmC0EC12rdzXQLdhnOMlHDW2wiCPLxBrOOJwX5L5E61by+UjTPOryqQiRSnjIKCI+GykKg==}
-    peerDependencies:
-      typescript: '>=5.4.0'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   p-limit@3.1.0:
     resolution: {integrity: sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ==}
     engines: {node: '>=10'}
@@ -1574,14 +1494,6 @@ packages:
 
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
-
-  viem@2.41.2:
-    resolution: {integrity: sha512-LYliajglBe1FU6+EH9mSWozp+gRA/QcHfxeD9Odf83AdH5fwUS7DroH4gHvlv6Sshqi1uXrYFA2B/EOczxd15g==}
-    peerDependencies:
-      typescript: '>=5.0.4'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
 
   viem@2.43.3:
     resolution: {integrity: sha512-zM251fspfSjENCtfmT7cauuD+AA/YAlkFU7cksdEQJxj7wDuO0XFRWRH+RMvfmTFza88B9kug5cKU+Wk2nAjJg==}
@@ -2206,10 +2118,6 @@ snapshots:
       '@vitest/pretty-format': 4.0.17
       tinyrainbow: 3.0.3
 
-  abitype@1.1.0(typescript@5.7.2):
-    optionalDependencies:
-      typescript: 5.7.2
-
   abitype@1.2.3(typescript@5.7.2):
     optionalDependencies:
       typescript: 5.7.2
@@ -2763,21 +2671,6 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  ox@0.9.6(typescript@5.7.2):
-    dependencies:
-      '@adraffy/ens-normalize': 1.11.1
-      '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
-      '@noble/hashes': 1.8.0
-      '@scure/bip32': 1.7.0
-      '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@5.7.2)
-      eventemitter3: 5.0.1
-    optionalDependencies:
-      typescript: 5.7.2
-    transitivePeerDependencies:
-      - zod
-
   p-limit@3.1.0:
     dependencies:
       yocto-queue: 0.1.0
@@ -2970,23 +2863,6 @@ snapshots:
       punycode: 2.3.1
 
   v8-compile-cache-lib@3.0.1: {}
-
-  viem@2.41.2(typescript@5.7.2):
-    dependencies:
-      '@noble/curves': 1.9.1
-      '@noble/hashes': 1.8.0
-      '@scure/bip32': 1.7.0
-      '@scure/bip39': 1.6.0
-      abitype: 1.1.0(typescript@5.7.2)
-      isows: 1.0.7(ws@8.18.3)
-      ox: 0.9.6(typescript@5.7.2)
-      ws: 8.18.3
-    optionalDependencies:
-      typescript: 5.7.2
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-      - zod
 
   viem@2.43.3(typescript@5.7.2):
     dependencies:
