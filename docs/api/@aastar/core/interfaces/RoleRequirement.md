@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/roles.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L128)
+Defined in: [packages/core/src/roles.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L128)
 
 Role requirement check result
 
@@ -8,7 +8,7 @@ Role requirement check result
 
 > **hasEnoughAPNTs**: `boolean`
 
-Defined in: [packages/core/src/roles.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L131)
+Defined in: [packages/core/src/roles.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L131)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/roles.ts:131](https://github.com/AAStarCommunity/
 
 > **hasEnoughGToken**: `boolean`
 
-Defined in: [packages/core/src/roles.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L130)
+Defined in: [packages/core/src/roles.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L130)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/roles.ts:130](https://github.com/AAStarCommunity/
 
 > **hasRole**: `boolean`
 
-Defined in: [packages/core/src/roles.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L129)
+Defined in: [packages/core/src/roles.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L129)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/roles.ts:129](https://github.com/AAStarCommunity/
 
 > **hasSBT**: `boolean`
 
-Defined in: [packages/core/src/roles.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L132)
+Defined in: [packages/core/src/roles.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L132)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [packages/core/src/roles.ts:132](https://github.com/AAStarCommunity/
 
 > **missingRequirements**: `string`[]
 
-Defined in: [packages/core/src/roles.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L133)
+Defined in: [packages/core/src/roles.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L133)

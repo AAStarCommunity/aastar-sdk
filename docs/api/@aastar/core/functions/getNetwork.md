@@ -1,6 +1,6 @@
 > **getNetwork**(`network`): \{ `blockExplorer`: `"https://sepolia.etherscan.io"`; `chainId`: `11155111`; `name`: `"Sepolia"`; `nativeCurrency`: \{ `decimals`: `18`; `name`: `"Sepolia ETH"`; `symbol`: `"ETH"`; \}; `rpcUrl`: `"https://rpc.sepolia.org"`; \} \| \{ `blockExplorer`: `""`; `chainId`: `31337`; `name`: `"Anvil"`; `nativeCurrency`: \{ `decimals`: `18`; `name`: `"ETH"`; `symbol`: `"ETH"`; \}; `rpcUrl`: `"http://127.0.0.1:8545"`; \}
 
-Defined in: [packages/core/src/networks.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/networks.ts#L44)
+Defined in: [packages/core/src/networks.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/networks.ts#L44)
 
 Get network configuration
 

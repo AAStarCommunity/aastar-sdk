@@ -1,6 +1,6 @@
 > **getBlockExplorer**(`network`): `""` \| `"https://sepolia.etherscan.io"`
 
-Defined in: [packages/core/src/networks.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/networks.ts#L75)
+Defined in: [packages/core/src/networks.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/networks.ts#L75)
 
 Get block explorer URL
 

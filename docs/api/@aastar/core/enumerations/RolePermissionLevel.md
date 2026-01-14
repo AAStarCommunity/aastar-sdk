@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/roles.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L159)
+Defined in: [packages/core/src/roles.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L159)
 
 Role permission levels (for UI sorting/filtering)
 
@@ -8,7 +8,7 @@ Role permission levels (for UI sorting/filtering)
 
 > **COMMUNITY**: `30`
 
-Defined in: [packages/core/src/roles.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L163)
+Defined in: [packages/core/src/roles.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L163)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/roles.ts:163](https://github.com/AAStarCommunity/
 
 > **KMS**: `80`
 
-Defined in: [packages/core/src/roles.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L161)
+Defined in: [packages/core/src/roles.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L161)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/roles.ts:161](https://github.com/AAStarCommunity/
 
 > **OPERATOR**: `50`
 
-Defined in: [packages/core/src/roles.ts:162](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L162)
+Defined in: [packages/core/src/roles.ts:162](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L162)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/roles.ts:162](https://github.com/AAStarCommunity/
 
 > **PROTOCOL**: `100`
 
-Defined in: [packages/core/src/roles.ts:160](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L160)
+Defined in: [packages/core/src/roles.ts:160](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L160)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [packages/core/src/roles.ts:160](https://github.com/AAStarCommunity/
 
 > **USER**: `10`
 
-Defined in: [packages/core/src/roles.ts:164](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L164)
+Defined in: [packages/core/src/roles.ts:164](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/roles.ts#L164)
