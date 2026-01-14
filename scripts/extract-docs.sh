@@ -42,6 +42,12 @@ if [ -d "$SDK_REPO/docs/api" ]; then
     if [ -f "$DOCS_REPO/api/README.md" ]; then
         cp "$DOCS_REPO/api/README.md" "$DOCS_REPO/api/index.md"
     fi
+    # Create index.md for each package
+    for pkg in "$DOCS_REPO/api/@aastar"/*; do
+        if [ -d "$pkg" ] && [ -f "$pkg/README.md" ]; then
+            cp "$pkg/README.md" "$pkg/index.md"
+        fi
+    done
 fi
 
 # 3. Sync Examples folder (Clean first, then copy)
