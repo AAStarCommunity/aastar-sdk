@@ -708,12 +708,35 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async registryGetAccountCommunity({ account: userAccount }: { account: Address }) {
-        return (client as PublicClient).readContract({
+        // Check if user has COMMUNITY role
+        const COMMUNITY_ROLE_ID = '0x0000000000000000000000000000000000000000000000000000000000000002' as Hex;
+        const hasRole = await (client as PublicClient).readContract({
             address,
             abi: RegistryABI,
-            functionName: 'accountToCommunity',
-            args: [userAccount]
-        }) as Promise<Address>;
+            functionName: 'hasRole',
+            args: [userAccount, COMMUNITY_ROLE_ID]
+        }) as boolean;
+
+        if (!hasRole) {
+            return '0x0000000000000000000000000000000000000000' as Address;
+        }
+
+        // Get role data which contains the community token address
+        const roleData = await (client as PublicClient).readContract({
+            address,
+            abi: RegistryABI,
+            functionName: 'getRoleData',
+            args: [userAccount, COMMUNITY_ROLE_ID]
+        }) as Hex;
+
+        // Parse community token from role data (first 20 bytes after removing 0x)
+        if (!roleData || roleData === '0x') {
+            return '0x0000000000000000000000000000000000000000' as Address;
+        }
+        
+        // Community token is at bytes 0-19 of roleData
+        const tokenAddress = ('0x' + roleData.slice(2, 42)) as Address;
+        return tokenAddress;
     },
 
     // Constants (Role IDs)
