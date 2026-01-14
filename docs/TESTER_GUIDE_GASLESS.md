@@ -324,33 +324,43 @@ await SepoliaFaucetAPI.prepareTestAccount(
         registry: '0x...',    // Registry Address
         // Optional:
         tokenAmount: parseEther('1000') 
-    }
-);
-```
-
 #### KMS / Remote Signer Integration
 To use a remote signer (AWS KMS, Fireblocks, MPC), creates a custom `viem` account.
 
 ```typescript
+import { http, createPublicClient } from 'viem';
 import { toAccount } from 'viem/accounts';
+import { createEndUserClient, CORE_ADDRESSES } from '@aastar/sdk';
+import { sepolia } from 'viem/chains';
 
-const remoteSigner = toAccount({
-    address: '0xYourWalletAddress',
+// 1. Define your Remote Signer (KMS) Wrapper
+const kmsAccount = toAccount({
+    address: '0xYourUserAddress',
     async signMessage({ message }) {
-        // message.raw is the UserOpHash
-        const sig = await myKmsClient.sign(message.raw); 
-        // Ensure signature is valid 65-byte hex (r, s, v)
+        // Implement your KMS call here (e.g., AWS KMS, Fireblocks)
+        // message.raw is the hash to sign
+        const sig = await remoteKmsSign(message.raw); 
         return sig; 
     },
-    async signTransaction(tx) {
-        throw new Error("Not supported for Gasless");
-    }
+    async signTransaction(tx) { throw new Error('Not supported'); },
+    async signTypedData(td) { throw new Error('Not supported'); }
 });
 
 const wallet = createWalletClient({ account: remoteSigner, ... });
 
-// Pass this wallet to SuperPaymasterClient
-const userOpHash = await SuperPaymasterClient.submitGaslessTransaction(..., wallet, ...);
+// 3. Execute Gasless Transaction
+// The SDK will automatically:
+// - Build the UserOp
+// - Calculate Gas Limits
+// - Call kmsAccount.signMessage() with the UserOpHash
+// - Submit to Bundler
+const result = await client.executeGasless({
+    target: '0xTargetContract',
+    data: '0xCallData',
+    operator: '0xPaymasterOperatorAddress' // Must be active
+});
+
+console.log('UserOp Hash:', result.hash);
 ```
 
 

@@ -4,12 +4,13 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { config } from 'dotenv';
 import { 
     createCommunityClient, 
-    // Protocol Client creation might be direct or via generic client with actions
+    createEndUserClient, 
+    createOperatorClient,
+    AAStarError 
 } from '@aastar/sdk'; 
 
 // Import constants from core or define them
 import { 
-    REGISTRY_ADDRESS, 
     REGISTRY_ADDRESS, 
     SUPER_PAYMASTER_ADDRESS, 
     SBT_ADDRESS, 
@@ -34,42 +35,58 @@ async function main() {
     console.log('='.repeat(60) + '\n');
 
     // ==========================================
-    // 1. Community Client Demo
-    // ==========================================
-    console.log('1️⃣ Community Client');
+    // 1. Initialize Clients (Using Factory Pattern)
+    // Note: Factories now take transport/chain, not client instances directly.
+    
+    console.log('\n[2] Initializing SDK Clients...');
+    
+    // Community Client
     const communityClient = createCommunityClient({
-        walletClient: walletClient, // Note: factory uses 'walletClient' prop
-        publicClient: publicClient,
-        registryAddress: REGISTRY_ADDRESS,
-        sbtAddress: SBT_ADDRESS,
+        transport: http(rpcUrl),
+        chain: sepolia, // or use defined chain
+        account: account, // Community Admin
+        addresses: {
+            registry: REGISTRY_ADDRESS,
+            sbt: SBT_ADDRESS
+        }
     });
 
     try {
-        const txHash = await communityClient.registerAsCommunity("TestCommunity");
-        console.log(`  ✓ Register as Community TX: ${txHash}`);
+        console.log('   Checking Community Info...');
+        // SDK v2 method: getCommunityInfo
+        const info = await communityClient.getCommunityInfo(account.address);
+        console.log('   Community Info:', info);
     } catch (e: any) {
-        console.log(`  ⚠️  Register checks: ${e.message.split('\n')[0]}`);
+        console.log('   (Community check skipped/failed)', e.message);
     }
 
-    // ==========================================
-    // 2. User Client Demo
-    // ==========================================
-    console.log('\n2️⃣ User Client');
-    const userClient = createUserClient({
-        walletClient: walletClient,
-        publicClient: publicClient,
-        accountAddress: account.address, 
-        sbtAddress: SBT_ADDRESS,
-        registryAddress: REGISTRY_ADDRESS
+    // User Client
+    const userClient = createEndUserClient({
+        transport: http(rpcUrl),
+        chain: sepolia,
+        account: account, // User Account
+        addresses: {
+            registry: REGISTRY_ADDRESS,
+            sbt: SBT_ADDRESS
+        }
     });
 
     try {
-        const sbtBalance = await userClient.sbtBalanceOf(account.address);
-        console.log(`  ✓ SBT Balance: ${sbtBalance}`);
+        const { accountAddress } = await userClient.createSmartAccount({ owner: account.address });
+        console.log(`   AA Account Address: ${accountAddress}`);
         
-        const gtokenBalance = await userClient.tokenBalanceOf({ token: GTOKEN_ADDRESS, account: account.address });
-        console.log(`  ✓ GToken Balance: ${gtokenBalance}`);
-
+        // Check Token Balance (Manual Read)
+        // UserClient doesn't include TokenActions by default to keep it slim?
+        // Let's use public client read
+        /* 
+        const bal = await userClient.readContract({
+             address: GTOKEN_ADDRESS,
+             abi: erc20Abi,
+             functionName: 'balanceOf',
+             args: [accountAddress]
+        });
+        console.log(`   GToken Balance: ${bal}`);
+        */
         console.log(`  ℹ️  Transfer Intent: 0.01 GT to Random Address`);
         // await userClient.transferToken({ token: GTOKEN_ADDRESS, to: '0x...', amount: parseEther('0.01') });
     } catch (e: any) {
@@ -81,17 +98,26 @@ async function main() {
     // ==========================================
     console.log('\n3️⃣ Paymaster Operator Client');
     const operatorClient = createOperatorClient({
-        walletClient: walletClient,
-        publicClient: publicClient,
-        superPaymasterAddress: SUPER_PAYMASTER_ADDRESS,
-        registryAddress: REGISTRY_ADDRESS
+        transport: http(rpcUrl),
+        chain: sepolia,
+        account: account,
+        addresses: {
+            registry: REGISTRY_ADDRESS,
+            superPaymaster: SUPER_PAYMASTER_ADDRESS
+        }
     });
 
     try {
-        const depositInfo = await operatorClient.superPaymasterGetDeposit(operatorClient.account!.address);
-        console.log(`  ✓ Paymaster Deposit: ${depositInfo}`);
+        // const sbtBalance = await userClient.sbtBalanceOf(account.address); // Not directly on client in v0.17?
+        // console.log(`  ✓ SBT Balance: ${sbtBalance}`);
         
-        // await operatorClient.superPaymasterDeposit(parseEther('0.001'));
+        // const gtokenBalance = await userClient.tokenBalanceOf({ token: GTOKEN_ADDRESS, account: account.address }); // Missing
+        // console.log(`  ✓ GToken Balance: ${gtokenBalance}`);
+        const status = await operatorClient.getOperatorStatus(account.address);
+        console.log('   Operator Status:', status);
+        
+        const deposit = await operatorClient.getDepositDetails();
+        console.log('   SuperPaymaster Deposit:', deposit);
     } catch (e: any) {
         console.log(`  ❌ Operator Ops Failed: ${e.message}`);
     }
