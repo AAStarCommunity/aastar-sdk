@@ -103,7 +103,7 @@ export class SepoliaFaucetAPI {
                 chain: sepolia,
                 account: adminWallet.account! 
             });
-            await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
+            await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
             console.log(`      -> Sent ${formatEther(amount)} ETH. Tx: ${hash}`);
             return true;
         }
@@ -184,7 +184,7 @@ export class SepoliaFaucetAPI {
                     chain: sepolia,
                     account: adminWallet.account!
                 });
-                await publicClient.waitForTransactionReceipt({ hash: hashApprove });
+                await publicClient.waitForTransactionReceipt({ hash: hashApprove, timeout: 300000 });
                 console.log(`      🔓 Approving Staking Contract... ${hashApprove}`);
 
                 // Ensure Admin has GTokens (Staking Token) balance
@@ -206,7 +206,7 @@ export class SepoliaFaucetAPI {
                             chain: sepolia,
                             account: adminWallet.account!
                         });
-                        await publicClient.waitForTransactionReceipt({ hash: hashGMint });
+                        await publicClient.waitForTransactionReceipt({ hash: hashGMint, timeout: 300000 });
                         console.log(`      ✅ GTokens Minted. Tx: ${hashGMint}`);
                     } catch (e) {
                         console.warn(`      ⚠️ Failed to mint GTokens (Admin might not be minter):`, e);
@@ -231,7 +231,7 @@ export class SepoliaFaucetAPI {
                     chain: sepolia,
                     account: adminWallet.account!
                 });
-                await publicClient.waitForTransactionReceipt({ hash });
+                await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
                 console.log(`      ✅ Approved Registry. Tx: ${hash}`);
             } else {
                  console.log('      ✅ Allowance sufficient.');
@@ -254,16 +254,16 @@ export class SepoliaFaucetAPI {
             const hashMint = await adminWallet.writeContract({
                 address: registryAddr,
                 abi: parseAbi([
-                    'function registerRole(bytes32 roleId, address user, bytes calldata data) external',
+                    'function safeMintForRole(bytes32 roleId, address user, bytes calldata data) external returns (uint256)',
                     'error InvalidParameter(string message)'
                 ]),
-                functionName: 'registerRole',
+                functionName: 'safeMintForRole',
                 args: [ENDUSER_ROLE as `0x${string}`, target, userData],
                 chain: sepolia,
                 account: adminWallet.account!
             });
             
-            await publicClient.waitForTransactionReceipt({ hash: hashMint, timeout: 120000 });
+            await publicClient.waitForTransactionReceipt({ hash: hashMint, timeout: 300000 });
             console.log(`      -> Role Sponsored & Granted. Tx: ${hashMint}`);
             return true;
 
@@ -291,19 +291,50 @@ export class SepoliaFaucetAPI {
         });
 
         if (balance < amount) {
-            console.log(`   🪙 Minting Tokens... (Current: ${formatEther(balance)})`);
-            // Assuming Admin has Minter Role on Token
-            const hash = await adminWallet.writeContract({
+            console.log(`   🪙 Funding Tokens... (Current: ${formatEther(balance)})`);
+            const adminAddr = adminWallet.account!.address;
+            
+            // 1. Try Transfer from Admin (if Admin has balance)
+            const adminBal = await publicClient.readContract({
                 address: token,
                 abi: ERC20_ABI,
-                functionName: 'mint',
-                args: [target, amount],
-                chain: sepolia,
-                account: adminWallet.account!
+                functionName: 'balanceOf',
+                args: [adminAddr]
             });
-            await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
-            console.log(`      -> Minted ${formatEther(amount)}. Tx: ${hash}`);
-            return true;
+
+            if (adminBal >= amount) {
+                 console.log(`      💸 Transferring from Admin...`);
+                 const hash = await adminWallet.writeContract({
+                     address: token,
+                     abi: ERC20_ABI,
+                     functionName: 'transfer',
+                     args: [target, amount],
+                     chain: sepolia,
+                     account: adminWallet.account!
+                 });
+                 await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
+                 console.log(`      ✅ Transferred ${formatEther(amount)}. Tx: ${hash}`);
+                 return true;
+            }
+
+            // 2. Try Mint (Assuming Admin has Minter Role or is Owner)
+            console.log(`      🪙 Admin balance low. Attempting Mint...`);
+            try {
+                const hash = await adminWallet.writeContract({
+                    address: token,
+                    abi: ERC20_ABI,
+                    functionName: 'mint',
+                    args: [target, amount],
+                    chain: sepolia,
+                    account: adminWallet.account!
+                });
+                await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
+                console.log(`      ✅ Minted ${formatEther(amount)}. Tx: ${hash}`);
+                return true;
+            } catch (e) {
+                console.warn(`      ⚠️ Failed to mint/transfer tokens. Check Admin permissions/balance.`, e);
+                return false;
+            }
         }
         console.log(`   ✅ Token Balance adequate.`);
         return false;
@@ -342,7 +373,8 @@ export class SepoliaFaucetAPI {
                 chain: sepolia,
                 account: adminWallet.account!
             });
-            await publicClient.waitForTransactionReceipt({ hash });
+            await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
+            console.log(`      -> Admin Minted. Tx: ${hash}`);
         }
 
         // 2. Approve Paymaster
@@ -363,7 +395,8 @@ export class SepoliaFaucetAPI {
                 chain: sepolia,
                 account: adminWallet.account!
             });
-            await publicClient.waitForTransactionReceipt({ hash });
+            await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
+            console.log(`      -> Approved Paymaster. Tx: ${hash}`);
         }
 
         // 3. Deposit For
@@ -377,7 +410,7 @@ export class SepoliaFaucetAPI {
                 chain: sepolia,
                 account: adminWallet.account!
             });
-            await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
+            await publicClient.waitForTransactionReceipt({ hash, timeout: 300000 });
             console.log(`      -> Deposited ${formatEther(amount)} to PM. Tx: ${hash}`);
             return true;
         } catch (e) {

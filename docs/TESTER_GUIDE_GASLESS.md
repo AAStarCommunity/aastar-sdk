@@ -1,4 +1,6 @@
-# Paymaster V4 Gasless Test Guide
+# SuperPaymaster Gasless Test Guide
+
+[中文版入口](#SuperPaymaster-无感交易测试指南-中文版) | [English Version](#superpaymaster-gasless-test-guide)
 
 > For external testers to run a gasless UserOperation on Sepolia.
 
@@ -295,7 +297,42 @@ Run the following script to create a fresh AA account, fund it, and execute a ga
 ```bash
 npx tsx scripts/test-faucet-and-gasless.ts
 ```
+这个脚本 
+test-faucet-and-gasless.ts
+ 实际上是一个端到端的全链路集成测试。它的核心任务是验证在没有 ETH 的情况下，一个新用户如何通过我们的 SDK 和 SuperPaymaster 体系从“零”开始变成一个“可用”的社区成员。
 
+以下是该脚本工作的详细步骤描述：
+
+1. 身份初始化
+新用户生成：脚本会随机生成一个 privateKey，代表一个全新的用户 EOA。
+AA 地址预测：利用 SDK 的 user.createSmartAccount 方法，根据 EOA 地址和 salt 预测出对应的智能账户地址（AA Address）。
+2. AA 账户预部署（这是解决 AA13 报错的关键）
+直接部署：脚本让 Supplier（资助者）发起一笔传统的 L1 交易，通过 Factory 为用户部署这个 AA 合约。
+目的：确保后续的 Gasless UserOp 在仿真时面对的是一个“已存在”的合约，从而彻底避免 Bundler 对 initCode 仿真的不稳定性。
+3. Faucet 准备阶段 (SepoliaFaucetAPI)
+这一步是脚本最核心的业务逻辑，它模拟了“水龙头”或“新人礼包”的过程：
+
+注入 ETH：Admin 向 AA 账户转入极小额的 ETH（约 0.02），用于支付非 Gasless 场景下的基础费用（如某些合约交互）。
+赞助角色注册 (Spo Forces API)：
+问题：通常注册 ENDUSER 角色需要用户质押 0.5 GTokens，但新用户此时没有钱。
+解决：Admin 调用 safeMintForRole。这是一种赞助模式，Admin 支付 GTokens 质押，直接将 ENDUSER 角色授予用户的 AA 账户。
+注入 C-Points (aPNTs)：Admin 直接给用户 AA 地址转入 1000 个 aPNTs 代币。这些代币是用户后面发起 Gasless 交易时扣除的“虚拟燃料”。
+4. Gasless 交易测试 (SuperPaymasterClient)
+一旦用户拥有了 ENDUSER 角色和 aPNTs，脚本就开始测试真正的无感交易：
+
+提交 UserOp：用户发起一个“转账回 Admin”的请求（作为测试动作）。
+SuperPaymaster 介入：
+SuperPaymaster 检查该 AA 用户是否拥有 ENDUSER 角色。
+它会检查 AA 用户账户里的 aPNTs 余额是否足够支付 Gas。
+执行：支付中心（SuperPaymaster）会为这笔交易担保并支付 Sepolia 网络原生的 Gas 费，而用户的 AA 账户则扣除相应的 aPNTs。
+总结
+你描述得很准确：
+
+随机生成/使用指定 A Account。
+不转 GToken 质押金，而是由 Admin “带”他完成社区注册（Sponsor Stake）。
+转入 aPNTs (C-Points) 供其消费。
+发起 Gasless 交易，验证整个“免 Gas”链路在真实 Sepolia 网络上是连通的。
+这个脚本成功运行，标志着我们的 SDK 在处理 v0.7 账户的赞助注册 + 燃料资助 + 无感交易这一套业务逻辑上已经完全成熟。
 **What it does:**
 1.  **Identity**: Generates a random private key (Brand new user).
 2.  **Faucet**: Uses `SepoliaFaucetAPI.prepareTestAccount` to:
@@ -308,10 +345,18 @@ npx tsx scripts/test-faucet-and-gasless.ts
 
 > **Note**: Requires `PRIVATE_KEY` (Deployer) or `PRIVATE_KEY_ANNI` in `.env.sepolia` to have Admin/Minter privileges. If specific permissions fail (like GrantRole), the script attempts to proceed.
 
-### 4. Code Sample: Using Faucet & KMS
-For a complete example of how to combine the Faucet (for setup) and a Mock KMS (for signing), refer to `scripts/test-kms-gasless.ts`.
+---
 
-#### Faucet Setup (One-Time)
+## 🛠️ Synergy: Faucet + KMS (Hardware/Cloud Wallets)
+
+If you are using a **KMS-backed AA account** (where the private key never leaves AWS/Google/Fireblocks), you can still use the full power of the Faucet and Gasless SDK.
+
+### 1. Setup is "Keyless"
+The **Faucet Setup** phase (`SepoliaFaucetAPI.prepareTestAccount`) DOES NOT require your user's private key.
+- It only needs your **AA Address**.
+- The `Admin` (Anni/Deployer) uses *their* key to grant you roles and fund you tokens.
+
+**Code Sample: Faucet Setup (One-Time)**
 ```typescript
 import { SepoliaFaucetAPI } from '@aastar/core';
 
@@ -319,58 +364,72 @@ await SepoliaFaucetAPI.prepareTestAccount(
     adminWallet, // WalletClient with Admin Key
     publicClient,
     {
-        targetAA: '0x...', 
-        token: '0x...',       // GToken Address
-        registry: '0x...',    // Registry Address
-        // Optional:
-        tokenAmount: parseEther('1000') 
-#### KMS / Remote Signer Integration
-To use a remote signer (AWS KMS, Fireblocks, MPC), creates a custom `viem` account.
+        targetAA: '0xYourUserAddress', 
+        token: CORE_ADDRESSES.aPNTs, 
+        registry: CORE_ADDRESSES.registry,
+        superPaymaster: CORE_ADDRESSES.superPaymaster,
+        ethAmount: parseEther('0.02')
+    }
+);
+```
 
+**Workflow**: 
+1. Provide your KMS AA Address to the Admin.
+2. Owner/Admin runs the Faucet script for your address.
+3. Your account is now "Gasless Ready" (has ENDUSER role + aPNTs).
+
+### 2. Signing is "KMS-native"
+The **Execution** phase (`SuperPaymasterClient.submitGaslessTransaction`) requires a signature, but it accepts a standard `viem` Client.
+- You can wrap your KMS API into a custom `viem` `Account`.
+- The SDK will call your KMS to sign the `UserOpHash`.
+
+**Code Sample: Remote Signer (KMS) Integration**
 ```typescript
 import { http, createPublicClient } from 'viem';
 import { toAccount } from 'viem/accounts';
 import { createEndUserClient, CORE_ADDRESSES } from '@aastar/sdk';
-import { sepolia } from 'viem/chains';
 
 // 1. Define your Remote Signer (KMS) Wrapper
 const kmsAccount = toAccount({
-    address: '0xYourUserAddress',
+    address: '0xYourUserAAAddress',
     async signMessage({ message }) {
         // Implement your KMS call here (e.g., AWS KMS, Fireblocks)
-        // message.raw is the hash to sign
+        // message.raw is the hash (UserOpHash) to sign
         const sig = await remoteKmsSign(message.raw); 
         return sig; 
-    },
-    async signTransaction(tx) { throw new Error('Not supported'); },
-    async signTypedData(td) { throw new Error('Not supported'); }
+    }
 });
 
 // 2. Initialize SDK Client with Remote Account
-const client = createEndUserClient({
-    transport: http('https://rpc.sepolia.org'),
-    chain: sepolia, // Important for EIP-155
-    account: kmsAccount, // Pass the custom account here
+const userClient = createEndUserClient({
+    transport: http(rpcUrl),
+    chain: sepolia,
+    account: kmsAccount, 
     addresses: {
         registry: CORE_ADDRESSES.registry,
-        entryPoint: CORE_ADDRESSES.entryPoint // v0.7 (SDK Standard)
+        entryPoint: CORE_ADDRESSES.entryPoint
     }
 });
 
 // 3. Execute Gasless Transaction
-// The SDK will automatically:
-// - Build the UserOp
-// - Calculate Gas Limits
-// - Call kmsAccount.signMessage() with the UserOpHash
-// - Submit to Bundler
-const result = await client.executeGasless({
+const result = await userClient.executeGasless({
     target: '0xTargetContract',
     data: '0xCallData',
-    operator: '0xPaymasterOperatorAddress' // Must be active
+    operator: '0xPaymasterOperatorAddress' 
 });
 
 console.log('UserOp Hash:', result.hash);
 ```
+
+### 3. Combination Summary
+| Phase | Requirement | Logic |
+| :--- | :--- | :--- |
+| **Preparation** | AA Address | **Keyless**: Admin sponsors your entry. |
+| **Verification** | AA Address | **Public**: Check roles/balance via SDK. |
+| **Execution** | KMS Signature | **Secure**: SDK requests signature from your KMS. |
+
+> [!TIP]
+> This separation allows developers to onboard "Air-Gapped" or "Enterprise" accounts into the SuperPaymaster ecosystem without ever touching their private keys.
 
 
 ---
@@ -398,6 +457,7 @@ Below is an analysis of a fulfilled Gasless Transaction (executed via `l4-test-j
 ### Key Takeaways
 1. **User Pays Zero ETH**: The `From` address (Bundler) paid the ETH gas. The Internal Transaction shows the Bundler getting reimbursed.
 2. **User Spent dPNTs**: The `ERC-20 Token Transfer` shows the user moving `dPNTs`. This likely covers the service fee (gas + premium) in a real "Pay with Token" model, though in this "Gasless" mode, the dPNTs might just be the payload or a separate fee payment.
+
 ### Frequently Asked Questions (Analysis)
 
 #### 1. Why is "From" the Bundler, not the User?
@@ -416,6 +476,7 @@ In Account Abstraction (ERC-4337), the User does not send the transaction direct
 #### 3. Why is there only one ERC-20 Transfer?
 - The transfer you see (`0.1 dPNTs` from Jason to Anni) is your **Actual execution payload**.
 - If the Paymaster used "Token Paymaster Mode 1" (pulling tokens from your wallet), you would see a second transfer for the fee.
+
 #### 4. "I can't see the Deducted Amount!" (How to Read Logs)
 You mentioned you couldn't find the deduction. It is in **Log Index 2** (on Etherscan Logs tab).
 - **Event Signature (Topic 0)**: `0x62544d7f...` (`PostOpProcessed`).
@@ -426,3 +487,177 @@ You mentioned you couldn't find the deduction. It is in **Log Index 2** (on Ethe
     3. **ProtocolRevenue**: Same as above (no markup in this test).
 
 **Summary**: Your deposit was deducted by **0.0433 dPNTs**.
+
+---
+
+# SuperPaymaster Gasless Test Guide (中文版)
+
+> 本指南供外部测试人员在 Sepolia 测试网上运行 Gasless（无感）UserOperation 时参考。
+
+---
+
+## 预配置测试账户
+
+测试账户通过 `l4-setup.ts` 动态配置，并存储在 `scripts/l4-state.json` 中。
+
+关键测试角色：
+- **Jason**: 使用 PaymasterV4, 代币: aPNTs
+- **Bob**: 使用 PaymasterV4, 代币: bPNTs  
+- **Anni**: 使用 SuperPaymaster, 代币: dPNTs
+- **Charlie**: 使用 PaymasterV4, 代币: cPNTs
+
+运行 `pnpm tsx scripts/l4-setup.ts` 可以查看当前的地址和状态。
+
+---
+
+## SDK 就绪检查与准备
+
+SDK 现在提供了“一键式”就绪检查，以避免常见的 Bundler 拒绝风险。
+
+### 1. 检查就绪状态 (诊断)
+检查 Paymaster 是否质押、价格是否设置以及用户是否有存款。
+
+```typescript
+import { PaymasterOperator } from '@aastar/paymaster';
+
+const report = await PaymasterOperator.checkGaslessReadiness(
+    publicClient,
+    entryPoint,
+    paymasterAddress,
+    userAA,
+    tokenAddress
+);
+
+if (!report.isReady) {
+    console.error("发现问题:", report.issues);
+}
+```
+
+### 2. 自动准备 (仅限运营商)
+自动修复缺失的质押、存款或价格。
+
+```typescript
+const steps = await PaymasterOperator.prepareGaslessEnvironment(
+    operatorWallet,
+    publicClient,
+    entryPoint,
+    paymasterAddress,
+    tokenAddress,
+    {
+        tokenPriceUSD: 100000000n, // $1.00 (8 位小数)
+        minStake: parseEther('0.05'),   
+        minDeposit: parseEther('0.1')   
+    }
+);
+console.log("采取的步骤:", steps);
+```
+
+---
+
+## 极简开发工作流
+
+### 1. 开发者：单行代码提交 (API 详解)
+
+参考脚本：[`examples/simple-gasless-demo.ts`](../examples/simple-gasless-demo.ts)
+
+#### 第一步：设置客户端
+```typescript
+const wallet = createWalletClient({ account, chain: sepolia, transport: http(rpcUrl) });
+const client = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+```
+
+#### 第二步：定义“用户意图” (CallData)
+```typescript
+const innerCall = PaymasterClient.encodeTokenTransfer(recipient, parseEther('0.01'));
+const callData = PaymasterClient.encodeExecution(tokenAddress, 0n, innerCall);
+```
+
+#### 第三步：✨ 核心提交接口 ✨
+`submitGaslessUserOperation` 函数处理了 AA 的所有复杂性：自动估算 Gas、动态获取网络 Gas 价格、应用效率保护机制。
+
+```typescript
+const userOpHash = await PaymasterClient.submitGaslessUserOperation(
+    client,            // 公共客户端
+    wallet,            // 钱包客户端 (用于签名)
+    aaAccountAddress,  // 用户的 AA 钱包地址
+    entryPointAddress, // 入口合约地址
+    paymasterAddress,  // 支付中心地址
+    tokenAddress,      // 用户支付的代币地址
+    bundlerUrl,        // Bundler RPC 地址
+    callData           // 业务操作数据
+);
+```
+
+---
+
+## 🛠️ 协同配合：水龙头 (Faucet) + KMS (硬件/云钱包)
+
+如果你使用的是 **KMS 后端 AA 账户**（私钥不出 AWS/Google/Fireblocks），你仍然可以充分利用 Faucet 和 Gasless SDK。
+
+### 1. 准备阶段是“无私钥”的
+**Faucet 设置阶段** (`SepoliaFaucetAPI.prepareTestAccount`) **不需要**用户的私钥。
+- 它只需要你的 **AA 地址**。
+- 管理员 (Admin) 使用他们的密钥为你授予角色并资助代币。
+
+**代码示例：水龙头准备 (一次性)**
+```typescript
+import { SepoliaFaucetAPI } from '@aastar/core';
+
+await SepoliaFaucetAPI.prepareTestAccount(
+    adminWallet, // 管理员钱包
+    publicClient,
+    {
+        targetAA: '0xYourUserAddress', 
+        token: CORE_ADDRESSES.aPNTs, 
+        registry: CORE_ADDRESSES.registry,
+        superPaymaster: CORE_ADDRESSES.superPaymaster,
+        ethAmount: parseEther('0.02')
+    }
+);
+```
+
+### 2. 签名阶段是“KMS 原生”的
+**执行阶段** (`SuperPaymasterClient.submitGaslessTransaction`) 需要签名逻辑，但它兼容任何 `viem` Signer。
+- 你可以将 KMS API 封装进自定义的 `viem` `Account` 即可。
+
+**代码示例：远程签名者 (KMS) 包装**
+```typescript
+const kmsAccount = toAccount({
+    address: '0xYourUserAAAddress',
+    async signMessage({ message }) {
+        const sig = await remoteKmsSign(message.raw); 
+        return sig; 
+    }
+});
+
+const userClient = createEndUserClient({
+    transport: http(rpcUrl),
+    chain: sepolia,
+    account: kmsAccount, 
+    ...
+});
+
+const hash = await userClient.executeGasless({
+    target: '0xTargetContract',
+    data: '0xCallData',
+    operator: '0xPaymasterOperatorAddress' 
+});
+```
+
+---
+
+## 自动化水龙头与验证脚本
+
+运行以下脚本可以创建一个全新的 AA 账户，资助它，并立即执行无感交易验证：
+
+```bash
+npx tsx scripts/test-faucet-and-gasless.ts
+```
+
+**脚本功能：**
+1. **身份**: 随机生成 EOA 密钥对。
+2. **部署**: 通过传统交易预部署 AA 账户（提升 Bundler 模拟成功率）。
+3. **Faucet**: 资助 0.02 ETH，使用 `safeMintForRole` 赞助 `ENDUSER` 角色（Admin 付质押金），并充值 aPNTs 燃料。
+4. **提交**: 使用 `SuperPaymasterClient` 发起 Gasless 交易。
+
+**结论**：该脚本成功运行，标志着 SDK 在处理 v0.7 账户的**赞助注册 + 燃料资助 + 无感交易**这一套业务逻辑上已经完全成熟。
