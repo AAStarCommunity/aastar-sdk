@@ -45,10 +45,10 @@ export async function runL1Tests(config: NetworkConfig) {
     
     totalTests++;
     try {
-        console.log('📝 Test: registryActions.hasRole()');
+        console.log('📝 Test: registryActions.registryHasRole()');
         const registry = registryActions(config.contracts.registry);
         const roleId = '0x0000000000000000000000000000000000000000000000000000000000000001' as Hex;
-        const hasRole = await registry(publicClient).hasRole({ user: account.address, roleId });
+        const hasRole = await registry(publicClient).registryHasRole({ user: account.address, roleId });
         console.log(`    Result: ${hasRole ? 'Has role' : 'No role'}`);
         console.log('    ✅ PASS\n');
         passedTests++;
@@ -58,9 +58,9 @@ export async function runL1Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
-        console.log('  Test: getAccountCommunity()');
+        console.log('  Test: registryGetAccountCommunity()');
         const registry = registryActions(config.contracts.registry);
-        const communityToken = await registry(publicClient).getAccountCommunity({ account: account.address });
+        const communityToken = await registry(publicClient).registryGetAccountCommunity({ account: account.address });
         console.log(`    Community Token: ${communityToken}`);
         console.log('    ✅ PASS\n');
         passedTests++;
@@ -70,10 +70,10 @@ export async function runL1Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
-        console.log('  Test: getRoleUserCount()');
+        console.log('  Test: registryRoleUserCount()');
         const registry = registryActions(config.contracts.registry);
         const roleId = '0x0000000000000000000000000000000000000000000000000000000000000002' as Hex;
-        const count = await registry(publicClient).getRoleUserCount({ roleId });
+        const count = await registry(publicClient).registryRoleUserCount({ roleId });
         console.log(`    Count: ${count.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
@@ -88,9 +88,9 @@ export async function runL1Tests(config: NetworkConfig) {
     
     totalTests++;
     try {
-        console.log('  Test: balanceOf()');
+        console.log('  Test: tokenBalanceOf()');
         const token = tokenActions(config.contracts.gToken);
-        const balance = await token(publicClient).balanceOf({ 
+        const balance = await token(publicClient).tokenBalanceOf({ 
             token: config.contracts.gToken,
             account: account.address 
         });
@@ -103,9 +103,9 @@ export async function runL1Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
-        console.log('  Test: tokenActions.balanceOf()');
+        console.log('  Test: tokenActions.tokenBalanceOf()');
         const token = tokenActions(config.contracts.gToken);
-        const balance = await token(publicClient).balanceOf({ 
+        const balance = await token(publicClient).tokenBalanceOf({ 
             token: config.contracts.gToken,
             account: account.address 
         });
@@ -118,9 +118,9 @@ export async function runL1Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
-        console.log('  Test: totalSupply()');
+        console.log('  Test: tokenTotalSupply()');
         const token = tokenActions(config.contracts.gToken);
-        const supply = await token(publicClient).totalSupply({ 
+        const supply = await token(publicClient).tokenTotalSupply({ 
             token: config.contracts.gToken 
         });
         console.log(`    Total Supply: ${supply.toString()}`);
@@ -174,9 +174,9 @@ export async function runL1Tests(config: NetworkConfig) {
     
     totalTests++;
     try {
-        console.log('  Test: balanceOf()');
+        console.log('  Test: sbtBalanceOf()');
         const sbt = sbtActions(config.contracts.sbt);
-        const sbtBalance = await sbt(publicClient).balanceOf({
+        const sbtBalance = await sbt(publicClient).sbtBalanceOf({
             owner: account.address
         });
         console.log(`    SBT Count: ${sbtBalance.toString()}`);
@@ -239,9 +239,9 @@ export async function runL1Tests(config: NetworkConfig) {
     } else {
         totalTests++;
         try {
-            console.log('  Test: getDeposit()');
+            console.log('  Test: superPaymasterGetDeposit()');
             const sp = superPaymasterActions(config.contracts.superPaymaster);
-            const deposit = await sp(publicClient).getDeposit({ operator: account.address });
+            const deposit = await sp(publicClient).superPaymasterGetDeposit({ operator: account.address });
             console.log(`    Deposit: ${deposit.toString()}`);
             console.log('    ✅ PASS\n');
             passedTests++;
@@ -251,9 +251,9 @@ export async function runL1Tests(config: NetworkConfig) {
 
         totalTests++;
         try {
-            console.log('  Test: operators()');
+            console.log('  Test: superPaymasterOperators()');
             const sp = superPaymasterActions(config.contracts.superPaymaster);
-            const isOp = await sp(publicClient).operators({ operator: account.address });
+            const isOp = await sp(publicClient).superPaymasterOperators({ operator: account.address });
             console.log(`    Is Operator: ${isOp}`);
             console.log('    ✅ PASS\n');
             passedTests++;
