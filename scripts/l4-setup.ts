@@ -177,12 +177,12 @@ Examples:
             await delayMs(TX_DELAY);
         }
 
-        const gtBal = await admin.balanceOf({ token: TEST_TOKEN_ADDRESSES.gToken, account: acc.address });
+        const gtBal = await admin.tokenBalanceOf({ token: TEST_TOKEN_ADDRESSES.gToken, account: acc.address });
 
         const reqGToken = op.name.includes('Anni') ? parseEther('200000') : parseEther('100000');
         if (gtBal < reqGToken) {
             console.log(`   🪙 Minting GToken...`);
-            const hash = await admin.mint({
+            const hash = await admin.tokenMint({
                 token: TEST_TOKEN_ADDRESSES.gToken,
                 to: acc.address,
                 amount: reqGToken,
@@ -258,7 +258,7 @@ Examples:
                 let success = false;
                 for (let i = 0; i < 3; i++) {
                     try {
-                        const mintHash = await admin.mint({
+                        const mintHash = await admin.tokenMint({
                             token: TEST_TOKEN_ADDRESSES.apnts,
                             to: acc.address,
                             amount: apntsRequired,
@@ -350,14 +350,14 @@ Examples:
                 });
 
             // Fund with some GTokens (idempotent check)
-            const gTokenBalance = await admin.balanceOf({ 
+            const gTokenBalance = await admin.tokenBalanceOf({ 
                 token: TEST_TOKEN_ADDRESSES.gToken, 
                 account: accountAddress 
             });
 
             if (gTokenBalance < parseEther('500')) {
                 console.log(`   ⛽ Minting 1000 GTokens for ${label}...`);
-                const hash = await admin.mint({
+                const hash = await admin.tokenMint({
                     token: TEST_TOKEN_ADDRESSES.gToken,
                     to: accountAddress,
                     amount: parseEther('1000'),
