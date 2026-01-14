@@ -19,33 +19,38 @@ mkdir -p "$DOCS_REPO/api"
 mkdir -p "$DOCS_REPO/guide"
 mkdir -p "$DOCS_REPO/examples"
 
-# 1. Sync Guide folder (Maintain same structure)
+# 1. Sync Guide folder (Clean first, then copy)
 echo -e "${YELLOW}📋 Syncing Guide folder...${NC}"
-# Sync EN Guide (Root)
+# Clean and sync EN Guide (Root)
 if [ -d "$SDK_REPO/docs/guide" ]; then
+    rm -rf "$DOCS_REPO/guide"/*
     cp -r "$SDK_REPO/docs/guide/"* "$DOCS_REPO/guide/" 2>/dev/null || true
 fi
-# Sync ZH Guide
+# Clean and sync ZH Guide
 if [ -d "$SDK_REPO/docs/zh/guide" ]; then
     mkdir -p "$DOCS_REPO/zh/guide"
+    rm -rf "$DOCS_REPO/zh/guide"/*
     cp -r "$SDK_REPO/docs/zh/guide/"* "$DOCS_REPO/zh/guide/" 2>/dev/null || true
 fi
 
-# 2. Sync API folder (Maintain same structure)
+# 2. Sync API folder (Clean first, then copy)
 echo -e "${YELLOW}📖 Syncing API folder...${NC}"
 if [ -d "$SDK_REPO/docs/api" ]; then
+    rm -rf "$DOCS_REPO/api"/*
     cp -r "$SDK_REPO/docs/api/"* "$DOCS_REPO/api/" 2>/dev/null || true
 fi
 
-# 3. Sync Examples folder (Maintain same structure)
+# 3. Sync Examples folder (Clean first, then copy)
 echo -e "${YELLOW}💡 Syncing Examples folder...${NC}"
-# Sync EN Examples
+# Clean and sync EN Examples
 if [ -d "$SDK_REPO/docs/examples" ]; then
+    rm -rf "$DOCS_REPO/examples"/*
     cp -r "$SDK_REPO/docs/examples/"* "$DOCS_REPO/examples/" 2>/dev/null || true
 fi
-# Sync ZH Examples
+# Clean and sync ZH Examples
 if [ -d "$SDK_REPO/docs/zh/examples" ]; then
     mkdir -p "$DOCS_REPO/zh/examples"
+    rm -rf "$DOCS_REPO/zh/examples"/*
     cp -r "$SDK_REPO/docs/zh/examples/"* "$DOCS_REPO/zh/examples/" 2>/dev/null || true
 fi
 
