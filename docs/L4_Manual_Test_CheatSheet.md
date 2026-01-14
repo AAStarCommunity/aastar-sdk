@@ -92,7 +92,7 @@ cat scripts/l4-state.json
 无需手动部署 Factory，使用 `UserClient` 即可。
 
 ```typescript
-import { UserClient } from '@aastar/enduser';
+import { createEndUserClient } from '@aastar/sdk';
 import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 
@@ -102,15 +102,15 @@ const account = privateKeyToAccount(pKey);
 
 // 2. 初始化 Client (自动关联 EntryPoint v0.7)
 // 注意：configs 应从 network config 加载，不应 hardcode
-const client = new UserClient({
-    client: createWalletClient({ 
+const client = createEndUserClient({
+    walletClient: createWalletClient({ 
         account, 
         chain: chainConfig, 
         transport: http(rpcUrl) 
     }),
     entryPointAddress: CONFIG.entryPoint,
     registryAddress: CONFIG.registry
-    // ... 其他地址
+    // ... 其他地址由内部分析或可选
 });
 console.log(`New AA Address: ${client.accountAddress}`);
 ```

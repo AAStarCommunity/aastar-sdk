@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
+import { PaymasterClient, PaymasterOperator } from '@aastar/sdk';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
 

@@ -3,25 +3,18 @@ import { sepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from 'dotenv';
 import { 
-    CommunityClient, 
-    UserClient, 
-    PaymasterOperatorClient, 
-    ProtocolClient,
-} from '@aastar/sdk'; // Should export from main package eventually, but now maybe from individual packages?
-// Currently monorepo packages are: @aastar/core, @aastar/enduser, @aastar/operator.
-// We need to import from them directly or ensure @aastar/sdk aggregates them.
-// Let's assume we import from packages directly for now to test internal linking.
+    createCommunityClient, 
+    // Protocol Client creation might be direct or via generic client with actions
+} from '@aastar/sdk'; 
 
+// Import constants from core or define them
 import { 
     REGISTRY_ADDRESS, 
+    REGISTRY_ADDRESS, 
     SUPER_PAYMASTER_ADDRESS, 
-    MYSBT_ADDRESS, 
+    SBT_ADDRESS, 
     GTOKEN_ADDRESS 
 } from '@aastar/core';
-
-// Correct imports based on package structure
-import { CommunityClient as CommunityClientImpl, UserClient as UserClientImpl } from '@aastar/enduser';
-import { PaymasterOperatorClient as OperatorClientImpl, ProtocolClient as ProtocolClientImpl } from '@aastar/operator';
 
 config({ path: '.env.sepolia' });
 
@@ -44,45 +37,41 @@ async function main() {
     // 1. Community Client Demo
     // ==========================================
     console.log('1️⃣ Community Client');
-    const communityClient = new CommunityClientImpl({
-        client: walletClient,
+    const communityClient = createCommunityClient({
+        walletClient: walletClient, // Note: factory uses 'walletClient' prop
         publicClient: publicClient,
         registryAddress: REGISTRY_ADDRESS,
-        sbtAddress: MYSBT_ADDRESS,
-        // factoryAddress: ... (Optional for this demo if we don't deploy token)
+        sbtAddress: SBT_ADDRESS,
     });
 
     try {
-        const txHash = await communityClient.registerAsCommunity();
+        const txHash = await communityClient.registerAsCommunity("TestCommunity");
         console.log(`  ✓ Register as Community TX: ${txHash}`);
-        // Note: For real demo we'd wait for receipt, but here we just show API works
     } catch (e: any) {
         console.log(`  ⚠️  Register checks: ${e.message.split('\n')[0]}`);
     }
 
     // ==========================================
-    // 2. User Client Demo (using same account as user for simplicity)
+    // 2. User Client Demo
     // ==========================================
     console.log('\n2️⃣ User Client');
-    const userClient = new UserClientImpl({
-        client: walletClient,
+    const userClient = createUserClient({
+        walletClient: walletClient,
         publicClient: publicClient,
-        accountAddress: account.address, // Acting as the AA account for read ops (conceptually) or owner
-        sbtAddress: MYSBT_ADDRESS,
+        accountAddress: account.address, 
+        sbtAddress: SBT_ADDRESS,
         registryAddress: REGISTRY_ADDRESS
     });
 
     try {
-        const sbtBalance = await userClient.getSBTBalance();
+        const sbtBalance = await userClient.sbtBalanceOf(account.address);
         console.log(`  ✓ SBT Balance: ${sbtBalance}`);
         
-        const gtokenBalance = await userClient.getTokenBalance(GTOKEN_ADDRESS);
+        const gtokenBalance = await userClient.tokenBalanceOf({ token: GTOKEN_ADDRESS, account: account.address });
         console.log(`  ✓ GToken Balance: ${gtokenBalance}`);
 
-        // Demo Transfer (Gas Estimate implicitly via L1 action or execution)
-        // Here we just print the code intent
         console.log(`  ℹ️  Transfer Intent: 0.01 GT to Random Address`);
-        // await userClient.transferToken(GTOKEN_ADDRESS, '0x...', parseEther('0.01'));
+        // await userClient.transferToken({ token: GTOKEN_ADDRESS, to: '0x...', amount: parseEther('0.01') });
     } catch (e: any) {
         console.log(`  ❌ User Ops Failed: ${e.message}`);
     }
@@ -91,19 +80,18 @@ async function main() {
     // 3. Operator Client Demo
     // ==========================================
     console.log('\n3️⃣ Paymaster Operator Client');
-    const operatorClient = new OperatorClientImpl({
-        client: walletClient,
+    const operatorClient = createOperatorClient({
+        walletClient: walletClient,
         publicClient: publicClient,
         superPaymasterAddress: SUPER_PAYMASTER_ADDRESS,
         registryAddress: REGISTRY_ADDRESS
     });
 
     try {
-        const depositInfo = await operatorClient.getDepositDetails();
-        console.log(`  ✓ Paymaster Deposit: ${depositInfo.deposit}`);
+        const depositInfo = await operatorClient.superPaymasterGetDeposit(operatorClient.account!.address);
+        console.log(`  ✓ Paymaster Deposit: ${depositInfo}`);
         
-        // Deposit Demo
-        // await operatorClient.deposit(parseEther('0.001'));
+        // await operatorClient.superPaymasterDeposit(parseEther('0.001'));
     } catch (e: any) {
         console.log(`  ❌ Operator Ops Failed: ${e.message}`);
     }
@@ -111,23 +99,12 @@ async function main() {
     // ==========================================
     // 4. Protocol Client Demo
     // ==========================================
-    console.log('\n4️⃣ Protocol Client (Infra)');
-    // Assuming DVT address is known or we use a placeholder for compilation check
-    const DVT_PLACEHOLDER = '0x0000000000000000000000000000000000000000'; 
-    const protocolClient = new ProtocolClientImpl({
-        client: walletClient,
-        publicClient: publicClient,
-        dvtValidatorAddress: DVT_PLACEHOLDER, 
-        registryAddress: REGISTRY_ADDRESS
-    });
-
-    try {
-        console.log(`  ℹ️  Initialized Protocol Client for DVT: ${DVT_PLACEHOLDER}`);
-        // Validating API existence
-        // await protocolClient.createProposal(...);
-    } catch (e: any) {
-        console.log(`  ❌ Protocol Ops Failed: ${e.message}`);
-    }
+    // Note: ProtocolClient might not have a dedicated factory yet, or logic is via AdminClient?
+    // Using AdminClient for now as it covers protocol level actions
+    console.log('\n4️⃣ Protocol Client (via AdminClient)');
+    
+    // const adminClient = createAdminClient({ ... });
+    // console.log("  ℹ️ Protocol/Admin actions would go here");
 
     console.log('\n✅ L2 Demo Execution Finished!');
 }

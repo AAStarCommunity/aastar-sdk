@@ -138,6 +138,18 @@ pnpm run test:full_anvil
 
 ---
 
+### Node.js Usage / Node.js 使用
+For server-side or CLI tools needing direct private key management (e.g., `KeyManager`), use the Node-specific export:
+
+```typescript
+import { KeyManager } from '@aastar/sdk/node';
+
+// Generate or load keys securely
+const key = KeyManager.loadFromEnv('PRIVATE_KEY');
+```
+
+---
+
 ## Development Workflow / 开发者工作流
 
 A step-by-step guide for contributors from contract modification to Sepolia deployment.

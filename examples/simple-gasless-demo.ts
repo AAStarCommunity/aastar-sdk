@@ -2,7 +2,7 @@ import { createPublicClient, createWalletClient, http, encodeFunctionData, parse
 import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterClient } from '../packages/paymaster/src/V4/index.js';
+import { PaymasterClient } from '@aastar/sdk';
 import * as dotenv from 'dotenv';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 
