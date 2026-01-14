@@ -31,7 +31,11 @@ export type XPNTsFactoryActions = {
     // Ownership
     owner: () => Promise<Address>;
     transferXPNTsFactoryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>; // Alias
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    
+    // Aliases
+    deployxPNTsToken: (args: { name: string, symbol: string, community: Address, account?: Account | Address }) => Promise<Hash>; // Alias
     
     // Version
     version: () => Promise<string>;
@@ -62,6 +66,7 @@ export type PaymasterFactoryActions = {
     // Ownership
     owner: () => Promise<Address>;
     transferPaymasterFactoryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>; // Alias
     
     // Version
     defaultVersion: () => Promise<string>;
@@ -263,6 +268,14 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         });
     },
 
+    async transferOwnership(args) {
+        return this.transferXPNTsFactoryOwnership(args);
+    },
+
+    async deployxPNTsToken(args) {
+        return this.createToken(args);
+    },
+
     async renounceOwnership({ account }) {
         return (client as any).writeContract({
             address,
@@ -415,6 +428,10 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async transferOwnership(args) {
+        return this.transferPaymasterFactoryOwnership(args);
     },
 
     async defaultVersion() {

@@ -94,6 +94,21 @@ export type SuperPaymasterActions = {
     owner: () => Promise<Address>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
+    // Aliases for ABI Compliance
+    addStake: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    depositFor: (args: { operator: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    unlockStake: (args: { account?: Account | Address }) => Promise<Hash>;
+    withdraw: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    
+    // Missing Constants & Views
+    MAX_PROTOCOL_FEE: () => Promise<bigint>;
+    VALIDATION_BUFFER_BPS: () => Promise<bigint>;
+    priceStalenessThreshold: () => Promise<bigint>;
+    sbtHolders: (args: { user: Address }) => Promise<boolean>;
+    userOpState: (args: { userOpHash: Hex }) => Promise<any>;
+    updateSBTStatus: (args: { user: Address, hasSBT: boolean, account?: Account | Address }) => Promise<Hash>;
+    
     // Version
     version: () => Promise<string>;
 };
@@ -737,7 +752,6 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         });
     },
 
-    // Version
     async version() {
         return (client as PublicClient).readContract({
             address,
@@ -745,5 +759,68 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             functionName: 'version',
             args: []
         }) as Promise<string>;
+    },
+
+    // Aliases including implementation
+    async addStake(args) { return this.addSuperStake(args); },
+    async depositFor(args) { return this.depositForOperator(args); },
+    async transferOwnership(args) { return this.transferSuperPaymasterOwnership(args); },
+    async unlockStake(args) { return this.unlockSuperStake(args); },
+    async withdraw(args) { return this.withdrawAPNTs(args); },
+
+    async MAX_PROTOCOL_FEE() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'MAX_PROTOCOL_FEE',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async VALIDATION_BUFFER_BPS() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'VALIDATION_BUFFER_BPS',
+            args: []
+        }) as Promise<bigint>;
+    },
+
+    async priceStalenessThreshold() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'priceStalenessThreshold', // Assuming ABI has this exact name
+            args: []
+        }) as Promise<bigint>;
+    },
+    
+    async sbtHolders({ user }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'sbtHolders',
+            args: [user]
+        }) as Promise<boolean>;
+    },
+
+    async userOpState({ userOpHash }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'userOpState',
+            args: [userOpHash]
+        });
+    },
+
+    async updateSBTStatus({ user, hasSBT, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: SuperPaymasterABI,
+            functionName: 'updateSBTStatus',
+            args: [user, hasSBT],
+            account: account as any,
+            chain: (client as any).chain
+        });
     }
 });

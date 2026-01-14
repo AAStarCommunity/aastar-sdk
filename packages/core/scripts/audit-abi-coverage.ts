@@ -42,18 +42,24 @@ function getAbiFunctions(abiJsonPath: string): string[] {
 function getImplementedActions(actionPath: string): string[] {
     try {
         const content = fs.readFileSync(actionPath, 'utf8');
-        // Simple regex to find method definitions like "async methodName(" or "methodName: ("
-        // This is a heuristic but covers most of our SDK action implementations
         const methods: string[] = [];
-        const lines = content.split('\n');
         
-        for (const line of lines) {
-            // Match "async method(" or "method: (" or "method("
-            const match = line.match(/^\s*(?:async\s+)?([a-zA-Z0-9_]+)\s*[:(]/);
-            if (match && !['if', 'for', 'while', 'switch', 'catch', 'return', 'async', 'export', 'const', 'let', 'type', 'interface'].includes(match[1])) {
-                methods.push(match[1]);
+        // Regex to find:
+        // 1. async methodName(
+        // 2. methodName: (
+        // 3. methodName(
+        // 4. const methodName = 
+        // 5. function methodName(
+        const regex = /(?:async\s+|function\s+|const\s+)?([a-zA-Z0-9_]+)\s*[:=(]/g;
+        
+        let match;
+        while ((match = regex.exec(content)) !== null) {
+            const name = match[1];
+            if (!['if', 'for', 'while', 'switch', 'catch', 'return', 'async', 'export', 'const', 'let', 'type', 'interface', 'function', 'await'].includes(name)) {
+                methods.push(name);
             }
         }
+        
         return [...new Set(methods)];
     } catch (e) {
         console.error(`Error reading Action ${actionPath}:`, e);
@@ -119,6 +125,10 @@ async function run() {
         const isChanged = prevHashes[abiFile] !== hash;
         const abiFuncs = getAbiFunctions(abiPath);
         const implementedActions = getImplementedActions(actionPath);
+
+        if (actionFileName === 'paymasterV4.ts') {
+             console.log(`[DEBUG] paymasterV4.ts found actions:`, implementedActions);
+        }
 
         const missing = abiFuncs.filter(f => !implementedActions.some(a => a.toLowerCase() === f.toLowerCase()));
         

@@ -49,7 +49,25 @@ export type PaymasterV4Actions = {
     // Ownership
     owner: () => Promise<Address>;
     transferPaymasterV4Ownership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>; // Alias
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    
+    // View Functions & Constants
+    registry: () => Promise<Address>;
+    treasury: () => Promise<Address>;
+    paused: () => Promise<boolean>;
+    maxGasCostCap: () => Promise<bigint>;
+    MAX_ETH_USD_PRICE: () => Promise<bigint>;
+    MAX_GAS_TOKENS: () => Promise<bigint>;
+    MAX_SBTS: () => Promise<bigint>;
+    MAX_SERVICE_FEE: () => Promise<bigint>;
+    MIN_ETH_USD_PRICE: () => Promise<bigint>;
+    priceStalenessThreshold: () => Promise<bigint>;
+    
+    // Aliases
+    addDeposit: (args: { account?: Account | Address }) => Promise<Hash>; // Alias for deposit
+    unlockStake: (args: { account?: Account | Address }) => Promise<Hash>; // Alias for unlockPaymasterStake
+    
     version: () => Promise<string>;
 };
 
@@ -298,6 +316,10 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
         });
     },
 
+    async transferOwnership(args) {
+        return this.transferPaymasterV4Ownership(args);
+    },
+
     async renounceOwnership({ account }) {
         return (client as any).writeContract({
             address,
@@ -307,6 +329,46 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    // View Functions & Constants
+    async registry() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'registry', args: [] }) as Promise<Address>;
+    },
+    async treasury() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'treasury', args: [] }) as Promise<Address>;
+    },
+    async paused() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'paused', args: [] }) as Promise<boolean>;
+    },
+    async maxGasCostCap() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'maxGasCostCap', args: [] }) as Promise<bigint>;
+    },
+    async MAX_ETH_USD_PRICE() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'MAX_ETH_USD_PRICE', args: [] }) as Promise<bigint>;
+    },
+    async MAX_GAS_TOKENS() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'MAX_GAS_TOKENS', args: [] }) as Promise<bigint>;
+    },
+    async MAX_SBTS() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'MAX_SBTS', args: [] }) as Promise<bigint>;
+    },
+    async MAX_SERVICE_FEE() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'MAX_SERVICE_FEE', args: [] }) as Promise<bigint>;
+    },
+    async MIN_ETH_USD_PRICE() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'MIN_ETH_USD_PRICE', args: [] }) as Promise<bigint>;
+    },
+    async priceStalenessThreshold() {
+        return (client as PublicClient).readContract({ address, abi: PaymasterV4ABI, functionName: 'priceStalenessThreshold', args: [] }) as Promise<bigint>;
+    },
+
+    // Aliases
+    async addDeposit(args) {
+        return this.deposit(args);
+    },
+    async unlockStake(args) {
+        return this.unlockPaymasterStake(args);
     },
 
     async version() {

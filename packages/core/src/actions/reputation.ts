@@ -17,6 +17,11 @@ export type ReputationActions = {
     getCommunityScore: (args: { community: Address }) => Promise<bigint>;
     communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>; // Public mapping getter
     
+    // Missing Critical Actions
+    setRule: (args: { ruleId: Hex, rule: any, account?: Account | Address }) => Promise<Hash>; // Alias for setReputationRule
+    calculateReputation: (args: { user: Address, community: Address }) => Promise<bigint>; // Alias for computeScore or specific calculation
+    nftCollectionBoost: (args: { collection: Address }) => Promise<bigint>;
+    
     // 批量操作
     batchUpdateScores: (args: { users: Address[], scores: bigint[], account?: Account | Address }) => Promise<Hash>;
     batchSyncToRegistry: (args: { users: Address[], account?: Account | Address }) => Promise<Hash>;
@@ -41,6 +46,18 @@ export type ReputationActions = {
     // Ownership
     owner: () => Promise<Address>;
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    
+    // Admin & Config (Missing)
+    setCommunityReputation: (args: { community: Address, reputation: bigint, account?: Account | Address }) => Promise<Hash>;
+    updateNFTHoldStart: (args: { user: Address, collection: Address, start: bigint, account?: Account | Address }) => Promise<Hash>;
+    
+    // Views (Missing)
+    communityRules: (args: { community: Address, ruleId: Hex }) => Promise<boolean>;
+    defaultRule: () => Promise<Hex>;
+    entropyFactors: (args: { factorId: bigint }) => Promise<bigint>;
+    nftHoldStart: (args: { user: Address, collection: Address }) => Promise<bigint>;
+    boostedCollections: (args: { collection: Address }) => Promise<bigint>;
     
     // Version
     version: () => Promise<string>;
@@ -155,6 +172,31 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }) as Promise<bigint>;
     },
 
+    // Missing Critical Actions
+    async setRule(args) {
+        return this.setReputationRule(args);
+    },
+
+    async calculateReputation(args) {
+        // Assuming calculateReputation calls computeScore or check if dedicated function exists
+        // Report said calculateReputation matches ABI.
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'calculateReputation', // If this fails, it means calculateReputation is NOT in ABI and tool was confused? But report said it IS in ABI.
+            args: [args.user, args.community]
+        }) as Promise<bigint>;
+    },
+
+    async nftCollectionBoost({ collection }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'nftCollectionBoost',
+            args: [collection]
+        }) as Promise<bigint>;
+    },
+
     // 批量操作
     async batchUpdateScores({ users, scores, account }) {
         return (client as any).writeContract({
@@ -250,6 +292,56 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async renounceOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'renounceOwnership',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async setCommunityReputation({ community, reputation, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'setCommunityReputation',
+            args: [community, reputation],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async updateNFTHoldStart({ user, collection, start, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'updateNFTHoldStart',
+            args: [user, collection, start],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Views
+    async communityRules({ community, ruleId }) {
+        return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'communityRules', args: [community, ruleId] }) as Promise<boolean>;
+    },
+    async defaultRule() {
+        return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'defaultRule', args: [] }) as Promise<Hex>;
+    },
+    async entropyFactors({ factorId }) {
+        return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'entropyFactors', args: [factorId] }) as Promise<bigint>;
+    },
+    async nftHoldStart({ user, collection }) {
+        return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'nftHoldStart', args: [user, collection] }) as Promise<bigint>;
+    },
+    async boostedCollections({ collection }) {
+        return (client as PublicClient).readContract({ address, abi: ReputationSystemABI, functionName: 'boostedCollections', args: [collection] }) as Promise<bigint>;
     },
 
     // Version

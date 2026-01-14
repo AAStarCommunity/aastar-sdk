@@ -40,6 +40,10 @@ export type TokenActions = {
     // Constants (aPNTs/xPNTs)
     SUPERPAYMASTER_ADDRESS: (args: { token: Address }) => Promise<Address>;
     FACTORY: (args: { token: Address }) => Promise<Address>;
+    
+    // Aliases & Missing
+    transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferCommunityOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
 };
 
 function getTokenABI(token: Address): any {
@@ -347,5 +351,20 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
             functionName: 'FACTORY',
             args: []
         }) as Promise<Address>;
+    },
+
+    async transferOwnership(args) {
+        return this.transferTokenOwnership(args);
+    },
+
+    async transferCommunityOwnership({ token, newOwner, account }) {
+        return (client as any).writeContract({
+            address: token,
+            abi: xPNTsTokenABI,
+            functionName: 'transferCommunityOwnership',
+            args: [newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
     }
 });

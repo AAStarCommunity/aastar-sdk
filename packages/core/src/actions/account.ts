@@ -9,6 +9,7 @@ export type AccountActions = {
     entryPoint: () => Promise<Address>;
     addDeposit: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawDepositTo: (args: { withdrawAddress: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    getDeposit: () => Promise<bigint>;
     owner: () => Promise<Address>;
 };
 
@@ -86,6 +87,15 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async getDeposit() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: SimpleAccountABI,
+            functionName: 'getDeposit',
+            args: []
+        }) as Promise<bigint>;
     },
 
     async owner() {

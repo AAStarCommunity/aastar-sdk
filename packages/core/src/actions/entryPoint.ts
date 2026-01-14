@@ -10,6 +10,13 @@ export type EntryPointActions = {
     depositTo: (args: { account: Address, amount: bigint, txAccount?: Account | Address }) => Promise<Hash>;
     getNonce: (args: { sender: Address, key: bigint }) => Promise<bigint>;
     getDepositInfo: (args: { account: Address }) => Promise<{ deposit: bigint, staked: boolean, stake: bigint, unstakeDelaySec: number, withdrawTime: number }>;
+    
+    // Stake Management
+    addStake: (args: { unstakeDelaySec: number, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    unlockStake: (args: { account?: Account | Address }) => Promise<Hash>;
+    withdrawStake: (args: { withdrawAddress: Address, account?: Account | Address }) => Promise<Hash>;
+    withdrawTo: (args: { withdrawAddress: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    
     version: EntryPointVersion;
 };
 

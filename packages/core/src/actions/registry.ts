@@ -48,6 +48,7 @@ export type RegistryActions = {
     
     // Admin
     transferRegistryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>; // Alias
     owner: () => Promise<Address>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
@@ -422,6 +423,10 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             account: account as any,
             chain: (client as any).chain
         });
+    },
+
+    async transferOwnership({ newOwner, account }) {
+        return this.transferRegistryOwnership({ newOwner, account });
     },
 
     async owner() {
