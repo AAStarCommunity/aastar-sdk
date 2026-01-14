@@ -1,7 +1,9 @@
 /**
  * Role constants and utilities for AAstar SDK
- * @dev All role hashes and configurations match exactly with Registry.sol v3.0.0
- * @source /contracts/src/core/Registry.sol
+ * @remarks
+ * All role hashes and configurations match exactly with Registry.sol v3.0.0
+ * 
+ * **Source**: /contracts/src/core/Registry.sol
  */
 import { keccak256, toHex, type Hash } from 'viem';
 
@@ -9,88 +11,96 @@ import { keccak256, toHex, type Hash } from 'viem';
 
 /**
  * Default Admin Role (OpenZeppelin AccessControl)
- * @description Highest privilege, can grant/revoke all roles
- * @permission Protocol governance only
- * @source OpenZeppelin AccessControl DEFAULT_ADMIN_ROLE
+ * @remarks
+ * - **Description**: Highest privilege, can grant/revoke all roles
+ * - **Permission**: Protocol governance only
+ * - **Source**: OpenZeppelin AccessControl DEFAULT_ADMIN_ROLE
  */
 export const DEFAULT_ADMIN_ROLE: Hash = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 /**
  * Community Role
- * @description Community administrator, can issue xPNTs, configure SBT rules
- * @permission Community-level governance
- * @requirement minStake: 30 GT, entryBurn: 3 GT (line 99)
- * @exitFee 5% (500 basis points), min 1 GT
- * @lockDuration 30 days
- * @source Registry.sol line 32: ROLE_COMMUNITY = keccak256("COMMUNITY")
+ * @remarks
+ * - **Description**: Community administrator, can issue xPNTs, configure SBT rules
+ * - **Permission**: Community-level governance
+ * - **Requirement**: minStake: 30 GT, entryBurn: 3 GT (line 99)
+ * - **Exit Fee**: 5% (500 basis points), min 1 GT
+ * - **Lock Duration**: 30 days
+ * - **Source**: Registry.sol line 32: ROLE_COMMUNITY = keccak256("COMMUNITY")
  */
 export const ROLE_COMMUNITY: Hash = keccak256(toHex('COMMUNITY'));
 
 /**
  * End User Role
- * @description Community member, can participate and use gasless transactions
- * @permission Basic user level
- * @requirement minStake: 0.3 GT, entryBurn: 0.05 GT (line 100)
- * @additionalRequirement Must hold MySBT from community
- * @exitFee 10% (1000 basis points), min 0.05 GT
- * @lockDuration 7 days
- * @source Registry.sol line 33: ROLE_ENDUSER = keccak256("ENDUSER")
+ * @remarks
+ * - **Description**: Community member, can participate and use gasless transactions
+ * - **Permission**: Basic user level
+ * - **Requirement**: minStake: 0.3 GT, entryBurn: 0.05 GT (line 100)
+ * - **Additional Requirement**: Must hold MySBT from community
+ * - **Exit Fee**: 10% (1000 basis points), min 0.05 GT
+ * - **Lock Duration**: 7 days
+ * - **Source**: Registry.sol line 33: ROLE_ENDUSER = keccak256("ENDUSER")
  */
 export const ROLE_ENDUSER: Hash = keccak256(toHex('ENDUSER'));
 
 /**
  * Paymaster AOA Role (Account Ownership Authentication)
- * @description Basic Paymaster node operator with account-based auth
- * @permission Infrastructure operator
- * @requirement minStake: 30 GT, entryBurn: 3 GT (line 92)
- * @exitFee 10% (1000 basis points), min 1 GT
- * @lockDuration 30 days
- * @source Registry.sol line 34: ROLE_PAYMASTER_AOA = keccak256("PAYMASTER_AOA")
+ * @remarks
+ * - **Description**: Basic Paymaster node operator with account-based auth
+ * - **Permission**: Infrastructure operator
+ * - **Requirement**: minStake: 30 GT, entryBurn: 3 GT (line 92)
+ * - **Exit Fee**: 10% (1000 basis points), min 1 GT
+ * - **Lock Duration**: 30 days
+ * - **Source**: Registry.sol line 34: ROLE_PAYMASTER_AOA = keccak256("PAYMASTER_AOA")
  */
 export const ROLE_PAYMASTER_AOA: Hash = keccak256(toHex('PAYMASTER_AOA'));
 
 /**
  * Paymaster Super Role
- * @description Advanced Paymaster operator, can use SuperPaymaster with aPNTs collateral
- * @permission Infrastructure operator (higher tier)
- * @requirement minStake: 50 GT, entryBurn: 5 GT (line 93)
- * @additionalRequirement aPNTs collateral in SuperPaymaster contract
- * @exitFee 10% (1000 basis points), min 2 GT
- * @lockDuration 30 days
- * @source Registry.sol line 35: ROLE_PAYMASTER_SUPER = keccak256("PAYMASTER_SUPER")
+ * @remarks
+ * - **Description**: Advanced Paymaster operator, can use SuperPaymaster with aPNTs collateral
+ * - **Permission**: Infrastructure operator (higher tier)
+ * - **Requirement**: minStake: 50 GT, entryBurn: 5 GT (line 93)
+ * - **Additional Requirement**: aPNTs collateral in SuperPaymaster contract
+ * - **Exit Fee**: 10% (1000 basis points), min 2 GT
+ * - **Lock Duration**: 30 days
+ * - **Source**: Registry.sol line 35: ROLE_PAYMASTER_SUPER = keccak256("PAYMASTER_SUPER")
  */
 export const ROLE_PAYMASTER_SUPER: Hash = keccak256(toHex('PAYMASTER_SUPER'));
 
 /**
  * DVT Role (Distributed Validator Technology)
- * @description DVT node operator for consensus validation
- * @permission Infrastructure operator
- * @requirement minStake: 30 GT, entryBurn: 3 GT (line 94)
- * @exitFee 10% (1000 basis points), min 1 GT
- * @lockDuration 30 days
- * @source Registry.sol line 36: ROLE_DVT = keccak256("DVT")
+ * @remarks
+ * - **Description**: DVT node operator for consensus validation
+ * - **Permission**: Infrastructure operator
+ * - **Requirement**: minStake: 30 GT, entryBurn: 3 GT (line 94)
+ * - **Exit Fee**: 10% (1000 basis points), min 1 GT
+ * - **Lock Duration**: 30 days
+ * - **Source**: Registry.sol line 36: ROLE_DVT = keccak256("DVT")
  */
 export const ROLE_DVT: Hash = keccak256(toHex('DVT'));
 
 /**
  * ANODE Role (Anonymous Node)
- * @description Anonymous infrastructure node operator
- * @permission Infrastructure operator
- * @requirement minStake: 20 GT, entryBurn: 2 GT (line 95)
- * @exitFee 10% (1000 basis points), min 1 GT
- * @lockDuration 30 days
- * @source Registry.sol line 37: ROLE_ANODE = keccak256("ANODE")
+ * @remarks
+ * - **Description**: Anonymous infrastructure node operator
+ * - **Permission**: Infrastructure operator
+ * - **Requirement**: minStake: 20 GT, entryBurn: 2 GT (line 95)
+ * - **Exit Fee**: 10% (1000 basis points), min 1 GT
+ * - **Lock Duration**: 30 days
+ * - **Source**: Registry.sol line 37: ROLE_ANODE = keccak256("ANODE")
  */
 export const ROLE_ANODE: Hash = keccak256(toHex('ANODE'));
 
 /**
  * KMS Role (Key Management Service)
- * @description KMS operator for secure key storage and management
- * @permission Infrastructure operator (highest stake)
- * @requirement minStake: 100 GT, entryBurn: 10 GT (line 98)
- * @exitFee 10% (1000 basis points), min 5 GT
- * @lockDuration 30 days
- * @source Registry.sol line 38: ROLE_KMS = keccak256("KMS")
+ * @remarks
+ * - **Description**: KMS operator for secure key storage and management
+ * - **Permission**: Infrastructure operator (highest stake)
+ * - **Requirement**: minStake: 100 GT, entryBurn: 10 GT (line 98)
+ * - **Exit Fee**: 10% (1000 basis points), min 5 GT
+ * - **Lock Duration**: 30 days
+ * - **Source**: Registry.sol line 38: ROLE_KMS = keccak256("KMS")
  */
 export const ROLE_KMS: Hash = keccak256(toHex('KMS'));
 
@@ -167,7 +177,8 @@ export const ROLE_PERMISSION_LEVELS: Record<string, RolePermissionLevel> = {
 
 /**
  * Exact stake requirements from Registry.sol constructor (lines 92-100)
- * @warning These are initial values, always query contract for current configuration
+ * @remarks
+ * **Warning**: These are initial values, always query contract for current configuration
  */
 export const INITIAL_ROLE_STAKES = {
     [ROLE_PAYMASTER_AOA]: {

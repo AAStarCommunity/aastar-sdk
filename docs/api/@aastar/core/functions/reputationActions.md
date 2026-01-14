@@ -1,6 +1,6 @@
 > **reputationActions**(`address`): (`client`) => [`ReputationActions`](../type-aliases/ReputationActions.md)
 
-Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/reputation.ts#L16)
+Defined in: [packages/core/src/actions/reputation.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/actions/reputation.ts#L69)
 
 ## Parameters
 

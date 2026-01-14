@@ -20,7 +20,8 @@ const MYSBT_ABI = parseAbi([
 
 /**
  * Requirement Checker Utility
- * @description Centralized validation for all role requirements
+ * 
+ * Centralized validation for all role requirements
  */
 export class RequirementChecker {
     constructor(

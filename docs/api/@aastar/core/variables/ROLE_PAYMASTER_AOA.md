@@ -1,3 +1,14 @@
-> `const` **ROLE\_PAYMASTER\_AOA**: `"0xf86d13979a91272f2c54c4147e588ecbeaad32dd1e0a5332a77356847049a70e"` = `"0xf86d13979a91272f2c54c4147e588ecbeaad32dd1e0a5332a77356847049a70e"`
+> `const` **ROLE\_PAYMASTER\_AOA**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/constants.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/constants.ts#L64)
+Defined in: [packages/core/src/roles.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L56)
+
+Paymaster AOA Role (Account Ownership Authentication)
+
+## Remarks
+
+- **Description**: Basic Paymaster node operator with account-based auth
+- **Permission**: Infrastructure operator
+- **Requirement**: minStake: 30 GT, entryBurn: 3 GT (line 92)
+- **Exit Fee**: 10% (1000 basis points), min 1 GT
+- **Lock Duration**: 30 days
+- **Source**: Registry.sol line 34: ROLE_PAYMASTER_AOA = keccak256("PAYMASTER_AOA")

@@ -1,6 +1,6 @@
 > **getAddressUrl**(`network`, `address`): `string`
 
-Defined in: [packages/core/src/networks.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/networks.ts#L109)
+Defined in: [packages/core/src/networks.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/networks.ts#L109)
 
 Get address URL on block explorer
 
@@ -10,7 +10,7 @@ Get address URL on block explorer
 
 Network name
 
-`"sepolia"` | `"anvil"`
+`"anvil"` | `"sepolia"`
 
 ### address
 

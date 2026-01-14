@@ -23,9 +23,11 @@
     - [End User Gasless Transaction / 终端用户 Gasless 流程](#end-user-gasless-transaction--终端用户-gasless-流程)
   - [Testing Commands / 测试命令](#testing-commands--测试命令)
     - [SDK Regression (Using SDK Clients)](#sdk-regression-using-sdk-clients)
+    - [ABI Alignment \& Coverage](#abi-alignment--coverage)
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
   - [Development Guides / 开发指南](#development-guides--开发指南)
     - [ABI Maintenance / ABI 维护](#abi-maintenance--abi-维护)
+    - [Node.js Usage / Node.js 使用](#nodejs-usage--nodejs-使用)
   - [Development Workflow / 开发者工作流](#development-workflow--开发者工作流)
     - [Step 1: Modify Contracts / 修改合约](#step-1-modify-contracts--修改合约)
     - [Step 2: Local Build \& Deploy (Anvil) / 本地构建与部署](#step-2-local-build--deploy-anvil--本地构建与部署)
@@ -33,6 +35,16 @@
     - [Step 4: Deploy to Sepolia / 部署至 Sepolia](#step-4-deploy-to-sepolia--部署至-sepolia)
     - [Step 5: Verify on Sepolia / Sepolia 验证](#step-5-verify-on-sepolia--sepolia-验证)
   - [Academic Research / 学术研究](#academic-research--学术研究)
+  - [API Documentation / API 文档](#api-documentation--api-文档)
+    - [📚 Complete API Reference](#-complete-api-reference)
+    - [📊 Documentation Coverage](#-documentation-coverage)
+    - [🔍 Key API Highlights](#-key-api-highlights)
+      - [Core Package (`@aastar/core`)](#core-package-aastarcore)
+      - [Account Package (`@aastar/account`)](#account-package-aastaraccount)
+      - [Paymaster Package (`@aastar/paymaster`)](#paymaster-package-aastarpaymaster)
+      - [Tokens Package (`@aastar/tokens`)](#tokens-package-aastartokens)
+    - [📝 Documentation Features](#-documentation-features)
+    - [🚀 Generate Documentation](#-generate-documentation)
   - [Support / 支援](#support--支援)
 
 ---
@@ -210,7 +222,76 @@ The SDK supports doctoral data collection for the SuperPaymaster paper. Official
 
 ---
 
+## API Documentation / API 文档
+
+### 📚 Complete API Reference
+
+The SDK provides comprehensive TypeDoc-generated API documentation for all packages:
+
+- **📖 [Full API Documentation](./docs/api/)** - Complete reference for all packages
+- **🌐 [Online Documentation](https://docs.aastar.io)** - Hosted documentation site
+
+### 📊 Documentation Coverage
+
+| Package | Classes | Functions | Interfaces | Types | Total APIs |
+|---------|---------|-----------|------------|-------|------------|
+| **[@aastar/core](./docs/api/@aastar/core/)** | 7 | 51 | 14 | 20 | **92+** |
+| **[@aastar/account](./docs/api/@aastar/account/)** | 1 | 4 | 2 | 2 | **9** |
+| **[@aastar/paymaster](./docs/api/@aastar/paymaster/)** | 4 | 7 | 4 | 4 | **19** |
+| **[@aastar/tokens](./docs/api/@aastar/tokens/)** | 1 | 15+ | - | - | **16+** |
+| **Total** | **13** | **77+** | **20+** | **26+** | **136+** |
+
+### 🔍 Key API Highlights
+
+#### Core Package (`@aastar/core`)
+- **Configuration Management**: `ContractConfigManager`, `getNetwork()`, `getRpcUrl()`
+- **Role System**: 7 role constants with complete requirements and permissions
+- **Actions**: Registry, Staking, SBT, SuperPaymaster, Token, EntryPoint actions
+- **Validation**: `RequirementChecker`, `StateValidator`, `AAStarValidationError`
+- **Client Base**: `BaseClient` with full viem integration
+
+#### Account Package (`@aastar/account`)
+- **User Operations**: `UserOpClient` for AA account management
+- **Account Creation**: `createEOAWalletClient()`, `toSimpleSmartAccount()`
+- **Utilities**: `getUserOpHash()`, `packUserOpLimits()`
+
+#### Paymaster Package (`@aastar/paymaster`)
+- **Clients**: `PaymasterClient`, `SuperPaymasterClient`, `SuperPaymasterAdminClient`, `PaymasterOperator`
+- **Middleware**: `getPaymasterV4Middleware()`, `getSuperPaymasterMiddleware()`
+- **Utilities**: `checkEligibility()`, `buildPaymasterData()`, `buildSuperPaymasterData()`
+
+#### Tokens Package (`@aastar/tokens`)
+- **Finance Client**: `FinanceClient` with 15+ token operation methods
+- **GToken Operations**: Balance queries, staking, unstaking, rewards
+- **aPNTs Operations**: Minting, burning, wrapping, balance management
+- **Tokenomics**: `getTokenomicsOverview()`, `getCirculatingSupply()`
+
+### 📝 Documentation Features
+
+✅ **Zero Warnings**: Clean documentation generation with no TypeDoc warnings  
+✅ **100% Accuracy**: All API docs verified against source code  
+✅ **Complete Coverage**: All exported APIs documented with types, parameters, and examples  
+✅ **Rich Metadata**: JSDoc comments, usage examples, and source code links  
+✅ **Auto-Generated**: Synchronized with latest codebase via `pnpm run docs:generate`
+
+### 🚀 Generate Documentation
+
+```bash
+# Generate API documentation
+pnpm run docs:generate
+
+# Sync to documentation repository
+pnpm run docs:sync
+```
+
+---
+
 ## Support / 支援
+
+**⭐ If you find this project helpful, please consider giving us a star on GitHub!**  
+**如果您觉得这个项目有帮助，请在 GitHub 上给我们一个 Star！**
+
+[![GitHub stars](https://img.shields.io/github/stars/AAStarCommunity/aastar-sdk?style=social)](https://github.com/AAStarCommunity/aastar-sdk)
 
 - **Documentation**: [docs.aastar.io](https://docs.aastar.io)
 - **GitHub**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)

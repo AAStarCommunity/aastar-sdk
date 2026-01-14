@@ -1,6 +1,6 @@
 > `const` **TEST\_ACCOUNT\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contract-addresses.ts#L44)
+Defined in: [packages/core/src/contract-addresses.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/contract-addresses.ts#L69)
 
 Test Account Addresses (For Development & Testing)
 
@@ -8,4 +8,4 @@ Test Account Addresses (For Development & Testing)
 
 ### simpleAccountFactory
 
-> `readonly` **simpleAccountFactory**: `"0x8B516A71c134a4b5196775e63b944f88Cc637F2b"` = `'0x8B516A71c134a4b5196775e63b944f88Cc637F2b'`
+> `readonly` **simpleAccountFactory**: `` `0x${string}` ``

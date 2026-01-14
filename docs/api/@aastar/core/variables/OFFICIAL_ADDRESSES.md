@@ -1,6 +1,6 @@
 > `const` **OFFICIAL\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contract-addresses.ts#L67)
+Defined in: [packages/core/src/contract-addresses.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/contract-addresses.ts#L93)
 
 Official Contract Addresses
 
@@ -8,4 +8,4 @@ Official Contract Addresses
 
 ### entryPoint
 
-> `readonly` **entryPoint**: `"0x0000000071727De22E5E9d8BAf0edAc6f37da032"` = `'0x0000000071727De22E5E9d8BAf0edAc6f37da032'`
+> `readonly` **entryPoint**: `` `0x${string}` ``

@@ -1,6 +1,6 @@
 > **getPaymasterV4Middleware**(`config`): `object`
 
-Defined in: [V4/index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/V4/index.ts#L17)
+Defined in: [V4/PaymasterUtils.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/V4/PaymasterUtils.ts#L32)
 
 Constructs the middleware for Paymaster V4.
 Returns the `paymasterAndData` hex string.

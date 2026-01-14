@@ -1,24 +1,13 @@
-Defined in: [SuperPaymaster/index.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L93)
+Defined in: [V4/SuperPaymasterClient.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/V4/SuperPaymasterClient.ts#L20)
 
-Admin Client for SuperPaymaster V3
+SuperPaymasterClient
+High-level API for SuperPaymaster operations, including dynamic gas estimation.
 
 ## Constructors
 
 ### Constructor
 
-> **new SuperPaymasterClient**(`client`, `paymasterAddress`): `SuperPaymasterClient`
-
-Defined in: [SuperPaymaster/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L94)
-
-#### Parameters
-
-##### client
-
-`any`
-
-##### paymasterAddress
-
-`` `0x${string}` ``
+> **new SuperPaymasterClient**(): `SuperPaymasterClient`
 
 #### Returns
 
@@ -26,138 +15,41 @@ Defined in: [SuperPaymaster/index.ts:94](https://github.com/AAStarCommunity/aast
 
 ## Methods
 
-### getOperator()
+### submitGaslessTransaction()
 
-> **getOperator**(`operator`): `Promise`\<`any`\>
+> `static` **submitGaslessTransaction**(`client`, `wallet`, `aaAddress`, `entryPoint`, `bundlerUrl`, `config`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [SuperPaymaster/index.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L96)
+Defined in: [V4/SuperPaymasterClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/V4/SuperPaymasterClient.ts#L26)
 
-#### Parameters
-
-##### operator
-
-`` `0x${string}` ``
-
-#### Returns
-
-`Promise`\<`any`\>
-
-***
-
-### configureOperator()
-
-> `static` **configureOperator**(`wallet`, `paymaster`, `token`, `treasury`, `exchangeRate`): `Promise`\<`any`\>
-
-Defined in: [SuperPaymaster/index.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L105)
+Submit a gasless transaction using SuperPaymaster.
+Automatically handles gas estimation with a smart efficiency buffer.
 
 #### Parameters
+
+##### client
+
+`any`
 
 ##### wallet
 
 `any`
 
-##### paymaster
+##### aaAddress
 
 `` `0x${string}` ``
 
-##### token
+##### entryPoint
 
 `` `0x${string}` ``
 
-##### treasury
+##### bundlerUrl
 
-`` `0x${string}` ``
+`string`
 
-##### exchangeRate
+##### config
 
-`bigint`
+[`GaslessTransactionConfig`](../type-aliases/GaslessTransactionConfig.md)
 
 #### Returns
 
-`Promise`\<`any`\>
-
-***
-
-### setAPNTsToken()
-
-> `static` **setAPNTsToken**(`wallet`, `paymaster`, `token`): `Promise`\<`any`\>
-
-Defined in: [SuperPaymaster/index.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L141)
-
-#### Parameters
-
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### token
-
-`` `0x${string}` ``
-
-#### Returns
-
-`Promise`\<`any`\>
-
-***
-
-### setOperatorPaused()
-
-> `static` **setOperatorPaused**(`wallet`, `paymaster`, `operator`, `paused`): `Promise`\<`any`\>
-
-Defined in: [SuperPaymaster/index.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L121)
-
-#### Parameters
-
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### operator
-
-`` `0x${string}` ``
-
-##### paused
-
-`boolean`
-
-#### Returns
-
-`Promise`\<`any`\>
-
-***
-
-### updateReputation()
-
-> `static` **updateReputation**(`wallet`, `paymaster`, `operator`, `score`): `Promise`\<`any`\>
-
-Defined in: [SuperPaymaster/index.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L131)
-
-#### Parameters
-
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### operator
-
-`` `0x${string}` ``
-
-##### score
-
-`bigint`
-
-#### Returns
-
-`Promise`\<`any`\>
+`Promise`\<`` `0x${string}` ``\>

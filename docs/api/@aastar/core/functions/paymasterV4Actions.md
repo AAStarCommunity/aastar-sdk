@@ -1,11 +1,12 @@
-> **paymasterV4Actions**(): (`client`) => [`PaymasterV4Actions`](../type-aliases/PaymasterV4Actions.md)
+> **paymasterV4Actions**(`address`): (`client`) => [`PaymasterV4Actions`](../type-aliases/PaymasterV4Actions.md)
 
-Defined in: [packages/core/src/actions/paymasterV4.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/paymasterV4.ts#L42)
+Defined in: [packages/core/src/actions/paymasterV4.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/actions/paymasterV4.ts#L94)
 
-Create Paymaster V4 Actions
+## Parameters
 
-Note: Unlike SuperPaymaster, V4 does not require a fixed address.
-Each deployment can have its own address, so we pass it per-call.
+### address
+
+`` `0x${string}` ``
 
 ## Returns
 

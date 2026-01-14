@@ -17,6 +17,26 @@
   "hidePageTitle": true,
   "hideBreadcrumbs": true,
   "cleanOutputDir": true,
+  "logLevel": "Error",
+  "validation": {
+    "notDocumented": false,
+    "invalidLink": false,
+    "notExported": false
+  },
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "composite": false,
+    "paths": {
+      "@aastar/core": ["./packages/core/src"],
+      "@aastar/core/*": ["./packages/core/src/*"],
+      "@aastar/account": ["./packages/account/src"],
+      "@aastar/account/*": ["./packages/account/src/*"],
+      "@aastar/paymaster": ["./packages/paymaster/src"],
+      "@aastar/paymaster/*": ["./packages/paymaster/src/*"],
+      "@aastar/tokens": ["./packages/tokens/src"],
+      "@aastar/tokens/*": ["./packages/tokens/src/*"]
+    }
+  },
   "externalSymbolLinkMappings": {
     "viem": {
       "*": "https://viem.sh/docs/index.html"

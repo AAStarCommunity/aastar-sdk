@@ -1,14 +1,22 @@
 > **PaymasterConfig** = `object`
 
-Defined in: [SuperPaymaster/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L4)
+Defined in: [SuperPaymaster/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/SuperPaymaster/index.ts#L4)
 
 ## Properties
+
+### maxRate?
+
+> `optional` **maxRate**: `bigint`
+
+Defined in: [SuperPaymaster/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/SuperPaymaster/index.ts#L7)
+
+***
 
 ### operator
 
 > **operator**: `Address`
 
-Defined in: [SuperPaymaster/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L6)
+Defined in: [SuperPaymaster/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/SuperPaymaster/index.ts#L6)
 
 ***
 
@@ -16,7 +24,7 @@ Defined in: [SuperPaymaster/index.ts:6](https://github.com/AAStarCommunity/aasta
 
 > **paymasterAddress**: `Address`
 
-Defined in: [SuperPaymaster/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L5)
+Defined in: [SuperPaymaster/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/SuperPaymaster/index.ts#L5)
 
 ***
 
@@ -24,7 +32,7 @@ Defined in: [SuperPaymaster/index.ts:5](https://github.com/AAStarCommunity/aasta
 
 > `optional` **postOpGasLimit**: `bigint`
 
-Defined in: [SuperPaymaster/index.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L8)
+Defined in: [SuperPaymaster/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/SuperPaymaster/index.ts#L9)
 
 ***
 
@@ -32,4 +40,4 @@ Defined in: [SuperPaymaster/index.ts:8](https://github.com/AAStarCommunity/aasta
 
 > `optional` **verificationGasLimit**: `bigint`
 
-Defined in: [SuperPaymaster/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/paymaster/src/SuperPaymaster/index.ts#L7)
+Defined in: [SuperPaymaster/index.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/paymaster/src/SuperPaymaster/index.ts#L8)

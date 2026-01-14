@@ -1,6 +1,6 @@
 > **getTestTokenContracts**(`network`): `object`
 
-Defined in: [packages/core/src/contracts.ts:217](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contracts.ts#L217)
+Defined in: [packages/core/src/contracts.ts:217](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/contracts.ts#L217)
 
 Get test token contracts (for development & testing)
 
@@ -18,17 +18,25 @@ Network name
 
 Test token contract addresses
 
-### aPNTs
+### apnts
 
-> `readonly` **aPNTs**: `"0xBD0710596010a157B88cd141d797E8Ad4bb2306b"` = `'0xBD0710596010a157B88cd141d797E8Ad4bb2306b'`
+> `readonly` **apnts**: `` `0x${string}` `` = `APNTS_ADDRESS`
 
-### bPNTs
+### bpnts
 
-> `readonly` **bPNTs**: `"0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3"` = `'0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3'`
+> `readonly` **bpnts**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
+
+### gToken
+
+> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
 
 ### mockUSDT
 
-> `readonly` **mockUSDT**: `"0x14EaC6C3D49AEDff3D59773A7d7bfb50182bCfDc"` = `'0x14EaC6C3D49AEDff3D59773A7d7bfb50182bCfDc'`
+> `readonly` **mockUSDT**: `` `0x${string}` ``
+
+### pimToken
+
+> `readonly` **pimToken**: `` `0x${string}` `` = `TOKEN_ADDRESSES.pimToken`
 
 ## Example
 

@@ -1,6 +1,6 @@
 > **getTokenContracts**(`network`): `object`
 
-Defined in: [packages/core/src/contracts.ts:201](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contracts.ts#L201)
+Defined in: [packages/core/src/contracts.ts:201](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/contracts.ts#L201)
 
 Get token system contracts
 
@@ -18,9 +18,21 @@ Network name
 
 Token contract addresses
 
+### aPNTs
+
+> `readonly` **aPNTs**: `` `0x${string}` `` = `APNTS_ADDRESS`
+
+### gToken
+
+> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
+
+### pimToken
+
+> `readonly` **pimToken**: `` `0x${string}` ``
+
 ### xPNTsFactory
 
-> `readonly` **xPNTsFactory**: `"0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd"` = `'0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd'`
+> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
 
 ## Example
 

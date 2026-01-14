@@ -1,3 +1,14 @@
-> `const` **ROLE\_KMS**: `"0x6fb2b25080d21c908f32ff8ff99eb1d552c210854f7de48a40406764c09c68f8"` = `"0x6fb2b25080d21c908f32ff8ff99eb1d552c210854f7de48a40406764c09c68f8"`
+> `const` **ROLE\_KMS**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/constants.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/constants.ts#L66)
+Defined in: [packages/core/src/roles.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/roles.ts#L105)
+
+KMS Role (Key Management Service)
+
+## Remarks
+
+- **Description**: KMS operator for secure key storage and management
+- **Permission**: Infrastructure operator (highest stake)
+- **Requirement**: minStake: 100 GT, entryBurn: 10 GT (line 98)
+- **Exit Fee**: 10% (1000 basis points), min 5 GT
+- **Lock Duration**: 30 days
+- **Source**: Registry.sol line 38: ROLE_KMS = keccak256("KMS")

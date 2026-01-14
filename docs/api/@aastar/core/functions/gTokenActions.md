@@ -1,10 +1,10 @@
-> **factoryActions**(): (`client`) => [`FactoryActions`](../type-aliases/FactoryActions.md)
+> **gTokenActions**(): (`client`) => [`TokenActions`](../type-aliases/TokenActions.md)
 
-Defined in: [packages/core/src/actions/factory.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/factory.ts#L10)
+Defined in: [packages/core/src/actions/tokens.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/ee2dd989851034f323f1aad02b8ecb5fe586602a/packages/core/src/actions/tokens.ts#L87)
 
 ## Returns
 
-> (`client`): [`FactoryActions`](../type-aliases/FactoryActions.md)
+> (`client`): [`TokenActions`](../type-aliases/TokenActions.md)
 
 ### Parameters
 
@@ -2711,4 +2711,4 @@ args: [69420],
 
 ### Returns
 
-[`FactoryActions`](../type-aliases/FactoryActions.md)
+[`TokenActions`](../type-aliases/TokenActions.md)
