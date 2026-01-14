@@ -128,22 +128,32 @@ export function createCommunityClient({
 
             const roleDataHex = RoleDataFactory.community(communityRoleData);
             
-            // Register Role
-            console.log('   Registry: Registering Role...');
-            try {
-                const regTx = await registryActionsObj.registryRegisterRoleSelf({
-                    roleId: RoleIds.COMMUNITY,
-                    data: roleDataHex,
-                    account
-                });
-                console.log(`   ✅ Registered: ${regTx}`);
-                const receipt = await client.waitForTransactionReceipt({ hash: regTx });
-                const events = decodeContractEvents(receipt.logs);
-                logDecodedEvents(events);
-                results.push({ hash: regTx, events });
-            } catch (e: any) {
-                // If already registered, we continue
-                console.log('   ℹ️ Role registration check:', e.message || 'Already registered');
+            // Register Role (with idempotent check)
+            console.log('   Registry: Checking Role...');
+            const hasRole = await registryActionsObj.registryHasRole({
+                user: account.address,
+                roleId: RoleIds.COMMUNITY
+            });
+
+            if (hasRole) {
+                console.log('   ✅ Role already registered, skipping.');
+            } else {
+                console.log('   Registry: Registering Role...');
+                try {
+                    const regTx = await registryActionsObj.registryRegisterRoleSelf({
+                        roleId: RoleIds.COMMUNITY,
+                        data: roleDataHex,
+                        account
+                    });
+                    console.log(`   ✅ Registered: ${regTx}`);
+                    const receipt = await client.waitForTransactionReceipt({ hash: regTx });
+                    const events = decodeContractEvents(receipt.logs);
+                    logDecodedEvents(events);
+                    results.push({ hash: regTx, events });
+                } catch (e: any) {
+                    // Fallback in case of race condition
+                    console.log('   ℹ️ Role registration check:', e.message || 'Already registered');
+                }
             }
 
             // 2. Deploy xPNTs Token via Factory
