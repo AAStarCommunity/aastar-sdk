@@ -116,6 +116,27 @@ describe('Validator Actions', () => {
             expect(await actions.owner()).toBe(MOCK_USER);
             expect(await actions.version()).toBe('v1');
         });
+        it('should call admin setters', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            const actions = dvtActions(MOCK_VALIDATOR)(mockWalletClient as WalletClient);
+            expect(await actions.setRegistry({ registry: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.setBLSAggregator({ aggregator: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.markProposalExecuted({ proposalId: 1n, account: mockAccount })).toBe(txHash);
+            expect(await actions.transferOwnership({ newOwner: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.renounceOwnership({ account: mockAccount })).toBe(txHash);
+        });
+
+        it('should call views', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce({}) // proposals
+                .mockResolvedValueOnce(2n) // nextProposalId
+                .mockResolvedValueOnce(MOCK_USER); // BLS_AGGREGATOR
+            const actions = dvtActions(MOCK_VALIDATOR)(mockPublicClient as PublicClient);
+            expect(await actions.proposals({ proposalId: 1n })).toEqual({});
+            expect(await actions.nextProposalId()).toBe(2n);
+            expect(await actions.BLS_AGGREGATOR()).toBe(MOCK_USER);
+        });
     });
 
     describe('blsActions', () => {
@@ -164,6 +185,55 @@ describe('Validator Actions', () => {
             expect(await actions.setThreshold({ newThreshold: 5n, account: mockAccount })).toBe(txHash);
             expect(await actions.setRegistry({ registry: MOCK_USER, account: mockAccount })).toBe(txHash);
             expect(await actions.transferOwnership({ newOwner: MOCK_USER, account: mockAccount })).toBe(txHash);
+        });
+        it('should call proposal execution extensions', async () => {
+             const txHash = '0xhash';
+             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+             const actions = blsActions(MOCK_BLS)(mockWalletClient as WalletClient);
+             expect(await actions.executeProposal({ proposalId: 1n, signatures: ['0x'], account: mockAccount })).toBe(txHash);
+             expect(await actions.verifyAndExecute({ proposalId: 1n, signatures: ['0x'], account: mockAccount })).toBe(txHash);
+        });
+        
+        it('should manage thresholds extended', async () => {
+             const txHash = '0xhash';
+             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+             const actions = blsActions(MOCK_BLS)(mockWalletClient as WalletClient);
+             
+             expect(await actions.setMinThreshold({ newThreshold: 2n, account: mockAccount })).toBe(txHash);
+             expect(await actions.setDefaultThreshold({ newThreshold: 3n, account: mockAccount })).toBe(txHash);
+             expect(await actions.setDVTValidator({ validator: MOCK_USER, account: mockAccount })).toBe(txHash);
+             expect(await actions.setSuperPaymaster({ paymaster: MOCK_USER, account: mockAccount })).toBe(txHash);
+             expect(await actions.renounceOwnership({ account: mockAccount })).toBe(txHash);
+        });
+
+        it('should call extended views', async () => {
+             (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(['0x']) // blsPublicKeys
+                .mockResolvedValueOnce(1n) // threshold
+                .mockResolvedValueOnce(1n) // minThreshold
+                .mockResolvedValueOnce(1n) // defaultThreshold
+                .mockResolvedValueOnce(MOCK_USER) // REGISTRY
+                .mockResolvedValueOnce(MOCK_USER) // DVT_VALIDATOR
+                .mockResolvedValueOnce(MOCK_USER) // SUPERPAYMASTER
+                .mockResolvedValueOnce(10n) // MAX_VALIDATORS
+                .mockResolvedValueOnce(true) // executedProposals
+                .mockResolvedValueOnce(0n) // proposalNonces
+                .mockResolvedValueOnce(MOCK_USER) // owner
+                .mockResolvedValueOnce('v1'); // version
+                
+             const actions = blsActions(MOCK_BLS)(mockPublicClient as PublicClient);
+             expect(await actions.blsPublicKeys({ address: MOCK_USER })).toEqual(['0x']);
+             expect(await actions.threshold()).toBe(1n);
+             expect(await actions.minThreshold()).toBe(1n);
+             expect(await actions.defaultThreshold()).toBe(1n);
+             expect(await actions.REGISTRY()).toBe(MOCK_USER);
+             expect(await actions.DVT_VALIDATOR()).toBe(MOCK_USER);
+             expect(await actions.SUPERPAYMASTER()).toBe(MOCK_USER);
+             expect(await actions.MAX_VALIDATORS()).toBe(10n);
+             expect(await actions.executedProposals({ proposalId: 1n })).toBe(true);
+             expect(await actions.proposalNonces({ proposalId: 1n })).toBe(0n);
+             expect(await actions.owner()).toBe(MOCK_USER);
+             expect(await actions.version()).toBe('v1');
         });
     });
 });

@@ -76,6 +76,38 @@ describe('Factory Actions', () => {
 
             expect(result).toBe(true);
         });
+
+
+        it('should handle predictions and economics', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(100n) // predictDepositAmount
+                .mockResolvedValueOnce([1n, 2n, 3n]) // getPredictionParams
+                .mockResolvedValueOnce(50n); // getAPNTsPrice
+            
+            const actions = xPNTsFactoryActions(MOCK_FACTORY)(mockPublicClient as PublicClient);
+            expect(await actions.predictDepositAmount({ community: MOCK_COMMUNITY, userCount: 10n })).toBe(100n);
+            expect(await actions.getPredictionParams({ community: MOCK_COMMUNITY })).toEqual([1n, 2n, 3n]);
+            expect(await actions.getAPNTsPrice()).toBe(50n);
+        });
+
+        it('should manage configuration', async () => {
+             const txHash = '0xhash';
+             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+             const actions = xPNTsFactoryActions(MOCK_FACTORY)(mockWalletClient as WalletClient);
+             
+             expect(await actions.setIndustryMultiplier({ industry: 'tech', multiplier: 2n, account: mockAccount })).toBe(txHash);
+             expect(await actions.setSuperPaymasterAddress({ superPaymaster: MOCK_USER, account: mockAccount })).toBe(txHash);
+             expect(await actions.updateAPNTsPrice({ newPrice: 100n, account: mockAccount })).toBe(txHash);
+        });
+        
+        it('should view config', async () => {
+             (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(123n) // industryMultipliers
+                .mockResolvedValueOnce(MOCK_USER); // SUPER_PAYMASTER
+             const actions = xPNTsFactoryActions(MOCK_FACTORY)(mockPublicClient as PublicClient);
+             expect(await actions.industryMultipliers({ industry: 'tech' })).toBe(123n);
+             expect(await actions.SUPER_PAYMASTER()).toBe(MOCK_USER);
+        });
     });
 
     describe('paymasterFactoryActions', () => {
@@ -193,6 +225,26 @@ describe('Factory Actions', () => {
             
             (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
             expect(await actions.owner()).toBe(MOCK_USER);
+        });
+
+        it('should handle implementations list', async () => {
+             (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(true) // implementations
+                .mockResolvedValueOnce(['0xI1']) // getPaymasterList
+                .mockResolvedValueOnce(5n); // totalDeployed
+             const actions = paymasterFactoryActions(MOCK_FACTORY)(mockPublicClient as PublicClient);
+             expect(await actions.implementations({ version: 'v1' })).toBe(true);
+             expect(await actions.getPaymasterList({ offset: 0n, limit: 10n })).toEqual(['0xI1']);
+             expect(await actions.totalDeployed()).toBe(5n);
+        });
+
+        it('should manage implementations', async () => {
+             const txHash = '0xhash';
+             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+             const actions = paymasterFactoryActions(MOCK_FACTORY)(mockWalletClient as WalletClient);
+             
+             expect(await actions.addImplementation({ version: 'v2', implementation: MOCK_USER, account: mockAccount })).toBe(txHash);
+             expect(await actions.setDefaultVersion({ version: 'v2', account: mockAccount })).toBe(txHash);
         });
     });
 });

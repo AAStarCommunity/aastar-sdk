@@ -11,6 +11,8 @@
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
     "prebuild": "pnpm clean",
     "build": "tsc",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "audit:abi": "npx tsx scripts/audit-abi-coverage.ts"
   },
   "dependencies": {
@@ -18,7 +20,9 @@
     "viem": "2.43.3"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.0.17",
     "abitype": "1.2.3",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "vitest": "4.0.17"
   }
 }

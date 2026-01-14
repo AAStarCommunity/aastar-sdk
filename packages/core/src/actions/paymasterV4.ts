@@ -38,7 +38,7 @@ export type PaymasterV4Actions = {
     // Deposit & Withdrawal (EntryPoint accounting)
     deposit: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    addStake: (args: { unstakeDelaySec: bigint, account?: Account | Address }) => Promise<Hash>;
+    addStake: (args: { unstakeDelaySec: bigint, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     unlockPaymasterStake: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawStake: (args: { to: Address, account?: Account | Address }) => Promise<Hash>;
     getDeposit: () => Promise<bigint>;
@@ -264,12 +264,13 @@ export const paymasterV4Actions = (address: Address) => (client: PublicClient | 
         });
     },
 
-    async addStake({ unstakeDelaySec, account }) {
+    async addStake({ unstakeDelaySec, amount, account }) {
         return (client as any).writeContract({
             address,
             abi: PaymasterV4ABI,
             functionName: 'addStake',
             args: [unstakeDelaySec],
+            value: amount,
             account: account as any,
             chain: (client as any).chain
         });
