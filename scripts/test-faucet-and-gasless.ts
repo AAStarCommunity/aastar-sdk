@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, createClient, encodeFunctionData, parseAbi, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, createClient, encodeFunctionData, parseAbi, encodeAbiParameters, type Hex, type Address } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { bundlerActions } from 'viem/account-abstraction';
 import { sepolia } from 'viem/chains';
@@ -74,13 +74,99 @@ async function main() {
 
     // 3. 🚰 Faucet: Prepared Account
     console.log('\n--- 🚰 Running SepoliaFaucetAPI ---');
+    
+    // Fetch Community Address (Mycelium) for EndUser Role
+    // Since Registry requires valid community membership
+    let communityAddr = await publicClient.readContract({
+        address: config.contracts.registry,
+        abi: parseAbi(['function communityByName(string) view returns (address)']),
+        functionName: 'communityByName',
+        args: ['Mycelium']
+    });
+
+    // Fetch staking address from registry (needed for community logic and token logic)
+    const stakingAddr = await publicClient.readContract({
+        address: config.contracts.registry,
+        abi: parseAbi(['function GTOKEN_STAKING() view returns (address)']),
+        functionName: 'GTOKEN_STAKING'
+    }) as Address;
+
+    if (communityAddr === '0x0000000000000000000000000000000000000000') {
+        const ROLE_COMMUNITY = '0xe94d78b6d8fb99b2c21131eb4552924a60f564d8515a3cc90ef300fc9735c074';
+        
+        // Check if Admin already has the role (maybe under different name or lost metadata)
+        const hasRole = await publicClient.readContract({
+            address: config.contracts.registry,
+            abi: parseAbi(['function hasRole(bytes32 role, address account) view returns (bool)']),
+            functionName: 'hasRole',
+            args: [ROLE_COMMUNITY as `0x${string}`, adminAccount.address]
+        });
+
+        if (hasRole) {
+            console.log(`   ✅ Admin already has COMMUNITY role. Using Admin as Community.`);
+            communityAddr = adminAccount.address;
+        } else {
+            console.log(`   ⚠️ Community "Mycelium" not found. Registering new Community...`);
+            // Register Admin as Community
+            const commData = encodeAbiParameters(
+                [
+                    { name: 'name', type: 'string' },
+                    { name: 'ensName', type: 'string' },
+                    { name: 'website', type: 'string' },
+                    { name: 'description', type: 'string' },
+                    { name: 'logoURI', type: 'string' },
+                    { name: 'stakeAmount', type: 'uint256' }
+                ],
+                ['Mycelium', 'mycelium.eth', 'https://aastar.io', 'Default Test Community', '', 0n]
+            );
+
+            // Approve Staking First (if needed) - using stakingAddr from outer scope
+            // We need gToken address to approve? 
+            // Better to fetch GToken here too.
+            // But let's assume '0x71f9...' for approval if we are lazy, OR fetch it.
+            // Let's fetch GToken using outer stakingAddr.
+            
+            console.log(`      🔓 Approving Staking (${stakingAddr}) for Community...`);
+            const hashApprove = await adminWallet.writeContract({
+                address: gtokenAddrForApprove,
+                abi: parseAbi(['function approve(address spender, uint256 amount) external returns (bool)']),
+                functionName: 'approve',
+                args: [stakingAddr, parseEther('1000')],
+                chain: sepolia,
+                account: adminWallet.account!
+            });
+            await publicClient.waitForTransactionReceipt({ hash: hashApprove });
+
+            console.log(`      🏙️ Registering Role...`);
+            const hashReg = await adminWallet.writeContract({
+                address: config.contracts.registry,
+                abi: parseAbi(['function registerRole(bytes32 roleId, address user, bytes calldata data) external']),
+                functionName: 'registerRole',
+                args: [ROLE_COMMUNITY as `0x${string}`, adminAccount.address, commData],
+                chain: sepolia,
+                account: adminWallet.account!
+            });
+            await publicClient.waitForTransactionReceipt({ hash: hashReg });
+            console.log(`      -> Community Registered. Tx: ${hashReg}`);
+            
+            communityAddr = adminAccount.address;
+        }
+    }
+    
+    console.log(`   🏙️ Community (Mycelium): ${communityAddr}`);
+
+    // Use cPNTs (Anni's Token) for Minting, as Admin owns it.
+    // Faucet will handle 0x60d... approval internally for Staking.
+    const tokenToMint = '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9'; 
+
     await SepoliaFaucetAPI.prepareTestAccount(adminWallet, publicClient, {
         targetAA: aaAddress,
         registry: config.contracts.registry,
-        token: '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9', // cPNTs (Anni's Token)
+        token: tokenToMint, 
         // superPaymaster is implied context for token holding
-        ethAmount: parseEther('0.02'), // Enough for deployment gas if needed (though we want gasless, deployment still costs if not sponsored? Paymaster CAN sponsor deployment!)
-        tokenAmount: parseEther('50')
+        ethAmount: parseEther('0.02'), // Enough for deployment gas if needed
+        tokenAmount: parseEther('50'),
+        community: communityAddr
     });
 
     // 4. Submit Gasless Transaction
@@ -119,8 +205,9 @@ async function main() {
         aaAddress,
         config.contracts.entryPoint,
         bundlerUrl,
+        bundlerUrl,
         {
-            token: '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9',
+            token: tokenToMint,
             recipient: adminAccount.address, // Send back to Admin
             amount: parseEther('1'),
             operator: '0xEcAACb915f7D92e9916f449F7ad42BD0408733c9', // Anni's Operator

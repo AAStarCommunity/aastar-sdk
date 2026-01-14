@@ -2,7 +2,7 @@
 
 这份文档旨在协助进行 L4 Gasless 场景的人工调试和验证。适用于 Sepolia, Anvil 或其他 EVM 网络。
 
-> **注意**: 部分地址 (Token, Paymaster) 是在运行 `l4-setup.ts` 脚本时动态生成的，请参照 `scripts/l4-state.json` 文件获取最新值。
+> **注意**: 部分地址 (Token, Paymaster) 是在运行 `l4-setup.ts` **脚本时动态生成的**，请参照 `scripts/l4-state.json` 文件获取最新值。
 
 ## 1. 核心账户配置 (Keys & Accounts)
 

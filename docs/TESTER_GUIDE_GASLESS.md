@@ -346,7 +346,16 @@ const kmsAccount = toAccount({
     async signTypedData(td) { throw new Error('Not supported'); }
 });
 
-const wallet = createWalletClient({ account: remoteSigner, ... });
+// 2. Initialize SDK Client with Remote Account
+const client = createEndUserClient({
+    transport: http('https://rpc.sepolia.org'),
+    chain: sepolia, // Important for EIP-155
+    account: kmsAccount, // Pass the custom account here
+    addresses: {
+        registry: CORE_ADDRESSES.registry,
+        entryPoint: CORE_ADDRESSES.entryPoint // v0.7 (SDK Standard)
+    }
+});
 
 // 3. Execute Gasless Transaction
 // The SDK will automatically:

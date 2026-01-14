@@ -7,7 +7,8 @@ import {
     createPublicClient,
     http,
     formatEther,
-    zeroAddress
+    zeroAddress,
+    encodeAbiParameters
 } from 'viem';
 import { sepolia } from 'viem/chains';
 import { registryActions } from './registry';
@@ -47,6 +48,7 @@ export class SepoliaFaucetAPI {
             superPaymaster?: Address; // Just for context, no specific action needed if user holds token
             ethAmount?: bigint; // Default 0.1 ETH
             tokenAmount?: bigint; // Default 1000 Tokens
+            community?: Address;
         }
     ) {
         console.log(`\n🚰 SepoliaFaucetAPI: Preparing ${config.targetAA}...`);
@@ -62,7 +64,7 @@ export class SepoliaFaucetAPI {
         results.ethFunded = await this.fundETH(adminWallet, publicClient, config.targetAA, ethAmount);
 
         // 2. Register EndUser
-        results.roleRegistered = await this.registerEndUser(adminWallet, publicClient, config.registry, config.targetAA, config.token);
+        results.roleRegistered = await this.registerEndUser(adminWallet, publicClient, config.registry, config.targetAA, config.token, config.community);
 
         // 3. Mint Tokens (User Holding Logic - for SuperPaymaster)
         // If SuperPaymaster is involved, User needs to HOLD the token.
@@ -120,7 +122,8 @@ export class SepoliaFaucetAPI {
         publicClient: PublicClient, 
         registryAddr: Address, 
         target: Address,
-        gasToken: Address // Re-using the 'token' passed in config which is GToken
+        gasToken: Address, // Re-using the 'token' passed in config which is GToken
+        community?: Address
     ): Promise<boolean> {
         // ENDUSER Hash: keccak256("ENDUSER")
         const ENDUSER_ROLE = '0x0c34ecc75d3bf122e0609d2576e167f53fb42429262ce8c9b33cab91ff670e3a';
@@ -148,38 +151,58 @@ export class SepoliaFaucetAPI {
                 functionName: 'GTOKEN_STAKING'
             }) as Address;
 
+            // Fetch the actual GToken required by Staking
+            const stakingToken = await publicClient.readContract({
+                address: stakingAddr,
+                abi: parseAbi(['function GTOKEN() view returns (address)']),
+                functionName: 'GTOKEN'
+            }) as Address;
+
             // 3. Admin Approves Staking Contract (if needed)
             const adminAddr = adminWallet.account!.address;
+            // Check allowance for the STAKING TOKEN
             const allowance = await publicClient.readContract({
-                address: gasToken,
+                address: stakingToken,
                 abi: ERC20_ABI,
                 functionName: 'allowance',
                 args: [adminAddr, stakingAddr]
             });
 
+            // Approve if needed (standard stake ~0.3 ETH, verify enough)
             if (allowance < parseEther('500')) {
-                console.log(`      🔓 Approving Staking Contract...`);
-                const hashApprove = await adminWallet.writeContract({
-                    address: gasToken,
+                console.log('      🔓 Approving Staking Contract (Core Token)...');
+                const hash = await adminWallet.writeContract({
+                    address: stakingToken,
                     abi: ERC20_ABI,
                     functionName: 'approve',
-                    args: [stakingAddr, parseEther('1000')], // Bulk approve
+                    args: [stakingAddr, parseEther('1000')],
                     chain: sepolia,
                     account: adminWallet.account!
                 });
-                await publicClient.waitForTransactionReceipt({ hash: hashApprove });
+                await publicClient.waitForTransactionReceipt({ hash });
             }
 
-            // 4. SafeMint (Sponsor)
-            // Empty data for ENDUSER role usually, but standard requires bytes
-            const userData = '0x'; 
+            // 4. Register Role (registerRole)
+            // EndUser Role Data: (address account, address community, string avatarURI, string ensName, uint256 stakeAmount)
+            const userData = encodeAbiParameters(
+                [
+                    { name: 'account', type: 'address' },
+                    { name: 'community', type: 'address' },
+                    { name: 'avatarURI', type: 'string' },
+                    { name: 'ensName', type: 'string' },
+                    { name: 'stakeAmount', type: 'uint256' }
+                ],
+                // Use provided community or zeroAddress (which will fail if Registry enforces it, but allows flexibility)
+                [target, community || zeroAddress, '', '', 0n] 
+            ); 
             
             const hashMint = await adminWallet.writeContract({
                 address: registryAddr,
                 abi: parseAbi([
-                    'function safeMintForRole(bytes32 roleId, address user, bytes calldata data) external returns (uint256)'
+                    'function registerRole(bytes32 roleId, address user, bytes calldata data) external',
+                    'error InvalidParameter(string message)'
                 ]),
-                functionName: 'safeMintForRole',
+                functionName: 'registerRole',
                 args: [ENDUSER_ROLE as `0x${string}`, target, userData],
                 chain: sepolia,
                 account: adminWallet.account!
