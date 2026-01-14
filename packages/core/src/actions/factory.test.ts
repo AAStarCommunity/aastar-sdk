@@ -96,7 +96,7 @@ describe('Factory Actions', () => {
              const actions = xPNTsFactoryActions(MOCK_FACTORY)(mockWalletClient as WalletClient);
              
              expect(await actions.setIndustryMultiplier({ industry: 'tech', multiplier: 2n, account: mockAccount })).toBe(txHash);
-             expect(await actions.setSuperPaymasterAddress({ superPaymaster: MOCK_USER, account: mockAccount })).toBe(txHash);
+             expect(await actions.setSuperPaymasterAddress({ paymaster: MOCK_USER, account: mockAccount })).toBe(txHash);
              expect(await actions.updateAPNTsPrice({ newPrice: 100n, account: mockAccount })).toBe(txHash);
         });
         
@@ -151,10 +151,10 @@ describe('Factory Actions', () => {
         it('should handle ownership and version', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
             const actions = xPNTsFactoryActions(MOCK_FACTORY)(mockPublicClient as PublicClient);
-            expect(await actions.owner()).toBe(MOCK_USER);
+            expect(await actions.xPNTsFactoryOwner()).toBe(MOCK_USER);
             
             (mockPublicClient.readContract as any).mockResolvedValue('v1');
-            expect(await actions.version()).toBe('v1');
+            expect(await actions.xPNTsFactoryVersion()).toBe('v1');
         });
     });
 
@@ -220,11 +220,11 @@ describe('Factory Actions', () => {
         it('should get versions and ownership', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue('v1');
             const actions = paymasterFactoryActions(MOCK_FACTORY)(mockPublicClient as PublicClient);
-            expect(await actions.version()).toBe('v1');
+            expect(await actions.paymasterFactoryVersion()).toBe('v1');
             expect(await actions.defaultVersion()).toBe('v1');
             
             (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
-            expect(await actions.owner()).toBe(MOCK_USER);
+            expect(await actions.paymasterFactoryOwner()).toBe(MOCK_USER);
         });
 
         it('should handle implementations list', async () => {

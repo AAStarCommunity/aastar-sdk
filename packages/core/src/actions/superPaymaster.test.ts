@@ -34,7 +34,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.depositAPNTs({ amount: 1000n, account: mockAccount });
+            const result = await actions.superPaymasterDeposit({ amount: 1000n, account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -44,7 +44,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.depositETH({ value: 1000000000000000000n, account: mockAccount });
+            const result = await actions.superPaymasterDepositETH({ value: 1000000000000000000n, account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -54,7 +54,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.depositForOperator({
+            const result = await actions.superPaymasterDepositFor({ // Changed from depositForOperator to superPaymasterDepositFor
                 operator: MOCK_OPERATOR,
                 amount: 5000n,
                 account: mockAccount
@@ -69,7 +69,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.withdrawTo({ to, amount: 2000n, account: mockAccount });
+            const result = await actions.superPaymasterWithdrawTo({ to, amount: 2000n, account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -81,7 +81,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.addSuperStake({ amount: 10000n, account: mockAccount });
+            const result = await actions.superPaymasterAddSuperStake({ amount: 10000n, account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -91,7 +91,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.unlockSuperStake({ account: mockAccount });
+            const result = await actions.superPaymasterUnlockSuperStake({ account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -102,7 +102,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.withdrawStake({ to, account: mockAccount });
+            const result = await actions.superPaymasterWithdrawStake({ to, account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -116,7 +116,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.configureOperator({
+            const result = await actions.superPaymasterConfigureOperator({
                 xPNTsToken,
                 treasury,
                 exchangeRate: 1000000n,
@@ -127,11 +127,11 @@ describe('SuperPaymaster Actions', () => {
         });
 
         it('should pause operator', async () => {
-            const txHash = '0xyz...';
+            const txHash = '0xdef...';
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setOperatorPaused({
+            const result = await actions.superPaymasterSetOperatorPaused({
                operator: MOCK_OPERATOR,
                 paused: true,
                 account: mockAccount
@@ -145,7 +145,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.updateReputation({
+            const result = await actions.superPaymasterUpdateReputation({
                 operator: MOCK_OPERATOR,
                 newReputation: 850n,
                 account: mockAccount
@@ -161,7 +161,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setAPNTsPrice({
+            const result = await actions.superPaymasterSetAPNTsPrice({
                 priceUSD: 1000000n, // $1.00
                 account: mockAccount
             });
@@ -174,7 +174,7 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setCachedPrice({
+            const result = await actions.superPaymasterSetCachedPrice({
                 price: 2000000000n,
                 account: mockAccount
             });
@@ -189,8 +189,8 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
 
-            const res1 = await actions.slashOperator({ operator: MOCK_OPERATOR, amount: 100n, reason: 'Test', account: mockAccount });
-            const res2 = await actions.executeSlashWithBLS({
+            const res1 = await actions.superPaymasterSlashOperator({ operator: MOCK_OPERATOR, amount: 100n, reason: 'Test', account: mockAccount });
+            const res2 = await actions.superPaymasterExecuteSlashWithBLS({
                 operator: MOCK_OPERATOR,
                 roleId: '0xROLE',
                 amount: 100n,
@@ -209,9 +209,9 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValue(true);
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
 
-            const tx1 = await actions.blockUser({ user: MOCK_USER, blocked: true, account: mockAccount });
-            const tx2 = await actions.updateBlockedStatus({ user: MOCK_USER, blocked: true, account: mockAccount });
-            const isBlocked = await actions.blockedUsers({ user: MOCK_USER });
+            const tx1 = await actions.superPaymasterBlockUser({ user: MOCK_USER, blocked: true, account: mockAccount });
+            const tx2 = await actions.superPaymasterUpdateBlockedStatus({ user: MOCK_USER, blocked: true, account: mockAccount });
+            const isBlocked = await actions.superPaymasterBlockedUsers({ user: MOCK_USER });
 
             expect(tx1).toBe(txHash);
             expect(tx2).toBe(txHash);
@@ -226,9 +226,9 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValueOnce(100n).mockResolvedValueOnce(500n);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const tx = await actions.setProtocolFee({ feeRecipient: MOCK_USER, feeBps: 100n, account: mockAccount });
-            const bps = await actions.protocolFeeBPS();
-            const revenue = await actions.protocolRevenue();
+            const tx = await actions.superPaymasterSetProtocolFee({ feeRecipient: MOCK_USER, feeBps: 100n, account: mockAccount });
+            const bps = await actions.superPaymasterProtocolFeeBPS();
+            const revenue = await actions.superPaymasterProtocolRevenue();
 
             expect(tx).toBe(txHash);
             expect(bps).toBe(100n);
@@ -241,9 +241,9 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValue(2000n);
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const tx1 = await actions.updatePrice({ account: mockAccount });
-            const tx2 = await actions.updatePriceDVT({ price: 2000n, proof: '0x', account: mockAccount });
-            const price = await actions.aPNTsPriceUSD();
+            const tx1 = await actions.superPaymasterUpdatePrice({ account: mockAccount });
+            const tx2 = await actions.superPaymasterUpdatePriceDVT({ price: 2000n, proof: '0x', account: mockAccount });
+            const price = await actions.superPaymasterAPNTsPriceUSD();
 
             expect(tx1).toBe(txHash);
             expect(tx2).toBe(txHash);
@@ -255,10 +255,10 @@ describe('SuperPaymaster Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = superPaymasterActions(mockPaymasterAddress)(mockWalletClient as WalletClient);
 
-            const tx1 = await actions.setTreasury({ treasury: MOCK_USER, account: mockAccount });
-            const tx2 = await actions.setXPNTsFactory({ factory: MOCK_USER, account: mockAccount });
-            const tx3 = await actions.setAPNTsToken({ token: MOCK_USER, account: mockAccount });
-            const tx4 = await actions.setBLSAggregator({ aggregator: MOCK_USER, account: mockAccount });
+            const tx1 = await actions.superPaymasterSetTreasury({ treasury: MOCK_USER, account: mockAccount });
+            const tx2 = await actions.superPaymasterSetXPNTsFactory({ factory: MOCK_USER, account: mockAccount });
+            const tx3 = await actions.superPaymasterSetAPNTsToken({ token: MOCK_USER, account: mockAccount });
+            const tx4 = await actions.superPaymasterSetBLSAggregator({ aggregator: MOCK_USER, account: mockAccount });
 
             expect(tx1).toBe(txHash);
             expect(tx2).toBe(txHash);
@@ -275,9 +275,9 @@ describe('SuperPaymaster Actions', () => {
                 .mockResolvedValueOnce({ amount: 100n }); // latest
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const count = await actions.getSlashCount({ operator: MOCK_OPERATOR });
-            const history = await actions.getSlashHistory({ operator: MOCK_OPERATOR });
-            const latest = await actions.getLatestSlash({ operator: MOCK_OPERATOR });
+            const count = await actions.superPaymasterGetSlashCount({ operator: MOCK_OPERATOR });
+            const history = await actions.superPaymasterGetSlashHistory({ operator: MOCK_OPERATOR });
+            const latest = await actions.superPaymasterGetLatestSlash({ operator: MOCK_OPERATOR });
 
             expect(count).toBe(5n);
             expect(Array.isArray(history)).toBe(true);
@@ -292,10 +292,10 @@ describe('SuperPaymaster Actions', () => {
                 .mockResolvedValueOnce(999999n); // lastUserOpTimestamp
 
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const deposit = await actions.getDeposit();
-            const credit = await actions.getAvailableCredit({ operator: MOCK_OPERATOR, user: MOCK_USER });
-            const tracked = await actions.totalTrackedBalance();
-            const ts = await actions.lastUserOpTimestamp({ user: MOCK_USER });
+            const deposit = await actions.superPaymasterGetDeposit();
+            const credit = await actions.superPaymasterGetAvailableCredit({ operator: MOCK_OPERATOR, user: MOCK_USER });
+            const tracked = await actions.superPaymasterTotalTrackedBalance();
+            const ts = await actions.superPaymasterLastUserOpTimestamp({ user: MOCK_USER });
 
             expect(deposit).toBe(parseEther('10'));
             expect(credit).toBe(parseEther('1'));
@@ -306,7 +306,7 @@ describe('SuperPaymaster Actions', () => {
         it('should get operator balance using convenience function', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue([parseEther('5'), '0x...']); // operators returns struct
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const balance = await actions.balanceOfOperator({ operator: MOCK_OPERATOR });
+            const balance = await actions.superPaymasterBalanceOfOperator({ operator: MOCK_OPERATOR });
             expect(balance).toBe(parseEther('5'));
         });
 
@@ -314,15 +314,15 @@ describe('SuperPaymaster Actions', () => {
             const mockSlash = { amount: 100n, reason: 'Test' };
             (mockPublicClient.readContract as any).mockResolvedValue(mockSlash);
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const slash = await actions.slashHistory({ operator: MOCK_OPERATOR, index: 0n });
+            const slash = await actions.superPaymasterSlashHistory({ operator: MOCK_OPERATOR, index: 0n });
             expect(slash.amount).toBe(100n);
         });
 
         it('should query price feed and parameters', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue(100n);
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const bps = await actions.BPS_DENOMINATOR();
-            const rate = await actions.RATE_OFFSET();
+            const bps = await actions.superPaymasterBPS_DENOMINATOR();
+            const rate = await actions.superPaymasterRATE_OFFSET();
             expect(bps).toBe(100n);
             expect(rate).toBe(100n);
         });
@@ -334,13 +334,13 @@ describe('SuperPaymaster Actions', () => {
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
 
             const results = await Promise.all([
-                actions.APNTS_TOKEN(),
-                actions.BLS_AGGREGATOR(),
-                actions.ETH_USD_PRICE_FEED(),
-                actions.xpntsFactory(),
-                actions.treasury(),
-                actions.entryPoint(),
-                actions.owner()
+                actions.superPaymasterAPNTS_TOKEN(),
+                actions.superPaymasterBLS_AGGREGATOR(),
+                actions.superPaymasterETH_USD_PRICE_FEED(),
+                actions.superPaymasterXpntsFactory(),
+                actions.superPaymasterTreasury(),
+                actions.superPaymasterEntryPoint(),
+                actions.superPaymasterOwner()
             ]);
 
             results.forEach(res => expect(res).toBe(MOCK_USER));
@@ -349,7 +349,7 @@ describe('SuperPaymaster Actions', () => {
         it('should get version', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue('v0.16.4');
             const actions = superPaymasterActions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const v = await actions.version();
+            const v = await actions.superPaymasterVersion();
             expect(v).toBe('v0.16.4');
         });
     });

@@ -33,6 +33,15 @@ pnpm add @aastar/sdk
 pnpm add @aastar/core @aastar/account @aastar/paymaster
 ```
 
+### Development & Maintenance
+```bash
+# Audit ABI alignment with contracts
+pnpm run audit:abi
+
+# Generate code coverage report
+pnpm run test:coverage
+```
+
 ---
 
 ## Quick Start

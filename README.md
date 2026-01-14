@@ -111,6 +111,17 @@ const hash = await PaymasterClient.submitGaslessUserOperation(
 pnpm run test:full_sdk
 ```
 
+### ABI Alignment & Coverage
+```bash
+# Audit ABI alignment between Registry.json and core/actions
+pnpm run audit:abi
+
+# Run unit tests with coverage report
+pnpm run test:coverage
+# or for specific packages
+pnpm exec vitest run packages --coverage
+```
+
 
 ### Full Protocol Regression (Anvil Dedicated)
 ```bash

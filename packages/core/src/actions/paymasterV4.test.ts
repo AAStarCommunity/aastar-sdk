@@ -34,7 +34,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.depositFor({
+            const result = await actions.paymasterV4DepositFor({
                 user: MOCK_USER,
                 token: MOCK_TOKEN,
                 amount: 1000n,
@@ -55,7 +55,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.withdraw({
+            const result = await actions.paymasterV4Withdraw({
                 token: MOCK_TOKEN,
                 amount: 500n,
                 account: mockAccount
@@ -68,7 +68,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(1000n);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const balance = await actions.balances({ user: MOCK_USER, token: MOCK_TOKEN });
+            const balance = await actions.paymasterV4Balances({ user: MOCK_USER, token: MOCK_TOKEN });
 
             expect(balance).toBe(1000n);
         });
@@ -80,7 +80,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setTokenPrice({
+            const result = await actions.paymasterV4SetTokenPrice({
                 token: MOCK_TOKEN,
                 price: 2000n,
                 account: mockAccount
@@ -93,7 +93,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(2000n);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const price = await actions.tokenPrices({ token: MOCK_TOKEN });
+            const price = await actions.paymasterV4TokenPrices({ token: MOCK_TOKEN });
 
             expect(price).toBe(2000n);
         });
@@ -105,7 +105,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.addGasToken({
+            const result = await actions.paymasterV4AddGasToken({
                 token: MOCK_TOKEN,
                 priceFeed: '0x5555555555555555555555555555555555555555' as Address,
                 account: mockAccount
@@ -119,7 +119,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(mockTokens);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const tokens = await actions.getSupportedGasTokens();
+            const tokens = await actions.paymasterV4GetSupportedGasTokens();
 
             expect(tokens).toEqual(mockTokens);
         });
@@ -128,7 +128,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(true);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const supported = await actions.isGasTokenSupported({ token: MOCK_TOKEN });
+            const supported = await actions.paymasterV4IsGasTokenSupported({ token: MOCK_TOKEN });
 
             expect(supported).toBe(true);
         });
@@ -140,7 +140,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.addSBT({ sbt: MOCK_SBT, account: mockAccount });
+            const result = await actions.paymasterV4AddSBT({ sbt: MOCK_SBT, account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -150,7 +150,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(mockSBTs);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const sbts = await actions.getSupportedSBTs();
+            const sbts = await actions.paymasterV4GetSupportedSBTs();
 
             expect(sbts).toEqual(mockSBTs);
         });
@@ -159,7 +159,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(true);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const supported = await actions.isSBTSupported({ sbt: MOCK_SBT });
+            const supported = await actions.paymasterV4IsSBTSupported({ sbt: MOCK_SBT });
 
             expect(supported).toBe(true);
         });
@@ -171,7 +171,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.deposit({ account: mockAccount });
+            const result = await actions.paymasterV4Deposit({ account: mockAccount });
 
             expect(result).toBe(txHash);
         });
@@ -181,7 +181,7 @@ describe('PaymasterV4 Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockWalletClient as WalletClient);
-            const result = await actions.withdrawTo({
+            const result = await actions.paymasterV4WithdrawTo({
                 to: MOCK_USER,
                 amount: 100n,
                 account: mockAccount
@@ -197,7 +197,7 @@ describe('PaymasterV4 Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(mockResult);
 
             const actions = paymasterV4Actions(mockPaymasterAddress)(mockPublicClient as PublicClient);
-            const result = await actions.validatePaymasterUserOp({
+            const result = await actions.paymasterV4ValidatePaymasterUserOp({
                 userOp: {} as any,
                 userOpHash: '0xhash' as `0x${string}`,
                 maxCost: 1000n

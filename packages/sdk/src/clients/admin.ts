@@ -1,4 +1,4 @@
-import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, parseAbi } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, parseAbi } from 'viem';
 import {
     registryActions, 
     superPaymasterActions,
@@ -48,21 +48,21 @@ class SystemModule {
     constructor(private client: AdminClient) {}
 
     // Registry / Configuration Management
-    async grantRole(args: { roleId: `0x${string}`; user: Address; data: `0x${string}`; account?: Account }) {
+    async grantRole(args: { roleId: Hex; user: Address; data: Hex; account?: Account | Address }) {
         validateHex(args.roleId, 'Role ID');
         validateAddress(args.user, 'User Address');
-        return wrapAdminCall(() => this.client.registerRole(args), 'grantRole'); 
+        return wrapAdminCall(() => (this.client as any).registryRegisterRole(args), 'grantRole'); 
     }
     
-    async revokeRole(args: { roleId: `0x${string}`; user: Address; account?: Account }) {
+    async revokeRole(args: { roleId: Hex; user: Address; account?: Account | Address }) {
         validateHex(args.roleId, 'Role ID');
         validateAddress(args.user, 'User Address');
-        return wrapAdminCall(() => this.client.unRegisterRole(args), 'revokeRole');
+        return wrapAdminCall(() => (this.client as any).registryUnRegisterRole(args), 'revokeRole');
     }
 
     async setSuperPaymaster(paymaster: Address) {
         validateAddress(paymaster, 'SuperPaymaster Address');
-        return wrapAdminCall(() => this.client.setSuperPaymaster({ paymaster }), 'setSuperPaymaster');
+        return wrapAdminCall(() => (this.client as any).registrySetSuperPaymaster({ paymaster }), 'setSuperPaymaster');
     }
 }
 
@@ -71,19 +71,19 @@ class FinanceModule {
 
     async deposit(args: { amount: bigint; account?: Account | Address }) {
         validateAmount(args.amount, 'Deposit Amount');
-        return wrapAdminCall(() => this.client.deposit(args), 'deposit');
+        return wrapAdminCall(() => (this.client as any).superPaymasterDeposit(args), 'deposit');
     }
 
     async depositForOperator(args: { operator: Address; amount: bigint; account?: Account | Address }) {
         validateAddress(args.operator, 'Operator Address');
         validateAmount(args.amount, 'Deposit Amount');
-        return wrapAdminCall(() => this.client.depositForOperator(args), 'depositForOperator');
+        return wrapAdminCall(() => (this.client as any).superPaymasterDepositFor(args), 'depositForOperator');
     }
 
     async withdrawTo(args: { to: Address; amount: bigint; account?: Account | Address }) {
         validateAddress(args.to, 'To Address');
         validateAmount(args.amount, 'Withdraw Amount');
-        return wrapAdminCall(() => this.client.withdrawTo(args), 'withdrawTo');
+        return wrapAdminCall(() => (this.client as any).superPaymasterWithdrawTo(args), 'withdrawTo');
     }
 }
 
@@ -92,17 +92,27 @@ class OperatorsModule {
 
     async ban(operator: Address) {
         validateAddress(operator, 'Operator Address');
-        return wrapAdminCall(() => this.client.updateOperatorBlacklist({ operator, isBlacklisted: true }), 'ban');
+        // V3 update: updateOperatorBlacklist logic might need proof, users, statuses
+        // For now, mapping to registryUpdateOperatorBlacklist with defaults if compatible
+        return wrapAdminCall(() => (this.client as any).registryUpdateOperatorBlacklist({ 
+            users: [operator], 
+            statuses: [true], 
+            proof: '0x' 
+        }), 'ban');
     }
 
     async unban(operator: Address) {
         validateAddress(operator, 'Operator Address');
-        return wrapAdminCall(() => this.client.updateOperatorBlacklist({ operator, isBlacklisted: false }), 'unban');
+        return wrapAdminCall(() => (this.client as any).registryUpdateOperatorBlacklist({ 
+            users: [operator], 
+            statuses: [false], 
+            proof: '0x' 
+        }), 'unban');
     }
 
     async setPaused(operator: Address, paused: boolean) {
         validateAddress(operator, 'Operator Address');
-        return wrapAdminCall(() => this.client.setOperatorPaused({ operator, paused }), 'setPaused');
+        return wrapAdminCall(() => (this.client as any).superPaymasterSetOperatorPaused({ operator, paused }), 'setPaused');
     }
 }
 

@@ -212,7 +212,7 @@ Examples:
                         name: op.name.split(' ')[0],
                         tokenName: `${op.name.split(' ')[0]} PNTs`,
                         tokenSymbol: op.name.split(' ')[0].toUpperCase().slice(0, 4) + 'P',
-                        governance: { initialReputationRule: false } // 跳过 reputation rule 设置（避免 ABI 错误）
+                        governance: { initialReputationRule: true } // 跳过 reputation rule 设置（避免 ABI 错误）
                     });
                     tokenAddr = launchResult.tokenAddress;
                 }

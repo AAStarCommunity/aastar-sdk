@@ -186,7 +186,7 @@ export function createEndUserClient({
                 logDecodedEvents(events);
 
                 // 2. Fetch SBT ID
-                const sbtId = await actions.getUserSBT({ user: accountToUse.address, roleId });
+                const sbtId = await (actions as any).sbtGetUserSBT({ user: accountToUse.address, roleId });
                 console.log(`   SDK: User joined. SBT ID: ${sbtId}`);
 
                 // 3. Fetch Initial Credit for verification
@@ -202,7 +202,7 @@ export function createEndUserClient({
 
                     // If token exists (not zero address), check credit
                     if (tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000') {
-                        credit = await actions.getAvailableCredit({
+                        credit = await (actions as any).superPaymasterGetAvailableCredit({
                             user: (client as any).aaAddress || accountToUse.address,
                             operator: tokenAddress
                         });

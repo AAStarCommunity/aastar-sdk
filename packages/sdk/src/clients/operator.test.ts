@@ -8,22 +8,22 @@ vi.mock('@aastar/core', async () => {
     return {
         ...actual,
         registryActions: vi.fn(() => vi.fn(() => ({
-            hasRole: vi.fn().mockResolvedValue(false),
-            registerRoleSelf: vi.fn().mockResolvedValue('0xhash')
+            registryHasRole: vi.fn().mockResolvedValue(false),
+            registryRegisterRoleSelf: vi.fn().mockResolvedValue('0xhash')
         }))),
         stakingActions: vi.fn(() => vi.fn(() => ({
             // any staking methods if needed
         }))),
         superPaymasterActions: vi.fn(() => vi.fn(() => ({
-            depositForOperator: vi.fn().mockResolvedValue('0xhash'),
-            operators: vi.fn().mockResolvedValue([1000n, 1000n, true, false]),
-            getDeposit: vi.fn().mockResolvedValue(555n)
+            superPaymasterDepositFor: vi.fn().mockResolvedValue('0xhash'),
+            superPaymasterOperators: vi.fn().mockResolvedValue([1000n, 1000n, true, false]),
+            superPaymasterGetDeposit: vi.fn().mockResolvedValue(555n)
         }))),
         paymasterV4Actions: vi.fn(() => vi.fn(() => ({
             // pmv4 methods
         }))),
         tokenActions: vi.fn(() => vi.fn(() => ({
-            approve: vi.fn().mockResolvedValue('0xhash')
+            tokenApprove: vi.fn().mockResolvedValue('0xhash')
         }))),
     };
 });
@@ -55,9 +55,9 @@ describe('OperatorClient', () => {
             });
 
             expect(results).toHaveLength(3); 
-            expect(client.approve).toHaveBeenCalled();
-            expect(client.registerRoleSelf).toHaveBeenCalled();
-            expect(client.depositForOperator).toHaveBeenCalled();
+            expect(client.tokenApprove).toHaveBeenCalled();
+            expect(client.registryRegisterRoleSelf).toHaveBeenCalled();
+            expect(client.superPaymasterDepositFor).toHaveBeenCalled();
         });
     });
 

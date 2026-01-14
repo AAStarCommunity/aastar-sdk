@@ -8,13 +8,13 @@ vi.mock('@aastar/core', async () => {
     return {
         ...actual,
         registryActions: vi.fn(() => vi.fn(() => ({
-            registerRoleSelf: vi.fn().mockResolvedValue('0xhash')
+            registryRegisterRoleSelf: vi.fn().mockResolvedValue('0xhash')
         }))),
         sbtActions: vi.fn(() => vi.fn(() => ({
-            getUserSBT: vi.fn().mockResolvedValue(123n)
+            sbtGetUserSBT: vi.fn().mockResolvedValue(123n)
         }))),
         superPaymasterActions: vi.fn(() => vi.fn(() => ({
-            getAvailableCredit: vi.fn().mockResolvedValue(1000n)
+            superPaymasterGetAvailableCredit: vi.fn().mockResolvedValue(100n)
         }))),
         paymasterV4Actions: vi.fn(() => vi.fn(() => ({
             // pmv4
@@ -120,8 +120,8 @@ describe('EndUserClient', () => {
         it('should get available credit', async () => {
              const client = createEndUserClient({ chain: mainnet, transport: http() });
              // getAvailableCredit is part of SuperPaymasterActions which is extended in client
-             const result = await client.getAvailableCredit({ user: MOCK_ADDR, operator: MOCK_COMMUNITY });
-             expect(result).toBe(1000n);
+             const credit = await client.superPaymasterGetAvailableCredit({ operator: MOCK_COMMUNITY, user: MOCK_ADDR });
+             expect(credit).toBe(100n);
         });
     });
 

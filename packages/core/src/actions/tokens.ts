@@ -4,79 +4,79 @@ import { GTokenABI, xPNTsTokenABI } from '../abis/index.js';
 // Universal Token Actions for GToken, aPNTs, xPNTs
 export type TokenActions = {
     // ERC20 Standard (all tokens)
-    totalSupply: (args: { token: Address }) => Promise<bigint>;
-    balanceOf: (args: { token: Address, account: Address }) => Promise<bigint>;
-    cap: (args: { token: Address }) => Promise<bigint>;
-    remainingMintableSupply: (args: { token: Address }) => Promise<bigint>;
-    transfer: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    transferFrom: (args: { token: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    approve: (args: { token: Address, spender: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    allowance: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
+    tokenTotalSupply: (args: { token: Address }) => Promise<bigint>;
+    tokenBalanceOf: (args: { token: Address, account: Address }) => Promise<bigint>;
+    tokenCap: (args: { token: Address }) => Promise<bigint>;
+    tokenRemainingMintableSupply: (args: { token: Address }) => Promise<bigint>;
+    tokenTransfer: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenTransferFrom: (args: { token: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenApprove: (args: { token: Address, spender: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenAllowance: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
     
     // Mintable/Burnable
-    mint: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    burn: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    burnFrom: (args: { token: Address, from: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenMint: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenBurn: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenBurnFrom: (args: { token: Address, from: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // ERC20 Metadata
-    name: (args: { token: Address }) => Promise<string>;
-    symbol: (args: { token: Address }) => Promise<string>;
-    decimals: (args: { token: Address }) => Promise<number>;
+    tokenName: (args: { token: Address }) => Promise<string>;
+    tokenSymbol: (args: { token: Address }) => Promise<string>;
+    tokenDecimals: (args: { token: Address }) => Promise<number>;
     
     // Ownable
-    owner: (args: { token: Address }) => Promise<Address>;
-    transferTokenOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    renounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenOwner: (args: { token: Address }) => Promise<Address>;
+    tokenTransferTokenOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenRenounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
     
     // xPNTs/aPNTs specific
-    updateExchangeRate: (args: { token: Address, newRate: bigint, account?: Account | Address }) => Promise<Hash>;
-    getDebt: (args: { token: Address, user: Address }) => Promise<bigint>;
-    repayDebt: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    transferAndCall: (args: { token: Address, to: Address, amount: bigint, data?: Hex, account?: Account | Address }) => Promise<Hash>;
+    tokenUpdateExchangeRate: (args: { token: Address, newRate: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenGetDebt: (args: { token: Address, user: Address }) => Promise<bigint>;
+    tokenRepayDebt: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenTransferAndCall: (args: { token: Address, to: Address, amount: bigint, data?: Hex, account?: Account | Address }) => Promise<Hash>;
     
     // aPNTs/xPNTs - Auto Approval
-    addAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
-    removeAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
-    isAutoApprovedSpender: (args: { token: Address, spender: Address }) => Promise<boolean>;
+    tokenAddAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenRemoveAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenIsAutoApprovedSpender: (args: { token: Address, spender: Address }) => Promise<boolean>;
     
     // Constants (aPNTs/xPNTs)
-    SUPERPAYMASTER_ADDRESS: (args: { token: Address }) => Promise<Address>;
-    FACTORY: (args: { token: Address }) => Promise<Address>;
+    tokenSUPERPAYMASTER_ADDRESS: (args: { token: Address }) => Promise<Address>;
+    tokenFACTORY: (args: { token: Address }) => Promise<Address>;
     
     // Aliases & Missing
-    transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    transferCommunityOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenTransferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenTransferCommunityOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     
     // xPNTs Views
-    communityName: (args: { token: Address }) => Promise<string>;
-    communityENS: (args: { token: Address }) => Promise<string>;
-    exchangeRate: (args: { token: Address }) => Promise<bigint>;
-    spendingLimits: (args: { token: Address, user: Address }) => Promise<bigint>; // struct return shim
-    defaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
-    cumulativeSpent: (args: { token: Address, user: Address }) => Promise<bigint>;
-    debts: (args: { token: Address, user: Address }) => Promise<bigint>; // mapping
-    usedOpHashes: (args: { token: Address, hash: Hex }) => Promise<boolean>;
+    tokenCommunityName: (args: { token: Address }) => Promise<string>;
+    tokenCommunityENS: (args: { token: Address }) => Promise<string>;
+    tokenExchangeRate: (args: { token: Address }) => Promise<bigint>;
+    tokenSpendingLimits: (args: { token: Address, user: Address }) => Promise<bigint>; // struct return shim
+    tokenDefaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
+    tokenCumulativeSpent: (args: { token: Address, user: Address }) => Promise<bigint>;
+    tokenDebts: (args: { token: Address, user: Address }) => Promise<bigint>; // mapping
+    tokenUsedOpHashes: (args: { token: Address, hash: Hex }) => Promise<boolean>;
     
     // EIP2612
-    DOMAIN_SEPARATOR: (args: { token: Address }) => Promise<Hex>;
-    nonces: (args: { token: Address, owner: Address }) => Promise<bigint>;
-    permit: (args: { token: Address, owner: Address, spender: Address, value: bigint, deadline: bigint, v: number, r: Hex, s: Hex, account?: Account | Address }) => Promise<Hash>;
+    tokenDOMAIN_SEPARATOR: (args: { token: Address }) => Promise<Hex>;
+    tokenNonces: (args: { token: Address, owner: Address }) => Promise<bigint>;
+    tokenPermit: (args: { token: Address, owner: Address, spender: Address, value: bigint, deadline: bigint, v: number, r: Hex, s: Hex, account?: Account | Address }) => Promise<Hash>;
     
     // xPNTs Additional
-    autoApprovedSpenders: (args: { token: Address, spender: Address }) => Promise<boolean>;
-    burnFromWithOpHash: (args: { token: Address, account: Address, amount: bigint, opHash: Hex, userOpAccount?: Account | Address }) => Promise<Hash>;
-    communityOwner: (args: { token: Address }) => Promise<Address>;
-    eip712Domain: (args: { token: Address }) => Promise<any>;
-    getDefaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
-    getMetadata: (args: { token: Address }) => Promise<string>;
-    needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
-    recordDebt: (args: { token: Address, user: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    DEFAULT_SPENDING_LIMIT_APNTS: (args: { token: Address }) => Promise<bigint>;
+    tokenAutoApprovedSpenders: (args: { token: Address, spender: Address }) => Promise<boolean>;
+    tokenBurnFromWithOpHash: (args: { token: Address, account: Address, amount: bigint, opHash: Hex, userOpAccount?: Account | Address }) => Promise<Hash>;
+    tokenCommunityOwner: (args: { token: Address }) => Promise<Address>;
+    tokenEip712Domain: (args: { token: Address }) => Promise<any>;
+    tokenGetDefaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
+    tokenGetMetadata: (args: { token: Address }) => Promise<string>;
+    tokenNeedsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
+    tokenRecordDebt: (args: { token: Address, user: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenDEFAULT_SPENDING_LIMIT_APNTS: (args: { token: Address }) => Promise<bigint>;
     
     // Admin
-    setPaymasterLimit: (args: { token: Address, user: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
-    setSuperPaymasterAddress: (args: { token: Address, superPaymaster: Address, account?: Account | Address }) => Promise<Hash>;
-    version: (args: { token: Address }) => Promise<string>;
+    tokenSetPaymasterLimit: (args: { token: Address, user: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
+    tokenSetSuperPaymasterAddress: (args: { token: Address, superPaymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    tokenVersion: (args: { token: Address }) => Promise<string>;
 };
 
 function getTokenABI(token: Address): any {
@@ -87,62 +87,62 @@ function getTokenABI(token: Address): any {
 export const gTokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
     // Use GTokenABI for everything
     ...tokenActions()(client),
-    async totalSupply({ token }) {
+    async tokenTotalSupply({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'totalSupply', args: [] }) as Promise<bigint>;
     },
-    async balanceOf({ token, account }) {
+    async tokenBalanceOf({ token, account }: { token: Address, account: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'balanceOf', args: [account] }) as Promise<bigint>;
     },
-    async transfer({ token, to, amount, account }) {
+    async tokenTransfer({ token, to, amount, account }: { token: Address, to: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
     },
-    async transferFrom({ token, from, to, amount, account }) {
+    async tokenTransferFrom({ token, from, to, amount, account }: { token: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferFrom', args: [from, to, amount], account: account as any, chain: (client as any).chain });
     },
-    async approve({ token, spender, amount, account }) {
+    async tokenApprove({ token, spender, amount, account }: { token: Address, spender: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
     },
-    async allowance({ token, owner, spender }) {
+    async tokenAllowance({ token, owner, spender }: { token: Address, owner: Address, spender: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'allowance', args: [owner, spender] }) as Promise<bigint>;
     },
-    async mint({ token, to, amount, account }) {
+    async tokenMint({ token, to, amount, account }: { token: Address, to: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
     },
-    async burn({ token, amount, account }) {
+    async tokenBurn({ token, amount, account }: { token: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
     },
-    async burnFrom({ token, from, amount, account }) {
+    async tokenBurnFrom({ token, from, amount, account }: { token: Address, from: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burnFrom', args: [from, amount], account: account as any, chain: (client as any).chain });
     },
-    async name({ token }) {
+    async tokenName({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'name', args: [] }) as Promise<string>;
     },
-    async symbol({ token }) {
+    async tokenSymbol({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'symbol', args: [] }) as Promise<string>;
     },
-    async decimals({ token }) {
+    async tokenDecimals({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'decimals', args: [] }) as Promise<number>;
     },
-    async owner({ token }) {
+    async tokenOwner({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'owner', args: [] }) as Promise<Address>;
     },
-    async transferTokenOwnership({ token, newOwner, account }) {
+    async tokenTransferTokenOwnership({ token, newOwner, account }: { token: Address, newOwner: Address, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferOwnership', args: [newOwner], account: account as any, chain: (client as any).chain });
     },
-    async renounceOwnership({ token, account }) {
+    async tokenRenounceOwnership({ token, account }: { token: Address, account?: Account | Address }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'renounceOwnership', args: [], account: account as any, chain: (client as any).chain });
     },
-    async cap({ token }) {
+    async tokenCap({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'cap', args: [] }) as Promise<bigint>;
     },
-    async remainingMintableSupply({ token }) {
+    async tokenRemainingMintableSupply({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'remainingMintableSupply', args: [] }) as Promise<bigint>;
     },
 });
 
 export const tokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
     // ERC20 Standard
-    async totalSupply({ token }) {
+    async tokenTotalSupply({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -151,7 +151,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<bigint>;
     },
 
-    async cap({ token }) {
+    async tokenCap({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -160,7 +160,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<bigint>;
     },
 
-    async remainingMintableSupply({ token }) {
+    async tokenRemainingMintableSupply({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -169,7 +169,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<bigint>;
     },
 
-    async balanceOf({ token, account }) {
+    async tokenBalanceOf({ token, account }: { token: Address, account: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -178,7 +178,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<bigint>;
     },
 
-    async transfer({ token, to, amount, account }) {
+    async tokenTransfer({ token, to, amount, account }: { token: Address, to: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -189,7 +189,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async transferFrom({ token, from, to, amount, account }) {
+    async tokenTransferFrom({ token, from, to, amount, account }: { token: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -200,7 +200,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async approve({ token, spender, amount, account }) {
+    async tokenApprove({ token, spender, amount, account }: { token: Address, spender: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -211,7 +211,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async allowance({ token, owner, spender }) {
+    async tokenAllowance({ token, owner, spender }: { token: Address, owner: Address, spender: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -221,7 +221,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // Mintable/Burnable
-    async mint({ token, to, amount, account }) {
+    async tokenMint({ token, to, amount, account }: { token: Address, to: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -232,7 +232,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async burn({ token, amount, account }) {
+    async tokenBurn({ token, amount, account }: { token: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -243,7 +243,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async burnFrom({ token, from, amount, account }) {
+    async tokenBurnFrom({ token, from, amount, account }: { token: Address, from: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -255,8 +255,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // ERC20 Metadata
-    async name({ token } = {} as any) {
-        if (!token) throw new Error("Token address required");
+    async tokenName({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -265,8 +264,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<string>;
     },
 
-    async symbol({ token } = {} as any) {
-        if (!token) throw new Error("Token address required");
+    async tokenSymbol({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -275,7 +273,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<string>;
     },
 
-    async decimals({ token }) {
+    async tokenDecimals({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -285,7 +283,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // Ownable
-    async owner({ token }) {
+    async tokenOwner({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -294,7 +292,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<Address>;
     },
 
-    async transferTokenOwnership({ token, newOwner, account }) {
+    async tokenTransferTokenOwnership({ token, newOwner, account }: { token: Address, newOwner: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -305,7 +303,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async renounceOwnership({ token, account }) {
+    async tokenRenounceOwnership({ token, account }: { token: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -317,7 +315,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // xPNTs/aPNTs specific
-    async updateExchangeRate({ token, newRate, account }) {
+    async tokenUpdateExchangeRate({ token, newRate, account }: { token: Address, newRate: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -328,7 +326,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async getDebt({ token, user }) {
+    async tokenGetDebt({ token, user }: { token: Address, user: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: getTokenABI(token),
@@ -337,7 +335,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<bigint>;
     },
 
-    async repayDebt({ token, amount, account }) {
+    async tokenRepayDebt({ token, amount, account }: { token: Address, amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -348,7 +346,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async transferAndCall({ token, to, amount, data = '0x', account }) {
+    async tokenTransferAndCall({ token, to, amount, data = '0x', account }: { token: Address, to: Address, amount: bigint, data?: Hex, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: getTokenABI(token),
@@ -360,7 +358,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // Auto Approval
-    async addAutoApprovedSpender({ token, spender, account }) {
+    async tokenAddAutoApprovedSpender({ token, spender, account }: { token: Address, spender: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -371,7 +369,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async removeAutoApprovedSpender({ token, spender, account }) {
+    async tokenRemoveAutoApprovedSpender({ token, spender, account }: { token: Address, spender: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -382,7 +380,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         });
     },
 
-    async isAutoApprovedSpender({ token, spender }) {
+    async tokenIsAutoApprovedSpender({ token, spender }: { token: Address, spender: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -392,7 +390,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // Constants
-    async SUPERPAYMASTER_ADDRESS({ token }) {
+    async tokenSUPERPAYMASTER_ADDRESS({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -401,7 +399,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<Address>;
     },
 
-    async FACTORY({ token }) {
+    async tokenFACTORY({ token }: { token: Address }) {
         return (client as PublicClient).readContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -410,11 +408,11 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
         }) as Promise<Address>;
     },
 
-    async transferOwnership(args) {
-        return this.transferTokenOwnership(args);
+    async tokenTransferOwnership(args: { token: Address, newOwner: Address, account?: Account | Address }) {
+        return this.tokenTransferTokenOwnership(args);
     },
 
-    async transferCommunityOwnership({ token, newOwner, account }) {
+    async tokenTransferCommunityOwnership({ token, newOwner, account }: { token: Address, newOwner: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -426,50 +424,43 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // xPNTs Views
-    async communityName({ token }) {
+    async tokenCommunityName({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'communityName', args: [] }) as Promise<string>;
     },
-    async communityENS({ token }) {
+    async tokenCommunityENS({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'communityENS', args: [] }) as Promise<string>;
     },
-    async exchangeRate({ token }) {
+    async tokenExchangeRate({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'exchangeRate', args: [] }) as Promise<bigint>;
     },
-    async spendingLimits({ token, user }) {
-        // Struct return, usually returns tuple. We force basic type or handle tuple if needed.
-        // For logic simplicity we return raw result, caller handles formatting if needs validation.
+    async tokenSpendingLimits({ token, user }: { token: Address, user: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'spendingLimits', args: [user] }) as Promise<bigint>; 
     },
-    async defaultSpendingLimitXPNTs({ token }) {
-        // Note: the ABI might name it differently, check audit report -> getDefaultSpendingLimitXPNTs
-        // Actually audit report says "getDefaultSpendingLimitXPNTs" is missing.
-        // Let's implement the getter if it effectively matches.
-        // Wait, 'getDefaultSpendingLimitXPNTs' (function) vs 'defaultSpendingLimitXPNTs' (public var).
-        // Let's try public var getter first.
+    async tokenDefaultSpendingLimitXPNTs({ token }: { token: Address }) {
         try {
              return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'defaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
         } catch {
              return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'getDefaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
         }
     },
-    async cumulativeSpent({ token, user }) {
+    async tokenCumulativeSpent({ token, user }: { token: Address, user: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'cumulativeSpent', args: [user] }) as Promise<bigint>;
     },
-    async debts({ token, user }) {
+    async tokenDebts({ token, user }: { token: Address, user: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'debts', args: [user] }) as Promise<bigint>;
     },
-    async usedOpHashes({ token, hash }) {
+    async tokenUsedOpHashes({ token, hash }: { token: Address, hash: Hex }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'usedOpHashes', args: [hash] }) as Promise<boolean>;
     },
 
     // EIP2612
-    async DOMAIN_SEPARATOR({ token }) { // Fixed typo
+    async tokenDOMAIN_SEPARATOR({ token }: { token: Address }) { 
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'DOMAIN_SEPARATOR', args: [] }) as Promise<Hex>;
     },
-    async nonces({ token, owner }) {
+    async tokenNonces({ token, owner }: { token: Address, owner: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'nonces', args: [owner] }) as Promise<bigint>;
     },
-    async permit({ token, owner, spender, value, deadline, v, r, s, account }) {
+    async tokenPermit({ token, owner, spender, value, deadline, v, r, s, account }: { token: Address, owner: Address, spender: Address, value: bigint, deadline: bigint, v: number, r: Hex, s: Hex, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -481,36 +472,36 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     // xPNTs Additional
-    async autoApprovedSpenders({ token, spender }) {
+    async tokenAutoApprovedSpenders({ token, spender }: { token: Address, spender: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'autoApprovedSpenders', args: [spender] }) as Promise<boolean>;
     },
-    async burnFromWithOpHash({ token, account: user, amount, opHash, userOpAccount }) {
+    async tokenBurnFromWithOpHash({ token, account: user, amount, opHash, userOpAccount }: { token: Address, account: Address, amount: bigint, opHash: Hex, userOpAccount?: Account | Address }) {
          return (client as any).writeContract({ address: token, abi: xPNTsTokenABI, functionName: 'burnFromWithOpHash', args: [user, amount, opHash], account: userOpAccount as any, chain: (client as any).chain });
     },
-    async communityOwner({ token }) {
+    async tokenCommunityOwner({ token }: { token: Address }) {
          return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'communityOwner', args: [] }) as Promise<Address>;
     },
-    async eip712Domain({ token }) {
+    async tokenEip712Domain({ token }: { token: Address }) {
          return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'eip712Domain', args: [] }) as Promise<any>;
     },
-    async getDefaultSpendingLimitXPNTs({ token }) {
+    async tokenGetDefaultSpendingLimitXPNTs({ token }: { token: Address }) {
          return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'getDefaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
     },
-    async getMetadata({ token }) {
+    async tokenGetMetadata({ token }: { token: Address }) {
          return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'getMetadata', args: [] }) as Promise<string>;
     },
-    async needsApproval({ token, owner, spender, amount }) {
+    async tokenNeedsApproval({ token, owner, spender, amount }: { token: Address, owner: Address, spender: Address, amount: bigint }) {
          return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'needsApproval', args: [owner, spender, amount] }) as Promise<boolean>;
     },
-    async recordDebt({ token, user, amount, account }) {
+    async tokenRecordDebt({ token, user, amount, account }: { token: Address, user: Address, amount: bigint, account?: Account | Address }) {
          return (client as any).writeContract({ address: token, abi: xPNTsTokenABI, functionName: 'recordDebt', args: [user, amount], account: account as any, chain: (client as any).chain });
     },
-    async DEFAULT_SPENDING_LIMIT_APNTS({ token }) {
+    async tokenDEFAULT_SPENDING_LIMIT_APNTS({ token }: { token: Address }) {
          return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'DEFAULT_SPENDING_LIMIT_APNTS', args: [] }) as Promise<bigint>;
     },
 
     // Admin
-    async setPaymasterLimit({ token, user, limit, account }) {
+    async tokenSetPaymasterLimit({ token, user, limit, account }: { token: Address, user: Address, limit: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -520,7 +511,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
             chain: (client as any).chain
         });
     },
-    async setSuperPaymasterAddress({ token, superPaymaster, account }) {
+    async tokenSetSuperPaymasterAddress({ token, superPaymaster, account }: { token: Address, superPaymaster: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address: token,
             abi: xPNTsTokenABI,
@@ -530,7 +521,7 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
             chain: (client as any).chain
         });
     },
-    async version({ token }) {
+    async tokenVersion({ token }: { token: Address }) {
         return (client as PublicClient).readContract({ address: token, abi: xPNTsTokenABI, functionName: 'version', args: [] }) as Promise<string>;
     }
 });

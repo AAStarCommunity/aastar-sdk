@@ -131,7 +131,7 @@ export function createCommunityClient({
             // Register Role
             console.log('   Registry: Registering Role...');
             try {
-                const regTx = await registryActionsObj.registerRoleSelf({
+                const regTx = await registryActionsObj.registryRegisterRoleSelf({
                     roleId: RoleIds.COMMUNITY,
                     data: roleDataHex,
                     account

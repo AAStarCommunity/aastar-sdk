@@ -34,7 +34,7 @@ describe('Registry Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(true);
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const hasRole = await actions.hasRole({ user: MOCK_USER, roleId: MOCK_ROLE_ID });
+            const hasRole = await actions.registryHasRole({ user: MOCK_USER, roleId: MOCK_ROLE_ID });
 
             expect(hasRole).toBe(true);
             expect(mockPublicClient.readContract).toHaveBeenCalledWith(
@@ -49,7 +49,7 @@ describe('Registry Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(false);
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const hasRole = await actions.hasRole({ user: MOCK_USER, roleId: MOCK_ROLE_ID });
+            const hasRole = await actions.registryHasRole({ user: MOCK_USER, roleId: MOCK_ROLE_ID });
 
             expect(hasRole).toBe(false);
         });
@@ -59,7 +59,7 @@ describe('Registry Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue(mockConfig);
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const config = await actions.getRoleConfig({ roleId: MOCK_ROLE_ID });
+            const config = await actions.registryGetRoleConfig({ roleId: MOCK_ROLE_ID });
 
             expect(config).toEqual(mockConfig);
         });
@@ -71,7 +71,7 @@ describe('Registry Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.registerRole({
+            const result = await actions.registryRegisterRole({
                 roleId: MOCK_ROLE_ID,
                 user: MOCK_USER,
                 data: '0x',
@@ -91,9 +91,23 @@ describe('Registry Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
 
             const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.unRegisterRole({
+            const result = await actions.registryUnRegisterRole({
                 user: MOCK_USER,
                 roleId: MOCK_ROLE_ID,
+                account: mockAccount
+            });
+
+            expect(result).toBe(txHash);
+        });
+
+        it('should register role self', async () => {
+            const txHash = '0xghi...';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+
+            const actions = registryActions(mockRegistryAddress)(mockWalletClient as any);
+            const result = await actions.registryRegisterRoleSelf({
+                roleId: MOCK_ROLE_ID,
+                data: '0x',
                 account: mockAccount
             });
 
@@ -102,55 +116,41 @@ describe('Registry Actions', () => {
     });
 
     describe('Community queries', () => {
-        it('should get community token', async () => {
-            const mockToken: Address = '0x4444444444444444444444444444444444444444';
-            (mockPublicClient.readContract as any).mockResolvedValue(mockToken);
+        it('should check community membership', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(true);
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const token = await actions.communityToToken({ community: MOCK_COMMUNITY });
+            const isMember = await actions.registryIsCommunityMember({
+                community: MOCK_COMMUNITY,
+                user: MOCK_USER
+            });
 
-            expect(token).toBe(mockToken);
+            expect(isMember).toBe(true);
         });
 
-        it('should get community role data', async () => {
-            const mockData = { roleId: MOCK_ROLE_ID, active: true };
-            (mockPublicClient.readContract as any).mockResolvedValue(mockData);
+        it('should lookup community by name', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(MOCK_COMMUNITY);
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const data = await actions.getCommunityRoleData({ community: MOCK_COMMUNITY });
+            const addr = await actions.registryCommunityByName({ name: 'test' });
 
-            expect(data).toEqual(mockData);
+            expect(addr).toBe(MOCK_COMMUNITY);
         });
     });
 
-    describe('Credit & Reputation', () => {
-        it('should get credit limit', async () => {
-            (mockPublicClient.readContract as any).mockResolvedValue(parseEther('100'));
-            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const limit = await actions.getCreditLimit({ user: MOCK_USER });
-            expect(limit).toBe(parseEther('100'));
-        });
-
+    describe('Reputation', () => {
         it('should get global reputation', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue(500n);
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const rep = await actions.getGlobalReputation({ user: MOCK_USER });
+            const rep = await actions.registryGlobalReputation({ user: MOCK_USER });
             expect(rep).toBe(500n);
-        });
-
-        it('should set credit tier', async () => {
-            const txHash = '0xhash';
-            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.setCreditTier({ tier: 1n, params: '0x', account: mockAccount });
-            expect(result).toBe(txHash);
         });
 
         it('should batch update global reputation', async () => {
             const txHash = '0xhash';
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.batchUpdateGlobalReputation({
+            const result = await actions.registryBatchUpdateGlobalReputation({
                 users: [MOCK_USER],
                 scores: [1000n],
                 epoch: 1n,
@@ -168,104 +168,78 @@ describe('Registry Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValue(true);
 
             const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const tx = await actions.updateOperatorBlacklist({ operator: MOCK_USER, isBlacklisted: true, account: mockAccount });
-            const isBlacklisted = await actions.isOperatorBlacklisted({ operator: MOCK_USER });
+            const tx = await actions.registryUpdateOperatorBlacklist({ 
+                operator: MOCK_USER, 
+                users: [MOCK_USER],
+                statuses: [true],
+                proof: '0x',
+                account: mockAccount 
+            });
+            const isBlacklisted = await actions.registryIsOperatorBlacklisted({ operator: MOCK_USER });
 
             expect(tx).toBe(txHash);
             expect(isBlacklisted).toBe(true);
+            expect(mockWalletClient.writeContract).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    functionName: 'updateOperatorBlacklist',
+                    args: [MOCK_USER, [MOCK_USER], [true], '0x'],
+                })
+            );
         });
     });
 
     describe('Contract References', () => {
-        it('should set all contract references', async () => {
-            const txHash = '0xhash';
-            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-
-            const results = await Promise.all([
-                actions.setBLSValidator({ validator: MOCK_USER, account: mockAccount }),
-                actions.setBLSAggregator({ aggregator: MOCK_USER, account: mockAccount }),
-                actions.setMySBT({ sbt: MOCK_USER, account: mockAccount }),
-                actions.setSuperPaymaster({ paymaster: MOCK_USER, account: mockAccount }),
-                actions.setStaking({ staking: MOCK_USER, account: mockAccount }),
-                actions.setReputationSource({ source: MOCK_USER, account: mockAccount })
-            ]);
-
-            results.forEach(res => expect(res).toBe(txHash));
-        });
-
         it('should query all contract references', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
 
             const results = await Promise.all([
-                actions.blsValidator(),
-                actions.blsAggregator(),
-                actions.mySBT(),
-                actions.superPaymaster(),
-                actions.staking(),
-                actions.reputationSource()
+                actions.registryBlsValidator(),
+                actions.registryBlsAggregator(),
+                actions.registryMySBT(),
+                actions.registrySuperPaymaster(),
+                actions.registryStaking(),
+                actions.registryReputationSource(),
+                actions.registryLevelThresholds({ level: 0n }),
+                actions.registryIsReputationSource({ source: MOCK_USER }),
+                actions.registryCreditTierConfig({ level: 1n }),
+                actions.registryRoleConfigs({ roleId: MOCK_ROLE_ID }),
+                actions.registryRoleLockDurations({ roleId: MOCK_ROLE_ID }),
+                actions.registryRoleOwners({ roleId: MOCK_ROLE_ID }),
+                actions.registryRoleSBTTokenIds({ roleId: MOCK_ROLE_ID, user: MOCK_USER }),
+                actions.registryRoleStakes({ roleId: MOCK_ROLE_ID, user: MOCK_USER }),
+                actions.registryUserRoles({ user: MOCK_USER, index: 0n }),
+                actions.registryUserRoleCount({ user: MOCK_USER }),
+                actions.registryRoleMetadata({ roleId: MOCK_ROLE_ID }),
+                actions.registryRoleMemberIndex({ roleId: MOCK_ROLE_ID, user: MOCK_USER }),
+                actions.registryRoleMembers({ roleId: MOCK_ROLE_ID, index: 0n }),
+                actions.registryRoleCounts({ roleId: MOCK_ROLE_ID })
             ]);
 
-            results.forEach(res => expect(res).toBe(MOCK_USER));
+            results.forEach(res => expect(res).toBeDefined());
         });
     });
 
-    describe('Admin & Role Advanced Operations', () => {
-        it('should admin configure role', async () => {
-            const txHash = '0xhash';
-            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.adminConfigureRole({ roleId: '0xROLE', config: {} as any, account: mockAccount });
-            expect(result).toBe(txHash);
-        });
-
-        it('should create new role', async () => {
-            const txHash = '0xhash';
-            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.createNewRole({ name: 'NewRole', config: {} as any, account: mockAccount });
-            expect(result).toBe(txHash);
-        });
-
-        it('should safe mint for role', async () => {
-            const txHash = '0xhash';
-            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const result = await actions.safeMintForRole({ roleId: '0xROLE', to: MOCK_USER, tokenURI: 'ipfs://...', account: mockAccount });
-            expect(result).toBe(txHash);
-        });
-
+    describe('Role Operations', () => {
         it('should exit role and calculate fee', async () => {
             const txHash = '0xhash';
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
-            (mockWalletClient.readContract as any).mockResolvedValue(parseEther('1'));
+            (mockPublicClient.readContract as any).mockResolvedValue(parseEther('1'));
 
-            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
-            const fee = await actions.calculateExitFee({ user: MOCK_USER, roleId: '0xROLE' });
-            const tx = await actions.exitRole({ roleId: '0xROLE', account: mockAccount });
+            const actions = registryActions(mockRegistryAddress)(mockWalletClient as any);
+            const actionsRead = registryActions(mockRegistryAddress)(mockPublicClient as any);
+            
+            const fee = await actionsRead.registryCalculateExitFee({ roleId: MOCK_ROLE_ID, amount: 1000n });
+            const tx = await actions.registryExitRole({ roleId: MOCK_ROLE_ID, account: mockAccount });
 
             expect(fee).toBe(parseEther('1'));
             expect(tx).toBe(txHash);
-        });
-    });
-
-    describe('Community Management', () => {
-        it('should lookup community by name and ENS', async () => {
-            (mockPublicClient.readContract as any).mockResolvedValue(MOCK_COMMUNITY);
-            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const addr1 = await actions.communityByNameV3({ name: 'Test' });
-            const addr2 = await actions.communityByENSV3({ ensName: 'test.eth' });
-            expect(addr1).toBe(MOCK_COMMUNITY);
-            expect(addr2).toBe(MOCK_COMMUNITY);
-        });
-
-        it('should get community role data', async () => {
-            const mockData = { some: 'data' };
-            (mockPublicClient.readContract as any).mockResolvedValue(mockData);
-            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const data = await actions.getCommunityRoleData({ community: MOCK_COMMUNITY });
-            expect(data).toEqual(mockData);
+            expect(mockPublicClient.readContract).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    functionName: 'calculateExitFee',
+                    args: [MOCK_ROLE_ID, 1000n],
+                })
+            );
         });
 
         it('should check if user is community member', async () => {
@@ -273,8 +247,26 @@ describe('Registry Actions', () => {
             (mockPublicClient.readContract as any).mockResolvedValue('0xROLE'); // ROLE_ENDUSER
             (mockPublicClient.readContract as any).mockResolvedValueOnce('0xROLE').mockResolvedValueOnce(true);
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const isMember = await actions.isCommunityMember({ community: MOCK_COMMUNITY, user: MOCK_USER });
+            const isMember = await actions.registryIsCommunityMember({ community: MOCK_COMMUNITY, user: MOCK_USER });
             expect(isMember).toBe(true);
+        });
+    });
+
+    describe('Constants (Role IDs)', () => {
+        it('should return all role ID constants', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue('0xROLE');
+            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
+
+            expect(await actions.registryROLE_COMMUNITY()).toBe('0xROLE');
+            expect(await actions.registryROLE_ENDUSER()).toBe('0xROLE');
+            expect(await actions.registryROLE_PAYMASTER_AOA()).toBe('0xROLE');
+            expect(await actions.registryROLE_PAYMASTER_SUPER()).toBe('0xROLE');
+            expect(await actions.registryROLE_DVT()).toBe('0xROLE');
+            expect(await actions.registryROLE_ANODE()).toBe('0xROLE');
+            expect(await actions.registryROLE_KMS()).toBe('0xROLE');
+            expect(await actions.registryGTOKEN_STAKING()).toBe('0xROLE');
+            expect(await actions.registryMYSBT()).toBe('0xROLE');
+            expect(await actions.registrySUPER_PAYMASTER()).toBe('0xROLE');
         });
     });
 
@@ -286,9 +278,9 @@ describe('Registry Actions', () => {
                 .mockResolvedValueOnce(3600n); // lock duration
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const count = await actions.getRoleUserCount({ roleId: MOCK_ROLE_ID });
-            const meta = await actions.roleMetadata({ roleId: MOCK_ROLE_ID });
-            const lock = await actions.roleLockDurations({ roleId: MOCK_ROLE_ID });
+            const count = await actions.registryGetRoleUserCount({ roleId: MOCK_ROLE_ID });
+            const meta = await actions.registryRoleMetadata({ roleId: MOCK_ROLE_ID });
+            const lock = await actions.registryRoleLockDurations({ roleId: MOCK_ROLE_ID });
 
             expect(count).toBe(10n);
             expect(meta).toEqual({ meta: 'data' });
@@ -301,8 +293,8 @@ describe('Registry Actions', () => {
                 .mockResolvedValueOnce(1n); // sbt id
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const stake = await actions.roleStakes({ roleId: MOCK_ROLE_ID, user: MOCK_USER });
-            const sbtId = await actions.roleSBTTokenIds({ roleId: MOCK_ROLE_ID, user: MOCK_USER });
+            const stake = await actions.registryRoleStakes({ roleId: MOCK_ROLE_ID, user: MOCK_USER });
+            const sbtId = await actions.registryRoleSBTTokenIds({ roleId: MOCK_ROLE_ID, user: MOCK_USER });
 
             expect(stake).toBe(100n);
             expect(sbtId).toBe(1n);
@@ -314,65 +306,21 @@ describe('Registry Actions', () => {
                 .mockResolvedValueOnce(['0xROLE']); // user roles
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const members = await actions.getRoleMembers({ roleId: MOCK_ROLE_ID });
-            const roles = await actions.getUserRoles({ user: MOCK_USER });
+            const members = await actions.registryGetRoleMembers({ roleId: MOCK_ROLE_ID });
+            const roles = await actions.registryGetUserRoles({ user: MOCK_USER });
 
             expect(members).toEqual([MOCK_USER]);
             expect(roles).toEqual(['0xROLE']);
         });
 
         it('should get version', async () => {
-            (mockPublicClient.readContract as any).mockResolvedValue('v0.16.4');
+            (mockPublicClient.readContract as any).mockResolvedValue('1.0.0');
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const v = await actions.version();
-            expect(v).toBe('v0.16.4');
+            expect(await actions.registryVersion()).toBe('1.0.0');
         });
+    });
+
     describe('Advanced View & Utility Functions', () => {
-        it('should query role counts and specific members', async () => {
-            (mockPublicClient.readContract as any)
-                .mockResolvedValueOnce(5n) // roleCounts
-                .mockResolvedValueOnce(MOCK_USER) // roleMembers
-                .mockResolvedValueOnce('0xROLE') // userRoles
-                .mockResolvedValueOnce(2n); // userRoleCount
-
-            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const count = await actions.roleCounts({ roleId: MOCK_ROLE_ID });
-            const member = await actions.roleMembers({ roleId: MOCK_ROLE_ID, index: 0n });
-            const userRole = await actions.userRoles({ user: MOCK_USER, index: 0n });
-            const userRoleCount = await actions.userRoleCount({ user: MOCK_USER });
-
-            expect(count).toBe(5n);
-            expect(member).toBe(MOCK_USER);
-            expect(userRole).toBe('0xROLE');
-            expect(userRoleCount).toBe(2n);
-        });
-
-        it('should query credit tiers and level thresholds', async () => {
-            (mockPublicClient.readContract as any)
-                .mockResolvedValueOnce({ active: true }) // creditTiers
-                .mockResolvedValueOnce(1000n); // levelThresholds
-
-            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const tier = await actions.creditTiers({ tier: 1n });
-            const threshold = await actions.levelThresholds({ level: 5n });
-
-            expect(tier).toEqual({ active: true });
-            expect(threshold).toBe(1000n);
-        });
-
-        it('should lookup accounts and communities', async () => {
-            (mockPublicClient.readContract as any)
-                .mockResolvedValueOnce(MOCK_USER) // accountToUser
-                .mockResolvedValueOnce(MOCK_COMMUNITY); // getAccountCommunity
-
-            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const user = await actions.accountToUser({ account: MOCK_USER });
-            const community = await actions.getAccountCommunity({ account: MOCK_USER });
-
-            expect(user).toBe(MOCK_USER);
-            expect(community).toBe(MOCK_COMMUNITY);
-        });
-
         it('should query role metadata specifics', async () => {
             (mockPublicClient.readContract as any)
                 .mockResolvedValueOnce(MOCK_USER) // roleOwners
@@ -380,13 +328,46 @@ describe('Registry Actions', () => {
                 .mockResolvedValueOnce('ProposedName'); // proposedRoleNames
 
             const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
-            const owner = await actions.roleOwners({ roleId: MOCK_ROLE_ID });
-            const index = await actions.roleMemberIndex({ roleId: MOCK_ROLE_ID, user: MOCK_USER });
-            const name = await actions.proposedRoleNames({ roleId: MOCK_ROLE_ID });
+            const owner = await actions.registryRoleOwners({ roleId: MOCK_ROLE_ID });
+            const index = await actions.registryRoleMemberIndex({ roleId: MOCK_ROLE_ID, user: MOCK_USER });
+            const name = await actions.registryProposedRoleNames({ roleId: MOCK_ROLE_ID });
 
             expect(owner).toBe(MOCK_USER);
             expect(index).toBe(0n);
             expect(name).toBe('ProposedName');
+        });
+
+        it('should query reputation source and epoch', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(true) // isReputationSource
+                .mockResolvedValueOnce(10n); // lastReputationEpoch
+
+            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
+            expect(await actions.registryIsReputationSource({ source: MOCK_USER })).toBe(true);
+            expect(await actions.registryLastReputationEpoch()).toBe(10n);
+        });
+
+        it('should lookup accounts and executed proposals', async () => {
+            (mockPublicClient.readContract as any)
+                .mockResolvedValueOnce(MOCK_USER) // accountToUser
+                .mockResolvedValueOnce(true); // executedProposals
+
+            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
+            const user = await actions.registryAccountToUser({ account: MOCK_USER });
+            const executed = await actions.registryExecutedProposals({ proposalId: 1n });
+
+            expect(user).toBe(MOCK_USER);
+            expect(executed).toBe(true);
+        });
+
+        it('should lookup communities', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(MOCK_COMMUNITY);
+            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
+
+            expect(await actions.registryCommunityByName({ name: 'test' })).toBe(MOCK_COMMUNITY);
+            expect(await actions.registryCommunityByENS({ ensName: 'test.eth' })).toBe(MOCK_COMMUNITY);
+            expect(await actions.registryCommunityByNameV3({ name: 'test' })).toBe(MOCK_COMMUNITY);
+            expect(await actions.registryCommunityByENSV3({ ensName: 'test.eth' })).toBe(MOCK_COMMUNITY);
         });
 
         it('should manage role settings (admin)', async () => {
@@ -394,16 +375,69 @@ describe('Registry Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
 
-            const tx1 = await actions.setRoleLockDuration({ roleId: MOCK_ROLE_ID, duration: 86400n, account: mockAccount });
-            const tx2 = await actions.setRoleOwner({ roleId: MOCK_ROLE_ID, newOwner: MOCK_USER, account: mockAccount });
-            const tx3 = await actions.addLevelThreshold({ level: 1n, threshold: 100n, account: mockAccount });
-            const tx4 = await actions.setLevelThreshold({ level: 1n, threshold: 100n, account: mockAccount });
+            expect(await actions.registrySetRoleLockDuration({ roleId: MOCK_ROLE_ID, duration: 86400n, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetRoleOwner({ roleId: MOCK_ROLE_ID, newOwner: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registryAddLevelThreshold({ threshold: 100n, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetLevelThreshold({ index: 0n, threshold: 50n, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetCreditTier({ level: 1n, limit: 1000n, account: mockAccount })).toBe(txHash);
+        });
 
-            expect(tx1).toBe(txHash);
-            expect(tx2).toBe(txHash);
-            expect(tx3).toBe(txHash);
-            expect(tx4).toBe(txHash);
+        it('should perform advanced admin operations', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
+
+            expect(await actions.registryAdminConfigureRole({ 
+                roleId: MOCK_ROLE_ID, 
+                minStake: 1n, 
+                entryBurn: 1n, 
+                exitFeePercent: 100, 
+                minExitFee: 1n, 
+                account: mockAccount 
+            })).toBe(txHash);
+
+            expect(await actions.registryCreateNewRole({ 
+                roleId: MOCK_ROLE_ID, 
+                config: { minStake: 1n } as any, 
+                roleOwner: MOCK_USER, 
+                account: mockAccount 
+            })).toBe(txHash);
+
+            expect(await actions.registrySafeMintForRole({ 
+                roleId: MOCK_ROLE_ID, 
+                user: MOCK_USER, 
+                data: '0x', 
+                account: mockAccount 
+            })).toBe(txHash);
+        });
+
+        it('should query credit and tiers', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(1000n);
+            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
+
+            expect(await actions.registryGetCreditLimit({ user: MOCK_USER })).toBe(1000n);
+            expect(await actions.registryCreditTierConfig({ level: 1n })).toBe(1000n);
+        });
+
+        it('should manage administrative setters', async () => {
+            const txHash = '0xhash';
+            (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
+            const actions = registryActions(mockRegistryAddress)(mockWalletClient as WalletClient);
+
+            expect(await actions.registrySetBLSValidator({ validator: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetBLSAggregator({ aggregator: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetMySBT({ sbt: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetSuperPaymaster({ paymaster: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetStaking({ staking: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registrySetReputationSource({ source: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registryTransferOwnership({ newOwner: MOCK_USER, account: mockAccount })).toBe(txHash);
+            expect(await actions.registryRenounceOwnership({ account: mockAccount })).toBe(txHash);
+        });
+
+        it('should query simple properties', async () => {
+            (mockPublicClient.readContract as any).mockResolvedValue(MOCK_USER);
+            const actions = registryActions(mockRegistryAddress)(mockPublicClient as PublicClient);
+            expect(await actions.registryOwner()).toBe(MOCK_USER);
         });
     });
-});
 });

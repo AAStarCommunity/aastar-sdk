@@ -34,7 +34,7 @@ describe('SBT Actions', () => {
 
             const user: Address = '0x1234567890123456789012345678901234567890';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const tokenId = await actions.userToSBT({ user });
+            const tokenId = await actions.sbtUserToSBT({ user });
 
             expect(tokenId).toBe(expectedTokenId);
             expect(mockPublicClient.readContract).toHaveBeenCalledWith(
@@ -50,7 +50,7 @@ describe('SBT Actions', () => {
 
             const user: Address = '0xabcd1234567890123456789012345678901234ab';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const tokenId = await actions.userToSBT({ user });
+            const tokenId = await actions.sbtUserToSBT({ user });
 
             expect(tokenId).toBe(0n);
         });
@@ -66,7 +66,7 @@ describe('SBT Actions', () => {
 
             const user: Address = '0x3333333333333333333333333333333333333333';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const memberships = await actions.getMemberships({ user });
+            const memberships = await actions.sbtGetMemberships({ user });
 
             expect(memberships).toHaveLength(2);
             expect(mockPublicClient.readContract).toHaveBeenCalledWith(
@@ -81,7 +81,7 @@ describe('SBT Actions', () => {
 
             const user: Address = '0x4444444444444444444444444444444444444444';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const memberships = await actions.getMemberships({ user });
+            const memberships = await actions.sbtGetMemberships({ user });
 
             expect(memberships).toHaveLength(0);
         });
@@ -97,7 +97,7 @@ describe('SBT Actions', () => {
 
             const user: Address = '0x7777777777777777777777777777777777777777';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const activeMemberships = await actions.getActiveMemberships({ user });
+            const activeMemberships = await actions.sbtGetActiveMemberships({ user });
 
             expect(activeMemberships).toHaveLength(2);
         });
@@ -110,7 +110,7 @@ describe('SBT Actions', () => {
             const user: Address = '0x8888888888888888888888888888888888888888';
             const community: Address = '0x9999999999999999999999999999999999999999';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const isMember = await actions.verifyCommunityMembership({ user, community });
+            const isMember = await actions.sbtVerifyCommunityMembership({ user, community });
 
             expect(isMember).toBe(true);
             expect(mockPublicClient.readContract).toHaveBeenCalledWith(
@@ -127,7 +127,7 @@ describe('SBT Actions', () => {
             const user: Address = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
             const community: Address = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const isMember = await actions.verifyCommunityMembership({ user, community });
+            const isMember = await actions.sbtVerifyCommunityMembership({ user, community });
 
             expect(isMember).toBe(false);
         });
@@ -140,10 +140,10 @@ describe('SBT Actions', () => {
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
 
             const results = await Promise.all([
-                actions.safeMintForRole({ roleId: '0xROLE', to: MOCK_USER, tokenURI: 'uri', account: mockAccount }),
-                actions.airdropMint({ roleId: '0xROLE', to: MOCK_USER, tokenURI: 'uri', account: mockAccount }),
-                actions.mintForRole({ roleId: '0xROLE', to: MOCK_USER, account: mockAccount }),
-                actions.mint({ to: MOCK_USER, tokenURI: 'uri', account: mockAccount })
+                actions.sbtSafeMintForRole({ roleId: '0xROLE', to: MOCK_USER, tokenURI: 'uri', account: mockAccount }),
+                actions.sbtAirdropMint({ roleId: '0xROLE', to: MOCK_USER, tokenURI: 'uri', account: mockAccount }),
+                actions.sbtMintForRole({ roleId: '0xROLE', to: MOCK_USER, account: mockAccount }),
+                actions.sbtMint({ to: MOCK_USER, tokenURI: 'uri', account: mockAccount })
             ]);
 
             results.forEach(res => expect(res).toBe(txHash));
@@ -154,8 +154,8 @@ describe('SBT Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
 
-            const res1 = await actions.burn({ tokenId: 1n, account: mockAccount });
-            const res2 = await actions.burnSBT({ tokenId: 1n, account: mockAccount });
+            const res1 = await actions.sbtBurn({ tokenId: 1n, account: mockAccount });
+            const res2 = await actions.sbtBurnSBT({ tokenId: 1n, account: mockAccount });
 
             expect(res1).toBe(txHash);
             expect(res2).toBe(txHash);
@@ -166,8 +166,8 @@ describe('SBT Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
 
-            const res1 = await actions.leaveCommunity({ community: MOCK_COMMUNITY, account: mockAccount });
-            const res2 = await actions.deactivateMembership({ tokenId: 1n, account: mockAccount });
+            const res1 = await actions.sbtLeaveCommunity({ community: MOCK_COMMUNITY, account: mockAccount });
+            const res2 = await actions.sbtDeactivateMembership({ tokenId: 1n, account: mockAccount });
 
             expect(res1).toBe(txHash);
             expect(res2).toBe(txHash);
@@ -181,9 +181,9 @@ describe('SBT Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValue(12345678n);
 
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
-            const tx = await actions.recordActivity({ user: MOCK_USER, account: mockAccount });
-            const lastTime = await actions.lastActivityTime({ user: MOCK_USER });
-            const weekly = await actions.weeklyActivity({ user: MOCK_USER });
+            const tx = await actions.sbtRecordActivity({ user: MOCK_USER, account: mockAccount });
+            const lastTime = await actions.sbtLastActivityTime({ user: MOCK_USER });
+            const weekly = await actions.sbtWeeklyActivity({ user: MOCK_USER });
 
             expect(tx).toBe(txHash);
             expect(lastTime).toBe(12345678n);
@@ -196,8 +196,8 @@ describe('SBT Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValue(MOCK_USER);
 
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
-            const tx = await actions.setReputationCalculator({ calculator: MOCK_USER, account: mockAccount });
-            const calculator = await actions.reputationCalculator();
+            const tx = await actions.sbtSetReputationCalculator({ calculator: MOCK_USER, account: mockAccount });
+            const calculator = await actions.sbtReputationCalculator();
 
             expect(tx).toBe(txHash);
             expect(calculator).toBe(MOCK_USER);
@@ -211,10 +211,10 @@ describe('SBT Actions', () => {
             (mockWalletClient.readContract as any).mockResolvedValue(100n);
 
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
-            const tx1 = await actions.setMintFee({ fee: 100n, account: mockAccount });
-            const tx2 = await actions.setMinLockAmount({ amount: 100n, account: mockAccount });
-            const fee = await actions.mintFee();
-            const lock = await actions.minLockAmount();
+            const tx1 = await actions.sbtSetMintFee({ fee: 100n, account: mockAccount });
+            const tx2 = await actions.sbtSetMinLockAmount({ amount: 100n, account: mockAccount });
+            const fee = await actions.sbtMintFee();
+            const lock = await actions.sbtMinLockAmount();
 
             expect(tx1).toBe(txHash);
             expect(tx2).toBe(txHash);
@@ -227,11 +227,11 @@ describe('SBT Actions', () => {
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
 
             const results = await Promise.all([
-                actions.REGISTRY(),
-                actions.GTOKEN_STAKING(),
-                actions.GTOKEN(),
-                actions.SUPER_PAYMASTER(),
-                actions.owner()
+                actions.sbtREGISTRY(),
+                actions.sbtGTOKEN_STAKING(),
+                actions.sbtGTOKEN(),
+                actions.sbtSUPER_PAYMASTER(),
+                actions.sbtOwner()
             ]);
 
             results.forEach(res => expect(res).toBe(MOCK_USER));
@@ -240,8 +240,8 @@ describe('SBT Actions', () => {
         it('should get version and pause status', async () => {
             (mockPublicClient.readContract as any).mockResolvedValueOnce('v1').mockResolvedValueOnce(true);
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const v = await actions.version();
-            const p = await actions.paused();
+            const v = await actions.sbtVersion();
+            const p = await actions.sbtPaused();
             expect(v).toBe('v1');
             expect(p).toBe(true);
         });
@@ -252,9 +252,9 @@ describe('SBT Actions', () => {
             (mockWalletClient.writeContract as any).mockResolvedValue(txHash);
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
 
-            const tx1 = await actions.safeTransferFrom({ from: MOCK_USER, to: MOCK_COMMUNITY, tokenId: 1n, account: mockAccount });
-            const tx2 = await actions.approve({ to: MOCK_COMMUNITY, tokenId: 1n, account: mockAccount });
-            const tx3 = await actions.setApprovalForAll({ operator: MOCK_COMMUNITY, approved: true, account: mockAccount });
+            const tx1 = await actions.sbtSafeTransferFrom({ from: MOCK_USER, to: MOCK_COMMUNITY, tokenId: 1n, account: mockAccount });
+            const tx2 = await actions.sbtApprove({ to: MOCK_COMMUNITY, tokenId: 1n, account: mockAccount });
+            const tx3 = await actions.sbtSetApprovalForAll({ operator: MOCK_COMMUNITY, approved: true, account: mockAccount });
 
             expect(tx1).toBe(txHash);
             expect(tx2).toBe(txHash);
@@ -266,8 +266,8 @@ describe('SBT Actions', () => {
                 .mockResolvedValueOnce(MOCK_USER)
                 .mockResolvedValueOnce(true);
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const approved = await actions.getApproved({ tokenId: 1n });
-            const isAllApproved = await actions.isApprovedForAll({ owner: MOCK_USER, operator: MOCK_COMMUNITY });
+            const approved = await actions.sbtGetApproved({ tokenId: 1n });
+            const isAllApproved = await actions.sbtIsApprovedForAll({ owner: MOCK_USER, operator: MOCK_COMMUNITY });
 
             expect(approved).toBe(MOCK_USER);
             expect(isAllApproved).toBe(true);
@@ -283,10 +283,10 @@ describe('SBT Actions', () => {
                 .mockResolvedValueOnce(10n); // nextTokenId
 
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const uri = await actions.tokenURI({ tokenId: 1n });
-            const indexToken = await actions.tokenByIndex({ index: 0n });
-            const ownerToken = await actions.tokenOfOwnerByIndex({ owner: MOCK_USER, index: 0n });
-            const nextId = await actions.nextTokenId();
+            const uri = await actions.sbtTokenURI({ tokenId: 1n });
+            const indexToken = await actions.sbtTokenByIndex({ index: 0n });
+            const ownerToken = await actions.sbtTokenOfOwnerByIndex({ owner: MOCK_USER, index: 0n });
+            const nextId = await actions.sbtNextTokenId();
 
             expect(uri).toBe('ipfs://uri');
             expect(indexToken).toBe(1n);
@@ -302,10 +302,10 @@ describe('SBT Actions', () => {
             const actions = sbtActions(mockSBTAddress)(mockWalletClient as WalletClient);
 
             const results = await Promise.all([
-                actions.setRegistry({ registry: MOCK_COMMUNITY, account: mockAccount }),
-                actions.setSuperPaymaster({ paymaster: MOCK_COMMUNITY, account: mockAccount }),
-                actions.setDAOMultisig({ multisig: MOCK_COMMUNITY, account: mockAccount }),
-                actions.setBaseURI({ baseURI: 'https://...', account: mockAccount })
+                actions.sbtSetRegistry({ registry: MOCK_COMMUNITY, account: mockAccount }),
+                actions.sbtSetSuperPaymaster({ paymaster: MOCK_COMMUNITY, account: mockAccount }),
+                actions.sbtSetDAOMultisig({ multisig: MOCK_COMMUNITY, account: mockAccount }),
+                actions.sbtSetBaseURI({ baseURI: 'https://...', account: mockAccount })
             ]);
 
             results.forEach(res => expect(res).toBe(txHash));
@@ -314,7 +314,7 @@ describe('SBT Actions', () => {
         it('should query system config', async () => {
             (mockPublicClient.readContract as any).mockResolvedValue(MOCK_COMMUNITY);
             const actions = sbtActions(mockSBTAddress)(mockPublicClient as PublicClient);
-            const multisig = await actions.daoMultisig();
+            const multisig = await actions.sbtDaoMultisig();
             expect(multisig).toBe(MOCK_COMMUNITY);
         });
     });

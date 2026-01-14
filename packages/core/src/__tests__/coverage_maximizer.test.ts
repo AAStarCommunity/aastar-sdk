@@ -1,5 +1,5 @@
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createAAStarPublicClient } from '../clients.js';
 import * as networks from '../networks.js';
 import { BLSSigner, BLSHelpers } from '../crypto/blsSigner.js';
@@ -159,87 +159,92 @@ describe('Coverage Maximizer', () => {
             (mockClient.writeContract as any).mockResolvedValue('0xhash');
             
             // Deposits
-            await actions.deposit({ amount: 1n });
-            await actions.depositAPNTs({ amount: 1n });
-            await actions.depositETH({ value: 1n });
-            await actions.depositForOperator({ operator: TEST_ADDRESSES.user, amount: 1n });
-            await actions.withdrawTo({ to: TEST_ADDRESSES.user, amount: 1n });
+            await actions.superPaymasterDeposit({ amount: 1n });
+            await actions.superPaymasterDepositAPNTs({ amount: 1n });
+            await actions.superPaymasterDepositETH({ value: 1n });
+            await actions.superPaymasterDepositFor({ operator: TEST_ADDRESSES.user, amount: 100n });
+            await actions.superPaymasterWithdrawTo({ to: TEST_ADDRESSES.user, amount: 1n });
             
             // Staking
-            await actions.addSuperStake({ amount: 1n });
-            await actions.unlockSuperStake({});
-            await actions.withdrawStake({ to: TEST_ADDRESSES.user });
+            await actions.superPaymasterAddSuperStake({ amount: 1n });
+            await actions.superPaymasterUnlockSuperStake({});
+            await actions.superPaymasterWithdrawStake({ to: TEST_ADDRESSES.user });
             
             // Operator Config
-            await actions.configureOperator({ xPNTsToken: TEST_ADDRESSES.token, treasury: TEST_ADDRESSES.owner, exchangeRate: 1n });
-            await actions.setOperatorPaused({ operator: TEST_ADDRESSES.user, paused: true });
-            await actions.updateReputation({ operator: TEST_ADDRESSES.user, newReputation: 100n });
+            await actions.superPaymasterConfigureOperator({ xPNTsToken: TEST_ADDRESSES.token, treasury: TEST_ADDRESSES.owner, exchangeRate: 1n });
+            await actions.superPaymasterSetOperatorPaused({ operator: TEST_ADDRESSES.user, paused: true });
+            await actions.superPaymasterUpdateReputation({ operator: TEST_ADDRESSES.user, newReputation: 100n });
             
             // Price & Config
-            await actions.setAPNTsPrice({ priceUSD: 100n });
-            await actions.setCachedPrice({ price: 100n });
-            await actions.setProtocolFee({ feeRecipient: TEST_ADDRESSES.owner, feeBps: 100n });
+            await actions.superPaymasterSetAPNTsPrice({ priceUSD: 100n });
+            await actions.superPaymasterSetCachedPrice({ price: 100n });
+            await actions.superPaymasterSetProtocolFee({ feeRecipient: TEST_ADDRESSES.owner, feeBps: 100n });
             
             // User Management
-            await actions.blockUser({ user: TEST_ADDRESSES.user, blocked: true });
+            await actions.superPaymasterBlockUser({ user: TEST_ADDRESSES.user, blocked: true });
             
             // Validation
-            await actions.validatePaymasterUserOp({ userOp: {}, userOpHash: '0x123', maxCost: 100n });
+            await actions.superPaymasterValidatePaymasterUserOp({ userOp: {}, userOpHash: '0x123', maxCost: 100n });
             
             // Views
-            await actions.getDeposit();
-            await actions.getAvailableCredit({ operator: TEST_ADDRESSES.user, user: TEST_ADDRESSES.user });
-            await actions.blockedUsers({ user: TEST_ADDRESSES.user });
-            await actions.balanceOfOperator({ operator: TEST_ADDRESSES.user }); // relies on operators mocking
-            await actions.aPNTsPriceUSD();
-            await actions.cachedPrice();
-            await actions.protocolFee();
-            await actions.protocolRevenue();
-            await actions.treasury();
-            await actions.xpntsFactory();
-            await actions.totalTrackedBalance();
-            await actions.lastUserOpTimestamp({ user: TEST_ADDRESSES.user });
+            await actions.superPaymasterGetDeposit();
+            await actions.superPaymasterGetAvailableCredit({ operator: TEST_ADDRESSES.user, user: TEST_ADDRESSES.user });
+            await actions.superPaymasterBlockedUsers({ user: TEST_ADDRESSES.user });
+            await actions.superPaymasterBalanceOfOperator({ operator: TEST_ADDRESSES.user }); // relies on operators mocking
+            await actions.superPaymasterAPNTsPriceUSD();
+            await actions.superPaymasterCachedPrice();
+            await actions.superPaymasterProtocolFee();
+            await actions.superPaymasterProtocolRevenue();
+            await actions.superPaymasterTreasury();
+            await actions.superPaymasterXpntsFactory();
+            await actions.superPaymasterTotalTrackedBalance();
+            await actions.superPaymasterLastUserOpTimestamp({ user: TEST_ADDRESSES.user });
             
             // Slash History
-            await actions.getSlashCount({ operator: TEST_ADDRESSES.user });
-            await actions.getLatestSlash({ operator: TEST_ADDRESSES.user });
+            await actions.superPaymasterGetSlashCount({ operator: TEST_ADDRESSES.user });
+            await actions.superPaymasterGetLatestSlash({ operator: TEST_ADDRESSES.user });
             
             // Price Management
-            await actions.updatePrice({});
-            await actions.updatePriceDVT({ price: 100n, proof: '0x' });
+            await actions.superPaymasterUpdatePrice({});
+            await actions.superPaymasterUpdatePriceDVT({ price: 100n, proof: '0x' });
             
             // Treasury
-            await actions.setTreasury({ treasury: TEST_ADDRESSES.owner });
-            await actions.withdrawProtocolRevenue({ to: TEST_ADDRESSES.owner });
+            await actions.superPaymasterSetTreasury({ treasury: TEST_ADDRESSES.owner });
+            await actions.superPaymasterWithdrawProtocolRevenue({ to: TEST_ADDRESSES.owner });
             
             // Factory
-            await actions.setXPNTsFactory({ factory: '0xfactory' });
-            await actions.setAPNTsToken({ token: TEST_ADDRESSES.token });
+            await actions.superPaymasterSetXPNTsFactory({ factory: '0xfactory' });
+            await actions.superPaymasterSetAPNTsToken({ token: TEST_ADDRESSES.token });
             
             // Callbacks
-            await actions.onTransferReceived({ from: TEST_ADDRESSES.user, amount: 100n, data: '0x' });
+            await actions.superPaymasterOnTransferReceived({ from: TEST_ADDRESSES.user, amount: 100n, data: '0x' });
             
             // Constants
-            await actions.APNTS_TOKEN();
-            await actions.REGISTRY();
-            await actions.BLS_AGGREGATOR();
-            await actions.ETH_USD_PRICE_FEED();
-            await actions.PAYMASTER_DATA_OFFSET();
-            await actions.RATE_OFFSET();
-            await actions.BPS_DENOMINATOR();
-            await actions.PRICE_CACHE_DURATION();
-            await actions.PRICE_STALENESS_THRESHOLD();
-            await actions.MAX_ETH_USD_PRICE();
-            await actions.MIN_ETH_USD_PRICE();
+            await actions.superPaymasterAPNTS_TOKEN();
+            await actions.superPaymasterREGISTRY();
+            await actions.superPaymasterBLS_AGGREGATOR();
+            await actions.superPaymasterETH_USD_PRICE_FEED();
+            await actions.superPaymasterPAYMASTER_DATA_OFFSET();
+            await actions.superPaymasterRATE_OFFSET();
+            await actions.superPaymasterBPS_DENOMINATOR();
+            await actions.superPaymasterPRICE_CACHE_DURATION();
+            await actions.superPaymasterPRICE_STALENESS_THRESHOLD();
+            await actions.superPaymasterMAX_ETH_USD_PRICE();
+            await actions.superPaymasterMIN_ETH_USD_PRICE();
             
             // Aliases
-            await actions.addStake({ amount: 1n });
-            await actions.depositFor({ operator: TEST_ADDRESSES.user, amount: 1n });
-            await actions.withdraw({ amount: 1n });
-            await actions.transferOwnership({ newOwner: TEST_ADDRESSES.user });
-            await actions.MAX_PROTOCOL_FEE();
-            await actions.VALIDATION_BUFFER_BPS();
-            await actions.priceStalenessThreshold();
+            await actions.superPaymasterAddStake({ amount: 1n });
+            await actions.superPaymasterDepositFor({ operator: TEST_ADDRESSES.user, amount: 1n });
+            await actions.superPaymasterWithdraw({ amount: 1n });
+            await actions.superPaymasterMAX_PROTOCOL_FEE();
+            await actions.superPaymasterVALIDATION_BUFFER_BPS();
+            await actions.superPaymasterPriceStalenessThreshold();
+            
+            // Ownership
+            await actions.superPaymasterOwner();
+            await actions.transferSuperPaymasterOwnership({ newOwner: TEST_ADDRESSES.user });
+            await actions.renounceSuperPaymasterOwnership({});
+            await actions.superPaymasterVersion();
              
              expect(mockClient.writeContract).toHaveBeenCalled();
         });
@@ -307,9 +312,10 @@ describe('Coverage Maximizer', () => {
             await actions.REGISTRY();
             
             // Ownership
-            await actions.owner();
-            await actions.transferOwnership({ newOwner: TEST_ADDRESSES.user });
-            await actions.renounceOwnership({});
+            await actions.reputationOwner();
+            await actions.transferReputationOwnership({ newOwner: TEST_ADDRESSES.user });
+            await actions.renounceReputationOwnership({});
+            await actions.reputationVersion();
             
             expect(mockClient.writeContract).toHaveBeenCalled();
         });
@@ -327,79 +333,78 @@ describe('Coverage Maximizer', () => {
              const pm = (await import('../actions/paymasterV4.js')).paymasterV4Actions(TEST_ADDRESSES.superPaymaster)(mockClient);
 
              it('should cover all deposit and withdrawal flows', async () => {
-                 await pm.depositFor({ user: TEST_ADDRESSES.user, token: TEST_ADDRESSES.token, amount: 100n });
-                 await pm.withdraw({ token: TEST_ADDRESSES.token, amount: 50n });
-                 await pm.balances({ user: TEST_ADDRESSES.user, token: TEST_ADDRESSES.token });
-                 await pm.deposit({});
-                 await pm.withdrawTo({ to: TEST_ADDRESSES.user, amount: 50n });
-                 await pm.addDeposit({}); // Alias
-                 await pm.getDeposit();
+                 await pm.paymasterV4DepositFor({ user: TEST_ADDRESSES.user, token: TEST_ADDRESSES.token, amount: 100n });
+                  await pm.paymasterV4Withdraw({ token: TEST_ADDRESSES.token, amount: 100n });
+                  await pm.paymasterV4Balances({ user: TEST_ADDRESSES.user, token: TEST_ADDRESSES.token });
+                  await pm.paymasterV4Deposit({});
+                  await pm.paymasterV4WithdrawTo({ to: TEST_ADDRESSES.user, amount: 50n });
+                  await pm.paymasterV4AddDeposit({}); // Alias
+                  await pm.paymasterV4GetDeposit();
              });
 
              it('should cover staking flows', async () => {
-                 await pm.addStake({ unstakeDelaySec: 100n, amount: 100n });
-                 await pm.unlockPaymasterStake({});
-                 await pm.unlockStake({}); // Alias
-                 await pm.withdrawStake({ to: TEST_ADDRESSES.user });
+                 await pm.paymasterV4AddStake({ unstakeDelaySec: 100n, amount: 100n });
+                 await pm.paymasterV4UnlockStake({});
+                 await pm.paymasterV4UnlockStake({}); // Alias
+                 await pm.paymasterV4WithdrawStake({ to: TEST_ADDRESSES.user });
              });
 
              it('should cover token management and legacy support', async () => {
-                 await pm.setTokenPrice({ token: TEST_ADDRESSES.token, price: 100n });
-                 await pm.tokenPrices({ token: TEST_ADDRESSES.token });
+                 await pm.paymasterV4SetTokenPrice({ token: TEST_ADDRESSES.token, price: 100n });
+                 await pm.paymasterV4TokenPrices({ token: TEST_ADDRESSES.token });
                  
                  // Legacy / Deprecated
-                 await pm.addGasToken({ token: TEST_ADDRESSES.token, priceFeed: TEST_ADDRESSES.oracle });
-                 await pm.removeGasToken({ token: TEST_ADDRESSES.token });
-                 await pm.getSupportedGasTokens();
-                 await pm.isGasTokenSupported({ token: TEST_ADDRESSES.token });
-                 await pm.addSBT({ sbt: TEST_ADDRESSES.token });
-                 await pm.removeSBT({ sbt: TEST_ADDRESSES.token });
-                 await pm.getSupportedSBTs();
-                 await pm.isSBTSupported({ sbt: TEST_ADDRESSES.token });
+                 await pm.paymasterV4AddGasToken({ token: TEST_ADDRESSES.token, priceFeed: TEST_ADDRESSES.oracle });
+                 await pm.paymasterV4RemoveGasToken({ token: TEST_ADDRESSES.token });
+                 await pm.paymasterV4GetSupportedGasTokens();
+                 await pm.paymasterV4IsGasTokenSupported({ token: TEST_ADDRESSES.token });
+                 await pm.paymasterV4AddSBT({ sbt: TEST_ADDRESSES.token });
+                 await pm.paymasterV4RemoveSBT({ sbt: TEST_ADDRESSES.token });
+                 await pm.paymasterV4GetSupportedSBTs();
+                 await pm.paymasterV4IsSBTSupported({ sbt: TEST_ADDRESSES.token });
              });
 
-             it('should cover all admin and configuration setters', async () => {
-                 await pm.setCachedPrice({ token: TEST_ADDRESSES.token, price: 200n });
-                 await pm.setServiceFeeRate({ rate: 50n });
-                 await pm.setMaxGasCostCap({ cap: 1000000n });
-                 await pm.setPriceStalenessThreshold({ threshold: 3600n });
-                 await pm.setTreasury({ treasury: TEST_ADDRESSES.owner });
-                 await pm.updatePrice({ token: TEST_ADDRESSES.token });
-                 await pm.deactivateFromRegistry({});
-                 await pm.initialize({ owner: TEST_ADDRESSES.owner });
-                 await pm.transferPaymasterV4Ownership({ newOwner: TEST_ADDRESSES.user });
-                 await pm.transferOwnership({ newOwner: TEST_ADDRESSES.user }); // Alias
-                 await pm.renounceOwnership({});
-             });
+              it('should cover all admin and configuration setters', async () => {
+                  await pm.paymasterV4SetCachedPrice({ token: TEST_ADDRESSES.token, price: 200n });
+                  await pm.paymasterV4SetServiceFeeRate({ rate: 50n });
+                  await pm.paymasterV4SetMaxGasCostCap({ cap: 1000000n });
+                  await pm.paymasterV4SetPriceStalenessThreshold({ threshold: 3600n });
+                  await pm.paymasterV4SetTreasury({ treasury: TEST_ADDRESSES.owner });
+                  await pm.paymasterV4UpdatePrice({ token: TEST_ADDRESSES.token });
+                  await pm.paymasterV4DeactivateFromRegistry({});
+                  await pm.paymasterV4Initialize({ owner: TEST_ADDRESSES.owner });
+                  await pm.paymasterV4TransferOwnership({ newOwner: TEST_ADDRESSES.user });
+                  await pm.paymasterV4RenounceOwnership({});
+              });
 
              it('should cover all view functions', async () => {
-                 await pm.ethUsdPriceFeed();
-                 await pm.oracleDecimals();
-                 await pm.tokenDecimals({ token: TEST_ADDRESSES.token });
-                 await pm.serviceFeeRate();
-                 await pm.calculateCost({ token: TEST_ADDRESSES.token, gasCost: 1000n, param: '0x' });
-                 await pm.getRealtimeTokenCost({ token: TEST_ADDRESSES.token, gasCost: 1000n });
-                 await pm.isActiveInRegistry();
-                 await pm.isRegistrySet();
-                 await pm.cachedPrice({ token: TEST_ADDRESSES.token });
-                 await pm.registry();
-                 await pm.treasury();
-                 await pm.paused();
-                 await pm.maxGasCostCap();
-                 await pm.MAX_ETH_USD_PRICE();
-                 await pm.MAX_GAS_TOKENS();
-                 await pm.MAX_SBTS();
-                 await pm.MAX_SERVICE_FEE();
-                 await pm.MIN_ETH_USD_PRICE();
-                 await pm.priceStalenessThreshold();
-                 await pm.entryPoint();
-                 await pm.owner();
-                 await pm.version();
+                 await pm.paymasterV4EthUsdPriceFeed();
+                 await pm.paymasterV4OracleDecimals();
+                 await pm.paymasterV4TokenDecimals({ token: TEST_ADDRESSES.token });
+                 await pm.paymasterV4ServiceFeeRate();
+                 await pm.paymasterV4CalculateCost({ token: TEST_ADDRESSES.token, gasCost: 1000n, param: '0x' });
+                 await pm.paymasterV4GetRealtimeTokenCost({ token: TEST_ADDRESSES.token, gasCost: 1000n });
+                  await pm.paymasterV4IsActiveInRegistry();
+                  await pm.paymasterV4IsRegistrySet();
+                  await pm.paymasterV4CachedPriceView({ token: TEST_ADDRESSES.token });
+                  await pm.paymasterV4Registry();
+                  await pm.paymasterV4Treasury();
+                 await pm.paymasterV4Paused();
+                 await pm.paymasterV4MaxGasCostCap();
+                 await pm.paymasterV4MaxEthUsdPrice();
+                 await pm.paymasterV4MaxGasTokens();
+                 await pm.paymasterV4MaxSbts();
+                 await pm.paymasterV4MaxServiceFee();
+                 await pm.paymasterV4MinEthUsdPrice();
+                 await pm.paymasterV4PriceStalenessThreshold();
+                 await pm.paymasterV4EntryPoint();
+                 await pm.paymasterV4Owner();
+                 await pm.paymasterV4Version();
              });
 
              it('should handle validation logic', async () => {
-                  await pm.validatePaymasterUserOp({ userOp: {}, userOpHash: '0x123', maxCost: 100n });
-                  await expect(pm.postOp({ mode: 0, context: '0x', actualGasCost: 0n, actualUserOpFeePerGas: 0n }))
+                  await pm.paymasterV4ValidatePaymasterUserOp({ userOp: {}, userOpHash: '0x123', maxCost: 100n });
+                  await expect(pm.paymasterV4PostOp({ mode: 0, context: '0x', actualGasCost: 0n, actualUserOpFeePerGas: 0n }))
                     .rejects.toThrow('postOp is called by EntryPoint');
              });
         });
@@ -426,18 +431,17 @@ describe('Coverage Maximizer', () => {
                  await fact.setImplementation({ impl: TEST_ADDRESSES.token });
                  await fact.getImplementation();
                  await fact.REGISTRY();
-                 await fact.SUPER_PAYMASTER();
-                 await fact.SUPERPAYMASTER();
-                 await fact.tokenImplementation();
-                 await fact.owner();
-                 await fact.transferXPNTsFactoryOwnership({ newOwner: TEST_ADDRESSES.user });
-                 await fact.transferOwnership({ newOwner: TEST_ADDRESSES.user });
-                 await fact.renounceOwnership({});
-                 await fact.deployxPNTsToken({ name: 'Test', symbol: 'TST', community: TEST_ADDRESSES.owner });
-                 await fact.version();
-             });
+                  await fact.SUPER_PAYMASTER();
+                  await fact.SUPERPAYMASTER();
+                  await fact.tokenImplementation();
+                  await fact.xPNTsFactoryOwner();
+                  await fact.transferXPNTsFactoryOwnership({ newOwner: TEST_ADDRESSES.user });
+                  await fact.renounceXPNTsFactoryOwnership({});
+                  await fact.deployxPNTsToken({ name: 'Test', symbol: 'TST', community: TEST_ADDRESSES.owner });
+                  await fact.xPNTsFactoryVersion();
+              });
 
-             it('should cover economics and prediction', async () => {
+              it('should cover prediction logic (mocked or formula)', async () => {
                   await fact.predictDepositAmount({ community: TEST_ADDRESSES.owner, userCount: 100n });
                   await fact.getPredictionParams({ community: TEST_ADDRESSES.owner });
                   await fact.getDepositBreakdown({ community: TEST_ADDRESSES.owner });
@@ -462,15 +466,15 @@ describe('Coverage Maximizer', () => {
                   await pmFact.predictPaymasterAddress({ owner: TEST_ADDRESSES.owner, salt: '0x123' });
                   await expect(pmFact.calculateAddress({ owner: TEST_ADDRESSES.owner }))
                     .rejects.toThrow('Predicting address not supported');
-             });
+              });
 
-             it('should cover PaymasterFactory query actions', async () => {
+              it('should cover PaymasterFactory view and shim actions', async () => {
                   await pmFact.getPaymaster({ owner: TEST_ADDRESSES.owner });
                   await pmFact.getPaymasterCount();
                   
                   // Mock getAllPaymasters internal logic
                   (mockClient.readContract as any).mockResolvedValueOnce(2n); // count
-                  (mockClient.readContract as any).mockResolvedValueOnce([TEST_ADDRESSES.superPaymaster]); // list
+                  (mockClient.readContract as any).mockResolvedValueOnce([TEST_ADDRESSES.superPaymaster, TEST_ADDRESSES.user]); // list
                   await pmFact.getAllPaymasters();
                   
                   await pmFact.isPaymasterDeployed({ owner: TEST_ADDRESSES.owner });
@@ -485,103 +489,103 @@ describe('Coverage Maximizer', () => {
                   await pmFact.getPaymasterInfo({ paymaster: TEST_ADDRESSES.superPaymaster });
                   await pmFact.hasImplementation({ version: 'v4' });
                   await pmFact.implementations({ version: 'v4' });
-             });
+              });
 
-             it('should cover PaymasterFactory config actions', async () => {
-                 await pmFact.setImplementationV4({ impl: TEST_ADDRESSES.token });
-                 await pmFact.getImplementationV4();
-                 await pmFact.setRegistry({ registry: TEST_ADDRESSES.registry });
-                 await pmFact.addImplementation({ version: 'v5', implementation: TEST_ADDRESSES.token });
-                 await pmFact.upgradeImplementation({ version: 'v4', newImplementation: TEST_ADDRESSES.token });
+              it('should cover PaymasterFactory config actions', async () => {
+                  await pmFact.setImplementationV4({ impl: TEST_ADDRESSES.token });
+                  await pmFact.getImplementationV4();
+                  await pmFact.setRegistry({ registry: TEST_ADDRESSES.registry });
+                  await pmFact.addImplementation({ version: 'v5', implementation: TEST_ADDRESSES.token });
+                  await pmFact.upgradeImplementation({ version: 'v4', newImplementation: TEST_ADDRESSES.token });
                  await pmFact.setDefaultVersion({ version: 'v5' });
-                 await pmFact.REGISTRY();
-                 await pmFact.ENTRY_POINT();
-                 await pmFact.owner();
-                 await pmFact.transferPaymasterFactoryOwnership({ newOwner: TEST_ADDRESSES.user });
-                 await pmFact.transferOwnership({ newOwner: TEST_ADDRESSES.user });
-                 await pmFact.defaultVersion();
-                 await pmFact.version();
-             });
+                  await pmFact.ENTRY_POINT();
+                  
+                  // Config
+                  await pmFact.paymasterFactoryOwner();
+                  await pmFact.transferPaymasterFactoryOwnership({ newOwner: TEST_ADDRESSES.user });
+                  await pmFact.renouncePaymasterFactoryOwnership({});
+                  await pmFact.paymasterFactoryVersion();
+              });
         });
         describe('Tokens', async () => {
-             const token = (await import('../actions/tokens.js')).tokenActions(TEST_ADDRESSES.token)(mockClient);
+             const token = (await import('../actions/tokens.js')).tokenActions()(mockClient);
              const gToken = (await import('../actions/tokens.js')).gTokenActions()(mockClient);
 
              it('should cover all standard ERC20 actions', async () => {
-                 await token.totalSupply({ token: TEST_ADDRESSES.token });
-                 await token.balanceOf({ token: TEST_ADDRESSES.token, account: TEST_ADDRESSES.user });
-                 await token.transfer({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
-                 await token.transferFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, amount: 100n });
-                 await token.approve({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user, amount: 100n });
-                 await token.allowance({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user });
-                 await token.decimals({ token: TEST_ADDRESSES.token });
-                 await token.name({ token: TEST_ADDRESSES.token });
-                 await token.symbol({ token: TEST_ADDRESSES.token });
-                 await token.owner({ token: TEST_ADDRESSES.token });
+                 await token.tokenTotalSupply({ token: TEST_ADDRESSES.token });
+                 await token.tokenBalanceOf({ token: TEST_ADDRESSES.token, account: TEST_ADDRESSES.user });
+                 await token.tokenTransfer({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
+                 await token.tokenTransferFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, amount: 100n });
+                 await token.tokenApprove({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user, amount: 100n });
+                 await token.tokenAllowance({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user });
+                 await token.tokenDecimals({ token: TEST_ADDRESSES.token });
+                 await token.tokenName({ token: TEST_ADDRESSES.token });
+                 await token.tokenSymbol({ token: TEST_ADDRESSES.token });
+                 await token.tokenOwner({ token: TEST_ADDRESSES.token });
              });
 
              it('should cover GToken specific actions (explicit ABI)', async () => {
-                 await gToken.totalSupply({ token: TEST_ADDRESSES.token });
-                 await gToken.balanceOf({ token: TEST_ADDRESSES.token, account: TEST_ADDRESSES.user });
-                 await gToken.transfer({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
-                 await gToken.transferFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, amount: 100n });
-                 await gToken.approve({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user, amount: 100n });
-                 await gToken.allowance({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user });
-                 await gToken.mint({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
-                 await gToken.burn({ token: TEST_ADDRESSES.token, amount: 50n });
-                 await gToken.burnFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.user, amount: 50n });
-                 await gToken.name({ token: TEST_ADDRESSES.token });
-                 await gToken.symbol({ token: TEST_ADDRESSES.token });
-                 await gToken.decimals({ token: TEST_ADDRESSES.token });
-                 await gToken.owner({ token: TEST_ADDRESSES.token });
-                 await gToken.transferTokenOwnership({ token: TEST_ADDRESSES.token, newOwner: TEST_ADDRESSES.user });
-                 await gToken.renounceOwnership({ token: TEST_ADDRESSES.token });
-                 await gToken.cap({ token: TEST_ADDRESSES.token });
-                 await gToken.remainingMintableSupply({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenTotalSupply({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenBalanceOf({ token: TEST_ADDRESSES.token, account: TEST_ADDRESSES.user });
+                 await gToken.tokenTransfer({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
+                 await gToken.tokenTransferFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, amount: 100n });
+                 await gToken.tokenApprove({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user, amount: 100n });
+                 await gToken.tokenAllowance({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user });
+                 await gToken.tokenMint({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
+                 await gToken.tokenBurn({ token: TEST_ADDRESSES.token, amount: 50n });
+                 await gToken.tokenBurnFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.user, amount: 50n });
+                 await gToken.tokenName({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenSymbol({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenDecimals({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenOwner({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenTransferOwnership({ token: TEST_ADDRESSES.token, newOwner: TEST_ADDRESSES.user });
+                 await gToken.tokenRenounceOwnership({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenCap({ token: TEST_ADDRESSES.token });
+                 await gToken.tokenRemainingMintableSupply({ token: TEST_ADDRESSES.token });
              });
 
              it('should cover mint/burn extended actions', async () => {
-                 await token.mint({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
-                 await token.burn({ token: TEST_ADDRESSES.token, amount: 50n });
-                 await token.burnFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.user, amount: 50n });
-                 await token.cap({ token: TEST_ADDRESSES.token });
-                 await token.remainingMintableSupply({ token: TEST_ADDRESSES.token });
+                 await token.tokenMint({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n });
+                 await token.tokenBurn({ token: TEST_ADDRESSES.token, amount: 50n });
+                 await token.tokenBurnFrom({ token: TEST_ADDRESSES.token, from: TEST_ADDRESSES.user, amount: 50n });
+                 await token.tokenCap({ token: TEST_ADDRESSES.token });
+                 await token.tokenRemainingMintableSupply({ token: TEST_ADDRESSES.token });
              });
 
              it('should cover xPNTs specific actions', async () => {
-                 await token.updateExchangeRate({ token: TEST_ADDRESSES.token, newRate: 200n });
-                 await token.getDebt({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
-                 await token.repayDebt({ token: TEST_ADDRESSES.token, amount: 100n });
-                 await token.transferAndCall({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n, data: '0x' });
-                 await token.addAutoApprovedSpender({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
-                 await token.removeAutoApprovedSpender({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
-                 await token.isAutoApprovedSpender({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
-                 await token.SUPERPAYMASTER_ADDRESS({ token: TEST_ADDRESSES.token });
-                 await token.FACTORY({ token: TEST_ADDRESSES.token });
-                 await token.communityName({ token: TEST_ADDRESSES.token });
-                 await token.communityENS({ token: TEST_ADDRESSES.token });
-                 await token.exchangeRate({ token: TEST_ADDRESSES.token });
-                 await token.spendingLimits({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
-                 await token.defaultSpendingLimitXPNTs({ token: TEST_ADDRESSES.token });
-                 await token.cumulativeSpent({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
-                 await token.debts({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
-                 await token.usedOpHashes({ token: TEST_ADDRESSES.token, hash: '0x123' });
-                 await token.DOMAIN_SEPARATOR({ token: TEST_ADDRESSES.token });
-                 await token.nonces({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.user });
-                 await token.permit({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user, value: 100n, deadline: 1000n, v: 27, r: '0x', s: '0x' });
-                 await token.autoApprovedSpenders({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
-                 await token.burnFromWithOpHash({ token: TEST_ADDRESSES.token, account: TEST_ADDRESSES.user, amount: 100n, opHash: '0x123' });
-                 await token.communityOwner({ token: TEST_ADDRESSES.token });
-                 await token.eip712Domain({ token: TEST_ADDRESSES.token });
-                 await token.getDefaultSpendingLimitXPNTs({ token: TEST_ADDRESSES.token });
-                 await token.getMetadata({ token: TEST_ADDRESSES.token });
-                 await token.needsApproval({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user, amount: 100n });
-                 await token.recordDebt({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user, amount: 100n });
-                 await token.DEFAULT_SPENDING_LIMIT_APNTS({ token: TEST_ADDRESSES.token });
-                 await token.setPaymasterLimit({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user, limit: 100n });
-                 await token.setSuperPaymasterAddress({ token: TEST_ADDRESSES.token, superPaymaster: TEST_ADDRESSES.superPaymaster });
-                 await token.version({ token: TEST_ADDRESSES.token });
-                 await token.transferCommunityOwnership({ token: TEST_ADDRESSES.token, newOwner: TEST_ADDRESSES.user });
+                 await token.tokenUpdateExchangeRate({ token: TEST_ADDRESSES.token, newRate: 200n });
+                 await token.tokenGetDebt({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
+                 await token.tokenRepayDebt({ token: TEST_ADDRESSES.token, amount: 100n });
+                 await token.tokenTransferAndCall({ token: TEST_ADDRESSES.token, to: TEST_ADDRESSES.user, amount: 100n, data: '0x' });
+                 await token.tokenAddAutoApprovedSpender({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
+                 await token.tokenRemoveAutoApprovedSpender({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
+                 await token.tokenIsAutoApprovedSpender({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
+                 await token.tokenSUPERPAYMASTER_ADDRESS({ token: TEST_ADDRESSES.token });
+                 await token.tokenFACTORY({ token: TEST_ADDRESSES.token });
+                 await token.tokenCommunityName({ token: TEST_ADDRESSES.token });
+                 await token.tokenCommunityENS({ token: TEST_ADDRESSES.token });
+                 await token.tokenExchangeRate({ token: TEST_ADDRESSES.token });
+                 await token.tokenSpendingLimits({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
+                 await token.tokenDefaultSpendingLimitXPNTs({ token: TEST_ADDRESSES.token });
+                 await token.tokenCumulativeSpent({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
+                 await token.tokenDebts({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user });
+                 await token.tokenUsedOpHashes({ token: TEST_ADDRESSES.token, hash: '0x123' });
+                 await token.tokenDOMAIN_SEPARATOR({ token: TEST_ADDRESSES.token });
+                 await token.tokenNonces({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.user });
+                 await token.tokenPermit({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user, value: 100n, deadline: 1000n, v: 27, r: '0x', s: '0x' });
+                 await token.tokenAutoApprovedSpenders({ token: TEST_ADDRESSES.token, spender: TEST_ADDRESSES.user });
+                 await token.tokenBurnFromWithOpHash({ token: TEST_ADDRESSES.token, account: TEST_ADDRESSES.user, amount: 100n, opHash: '0x123' });
+                 await token.tokenCommunityOwner({ token: TEST_ADDRESSES.token });
+                 await token.tokenEip712Domain({ token: TEST_ADDRESSES.token });
+                 await token.tokenGetDefaultSpendingLimitXPNTs({ token: TEST_ADDRESSES.token });
+                 await token.tokenGetMetadata({ token: TEST_ADDRESSES.token });
+                 await token.tokenNeedsApproval({ token: TEST_ADDRESSES.token, owner: TEST_ADDRESSES.owner, spender: TEST_ADDRESSES.user, amount: 100n });
+                 await token.tokenRecordDebt({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user, amount: 100n });
+                 await token.tokenDEFAULT_SPENDING_LIMIT_APNTS({ token: TEST_ADDRESSES.token });
+                 await token.tokenSetPaymasterLimit({ token: TEST_ADDRESSES.token, user: TEST_ADDRESSES.user, limit: 100n });
+                 await token.tokenSetSuperPaymasterAddress({ token: TEST_ADDRESSES.token, superPaymaster: TEST_ADDRESSES.superPaymaster });
+                 await token.tokenVersion({ token: TEST_ADDRESSES.token });
+                 await token.tokenTransferOwnership({ token: TEST_ADDRESSES.token, newOwner: TEST_ADDRESSES.user });
              });
         });
 
@@ -698,71 +702,71 @@ describe('Coverage Maximizer', () => {
 
              it('should cover all 50+ SBT actions', async () => {
                  // Minting & Membership
-                 await sbt.safeMintForRole({ roleId: '0x1', to: TEST_ADDRESSES.user, tokenURI: 'uri' });
-                 await sbt.airdropMint({ roleId: '0x1', to: TEST_ADDRESSES.user, tokenURI: 'uri' });
-                 await sbt.mintForRole({ roleId: '0x1', to: TEST_ADDRESSES.user });
-                 await sbt.mint({ to: TEST_ADDRESSES.user, tokenURI: 'uri' });
-                 await sbt.burn({ tokenId: 1n });
-                 await sbt.burnSBT({ tokenId: 1n });
-                 await sbt.deactivateAllMemberships({ user: TEST_ADDRESSES.user });
-                 await sbt.leaveCommunity({ community: TEST_ADDRESSES.owner });
-                 await sbt.deactivateMembership({ tokenId: 1n });
+                 await sbt.sbtSafeMintForRole({ roleId: '0x1', to: TEST_ADDRESSES.user, tokenURI: 'uri' });
+                 await sbt.sbtAirdropMint({ roleId: '0x1', to: TEST_ADDRESSES.user, tokenURI: 'uri' });
+                 await sbt.sbtMintForRole({ roleId: '0x1', to: TEST_ADDRESSES.user });
+                 await sbt.sbtMint({ to: TEST_ADDRESSES.user, tokenURI: 'uri' });
+                 await sbt.sbtBurn({ tokenId: 1n });
+                 await sbt.sbtBurnSBT({ tokenId: 1n });
+                 await sbt.sbtDeactivateAllMemberships({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtLeaveCommunity({ community: TEST_ADDRESSES.owner });
+                 await sbt.sbtDeactivateMembership({ tokenId: 1n });
 
                  // Views
-                 await sbt.getUserSBT({ user: TEST_ADDRESSES.user, roleId: '0x1' });
-                 await sbt.getSBTData({ tokenId: 1n });
-                 await sbt.sbtData({ tokenId: 1n });
-                 await sbt.getCommunityMembership({ user: TEST_ADDRESSES.user, community: TEST_ADDRESSES.owner });
-                 await sbt.getMemberships({ user: TEST_ADDRESSES.user });
-                 await sbt.getActiveMemberships({ user: TEST_ADDRESSES.user });
-                 await sbt.verifyCommunityMembership({ user: TEST_ADDRESSES.user, community: TEST_ADDRESSES.owner });
-                 await sbt.userToSBT({ user: TEST_ADDRESSES.user });
-                 await sbt.membershipIndex({ user: TEST_ADDRESSES.user, index: 0n });
-                 await sbt.nextTokenId();
+                 await sbt.sbtGetUserSBT({ user: TEST_ADDRESSES.user, roleId: '0x1' });
+                 await sbt.sbtGetSBTData({ tokenId: 1n });
+                 await sbt.sbtSbtData({ tokenId: 1n });
+                 await sbt.sbtGetCommunityMembership({ user: TEST_ADDRESSES.user, community: TEST_ADDRESSES.owner });
+                 await sbt.sbtGetMemberships({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtGetActiveMemberships({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtVerifyCommunityMembership({ user: TEST_ADDRESSES.user, community: TEST_ADDRESSES.owner });
+                 await sbt.sbtUserToSBT({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtMembershipIndex({ user: TEST_ADDRESSES.user, index: 0n });
+                 await sbt.sbtNextTokenId();
 
                  // ERC721
-                 await sbt.balanceOf({ owner: TEST_ADDRESSES.user });
-                 await sbt.ownerOf({ tokenId: 1n });
-                 await sbt.safeTransferFrom({ from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, tokenId: 1n });
-                 await sbt.transferFrom({ from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, tokenId: 1n });
-                 await sbt.approve({ to: TEST_ADDRESSES.user, tokenId: 1n });
-                 await sbt.setApprovalForAll({ operator: TEST_ADDRESSES.user, approved: true });
-                 await sbt.getApproved({ tokenId: 1n });
-                 await sbt.isApprovedForAll({ owner: TEST_ADDRESSES.owner, operator: TEST_ADDRESSES.user });
-                 await sbt.name();
-                 await sbt.symbol();
-                 await sbt.tokenURI({ tokenId: 1n });
-                 await sbt.totalSupply();
-                 await sbt.tokenByIndex({ index: 0n });
-                 await sbt.tokenOfOwnerByIndex({ owner: TEST_ADDRESSES.owner, index: 0n });
-                 await sbt.supportsInterface({ interfaceId: '0x01ffc9a7' });
+                 await sbt.sbtBalanceOf({ owner: TEST_ADDRESSES.user });
+                 await sbt.sbtOwnerOf({ tokenId: 1n });
+                 await sbt.sbtSafeTransferFrom({ from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, tokenId: 1n });
+                 await sbt.sbtTransferFrom({ from: TEST_ADDRESSES.owner, to: TEST_ADDRESSES.user, tokenId: 1n });
+                 await sbt.sbtApprove({ to: TEST_ADDRESSES.user, tokenId: 1n });
+                 await sbt.sbtSetApprovalForAll({ operator: TEST_ADDRESSES.user, approved: true });
+                 await sbt.sbtGetApproved({ tokenId: 1n });
+                 await sbt.sbtIsApprovedForAll({ owner: TEST_ADDRESSES.owner, operator: TEST_ADDRESSES.user });
+                 await sbt.sbtName();
+                 await sbt.sbtSymbol();
+                 await sbt.sbtTokenURI({ tokenId: 1n });
+                 await sbt.sbtTotalSupply();
+                 await sbt.sbtTokenByIndex({ index: 0n });
+                 await sbt.sbtTokenOfOwnerByIndex({ owner: TEST_ADDRESSES.owner, index: 0n });
+                 await sbt.sbtSupportsInterface({ interfaceId: '0x01ffc9a7' });
 
                  // Admin & Config
-                 await sbt.setBaseURI({ baseURI: 'uri' });
-                 await sbt.recordActivity({ user: TEST_ADDRESSES.user });
-                 await sbt.lastActivityTime({ user: TEST_ADDRESSES.user });
-                 await sbt.weeklyActivity({ user: TEST_ADDRESSES.user });
-                 await sbt.reputationCalculator();
-                 await sbt.setReputationCalculator({ calculator: TEST_ADDRESSES.owner });
-                 await sbt.mintFee();
-                 await sbt.setMintFee({ fee: 100n });
-                 await sbt.minLockAmount();
-                 await sbt.setMinLockAmount({ amount: 100n });
-                 await sbt.pause({});
-                 await sbt.unpause({});
-                 await sbt.paused();
-                 await sbt.daoMultisig();
-                 await sbt.setDAOMultisig({ multisig: TEST_ADDRESSES.owner });
-                 await sbt.setRegistry({ registry: TEST_ADDRESSES.registry });
-                 await sbt.setSuperPaymaster({ paymaster: TEST_ADDRESSES.superPaymaster });
-                 await sbt.version();
-                 await sbt.REGISTRY();
-                 await sbt.GTOKEN_STAKING();
-                 await sbt.GTOKEN();
-                 await sbt.SUPER_PAYMASTER();
-                 await sbt.owner();
-                 await sbt.transferSBTOwnership({ newOwner: TEST_ADDRESSES.user });
-                 await sbt.renounceOwnership({});
+                 await sbt.sbtSetBaseURI({ baseURI: 'uri' });
+                 await sbt.sbtRecordActivity({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtLastActivityTime({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtWeeklyActivity({ user: TEST_ADDRESSES.user });
+                 await sbt.sbtReputationCalculator();
+                 await sbt.sbtSetReputationCalculator({ calculator: TEST_ADDRESSES.owner });
+                 await sbt.sbtMintFee();
+                 await sbt.sbtSetMintFee({ fee: 100n });
+                 await sbt.sbtMinLockAmount();
+                 await sbt.sbtSetMinLockAmount({ amount: 100n });
+                 await sbt.sbtPause({});
+                 await sbt.sbtUnpause({});
+                 await sbt.sbtPaused();
+                 await sbt.sbtDaoMultisig();
+                 await sbt.sbtSetDAOMultisig({ multisig: TEST_ADDRESSES.owner });
+                 await sbt.sbtSetRegistry({ registry: TEST_ADDRESSES.registry });
+                 await sbt.sbtSetSuperPaymaster({ paymaster: TEST_ADDRESSES.superPaymaster });
+                 await sbt.sbtVersion();
+                 await sbt.sbtREGISTRY();
+                 await sbt.sbtGTOKEN_STAKING();
+                 await sbt.sbtGTOKEN();
+                 await sbt.sbtSUPER_PAYMASTER();
+                 await sbt.sbtOwner();
+                 await sbt.sbtTransferSBTOwnership({ newOwner: TEST_ADDRESSES.user });
+                 await sbt.sbtRenounceOwnership({});
              });
         });
 

@@ -44,9 +44,9 @@ export type ReputationActions = {
     REGISTRY: () => Promise<Address>;
     
     // Ownership
-    owner: () => Promise<Address>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    reputationOwner: () => Promise<Address>;
+    transferReputationOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceReputationOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Admin & Config (Missing)
     setCommunityReputation: (args: { community: Address, reputation: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -63,7 +63,7 @@ export type ReputationActions = {
     setNFTBoost: (args: { collection: Address, boost: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Version
-    version: () => Promise<string>;
+    reputationVersion: () => Promise<string>;
 };
 
 export const reputationActions = (address: Address) => (client: PublicClient | WalletClient): ReputationActions => ({
@@ -277,7 +277,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     // Ownership
-    async owner() {
+    async reputationOwner() {
         return (client as PublicClient).readContract({
             address,
             abi: ReputationSystemABI,
@@ -286,23 +286,23 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async renounceOwnership({ account }) {
+    async renounceReputationOwnership({ account }: { account?: Account | Address } = {}) {
         return (client as any).writeContract({
             address,
             abi: ReputationSystemABI,
             functionName: 'renounceOwnership',
             args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async transferReputationOwnership({ newOwner, account }: { newOwner: Address, account?: Account | Address }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'transferOwnership',
+            args: [newOwner],
             account: account as any,
             chain: (client as any).chain
         });
@@ -367,7 +367,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     // Version
-    async version() {
+    async reputationVersion() {
         return (client as PublicClient).readContract({
             address,
             abi: ReputationSystemABI,

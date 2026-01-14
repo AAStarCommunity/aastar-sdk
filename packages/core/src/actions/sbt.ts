@@ -4,94 +4,94 @@ import { MySBTABI } from '../abis/index.js';
 // MySBT (ERC721 + custom SBT functions) - 50 functions
 export type SBTActions = {
     // SBT specific
-    safeMintForRole: (args: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
-    airdropMint: (args: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
-    mintForRole: (args: { roleId: Hex, to: Address, account?: Account | Address }) => Promise<Hash>;
-    getUserSBT: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
-    getSBTData: (args: { tokenId: bigint }) => Promise<any>;
-    getCommunityMembership: (args: { user: Address, community: Address }) => Promise<bigint>;
-    getMemberships: (args: { user: Address }) => Promise<any[]>;
-    getActiveMemberships: (args: { user: Address }) => Promise<any[]>;
-    verifyCommunityMembership: (args: { user: Address, community: Address }) => Promise<boolean>;
-    userToSBT: (args: { user: Address }) => Promise<bigint>;
-    sbtData: (args: { tokenId: bigint }) => Promise<any>;
-    membershipIndex: (args: { user: Address, index: bigint }) => Promise<any>;
+    sbtSafeMintForRole: (args: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
+    sbtAirdropMint: (args: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
+    sbtMintForRole: (args: { roleId: Hex, to: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtGetUserSBT: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
+    sbtGetSBTData: (args: { tokenId: bigint }) => Promise<any>;
+    sbtGetCommunityMembership: (args: { user: Address, community: Address }) => Promise<bigint>;
+    sbtGetMemberships: (args: { user: Address }) => Promise<any[]>;
+    sbtGetActiveMemberships: (args: { user: Address }) => Promise<any[]>;
+    sbtVerifyCommunityMembership: (args: { user: Address, community: Address }) => Promise<boolean>;
+    sbtUserToSBT: (args: { user: Address }) => Promise<bigint>;
+    sbtSbtData: (args: { tokenId: bigint }) => Promise<any>;
+    sbtMembershipIndex: (args: { user: Address, index: bigint }) => Promise<any>;
     
     // ERC721 Standard
-    balanceOf: (args: { owner: Address }) => Promise<bigint>;
-    ownerOf: (args: { tokenId: bigint }) => Promise<Address>;
-    safeTransferFrom: (args: { from: Address, to: Address, tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
-    transferFrom: (args: { from: Address, to: Address, tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
-    approve: (args: { to: Address, tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
-    setApprovalForAll: (args: { operator: Address, approved: boolean, account?: Account | Address }) => Promise<Hash>;
-    getApproved: (args: { tokenId: bigint }) => Promise<Address>;
-    isApprovedForAll: (args: { owner: Address, operator: Address }) => Promise<boolean>;
+    sbtBalanceOf: (args: { owner: Address }) => Promise<bigint>;
+    sbtOwnerOf: (args: { tokenId: bigint }) => Promise<Address>;
+    sbtSafeTransferFrom: (args: { from: Address, to: Address, tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtTransferFrom: (args: { from: Address, to: Address, tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtApprove: (args: { to: Address, tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtSetApprovalForAll: (args: { operator: Address, approved: boolean, account?: Account | Address }) => Promise<Hash>;
+    sbtGetApproved: (args: { tokenId: bigint }) => Promise<Address>;
+    sbtIsApprovedForAll: (args: { owner: Address, operator: Address }) => Promise<boolean>;
     
     // ERC721 Metadata
-    name: () => Promise<string>;
-    symbol: () => Promise<string>;
-    tokenURI: (args: { tokenId: bigint }) => Promise<string>;
+    sbtName: () => Promise<string>;
+    sbtSymbol: () => Promise<string>;
+    sbtTokenURI: (args: { tokenId: bigint }) => Promise<string>;
     
     // ERC721 Enumerable
-    totalSupply: () => Promise<bigint>;
-    tokenByIndex: (args: { index: bigint }) => Promise<bigint>;
-    tokenOfOwnerByIndex: (args: { owner: Address, index: bigint }) => Promise<bigint>;
-    supportsInterface: (args: { interfaceId: Hex }) => Promise<boolean>;
-    nextTokenId: () => Promise<bigint>;
+    sbtTotalSupply: () => Promise<bigint>;
+    sbtTokenByIndex: (args: { index: bigint }) => Promise<bigint>;
+    sbtTokenOfOwnerByIndex: (args: { owner: Address, index: bigint }) => Promise<bigint>;
+    sbtSupportsInterface: (args: { interfaceId: Hex }) => Promise<boolean>;
+    sbtNextTokenId: () => Promise<bigint>;
     
     // Admin/Minting
-    mint: (args: { to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
-    burn: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
-    burnSBT: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
-    deactivateAllMemberships: (args: { user: Address, account?: Account | Address }) => Promise<Hash>;
-    setBaseURI: (args: { baseURI: string, account?: Account | Address }) => Promise<Hash>;
+    sbtMint: (args: { to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
+    sbtBurn: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtBurnSBT: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtDeactivateAllMemberships: (args: { user: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtSetBaseURI: (args: { baseURI: string, account?: Account | Address }) => Promise<Hash>;
     
     // Membership Management
-    leaveCommunity: (args: { community: Address, account?: Account | Address }) => Promise<Hash>;
-    deactivateMembership: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtLeaveCommunity: (args: { community: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtDeactivateMembership: (args: { tokenId: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Activity & Reputation
-    recordActivity: (args: { user: Address, account?: Account | Address }) => Promise<Hash>;
-    lastActivityTime: (args: { user: Address }) => Promise<bigint>;
-    weeklyActivity: (args: { user: Address }) => Promise<bigint>;
-    reputationCalculator: () => Promise<Address>;
-    setReputationCalculator: (args: { calculator: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtRecordActivity: (args: { user: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtLastActivityTime: (args: { user: Address }) => Promise<bigint>;
+    sbtWeeklyActivity: (args: { user: Address }) => Promise<bigint>;
+    sbtReputationCalculator: () => Promise<Address>;
+    sbtSetReputationCalculator: (args: { calculator: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Mint Fee & Lock
-    mintFee: () => Promise<bigint>;
-    setMintFee: (args: { fee: bigint, account?: Account | Address }) => Promise<Hash>;
-    minLockAmount: () => Promise<bigint>;
-    setMinLockAmount: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtMintFee: () => Promise<bigint>;
+    sbtSetMintFee: (args: { fee: bigint, account?: Account | Address }) => Promise<Hash>;
+    sbtMinLockAmount: () => Promise<bigint>;
+    sbtSetMinLockAmount: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Pause
-    pause: (args: { account?: Account | Address }) => Promise<Hash>;
-    unpause: (args: { account?: Account | Address }) => Promise<Hash>;
-    paused: () => Promise<boolean>;
+    sbtPause: (args: { account?: Account | Address }) => Promise<Hash>;
+    sbtUnpause: (args: { account?: Account | Address }) => Promise<Hash>;
+    sbtPaused: () => Promise<boolean>;
     
     // DAO & Config
-    daoMultisig: () => Promise<Address>;
-    setDAOMultisig: (args: { multisig: Address, account?: Account | Address }) => Promise<Hash>;
-    setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
-    setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtDaoMultisig: () => Promise<Address>;
+    sbtSetDAOMultisig: (args: { multisig: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtSetRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtSetSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Version
-    version: () => Promise<string>;
+    sbtVersion: () => Promise<string>;
     
     // Constants
-    REGISTRY: () => Promise<Address>;
-    GTOKEN_STAKING: () => Promise<Address>;
-    GTOKEN: () => Promise<Address>;
-    SUPER_PAYMASTER: () => Promise<Address>;
+    sbtREGISTRY: () => Promise<Address>;
+    sbtGTOKEN_STAKING: () => Promise<Address>;
+    sbtGTOKEN: () => Promise<Address>;
+    sbtSUPER_PAYMASTER: () => Promise<Address>;
     
     // Ownership
-    owner: () => Promise<Address>;
-    transferSBTOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    sbtOwner: () => Promise<Address>;
+    sbtTransferSBTOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    sbtRenounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
 };
 
 export const sbtActions = (address: Address) => (client: PublicClient | WalletClient): SBTActions => ({
     // SBT specific
-    async safeMintForRole({ roleId, to, tokenURI, account }) {
+    async sbtSafeMintForRole({ roleId, to, tokenURI, account }: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -102,7 +102,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async airdropMint({ roleId, to, tokenURI, account }) {
+    async sbtAirdropMint({ roleId, to, tokenURI, account }: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -113,7 +113,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async getUserSBT({ user }) {
+    async sbtGetUserSBT({ user, roleId }: { user: Address, roleId: Hex }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -122,7 +122,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async getSBTData({ tokenId }) {
+    async sbtGetSBTData({ tokenId }: { tokenId: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -131,7 +131,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async getCommunityMembership({ user, community }) {
+    async sbtGetCommunityMembership({ user, community }: { user: Address, community: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -141,7 +141,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // ERC721 Standard
-    async balanceOf({ owner }) {
+    async sbtBalanceOf({ owner }: { owner: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -150,7 +150,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async ownerOf({ tokenId }) {
+    async sbtOwnerOf({ tokenId }: { tokenId: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -159,7 +159,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async safeTransferFrom({ from, to, tokenId, account }) {
+    async sbtSafeTransferFrom({ from, to, tokenId, account }: { from: Address, to: Address, tokenId: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -170,7 +170,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async transferFrom({ from, to, tokenId, account }) {
+    async sbtTransferFrom({ from, to, tokenId, account }: { from: Address, to: Address, tokenId: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -181,7 +181,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async approve({ to, tokenId, account }) {
+    async sbtApprove({ to, tokenId, account }: { to: Address, tokenId: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -192,7 +192,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async setApprovalForAll({ operator, approved, account }) {
+    async sbtSetApprovalForAll({ operator, approved, account }: { operator: Address, approved: boolean, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -203,7 +203,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async getApproved({ tokenId }) {
+    async sbtGetApproved({ tokenId }: { tokenId: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -212,7 +212,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async isApprovedForAll({ owner, operator }) {
+    async sbtIsApprovedForAll({ owner, operator }: { owner: Address, operator: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -222,7 +222,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // ERC721 Metadata
-    async name() {
+    async sbtName() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -231,7 +231,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<string>;
     },
 
-    async symbol() {
+    async sbtSymbol() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -240,7 +240,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<string>;
     },
 
-    async tokenURI({ tokenId }) {
+    async sbtTokenURI({ tokenId }: { tokenId: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -250,7 +250,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // ERC721 Enumerable
-    async totalSupply() {
+    async sbtTotalSupply() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -259,7 +259,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async tokenByIndex({ index }) {
+    async sbtTokenByIndex({ index }: { index: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -268,7 +268,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async tokenOfOwnerByIndex({ owner, index }) {
+    async sbtTokenOfOwnerByIndex({ owner, index }: { owner: Address, index: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -278,7 +278,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // Admin/Minting
-    async mint({ to, tokenURI, account }) {
+    async sbtMint({ to, tokenURI, account }: { to: Address, tokenURI: string, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -289,7 +289,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async burn({ tokenId, account }) {
+    async sbtBurn({ tokenId, account }: { tokenId: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -300,9 +300,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-
-
-    async deactivateAllMemberships({ user, account }) {
+    async sbtDeactivateAllMemberships({ user, account }: { user: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -313,7 +311,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async setBaseURI({ baseURI, account }) {
+    async sbtSetBaseURI({ baseURI, account }: { baseURI: string, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -325,7 +323,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // Constants
-    async REGISTRY() {
+    async sbtREGISTRY() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -334,7 +332,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async GTOKEN_STAKING() {
+    async sbtGTOKEN_STAKING() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -343,7 +341,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async GTOKEN() {
+    async sbtGTOKEN() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -352,7 +350,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async SUPER_PAYMASTER() {
+    async sbtSUPER_PAYMASTER() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -362,7 +360,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // Ownership
-    async owner() {
+    async sbtOwner() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -371,7 +369,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async transferSBTOwnership({ newOwner, account }) {
+    async sbtTransferSBTOwnership({ newOwner, account }: { newOwner: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -382,7 +380,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async renounceOwnership({ account }) {
+    async sbtRenounceOwnership({ account }: { account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -394,7 +392,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // Additional SBT-specific functions
-    async mintForRole({ roleId, to, account }) {
+    async sbtMintForRole({ roleId, to, account }: { roleId: Hex, to: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -405,7 +403,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async getMemberships({ user }) {
+    async sbtGetMemberships({ user }: { user: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -414,7 +412,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<any[]>;
     },
 
-    async getActiveMemberships({ user }) {
+    async sbtGetActiveMemberships({ user }: { user: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -423,7 +421,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<any[]>;
     },
 
-    async verifyCommunityMembership({ user, community }) {
+    async sbtVerifyCommunityMembership({ user, community }: { user: Address, community: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -432,7 +430,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<boolean>;
     },
 
-    async userToSBT({ user }) {
+    async sbtUserToSBT({ user }: { user: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -441,7 +439,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async sbtData({ tokenId }) {
+    async sbtSbtData({ tokenId }: { tokenId: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -450,7 +448,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async membershipIndex({ user, index }) {
+    async sbtMembershipIndex({ user, index }: { user: Address, index: bigint }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -459,7 +457,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async supportsInterface({ interfaceId }) {
+    async sbtSupportsInterface({ interfaceId }: { interfaceId: Hex }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -468,7 +466,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<boolean>;
     },
 
-    async nextTokenId() {
+    async sbtNextTokenId() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -477,7 +475,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async burnSBT({ tokenId, account }) {
+    async sbtBurnSBT({ tokenId, account }: { tokenId: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -488,7 +486,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async leaveCommunity({ community, account }) {
+    async sbtLeaveCommunity({ community, account }: { community: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -499,7 +497,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async deactivateMembership({ tokenId, account }) {
+    async sbtDeactivateMembership({ tokenId, account }: { tokenId: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -510,7 +508,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async recordActivity({ user, account }) {
+    async sbtRecordActivity({ user, account }: { user: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -521,7 +519,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async lastActivityTime({ user }) {
+    async sbtLastActivityTime({ user }: { user: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -530,7 +528,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async weeklyActivity({ user }) {
+    async sbtWeeklyActivity({ user }: { user: Address }) {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -539,7 +537,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async reputationCalculator() {
+    async sbtReputationCalculator() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -548,7 +546,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async setReputationCalculator({ calculator, account }) {
+    async sbtSetReputationCalculator({ calculator, account }: { calculator: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -559,7 +557,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async mintFee() {
+    async sbtMintFee() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -568,7 +566,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async setMintFee({ fee, account }) {
+    async sbtSetMintFee({ fee, account }: { fee: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -579,7 +577,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async minLockAmount() {
+    async sbtMinLockAmount() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -588,7 +586,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<bigint>;
     },
 
-    async setMinLockAmount({ amount, account }) {
+    async sbtSetMinLockAmount({ amount, account }: { amount: bigint, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -599,7 +597,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async pause({ account }) {
+    async sbtPause({ account }: { account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -610,7 +608,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async unpause({ account }) {
+    async sbtUnpause({ account }: { account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -621,7 +619,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async paused() {
+    async sbtPaused() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -630,7 +628,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<boolean>;
     },
 
-    async daoMultisig() {
+    async sbtDaoMultisig() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,
@@ -639,7 +637,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }) as Promise<Address>;
     },
 
-    async setDAOMultisig({ multisig, account }) {
+    async sbtSetDAOMultisig({ multisig, account }: { multisig: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -650,7 +648,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async setRegistry({ registry, account }) {
+    async sbtSetRegistry({ registry, account }: { registry: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -661,7 +659,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async setSuperPaymaster({ paymaster, account }) {
+    async sbtSetSuperPaymaster({ paymaster, account }: { paymaster: Address, account?: Account | Address }) {
         return (client as any).writeContract({
             address,
             abi: MySBTABI,
@@ -672,7 +670,7 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         });
     },
 
-    async version() {
+    async sbtVersion() {
         return (client as PublicClient).readContract({
             address,
             abi: MySBTABI,

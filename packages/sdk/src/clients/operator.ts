@@ -98,15 +98,18 @@ export function createOperatorClient({
     const spActions = superPaymasterActions(usedAddresses.superPaymaster)(client as any);
     const regActions = registryActions(usedAddresses.registry)(client as any);
     const stkActions = stakingActions(usedAddresses.gTokenStaking)(client as any);
-    const pmV4Actions = paymasterV4Actions(usedAddresses.paymasterV4)(client as any);
-    const tkActions = tokenActions()(client as any);
+    const p4Actions = paymasterV4Actions(usedAddresses.paymasterV4)(client as any);
+    const tokActions = tokenActions()(client as any);
 
     const actions = {
-        ...stkActions,
-        ...spActions,
-        ...pmV4Actions,
+        ...client,
+        ...publicActions(client),
+        ...walletActions(client),
         ...regActions,
-        ...tkActions,
+        ...spActions,
+        ...p4Actions,
+        ...stkActions,
+        ...tokActions,
 
         async setup(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             console.log('⚙️ Setting up operator...');
@@ -149,14 +152,14 @@ export function createOperatorClient({
                 const totalStakeNeeded = args.stakeAmount + entryBurn;
 
                 console.log(`   SDK: Approving GToken (Stake: ${args.stakeAmount}, Burn: ${entryBurn})...`);
-                const approveStkTx = await tkActions.approve({
+                const approveStkTx = await tokActions.tokenApprove({
                     token: usedAddresses.gToken,
                     spender: usedAddresses.gTokenStaking,
                     amount: totalStakeNeeded,
                     account: accountToUse
                 });
-                const receipt = await (client as any).waitForTransactionReceipt({ hash: approveStkTx });
-                const events = decodeContractEvents(receipt.logs);
+                let receipt = await (client as any).waitForTransactionReceipt({ hash: approveStkTx });
+                let events = decodeContractEvents(receipt.logs);
                 logDecodedEvents(events);
                 results.push({ hash: approveStkTx, events });
 
@@ -178,7 +181,7 @@ export function createOperatorClient({
                 }
                 
                 console.log(`   SDK: Checking if role already granted...`);
-                const hasRoleResult = await regActions.hasRole({ 
+                const hasRoleResult = await regActions.registryHasRole({ 
                     user: accountToUse!.address,
                     roleId: args.roleId 
                 });
@@ -187,7 +190,7 @@ export function createOperatorClient({
                     console.log(`   ℹ️  Role already granted, skipping registration`);
                 } else {
                     console.log(`   SDK: Registering role ${args.roleId}...`);
-                    const registerTx = await regActions.registerRoleSelf({
+                    const registerTx = await regActions.registryRegisterRoleSelf({
                         roleId: args.roleId,
                         data, 
                         account: accountToUse
@@ -200,8 +203,8 @@ export function createOperatorClient({
 
                 // 3. Deposit aPNTs
                 if (args.depositAmount > 0n) {
-                    console.log('   SDK: Depositing aPNTs via depositForOperator...');
-                    const depositTx = await spActions.depositForOperator({
+                    console.log('   SDK: Depositing aPNTs via superPaymasterDepositFor...');
+                    const depositTx = await spActions.superPaymasterDepositFor({
                         operator: accountToUse.address, 
                         amount: args.depositAmount,
                         account: accountToUse
@@ -238,7 +241,7 @@ export function createOperatorClient({
             validateAddress(treasury, 'Treasury');
             validateAmount(exchangeRate, 'Exchange Rate');
 
-            const tx = await spActions.configureOperator({ 
+            const tx = await spActions.superPaymasterConfigureOperator({ 
                 xPNTsToken, 
                 treasury, 
                 exchangeRate,
@@ -253,9 +256,9 @@ export function createOperatorClient({
             const addr = account.address;
             
             const roleId = keccak256(stringToBytes('PAYMASTER_SUPER'));
-            const roleStatus = await regActions.hasRole({ user: addr, roleId });
+            const roleStatus = await regActions.registryHasRole({ user: addr, roleId });
             
-            const operatorData = await spActions.operators({ operator: addr });
+            const operatorData = await spActions.superPaymasterOperators({ operator: addr });
             // operators(address) returns (uint128 aPNTsBalance, uint96 exchangeRate, bool isConfigured, bool isPaused, ...)
             
             return {
@@ -330,12 +333,12 @@ export function createOperatorClient({
         },
 
         async isOperator(operator: Address): Promise<boolean> {
-            const data = await spActions.operators({ operator });
+            const data = await spActions.superPaymasterOperators({ operator });
             return data[2]; // isConfigured
         },
 
         async getDepositDetails(): Promise<{ deposit: bigint }> {
-            const deposit = await spActions.getDeposit();
+            const deposit = await spActions.superPaymasterGetDeposit();
             return { deposit };
         }
     };

@@ -26,7 +26,7 @@ async function verify() {
     // 1. FinanceClient Verification
     // =========================================================================
     console.log('1️⃣  [FinanceClient] Verifying Tokenomics & Staking...');
-    const { FinanceClient } = await import('../packages/tokens/dist/index.js');
+    const { FinanceClient } = await import('../packages/sdk/src/index.ts');
     const finance = new FinanceClient(publicClient, walletClient);
 
     // 1.1 Read Tokenomics
@@ -61,8 +61,7 @@ async function verify() {
     // 2. IdentityClient Verification
     // =========================================================================
     console.log('2️⃣  [IdentityClient] Verifying Reputation...');
-    const { ReputationClient } = await import('../packages/identity/dist/index.js');
-    const { CORE_ADDRESSES } = await import('../packages/core/dist/index.js');
+    const { ReputationClient, CORE_ADDRESSES } = await import('../packages/sdk/src/index.ts');
     
     // Use fallback if needed
     const repAddr = CORE_ADDRESSES.reputationSystem || CORE_ADDRESSES.mySBT; 
@@ -80,7 +79,7 @@ async function verify() {
     // 3. CommunityClient Verification
     // =========================================================================
     console.log('3️⃣  [CommunityClient] Verifying issueXPNTs...');
-    const { CommunityClient } = await import('../packages/community/dist/index.js');
+    const { CommunityClient } = await import('../packages/sdk/src/index.ts');
     const community = new CommunityClient(publicClient, walletClient);
 
     try {
@@ -106,7 +105,7 @@ async function verify() {
     // 4. OperatorClient Verification
     // =========================================================================
     console.log('4️⃣  [OperatorClient] Verifying deployPaymaster...');
-    const { OperatorClient } = await import('../packages/operator/dist/index.js');
+    const { OperatorClient } = await import('../packages/sdk/src/index.ts');
     const operator = new OperatorClient(publicClient, walletClient);
 
     try {
@@ -127,7 +126,7 @@ async function verify() {
     // 5. EndUserClient Verification
     // =========================================================================
     console.log('5️⃣  [EndUserClient] Verifying sendGaslessTransaction...');
-    const { EndUserClient } = await import('../packages/enduser/dist/index.js');
+    const { EndUserClient } = await import('../packages/sdk/src/index.ts');
     const enduser = new EndUserClient(publicClient, walletClient);
 
     try {

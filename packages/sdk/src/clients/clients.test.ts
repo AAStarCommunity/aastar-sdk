@@ -82,7 +82,7 @@ describe('SDK L2 Clients', () => {
             client.readContract = vi.fn().mockResolvedValue(['', 0n]); // roleConfig
             client.writeContract = vi.fn().mockResolvedValue('0xhash');
             client.waitForTransactionReceipt = vi.fn().mockResolvedValue({ logs: [] });
-            client.hasRole = vi.fn().mockResolvedValue(false);
+            client.registryHasRole = vi.fn().mockResolvedValue(false);
 
             const result = await client.setup({
                 stakeAmount: 100n,

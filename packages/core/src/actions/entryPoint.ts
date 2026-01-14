@@ -1,3 +1,4 @@
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { EntryPointABI } from '../abis/index.js';
 
 export enum EntryPointVersion {

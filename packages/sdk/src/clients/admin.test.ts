@@ -17,7 +17,7 @@ describe('AdminClient', () => {
         it('should grant role', async () => {
             const client = createAdminClient({ chain: mainnet, transport: http() });
             const spy = vi.fn().mockResolvedValue('0xhash');
-            (client as any).registerRole = spy;
+            (client as any).registryRegisterRole = spy;
             
             const hash = await client.system.grantRole({ roleId: '0x1', user: MOCK_ADDR, data: '0x' });
             expect(hash).toBe('0xhash');
@@ -27,7 +27,7 @@ describe('AdminClient', () => {
         it('should revoke role', async () => {
              const client = createAdminClient({ chain: mainnet, transport: http() });
              const spy = vi.fn().mockResolvedValue('0xhash');
-             (client as any).unRegisterRole = spy;
+             (client as any).registryUnRegisterRole = spy;
              
              const hash = await client.system.revokeRole({ roleId: '0x1', user: MOCK_ADDR });
              expect(hash).toBe('0xhash');
@@ -37,7 +37,7 @@ describe('AdminClient', () => {
         it('should set super paymaster', async () => {
             const client = createAdminClient({ chain: mainnet, transport: http() });
             const spy = vi.fn().mockResolvedValue('0xhash');
-            (client as any).setSuperPaymaster = spy;
+            (client as any).registrySetSuperPaymaster = spy;
             
             const hash = await client.system.setSuperPaymaster(MOCK_ADDR);
             expect(hash).toBe('0xhash');
@@ -48,7 +48,7 @@ describe('AdminClient', () => {
         it('should deposit', async () => {
             const client = createAdminClient({ chain: mainnet, transport: http() });
             const spy = vi.fn().mockResolvedValue('0xhash');
-            (client as any).deposit = spy;
+            (client as any).superPaymasterDeposit = spy;
             
             const hash = await client.finance.deposit({ amount: 100n });
             expect(hash).toBe('0xhash');
@@ -57,7 +57,7 @@ describe('AdminClient', () => {
         it('should depositForOperator', async () => {
             const client = createAdminClient({ chain: mainnet, transport: http() });
             const spy = vi.fn().mockResolvedValue('0xhash');
-            (client as any).depositForOperator = spy;
+            (client as any).superPaymasterDepositFor = spy;
             
             const hash = await client.finance.depositForOperator({ operator: MOCK_ADDR, amount: 100n });
             expect(hash).toBe('0xhash');
@@ -66,7 +66,7 @@ describe('AdminClient', () => {
         it('should withdrawTo', async () => {
             const client = createAdminClient({ chain: mainnet, transport: http() });
             const spy = vi.fn().mockResolvedValue('0xhash');
-            (client as any).withdrawTo = spy;
+            (client as any).superPaymasterWithdrawTo = spy;
             
             const hash = await client.finance.withdrawTo({ to: MOCK_ADDR, amount: 100n });
             expect(hash).toBe('0xhash');
@@ -77,19 +77,19 @@ describe('AdminClient', () => {
         it('should ban/unban operator', async () => {
             const client = createAdminClient({ chain: mainnet, transport: http() });
             const spy = vi.fn().mockResolvedValue('0xhash');
-            (client as any).updateOperatorBlacklist = spy;
+            (client as any).registryUpdateOperatorBlacklist = spy;
             
             await client.operators.ban(MOCK_ADDR);
-            expect(spy).toHaveBeenCalledWith(expect.objectContaining({ isBlacklisted: true }));
+            expect(spy).toHaveBeenCalledWith(expect.objectContaining({ statuses: [true] }));
             
             await client.operators.unban(MOCK_ADDR);
-            expect(spy).toHaveBeenCalledWith(expect.objectContaining({ isBlacklisted: false }));
+            expect(spy).toHaveBeenCalledWith(expect.objectContaining({ statuses: [false] }));
         });
 
         it('should setPaused', async () => {
              const client = createAdminClient({ chain: mainnet, transport: http() });
              const spy = vi.fn().mockResolvedValue('0xhash');
-             (client as any).setOperatorPaused = spy;
+             (client as any).superPaymasterSetOperatorPaused = spy;
              
              await client.operators.setPaused(MOCK_ADDR, true);
              expect(spy).toHaveBeenCalledWith(expect.objectContaining({ paused: true }));

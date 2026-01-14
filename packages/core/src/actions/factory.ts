@@ -29,10 +29,9 @@ export type XPNTsFactoryActions = {
     tokenImplementation: () => Promise<Address>;
     
     // Ownership
-    owner: () => Promise<Address>;
+    xPNTsFactoryOwner: () => Promise<Address>;
     transferXPNTsFactoryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>; // Alias
-    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    renounceXPNTsFactoryOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Aliases
     deployxPNTsToken: (args: { name: string, symbol: string, community: Address, account?: Account | Address }) => Promise<Hash>; // Alias
@@ -64,7 +63,7 @@ export type XPNTsFactoryActions = {
     SUPERPAYMASTER: () => Promise<Address>; // Alias for SUPER_PAYMASTER due to ABI naming
     
     // Version
-    version: () => Promise<string>;
+    xPNTsFactoryVersion: () => Promise<string>;
 };
 
 // Paymaster Factory Actions
@@ -110,13 +109,13 @@ export type PaymasterFactoryActions = {
     ENTRY_POINT: () => Promise<Address>;
     
     // Ownership
-    owner: () => Promise<Address>;
+    paymasterFactoryOwner: () => Promise<Address>;
     transferPaymasterFactoryOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>; // Alias
+    renouncePaymasterFactoryOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
     defaultVersion: () => Promise<string>;
-    version: () => Promise<string>;
+    paymasterFactoryVersion: () => Promise<string>;
 };
 
 export const xPNTsFactoryActions = (address: Address) => (client: PublicClient | WalletClient): XPNTsFactoryActions => ({
@@ -287,7 +286,7 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         }) as Promise<Address>;
     },
 
-    async owner() {
+    async xPNTsFactoryOwner() {
         return (client as PublicClient).readContract({
             address,
             abi: xPNTsFactoryABI,
@@ -307,8 +306,15 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         });
     },
 
-    async transferOwnership(args) {
-        return this.transferXPNTsFactoryOwnership(args);
+    async renounceXPNTsFactoryOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: xPNTsFactoryABI,
+            functionName: 'renounceOwnership',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
     },
 
     async deployxPNTsToken(args) {
@@ -381,18 +387,7 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         return (client as PublicClient).readContract({ address, abi: xPNTsFactoryABI, functionName: 'MIN_SUGGESTED_AMOUNT', args: [] }) as Promise<bigint>;
     },
 
-    async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
-    },
-
-    async version() {
+    async xPNTsFactoryVersion() {
         return (client as PublicClient).readContract({
             address,
             abi: xPNTsFactoryABI,
@@ -567,7 +562,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         }) as Promise<Address>;
     },
 
-    async owner() {
+    async paymasterFactoryOwner() {
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,
@@ -587,8 +582,15 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         });
     },
 
-    async transferOwnership(args) {
-        return this.transferPaymasterFactoryOwnership(args);
+    async renouncePaymasterFactoryOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: PaymasterFactoryABI,
+            functionName: 'renounceOwnership',
+            args: [],
+            account: account as any,
+            chain: (client as any).chain
+        });
     },
 
     async defaultVersion() {
@@ -600,7 +602,7 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         }) as Promise<string>;
     },
 
-    async version() {
+    async paymasterFactoryVersion() {
         return (client as PublicClient).readContract({
             address,
             abi: PaymasterFactoryABI,

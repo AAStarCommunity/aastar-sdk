@@ -24,7 +24,7 @@ describe('TokenActions', () => {
 
     it('should read name', async () => {
         mockPublicClient.readContract.mockResolvedValue('Test Token');
-        const name = await actions.name({ token: MOCK_ADDR });
+        const name = await actions.tokenName({ token: MOCK_ADDR });
         expect(name).toBe('Test Token');
         expect(mockPublicClient.readContract).toHaveBeenCalledWith(expect.objectContaining({
             functionName: 'name'
@@ -33,12 +33,12 @@ describe('TokenActions', () => {
 
     it('should read symbol', async () => {
         mockPublicClient.readContract.mockResolvedValue('TT');
-        const symbol = await actions.symbol({ token: MOCK_ADDR });
+        const symbol = await actions.tokenSymbol({ token: MOCK_ADDR });
         expect(symbol).toBe('TT');
     });
 
     it('should transfer tokens', async () => {
-        const tx = await actions.transfer({
+        const tx = await actions.tokenTransfer({
             token: MOCK_ADDR,
             to: MOCK_ADDR,
             amount: 100n,
@@ -48,7 +48,7 @@ describe('TokenActions', () => {
     });
 
     it('should handle transferFrom', async () => {
-        const tx = await actions.transferFrom({
+        const tx = await actions.tokenTransferFrom({
             token: MOCK_ADDR,
             from: MOCK_ADDR,
             to: MOCK_ADDR,
