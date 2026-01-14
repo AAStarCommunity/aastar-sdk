@@ -9,7 +9,7 @@ import { dirname, join } from 'path';
 // 1. Load Env
 dotenv.config({ path: '.env.sepolia' });
 const RPC_URL = process.env.SEPOLIA_RPC_URL!;
-const SUPPLIER_KEY = process.env.ADMIN_KEY as `0x${string}`;
+const SUPPLIER_KEY = (process.env.PRIVATE_KEY_SUPPLIER || process.env.TEST_PRIVATE_KEY || process.env.PRIVATE_KEY) as `0x${string}`;
 
 console.log('🚀 Running SDK Regression V2 (Full API Coverage)...');
 console.log(`📡 RPC: ${RPC_URL.substring(0, 25)}...`);
@@ -79,18 +79,21 @@ async function verify() {
     // 3. CommunityClient Verification
     // =========================================================================
     console.log('3️⃣  [CommunityClient] Verifying issueXPNTs...');
-    const { CommunityClient } = await import('../packages/sdk/src/index.ts');
-    const community = new CommunityClient(publicClient, walletClient);
+    const { createCommunityClient } = await import('../packages/sdk/src/index.ts');
+    const community = createCommunityClient({
+        transport: http(RPC_URL),
+        chain: walletClient.chain,
+        account: walletClient.account
+    });
 
     try {
-        // issueXPNTs requires { symbol, initialSupply, exchangeRate } now (per Phase 2 update)
-        // A revert "xPNTsFactory address not found" or "revert" PROVES the API targeted the SDK logic correctly!
-        await community.issueXPNTs({
-             symbol: "TEST",
-             initialSupply: parseEther("100"),
-             exchangeRate: 1n
+        // issueXPNTs replaced by launch()
+        const launchResult = await community.launch({
+             name: "Test Community",
+             tokenName: "Test Token",
+             tokenSymbol: "TEST"
         });
-        console.log('   ✅ Success: Tx Sent');
+        console.log(`   ✅ Community Launched. Token: ${launchResult.tokenAddress}`);
     } catch (e: any) {
         const msg = e.message || "";
         if (msg.includes('Missing ROLE_COMMUNITY') || msg.includes('revert') || msg.includes('Factory address not found') || msg.includes('User rejected')) {
@@ -105,12 +108,16 @@ async function verify() {
     // 4. OperatorClient Verification
     // =========================================================================
     console.log('4️⃣  [OperatorClient] Verifying deployPaymaster...');
-    const { OperatorClient } = await import('../packages/sdk/src/index.ts');
-    const operator = new OperatorClient(publicClient, walletClient);
+    const { createOperatorClient } = await import('../packages/sdk/src/index.ts');
+    const operator = createOperatorClient({
+        transport: http(RPC_URL),
+        chain: walletClient.chain,
+        account: walletClient.account
+    });
 
     try {
-        await operator.deployPaymaster(account.address); // Owner = self
-        console.log('   ✅ Success: Tx Sent');
+        await operator.deployPaymasterV4(); 
+        console.log('   ✅ Success: Paymaster Deployed');
     } catch (e: any) {
         const msg = e.message || "";
         // Expecting role error or revert
@@ -126,12 +133,20 @@ async function verify() {
     // 5. EndUserClient Verification
     // =========================================================================
     console.log('5️⃣  [EndUserClient] Verifying sendGaslessTransaction...');
-    const { EndUserClient } = await import('../packages/sdk/src/index.ts');
-    const enduser = new EndUserClient(publicClient, walletClient);
+    const { createEndUserClient } = await import('../packages/sdk/src/index.ts');
+    const enduser = createEndUserClient({
+        transport: http(RPC_URL),
+        chain: walletClient.chain,
+        account: walletClient.account
+    });
 
     try {
         // We asserted this throws a specific error containing the EntryPoint address
-        await enduser.sendGaslessTransaction(account.address, "0x", 0n);
+        await enduser.executeGasless({
+            target: account.address,
+            data: "0x",
+            operator: account.address
+        });
     } catch (e: any) {
         if (e.message.includes('Gasless TX requires Bundler connection')) {
             console.log(`   ✅ Verification Passed: Correctly blocked and identified EntryPoint config.`);
