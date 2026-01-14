@@ -106,8 +106,11 @@ export function createCommunityClient({
         
         // Input Validation
         if (!args.name) throw new AAStarError("Community Name is required", AAStarErrorType.VALIDATION_ERROR);
+        if (args.name.length > 50) throw new AAStarError("Community Name must be ≤ 50 characters", AAStarErrorType.VALIDATION_ERROR);
         if (!args.tokenName) throw new AAStarError("Token Name is required", AAStarErrorType.VALIDATION_ERROR);
+        if (args.tokenName.length > 50) throw new AAStarError("Token Name must be ≤ 50 characters", AAStarErrorType.VALIDATION_ERROR);
         if (!args.tokenSymbol) throw new AAStarError("Token Symbol is required", AAStarErrorType.VALIDATION_ERROR);
+        if (args.tokenSymbol.length > 10) throw new AAStarError("Token Symbol must be ≤ 10 characters", AAStarErrorType.VALIDATION_ERROR);
 
         const results: { hash: Hash, events: DecodedEvent[] }[] = [];
         let tokenAddress: Address = '0x0000000000000000000000000000000000000000';
