@@ -210,7 +210,62 @@ export class SepoliaFaucetAPI {
                  console.log('      ✅ Allowance sufficient.');
             }
 
-            // 4. Register Role (registerRole)
+            // 4. Manual Staking (Bypass Registry Payment Logic)
+            // Fetch Role Config to know minStake
+            const roleConfig = await publicClient.readContract({
+                address: registryAddr,
+                abi: parseAbi(['function roleConfigs(bytes32 roleId) view returns (address owner, uint128 minStake, uint128 slashInc, bool active)']),
+                functionName: 'roleConfigs',
+                args: [ENDUSER_ROLE as `0x${string}`]
+            }) as [Address, bigint, bigint, boolean];
+            
+            const minStake = roleConfig[1];
+            // const slashInc = roleConfig[2]; 
+
+            // Check if already staked
+            const staked = await publicClient.readContract({
+                address: stakingAddr,
+                abi: parseAbi(['function getLockedStake(address user, bytes32 roleId) view returns (uint256)']),
+                functionName: 'getLockedStake',
+                args: [target, ENDUSER_ROLE as `0x${string}`]
+            }) as bigint;
+
+            if (staked < minStake) {
+                // Ensure Admin has tokens to pay for stake
+                const adminBal = await publicClient.readContract({
+                    address: stakingToken,
+                    abi: ERC20_ABI,
+                    functionName: 'balanceOf',
+                    args: [adminAddr]
+                });
+                
+                if (adminBal < minStake) {
+                    console.log(`      🪙 Minting GTokens to Admin (for stake)...`);
+                    const hashMint = await adminWallet.writeContract({
+                        address: stakingToken,
+                        abi: ERC20_ABI,
+                        functionName: 'mint',
+                        args: [adminAddr, parseEther('1000')], // Mint plenty
+                        chain: sepolia,
+                        account: adminWallet.account!
+                    });
+                    await publicClient.waitForTransactionReceipt({ hash: hashMint });
+                }
+
+                console.log(`      🔐 Manually Locking Stake for User (${formatEther(minStake)} tokens)...`);
+                const hashLock = await adminWallet.writeContract({
+                    address: stakingAddr,
+                    abi: parseAbi(['function lockStake(address user, bytes32 roleId, uint256 stakeAmount, uint256 entryBurn, address payer) external returns (uint256)']),
+                    functionName: 'lockStake',
+                    args: [target, ENDUSER_ROLE as `0x${string}`, minStake, 0n, adminAddr], 
+                    chain: sepolia,
+                    account: adminWallet.account!
+                });
+                await publicClient.waitForTransactionReceipt({ hash: hashLock });
+                console.log(`      ✅ Stake Locked. Tx: ${hashLock}`);
+            }
+
+            // 5. Register Role (registerRole)
             // EndUser Role Data: (address account, address community, string avatarURI, string ensName, uint256 stakeAmount)
             const userData = encodeAbiParameters(
                 [
@@ -220,7 +275,7 @@ export class SepoliaFaucetAPI {
                     { name: 'ensName', type: 'string' },
                     { name: 'stakeAmount', type: 'uint256' }
                 ],
-                // Use provided community or zeroAddress (which will fail if Registry enforces it, but allows flexibility)
+                // Stake Amount 0 because we just locked it manually
                 [target, community || zeroAddress, '', '', 0n] 
             ); 
             

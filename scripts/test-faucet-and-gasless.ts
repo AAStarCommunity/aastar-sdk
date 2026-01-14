@@ -88,7 +88,7 @@ async function main() {
         targetAA: aaAddress,
         registry: config.contracts.registry,
         token: tokenToMint, 
-        ethAmount: parseEther('0.02'),
+        ethAmount: 0n, // SKIP ETH Funding to allow checking Role Logic with low admin balance
         tokenAmount: parseEther('50'),
         community: communityAddr
     });
