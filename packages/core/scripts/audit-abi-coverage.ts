@@ -76,23 +76,23 @@ async function run() {
         : {};
     const currentHashes: HashCache = {};
     
-    // Map of ABI filenames to Action filenames
-    const ABI_ACTION_MAP: { [key: string]: string } = {
-        'GToken.json': 'tokens.ts',
-        'xPNTsToken.json': 'tokens.ts',
-        'xPNTsFactory.json': 'factory.ts',
-        'PaymasterFactory.json': 'factory.ts',
-        'SimpleAccountFactory.json': 'account.ts',
-        'SimpleAccount.json': 'account.ts',
-        'BLSAggregator.json': 'validators.ts',
-        'DVTValidator.json': 'validators.ts',
-        'GTokenStaking.json': 'staking.ts',
-        'MySBT.json': 'sbt.ts',
-        'Paymaster.json': 'paymasterV4.ts',
-        'ReputationSystem.json': 'reputation.ts',
-        'EntryPoint.json': 'entryPoint.ts',
-        'Registry.json': 'registry.ts',
-        'SuperPaymaster.json': 'superPaymaster.ts'
+    // Map of ABI filenames to Action filenames and prefixes
+    const ABI_ACTION_MAP: { [key: string]: { file: string, prefix?: string } } = {
+        'GToken.json': { file: 'tokens.ts', prefix: 'token' },
+        'xPNTsToken.json': { file: 'tokens.ts', prefix: 'token' },
+        'xPNTsFactory.json': { file: 'factory.ts' },
+        'PaymasterFactory.json': { file: 'factory.ts' },
+        'SimpleAccountFactory.json': { file: 'account.ts' },
+        'SimpleAccount.json': { file: 'account.ts' },
+        'BLSAggregator.json': { file: 'validators.ts' },
+        'DVTValidator.json': { file: 'validators.ts' },
+        'GTokenStaking.json': { file: 'staking.ts' },
+        'MySBT.json': { file: 'sbt.ts', prefix: 'sbt' },
+        'Paymaster.json': { file: 'paymasterV4.ts', prefix: 'paymasterV4' },
+        'ReputationSystem.json': { file: 'reputation.ts' }, 
+        'EntryPoint.json': { file: 'entryPoint.ts' },
+        'Registry.json': { file: 'registry.ts', prefix: 'registry' },
+        'SuperPaymaster.json': { file: 'superPaymaster.ts', prefix: 'superPaymaster' }
     };
     
     let totalAbiFuncs = 0;
@@ -106,7 +106,9 @@ async function run() {
         currentHashes[abiFile] = hash;
 
         // Determine matching action file
-        let actionFileName = ABI_ACTION_MAP[abiFile];
+        let config = ABI_ACTION_MAP[abiFile];
+        let actionFileName = config?.file;
+        let prefix = config?.prefix || '';
         
         if (!actionFileName) {
             // Fallback to simple name matching
@@ -118,7 +120,6 @@ async function run() {
         const actionPath = path.join(ACTIONS_DIR, actionFileName);
 
         if (!fs.existsSync(actionPath)) {
-            // console.warn(`[SKIP] No matching action file for ${abiFile} (${actionFileName})`);
             continue;
         }
 
@@ -126,11 +127,15 @@ async function run() {
         const abiFuncs = getAbiFunctions(abiPath);
         const implementedActions = getImplementedActions(actionPath);
 
-        if (actionFileName === 'paymasterV4.ts') {
-             console.log(`[DEBUG] paymasterV4.ts found actions:`, implementedActions);
-        }
-
-        const missing = abiFuncs.filter(f => !implementedActions.some(a => a.toLowerCase() === f.toLowerCase()));
+        const missing = abiFuncs.filter(f => {
+            const abiNameLower = f.toLowerCase();
+            const prefixedNameLower = (prefix + f).toLowerCase();
+            
+            return !implementedActions.some(a => {
+                const actionNameLower = a.toLowerCase();
+                return actionNameLower === abiNameLower || actionNameLower === prefixedNameLower;
+            });
+        });
         
         totalAbiFuncs += abiFuncs.length;
         totalCovered += (abiFuncs.length - missing.length);

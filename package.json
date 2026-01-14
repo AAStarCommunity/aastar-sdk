@@ -9,6 +9,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:coverage": "vitest run packages --coverage",
     "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
     "test:init": "bash run_full_regression.sh init",
     "test:admin": "ts-node scripts/10_test_protocol_admin_full.ts",
