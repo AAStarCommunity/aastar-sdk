@@ -23,10 +23,22 @@
   "devDependencies": {
     "typescript": "5.7.2"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    }
+  },
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
     "prebuild": "pnpm clean",
     "build": "tsc",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext .ts",
+    "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext .ts --fix",
     "example:local": "tsx examples/regression_test.ts"
   }
 }

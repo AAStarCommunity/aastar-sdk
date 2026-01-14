@@ -4,6 +4,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
+ * ⚠️ WARNING: TESTING & NODE.JS UTILITY ONLY ⚠️
+ * 
+ * This file uses Node.js 'fs' module and is NOT compatible with browsers.
+ * It is intended for use in test scripts, CLI tools, and backend environments only.
+ * DO NOT import this file in frontend/browser code.
+ */
+/**
  * 密钥对接口
  */
 export interface KeyPair {

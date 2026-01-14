@@ -20,7 +20,7 @@ import {
     validateAmount,
 } from '@aastar/core';
 import { PaymasterClient } from '@aastar/paymaster';
-import { AAStarError, AAStarErrorCode as AAStarErrorType } from '../errors/AAStarError.js';
+import { AAStarError, AAStarErrorCode as AAStarErrorType, createError } from '../errors/AAStarError.js';
 import { decodeContractError } from '../errors/decoder.js';
 import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
 
@@ -142,7 +142,7 @@ export function createEndUserClient({
             roleData?: Hex 
         }) {
             const accountToUse = account;
-            if (!accountToUse) throw new Error("Account required for joinAndActivate");
+            if (!accountToUse) throw createError.validation("Account", "Account required for joinAndActivate");
 
             // Validation
             community = validateAddress(community, 'Community');
@@ -235,7 +235,7 @@ export function createEndUserClient({
             operator: Address 
         }) {
             const accountToUse = account;
-            if (!accountToUse) throw new Error("Wallet account required for gasless execution");
+            if (!accountToUse) throw createError.validation("Wallet", "Wallet account required for gasless execution");
 
             // Validation
             target = validateAddress(target, 'Target Address');
@@ -360,7 +360,7 @@ export function createEndUserClient({
             operator: Address 
         }) {
             const accountToUse = account;
-            if (!accountToUse) throw new Error("Wallet account required for gasless execution");
+            if (!accountToUse) throw createError.validation("Wallet", "Wallet account required for gasless execution");
 
             // Validation
             targets.forEach(t => validateAddress(t, 'Target'));
@@ -467,7 +467,7 @@ export function createEndUserClient({
         },
         async checkJoinRequirements(address?: Address) {
             const accountToUse = address || account?.address;
-            if (!accountToUse) throw new Error("Account address required for requirement check");
+            if (!accountToUse) throw createError.validation("Account", "Account address required for requirement check");
             validateAddress(accountToUse, 'Check Address');
             
             const { RequirementChecker } = await import('@aastar/core');

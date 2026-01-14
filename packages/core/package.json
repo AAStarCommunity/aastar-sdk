@@ -9,10 +9,11 @@
   ],
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
-    "prebuild": "pnpm clean",
-    "build": "tsc",
+    "build": "pnpm clean && tsc",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext .ts",
+    "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext .ts --fix",
     "audit:abi": "npx tsx scripts/audit-abi-coverage.ts"
   },
   "dependencies": {

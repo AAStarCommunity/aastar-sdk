@@ -24,6 +24,7 @@ import {
     validateAmount,
     validateHex
 } from '@aastar/core';
+import { AAStarError, createError } from '../errors/AAStarError.js';
 import { decodeContractError } from '../errors/decoder.js';
 
 export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & SBTActions & DVTActions & XPNTsFactoryActions & AggregatorActions & TokenActions & {
@@ -37,10 +38,7 @@ async function wrapAdminCall<T>(fn: () => Promise<T>, operationName: string): Pr
         return await fn();
     } catch (error: any) {
         const decodedMsg = decodeContractError(error);
-        if (decodedMsg) {
-            throw new Error(`Admin Operation [${operationName}] Failed: ${decodedMsg}`);
-        }
-        throw error;
+        throw createError.contract(operationName, decodedMsg || error.message);
     }
 }
 

@@ -23,7 +23,7 @@ import {
     SuperPaymasterABI
 } from '@aastar/core';
 import { RoleDataFactory } from '../utils/roleData.js';
-import { decodeContractError } from '../errors/decoder.js';
+import { AAStarError, AAStarErrorCode as AAStarErrorType, createError } from '../errors/AAStarError.js';
 import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
 
 export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & TokenActions & {
@@ -136,7 +136,7 @@ export function createOperatorClient({
 
             const results: { hash: Hash, events: DecodedEvent[] }[] = [];
             const accountToUse = account; 
-            if (!accountToUse) throw new Error("Account required for onboarding");
+            if (!accountToUse) throw createError.validation("Account", "Account required for onboarding");
 
             try {
                 // 1. Fetch Entry Burn & Approve GToken
@@ -252,7 +252,7 @@ export function createOperatorClient({
         },
 
         async checkReadiness() {
-            if (!account) throw new Error("Account required for readiness check");
+            if (!account) throw createError.validation("Account", "Account required for readiness check");
             const addr = account.address;
             
             const roleId = keccak256(stringToBytes('PAYMASTER_SUPER'));

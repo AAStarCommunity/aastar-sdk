@@ -26,7 +26,7 @@ import {
     TEST_TOKEN_ADDRESSES,
     validateAddress
 } from '@aastar/core';
-import { AAStarError, AAStarErrorCode as AAStarErrorType } from '../errors/AAStarError.js';
+import { AAStarError, AAStarErrorCode as AAStarErrorType, createError } from '../errors/AAStarError.js';
 import { RoleDataFactory, RoleIds } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
 import { decodeContractEvents, logDecodedEvents, type DecodedEvent } from '../utils/eventDecoder.js';
@@ -102,7 +102,7 @@ export function createCommunityClient({
             initialReputationRule?: boolean;
         }
     }) => {
-        if (!account) throw new Error("Account required for launch");
+        if (!account) throw createError.validation("Account", "Account required for launch");
         
         // Input Validation
         if (!args.name) throw new AAStarError("Community Name is required", AAStarErrorType.VALIDATION_ERROR);
