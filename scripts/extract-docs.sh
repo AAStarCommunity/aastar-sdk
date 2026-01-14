@@ -38,6 +38,10 @@ echo -e "${YELLOW}📖 Syncing API folder...${NC}"
 if [ -d "$SDK_REPO/docs/api" ]; then
     rm -rf "$DOCS_REPO/api"/*
     cp -r "$SDK_REPO/docs/api/"* "$DOCS_REPO/api/" 2>/dev/null || true
+    # VitePress needs index.md, not README.md
+    if [ -f "$DOCS_REPO/api/README.md" ]; then
+        cp "$DOCS_REPO/api/README.md" "$DOCS_REPO/api/index.md"
+    fi
 fi
 
 # 3. Sync Examples folder (Clean first, then copy)
@@ -46,12 +50,19 @@ echo -e "${YELLOW}💡 Syncing Examples folder...${NC}"
 if [ -d "$SDK_REPO/docs/examples" ]; then
     rm -rf "$DOCS_REPO/examples"/*
     cp -r "$SDK_REPO/docs/examples/"* "$DOCS_REPO/examples/" 2>/dev/null || true
+    # VitePress needs index.md, not README.md
+    if [ -f "$DOCS_REPO/examples/README.md" ]; then
+        cp "$DOCS_REPO/examples/README.md" "$DOCS_REPO/examples/index.md"
+    fi
 fi
 # Clean and sync ZH Examples
 if [ -d "$SDK_REPO/docs/zh/examples" ]; then
     mkdir -p "$DOCS_REPO/zh/examples"
     rm -rf "$DOCS_REPO/zh/examples"/*
     cp -r "$SDK_REPO/docs/zh/examples/"* "$DOCS_REPO/zh/examples/" 2>/dev/null || true
+    if [ -f "$DOCS_REPO/zh/examples/README.md" ]; then
+        cp "$DOCS_REPO/zh/examples/README.md" "$DOCS_REPO/zh/examples/index.md"
+    fi
 fi
 
 # 4. Sync main README to guide/index.md for easy entry
