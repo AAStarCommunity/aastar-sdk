@@ -55,8 +55,11 @@ export async function runL2Tests(config: NetworkConfig) {
         // Use core SBT action directly
         const { sbtActions } = await import('../../packages/core/dist/index.js');
         const sbt = sbtActions(addresses.mySBT);
-        const publicClient = http(config.rpcUrl);
-        const sbtId = await sbt(publicClient).sbtGetUserSBT({ 
+        const testPublicClient = createPublicClient({
+            chain: config.chain,
+            transport: http(config.rpcUrl)
+        });
+        const sbtId = await sbt(testPublicClient).sbtGetUserSBT({ 
             user: account.address, 
             roleId: RoleIds.ENDUSER 
         });
