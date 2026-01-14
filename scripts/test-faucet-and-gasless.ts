@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, createClient, encodeFunctionData, parseAbi, encodeAbiParameters, type Hex, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, createClient, encodeFunctionData, parseAbi, encodeAbiParameters, type Hex, type Address, keccak256, toHex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { bundlerActions } from 'viem/account-abstraction';
 import { sepolia } from 'viem/chains';
@@ -16,15 +16,38 @@ async function main() {
     const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
     const bundlerUrl = process.env.BUNDLER_URL!;
 
-    // 1. Setup Admin (The Faucet Provider)
-    const adminPk = (process.env.PRIVATE_KEY_ANNI || process.env.PRIVATE_KEY_JASON || process.env.PRIVATE_KEY) as `0x${string}`;
-    if (!adminPk) throw new Error("No Admin Private Key found in .env");
-    
-    const adminAccount = privateKeyToAccount(adminPk);
+    // 1. Setup Admins
+    // Supplier (Jason): Has ETH, no mint permission
+    const supplierPk = process.env.PRIVATE_KEY_SUPPLIER as `0x${string}`;
+    if (!supplierPk) throw new Error("No Supplier Private Key found");
+    const supplierAccount = privateKeyToAccount(supplierPk);
+    const supplierWallet = createWalletClient({ account: supplierAccount, chain: sepolia, transport: http(rpcUrl) });
+
+    // Faucet Admin (Anni): Has Permission, often low ETH
+    const faucetPk = (process.env.PRIVATE_KEY_ANNI || process.env.PRIVATE_KEY) as `0x${string}`;
+    if (!faucetPk) throw new Error("No Faucet Admin Private Key found");
+    const adminAccount = privateKeyToAccount(faucetPk); // Anni
     const adminWallet = createWalletClient({ account: adminAccount, chain: sepolia, transport: http(rpcUrl) });
     const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
     
-    console.log(`👨‍✈️ Admin (Faucet): ${adminAccount.address}`);
+    console.log(`👨‍✈️ Supplier (Funds): ${supplierAccount.address}`);
+    console.log(`👩‍✈️ Faucet Admin (Perms): ${adminAccount.address}`);
+
+    // Check Faucet Admin Balance and Fund if needed
+    const adminBal = await publicClient.getBalance({ address: adminAccount.address });
+    if (adminBal < parseEther('0.05')) {
+        console.log(`   ⚠️ Faucet Admin low on ETH (${formatEther(adminBal)}). Funding from Supplier...`);
+        const hash = await supplierWallet.sendTransaction({
+            to: adminAccount.address,
+            value: parseEther('0.05'),
+            chain: sepolia,
+            account: supplierAccount
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+        console.log(`   ✅ Funded Faucet Admin. Tx: ${hash}`);
+    } else {
+        console.log(`   ✅ Faucet Admin has sufficient ETH (${formatEther(adminBal)}).`);
+    }
 
     // 2. Generate Brand New Identity (The Test User)
     const newPk = generatePrivateKey();
@@ -88,7 +111,7 @@ async function main() {
         targetAA: aaAddress,
         registry: config.contracts.registry,
         token: tokenToMint, 
-        ethAmount: 0n, // SKIP ETH Funding to allow checking Role Logic with low admin balance
+        ethAmount: parseEther('0.02'), // Restore funding
         tokenAmount: parseEther('50'),
         community: communityAddr
     });
