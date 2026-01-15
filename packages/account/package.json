@@ -1,6 +1,6 @@
 {
   "name": "@aastar/account",
-  "version": "0.12.0",
+  "version": "0.16.6",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,5 +16,8 @@
   },
   "scripts": {
     "build": "tsc"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

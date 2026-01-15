@@ -1,6 +1,6 @@
 {
   "name": "@aastar/analytics",
-  "version": "0.14.3",
+  "version": "0.16.6",
   "description": "Analytics client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,11 @@
     "build": "tsc",
     "test": "jest --passWithNoTests"
   },
-  "keywords": ["aastar", "analytics", "web3"],
+  "keywords": [
+    "aastar",
+    "analytics",
+    "web3"
+  ],
   "author": "AAstar Team",
   "license": "MIT",
   "dependencies": {
@@ -17,5 +21,8 @@
   },
   "devDependencies": {
     "typescript": "5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

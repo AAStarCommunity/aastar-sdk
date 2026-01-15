@@ -1,6 +1,6 @@
 {
   "name": "@aastar/core",
-  "version": "0.16.4",
+  "version": "0.16.6",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,5 +25,8 @@
     "abitype": "1.2.3",
     "typescript": "5.7.2",
     "vitest": "4.0.17"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

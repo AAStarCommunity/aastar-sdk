@@ -1,6 +1,6 @@
 {
   "name": "@aastar/identity",
-  "version": "0.14.3",
+  "version": "0.16.6",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,5 +18,8 @@
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
     "prebuild": "pnpm clean",
     "build": "tsc"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
