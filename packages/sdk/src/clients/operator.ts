@@ -217,8 +217,9 @@ export function createOperatorClient({
 
                 return results;
             } catch (error) {
-                const decodedMsg = decodeContractError(error);
-                throw decodedMsg ? new Error(`Onboarding Failed: ${decodedMsg}`) : error;
+                // const decodedMsg = decodeContractError(error);
+                // throw decodedMsg ? new Error(`Onboarding Failed: ${decodedMsg}`) : error;
+                throw error;
             }
         },
 

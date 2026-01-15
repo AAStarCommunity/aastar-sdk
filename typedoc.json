@@ -4,7 +4,11 @@
     "packages/core",
     "packages/account",
     "packages/paymaster",
-    "packages/tokens"
+    "packages/tokens",
+    "packages/analytics",
+    "packages/dapp",
+    "packages/identity",
+    "packages/sdk"
   ],
   "entryPointStrategy": "packages",
   "out": "docs/api",
@@ -34,7 +38,15 @@
       "@aastar/paymaster": ["./packages/paymaster/src"],
       "@aastar/paymaster/*": ["./packages/paymaster/src/*"],
       "@aastar/tokens": ["./packages/tokens/src"],
-      "@aastar/tokens/*": ["./packages/tokens/src/*"]
+      "@aastar/tokens/*": ["./packages/tokens/src/*"],
+      "@aastar/analytics": ["./packages/analytics/src"],
+      "@aastar/analytics/*": ["./packages/analytics/src/*"],
+      "@aastar/dapp": ["./packages/dapp/src"],
+      "@aastar/dapp/*": ["./packages/dapp/src/*"],
+      "@aastar/identity": ["./packages/identity/src"],
+      "@aastar/identity/*": ["./packages/identity/src/*"],
+      "@aastar/sdk": ["./packages/sdk/src"],
+      "@aastar/sdk/*": ["./packages/sdk/src/*"]
     }
   },
   "externalSymbolLinkMappings": {

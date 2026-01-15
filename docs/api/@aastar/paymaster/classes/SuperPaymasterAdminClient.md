@@ -1,4 +1,4 @@
-Defined in: [SuperPaymaster/index.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L95)
+Defined in: [SuperPaymaster/index.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L95)
 
 Admin Client for SuperPaymaster V3
 
@@ -8,7 +8,7 @@ Admin Client for SuperPaymaster V3
 
 > **new SuperPaymasterAdminClient**(`client`, `paymasterAddress`): `SuperPaymasterAdminClient`
 
-Defined in: [SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L99)
+Defined in: [SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L99)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aast
 
 > **getOperator**(`operator`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L104)
+Defined in: [SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L104)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aas
 
 > `static` **configureOperator**(`wallet`, `paymaster`, `token`, `treasury`, `exchangeRate`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L113)
+Defined in: [SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L113)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aas
 
 > `static` **setAPNTsToken**(`wallet`, `paymaster`, `token`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L149)
+Defined in: [SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L149)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aas
 
 > `static` **setOperatorPaused**(`wallet`, `paymaster`, `operator`, `paused`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L129)
+Defined in: [SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L129)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aas
 
 > `static` **setXPNTsFactory**(`wallet`, `paymaster`, `factory`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L159)
+Defined in: [SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L159)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aas
 
 > `static` **updateReputation**(`wallet`, `paymaster`, `operator`, `score`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/paymaster/src/SuperPaymaster/index.ts#L139)
+Defined in: [SuperPaymaster/index.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/paymaster/src/SuperPaymaster/index.ts#L139)
 
 #### Parameters
 

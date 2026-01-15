@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/faucet.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/actions/faucet.ts#L31)
+Defined in: [packages/core/src/actions/faucet.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/faucet.ts#L31)
 
 ## Constructors
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/faucet.ts:31](https://github.com/AAStarCo
 
 > `static` **adminDepositForUser**(`adminWallet`, `publicClient`, `paymaster`, `target`, `token`, `amount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:349](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/actions/faucet.ts#L349)
+Defined in: [packages/core/src/actions/faucet.ts:349](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/faucet.ts#L349)
 
 Complex Flow:
 1. Admin mints tokens to SELF.
@@ -2748,7 +2748,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > `static` **fundETH**(`adminWallet`, `publicClient`, `target`, `amount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/actions/faucet.ts#L95)
+Defined in: [packages/core/src/actions/faucet.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/faucet.ts#L95)
 
 Funds the target with ETH if balance is below threshold.
 
@@ -5469,7 +5469,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > `static` **mintTestTokens**(`adminWallet`, `publicClient`, `token`, `target`, `amount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:279](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/actions/faucet.ts#L279)
+Defined in: [packages/core/src/actions/faucet.ts:279](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/faucet.ts#L279)
 
 Mints tokens directly to the target.
 
@@ -8194,7 +8194,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > `static` **prepareTestAccount**(`adminWallet`, `publicClient`, `config`): `Promise`\<\{ `ethFunded`: `boolean`; `paymasterDeposited`: `boolean`; `roleRegistered`: `boolean`; `tokenMinted`: `boolean`; \}\>
 
-Defined in: [packages/core/src/actions/faucet.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/actions/faucet.ts#L40)
+Defined in: [packages/core/src/actions/faucet.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/faucet.ts#L40)
 
 Orchestrates the complete setup for a test account.
 1. Funds ETH
@@ -10945,7 +10945,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > `static` **registerEndUser**(`adminWallet`, `publicClient`, `registryAddr`, `target`, `gasToken`, `community?`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/89f481b5e82d27cdc5d83f918ddad6748e0e7c3e/packages/core/src/actions/faucet.ts#L120)
+Defined in: [packages/core/src/actions/faucet.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/faucet.ts#L120)
 
 Registers the ENDUSER role using Sponsor Mode (Admin pays stake).
 
