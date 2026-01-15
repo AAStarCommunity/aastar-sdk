@@ -35,13 +35,26 @@ fi
 
 # 2. Sync API folder (Clean first, then copy)
 echo -e "${YELLOW}📖 Syncing API folder...${NC}"
+# Backup hand-written index.md if it exists
+INDEX_BACKUP=""
+if [ -f "$DOCS_REPO/api/index.md" ]; then
+    echo "Backing up hand-written api/index.md..."
+    INDEX_BACKUP=$(cat "$DOCS_REPO/api/index.md")
+fi
+
 if [ -d "$SDK_REPO/docs/api" ]; then
     rm -rf "$DOCS_REPO/api"/*
     cp -r "$SDK_REPO/docs/api/"* "$DOCS_REPO/api/" 2>/dev/null || true
-    # VitePress needs index.md, not README.md
-    if [ -f "$DOCS_REPO/api/README.md" ]; then
+    
+    # Restore hand-written index.md if it existed
+    if [ -n "$INDEX_BACKUP" ]; then
+        echo "Restoring hand-written api/index.md..."
+        echo "$INDEX_BACKUP" > "$DOCS_REPO/api/index.md"
+    elif [ -f "$DOCS_REPO/api/README.md" ]; then
+        # VitePress needs index.md, not README.md (Fallback)
         cp "$DOCS_REPO/api/README.md" "$DOCS_REPO/api/index.md"
     fi
+
     # Create index.md for each package
     for pkg in "$DOCS_REPO/api/@aastar"/*; do
         if [ -d "$pkg" ] && [ -f "$pkg/README.md" ]; then
