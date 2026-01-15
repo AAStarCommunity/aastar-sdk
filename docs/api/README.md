@@ -964,7 +964,6 @@ import type { ReputationClient } from '@aastar/identity';
 
 - **Documentation**: https://docs.aastar.io
 - **GitHub**: https://github.com/AAStarCommunity/aastar-sdk
-- **Discord**: https://discord.gg/aastar
 
 ---
 
