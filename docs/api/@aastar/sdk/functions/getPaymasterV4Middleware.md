@@ -1,32 +1,22 @@
-> **getPaymasterV4Middleware**(`config`): `object`
+```ts
+function getPaymasterV4Middleware(config): object;
+```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/paymaster/src/V4/PaymasterUtils.ts#L32)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L32)
 
 Constructs the middleware for Paymaster V4.
 Returns the `paymasterAndData` hex string.
 
 ## Parameters
 
-### config
-
-[`PaymasterV4MiddlewareConfig`](../type-aliases/PaymasterV4MiddlewareConfig.md)
+| Parameter | Type |
+| ------ | ------ |
+| `config` | [`PaymasterV4MiddlewareConfig`](../type-aliases/PaymasterV4MiddlewareConfig.md) |
 
 ## Returns
 
 `object`
 
-### sponsorUserOperation()
-
-> **sponsorUserOperation**: (`args`) => `Promise`\<\{ `paymasterAndData`: `` `0x${string}` ``; `preVerificationGas`: `any`; `verificationGasLimit`: `bigint`; \}\>
-
-#### Parameters
-
-##### args
-
-###### userOperation
-
-`any`
-
-#### Returns
-
-`Promise`\<\{ `paymasterAndData`: `` `0x${string}` ``; `preVerificationGas`: `any`; `verificationGasLimit`: `bigint`; \}\>
+| Name | Type | Defined in |
+| ------ | ------ | ------ |
+| `sponsorUserOperation()` | (`args`) => `Promise`\<\{ `paymasterAndData`: `` `0x${string}` ``; `preVerificationGas`: `any`; `verificationGasLimit`: `bigint`; \}\> | [packages/paymaster/src/V4/PaymasterUtils.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L34) |

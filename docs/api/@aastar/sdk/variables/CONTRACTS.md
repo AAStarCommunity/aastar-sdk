@@ -1,203 +1,60 @@
-> `const` **CONTRACTS**: `object`
+```ts
+const CONTRACTS: object;
+```
 
-Defined in: [packages/core/src/contracts.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contracts.ts#L101)
+Defined in: [packages/core/src/contracts.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L101)
 
 All supported networks
 
 ## Type Declaration
 
-### sepolia
-
-> `readonly` **sepolia**: `object` = `SEPOLIA_CONTRACTS`
-
-#### sepolia.communities
-
-> `readonly` **communities**: `object`
-
-#### sepolia.communities.aastar
-
-> `readonly` **aastar**: `object`
-
-AAStar Community - Test community for development (registered: 2025-11-01)
-
-#### sepolia.communities.aastar.ensName
-
-> `readonly` **ensName**: `"aastar.eth"` = `'aastar.eth'`
-
-#### sepolia.communities.aastar.gasToken
-
-> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.apnts`
-
-#### sepolia.communities.aastar.name
-
-> `readonly` **name**: `"AAStar"` = `'AAStar'`
-
-#### sepolia.communities.aastar.owner
-
-> `readonly` **owner**: `"0x411BD567E46C0781248dbB6a9211891C032885e5"` = `COMMUNITY_OWNERS.aastarOwner`
-
-#### sepolia.communities.aastar.stake
-
-> `readonly` **stake**: `"50"` = `'50'`
-
-#### sepolia.communities.breadCommunity
-
-> `readonly` **breadCommunity**: `object`
-
-BreadCommunity - Test community for development (registered: 2025-11-03)
-
-#### sepolia.communities.breadCommunity.ensName
-
-> `readonly` **ensName**: `"bread.eth"` = `'bread.eth'`
-
-#### sepolia.communities.breadCommunity.gasToken
-
-> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.bpnts`
-
-#### sepolia.communities.breadCommunity.name
-
-> `readonly` **name**: `"BreadCommunity"` = `'BreadCommunity'`
-
-#### sepolia.communities.breadCommunity.owner
-
-> `readonly` **owner**: `"0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA"` = `COMMUNITY_OWNERS.breadCommunityOwner`
-
-#### sepolia.communities.breadCommunity.stake
-
-> `readonly` **stake**: `"50"` = `'50'`
-
-#### sepolia.core
-
-> `readonly` **core**: `object` = `CORE_ADDRESSES`
-
-#### sepolia.core.aPNTs
-
-> `readonly` **aPNTs**: `` `0x${string}` `` = `APNTS_ADDRESS`
-
-#### sepolia.core.dvtValidator
-
-> `readonly` **dvtValidator**: `` `0x${string}` `` = `DVT_VALIDATOR_ADDRESS`
-
-#### sepolia.core.entryPoint
-
-> `readonly` **entryPoint**: `` `0x${string}` `` = `ENTRY_POINT_ADDRESS`
-
-#### sepolia.core.gToken
-
-> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### sepolia.core.gTokenStaking
-
-> `readonly` **gTokenStaking**: `` `0x${string}` `` = `GTOKEN_STAKING_ADDRESS`
-
-#### sepolia.core.mySBT
-
-> `readonly` **mySBT**: `` `0x${string}` `` = `SBT_ADDRESS`
-
-#### sepolia.core.paymasterFactory
-
-> `readonly` **paymasterFactory**: `` `0x${string}` `` = `PAYMASTER_FACTORY_ADDRESS`
-
-#### sepolia.core.paymasterV4
-
-> `readonly` **paymasterV4**: `` `0x${string}` ``
-
-#### sepolia.core.registry
-
-> `readonly` **registry**: `` `0x${string}` `` = `REGISTRY_ADDRESS`
-
-#### sepolia.core.reputationSystem
-
-> `readonly` **reputationSystem**: `` `0x${string}` ``
-
-#### sepolia.core.superPaymaster
-
-> `readonly` **superPaymaster**: `` `0x${string}` `` = `SUPER_PAYMASTER_ADDRESS`
-
-#### sepolia.core.xPNTsFactory
-
-> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
-
-#### sepolia.monitoring
-
-> `readonly` **monitoring**: `object` = `MONITORING_ADDRESSES`
-
-#### sepolia.monitoring.blsAggregator
-
-> `readonly` **blsAggregator**: `` `0x${string}` `` = `BLS_AGGREGATOR_ADDRESS`
-
-#### sepolia.monitoring.dvtValidator
-
-> `readonly` **dvtValidator**: `` `0x${string}` `` = `DVT_VALIDATOR_ADDRESS`
-
-#### sepolia.official
-
-> `readonly` **official**: `object` = `OFFICIAL_ADDRESSES`
-
-#### sepolia.official.entryPoint
-
-> `readonly` **entryPoint**: `` `0x${string}` ``
-
-#### sepolia.paymaster
-
-> `readonly` **paymaster**: `object` = `PAYMASTER_ADDRESSES`
-
-#### sepolia.paymaster.paymasterV4\_1
-
-> `readonly` **paymasterV4\_1**: `` `0x${string}` ``
-
-#### sepolia.paymaster.paymasterV4\_1iImplementation
-
-> `readonly` **paymasterV4\_1iImplementation**: `` `0x${string}` `` = `PAYMASTER_V4_IMPL_ADDRESS`
-
-#### sepolia.testAccounts
-
-> `readonly` **testAccounts**: `object` = `TEST_ACCOUNT_ADDRESSES`
-
-#### sepolia.testAccounts.simpleAccountFactory
-
-> `readonly` **simpleAccountFactory**: `` `0x${string}` ``
-
-#### sepolia.testTokens
-
-> `readonly` **testTokens**: `object` = `TEST_TOKEN_ADDRESSES`
-
-#### sepolia.testTokens.apnts
-
-> `readonly` **apnts**: `` `0x${string}` `` = `APNTS_ADDRESS`
-
-#### sepolia.testTokens.bpnts
-
-> `readonly` **bpnts**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### sepolia.testTokens.gToken
-
-> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### sepolia.testTokens.mockUSDT
-
-> `readonly` **mockUSDT**: `` `0x${string}` ``
-
-#### sepolia.testTokens.pimToken
-
-> `readonly` **pimToken**: `` `0x${string}` `` = `TOKEN_ADDRESSES.pimToken`
-
-#### sepolia.tokens
-
-> `readonly` **tokens**: `object` = `TOKEN_ADDRESSES`
-
-#### sepolia.tokens.aPNTs
-
-> `readonly` **aPNTs**: `` `0x${string}` `` = `APNTS_ADDRESS`
-
-#### sepolia.tokens.gToken
-
-> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### sepolia.tokens.pimToken
-
-> `readonly` **pimToken**: `` `0x${string}` ``
-
-#### sepolia.tokens.xPNTsFactory
-
-> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
+| Name | Type | Default value | Description | Defined in |
+| ------ | ------ | ------ | ------ | ------ |
+| <a id="sepolia"></a> `sepolia` | `object` | `SEPOLIA_CONTRACTS` | - | [packages/core/src/contracts.ts:102](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L102) |
+| `sepolia.communities` | `object` | - | - | [packages/core/src/contracts.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L77) |
+| `sepolia.communities.aastar` | `object` | - | AAStar Community - Test community for development (registered: 2025-11-01) | [packages/core/src/contracts.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L79) |
+| `sepolia.communities.aastar.ensName` | `"aastar.eth"` | `'aastar.eth'` | - | [packages/core/src/contracts.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L82) |
+| `sepolia.communities.aastar.gasToken` | `` `0x${string}` `` | `TEST_TOKEN_ADDRESSES.apnts` | - | [packages/core/src/contracts.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L81) |
+| `sepolia.communities.aastar.name` | `"AAStar"` | `'AAStar'` | - | [packages/core/src/contracts.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L83) |
+| `sepolia.communities.aastar.owner` | `"0x411BD567E46C0781248dbB6a9211891C032885e5"` | `COMMUNITY_OWNERS.aastarOwner` | - | [packages/core/src/contracts.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L80) |
+| `sepolia.communities.aastar.stake` | `"50"` | `'50'` | - | [packages/core/src/contracts.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L84) |
+| `sepolia.communities.breadCommunity` | `object` | - | BreadCommunity - Test community for development (registered: 2025-11-03) | [packages/core/src/contracts.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L88) |
+| `sepolia.communities.breadCommunity.ensName` | `"bread.eth"` | `'bread.eth'` | - | [packages/core/src/contracts.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L91) |
+| `sepolia.communities.breadCommunity.gasToken` | `` `0x${string}` `` | `TEST_TOKEN_ADDRESSES.bpnts` | - | [packages/core/src/contracts.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L90) |
+| `sepolia.communities.breadCommunity.name` | `"BreadCommunity"` | `'BreadCommunity'` | - | [packages/core/src/contracts.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L92) |
+| `sepolia.communities.breadCommunity.owner` | `"0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA"` | `COMMUNITY_OWNERS.breadCommunityOwner` | - | [packages/core/src/contracts.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L89) |
+| `sepolia.communities.breadCommunity.stake` | `"50"` | `'50'` | - | [packages/core/src/contracts.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L93) |
+| `sepolia.core` | `object` | `CORE_ADDRESSES` | - | [packages/core/src/contracts.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L42) |
+| `sepolia.core.aPNTs` | `` `0x${string}` `` | `APNTS_ADDRESS` | - | [packages/core/src/contract-addresses.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L35) |
+| `sepolia.core.dvtValidator` | `` `0x${string}` `` | `DVT_VALIDATOR_ADDRESS` | - | [packages/core/src/contract-addresses.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L39) |
+| `sepolia.core.entryPoint` | `` `0x${string}` `` | `ENTRY_POINT_ADDRESS` | - | [packages/core/src/contract-addresses.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L40) |
+| `sepolia.core.gToken` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L31) |
+| `sepolia.core.gTokenStaking` | `` `0x${string}` `` | `GTOKEN_STAKING_ADDRESS` | - | [packages/core/src/contract-addresses.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L32) |
+| `sepolia.core.mySBT` | `` `0x${string}` `` | `SBT_ADDRESS` | - | [packages/core/src/contract-addresses.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L36) |
+| `sepolia.core.paymasterFactory` | `` `0x${string}` `` | `PAYMASTER_FACTORY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L34) |
+| `sepolia.core.paymasterV4` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L38) |
+| `sepolia.core.registry` | `` `0x${string}` `` | `REGISTRY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L30) |
+| `sepolia.core.reputationSystem` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L42) |
+| `sepolia.core.superPaymaster` | `` `0x${string}` `` | `SUPER_PAYMASTER_ADDRESS` | - | [packages/core/src/contract-addresses.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L33) |
+| `sepolia.core.xPNTsFactory` | `` `0x${string}` `` | `XPNTS_FACTORY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L41) |
+| `sepolia.monitoring` | `object` | `MONITORING_ADDRESSES` | - | [packages/core/src/contracts.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L67) |
+| `sepolia.monitoring.blsAggregator` | `` `0x${string}` `` | `BLS_AGGREGATOR_ADDRESS` | - | [packages/core/src/contract-addresses.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L87) |
+| `sepolia.monitoring.dvtValidator` | `` `0x${string}` `` | `DVT_VALIDATOR_ADDRESS` | - | [packages/core/src/contract-addresses.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L86) |
+| `sepolia.official` | `object` | `OFFICIAL_ADDRESSES` | - | [packages/core/src/contracts.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L72) |
+| `sepolia.official.entryPoint` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L94) |
+| `sepolia.paymaster` | `object` | `PAYMASTER_ADDRESSES` | - | [packages/core/src/contracts.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L62) |
+| `sepolia.paymaster.paymasterV4_1` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L78) |
+| `sepolia.paymaster.paymasterV4_1iImplementation` | `` `0x${string}` `` | `PAYMASTER_V4_IMPL_ADDRESS` | - | [packages/core/src/contract-addresses.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L79) |
+| `sepolia.testAccounts` | `object` | `TEST_ACCOUNT_ADDRESSES` | - | [packages/core/src/contracts.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L57) |
+| `sepolia.testAccounts.simpleAccountFactory` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L71) |
+| `sepolia.testTokens` | `object` | `TEST_TOKEN_ADDRESSES` | - | [packages/core/src/contracts.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L52) |
+| `sepolia.testTokens.apnts` | `` `0x${string}` `` | `APNTS_ADDRESS` | - | [packages/core/src/contract-addresses.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L60) |
+| `sepolia.testTokens.bpnts` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L62) |
+| `sepolia.testTokens.gToken` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L61) |
+| `sepolia.testTokens.mockUSDT` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L59) |
+| `sepolia.testTokens.pimToken` | `` `0x${string}` `` | `TOKEN_ADDRESSES.pimToken` | - | [packages/core/src/contract-addresses.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L63) |
+| `sepolia.tokens` | `object` | `TOKEN_ADDRESSES` | - | [packages/core/src/contracts.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L47) |
+| `sepolia.tokens.aPNTs` | `` `0x${string}` `` | `APNTS_ADDRESS` | - | [packages/core/src/contract-addresses.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L50) |
+| `sepolia.tokens.gToken` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L51) |
+| `sepolia.tokens.pimToken` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L52) |
+| `sepolia.tokens.xPNTsFactory` | `` `0x${string}` `` | `XPNTS_FACTORY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L49) |

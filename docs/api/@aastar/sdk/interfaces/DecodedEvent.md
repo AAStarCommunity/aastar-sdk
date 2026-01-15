@@ -1,25 +1,31 @@
-Defined in: [packages/sdk/src/utils/eventDecoder.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/eventDecoder.ts#L13)
+Defined in: [packages/sdk/src/utils/eventDecoder.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/eventDecoder.ts#L13)
 
 ## Properties
 
 ### args
 
-> **args**: `any`
+```ts
+args: any;
+```
 
-Defined in: [packages/sdk/src/utils/eventDecoder.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/eventDecoder.ts#L16)
+Defined in: [packages/sdk/src/utils/eventDecoder.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/eventDecoder.ts#L16)
 
 ***
 
 ### contractName
 
-> **contractName**: `string`
+```ts
+contractName: string;
+```
 
-Defined in: [packages/sdk/src/utils/eventDecoder.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/eventDecoder.ts#L14)
+Defined in: [packages/sdk/src/utils/eventDecoder.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/eventDecoder.ts#L14)
 
 ***
 
 ### eventName
 
-> **eventName**: `string`
+```ts
+eventName: string;
+```
 
-Defined in: [packages/sdk/src/utils/eventDecoder.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/eventDecoder.ts#L15)
+Defined in: [packages/sdk/src/utils/eventDecoder.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/eventDecoder.ts#L15)

@@ -1,82 +1,72 @@
-> **SBTActions** = `object`
+```ts
+type SBTActions = object;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L5)
+Defined in: [packages/core/src/actions/sbt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L5)
 
 ## Properties
 
 ### sbtAirdropMint()
 
-> **sbtAirdropMint**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtAirdropMint: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L8)
+Defined in: [packages/core/src/actions/sbt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L8)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### to
-
-`Address`
-
-###### tokenURI
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); `to`: `Address`; `tokenURI`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.to` | `Address` |
+| `args.tokenURI` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtApprove()
 
-> **sbtApprove**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtApprove: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L25)
+Defined in: [packages/core/src/actions/sbt.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L25)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### to
-
-`Address`
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `to`: `Address`; `tokenId`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.to` | `Address` |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtBalanceOf()
 
-> **sbtBalanceOf**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtBalanceOf: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L21)
+Defined in: [packages/core/src/actions/sbt.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L21)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; \} |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -86,57 +76,55 @@ Defined in: [packages/core/src/actions/sbt.ts:21](https://github.com/AAStarCommu
 
 ### sbtBurn()
 
-> **sbtBurn**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtBurn: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L44)
+Defined in: [packages/core/src/actions/sbt.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L44)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `tokenId`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtBurnSBT()
 
-> **sbtBurnSBT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtBurnSBT: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L45)
+Defined in: [packages/core/src/actions/sbt.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L45)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `tokenId`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtDaoMultisig()
 
-> **sbtDaoMultisig**: () => `Promise`\<`Address`\>
+```ts
+sbtDaoMultisig: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L72)
+Defined in: [packages/core/src/actions/sbt.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L72)
 
 #### Returns
 
@@ -146,65 +134,62 @@ Defined in: [packages/core/src/actions/sbt.ts:72](https://github.com/AAStarCommu
 
 ### sbtDeactivateAllMemberships()
 
-> **sbtDeactivateAllMemberships**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtDeactivateAllMemberships: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L46)
+Defined in: [packages/core/src/actions/sbt.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L46)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtDeactivateMembership()
 
-> **sbtDeactivateMembership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtDeactivateMembership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L51)
+Defined in: [packages/core/src/actions/sbt.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L51)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `tokenId`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtGetActiveMemberships()
 
-> **sbtGetActiveMemberships**: (`args`) => `Promise`\<`any`[]\>
+```ts
+sbtGetActiveMemberships: (args) => Promise<any[]>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L14)
+Defined in: [packages/core/src/actions/sbt.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L14)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -214,17 +199,18 @@ Defined in: [packages/core/src/actions/sbt.ts:14](https://github.com/AAStarCommu
 
 ### sbtGetApproved()
 
-> **sbtGetApproved**: (`args`) => `Promise`\<`Address`\>
+```ts
+sbtGetApproved: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L27)
+Defined in: [packages/core/src/actions/sbt.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L27)
 
 #### Parameters
 
-##### args
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `tokenId`: `bigint`; \} |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
@@ -234,21 +220,19 @@ Defined in: [packages/core/src/actions/sbt.ts:27](https://github.com/AAStarCommu
 
 ### sbtGetCommunityMembership()
 
-> **sbtGetCommunityMembership**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtGetCommunityMembership: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L12)
+Defined in: [packages/core/src/actions/sbt.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L12)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `user`: `Address`; \} |
+| `args.community` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -258,17 +242,18 @@ Defined in: [packages/core/src/actions/sbt.ts:12](https://github.com/AAStarCommu
 
 ### sbtGetMemberships()
 
-> **sbtGetMemberships**: (`args`) => `Promise`\<`any`[]\>
+```ts
+sbtGetMemberships: (args) => Promise<any[]>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L13)
+Defined in: [packages/core/src/actions/sbt.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L13)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -278,17 +263,18 @@ Defined in: [packages/core/src/actions/sbt.ts:13](https://github.com/AAStarCommu
 
 ### sbtGetSBTData()
 
-> **sbtGetSBTData**: (`args`) => `Promise`\<`any`\>
+```ts
+sbtGetSBTData: (args) => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L11)
+Defined in: [packages/core/src/actions/sbt.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L11)
 
 #### Parameters
 
-##### args
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `tokenId`: `bigint`; \} |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
@@ -298,21 +284,19 @@ Defined in: [packages/core/src/actions/sbt.ts:11](https://github.com/AAStarCommu
 
 ### sbtGetUserSBT()
 
-> **sbtGetUserSBT**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtGetUserSBT: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L10)
+Defined in: [packages/core/src/actions/sbt.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L10)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -322,9 +306,11 @@ Defined in: [packages/core/src/actions/sbt.ts:10](https://github.com/AAStarCommu
 
 ### sbtGTOKEN()
 
-> **sbtGTOKEN**: () => `Promise`\<`Address`\>
+```ts
+sbtGTOKEN: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L83)
+Defined in: [packages/core/src/actions/sbt.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L83)
 
 #### Returns
 
@@ -334,9 +320,11 @@ Defined in: [packages/core/src/actions/sbt.ts:83](https://github.com/AAStarCommu
 
 ### sbtGTOKEN\_STAKING()
 
-> **sbtGTOKEN\_STAKING**: () => `Promise`\<`Address`\>
+```ts
+sbtGTOKEN_STAKING: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L82)
+Defined in: [packages/core/src/actions/sbt.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L82)
 
 #### Returns
 
@@ -346,21 +334,19 @@ Defined in: [packages/core/src/actions/sbt.ts:82](https://github.com/AAStarCommu
 
 ### sbtIsApprovedForAll()
 
-> **sbtIsApprovedForAll**: (`args`) => `Promise`\<`boolean`\>
+```ts
+sbtIsApprovedForAll: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L28)
+Defined in: [packages/core/src/actions/sbt.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L28)
 
 #### Parameters
 
-##### args
-
-###### operator
-
-`Address`
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `operator`: `Address`; `owner`: `Address`; \} |
+| `args.operator` | `Address` |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -370,17 +356,18 @@ Defined in: [packages/core/src/actions/sbt.ts:28](https://github.com/AAStarCommu
 
 ### sbtLastActivityTime()
 
-> **sbtLastActivityTime**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtLastActivityTime: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L55)
+Defined in: [packages/core/src/actions/sbt.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L55)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -390,45 +377,41 @@ Defined in: [packages/core/src/actions/sbt.ts:55](https://github.com/AAStarCommu
 
 ### sbtLeaveCommunity()
 
-> **sbtLeaveCommunity**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtLeaveCommunity: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L50)
+Defined in: [packages/core/src/actions/sbt.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L50)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### community
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `community`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.community` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtMembershipIndex()
 
-> **sbtMembershipIndex**: (`args`) => `Promise`\<`any`\>
+```ts
+sbtMembershipIndex: (args) => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L18)
+Defined in: [packages/core/src/actions/sbt.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L18)
 
 #### Parameters
 
-##### args
-
-###### index
-
-`bigint`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `index`: `bigint`; `user`: `Address`; \} |
+| `args.index` | `bigint` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -438,9 +421,11 @@ Defined in: [packages/core/src/actions/sbt.ts:18](https://github.com/AAStarCommu
 
 ### sbtMinLockAmount()
 
-> **sbtMinLockAmount**: () => `Promise`\<`bigint`\>
+```ts
+sbtMinLockAmount: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L63)
+Defined in: [packages/core/src/actions/sbt.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L63)
 
 #### Returns
 
@@ -450,37 +435,34 @@ Defined in: [packages/core/src/actions/sbt.ts:63](https://github.com/AAStarCommu
 
 ### sbtMint()
 
-> **sbtMint**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtMint: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L43)
+Defined in: [packages/core/src/actions/sbt.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L43)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### to
-
-`Address`
-
-###### tokenURI
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `to`: `Address`; `tokenURI`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.to` | `Address` |
+| `args.tokenURI` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtMintFee()
 
-> **sbtMintFee**: () => `Promise`\<`bigint`\>
+```ts
+sbtMintFee: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L61)
+Defined in: [packages/core/src/actions/sbt.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L61)
 
 #### Returns
 
@@ -490,37 +472,34 @@ Defined in: [packages/core/src/actions/sbt.ts:61](https://github.com/AAStarCommu
 
 ### sbtMintForRole()
 
-> **sbtMintForRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtMintForRole: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L9)
+Defined in: [packages/core/src/actions/sbt.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L9)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### to
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); `to`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.to` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtName()
 
-> **sbtName**: () => `Promise`\<`string`\>
+```ts
+sbtName: () => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L31)
+Defined in: [packages/core/src/actions/sbt.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L31)
 
 #### Returns
 
@@ -530,9 +509,11 @@ Defined in: [packages/core/src/actions/sbt.ts:31](https://github.com/AAStarCommu
 
 ### sbtNextTokenId()
 
-> **sbtNextTokenId**: () => `Promise`\<`bigint`\>
+```ts
+sbtNextTokenId: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L40)
+Defined in: [packages/core/src/actions/sbt.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L40)
 
 #### Returns
 
@@ -542,9 +523,11 @@ Defined in: [packages/core/src/actions/sbt.ts:40](https://github.com/AAStarCommu
 
 ### sbtOwner()
 
-> **sbtOwner**: () => `Promise`\<`Address`\>
+```ts
+sbtOwner: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L87)
+Defined in: [packages/core/src/actions/sbt.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L87)
 
 #### Returns
 
@@ -554,17 +537,18 @@ Defined in: [packages/core/src/actions/sbt.ts:87](https://github.com/AAStarCommu
 
 ### sbtOwnerOf()
 
-> **sbtOwnerOf**: (`args`) => `Promise`\<`Address`\>
+```ts
+sbtOwnerOf: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L22)
+Defined in: [packages/core/src/actions/sbt.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L22)
 
 #### Parameters
 
-##### args
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `tokenId`: `bigint`; \} |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
@@ -574,29 +558,32 @@ Defined in: [packages/core/src/actions/sbt.ts:22](https://github.com/AAStarCommu
 
 ### sbtPause()
 
-> **sbtPause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtPause: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L67)
+Defined in: [packages/core/src/actions/sbt.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L67)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtPaused()
 
-> **sbtPaused**: () => `Promise`\<`boolean`\>
+```ts
+sbtPaused: () => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L69)
+Defined in: [packages/core/src/actions/sbt.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L69)
 
 #### Returns
 
@@ -606,33 +593,33 @@ Defined in: [packages/core/src/actions/sbt.ts:69](https://github.com/AAStarCommu
 
 ### sbtRecordActivity()
 
-> **sbtRecordActivity**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtRecordActivity: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L54)
+Defined in: [packages/core/src/actions/sbt.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L54)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtREGISTRY()
 
-> **sbtREGISTRY**: () => `Promise`\<`Address`\>
+```ts
+sbtREGISTRY: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L81)
+Defined in: [packages/core/src/actions/sbt.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L81)
 
 #### Returns
 
@@ -642,29 +629,32 @@ Defined in: [packages/core/src/actions/sbt.ts:81](https://github.com/AAStarCommu
 
 ### sbtRenounceOwnership()
 
-> **sbtRenounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtRenounceOwnership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L89)
+Defined in: [packages/core/src/actions/sbt.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L89)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtReputationCalculator()
 
-> **sbtReputationCalculator**: () => `Promise`\<`Address`\>
+```ts
+sbtReputationCalculator: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L57)
+Defined in: [packages/core/src/actions/sbt.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L57)
 
 #### Returns
 
@@ -674,81 +664,66 @@ Defined in: [packages/core/src/actions/sbt.ts:57](https://github.com/AAStarCommu
 
 ### sbtSafeMintForRole()
 
-> **sbtSafeMintForRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSafeMintForRole: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L7)
+Defined in: [packages/core/src/actions/sbt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L7)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### to
-
-`Address`
-
-###### tokenURI
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); `to`: `Address`; `tokenURI`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.to` | `Address` |
+| `args.tokenURI` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSafeTransferFrom()
 
-> **sbtSafeTransferFrom**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSafeTransferFrom: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L23)
+Defined in: [packages/core/src/actions/sbt.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L23)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### from
-
-`Address`
-
-###### to
-
-`Address`
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `from`: `Address`; `to`: `Address`; `tokenId`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.from` | `Address` |
+| `args.to` | `Address` |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSbtData()
 
-> **sbtSbtData**: (`args`) => `Promise`\<`any`\>
+```ts
+sbtSbtData: (args) => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L17)
+Defined in: [packages/core/src/actions/sbt.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L17)
 
 #### Parameters
 
-##### args
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `tokenId`: `bigint`; \} |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
@@ -758,205 +733,188 @@ Defined in: [packages/core/src/actions/sbt.ts:17](https://github.com/AAStarCommu
 
 ### sbtSetApprovalForAll()
 
-> **sbtSetApprovalForAll**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetApprovalForAll: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L26)
+Defined in: [packages/core/src/actions/sbt.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L26)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### approved
-
-`boolean`
-
-###### operator
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `approved`: `boolean`; `operator`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.approved` | `boolean` |
+| `args.operator` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetBaseURI()
 
-> **sbtSetBaseURI**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetBaseURI: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L47)
+Defined in: [packages/core/src/actions/sbt.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L47)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### baseURI
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `baseURI`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.baseURI` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetDAOMultisig()
 
-> **sbtSetDAOMultisig**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetDAOMultisig: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L73)
+Defined in: [packages/core/src/actions/sbt.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L73)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### multisig
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `multisig`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.multisig` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetMinLockAmount()
 
-> **sbtSetMinLockAmount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetMinLockAmount: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L64)
+Defined in: [packages/core/src/actions/sbt.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L64)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.amount` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetMintFee()
 
-> **sbtSetMintFee**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetMintFee: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L62)
+Defined in: [packages/core/src/actions/sbt.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L62)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### fee
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `fee`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.fee` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetRegistry()
 
-> **sbtSetRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetRegistry: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L74)
+Defined in: [packages/core/src/actions/sbt.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L74)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### registry
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `registry`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.registry` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetReputationCalculator()
 
-> **sbtSetReputationCalculator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetReputationCalculator: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L58)
+Defined in: [packages/core/src/actions/sbt.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L58)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### calculator
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `calculator`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.calculator` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSetSuperPaymaster()
 
-> **sbtSetSuperPaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtSetSuperPaymaster: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L75)
+Defined in: [packages/core/src/actions/sbt.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L75)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### paymaster
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `paymaster`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.paymaster` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtSUPER\_PAYMASTER()
 
-> **sbtSUPER\_PAYMASTER**: () => `Promise`\<`Address`\>
+```ts
+sbtSUPER_PAYMASTER: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L84)
+Defined in: [packages/core/src/actions/sbt.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L84)
 
 #### Returns
 
@@ -966,17 +924,18 @@ Defined in: [packages/core/src/actions/sbt.ts:84](https://github.com/AAStarCommu
 
 ### sbtSupportsInterface()
 
-> **sbtSupportsInterface**: (`args`) => `Promise`\<`boolean`\>
+```ts
+sbtSupportsInterface: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L39)
+Defined in: [packages/core/src/actions/sbt.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L39)
 
 #### Parameters
 
-##### args
-
-###### interfaceId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `interfaceId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.interfaceId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -986,9 +945,11 @@ Defined in: [packages/core/src/actions/sbt.ts:39](https://github.com/AAStarCommu
 
 ### sbtSymbol()
 
-> **sbtSymbol**: () => `Promise`\<`string`\>
+```ts
+sbtSymbol: () => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L32)
+Defined in: [packages/core/src/actions/sbt.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L32)
 
 #### Returns
 
@@ -998,17 +959,18 @@ Defined in: [packages/core/src/actions/sbt.ts:32](https://github.com/AAStarCommu
 
 ### sbtTokenByIndex()
 
-> **sbtTokenByIndex**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtTokenByIndex: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L37)
+Defined in: [packages/core/src/actions/sbt.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L37)
 
 #### Parameters
 
-##### args
-
-###### index
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `index`: `bigint`; \} |
+| `args.index` | `bigint` |
 
 #### Returns
 
@@ -1018,21 +980,19 @@ Defined in: [packages/core/src/actions/sbt.ts:37](https://github.com/AAStarCommu
 
 ### sbtTokenOfOwnerByIndex()
 
-> **sbtTokenOfOwnerByIndex**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtTokenOfOwnerByIndex: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L38)
+Defined in: [packages/core/src/actions/sbt.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L38)
 
 #### Parameters
 
-##### args
-
-###### index
-
-`bigint`
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `index`: `bigint`; `owner`: `Address`; \} |
+| `args.index` | `bigint` |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -1042,17 +1002,18 @@ Defined in: [packages/core/src/actions/sbt.ts:38](https://github.com/AAStarCommu
 
 ### sbtTokenURI()
 
-> **sbtTokenURI**: (`args`) => `Promise`\<`string`\>
+```ts
+sbtTokenURI: (args) => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L33)
+Defined in: [packages/core/src/actions/sbt.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L33)
 
 #### Parameters
 
-##### args
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `tokenId`: `bigint`; \} |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
@@ -1062,9 +1023,11 @@ Defined in: [packages/core/src/actions/sbt.ts:33](https://github.com/AAStarCommu
 
 ### sbtTotalSupply()
 
-> **sbtTotalSupply**: () => `Promise`\<`bigint`\>
+```ts
+sbtTotalSupply: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L36)
+Defined in: [packages/core/src/actions/sbt.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L36)
 
 #### Returns
 
@@ -1074,93 +1037,85 @@ Defined in: [packages/core/src/actions/sbt.ts:36](https://github.com/AAStarCommu
 
 ### sbtTransferFrom()
 
-> **sbtTransferFrom**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtTransferFrom: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L24)
+Defined in: [packages/core/src/actions/sbt.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L24)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### from
-
-`Address`
-
-###### to
-
-`Address`
-
-###### tokenId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `from`: `Address`; `to`: `Address`; `tokenId`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.from` | `Address` |
+| `args.to` | `Address` |
+| `args.tokenId` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtTransferSBTOwnership()
 
-> **sbtTransferSBTOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtTransferSBTOwnership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L88)
+Defined in: [packages/core/src/actions/sbt.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L88)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newOwner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `newOwner`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.newOwner` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtUnpause()
 
-> **sbtUnpause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+sbtUnpause: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L68)
+Defined in: [packages/core/src/actions/sbt.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L68)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### sbtUserToSBT()
 
-> **sbtUserToSBT**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtUserToSBT: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L16)
+Defined in: [packages/core/src/actions/sbt.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L16)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -1170,21 +1125,19 @@ Defined in: [packages/core/src/actions/sbt.ts:16](https://github.com/AAStarCommu
 
 ### sbtVerifyCommunityMembership()
 
-> **sbtVerifyCommunityMembership**: (`args`) => `Promise`\<`boolean`\>
+```ts
+sbtVerifyCommunityMembership: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L15)
+Defined in: [packages/core/src/actions/sbt.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L15)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `user`: `Address`; \} |
+| `args.community` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -1194,9 +1147,11 @@ Defined in: [packages/core/src/actions/sbt.ts:15](https://github.com/AAStarCommu
 
 ### sbtVersion()
 
-> **sbtVersion**: () => `Promise`\<`string`\>
+```ts
+sbtVersion: () => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L78)
+Defined in: [packages/core/src/actions/sbt.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L78)
 
 #### Returns
 
@@ -1206,17 +1161,18 @@ Defined in: [packages/core/src/actions/sbt.ts:78](https://github.com/AAStarCommu
 
 ### sbtWeeklyActivity()
 
-> **sbtWeeklyActivity**: (`args`) => `Promise`\<`bigint`\>
+```ts
+sbtWeeklyActivity: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/sbt.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/sbt.ts#L56)
+Defined in: [packages/core/src/actions/sbt.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/sbt.ts#L56)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 

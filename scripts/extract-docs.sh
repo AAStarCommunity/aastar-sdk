@@ -79,9 +79,33 @@ fi
 # 5. Extract package READMEs to api/modules/
 echo -e "${YELLOW}📦 Extracting package documentation...${NC}"
 mkdir -p "$DOCS_REPO/api/modules"
-for pkg in core account paymaster tokens identity dapp; do
+for pkg in core account paymaster tokens analytics dapp identity sdk; do
     if [ -f "$SDK_REPO/packages/$pkg/README.md" ]; then
-        cp "$SDK_REPO/packages/$pkg/README.md" "$DOCS_REPO/api/modules/$pkg.md"
+        cp "$SDK_REPO/packages/$pkg/README.md" "$DOCS_REPO/api/modules/$pkg.md" 2>/dev/null || true
+    fi
+done
+
+# 6. Sync Changelog
+if [ -f "$SDK_REPO/docs/changelog.md" ]; then
+    echo -e "${YELLOW}📜 Syncing Changelog...${NC}"
+    cp "$SDK_REPO/docs/changelog.md" "$DOCS_REPO/changelog.md"
+fi
+
+# 7. Post-process API directories to ensure index.md exists for VitePress
+echo -e "${YELLOW}🔍 Generating index.md for deep API directories...${NC}"
+find "$DOCS_REPO/api" -type d | while read -r dir; do
+    # Skip if index.md or README.md already exists
+    if [ ! -f "$dir/index.md" ] && [ ! -f "$dir/README.md" ]; then
+        echo "Creating index for $dir"
+        echo "# $(basename "$dir")" > "$dir/index.md"
+        echo "" >> "$dir/index.md"
+        ls -p "$dir" | grep -v "/" | grep ".md" | grep -v "index.md" | sed 's/\.md//' | while read -r file; do
+            echo "- [$file](./$file.md)" >> "$dir/index.md"
+        done
+    fi
+    # Ensure index.md exists if README.md exists
+    if [ -f "$dir/README.md" ] && [ ! -f "$dir/index.md" ]; then
+        cp "$dir/README.md" "$dir/index.md"
     fi
 done
 

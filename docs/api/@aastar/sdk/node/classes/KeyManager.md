@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L26)
+Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L26)
 
 密钥管理器
 提供密钥生成、存储、加载等工具函数
@@ -7,7 +7,9 @@ Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommuni
 
 ### Constructor
 
-> **new KeyManager**(): `KeyManager`
+```ts
+new KeyManager(): KeyManager;
+```
 
 #### Returns
 
@@ -17,19 +19,19 @@ Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommuni
 
 ### generateKeyPair()
 
-> `static` **generateKeyPair**(`name`): [`KeyPair`](../interfaces/KeyPair.md)
+```ts
+static generateKeyPair(name): KeyPair;
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L31)
+Defined in: [packages/sdk/src/utils/keys.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L31)
 
 生成单个密钥对
 
 #### Parameters
 
-##### name
-
-`string`
-
-密钥名称（如 'Jason', 'Anni'）
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `name` | `string` | 密钥名称（如 'Jason', 'Anni'） |
 
 #### Returns
 
@@ -39,19 +41,19 @@ Defined in: [packages/sdk/src/utils/keys.ts:31](https://github.com/AAStarCommuni
 
 ### generateKeyPairs()
 
-> `static` **generateKeyPairs**(`names`): [`KeyPair`](../interfaces/KeyPair.md)[]
+```ts
+static generateKeyPairs(names): KeyPair[];
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L45)
+Defined in: [packages/sdk/src/utils/keys.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L45)
 
 批量生成密钥对
 
 #### Parameters
 
-##### names
-
-`string`[]
-
-密钥名称数组
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `names` | `string`[] | 密钥名称数组 |
 
 #### Returns
 
@@ -61,25 +63,20 @@ Defined in: [packages/sdk/src/utils/keys.ts:45](https://github.com/AAStarCommuni
 
 ### generateMultiple()
 
-> `static` **generateMultiple**(`count`, `prefix`): [`KeyPair`](../interfaces/KeyPair.md)[]
+```ts
+static generateMultiple(count, prefix): KeyPair[];
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L54)
+Defined in: [packages/sdk/src/utils/keys.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L54)
 
 生成指定数量的密钥对（自动命名为 Operator_1, Operator_2, ...）
 
 #### Parameters
 
-##### count
-
-`number`
-
-数量
-
-##### prefix
-
-`string` = `'Operator'`
-
-名称前缀（默认 'Operator'）
+| Parameter | Type | Default value | Description |
+| ------ | ------ | ------ | ------ |
+| `count` | `number` | `undefined` | 数量 |
+| `prefix` | `string` | `'Operator'` | 名称前缀（默认 'Operator'） |
 
 #### Returns
 
@@ -89,19 +86,19 @@ Defined in: [packages/sdk/src/utils/keys.ts:54](https://github.com/AAStarCommuni
 
 ### loadFromEnvFile()
 
-> `static` **loadFromEnvFile**(`filePath`): [`KeyPair`](../interfaces/KeyPair.md)[]
+```ts
+static loadFromEnvFile(filePath): KeyPair[];
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L83)
+Defined in: [packages/sdk/src/utils/keys.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L83)
 
 从 .env 文件加载密钥
 
 #### Parameters
 
-##### filePath
-
-`string`
-
-文件路径（绝对路径）
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `filePath` | `string` | 文件路径（绝对路径） |
 
 #### Returns
 
@@ -113,19 +110,19 @@ Defined in: [packages/sdk/src/utils/keys.ts:83](https://github.com/AAStarCommuni
 
 ### loadFromJsonFile()
 
-> `static` **loadFromJsonFile**(`filePath`): [`KeyPair`](../interfaces/KeyPair.md)[]
+```ts
+static loadFromJsonFile(filePath): KeyPair[];
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L133)
+Defined in: [packages/sdk/src/utils/keys.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L133)
 
 从 JSON 文件加载密钥
 
 #### Parameters
 
-##### filePath
-
-`string`
-
-文件路径（绝对路径）
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `filePath` | `string` | 文件路径（绝对路径） |
 
 #### Returns
 
@@ -135,23 +132,20 @@ Defined in: [packages/sdk/src/utils/keys.ts:133](https://github.com/AAStarCommun
 
 ### printKeys()
 
-> `static` **printKeys**(`keys`, `showPrivateKey`): `void`
+```ts
+static printKeys(keys, showPrivateKey): void;
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:152](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L152)
+Defined in: [packages/sdk/src/utils/keys.ts:152](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L152)
 
 打印密钥信息（隐藏私钥）
 
 #### Parameters
 
-##### keys
-
-[`KeyPair`](../interfaces/KeyPair.md)[]
-
-密钥对数组
-
-##### showPrivateKey
-
-`boolean` = `false`
+| Parameter | Type | Default value | Description |
+| ------ | ------ | ------ | ------ |
+| `keys` | [`KeyPair`](../interfaces/KeyPair.md)[] | `undefined` | 密钥对数组 |
+| `showPrivateKey` | `boolean` | `false` | - |
 
 #### Returns
 
@@ -161,31 +155,24 @@ Defined in: [packages/sdk/src/utils/keys.ts:152](https://github.com/AAStarCommun
 
 ### saveToEnvFile()
 
-> `static` **saveToEnvFile**(`filePath`, `keys`, `overwrite`): `void`
+```ts
+static saveToEnvFile(
+   filePath, 
+   keys, 
+   overwrite): void;
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L65)
+Defined in: [packages/sdk/src/utils/keys.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L65)
 
 保存密钥到 .env 文件
 
 #### Parameters
 
-##### filePath
-
-`string`
-
-文件路径（绝对路径）
-
-##### keys
-
-[`KeyPair`](../interfaces/KeyPair.md)[]
-
-密钥对数组
-
-##### overwrite
-
-`boolean` = `false`
-
-是否覆盖已存在的文件（默认 false）
+| Parameter | Type | Default value | Description |
+| ------ | ------ | ------ | ------ |
+| `filePath` | `string` | `undefined` | 文件路径（绝对路径） |
+| `keys` | [`KeyPair`](../interfaces/KeyPair.md)[] | `undefined` | 密钥对数组 |
+| `overwrite` | `boolean` | `false` | 是否覆盖已存在的文件（默认 false） |
 
 #### Returns
 
@@ -195,31 +182,24 @@ Defined in: [packages/sdk/src/utils/keys.ts:65](https://github.com/AAStarCommuni
 
 ### saveToJsonFile()
 
-> `static` **saveToJsonFile**(`filePath`, `keys`, `overwrite`): `void`
+```ts
+static saveToJsonFile(
+   filePath, 
+   keys, 
+   overwrite): void;
+```
 
-Defined in: [packages/sdk/src/utils/keys.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L111)
+Defined in: [packages/sdk/src/utils/keys.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L111)
 
 保存密钥到 JSON 文件（包含地址信息）
 
 #### Parameters
 
-##### filePath
-
-`string`
-
-文件路径（绝对路径）
-
-##### keys
-
-[`KeyPair`](../interfaces/KeyPair.md)[]
-
-密钥对数组
-
-##### overwrite
-
-`boolean` = `false`
-
-是否覆盖已存在的文件（默认 false）
+| Parameter | Type | Default value | Description |
+| ------ | ------ | ------ | ------ |
+| `filePath` | `string` | `undefined` | 文件路径（绝对路径） |
+| `keys` | [`KeyPair`](../interfaces/KeyPair.md)[] | `undefined` | 密钥对数组 |
+| `overwrite` | `boolean` | `false` | 是否覆盖已存在的文件（默认 false） |
 
 #### Returns
 

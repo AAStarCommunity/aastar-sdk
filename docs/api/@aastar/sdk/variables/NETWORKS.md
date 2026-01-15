@@ -1,79 +1,30 @@
-> `const` **NETWORKS**: `object`
+```ts
+const NETWORKS: object;
+```
 
-Defined in: [packages/core/src/networks.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/networks.ts#L5)
+Defined in: [packages/core/src/networks.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L5)
 
 Blockchain Network Configuration
 
 ## Type Declaration
 
-### anvil
-
-> `readonly` **anvil**: `object`
-
-#### anvil.blockExplorer
-
-> `readonly` **blockExplorer**: `""` = `''`
-
-#### anvil.chainId
-
-> `readonly` **chainId**: `31337` = `31337`
-
-#### anvil.name
-
-> `readonly` **name**: `"Anvil"` = `'Anvil'`
-
-#### anvil.nativeCurrency
-
-> `readonly` **nativeCurrency**: `object`
-
-#### anvil.nativeCurrency.decimals
-
-> `readonly` **decimals**: `18` = `18`
-
-#### anvil.nativeCurrency.name
-
-> `readonly` **name**: `"ETH"` = `'ETH'`
-
-#### anvil.nativeCurrency.symbol
-
-> `readonly` **symbol**: `"ETH"` = `'ETH'`
-
-#### anvil.rpcUrl
-
-> `readonly` **rpcUrl**: `"http://127.0.0.1:8545"` = `'http://127.0.0.1:8545'`
-
-### sepolia
-
-> `readonly` **sepolia**: `object`
-
-#### sepolia.blockExplorer
-
-> `readonly` **blockExplorer**: `"https://sepolia.etherscan.io"` = `'https://sepolia.etherscan.io'`
-
-#### sepolia.chainId
-
-> `readonly` **chainId**: `11155111` = `11155111`
-
-#### sepolia.name
-
-> `readonly` **name**: `"Sepolia"` = `'Sepolia'`
-
-#### sepolia.nativeCurrency
-
-> `readonly` **nativeCurrency**: `object`
-
-#### sepolia.nativeCurrency.decimals
-
-> `readonly` **decimals**: `18` = `18`
-
-#### sepolia.nativeCurrency.name
-
-> `readonly` **name**: `"Sepolia ETH"` = `'Sepolia ETH'`
-
-#### sepolia.nativeCurrency.symbol
-
-> `readonly` **symbol**: `"ETH"` = `'ETH'`
-
-#### sepolia.rpcUrl
-
-> `readonly` **rpcUrl**: `"https://rpc.sepolia.org"` = `'https://rpc.sepolia.org'`
+| Name | Type | Default value | Defined in |
+| ------ | ------ | ------ | ------ |
+| <a id="anvil"></a> `anvil` | `object` | - | [packages/core/src/networks.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L17) |
+| `anvil.blockExplorer` | `""` | `''` | [packages/core/src/networks.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L21) |
+| `anvil.chainId` | `31337` | `31337` | [packages/core/src/networks.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L18) |
+| `anvil.name` | `"Anvil"` | `'Anvil'` | [packages/core/src/networks.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L19) |
+| `anvil.nativeCurrency` | `object` | - | [packages/core/src/networks.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L22) |
+| `anvil.nativeCurrency.decimals` | `18` | `18` | [packages/core/src/networks.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L25) |
+| `anvil.nativeCurrency.name` | `"ETH"` | `'ETH'` | [packages/core/src/networks.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L23) |
+| `anvil.nativeCurrency.symbol` | `"ETH"` | `'ETH'` | [packages/core/src/networks.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L24) |
+| `anvil.rpcUrl` | `"http://127.0.0.1:8545"` | `'http://127.0.0.1:8545'` | [packages/core/src/networks.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L20) |
+| <a id="sepolia"></a> `sepolia` | `object` | - | [packages/core/src/networks.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L6) |
+| `sepolia.blockExplorer` | `"https://sepolia.etherscan.io"` | `'https://sepolia.etherscan.io'` | [packages/core/src/networks.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L10) |
+| `sepolia.chainId` | `11155111` | `11155111` | [packages/core/src/networks.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L7) |
+| `sepolia.name` | `"Sepolia"` | `'Sepolia'` | [packages/core/src/networks.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L8) |
+| `sepolia.nativeCurrency` | `object` | - | [packages/core/src/networks.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L11) |
+| `sepolia.nativeCurrency.decimals` | `18` | `18` | [packages/core/src/networks.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L14) |
+| `sepolia.nativeCurrency.name` | `"Sepolia ETH"` | `'Sepolia ETH'` | [packages/core/src/networks.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L12) |
+| `sepolia.nativeCurrency.symbol` | `"ETH"` | `'ETH'` | [packages/core/src/networks.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L13) |
+| `sepolia.rpcUrl` | `"https://rpc.sepolia.org"` | `'https://rpc.sepolia.org'` | [packages/core/src/networks.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L9) |

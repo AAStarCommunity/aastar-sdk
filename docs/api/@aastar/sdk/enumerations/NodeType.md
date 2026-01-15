@@ -1,33 +1,41 @@
-Defined in: [packages/core/src/communities.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/communities.ts#L8)
+Defined in: [packages/core/src/communities.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/communities.ts#L8)
 
 ## Enumeration Members
 
 ### ANODE
 
-> **ANODE**: `2`
+```ts
+ANODE: 2;
+```
 
-Defined in: [packages/core/src/communities.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/communities.ts#L11)
+Defined in: [packages/core/src/communities.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/communities.ts#L11)
 
 ***
 
 ### KMS
 
-> **KMS**: `3`
+```ts
+KMS: 3;
+```
 
-Defined in: [packages/core/src/communities.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/communities.ts#L12)
+Defined in: [packages/core/src/communities.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/communities.ts#L12)
 
 ***
 
 ### PAYMASTER\_AOA
 
-> **PAYMASTER\_AOA**: `0`
+```ts
+PAYMASTER_AOA: 0;
+```
 
-Defined in: [packages/core/src/communities.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/communities.ts#L9)
+Defined in: [packages/core/src/communities.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/communities.ts#L9)
 
 ***
 
 ### PAYMASTER\_SUPER
 
-> **PAYMASTER\_SUPER**: `1`
+```ts
+PAYMASTER_SUPER: 1;
+```
 
-Defined in: [packages/core/src/communities.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/communities.ts#L10)
+Defined in: [packages/core/src/communities.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/communities.ts#L10)

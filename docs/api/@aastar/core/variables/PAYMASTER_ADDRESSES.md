@@ -1,15 +1,14 @@
-> `const` **PAYMASTER\_ADDRESSES**: `object`
+```ts
+const PAYMASTER_ADDRESSES: object;
+```
 
-Defined in: [packages/core/src/contract-addresses.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contract-addresses.ts#L77)
+Defined in: [packages/core/src/contract-addresses.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L77)
 
 Paymaster Addresses
 
 ## Type Declaration
 
-### paymasterV4\_1
-
-> `readonly` **paymasterV4\_1**: `` `0x${string}` ``
-
-### paymasterV4\_1iImplementation
-
-> `readonly` **paymasterV4\_1iImplementation**: `` `0x${string}` `` = `PAYMASTER_V4_IMPL_ADDRESS`
+| Name | Type | Default value | Defined in |
+| ------ | ------ | ------ | ------ |
+| <a id="paymasterv4_1"></a> `paymasterV4_1` | `` `0x${string}` `` | - | [packages/core/src/contract-addresses.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L78) |
+| <a id="paymasterv4_1iimplementation"></a> `paymasterV4_1iImplementation` | `` `0x${string}` `` | `PAYMASTER_V4_IMPL_ADDRESS` | [packages/core/src/contract-addresses.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L79) |

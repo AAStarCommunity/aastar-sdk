@@ -1,22 +1,25 @@
-> **AggregatorActions** = `object`
+```ts
+type AggregatorActions = object;
+```
 
-Defined in: [packages/core/src/actions/aggregator.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/aggregator.ts#L4)
+Defined in: [packages/core/src/actions/aggregator.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/aggregator.ts#L4)
 
 ## Properties
 
 ### getBLSThreshold()
 
-> **getBLSThreshold**: (`args`) => `Promise`\<`bigint`\>
+```ts
+getBLSThreshold: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/aggregator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/aggregator.ts#L7)
+Defined in: [packages/core/src/actions/aggregator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/aggregator.ts#L7)
 
 #### Parameters
 
-##### args
-
-###### address
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `address`: `Address`; \} |
+| `args.address` | `Address` |
 
 #### Returns
 
@@ -26,54 +29,44 @@ Defined in: [packages/core/src/actions/aggregator.ts:7](https://github.com/AASta
 
 ### registerBLSPublicKey()
 
-> **registerBLSPublicKey**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+registerBLSPublicKey: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/aggregator.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/aggregator.ts#L5)
+Defined in: [packages/core/src/actions/aggregator.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/aggregator.ts#L5)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### address
-
-`Address`
-
-###### publicKey
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `address`: `Address`; `publicKey`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.address` | `Address` |
+| `args.publicKey` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setBLSThreshold()
 
-> **setBLSThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setBLSThreshold: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/aggregator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/aggregator.ts#L6)
+Defined in: [packages/core/src/actions/aggregator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/aggregator.ts#L6)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### address
-
-`Address`
-
-###### threshold
-
-`number`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `address`: `Address`; `threshold`: `number`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.address` | `Address` |
+| `args.threshold` | `number` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>

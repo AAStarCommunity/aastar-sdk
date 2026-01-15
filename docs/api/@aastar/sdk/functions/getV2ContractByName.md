@@ -1,16 +1,16 @@
-> **getV2ContractByName**(`name`): [`ContractVersion`](../interfaces/ContractVersion.md) \| `undefined`
+```ts
+function getV2ContractByName(name): ContractVersion | undefined;
+```
 
-Defined in: [packages/core/src/contract-versions.ts:303](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contract-versions.ts#L303)
+Defined in: [packages/core/src/contract-versions.ts:303](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L303)
 
 Get V2 contract by name
 
 ## Parameters
 
-### name
-
-`string`
-
-Contract name
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `name` | `string` | Contract name |
 
 ## Returns
 

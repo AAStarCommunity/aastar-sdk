@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/roles.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L112)
+Defined in: [packages/core/src/roles.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L112)
 
 Role configuration structure (matches Registry.sol RoleConfig struct)
 
@@ -6,78 +6,98 @@ Role configuration structure (matches Registry.sol RoleConfig struct)
 
 ### description
 
-> **description**: `string`
+```ts
+description: string;
+```
 
-Defined in: [packages/core/src/roles.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L122)
+Defined in: [packages/core/src/roles.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L122)
 
 ***
 
 ### entryBurn
 
-> **entryBurn**: `bigint`
+```ts
+entryBurn: bigint;
+```
 
-Defined in: [packages/core/src/roles.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L114)
+Defined in: [packages/core/src/roles.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L114)
 
 ***
 
 ### exitFeePercent
 
-> **exitFeePercent**: `bigint`
+```ts
+exitFeePercent: bigint;
+```
 
-Defined in: [packages/core/src/roles.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L119)
+Defined in: [packages/core/src/roles.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L119)
 
 ***
 
 ### isActive
 
-> **isActive**: `boolean`
+```ts
+isActive: boolean;
+```
 
-Defined in: [packages/core/src/roles.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L121)
+Defined in: [packages/core/src/roles.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L121)
 
 ***
 
 ### minExitFee
 
-> **minExitFee**: `bigint`
+```ts
+minExitFee: bigint;
+```
 
-Defined in: [packages/core/src/roles.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L120)
+Defined in: [packages/core/src/roles.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L120)
 
 ***
 
 ### minStake
 
-> **minStake**: `bigint`
+```ts
+minStake: bigint;
+```
 
-Defined in: [packages/core/src/roles.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L113)
+Defined in: [packages/core/src/roles.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L113)
 
 ***
 
 ### slashBase
 
-> **slashBase**: `number`
+```ts
+slashBase: number;
+```
 
-Defined in: [packages/core/src/roles.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L116)
+Defined in: [packages/core/src/roles.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L116)
 
 ***
 
 ### slashIncrement
 
-> **slashIncrement**: `number`
+```ts
+slashIncrement: number;
+```
 
-Defined in: [packages/core/src/roles.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L117)
+Defined in: [packages/core/src/roles.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L117)
 
 ***
 
 ### slashMax
 
-> **slashMax**: `number`
+```ts
+slashMax: number;
+```
 
-Defined in: [packages/core/src/roles.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L118)
+Defined in: [packages/core/src/roles.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L118)
 
 ***
 
 ### slashThreshold
 
-> **slashThreshold**: `number`
+```ts
+slashThreshold: number;
+```
 
-Defined in: [packages/core/src/roles.ts:115](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L115)
+Defined in: [packages/core/src/roles.ts:115](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/roles.ts#L115)

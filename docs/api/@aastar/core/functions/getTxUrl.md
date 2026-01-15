@@ -1,22 +1,17 @@
-> **getTxUrl**(`network`, `txHash`): `string`
+```ts
+function getTxUrl(network, txHash): string;
+```
 
-Defined in: [packages/core/src/networks.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/networks.ts#L92)
+Defined in: [packages/core/src/networks.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/networks.ts#L92)
 
 Get transaction URL on block explorer
 
 ## Parameters
 
-### network
-
-Network name
-
-`"anvil"` | `"sepolia"`
-
-### txHash
-
-`string`
-
-Transaction hash
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"anvil"` \| `"sepolia"` | Network name |
+| `txHash` | `string` | Transaction hash |
 
 ## Returns
 

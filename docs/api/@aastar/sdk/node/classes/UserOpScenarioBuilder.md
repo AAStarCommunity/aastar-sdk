@@ -1,10 +1,12 @@
-Defined in: [packages/sdk/src/utils/testScenarios.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/testScenarios.ts#L30)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L30)
 
 ## Constructors
 
 ### Constructor
 
-> **new UserOpScenarioBuilder**(): `UserOpScenarioBuilder`
+```ts
+new UserOpScenarioBuilder(): UserOpScenarioBuilder;
+```
 
 #### Returns
 
@@ -14,22 +16,27 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:30](https://github.com/AASt
 
 ### buildTransferScenario()
 
-> `static` **buildTransferScenario**(`type`, `params`): `Promise`\<\{ `opHash`: `` `0x${string}` ``; `userOp`: `any`; \}\>
+```ts
+static buildTransferScenario(type, params): Promise<{
+  opHash: `0x${string}`;
+  userOp: any;
+}>;
+```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/testScenarios.ts#L34)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L34)
 
 Builds a signed PackedUserOperation for a token transfer based on the specified scenario.
 
 #### Parameters
 
-##### type
-
-[`UserOpScenarioType`](../enumerations/UserOpScenarioType.md)
-
-##### params
-
-[`ScenarioParams`](../interfaces/ScenarioParams.md)
+| Parameter | Type |
+| ------ | ------ |
+| `type` | [`UserOpScenarioType`](../enumerations/UserOpScenarioType.md) |
+| `params` | [`ScenarioParams`](../interfaces/ScenarioParams.md) |
 
 #### Returns
 
-`Promise`\<\{ `opHash`: `` `0x${string}` ``; `userOp`: `any`; \}\>
+`Promise`\<\{
+  `opHash`: `` `0x${string}` ``;
+  `userOp`: `any`;
+\}\>

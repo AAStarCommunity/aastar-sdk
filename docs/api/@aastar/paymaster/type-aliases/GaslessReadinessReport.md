@@ -1,55 +1,77 @@
-> **GaslessReadinessReport** = `object`
+```ts
+type GaslessReadinessReport = object;
+```
 
-Defined in: [V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
+Defined in: [V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
 
 ## Properties
 
 ### details
 
-> **details**: `object`
+```ts
+details: object;
+```
 
-Defined in: [V4/PaymasterUtils.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/paymaster/src/V4/PaymasterUtils.ts#L14)
+Defined in: [V4/PaymasterUtils.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L14)
 
 #### ethUsdPrice
 
-> **ethUsdPrice**: `bigint`
+```ts
+ethUsdPrice: bigint;
+```
 
 #### paymasterDeposit
 
-> **paymasterDeposit**: `bigint`
+```ts
+paymasterDeposit: bigint;
+```
 
 #### paymasterStake
 
-> **paymasterStake**: `bigint`
+```ts
+paymasterStake: bigint;
+```
 
 #### tokenPrice
 
-> **tokenPrice**: `bigint`
+```ts
+tokenPrice: bigint;
+```
 
 #### tokenSupported
 
-> **tokenSupported**: `boolean`
+```ts
+tokenSupported: boolean;
+```
 
 #### userPaymasterDeposit
 
-> **userPaymasterDeposit**: `bigint`
+```ts
+userPaymasterDeposit: bigint;
+```
 
 #### userTokenBalance
 
-> **userTokenBalance**: `bigint`
+```ts
+userTokenBalance: bigint;
+```
 
 ***
 
 ### isReady
 
-> **isReady**: `boolean`
+```ts
+isReady: boolean;
+```
 
-Defined in: [V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
+Defined in: [V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
 
 ***
 
 ### issues
 
-> **issues**: `string`[]
+```ts
+issues: string[];
+```
 
-Defined in: [V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
+Defined in: [V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L13)

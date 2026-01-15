@@ -1,19 +1,18 @@
-> **validateAddress**(`address`, `fieldName`): `` `0x${string}` ``
+```ts
+function validateAddress(address, fieldName): `0x${string}`;
+```
 
-Defined in: [packages/core/src/utils/validation.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/utils/validation.ts#L14)
+Defined in: [packages/core/src/utils/validation.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/utils/validation.ts#L14)
 
 Validates an Ethereum address.
 Throws AAStarValidationError if invalid.
 
 ## Parameters
 
-### address
-
-`string`
-
-### fieldName
-
-`string` = `'Address'`
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `address` | `string` | `undefined` |
+| `fieldName` | `string` | `'Address'` |
 
 ## Returns
 

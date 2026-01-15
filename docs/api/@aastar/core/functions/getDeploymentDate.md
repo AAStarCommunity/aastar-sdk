@@ -1,22 +1,17 @@
-> **getDeploymentDate**(`network`, `contractName`): `string` \| `undefined`
+```ts
+function getDeploymentDate(network, contractName): string | undefined;
+```
 
-Defined in: [packages/core/src/contracts.ts:376](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contracts.ts#L376)
+Defined in: [packages/core/src/contracts.ts:376](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L376)
 
 Get contract deployment date
 
 ## Parameters
 
-### network
-
-`"sepolia"`
-
-Network name
-
-### contractName
-
-`string`
-
-Contract name
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"sepolia"` | Network name |
+| `contractName` | `string` | Contract name |
 
 ## Returns
 

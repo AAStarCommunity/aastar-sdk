@@ -1,16 +1,16 @@
-> **getPaymasterV4\_1**(`network`): `string`
+```ts
+function getPaymasterV4_1(network): string;
+```
 
-Defined in: [packages/core/src/contracts.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contracts.ts#L232)
+Defined in: [packages/core/src/contracts.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L232)
 
 Get PaymasterV4_1 address (AOA mode)
 
 ## Parameters
 
-### network
-
-`"sepolia"`
-
-Network name
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"sepolia"` | Network name |
 
 ## Returns
 

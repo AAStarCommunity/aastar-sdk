@@ -1,106 +1,78 @@
-> **DVTActions** = `object`
+```ts
+type DVTActions = object;
+```
 
-Defined in: [packages/core/src/actions/dvt.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/dvt.ts#L4)
+Defined in: [packages/core/src/actions/dvt.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/dvt.ts#L4)
 
 ## Properties
 
 ### createSlashProposal()
 
-> **createSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+createSlashProposal: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/dvt.ts#L5)
+Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/dvt.ts#L5)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### address
-
-`Address`
-
-###### level
-
-`number`
-
-###### operator
-
-`Address`
-
-###### reason
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `address`: `Address`; `level`: `number`; `operator`: `Address`; `reason`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.address` | `Address` |
+| `args.level` | `number` |
+| `args.operator` | `Address` |
+| `args.reason` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### executeSlashWithProof()
 
-> **executeSlashWithProof**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+executeSlashWithProof: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/dvt.ts#L7)
+Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/dvt.ts#L7)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### address
-
-`Address`
-
-###### epoch
-
-`bigint`
-
-###### newScores
-
-`bigint`[]
-
-###### proof
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### proposalId
-
-`bigint`
-
-###### repUsers
-
-`Address`[]
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `address`: `Address`; `epoch`: `bigint`; `newScores`: `bigint`[]; `proof`: [`Hex`](https://viem.sh/docs/); `proposalId`: `bigint`; `repUsers`: `Address`[]; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.address` | `Address` |
+| `args.epoch` | `bigint` |
+| `args.newScores` | `bigint`[] |
+| `args.proof` | [`Hex`](https://viem.sh/docs/) |
+| `args.proposalId` | `bigint` |
+| `args.repUsers` | `Address`[] |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### isValidator()
 
-> **isValidator**: (`args`) => `Promise`\<`boolean`\>
+```ts
+isValidator: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/dvt.ts#L8)
+Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/dvt.ts#L8)
 
 #### Parameters
 
-##### args
-
-###### address
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `address`: `Address`; `user`: `Address`; \} |
+| `args.address` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -110,30 +82,22 @@ Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommun
 
 ### signSlashProposal()
 
-> **signSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+signSlashProposal: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/dvt.ts#L6)
+Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/dvt.ts#L6)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### address
-
-`Address`
-
-###### proposalId
-
-`bigint`
-
-###### signature
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `address`: `Address`; `proposalId`: `bigint`; `signature`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.address` | `Address` |
+| `args.proposalId` | `bigint` |
+| `args.signature` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>

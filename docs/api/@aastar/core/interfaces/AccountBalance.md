@@ -1,41 +1,51 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L36)
+Defined in: [packages/core/src/actions/StateValidator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L36)
 
 ## Properties
 
 ### address
 
-> **address**: `` `0x${string}` ``
+```ts
+address: `0x${string}`;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L37)
+Defined in: [packages/core/src/actions/StateValidator.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L37)
 
 ***
 
 ### aPNTs
 
-> **aPNTs**: `bigint`
+```ts
+aPNTs: bigint;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L40)
+Defined in: [packages/core/src/actions/StateValidator.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L40)
 
 ***
 
 ### eth
 
-> **eth**: `bigint`
+```ts
+eth: bigint;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L38)
+Defined in: [packages/core/src/actions/StateValidator.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L38)
 
 ***
 
 ### gToken
 
-> **gToken**: `bigint`
+```ts
+gToken: bigint;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L39)
+Defined in: [packages/core/src/actions/StateValidator.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L39)
 
 ***
 
 ### xPNTs
 
-> **xPNTs**: `bigint`
+```ts
+xPNTs: bigint;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L41)
+Defined in: [packages/core/src/actions/StateValidator.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L41)

@@ -1,16 +1,16 @@
-> **getV2ContractByAddress**(`address`): [`ContractVersion`](../interfaces/ContractVersion.md) \| `undefined`
+```ts
+function getV2ContractByAddress(address): ContractVersion | undefined;
+```
 
-Defined in: [packages/core/src/contract-versions.ts:322](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contract-versions.ts#L322)
+Defined in: [packages/core/src/contract-versions.ts:322](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L322)
 
 Get V2 contract by address
 
 ## Parameters
 
-### address
-
-`string`
-
-Contract address (case-insensitive)
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `address` | `string` | Contract address (case-insensitive) |
 
 ## Returns
 

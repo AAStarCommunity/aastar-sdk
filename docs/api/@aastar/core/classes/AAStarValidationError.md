@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/utils/validation.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/utils/validation.ts#L3)
+Defined in: [packages/core/src/utils/validation.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/utils/validation.ts#L3)
 
 ## Extends
 
@@ -8,15 +8,17 @@ Defined in: [packages/core/src/utils/validation.ts:3](https://github.com/AAStarC
 
 ### Constructor
 
-> **new AAStarValidationError**(`message`): `AAStarValidationError`
+```ts
+new AAStarValidationError(message): AAStarValidationError;
+```
 
-Defined in: [packages/core/src/utils/validation.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/utils/validation.ts#L4)
+Defined in: [packages/core/src/utils/validation.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/utils/validation.ts#L4)
 
 #### Parameters
 
-##### message
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `message` | `string` |
 
 #### Returns
 
@@ -24,61 +26,81 @@ Defined in: [packages/core/src/utils/validation.ts:4](https://github.com/AAStarC
 
 #### Overrides
 
-`Error.constructor`
+```ts
+Error.constructor
+```
 
 ## Properties
 
 ### cause?
 
-> `optional` **cause**: `unknown`
+```ts
+optional cause: unknown;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es2022.error.d.ts:26
 
 #### Inherited from
 
-`Error.cause`
+```ts
+Error.cause
+```
 
 ***
 
 ### message
 
-> **message**: `string`
+```ts
+message: string;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 #### Inherited from
 
-`Error.message`
+```ts
+Error.message
+```
 
 ***
 
 ### name
 
-> **name**: `string`
+```ts
+name: string;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 #### Inherited from
 
-`Error.name`
+```ts
+Error.name
+```
 
 ***
 
 ### stack?
 
-> `optional` **stack**: `string`
+```ts
+optional stack: string;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es5.d.ts:1078
 
 #### Inherited from
 
-`Error.stack`
+```ts
+Error.stack
+```
 
 ***
 
 ### prepareStackTrace()?
 
-> `static` `optional` **prepareStackTrace**: (`err`, `stackTraces`) => `any`
+```ts
+static optional prepareStackTrace: (err, stackTraces) => any;
+```
 
 Defined in: node\_modules/.pnpm/@types+node@20.11.5/node\_modules/@types/node/globals.d.ts:28
 
@@ -86,13 +108,10 @@ Optional override for formatting stack traces
 
 #### Parameters
 
-##### err
-
-`Error`
-
-##### stackTraces
-
-`CallSite`[]
+| Parameter | Type |
+| ------ | ------ |
+| `err` | `Error` |
+| `stackTraces` | `CallSite`[] |
 
 #### Returns
 
@@ -104,25 +123,33 @@ https://v8.dev/docs/stack-trace-api#customizing-stack-traces
 
 #### Inherited from
 
-`Error.prepareStackTrace`
+```ts
+Error.prepareStackTrace
+```
 
 ***
 
 ### stackTraceLimit
 
-> `static` **stackTraceLimit**: `number`
+```ts
+static stackTraceLimit: number;
+```
 
 Defined in: node\_modules/.pnpm/@types+node@20.11.5/node\_modules/@types/node/globals.d.ts:30
 
 #### Inherited from
 
-`Error.stackTraceLimit`
+```ts
+Error.stackTraceLimit
+```
 
 ## Methods
 
 ### captureStackTrace()
 
-> `static` **captureStackTrace**(`targetObject`, `constructorOpt?`): `void`
+```ts
+static captureStackTrace(targetObject, constructorOpt?): void;
+```
 
 Defined in: node\_modules/.pnpm/@types+node@20.11.5/node\_modules/@types/node/globals.d.ts:21
 
@@ -130,13 +157,10 @@ Create .stack property on a target object
 
 #### Parameters
 
-##### targetObject
-
-`object`
-
-##### constructorOpt?
-
-`Function`
+| Parameter | Type |
+| ------ | ------ |
+| `targetObject` | `object` |
+| `constructorOpt?` | `Function` |
 
 #### Returns
 
@@ -144,4 +168,6 @@ Create .stack property on a target object
 
 #### Inherited from
 
-`Error.captureStackTrace`
+```ts
+Error.captureStackTrace
+```

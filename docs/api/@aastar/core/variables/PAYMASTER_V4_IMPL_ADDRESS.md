@@ -1,3 +1,5 @@
-> `const` **PAYMASTER\_V4\_IMPL\_ADDRESS**: `` `0x${string}` ``
+```ts
+const PAYMASTER_V4_IMPL_ADDRESS: `0x${string}`;
+```
 
-Defined in: [packages/core/src/constants.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/constants.ts#L55)
+Defined in: [packages/core/src/constants.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/constants.ts#L55)

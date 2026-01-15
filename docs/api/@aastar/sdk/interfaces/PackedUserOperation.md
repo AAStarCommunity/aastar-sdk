@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/userOp.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L6)
+Defined in: [packages/sdk/src/utils/userOp.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L6)
 
 ERC-4337 v0.7 Packed UserOperation structure.
 
@@ -6,70 +6,88 @@ ERC-4337 v0.7 Packed UserOperation structure.
 
 ### accountGasLimits
 
-> **accountGasLimits**: `` `0x${string}` ``
+```ts
+accountGasLimits: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L11)
+Defined in: [packages/sdk/src/utils/userOp.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L11)
 
 ***
 
 ### callData
 
-> **callData**: `` `0x${string}` ``
+```ts
+callData: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L10)
+Defined in: [packages/sdk/src/utils/userOp.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L10)
 
 ***
 
 ### gasFees
 
-> **gasFees**: `` `0x${string}` ``
+```ts
+gasFees: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L13)
+Defined in: [packages/sdk/src/utils/userOp.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L13)
 
 ***
 
 ### initCode
 
-> **initCode**: `` `0x${string}` ``
+```ts
+initCode: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L9)
+Defined in: [packages/sdk/src/utils/userOp.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L9)
 
 ***
 
 ### nonce
 
-> **nonce**: `` `0x${string}` ``
+```ts
+nonce: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L8)
+Defined in: [packages/sdk/src/utils/userOp.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L8)
 
 ***
 
 ### paymasterAndData
 
-> **paymasterAndData**: `` `0x${string}` ``
+```ts
+paymasterAndData: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L14)
+Defined in: [packages/sdk/src/utils/userOp.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L14)
 
 ***
 
 ### preVerificationGas
 
-> **preVerificationGas**: `` `0x${string}` ``
+```ts
+preVerificationGas: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L12)
+Defined in: [packages/sdk/src/utils/userOp.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L12)
 
 ***
 
 ### sender
 
-> **sender**: `` `0x${string}` ``
+```ts
+sender: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L7)
+Defined in: [packages/sdk/src/utils/userOp.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L7)
 
 ***
 
 ### signature
 
-> **signature**: `` `0x${string}` ``
+```ts
+signature: `0x${string}`;
+```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L15)
+Defined in: [packages/sdk/src/utils/userOp.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/userOp.ts#L15)

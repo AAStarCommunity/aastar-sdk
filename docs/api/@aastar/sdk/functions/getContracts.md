@@ -1,16 +1,16 @@
-> **getContracts**(`network`): `object`
+```ts
+function getContracts(network): object;
+```
 
-Defined in: [packages/core/src/contracts.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contracts.ts#L130)
+Defined in: [packages/core/src/contracts.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L130)
 
 Get all contracts for a specific network
 
 ## Parameters
 
-### network
-
-`"sepolia"`
-
-Network name (e.g., 'sepolia')
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"sepolia"` | Network name (e.g., 'sepolia') |
 
 ## Returns
 
@@ -18,197 +18,55 @@ Network name (e.g., 'sepolia')
 
 All contract addresses for the network
 
-### communities
-
-> `readonly` **communities**: `object`
-
-#### communities.aastar
-
-> `readonly` **aastar**: `object`
-
-AAStar Community - Test community for development (registered: 2025-11-01)
-
-#### communities.aastar.ensName
-
-> `readonly` **ensName**: `"aastar.eth"` = `'aastar.eth'`
-
-#### communities.aastar.gasToken
-
-> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.apnts`
-
-#### communities.aastar.name
-
-> `readonly` **name**: `"AAStar"` = `'AAStar'`
-
-#### communities.aastar.owner
-
-> `readonly` **owner**: `"0x411BD567E46C0781248dbB6a9211891C032885e5"` = `COMMUNITY_OWNERS.aastarOwner`
-
-#### communities.aastar.stake
-
-> `readonly` **stake**: `"50"` = `'50'`
-
-#### communities.breadCommunity
-
-> `readonly` **breadCommunity**: `object`
-
-BreadCommunity - Test community for development (registered: 2025-11-03)
-
-#### communities.breadCommunity.ensName
-
-> `readonly` **ensName**: `"bread.eth"` = `'bread.eth'`
-
-#### communities.breadCommunity.gasToken
-
-> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.bpnts`
-
-#### communities.breadCommunity.name
-
-> `readonly` **name**: `"BreadCommunity"` = `'BreadCommunity'`
-
-#### communities.breadCommunity.owner
-
-> `readonly` **owner**: `"0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA"` = `COMMUNITY_OWNERS.breadCommunityOwner`
-
-#### communities.breadCommunity.stake
-
-> `readonly` **stake**: `"50"` = `'50'`
-
-### core
-
-> `readonly` **core**: `object` = `CORE_ADDRESSES`
-
-#### core.aPNTs
-
-> `readonly` **aPNTs**: `` `0x${string}` `` = `APNTS_ADDRESS`
-
-#### core.dvtValidator
-
-> `readonly` **dvtValidator**: `` `0x${string}` `` = `DVT_VALIDATOR_ADDRESS`
-
-#### core.entryPoint
-
-> `readonly` **entryPoint**: `` `0x${string}` `` = `ENTRY_POINT_ADDRESS`
-
-#### core.gToken
-
-> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### core.gTokenStaking
-
-> `readonly` **gTokenStaking**: `` `0x${string}` `` = `GTOKEN_STAKING_ADDRESS`
-
-#### core.mySBT
-
-> `readonly` **mySBT**: `` `0x${string}` `` = `SBT_ADDRESS`
-
-#### core.paymasterFactory
-
-> `readonly` **paymasterFactory**: `` `0x${string}` `` = `PAYMASTER_FACTORY_ADDRESS`
-
-#### core.paymasterV4
-
-> `readonly` **paymasterV4**: `` `0x${string}` ``
-
-#### core.registry
-
-> `readonly` **registry**: `` `0x${string}` `` = `REGISTRY_ADDRESS`
-
-#### core.reputationSystem
-
-> `readonly` **reputationSystem**: `` `0x${string}` ``
-
-#### core.superPaymaster
-
-> `readonly` **superPaymaster**: `` `0x${string}` `` = `SUPER_PAYMASTER_ADDRESS`
-
-#### core.xPNTsFactory
-
-> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
-
-### monitoring
-
-> `readonly` **monitoring**: `object` = `MONITORING_ADDRESSES`
-
-#### monitoring.blsAggregator
-
-> `readonly` **blsAggregator**: `` `0x${string}` `` = `BLS_AGGREGATOR_ADDRESS`
-
-#### monitoring.dvtValidator
-
-> `readonly` **dvtValidator**: `` `0x${string}` `` = `DVT_VALIDATOR_ADDRESS`
-
-### official
-
-> `readonly` **official**: `object` = `OFFICIAL_ADDRESSES`
-
-#### official.entryPoint
-
-> `readonly` **entryPoint**: `` `0x${string}` ``
-
-### paymaster
-
-> `readonly` **paymaster**: `object` = `PAYMASTER_ADDRESSES`
-
-#### paymaster.paymasterV4\_1
-
-> `readonly` **paymasterV4\_1**: `` `0x${string}` ``
-
-#### paymaster.paymasterV4\_1iImplementation
-
-> `readonly` **paymasterV4\_1iImplementation**: `` `0x${string}` `` = `PAYMASTER_V4_IMPL_ADDRESS`
-
-### testAccounts
-
-> `readonly` **testAccounts**: `object` = `TEST_ACCOUNT_ADDRESSES`
-
-#### testAccounts.simpleAccountFactory
-
-> `readonly` **simpleAccountFactory**: `` `0x${string}` ``
-
-### testTokens
-
-> `readonly` **testTokens**: `object` = `TEST_TOKEN_ADDRESSES`
-
-#### testTokens.apnts
-
-> `readonly` **apnts**: `` `0x${string}` `` = `APNTS_ADDRESS`
-
-#### testTokens.bpnts
-
-> `readonly` **bpnts**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### testTokens.gToken
-
-> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### testTokens.mockUSDT
-
-> `readonly` **mockUSDT**: `` `0x${string}` ``
-
-#### testTokens.pimToken
-
-> `readonly` **pimToken**: `` `0x${string}` `` = `TOKEN_ADDRESSES.pimToken`
-
-### tokens
-
-> `readonly` **tokens**: `object` = `TOKEN_ADDRESSES`
-
-#### tokens.aPNTs
-
-> `readonly` **aPNTs**: `` `0x${string}` `` = `APNTS_ADDRESS`
-
-#### tokens.gToken
-
-> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
-
-#### tokens.pimToken
-
-> `readonly` **pimToken**: `` `0x${string}` ``
-
-#### tokens.xPNTsFactory
-
-> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
+| Name | Type | Default value | Description | Defined in |
+| ------ | ------ | ------ | ------ | ------ |
+| `communities` | `object` | - | - | [packages/core/src/contracts.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L77) |
+| `communities.aastar` | `object` | - | AAStar Community - Test community for development (registered: 2025-11-01) | [packages/core/src/contracts.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L79) |
+| `communities.aastar.ensName` | `"aastar.eth"` | `'aastar.eth'` | - | [packages/core/src/contracts.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L82) |
+| `communities.aastar.gasToken` | `` `0x${string}` `` | `TEST_TOKEN_ADDRESSES.apnts` | - | [packages/core/src/contracts.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L81) |
+| `communities.aastar.name` | `"AAStar"` | `'AAStar'` | - | [packages/core/src/contracts.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L83) |
+| `communities.aastar.owner` | `"0x411BD567E46C0781248dbB6a9211891C032885e5"` | `COMMUNITY_OWNERS.aastarOwner` | - | [packages/core/src/contracts.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L80) |
+| `communities.aastar.stake` | `"50"` | `'50'` | - | [packages/core/src/contracts.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L84) |
+| `communities.breadCommunity` | `object` | - | BreadCommunity - Test community for development (registered: 2025-11-03) | [packages/core/src/contracts.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L88) |
+| `communities.breadCommunity.ensName` | `"bread.eth"` | `'bread.eth'` | - | [packages/core/src/contracts.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L91) |
+| `communities.breadCommunity.gasToken` | `` `0x${string}` `` | `TEST_TOKEN_ADDRESSES.bpnts` | - | [packages/core/src/contracts.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L90) |
+| `communities.breadCommunity.name` | `"BreadCommunity"` | `'BreadCommunity'` | - | [packages/core/src/contracts.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L92) |
+| `communities.breadCommunity.owner` | `"0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA"` | `COMMUNITY_OWNERS.breadCommunityOwner` | - | [packages/core/src/contracts.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L89) |
+| `communities.breadCommunity.stake` | `"50"` | `'50'` | - | [packages/core/src/contracts.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L93) |
+| `core` | `object` | `CORE_ADDRESSES` | - | [packages/core/src/contracts.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L42) |
+| `core.aPNTs` | `` `0x${string}` `` | `APNTS_ADDRESS` | - | [packages/core/src/contract-addresses.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L35) |
+| `core.dvtValidator` | `` `0x${string}` `` | `DVT_VALIDATOR_ADDRESS` | - | [packages/core/src/contract-addresses.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L39) |
+| `core.entryPoint` | `` `0x${string}` `` | `ENTRY_POINT_ADDRESS` | - | [packages/core/src/contract-addresses.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L40) |
+| `core.gToken` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L31) |
+| `core.gTokenStaking` | `` `0x${string}` `` | `GTOKEN_STAKING_ADDRESS` | - | [packages/core/src/contract-addresses.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L32) |
+| `core.mySBT` | `` `0x${string}` `` | `SBT_ADDRESS` | - | [packages/core/src/contract-addresses.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L36) |
+| `core.paymasterFactory` | `` `0x${string}` `` | `PAYMASTER_FACTORY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L34) |
+| `core.paymasterV4` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L38) |
+| `core.registry` | `` `0x${string}` `` | `REGISTRY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L30) |
+| `core.reputationSystem` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L42) |
+| `core.superPaymaster` | `` `0x${string}` `` | `SUPER_PAYMASTER_ADDRESS` | - | [packages/core/src/contract-addresses.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L33) |
+| `core.xPNTsFactory` | `` `0x${string}` `` | `XPNTS_FACTORY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L41) |
+| `monitoring` | `object` | `MONITORING_ADDRESSES` | - | [packages/core/src/contracts.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L67) |
+| `monitoring.blsAggregator` | `` `0x${string}` `` | `BLS_AGGREGATOR_ADDRESS` | - | [packages/core/src/contract-addresses.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L87) |
+| `monitoring.dvtValidator` | `` `0x${string}` `` | `DVT_VALIDATOR_ADDRESS` | - | [packages/core/src/contract-addresses.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L86) |
+| `official` | `object` | `OFFICIAL_ADDRESSES` | - | [packages/core/src/contracts.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L72) |
+| `official.entryPoint` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L94) |
+| `paymaster` | `object` | `PAYMASTER_ADDRESSES` | - | [packages/core/src/contracts.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L62) |
+| `paymaster.paymasterV4_1` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L78) |
+| `paymaster.paymasterV4_1iImplementation` | `` `0x${string}` `` | `PAYMASTER_V4_IMPL_ADDRESS` | - | [packages/core/src/contract-addresses.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L79) |
+| `testAccounts` | `object` | `TEST_ACCOUNT_ADDRESSES` | - | [packages/core/src/contracts.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L57) |
+| `testAccounts.simpleAccountFactory` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L71) |
+| `testTokens` | `object` | `TEST_TOKEN_ADDRESSES` | - | [packages/core/src/contracts.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L52) |
+| `testTokens.apnts` | `` `0x${string}` `` | `APNTS_ADDRESS` | - | [packages/core/src/contract-addresses.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L60) |
+| `testTokens.bpnts` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L62) |
+| `testTokens.gToken` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L61) |
+| `testTokens.mockUSDT` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L59) |
+| `testTokens.pimToken` | `` `0x${string}` `` | `TOKEN_ADDRESSES.pimToken` | - | [packages/core/src/contract-addresses.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L63) |
+| `tokens` | `object` | `TOKEN_ADDRESSES` | - | [packages/core/src/contracts.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contracts.ts#L47) |
+| `tokens.aPNTs` | `` `0x${string}` `` | `APNTS_ADDRESS` | - | [packages/core/src/contract-addresses.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L50) |
+| `tokens.gToken` | `` `0x${string}` `` | `GTOKEN_ADDRESS` | - | [packages/core/src/contract-addresses.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L51) |
+| `tokens.pimToken` | `` `0x${string}` `` | - | - | [packages/core/src/contract-addresses.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L52) |
+| `tokens.xPNTsFactory` | `` `0x${string}` `` | `XPNTS_FACTORY_ADDRESS` | - | [packages/core/src/contract-addresses.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-addresses.ts#L49) |
 
 ## Example
 

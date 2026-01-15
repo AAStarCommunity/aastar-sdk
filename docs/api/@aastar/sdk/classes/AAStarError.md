@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L13)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L13)
 
 ## Extends
 
@@ -8,23 +8,22 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AASta
 
 ### Constructor
 
-> **new AAStarError**(`message`, `code`, `details?`): `AAStarError`
+```ts
+new AAStarError(
+   message, 
+   code, 
+   details?): AAStarError;
+```
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L17)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L17)
 
 #### Parameters
 
-##### message
-
-`string`
-
-##### code
-
-[`AAStarErrorCode`](../enumerations/AAStarErrorCode.md) = `AAStarErrorCode.UNKNOWN_ERROR`
-
-##### details?
-
-`any`
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `message` | `string` | `undefined` |
+| `code` | [`AAStarErrorCode`](../enumerations/AAStarErrorCode.md) | `AAStarErrorCode.UNKNOWN_ERROR` |
+| `details?` | `any` | `undefined` |
 
 #### Returns
 
@@ -32,77 +31,101 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AASta
 
 #### Overrides
 
-`Error.constructor`
+```ts
+Error.constructor
+```
 
 ## Properties
 
 ### cause?
 
-> `optional` **cause**: `unknown`
+```ts
+optional cause: unknown;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es2022.error.d.ts:26
 
 #### Inherited from
 
-`Error.cause`
+```ts
+Error.cause
+```
 
 ***
 
 ### code
 
-> `readonly` **code**: [`AAStarErrorCode`](../enumerations/AAStarErrorCode.md)
+```ts
+readonly code: AAStarErrorCode;
+```
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L14)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L14)
 
 ***
 
 ### details?
 
-> `readonly` `optional` **details**: `any`
+```ts
+readonly optional details: any;
+```
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L15)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L15)
 
 ***
 
 ### message
 
-> **message**: `string`
+```ts
+message: string;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 #### Inherited from
 
-`Error.message`
+```ts
+Error.message
+```
 
 ***
 
 ### name
 
-> **name**: `string`
+```ts
+name: string;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 #### Inherited from
 
-`Error.name`
+```ts
+Error.name
+```
 
 ***
 
 ### stack?
 
-> `optional` **stack**: `string`
+```ts
+optional stack: string;
+```
 
 Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/lib.es5.d.ts:1078
 
 #### Inherited from
 
-`Error.stack`
+```ts
+Error.stack
+```
 
 ***
 
 ### prepareStackTrace()?
 
-> `static` `optional` **prepareStackTrace**: (`err`, `stackTraces`) => `any`
+```ts
+static optional prepareStackTrace: (err, stackTraces) => any;
+```
 
 Defined in: node\_modules/.pnpm/@types+node@20.11.5/node\_modules/@types/node/globals.d.ts:28
 
@@ -110,13 +133,10 @@ Optional override for formatting stack traces
 
 #### Parameters
 
-##### err
-
-`Error`
-
-##### stackTraces
-
-`CallSite`[]
+| Parameter | Type |
+| ------ | ------ |
+| `err` | `Error` |
+| `stackTraces` | `CallSite`[] |
 
 #### Returns
 
@@ -128,25 +148,33 @@ https://v8.dev/docs/stack-trace-api#customizing-stack-traces
 
 #### Inherited from
 
-`Error.prepareStackTrace`
+```ts
+Error.prepareStackTrace
+```
 
 ***
 
 ### stackTraceLimit
 
-> `static` **stackTraceLimit**: `number`
+```ts
+static stackTraceLimit: number;
+```
 
 Defined in: node\_modules/.pnpm/@types+node@20.11.5/node\_modules/@types/node/globals.d.ts:30
 
 #### Inherited from
 
-`Error.stackTraceLimit`
+```ts
+Error.stackTraceLimit
+```
 
 ## Methods
 
 ### captureStackTrace()
 
-> `static` **captureStackTrace**(`targetObject`, `constructorOpt?`): `void`
+```ts
+static captureStackTrace(targetObject, constructorOpt?): void;
+```
 
 Defined in: node\_modules/.pnpm/@types+node@20.11.5/node\_modules/@types/node/globals.d.ts:21
 
@@ -154,13 +182,10 @@ Create .stack property on a target object
 
 #### Parameters
 
-##### targetObject
-
-`object`
-
-##### constructorOpt?
-
-`Function`
+| Parameter | Type |
+| ------ | ------ |
+| `targetObject` | `object` |
+| `constructorOpt?` | `Function` |
 
 #### Returns
 
@@ -168,4 +193,6 @@ Create .stack property on a target object
 
 #### Inherited from
 
-`Error.captureStackTrace`
+```ts
+Error.captureStackTrace
+```

@@ -1,20 +1,19 @@
-> **getUserOpHashV07**(`userOp`, `entryPoint`, `chainId`): `` `0x${string}` ``
+```ts
+function getUserOpHashV07(
+   userOp, 
+   entryPoint, 
+   chainId): `0x${string}`;
+```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/paymaster/src/V4/PaymasterUtils.ts#L167)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L167)
 
 ## Parameters
 
-### userOp
-
-`any`
-
-### entryPoint
-
-`` `0x${string}` ``
-
-### chainId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `userOp` | `any` |
+| `entryPoint` | `` `0x${string}` `` |
+| `chainId` | `bigint` |
 
 ## Returns
 

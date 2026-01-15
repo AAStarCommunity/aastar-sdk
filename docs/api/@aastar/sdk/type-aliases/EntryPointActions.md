@@ -1,50 +1,48 @@
-> **EntryPointActions** = `object`
+```ts
+type EntryPointActions = object;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L9)
+Defined in: [packages/core/src/actions/entryPoint.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L9)
 
 ## Properties
 
 ### addStake()
 
-> **addStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+addStake: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L16)
+Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L16)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### unstakeDelaySec
-
-`number`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; `unstakeDelaySec`: `number`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.unstakeDelaySec` | `number` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### balanceOf()
 
-> **balanceOf**: (`args`) => `Promise`\<`bigint`\>
+```ts
+balanceOf: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L10)
+Defined in: [packages/core/src/actions/entryPoint.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L10)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; \} |
+| `args.account` | `Address` |
 
 #### Returns
 
@@ -54,25 +52,20 @@ Defined in: [packages/core/src/actions/entryPoint.ts:10](https://github.com/AASt
 
 ### delegateAndRevert()
 
-> **delegateAndRevert**: (`args`) => `Promise`\<`void`\>
+```ts
+delegateAndRevert: (args) => Promise<void>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L25)
+Defined in: [packages/core/src/actions/entryPoint.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L25)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### data
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### target
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `data`: [`Hex`](https://viem.sh/docs/); `target`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.data` | [`Hex`](https://viem.sh/docs/) |
+| `args.target` | `Address` |
 
 #### Returns
 
@@ -82,37 +75,34 @@ Defined in: [packages/core/src/actions/entryPoint.ts:25](https://github.com/AASt
 
 ### depositTo()
 
-> **depositTo**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+depositTo: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L11)
+Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L11)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
-
-###### amount
-
-`bigint`
-
-###### txAccount?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; `amount`: `bigint`; `txAccount?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account` | `Address` |
+| `args.amount` | `bigint` |
+| `args.txAccount?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### eip712Domain()
 
-> **eip712Domain**: () => `Promise`\<`any`\>
+```ts
+eip712Domain: () => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L34)
+Defined in: [packages/core/src/actions/entryPoint.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L34)
 
 #### Returns
 
@@ -122,65 +112,80 @@ Defined in: [packages/core/src/actions/entryPoint.ts:34](https://github.com/AASt
 
 ### getCurrentUserOpHash()
 
-> **getCurrentUserOpHash**: () => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+getCurrentUserOpHash: () => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L35)
+Defined in: [packages/core/src/actions/entryPoint.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L35)
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### getDepositInfo()
 
-> **getDepositInfo**: (`args`) => `Promise`\<\{ `deposit`: `bigint`; `stake`: `bigint`; `staked`: `boolean`; `unstakeDelaySec`: `number`; `withdrawTime`: `number`; \}\>
+```ts
+getDepositInfo: (args) => Promise<{
+  deposit: bigint;
+  stake: bigint;
+  staked: boolean;
+  unstakeDelaySec: number;
+  withdrawTime: number;
+}>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L13)
+Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L13)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; \} |
+| `args.account` | `Address` |
 
 #### Returns
 
-`Promise`\<\{ `deposit`: `bigint`; `stake`: `bigint`; `staked`: `boolean`; `unstakeDelaySec`: `number`; `withdrawTime`: `number`; \}\>
+`Promise`\<\{
+  `deposit`: `bigint`;
+  `stake`: `bigint`;
+  `staked`: `boolean`;
+  `unstakeDelaySec`: `number`;
+  `withdrawTime`: `number`;
+\}\>
 
 ***
 
 ### getDomainSeparatorV4()
 
-> **getDomainSeparatorV4**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
+```ts
+getDomainSeparatorV4: () => Promise<Hex>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L36)
+Defined in: [packages/core/src/actions/entryPoint.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L36)
 
 #### Returns
 
-`Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hex`](https://viem.sh/docs/)\>
 
 ***
 
 ### getNonce()
 
-> **getNonce**: (`args`) => `Promise`\<`bigint`\>
+```ts
+getNonce: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L12)
+Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L12)
 
 #### Parameters
 
-##### args
-
-###### key
-
-`bigint`
-
-###### sender
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `key`: `bigint`; `sender`: `Address`; \} |
+| `args.key` | `bigint` |
+| `args.sender` | `Address` |
 
 #### Returns
 
@@ -190,29 +195,32 @@ Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AASt
 
 ### getPackedUserOpTypeHash()
 
-> **getPackedUserOpTypeHash**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
+```ts
+getPackedUserOpTypeHash: () => Promise<Hex>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L37)
+Defined in: [packages/core/src/actions/entryPoint.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L37)
 
 #### Returns
 
-`Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hex`](https://viem.sh/docs/)\>
 
 ***
 
 ### getSenderAddress()
 
-> **getSenderAddress**: (`args`) => `Promise`\<`Address`\>
+```ts
+getSenderAddress: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L29)
+Defined in: [packages/core/src/actions/entryPoint.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L29)
 
 #### Parameters
 
-##### args
-
-###### initCode
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `initCode`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.initCode` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -222,153 +230,132 @@ Defined in: [packages/core/src/actions/entryPoint.ts:29](https://github.com/AASt
 
 ### getUserOpHash()
 
-> **getUserOpHash**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+getUserOpHash: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L28)
+Defined in: [packages/core/src/actions/entryPoint.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L28)
 
 #### Parameters
 
-##### args
-
-###### op
-
-`any`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `op`: `any`; \} |
+| `args.op` | `any` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### handleAggregatedOps()
 
-> **handleAggregatedOps**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+handleAggregatedOps: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L23)
+Defined in: [packages/core/src/actions/entryPoint.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L23)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### beneficiary
-
-`Address`
-
-###### opsPerAggregator
-
-`any`[]
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `beneficiary`: `Address`; `opsPerAggregator`: `any`[]; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.beneficiary` | `Address` |
+| `args.opsPerAggregator` | `any`[] |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### handleOps()
 
-> **handleOps**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+handleOps: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L22)
+Defined in: [packages/core/src/actions/entryPoint.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L22)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### beneficiary
-
-`Address`
-
-###### ops
-
-`any`[]
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `beneficiary`: `Address`; `ops`: `any`[]; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.beneficiary` | `Address` |
+| `args.ops` | `any`[] |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### incrementNonce()
 
-> **incrementNonce**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+incrementNonce: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L31)
+Defined in: [packages/core/src/actions/entryPoint.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L31)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### key
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `key`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.key` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### innerHandleOp()
 
-> **innerHandleOp**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+innerHandleOp: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L24)
+Defined in: [packages/core/src/actions/entryPoint.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L24)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### callData
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### context
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### opInfo
-
-`any`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `callData`: [`Hex`](https://viem.sh/docs/); `context`: [`Hex`](https://viem.sh/docs/); `opInfo`: `any`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.callData` | [`Hex`](https://viem.sh/docs/) |
+| `args.context` | [`Hex`](https://viem.sh/docs/) |
+| `args.opInfo` | `any` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### nonceSequenceNumber()
 
-> **nonceSequenceNumber**: (`args`) => `Promise`\<`bigint`\>
+```ts
+nonceSequenceNumber: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L32)
+Defined in: [packages/core/src/actions/entryPoint.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L32)
 
 #### Parameters
 
-##### args
-
-###### key
-
-`bigint`
-
-###### sender
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `key`: `bigint`; `sender`: `Address`; \} |
+| `args.key` | `bigint` |
+| `args.sender` | `Address` |
 
 #### Returns
 
@@ -378,9 +365,11 @@ Defined in: [packages/core/src/actions/entryPoint.ts:32](https://github.com/AASt
 
 ### senderCreator()
 
-> **senderCreator**: () => `Promise`\<`Address`\>
+```ts
+senderCreator: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L30)
+Defined in: [packages/core/src/actions/entryPoint.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L30)
 
 #### Returns
 
@@ -390,17 +379,18 @@ Defined in: [packages/core/src/actions/entryPoint.ts:30](https://github.com/AASt
 
 ### supportsInterface()
 
-> **supportsInterface**: (`args`) => `Promise`\<`boolean`\>
+```ts
+supportsInterface: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L33)
+Defined in: [packages/core/src/actions/entryPoint.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L33)
 
 #### Parameters
 
-##### args
-
-###### interfaceId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `interfaceId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.interfaceId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -410,78 +400,74 @@ Defined in: [packages/core/src/actions/entryPoint.ts:33](https://github.com/AASt
 
 ### unlockStake()
 
-> **unlockStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+unlockStake: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L17)
+Defined in: [packages/core/src/actions/entryPoint.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L17)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### version
 
-> **version**: [`EntryPointVersion`](../enumerations/EntryPointVersion.md)
+```ts
+version: EntryPointVersion;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L39)
+Defined in: [packages/core/src/actions/entryPoint.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L39)
 
 ***
 
 ### withdrawStake()
 
-> **withdrawStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+withdrawStake: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L18)
+Defined in: [packages/core/src/actions/entryPoint.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L18)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### withdrawAddress
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `withdrawAddress`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.withdrawAddress` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### withdrawTo()
 
-> **withdrawTo**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+withdrawTo: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/entryPoint.ts#L19)
+Defined in: [packages/core/src/actions/entryPoint.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/entryPoint.ts#L19)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### withdrawAddress
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; `withdrawAddress`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.withdrawAddress` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>

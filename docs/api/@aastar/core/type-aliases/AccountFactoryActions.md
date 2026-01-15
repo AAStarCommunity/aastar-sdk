@@ -1,14 +1,18 @@
-> **AccountFactoryActions** = `object`
+```ts
+type AccountFactoryActions = object;
+```
 
-Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L24)
+Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/account.ts#L24)
 
 ## Properties
 
 ### accountImplementation()
 
-> **accountImplementation**: () => `Promise`\<`Address`\>
+```ts
+accountImplementation: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L29)
+Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/account.ts#L29)
 
 #### Returns
 
@@ -18,49 +22,42 @@ Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarC
 
 ### createAccount()
 
-> **createAccount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+createAccount: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L25)
+Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/account.ts#L25)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### owner
-
-`Address`
-
-###### salt
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `owner`: `Address`; `salt`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.owner` | `Address` |
+| `args.salt` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### getAddress()
 
-> **getAddress**: (`args`) => `Promise`\<`Address`\>
+```ts
+getAddress: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/account.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L26)
+Defined in: [packages/core/src/actions/account.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/account.ts#L26)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
-
-###### salt
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; `salt`: `bigint`; \} |
+| `args.owner` | `Address` |
+| `args.salt` | `bigint` |
 
 #### Returns
 

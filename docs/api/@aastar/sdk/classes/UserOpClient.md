@@ -1,4 +1,4 @@
-Defined in: [packages/account/src/index.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/account/src/index.ts#L40)
+Defined in: [packages/account/src/index.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/account/src/index.ts#L40)
 
 UserOperation Client for handling high-level flows
 
@@ -6,7 +6,9 @@ UserOperation Client for handling high-level flows
 
 ### Constructor
 
-> **new UserOpClient**(): `UserOpClient`
+```ts
+new UserOpClient(): UserOpClient;
+```
 
 #### Returns
 
@@ -16,23 +18,22 @@ UserOperation Client for handling high-level flows
 
 ### estimateGas()
 
-> `static` **estimateGas**(`bundler`, `op`, `entryPoint`): `Promise`\<`any`\>
+```ts
+static estimateGas(
+   bundler, 
+   op, 
+entryPoint): Promise<any>;
+```
 
-Defined in: [packages/account/src/index.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/account/src/index.ts#L41)
+Defined in: [packages/account/src/index.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/account/src/index.ts#L41)
 
 #### Parameters
 
-##### bundler
-
-`any`
-
-##### op
-
-`any`
-
-##### entryPoint
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `bundler` | `any` |
+| `op` | `any` |
+| `entryPoint` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -42,19 +43,18 @@ Defined in: [packages/account/src/index.ts:41](https://github.com/AAStarCommunit
 
 ### getReceipt()
 
-> `static` **getReceipt**(`bundler`, `hash`): `Promise`\<`any`\>
+```ts
+static getReceipt(bundler, hash): Promise<any>;
+```
 
-Defined in: [packages/account/src/index.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/account/src/index.ts#L55)
+Defined in: [packages/account/src/index.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/account/src/index.ts#L55)
 
 #### Parameters
 
-##### bundler
-
-`any`
-
-##### hash
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `bundler` | `any` |
+| `hash` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -64,23 +64,22 @@ Defined in: [packages/account/src/index.ts:55](https://github.com/AAStarCommunit
 
 ### sendUserOp()
 
-> `static` **sendUserOp**(`bundler`, `op`, `entryPoint`): `Promise`\<`any`\>
+```ts
+static sendUserOp(
+   bundler, 
+   op, 
+entryPoint): Promise<any>;
+```
 
-Defined in: [packages/account/src/index.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/account/src/index.ts#L48)
+Defined in: [packages/account/src/index.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/account/src/index.ts#L48)
 
 #### Parameters
 
-##### bundler
-
-`any`
-
-##### op
-
-`any`
-
-##### entryPoint
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `bundler` | `any` |
+| `op` | `any` |
+| `entryPoint` | `` `0x${string}` `` |
 
 #### Returns
 

@@ -1,50 +1,48 @@
-> **PaymasterFactoryActions** = `object`
+```ts
+type PaymasterFactoryActions = object;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L70)
+Defined in: [packages/core/src/actions/factory.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L70)
 
 ## Properties
 
 ### addImplementation()
 
-> **addImplementation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+addImplementation: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L103)
+Defined in: [packages/core/src/actions/factory.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L103)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### implementation
-
-`Address`
-
-###### version
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `implementation`: `Address`; `version`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.implementation` | `Address` |
+| `args.version` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### calculateAddress()
 
-> **calculateAddress**: (`args`) => `Promise`\<`Address`\>
+```ts
+calculateAddress: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L78)
+Defined in: [packages/core/src/actions/factory.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L78)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; \} |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -54,9 +52,11 @@ Defined in: [packages/core/src/actions/factory.ts:78](https://github.com/AAStarC
 
 ### defaultVersion()
 
-> **defaultVersion**: () => `Promise`\<`string`\>
+```ts
+defaultVersion: () => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L117)
+Defined in: [packages/core/src/actions/factory.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L117)
 
 #### Returns
 
@@ -66,77 +66,60 @@ Defined in: [packages/core/src/actions/factory.ts:117](https://github.com/AAStar
 
 ### deployPaymaster()
 
-> **deployPaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+deployPaymaster: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L73)
+Defined in: [packages/core/src/actions/factory.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L73)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### initData?
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### owner
-
-`Address`
-
-###### version?
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `initData?`: [`Hex`](https://viem.sh/docs/); `owner`: `Address`; `version?`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.initData?` | [`Hex`](https://viem.sh/docs/) |
+| `args.owner` | `Address` |
+| `args.version?` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### deployPaymasterDeterministic()
 
-> **deployPaymasterDeterministic**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+deployPaymasterDeterministic: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L74)
+Defined in: [packages/core/src/actions/factory.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L74)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### initData?
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### owner
-
-`Address`
-
-###### salt
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### version?
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `initData?`: [`Hex`](https://viem.sh/docs/); `owner`: `Address`; `salt`: [`Hex`](https://viem.sh/docs/); `version?`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.initData?` | [`Hex`](https://viem.sh/docs/) |
+| `args.owner` | `Address` |
+| `args.salt` | [`Hex`](https://viem.sh/docs/) |
+| `args.version?` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### ENTRY\_POINT()
 
-> **ENTRY\_POINT**: () => `Promise`\<`Address`\>
+```ts
+ENTRY_POINT: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L109)
+Defined in: [packages/core/src/actions/factory.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L109)
 
 #### Returns
 
@@ -146,9 +129,11 @@ Defined in: [packages/core/src/actions/factory.ts:109](https://github.com/AAStar
 
 ### getAllPaymasters()
 
-> **getAllPaymasters**: () => `Promise`\<`Address`[]\>
+```ts
+getAllPaymasters: () => Promise<Address[]>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L81)
+Defined in: [packages/core/src/actions/factory.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L81)
 
 #### Returns
 
@@ -158,9 +143,11 @@ Defined in: [packages/core/src/actions/factory.ts:81](https://github.com/AAStarC
 
 ### getImplementationV4()
 
-> **getImplementationV4**: () => `Promise`\<`Address`\>
+```ts
+getImplementationV4: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:100](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L100)
+Defined in: [packages/core/src/actions/factory.ts:100](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L100)
 
 #### Returns
 
@@ -170,17 +157,18 @@ Defined in: [packages/core/src/actions/factory.ts:100](https://github.com/AAStar
 
 ### getOperatorByPaymaster()
 
-> **getOperatorByPaymaster**: (`args`) => `Promise`\<`Address`\>
+```ts
+getOperatorByPaymaster: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L89)
+Defined in: [packages/core/src/actions/factory.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L89)
 
 #### Parameters
 
-##### args
-
-###### paymaster
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `paymaster`: `Address`; \} |
+| `args.paymaster` | `Address` |
 
 #### Returns
 
@@ -190,17 +178,18 @@ Defined in: [packages/core/src/actions/factory.ts:89](https://github.com/AAStarC
 
 ### getPaymaster()
 
-> **getPaymaster**: (`args`) => `Promise`\<`Address`\>
+```ts
+getPaymaster: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L79)
+Defined in: [packages/core/src/actions/factory.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L79)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; \} |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -210,17 +199,18 @@ Defined in: [packages/core/src/actions/factory.ts:79](https://github.com/AAStarC
 
 ### getPaymasterByOperator()
 
-> **getPaymasterByOperator**: (`args`) => `Promise`\<`Address`\>
+```ts
+getPaymasterByOperator: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L91)
+Defined in: [packages/core/src/actions/factory.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L91)
 
 #### Parameters
 
-##### args
-
-###### operator
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `operator`: `Address`; \} |
+| `args.operator` | `Address` |
 
 #### Returns
 
@@ -230,9 +220,11 @@ Defined in: [packages/core/src/actions/factory.ts:91](https://github.com/AAStarC
 
 ### getPaymasterCount()
 
-> **getPaymasterCount**: () => `Promise`\<`bigint`\>
+```ts
+getPaymasterCount: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L80)
+Defined in: [packages/core/src/actions/factory.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L80)
 
 #### Returns
 
@@ -242,17 +234,18 @@ Defined in: [packages/core/src/actions/factory.ts:80](https://github.com/AAStarC
 
 ### getPaymasterInfo()
 
-> **getPaymasterInfo**: (`args`) => `Promise`\<`any`\>
+```ts
+getPaymasterInfo: (args) => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L93)
+Defined in: [packages/core/src/actions/factory.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L93)
 
 #### Parameters
 
-##### args
-
-###### paymaster
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `paymaster`: `Address`; \} |
+| `args.paymaster` | `Address` |
 
 #### Returns
 
@@ -262,21 +255,19 @@ Defined in: [packages/core/src/actions/factory.ts:93](https://github.com/AAStarC
 
 ### getPaymasterList()
 
-> **getPaymasterList**: (`args`) => `Promise`\<`Address`[]\>
+```ts
+getPaymasterList: (args) => Promise<Address[]>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L85)
+Defined in: [packages/core/src/actions/factory.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L85)
 
 #### Parameters
 
-##### args
-
-###### limit
-
-`bigint`
-
-###### offset
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `limit`: `bigint`; `offset`: `bigint`; \} |
+| `args.limit` | `bigint` |
+| `args.offset` | `bigint` |
 
 #### Returns
 
@@ -286,17 +277,18 @@ Defined in: [packages/core/src/actions/factory.ts:85](https://github.com/AAStarC
 
 ### hasImplementation()
 
-> **hasImplementation**: (`args`) => `Promise`\<`boolean`\>
+```ts
+hasImplementation: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L95)
+Defined in: [packages/core/src/actions/factory.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L95)
 
 #### Parameters
 
-##### args
-
-###### version
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `version`: `string`; \} |
+| `args.version` | `string` |
 
 #### Returns
 
@@ -306,17 +298,18 @@ Defined in: [packages/core/src/actions/factory.ts:95](https://github.com/AAStarC
 
 ### hasPaymaster()
 
-> **hasPaymaster**: (`args`) => `Promise`\<`boolean`\>
+```ts
+hasPaymaster: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L84)
+Defined in: [packages/core/src/actions/factory.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L84)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; \} |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -326,17 +319,18 @@ Defined in: [packages/core/src/actions/factory.ts:84](https://github.com/AAStarC
 
 ### implementations()
 
-> **implementations**: (`args`) => `Promise`\<`Address`\>
+```ts
+implementations: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L96)
+Defined in: [packages/core/src/actions/factory.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L96)
 
 #### Parameters
 
-##### args
-
-###### version
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `version`: `string`; \} |
+| `args.version` | `string` |
 
 #### Returns
 
@@ -346,17 +340,18 @@ Defined in: [packages/core/src/actions/factory.ts:96](https://github.com/AAStarC
 
 ### isPaymasterDeployed()
 
-> **isPaymasterDeployed**: (`args`) => `Promise`\<`boolean`\>
+```ts
+isPaymasterDeployed: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L82)
+Defined in: [packages/core/src/actions/factory.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L82)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; \} |
+| `args.owner` | `Address` |
 
 #### Returns
 
@@ -366,17 +361,18 @@ Defined in: [packages/core/src/actions/factory.ts:82](https://github.com/AAStarC
 
 ### operatorByPaymaster()
 
-> **operatorByPaymaster**: (`args`) => `Promise`\<`Address`\>
+```ts
+operatorByPaymaster: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L90)
+Defined in: [packages/core/src/actions/factory.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L90)
 
 #### Parameters
 
-##### args
-
-###### paymaster
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `paymaster`: `Address`; \} |
+| `args.paymaster` | `Address` |
 
 #### Returns
 
@@ -386,17 +382,18 @@ Defined in: [packages/core/src/actions/factory.ts:90](https://github.com/AAStarC
 
 ### paymasterByOperator()
 
-> **paymasterByOperator**: (`args`) => `Promise`\<`Address`\>
+```ts
+paymasterByOperator: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L92)
+Defined in: [packages/core/src/actions/factory.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L92)
 
 #### Parameters
 
-##### args
-
-###### operator
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `operator`: `Address`; \} |
+| `args.operator` | `Address` |
 
 #### Returns
 
@@ -406,9 +403,11 @@ Defined in: [packages/core/src/actions/factory.ts:92](https://github.com/AAStarC
 
 ### paymasterFactoryOwner()
 
-> **paymasterFactoryOwner**: () => `Promise`\<`Address`\>
+```ts
+paymasterFactoryOwner: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L112)
+Defined in: [packages/core/src/actions/factory.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L112)
 
 #### Returns
 
@@ -418,9 +417,11 @@ Defined in: [packages/core/src/actions/factory.ts:112](https://github.com/AAStar
 
 ### paymasterFactoryVersion()
 
-> **paymasterFactoryVersion**: () => `Promise`\<`string`\>
+```ts
+paymasterFactoryVersion: () => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L118)
+Defined in: [packages/core/src/actions/factory.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L118)
 
 #### Returns
 
@@ -430,17 +431,18 @@ Defined in: [packages/core/src/actions/factory.ts:118](https://github.com/AAStar
 
 ### paymasterList()
 
-> **paymasterList**: (`args`) => `Promise`\<`Address`\>
+```ts
+paymasterList: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L86)
+Defined in: [packages/core/src/actions/factory.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L86)
 
 #### Parameters
 
-##### args
-
-###### index
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `index`: `bigint`; \} |
+| `args.index` | `bigint` |
 
 #### Returns
 
@@ -450,21 +452,19 @@ Defined in: [packages/core/src/actions/factory.ts:86](https://github.com/AAStarC
 
 ### predictPaymasterAddress()
 
-> **predictPaymasterAddress**: (`args`) => `Promise`\<`Address`\>
+```ts
+predictPaymasterAddress: (args) => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L75)
+Defined in: [packages/core/src/actions/factory.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L75)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
-
-###### salt
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; `salt`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.owner` | `Address` |
+| `args.salt` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -474,9 +474,11 @@ Defined in: [packages/core/src/actions/factory.ts:75](https://github.com/AAStarC
 
 ### REGISTRY()
 
-> **REGISTRY**: () => `Promise`\<`Address`\>
+```ts
+REGISTRY: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L108)
+Defined in: [packages/core/src/actions/factory.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L108)
 
 #### Returns
 
@@ -486,101 +488,98 @@ Defined in: [packages/core/src/actions/factory.ts:108](https://github.com/AAStar
 
 ### renouncePaymasterFactoryOwnership()
 
-> **renouncePaymasterFactoryOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+renouncePaymasterFactoryOwnership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L114)
+Defined in: [packages/core/src/actions/factory.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L114)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setDefaultVersion()
 
-> **setDefaultVersion**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setDefaultVersion: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L105)
+Defined in: [packages/core/src/actions/factory.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L105)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### version
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `version`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.version` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setImplementationV4()
 
-> **setImplementationV4**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setImplementationV4: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L99)
+Defined in: [packages/core/src/actions/factory.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L99)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### impl
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `impl`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.impl` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setRegistry()
 
-> **setRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setRegistry: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L101)
+Defined in: [packages/core/src/actions/factory.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L101)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### registry
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `registry`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.registry` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### totalDeployed()
 
-> **totalDeployed**: () => `Promise`\<`bigint`\>
+```ts
+totalDeployed: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L87)
+Defined in: [packages/core/src/actions/factory.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L87)
 
 #### Returns
 
@@ -590,50 +589,43 @@ Defined in: [packages/core/src/actions/factory.ts:87](https://github.com/AAStarC
 
 ### transferPaymasterFactoryOwnership()
 
-> **transferPaymasterFactoryOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+transferPaymasterFactoryOwnership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L113)
+Defined in: [packages/core/src/actions/factory.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L113)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newOwner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `newOwner`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.newOwner` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### upgradeImplementation()
 
-> **upgradeImplementation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+upgradeImplementation: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/factory.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L104)
+Defined in: [packages/core/src/actions/factory.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/factory.ts#L104)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newImplementation
-
-`Address`
-
-###### version
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `newImplementation`: `Address`; `version`: `string`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.newImplementation` | `Address` |
+| `args.version` | `string` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>

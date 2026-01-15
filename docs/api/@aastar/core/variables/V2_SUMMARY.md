@@ -1,39 +1,20 @@
-> `const` **V2\_SUMMARY**: `object`
+```ts
+const V2_SUMMARY: object;
+```
 
-Defined in: [packages/core/src/contract-versions.ts:364](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contract-versions.ts#L364)
+Defined in: [packages/core/src/contract-versions.ts:364](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L364)
 
 V2 Contract Summary
 
 ## Type Declaration
 
-### allContractsHaveVersion
-
-> `readonly` **allContractsHaveVersion**: `true` = `true`
-
-### categories
-
-> `readonly` **categories**: `object`
-
-#### categories.core
-
-> `readonly` **core**: `5` = `5`
-
-#### categories.monitoring
-
-> `readonly` **monitoring**: `2` = `2`
-
-#### categories.testTokens
-
-> `readonly` **testTokens**: `2` = `2`
-
-#### categories.tokens
-
-> `readonly` **tokens**: `2` = `2`
-
-### latestDeployment
-
-> `readonly` **latestDeployment**: `"2025-11-09"` = `'2025-11-09'`
-
-### totalContracts
-
-> `readonly` **totalContracts**: `11` = `11`
+| Name | Type | Default value | Defined in |
+| ------ | ------ | ------ | ------ |
+| <a id="allcontractshaveversion"></a> `allContractsHaveVersion` | `true` | `true` | [packages/core/src/contract-versions.ts:373](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L373) |
+| <a id="categories"></a> `categories` | `object` | - | [packages/core/src/contract-versions.ts:366](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L366) |
+| `categories.core` | `5` | `5` | [packages/core/src/contract-versions.ts:367](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L367) |
+| `categories.monitoring` | `2` | `2` | [packages/core/src/contract-versions.ts:370](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L370) |
+| `categories.testTokens` | `2` | `2` | [packages/core/src/contract-versions.ts:369](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L369) |
+| `categories.tokens` | `2` | `2` | [packages/core/src/contract-versions.ts:368](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L368) |
+| <a id="latestdeployment"></a> `latestDeployment` | `"2025-11-09"` | `'2025-11-09'` | [packages/core/src/contract-versions.ts:372](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L372) |
+| <a id="totalcontracts"></a> `totalContracts` | `11` | `11` | [packages/core/src/contract-versions.ts:365](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/contract-versions.ts#L365) |

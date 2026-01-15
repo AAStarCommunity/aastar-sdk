@@ -1,21 +1,20 @@
-> **useCreditScore**(`__namedParameters`): `object`
+```ts
+function useCreditScore(__namedParameters): object;
+```
 
 Defined in: packages/dapp/dist/ui/hooks/useCreditScore.d.ts:9
 
 ## Parameters
 
-### \_\_namedParameters
-
-`UseCreditScoreConfig`
+| Parameter | Type |
+| ------ | ------ |
+| `__namedParameters` | `UseCreditScoreConfig` |
 
 ## Returns
 
 `object`
 
-### creditLimit
-
-> **creditLimit**: `bigint` \| `null`
-
-### loading
-
-> **loading**: `boolean`
+| Name | Type | Defined in |
+| ------ | ------ | ------ |
+| `creditLimit` | `bigint` \| `null` | packages/dapp/dist/ui/hooks/useCreditScore.d.ts:10 |
+| `loading` | `boolean` | packages/dapp/dist/ui/hooks/useCreditScore.d.ts:11 |

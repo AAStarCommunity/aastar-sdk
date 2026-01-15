@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L6)
+Defined in: [packages/core/src/actions/StateValidator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L6)
 
 Interface definitions
 
@@ -12,14 +12,18 @@ Interface definitions
 
 ### chain
 
-> **chain**: [`Chain`](https://viem.sh/docs/index.html)
+```ts
+chain: Chain;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L8)
+Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L8)
 
 ***
 
 ### rpcUrl
 
-> **rpcUrl**: `string`
+```ts
+rpcUrl: string;
+```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L7)
+Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L7)

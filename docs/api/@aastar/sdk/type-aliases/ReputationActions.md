@@ -1,74 +1,70 @@
-> **ReputationActions** = `object`
+```ts
+type ReputationActions = object;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L4)
+Defined in: [packages/core/src/actions/reputation.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L4)
 
 ## Properties
 
 ### batchSyncToRegistry()
 
-> **batchSyncToRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+batchSyncToRegistry: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L27)
+Defined in: [packages/core/src/actions/reputation.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L27)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### users
-
-`Address`[]
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `users`: `Address`[]; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.users` | `Address`[] |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### batchUpdateScores()
 
-> **batchUpdateScores**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+batchUpdateScores: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L26)
+Defined in: [packages/core/src/actions/reputation.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L26)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### scores
-
-`bigint`[]
-
-###### users
-
-`Address`[]
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `scores`: `bigint`[]; `users`: `Address`[]; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.scores` | `bigint`[] |
+| `args.users` | `Address`[] |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### boostedCollections()
 
-> **boostedCollections**: (`args`) => `Promise`\<`bigint`\>
+```ts
+boostedCollections: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L60)
+Defined in: [packages/core/src/actions/reputation.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L60)
 
 #### Parameters
 
-##### args
-
-###### collection
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `collection`: `Address`; \} |
+| `args.collection` | `Address` |
 
 #### Returns
 
@@ -78,21 +74,19 @@ Defined in: [packages/core/src/actions/reputation.ts:60](https://github.com/AASt
 
 ### calculateReputation()
 
-> **calculateReputation**: (`args`) => `Promise`\<`bigint`\>
+```ts
+calculateReputation: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L22)
+Defined in: [packages/core/src/actions/reputation.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L22)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `user`: `Address`; \} |
+| `args.community` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -102,21 +96,19 @@ Defined in: [packages/core/src/actions/reputation.ts:22](https://github.com/AASt
 
 ### communityActiveRules()
 
-> **communityActiveRules**: (`args`) => `Promise`\<`boolean`\>
+```ts
+communityActiveRules: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L61)
+Defined in: [packages/core/src/actions/reputation.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L61)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.community` | `Address` |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -126,21 +118,19 @@ Defined in: [packages/core/src/actions/reputation.ts:61](https://github.com/AASt
 
 ### communityReputations()
 
-> **communityReputations**: (`args`) => `Promise`\<`bigint`\>
+```ts
+communityReputations: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L18)
+Defined in: [packages/core/src/actions/reputation.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L18)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `user`: `Address`; \} |
+| `args.community` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -150,21 +140,19 @@ Defined in: [packages/core/src/actions/reputation.ts:18](https://github.com/AASt
 
 ### communityRules()
 
-> **communityRules**: (`args`) => `Promise`\<`boolean`\>
+```ts
+communityRules: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L56)
+Defined in: [packages/core/src/actions/reputation.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L56)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.community` | `Address` |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -174,21 +162,19 @@ Defined in: [packages/core/src/actions/reputation.ts:56](https://github.com/AASt
 
 ### computeScore()
 
-> **computeScore**: (`args`) => `Promise`\<`bigint`\>
+```ts
+computeScore: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L15)
+Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L15)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `user`: `Address`; \} |
+| `args.community` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -198,77 +184,76 @@ Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AASt
 
 ### defaultRule()
 
-> **defaultRule**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
+```ts
+defaultRule: () => Promise<Hex>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L57)
+Defined in: [packages/core/src/actions/reputation.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L57)
 
 #### Returns
 
-`Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hex`](https://viem.sh/docs/)\>
 
 ***
 
 ### disableRule()
 
-> **disableRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+disableRule: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L9)
+Defined in: [packages/core/src/actions/reputation.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L9)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### enableRule()
 
-> **enableRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+enableRule: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L8)
+Defined in: [packages/core/src/actions/reputation.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L8)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### entropyFactors()
 
-> **entropyFactors**: (`args`) => `Promise`\<`bigint`\>
+```ts
+entropyFactors: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L58)
+Defined in: [packages/core/src/actions/reputation.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L58)
 
 #### Parameters
 
-##### args
-
-###### factorId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `factorId`: `bigint`; \} |
+| `args.factorId` | `bigint` |
 
 #### Returns
 
@@ -278,37 +263,39 @@ Defined in: [packages/core/src/actions/reputation.ts:58](https://github.com/AASt
 
 ### getActiveRules()
 
-> **getActiveRules**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)[]\>
+```ts
+getActiveRules: (args) => Promise<Hex[]>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L11)
+Defined in: [packages/core/src/actions/reputation.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L11)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; \} |
+| `args.community` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hex`](https://viem.sh/docs/index.html)[]\>
+`Promise`\<[`Hex`](https://viem.sh/docs/)[]\>
 
 ***
 
 ### getCommunityScore()
 
-> **getCommunityScore**: (`args`) => `Promise`\<`bigint`\>
+```ts
+getCommunityScore: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L17)
+Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L17)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; \} |
+| `args.community` | `Address` |
 
 #### Returns
 
@@ -318,9 +305,11 @@ Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AASt
 
 ### getEntropyFactor()
 
-> **getEntropyFactor**: () => `Promise`\<`bigint`\>
+```ts
+getEntropyFactor: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L41)
+Defined in: [packages/core/src/actions/reputation.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L41)
 
 #### Returns
 
@@ -330,21 +319,19 @@ Defined in: [packages/core/src/actions/reputation.ts:41](https://github.com/AASt
 
 ### getReputationBreakdown()
 
-> **getReputationBreakdown**: (`args`) => `Promise`\<`any`\>
+```ts
+getReputationBreakdown: (args) => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L62)
+Defined in: [packages/core/src/actions/reputation.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L62)
 
 #### Parameters
 
-##### args
-
-###### community
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `community`: `Address`; `user`: `Address`; \} |
+| `args.community` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -354,17 +341,18 @@ Defined in: [packages/core/src/actions/reputation.ts:62](https://github.com/AASt
 
 ### getReputationRule()
 
-> **getReputationRule**: (`args`) => `Promise`\<`any`\>
+```ts
+getReputationRule: (args) => Promise<any>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L7)
+Defined in: [packages/core/src/actions/reputation.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L7)
 
 #### Parameters
 
-##### args
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -374,9 +362,11 @@ Defined in: [packages/core/src/actions/reputation.ts:7](https://github.com/AASta
 
 ### getRuleCount()
 
-> **getRuleCount**: () => `Promise`\<`bigint`\>
+```ts
+getRuleCount: () => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L12)
+Defined in: [packages/core/src/actions/reputation.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L12)
 
 #### Returns
 
@@ -386,17 +376,18 @@ Defined in: [packages/core/src/actions/reputation.ts:12](https://github.com/AASt
 
 ### getUserScore()
 
-> **getUserScore**: (`args`) => `Promise`\<`bigint`\>
+```ts
+getUserScore: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L16)
+Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L16)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -406,17 +397,18 @@ Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AASt
 
 ### isRuleActive()
 
-> **isRuleActive**: (`args`) => `Promise`\<`boolean`\>
+```ts
+isRuleActive: (args) => Promise<boolean>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L10)
+Defined in: [packages/core/src/actions/reputation.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L10)
 
 #### Parameters
 
-##### args
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
@@ -426,17 +418,18 @@ Defined in: [packages/core/src/actions/reputation.ts:10](https://github.com/AASt
 
 ### nftCollectionBoost()
 
-> **nftCollectionBoost**: (`args`) => `Promise`\<`bigint`\>
+```ts
+nftCollectionBoost: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L23)
+Defined in: [packages/core/src/actions/reputation.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L23)
 
 #### Parameters
 
-##### args
-
-###### collection
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `collection`: `Address`; \} |
+| `args.collection` | `Address` |
 
 #### Returns
 
@@ -446,21 +439,19 @@ Defined in: [packages/core/src/actions/reputation.ts:23](https://github.com/AASt
 
 ### nftHoldStart()
 
-> **nftHoldStart**: (`args`) => `Promise`\<`bigint`\>
+```ts
+nftHoldStart: (args) => Promise<bigint>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L59)
+Defined in: [packages/core/src/actions/reputation.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L59)
 
 #### Parameters
 
-##### args
-
-###### collection
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `collection`: `Address`; `user`: `Address`; \} |
+| `args.collection` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -470,9 +461,11 @@ Defined in: [packages/core/src/actions/reputation.ts:59](https://github.com/AASt
 
 ### REGISTRY()
 
-> **REGISTRY**: () => `Promise`\<`Address`\>
+```ts
+REGISTRY: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L44)
+Defined in: [packages/core/src/actions/reputation.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L44)
 
 #### Returns
 
@@ -482,29 +475,32 @@ Defined in: [packages/core/src/actions/reputation.ts:44](https://github.com/AASt
 
 ### renounceReputationOwnership()
 
-> **renounceReputationOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+renounceReputationOwnership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L49)
+Defined in: [packages/core/src/actions/reputation.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L49)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### reputationOwner()
 
-> **reputationOwner**: () => `Promise`\<`Address`\>
+```ts
+reputationOwner: () => Promise<Address>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L47)
+Defined in: [packages/core/src/actions/reputation.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L47)
 
 #### Returns
 
@@ -514,9 +510,11 @@ Defined in: [packages/core/src/actions/reputation.ts:47](https://github.com/AASt
 
 ### reputationVersion()
 
-> **reputationVersion**: () => `Promise`\<`string`\>
+```ts
+reputationVersion: () => Promise<string>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L66)
+Defined in: [packages/core/src/actions/reputation.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L66)
 
 #### Returns
 
@@ -526,258 +524,207 @@ Defined in: [packages/core/src/actions/reputation.ts:66](https://github.com/AASt
 
 ### setCommunityReputation()
 
-> **setCommunityReputation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setCommunityReputation: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L52)
+Defined in: [packages/core/src/actions/reputation.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L52)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### community
-
-`Address`
-
-###### reputation
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `community`: `Address`; `reputation`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.community` | `Address` |
+| `args.reputation` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setEntropyFactor()
 
-> **setEntropyFactor**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setEntropyFactor: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L40)
+Defined in: [packages/core/src/actions/reputation.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L40)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### factor
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `factor`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.factor` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setNFTBoost()
 
-> **setNFTBoost**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setNFTBoost: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L63)
+Defined in: [packages/core/src/actions/reputation.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L63)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### boost
-
-`bigint`
-
-###### collection
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `boost`: `bigint`; `collection`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.boost` | `bigint` |
+| `args.collection` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setRegistry()
 
-> **setRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setRegistry: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L39)
+Defined in: [packages/core/src/actions/reputation.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L39)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### registry
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `registry`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.registry` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setReputationRule()
 
-> **setReputationRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setReputationRule: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L6)
+Defined in: [packages/core/src/actions/reputation.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L6)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### rule
-
-`any`
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `rule`: `any`; `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.rule` | `any` |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### setRule()
 
-> **setRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+setRule: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L21)
+Defined in: [packages/core/src/actions/reputation.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L21)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### rule
-
-`any`
-
-###### ruleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `rule`: `any`; `ruleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.rule` | `any` |
+| `args.ruleId` | [`Hex`](https://viem.sh/docs/) |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### syncToRegistry()
 
-> **syncToRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+syncToRegistry: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L28)
+Defined in: [packages/core/src/actions/reputation.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L28)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### activities
-
-`bigint`[][]
-
-###### communities
-
-`Address`[]
-
-###### epoch
-
-`bigint`
-
-###### proof
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### ruleIds
-
-[`Hex`](https://viem.sh/docs/index.html)[][]
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `activities`: `bigint`[][]; `communities`: `Address`[]; `epoch`: `bigint`; `proof`: [`Hex`](https://viem.sh/docs/); `ruleIds`: [`Hex`](https://viem.sh/docs/)[][]; `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.activities` | `bigint`[][] |
+| `args.communities` | `Address`[] |
+| `args.epoch` | `bigint` |
+| `args.proof` | [`Hex`](https://viem.sh/docs/) |
+| `args.ruleIds` | [`Hex`](https://viem.sh/docs/)[][] |
+| `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### transferReputationOwnership()
 
-> **transferReputationOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+transferReputationOwnership: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L48)
+Defined in: [packages/core/src/actions/reputation.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L48)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newOwner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `newOwner`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.newOwner` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
 
 ***
 
 ### updateNFTHoldStart()
 
-> **updateNFTHoldStart**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+```ts
+updateNFTHoldStart: (args) => Promise<Hash>;
+```
 
-Defined in: [packages/core/src/actions/reputation.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/reputation.ts#L53)
+Defined in: [packages/core/src/actions/reputation.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/reputation.ts#L53)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### collection
-
-`Address`
-
-###### start
-
-`bigint`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `collection`: `Address`; `start`: `bigint`; `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args.collection` | `Address` |
+| `args.start` | `bigint` |
+| `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+`Promise`\<[`Hash`](https://viem.sh/docs/)\>
