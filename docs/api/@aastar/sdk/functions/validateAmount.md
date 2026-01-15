@@ -6,7 +6,7 @@ function validateAmount(
    max?): bigint;
 ```
 
-Defined in: [packages/core/src/utils/validation.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/utils/validation.ts#L31)
+Defined in: [packages/core/src/utils/validation.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/utils/validation.ts#L31)
 
 Validates a BigInt amount.
 

@@ -2,7 +2,7 @@
 type GaslessReadinessReport = object;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/
 details: object;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L14)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterUtils.ts#L14)
 
 #### ethUsdPrice
 
@@ -64,7 +64,7 @@ userTokenBalance: bigint;
 isReady: boolean;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
 
 ***
 
@@ -74,4 +74,4 @@ Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:12](https://github.com/
 issues: string[];
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterUtils.ts#L13)

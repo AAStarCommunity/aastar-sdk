@@ -5,7 +5,7 @@ function getUserOpHash(
    chainId): `0x${string}`;
 ```
 
-Defined in: [packages/account/src/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/account/src/index.ts#L16)
+Defined in: [packages/account/src/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/account/src/index.ts#L16)
 
 Local implementation of EntryPoint v0.7 getUserOpHash
 

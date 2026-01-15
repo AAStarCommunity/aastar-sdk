@@ -26,6 +26,7 @@
   "typeDeclarationFormat": "Table",
   "useCodeBlocks": true,
   "expandObjects": false,
+  "mergeReadme": true,
   "validation": {
     "notDocumented": false,
     "invalidLink": false,
@@ -53,9 +54,5 @@
       "@aastar/sdk/*": ["./packages/sdk/src/*"]
     }
   },
-  "externalSymbolLinkMappings": {
-    "viem": {
-      "*": "https://viem.sh/docs/"
-    }
-  }
+  "externalSymbolLinkMappings": {}
 }

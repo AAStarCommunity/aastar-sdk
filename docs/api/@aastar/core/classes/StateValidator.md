@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L44)
+Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/StateValidator.ts#L44)
 
 ## Constructors
 
@@ -20,7 +20,7 @@ new StateValidator(): StateValidator;
 static getAccountBalances(params): Promise<AccountBalance[]>;
 ```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L58)
+Defined in: [packages/core/src/actions/StateValidator.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/StateValidator.ts#L58)
 
 Batch fetch balances for multiple accounts
 
@@ -28,10 +28,10 @@ Batch fetch balances for multiple accounts
 
 | Parameter | Type |
 | ------ | ------ |
-| `params` | \{ `addresses`: `` `0x${string}` ``[]; `aPNTsAddress?`: `` `0x${string}` ``; `chain`: [`Chain`](https://viem.sh/docs/); `gTokenAddress?`: `` `0x${string}` ``; `rpcUrl`: `string`; `xPNTsAddress?`: `` `0x${string}` ``; \} |
+| `params` | \{ `addresses`: `` `0x${string}` ``[]; `aPNTsAddress?`: `` `0x${string}` ``; `chain`: `Chain`; `gTokenAddress?`: `` `0x${string}` ``; `rpcUrl`: `string`; `xPNTsAddress?`: `` `0x${string}` ``; \} |
 | `params.addresses` | `` `0x${string}` ``[] |
 | `params.aPNTsAddress?` | `` `0x${string}` `` |
-| `params.chain` | [`Chain`](https://viem.sh/docs/) |
+| `params.chain` | `Chain` |
 | `params.gTokenAddress?` | `` `0x${string}` `` |
 | `params.rpcUrl` | `string` |
 | `params.xPNTsAddress?` | `` `0x${string}` `` |
@@ -48,7 +48,7 @@ Batch fetch balances for multiple accounts
 static validateDeployment(params): Promise<ValidationResult>;
 ```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L232)
+Defined in: [packages/core/src/actions/StateValidator.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/StateValidator.ts#L232)
 
 Deployment Validation
 
@@ -70,7 +70,7 @@ Deployment Validation
 static validateETHBalance(params): Promise<ValidationResult>;
 ```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L153)
+Defined in: [packages/core/src/actions/StateValidator.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/StateValidator.ts#L153)
 
 ETH Balance Validation
 
@@ -92,7 +92,7 @@ ETH Balance Validation
 static validateRole(params): Promise<ValidationResult>;
 ```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L114)
+Defined in: [packages/core/src/actions/StateValidator.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/StateValidator.ts#L114)
 
 Role Validation
 
@@ -114,7 +114,7 @@ Role Validation
 static validateTokenBalance(params): Promise<ValidationResult>;
 ```
 
-Defined in: [packages/core/src/actions/StateValidator.ts:189](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/StateValidator.ts#L189)
+Defined in: [packages/core/src/actions/StateValidator.ts:189](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/StateValidator.ts#L189)
 
 Token Balance Validation
 

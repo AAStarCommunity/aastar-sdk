@@ -2,4 +2,4 @@
 const PaymasterV4ABI: any;
 ```
 
-Defined in: [packages/core/src/abis/index.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/abis/index.ts#L51)
+Defined in: [packages/core/src/abis/index.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/abis/index.ts#L51)

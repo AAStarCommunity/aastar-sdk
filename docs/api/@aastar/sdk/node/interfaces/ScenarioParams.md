@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/testScenarios.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L13)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L13)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:13](https://github.com/AASt
 amount: bigint;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L18)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L18)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:18](https://github.com/AASt
 chainId: number;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L20)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L20)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:20](https://github.com/AASt
 entryPoint: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L19)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L19)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:19](https://github.com/AASt
 optional gasToken: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L27)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L27)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:27](https://github.com/AASt
 optional nonceKey: bigint;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L26)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L26)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:26](https://github.com/AASt
 optional operator: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L23)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L23)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:23](https://github.com/AASt
 ownerAccount: any;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L15)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L15)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:15](https://github.com/AASt
 optional paymaster: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L22)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L22)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:22](https://github.com/AASt
 optional paymasterGasLimit: bigint;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L24)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L24)
 
 ***
 
@@ -98,7 +98,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:24](https://github.com/AASt
 optional paymasterPostOpGasLimit: bigint;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L25)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L25)
 
 ***
 
@@ -108,7 +108,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:25](https://github.com/AASt
 publicClient: object;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L21)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L21)
 
 #### account
 
@@ -175,13 +175,13 @@ Executes a new message call immediately without submitting a transaction to the 
 
 | Parameter | Type |
 | ------ | ------ |
-| `parameters` | [`CallParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`\> |
+| `parameters` | `CallParameters`\<`Chain` \| `undefined`\> |
 
 ##### Returns
 
-`Promise`\<[`CallReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`CallReturnType`\>
 
-The call data. [CallReturnType](https://viem.sh/docs/)
+The call data. CallReturnType
 
 ##### Example
 
@@ -248,16 +248,16 @@ Creates an EIP-2930 access list that you can include in a transaction.
 
 | Parameter | Type |
 | ------ | ------ |
-| `parameters` | [`CreateAccessListParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`\> |
+| `parameters` | `CreateAccessListParameters`\<`Chain` \| `undefined`\> |
 
 ##### Returns
 
 `Promise`\<\{
-  `accessList`: [`AccessList`](https://viem.sh/docs/);
+  `accessList`: `AccessList`;
   `gasUsed`: `bigint`;
 \}\>
 
-The call data. [CreateAccessListReturnType](https://viem.sh/docs/)
+The call data. CreateAccessListReturnType
 
 ##### Example
 
@@ -307,14 +307,14 @@ Creates a Filter to listen for new block hashes that can be used with [`getFilte
 
 `Promise`\<\{
   `id`: `` `0x${string}` ``;
-  `request`: [`EIP1193RequestFn`](https://viem.sh/docs/)\<readonly \[\{
+  `request`: `EIP1193RequestFn`\<readonly \[\{
      `Method`: `"eth_getFilterChanges"`;
      `Parameters`: \[`` `0x${string}` ``\];
-     `ReturnType`: `` `0x${string}` ``[] \| [`RpcLog`](https://viem.sh/docs/)[];
+     `ReturnType`: `` `0x${string}` ``[] \| `RpcLog`[];
    \}, \{
      `Method`: `"eth_getFilterLogs"`;
      `Parameters`: \[`` `0x${string}` ``\];
-     `ReturnType`: [`RpcLog`](https://viem.sh/docs/)[];
+     `ReturnType`: `RpcLog`[];
    \}, \{
      `Method`: `"eth_uninstallFilter"`;
      `Parameters`: \[`` `0x${string}` ``\];
@@ -323,7 +323,7 @@ Creates a Filter to listen for new block hashes that can be used with [`getFilte
   `type`: `"block"`;
 \}\>
 
-Filter. [CreateBlockFilterReturnType](https://viem.sh/docs/)
+Filter. CreateBlockFilterReturnType
 
 ##### Example
 
@@ -357,20 +357,20 @@ Creates a Filter to retrieve event logs that can be used with [`getFilterChanges
 | `eventName` *extends* `string` \| `undefined` | - |
 | `args` *extends* readonly `unknown`[] \| `Record`\<`string`, `unknown`\> \| `undefined` | - |
 | `strict` *extends* `boolean` \| `undefined` | `undefined` |
-| `fromBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `toBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `fromBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `toBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`CreateContractEventFilterParameters`](https://viem.sh/docs/)\<`abi`, `eventName`, `args`, `strict`, `fromBlock`, `toBlock`\> | [CreateContractEventFilterParameters](https://viem.sh/docs/) |
+| `args` | `CreateContractEventFilterParameters`\<`abi`, `eventName`, `args`, `strict`, `fromBlock`, `toBlock`\> | CreateContractEventFilterParameters |
 
 ##### Returns
 
-`Promise`\<[`CreateContractEventFilterReturnType`](https://viem.sh/docs/)\<`abi`, `eventName`, `args`, `strict`, `fromBlock`, `toBlock`\>\>
+`Promise`\<`CreateContractEventFilterReturnType`\<`abi`, `eventName`, `args`, `strict`, `fromBlock`, `toBlock`\>\>
 
-[`Filter`](https://viem.sh/docs/glossary/types#filter). [CreateContractEventFilterReturnType](https://viem.sh/docs/)
+[`Filter`](https://viem.sh/docs/glossary/types#filter). CreateContractEventFilterReturnType
 
 ##### Example
 
@@ -405,22 +405,22 @@ Creates a [`Filter`](https://viem.sh/docs/glossary/types#filter) to listen for n
 | `abiEvent` *extends* `AbiEvent` \| `undefined` | `undefined` |
 | `abiEvents` *extends* readonly `unknown`[] \| readonly `AbiEvent`[] \| `undefined` | `abiEvent` *extends* `AbiEvent` ? \[`abiEvent`\<`abiEvent`\>\] : `undefined` |
 | `strict` *extends* `boolean` \| `undefined` | `undefined` |
-| `fromBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `toBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `_EventName` *extends* `string` \| `undefined` | [`MaybeAbiEventName`](https://viem.sh/docs/)\<`abiEvent`\> |
+| `fromBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `toBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `_EventName` *extends* `string` \| `undefined` | `MaybeAbiEventName`\<`abiEvent`\> |
 | `_Args` *extends* readonly `unknown`[] \| `Record`\<`string`, `unknown`\> \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args?` | [`CreateEventFilterParameters`](https://viem.sh/docs/)\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`, `_EventName`, `_Args`\> | [CreateEventFilterParameters](https://viem.sh/docs/) |
+| `args?` | `CreateEventFilterParameters`\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`, `_EventName`, `_Args`\> | CreateEventFilterParameters |
 
 ##### Returns
 
 `Promise`\<\{ \[K in string \| number \| symbol\]: Filter\<"event", abiEvents, \_EventName, \_Args, strict, fromBlock, toBlock\>\[K\] \}\>
 
-[`Filter`](https://viem.sh/docs/glossary/types#filter). [CreateEventFilterReturnType](https://viem.sh/docs/)
+[`Filter`](https://viem.sh/docs/glossary/types#filter). CreateEventFilterReturnType
 
 ##### Example
 
@@ -468,14 +468,14 @@ Creates a Filter to listen for new pending transaction hashes that can be used w
 
 `Promise`\<\{
   `id`: `` `0x${string}` ``;
-  `request`: [`EIP1193RequestFn`](https://viem.sh/docs/)\<readonly \[\{
+  `request`: `EIP1193RequestFn`\<readonly \[\{
      `Method`: `"eth_getFilterChanges"`;
      `Parameters`: \[`` `0x${string}` ``\];
-     `ReturnType`: `` `0x${string}` ``[] \| [`RpcLog`](https://viem.sh/docs/)[];
+     `ReturnType`: `` `0x${string}` ``[] \| `RpcLog`[];
    \}, \{
      `Method`: `"eth_getFilterLogs"`;
      `Parameters`: \[`` `0x${string}` ``\];
-     `ReturnType`: [`RpcLog`](https://viem.sh/docs/)[];
+     `ReturnType`: `RpcLog`[];
    \}, \{
      `Method`: `"eth_uninstallFilter"`;
      `Parameters`: \[`` `0x${string}` ``\];
@@ -484,7 +484,7 @@ Creates a Filter to listen for new pending transaction hashes that can be used w
   `type`: `"transaction"`;
 \}\>
 
-[`Filter`](https://viem.sh/docs/glossary/types#filter). [CreateBlockFilterReturnType](https://viem.sh/docs/)
+[`Filter`](https://viem.sh/docs/glossary/types#filter). CreateBlockFilterReturnType
 
 ##### Example
 
@@ -514,7 +514,7 @@ Estimates the gas required to successfully execute a contract write function cal
 
 | Type Parameter |
 | ------ |
-| `chain` *extends* [`Chain`](https://viem.sh/docs/) \| `undefined` |
+| `chain` *extends* `Chain` \| `undefined` |
 | `abi` *extends* readonly `unknown`[] \| `Abi` |
 | `functionName` *extends* `string` |
 | `args` *extends* `unknown` |
@@ -523,13 +523,13 @@ Estimates the gas required to successfully execute a contract write function cal
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`EstimateContractGasParameters`](https://viem.sh/docs/)\<`abi`, `functionName`, `args`, `chain`\> | [EstimateContractGasParameters](https://viem.sh/docs/) |
+| `args` | `EstimateContractGasParameters`\<`abi`, `functionName`, `args`, `chain`\> | EstimateContractGasParameters |
 
 ##### Returns
 
 `Promise`\<`bigint`\>
 
-The gas estimate (in wei). [EstimateContractGasReturnType](https://viem.sh/docs/)
+The gas estimate (in wei). EstimateContractGasReturnType
 
 ##### Remarks
 
@@ -568,20 +568,20 @@ in the next block.
 
 | Type Parameter | Default type |
 | ------ | ------ |
-| `chainOverride` *extends* [`Chain`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `type` *extends* [`FeeValuesType`](https://viem.sh/docs/) | `"eip1559"` |
+| `chainOverride` *extends* `Chain` \| `undefined` | `undefined` |
+| `type` *extends* `FeeValuesType` | `"eip1559"` |
 
 ##### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args?` | [`EstimateFeesPerGasParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`, `chainOverride`, `type`\> |
+| `args?` | `EstimateFeesPerGasParameters`\<`Chain` \| `undefined`, `chainOverride`, `type`\> |
 
 ##### Returns
 
-`Promise`\<[`EstimateFeesPerGasReturnType`](https://viem.sh/docs/)\<`type`\>\>
+`Promise`\<`EstimateFeesPerGasReturnType`\<`type`\>\>
 
-An estimate (in wei) for the fees per gas. [EstimateFeesPerGasReturnType](https://viem.sh/docs/)
+An estimate (in wei) for the fees per gas. EstimateFeesPerGasReturnType
 
 ##### Example
 
@@ -612,13 +612,13 @@ Estimates the gas necessary to complete a transaction without submitting it to t
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`EstimateGasParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`\> | [EstimateGasParameters](https://viem.sh/docs/) |
+| `args` | `EstimateGasParameters`\<`Chain` \| `undefined`\> | EstimateGasParameters |
 
 ##### Returns
 
 `Promise`\<`bigint`\>
 
-The gas estimate (in wei). [EstimateGasReturnType](https://viem.sh/docs/)
+The gas estimate (in wei). EstimateGasReturnType
 
 ##### Example
 
@@ -652,7 +652,7 @@ to be included in the next block.
 
 | Type Parameter | Default type |
 | ------ | ------ |
-| `chainOverride` *extends* [`Chain`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `chainOverride` *extends* `Chain` \| `undefined` | `undefined` |
 
 ##### Parameters
 
@@ -665,7 +665,7 @@ to be included in the next block.
 
 `Promise`\<`bigint`\>
 
-An estimate (in wei) for the max priority fee per gas. [EstimateMaxPriorityFeePerGasReturnType](https://viem.sh/docs/)
+An estimate (in wei) for the max priority fee per gas. EstimateMaxPriorityFeePerGasReturnType
 
 ##### Example
 
@@ -699,7 +699,7 @@ extend: <client>(fn) => Client<Transport, Chain | undefined, undefined, PublicRp
 
 | Type Parameter |
 | ------ |
-| `client` *extends* `object` & [`ExactPartial`](https://viem.sh/docs/)\<[`ExtendableProtectedActions`](https://viem.sh/docs/)\<[`Transport`](https://viem.sh/docs/), [`Chain`](https://viem.sh/docs/) \| `undefined`, `undefined`\>\> |
+| `client` *extends* `object` & `ExactPartial`\<`ExtendableProtectedActions`\<`Transport`, `Chain` \| `undefined`, `undefined`\>\> |
 
 ##### Parameters
 
@@ -709,7 +709,7 @@ extend: <client>(fn) => Client<Transport, Chain | undefined, undefined, PublicRp
 
 ##### Returns
 
-[`Client`](https://viem.sh/docs/)\<[`Transport`](https://viem.sh/docs/), [`Chain`](https://viem.sh/docs/) \| `undefined`, `undefined`, [`PublicRpcSchema`](https://viem.sh/docs/), \{ \[K in string \| number \| symbol\]: client\[K\] \} & [`PublicActions`](https://viem.sh/docs/)\<[`Transport`](https://viem.sh/docs/), [`Chain`](https://viem.sh/docs/) \| `undefined`\>\>
+`Client`\<`Transport`, `Chain` \| `undefined`, `undefined`, `PublicRpcSchema`, \{ \[K in string \| number \| symbol\]: client\[K\] \} & `PublicActions`\<`Transport`, `Chain` \| `undefined`\>\>
 
 #### fillTransaction()
 
@@ -725,20 +725,20 @@ Fills a transaction request with the necessary fields to be signed over.
 
 | Type Parameter | Default type |
 | ------ | ------ |
-| `chainOverride` *extends* [`Chain`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `accountOverride` *extends* `` `0x${string}` `` \| [`Account`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `chainOverride` *extends* `Chain` \| `undefined` | `undefined` |
+| `accountOverride` *extends* `` `0x${string}` `` \| `Account` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`FillTransactionParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`, [`Account`](https://viem.sh/docs/) \| `undefined`, `chainOverride`, `accountOverride`\> |
+| `args` | `FillTransactionParameters`\<`Chain` \| `undefined`, `Account` \| `undefined`, `chainOverride`, `accountOverride`\> |
 
 ##### Returns
 
-`Promise`\<[`FillTransactionReturnType`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`, `chainOverride`\>\>
+`Promise`\<`FillTransactionReturnType`\<`Chain` \| `undefined`, `chainOverride`\>\>
 
-The filled transaction. [FillTransactionReturnType](https://viem.sh/docs/)
+The filled transaction. FillTransactionReturnType
 
 ##### Example
 
@@ -772,13 +772,13 @@ Returns the balance of an address in wei.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetBalanceParameters`](https://viem.sh/docs/) | [GetBalanceParameters](https://viem.sh/docs/) |
+| `args` | `GetBalanceParameters` | GetBalanceParameters |
 
 ##### Returns
 
 `Promise`\<`bigint`\>
 
-The balance of the address in wei. [GetBalanceReturnType](https://viem.sh/docs/)
+The balance of the address in wei. GetBalanceReturnType
 
 ##### Remarks
 
@@ -824,7 +824,7 @@ Returns the base fee per blob gas in wei.
 
 `Promise`\<`bigint`\>
 
-The blob base fee (in wei). [GetBlobBaseFeeReturnType](https://viem.sh/docs/)
+The blob base fee (in wei). GetBlobBaseFeeReturnType
 
 ##### Example
 
@@ -1017,13 +1017,13 @@ Returns information about a block at a block number, hash, or tag.
 | Type Parameter | Default type |
 | ------ | ------ |
 | `includeTransactions` *extends* `boolean` | `false` |
-| `blockTag` *extends* [`BlockTag`](https://viem.sh/docs/) | `"latest"` |
+| `blockTag` *extends* `BlockTag` | `"latest"` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args?` | [`GetBlockParameters`](https://viem.sh/docs/)\<`includeTransactions`, `blockTag`\> | [GetBlockParameters](https://viem.sh/docs/) |
+| `args?` | `GetBlockParameters`\<`includeTransactions`, `blockTag`\> | GetBlockParameters |
 
 ##### Returns
 
@@ -1078,7 +1078,7 @@ Returns information about a block at a block number, hash, or tag.
      `yParity?`: `undefined`;
    \}
      \| \{
-     `accessList`: [`AccessList`](https://viem.sh/docs/);
+     `accessList`: `AccessList`;
      `authorizationList?`: `undefined`;
      `blobVersionedHashes?`: `undefined`;
      `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
@@ -1104,7 +1104,7 @@ Returns information about a block at a block number, hash, or tag.
      `yParity`: `number`;
    \}
      \| \{
-     `accessList`: [`AccessList`](https://viem.sh/docs/);
+     `accessList`: `AccessList`;
      `authorizationList?`: `undefined`;
      `blobVersionedHashes?`: `undefined`;
      `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
@@ -1130,7 +1130,7 @@ Returns information about a block at a block number, hash, or tag.
      `yParity`: `number`;
    \}
      \| \{
-     `accessList`: [`AccessList`](https://viem.sh/docs/);
+     `accessList`: `AccessList`;
      `authorizationList?`: `undefined`;
      `blobVersionedHashes`: readonly `` `0x${string}` ``[];
      `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
@@ -1156,8 +1156,8 @@ Returns information about a block at a block number, hash, or tag.
      `yParity`: `number`;
    \}
      \| \{
-     `accessList`: [`AccessList`](https://viem.sh/docs/);
-     `authorizationList`: [`SignedAuthorizationList`](https://viem.sh/docs/);
+     `accessList`: `AccessList`;
+     `authorizationList`: `SignedAuthorizationList`;
      `blobVersionedHashes?`: `undefined`;
      `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
      `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`;
@@ -1183,11 +1183,11 @@ Returns information about a block at a block number, hash, or tag.
   \})[] : `` `0x${string}` ``[];
   `transactionsRoot`: `` `0x${string}` ``;
   `uncles`: `` `0x${string}` ``[];
-  `withdrawals?`: [`Withdrawal`](https://viem.sh/docs/)[];
+  `withdrawals?`: `Withdrawal`[];
   `withdrawalsRoot?`: `` `0x${string}` ``;
 \}\>
 
-Information about the block. [GetBlockReturnType](https://viem.sh/docs/)
+Information about the block. GetBlockReturnType
 
 ##### Example
 
@@ -1218,13 +1218,13 @@ Returns the number of the most recent block seen.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args?` | [`GetBlockNumberParameters`](https://viem.sh/docs/) | [GetBlockNumberParameters](https://viem.sh/docs/) |
+| `args?` | `GetBlockNumberParameters` | GetBlockNumberParameters |
 
 ##### Returns
 
 `Promise`\<`bigint`\>
 
-The number of the block. [GetBlockNumberReturnType](https://viem.sh/docs/)
+The number of the block. GetBlockNumberReturnType
 
 ##### Example
 
@@ -1257,13 +1257,13 @@ Returns the number of Transactions at a block number, hash, or tag.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args?` | [`GetBlockTransactionCountParameters`](https://viem.sh/docs/) | [GetBlockTransactionCountParameters](https://viem.sh/docs/) |
+| `args?` | `GetBlockTransactionCountParameters` | GetBlockTransactionCountParameters |
 
 ##### Returns
 
 `Promise`\<`number`\>
 
-The block transaction count. [GetBlockTransactionCountReturnType](https://viem.sh/docs/)
+The block transaction count. GetBlockTransactionCountReturnType
 
 ##### Example
 
@@ -1288,11 +1288,11 @@ getBytecode: (args) => Promise<GetCodeReturnType>;
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`GetCodeParameters`](https://viem.sh/docs/) |
+| `args` | `GetCodeParameters` |
 
 ##### Returns
 
-`Promise`\<[`GetCodeReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetCodeReturnType`\>
 
 ##### Deprecated
 
@@ -1313,7 +1313,7 @@ Returns the chain ID associated with the current network.
 
 `Promise`\<`number`\>
 
-The current chain ID. [GetChainIdReturnType](https://viem.sh/docs/)
+The current chain ID. GetChainIdReturnType
 
 ##### Example
 
@@ -1344,11 +1344,11 @@ Retrieves the bytecode at an address.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetCodeParameters`](https://viem.sh/docs/) | GetBytecodeParameters |
+| `args` | `GetCodeParameters` | GetBytecodeParameters |
 
 ##### Returns
 
-`Promise`\<[`GetCodeReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetCodeReturnType`\>
 
 The contract's bytecode. GetBytecodeReturnType
 
@@ -1385,20 +1385,20 @@ Returns a list of event logs emitted by a contract.
 | `abi` *extends* readonly `unknown`[] \| `Abi` | - |
 | `eventName` *extends* `string` \| `undefined` | `undefined` |
 | `strict` *extends* `boolean` \| `undefined` | `undefined` |
-| `fromBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `toBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `fromBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `toBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`GetContractEventsParameters`](https://viem.sh/docs/)\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\> |
+| `args` | `GetContractEventsParameters`\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\> |
 
 ##### Returns
 
-`Promise`\<[`GetContractEventsReturnType`](https://viem.sh/docs/)\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
+`Promise`\<`GetContractEventsReturnType`\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
 
-A list of event logs. [GetContractEventsReturnType](https://viem.sh/docs/)
+A list of event logs. GetContractEventsReturnType
 
 ##### Example
 
@@ -1430,13 +1430,13 @@ Reads the EIP-712 domain from a contract, based on the ERC-5267 specification.
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`GetEip712DomainParameters`](https://viem.sh/docs/) |
+| `args` | `GetEip712DomainParameters` |
 
 ##### Returns
 
-`Promise`\<[`GetEip712DomainReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetEip712DomainReturnType`\>
 
-The EIP-712 domain, fields, and extensions. [GetEip712DomainReturnType](https://viem.sh/docs/)
+The EIP-712 domain, fields, and extensions. GetEip712DomainReturnType
 
 ##### Example
 
@@ -1479,9 +1479,9 @@ Gets address for ENS name.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `coinType?`: `bigint`; `gatewayUrls?`: `string`[]; `name`: `string`; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | [GetEnsAddressParameters](https://viem.sh/docs/) |
+| `args` | \{ `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `coinType?`: `bigint`; `gatewayUrls?`: `string`[]; `name`: `string`; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | GetEnsAddressParameters |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
 | `args.coinType?` | `bigint` | ENSIP-9 compliant coinType (chain) to get ENS address for. To get the `coinType` for a chain id, use the `toCoinType` function: `import { toCoinType } from 'viem' import { base } from 'viem/chains' const coinType = toCoinType(base.id)` **Default** `60n` |
 | `args.gatewayUrls?` | `string`[] | Universal Resolver gateway URLs to use for resolving CCIP-read requests. |
 | `args.name` | `string` | Name to get the address for. |
@@ -1490,9 +1490,9 @@ Gets address for ENS name.
 
 ##### Returns
 
-`Promise`\<[`GetEnsAddressReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetEnsAddressReturnType`\>
 
-Address for ENS name or `null` if not found. [GetEnsAddressReturnType](https://viem.sh/docs/)
+Address for ENS name or `null` if not found. GetEnsAddressReturnType
 
 ##### Remarks
 
@@ -1532,10 +1532,10 @@ Gets the avatar of an ENS name.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `assetGatewayUrls?`: [`AssetGatewayUrls`](https://viem.sh/docs/); `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `gatewayUrls?`: `string`[]; `name`: `string`; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | [GetEnsAvatarParameters](https://viem.sh/docs/) |
-| `args.assetGatewayUrls?` | [`AssetGatewayUrls`](https://viem.sh/docs/) | Gateway urls to resolve IPFS and/or Arweave assets. |
+| `args` | \{ `assetGatewayUrls?`: `AssetGatewayUrls`; `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `gatewayUrls?`: `string`[]; `name`: `string`; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | GetEnsAvatarParameters |
+| `args.assetGatewayUrls?` | `AssetGatewayUrls` | Gateway urls to resolve IPFS and/or Arweave assets. |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
 | `args.gatewayUrls?` | `string`[] | Universal Resolver gateway URLs to use for resolving CCIP-read requests. |
 | `args.name` | `string` | ENS name to get Text for. |
 | `args.strict?` | `boolean` | Whether or not to throw errors propagated from the ENS Universal Resolver Contract. |
@@ -1543,9 +1543,9 @@ Gets the avatar of an ENS name.
 
 ##### Returns
 
-`Promise`\<[`GetEnsAvatarReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetEnsAvatarReturnType`\>
 
-Avatar URI or `null` if not found. [GetEnsAvatarReturnType](https://viem.sh/docs/)
+Avatar URI or `null` if not found. GetEnsAvatarReturnType
 
 ##### Remarks
 
@@ -1585,10 +1585,10 @@ Gets primary name for specified address.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `address`: `` `0x${string}` ``; `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `coinType?`: `bigint`; `gatewayUrls?`: `string`[]; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | [GetEnsNameParameters](https://viem.sh/docs/) |
+| `args` | \{ `address`: `` `0x${string}` ``; `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `coinType?`: `bigint`; `gatewayUrls?`: `string`[]; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | GetEnsNameParameters |
 | `args.address` | `` `0x${string}` `` | Address to get ENS name for. |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
 | `args.coinType?` | `bigint` | ENSIP-9 compliant coinType (chain) to get ENS name for. To get the `coinType` for a chain id, use the `toCoinType` function: `import { toCoinType } from 'viem' import { base } from 'viem/chains' const coinType = toCoinType(base.id)` **Default** `60n` |
 | `args.gatewayUrls?` | `string`[] | Universal Resolver gateway URLs to use for resolving CCIP-read requests. |
 | `args.strict?` | `boolean` | Whether or not to throw errors propagated from the ENS Universal Resolver Contract. |
@@ -1596,9 +1596,9 @@ Gets primary name for specified address.
 
 ##### Returns
 
-`Promise`\<[`GetEnsNameReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetEnsNameReturnType`\>
 
-Name or `null` if not found. [GetEnsNameReturnType](https://viem.sh/docs/)
+Name or `null` if not found. GetEnsNameReturnType
 
 ##### Remarks
 
@@ -1635,9 +1635,9 @@ Gets resolver for ENS name.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `name`: `string`; `universalResolverAddress?`: `` `0x${string}` ``; \} | [GetEnsResolverParameters](https://viem.sh/docs/) |
+| `args` | \{ `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `name`: `string`; `universalResolverAddress?`: `` `0x${string}` ``; \} | GetEnsResolverParameters |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
 | `args.name` | `string` | Name to get the address for. |
 | `args.universalResolverAddress?` | `` `0x${string}` `` | Address of ENS Universal Resolver Contract. |
 
@@ -1645,7 +1645,7 @@ Gets resolver for ENS name.
 
 `Promise`\<`` `0x${string}` ``\>
 
-Address for ENS resolver. [GetEnsResolverReturnType](https://viem.sh/docs/)
+Address for ENS resolver. GetEnsResolverReturnType
 
 ##### Remarks
 
@@ -1685,9 +1685,9 @@ Gets a text record for specified ENS name.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `gatewayUrls?`: `string`[]; `key`: `string`; `name`: `string`; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | [GetEnsTextParameters](https://viem.sh/docs/) |
+| `args` | \{ `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `gatewayUrls?`: `string`[]; `key`: `string`; `name`: `string`; `strict?`: `boolean`; `universalResolverAddress?`: `` `0x${string}` ``; \} | GetEnsTextParameters |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
 | `args.gatewayUrls?` | `string`[] | Universal Resolver gateway URLs to use for resolving CCIP-read requests. |
 | `args.key` | `string` | Text record to retrieve. |
 | `args.name` | `string` | ENS name to get Text for. |
@@ -1696,9 +1696,9 @@ Gets a text record for specified ENS name.
 
 ##### Returns
 
-`Promise`\<[`GetEnsTextReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetEnsTextReturnType`\>
 
-Address for ENS resolver. [GetEnsTextReturnType](https://viem.sh/docs/)
+Address for ENS resolver. GetEnsTextReturnType
 
 ##### Remarks
 
@@ -1739,13 +1739,13 @@ Returns a collection of historical gas information.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetFeeHistoryParameters`](https://viem.sh/docs/) | [GetFeeHistoryParameters](https://viem.sh/docs/) |
+| `args` | `GetFeeHistoryParameters` | GetFeeHistoryParameters |
 
 ##### Returns
 
-`Promise`\<[`GetFeeHistoryReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetFeeHistoryReturnType`\>
 
-The gas estimate (in wei). [GetFeeHistoryReturnType](https://viem.sh/docs/)
+The gas estimate (in wei). GetFeeHistoryReturnType
 
 ##### Example
 
@@ -1778,24 +1778,24 @@ Returns a list of logs or hashes based on a [Filter](/docs/glossary/terms#filter
 
 | Type Parameter | Default type |
 | ------ | ------ |
-| `filterType` *extends* [`FilterType`](https://viem.sh/docs/) | - |
+| `filterType` *extends* `FilterType` | - |
 | `abi` *extends* readonly `unknown`[] \| `Abi` \| `undefined` | - |
 | `eventName` *extends* `string` \| `undefined` | - |
 | `strict` *extends* `boolean` \| `undefined` | `undefined` |
-| `fromBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `toBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `fromBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `toBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetFilterChangesParameters`](https://viem.sh/docs/)\<`filterType`, `abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\> | [GetFilterChangesParameters](https://viem.sh/docs/) |
+| `args` | `GetFilterChangesParameters`\<`filterType`, `abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\> | GetFilterChangesParameters |
 
 ##### Returns
 
-`Promise`\<[`GetFilterChangesReturnType`](https://viem.sh/docs/)\<`filterType`, `abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
+`Promise`\<`GetFilterChangesReturnType`\<`filterType`, `abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
 
-Logs or hashes. [GetFilterChangesReturnType](https://viem.sh/docs/)
+Logs or hashes. GetFilterChangesReturnType
 
 ##### Remarks
 
@@ -1891,20 +1891,20 @@ Returns a list of event logs since the filter was created.
 | `abi` *extends* readonly `unknown`[] \| `Abi` \| `undefined` | - |
 | `eventName` *extends* `string` \| `undefined` | - |
 | `strict` *extends* `boolean` \| `undefined` | `undefined` |
-| `fromBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `toBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `fromBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `toBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetFilterLogsParameters`](https://viem.sh/docs/)\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\> | [GetFilterLogsParameters](https://viem.sh/docs/) |
+| `args` | `GetFilterLogsParameters`\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\> | GetFilterLogsParameters |
 
 ##### Returns
 
-`Promise`\<[`GetFilterLogsReturnType`](https://viem.sh/docs/)\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
+`Promise`\<`GetFilterLogsReturnType`\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
 
-A list of event logs. [GetFilterLogsReturnType](https://viem.sh/docs/)
+A list of event logs. GetFilterLogsReturnType
 
 ##### Remarks
 
@@ -1942,7 +1942,7 @@ Returns the current price of gas (in wei).
 
 `Promise`\<`bigint`\>
 
-The gas price (in wei). [GetGasPriceReturnType](https://viem.sh/docs/)
+The gas price (in wei). GetGasPriceReturnType
 
 ##### Example
 
@@ -1976,20 +1976,20 @@ Returns a list of event logs matching the provided parameters.
 | `abiEvent` *extends* `AbiEvent` \| `undefined` | `undefined` |
 | `abiEvents` *extends* readonly `unknown`[] \| readonly `AbiEvent`[] \| `undefined` | `abiEvent` *extends* `AbiEvent` ? \[`abiEvent`\<`abiEvent`\>\] : `undefined` |
 | `strict` *extends* `boolean` \| `undefined` | `undefined` |
-| `fromBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `toBlock` *extends* `bigint` \| [`BlockTag`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `fromBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
+| `toBlock` *extends* `bigint` \| `BlockTag` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args?` | [`GetLogsParameters`](https://viem.sh/docs/)\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`\> | [GetLogsParameters](https://viem.sh/docs/) |
+| `args?` | `GetLogsParameters`\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`\> | GetLogsParameters |
 
 ##### Returns
 
-`Promise`\<[`GetLogsReturnType`](https://viem.sh/docs/)\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`\>\>
+`Promise`\<`GetLogsReturnType`\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`\>\>
 
-A list of event logs. [GetLogsReturnType](https://viem.sh/docs/)
+A list of event logs. GetLogsReturnType
 
 ##### Example
 
@@ -2020,13 +2020,13 @@ Returns the account and storage values of the specified account including the Me
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`GetProofParameters`](https://viem.sh/docs/) |
+| `args` | `GetProofParameters` |
 
 ##### Returns
 
-`Promise`\<[`GetProofReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetProofReturnType`\>
 
-Proof data. [GetProofReturnType](https://viem.sh/docs/)
+Proof data. GetProofReturnType
 
 ##### Example
 
@@ -2059,13 +2059,13 @@ Returns the value from a storage slot at a given address.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetStorageAtParameters`](https://viem.sh/docs/) | [GetStorageAtParameters](https://viem.sh/docs/) |
+| `args` | `GetStorageAtParameters` | GetStorageAtParameters |
 
 ##### Returns
 
-`Promise`\<[`GetStorageAtReturnType`](https://viem.sh/docs/)\>
+`Promise`\<`GetStorageAtReturnType`\>
 
-The value of the storage slot. [GetStorageAtReturnType](https://viem.sh/docs/)
+The value of the storage slot. GetStorageAtReturnType
 
 ##### Example
 
@@ -2230,13 +2230,13 @@ Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#tr
 
 | Type Parameter | Default type |
 | ------ | ------ |
-| `blockTag` *extends* [`BlockTag`](https://viem.sh/docs/) | `"latest"` |
+| `blockTag` *extends* `BlockTag` | `"latest"` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetTransactionParameters`](https://viem.sh/docs/)\<`blockTag`\> | [GetTransactionParameters](https://viem.sh/docs/) |
+| `args` | `GetTransactionParameters`\<`blockTag`\> | GetTransactionParameters |
 
 ##### Returns
 
@@ -2268,7 +2268,7 @@ Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#tr
   `yParity?`: `undefined`;
 \}
   \| \{
-  `accessList`: [`AccessList`](https://viem.sh/docs/);
+  `accessList`: `AccessList`;
   `authorizationList?`: `undefined`;
   `blobVersionedHashes?`: `undefined`;
   `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
@@ -2294,7 +2294,7 @@ Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#tr
   `yParity`: `number`;
 \}
   \| \{
-  `accessList`: [`AccessList`](https://viem.sh/docs/);
+  `accessList`: `AccessList`;
   `authorizationList?`: `undefined`;
   `blobVersionedHashes?`: `undefined`;
   `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
@@ -2320,7 +2320,7 @@ Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#tr
   `yParity`: `number`;
 \}
   \| \{
-  `accessList`: [`AccessList`](https://viem.sh/docs/);
+  `accessList`: `AccessList`;
   `authorizationList?`: `undefined`;
   `blobVersionedHashes`: readonly `` `0x${string}` ``[];
   `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
@@ -2346,8 +2346,8 @@ Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#tr
   `yParity`: `number`;
 \}
   \| \{
-  `accessList`: [`AccessList`](https://viem.sh/docs/);
-  `authorizationList`: [`SignedAuthorizationList`](https://viem.sh/docs/);
+  `accessList`: `AccessList`;
+  `authorizationList`: `SignedAuthorizationList`;
   `blobVersionedHashes?`: `undefined`;
   `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``;
   `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`;
@@ -2372,7 +2372,7 @@ Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#tr
   `yParity`: `number`;
 \}\>
 
-The transaction information. [GetTransactionReturnType](https://viem.sh/docs/)
+The transaction information. GetTransactionReturnType
 
 ##### Example
 
@@ -2405,13 +2405,13 @@ Returns the number of blocks passed (confirmations) since the transaction was pr
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetTransactionConfirmationsParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`\> | [GetTransactionConfirmationsParameters](https://viem.sh/docs/) |
+| `args` | `GetTransactionConfirmationsParameters`\<`Chain` \| `undefined`\> | GetTransactionConfirmationsParameters |
 
 ##### Returns
 
 `Promise`\<`bigint`\>
 
-The number of blocks passed since the transaction was processed. If confirmations is 0, then the Transaction has not been confirmed & processed yet. [GetTransactionConfirmationsReturnType](https://viem.sh/docs/)
+The number of blocks passed since the transaction was processed. If confirmations is 0, then the Transaction has not been confirmed & processed yet. GetTransactionConfirmationsReturnType
 
 ##### Example
 
@@ -2443,13 +2443,13 @@ Returns the number of [Transactions](https://viem.sh/docs/glossary/terms#transac
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetTransactionCountParameters`](https://viem.sh/docs/) | [GetTransactionCountParameters](https://viem.sh/docs/) |
+| `args` | `GetTransactionCountParameters` | GetTransactionCountParameters |
 
 ##### Returns
 
 `Promise`\<`number`\>
 
-The number of transactions an account has sent. [GetTransactionCountReturnType](https://viem.sh/docs/)
+The number of transactions an account has sent. GetTransactionCountReturnType
 
 ##### Example
 
@@ -2482,13 +2482,13 @@ Returns the [Transaction Receipt](https://viem.sh/docs/glossary/terms#transactio
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`GetTransactionReceiptParameters`](https://viem.sh/docs/) | [GetTransactionReceiptParameters](https://viem.sh/docs/) |
+| `args` | `GetTransactionReceiptParameters` | GetTransactionReceiptParameters |
 
 ##### Returns
 
-`Promise`\<[`TransactionReceipt`](https://viem.sh/docs/)\>
+`Promise`\<`TransactionReceipt`\>
 
-The transaction receipt. [GetTransactionReceiptReturnType](https://viem.sh/docs/)
+The transaction receipt. GetTransactionReceiptReturnType
 
 ##### Example
 
@@ -2534,13 +2534,13 @@ Similar to [`readContract`](https://viem.sh/docs/contract/readContract), but bat
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`MulticallParameters`](https://viem.sh/docs/)\<`contracts`, `allowFailure`\> | [MulticallParameters](https://viem.sh/docs/) |
+| `args` | `MulticallParameters`\<`contracts`, `allowFailure`\> | MulticallParameters |
 
 ##### Returns
 
-`Promise`\<[`MulticallReturnType`](https://viem.sh/docs/)\<`contracts`, `allowFailure`\>\>
+`Promise`\<`MulticallReturnType`\<`contracts`, `allowFailure`\>\>
 
-An array of results with accompanying status. [MulticallReturnType](https://viem.sh/docs/)
+An array of results with accompanying status. MulticallReturnType
 
 ##### Example
 
@@ -2604,21 +2604,21 @@ Prepares a transaction request for signing.
 
 | Type Parameter | Default type |
 | ------ | ------ |
-| `request` *extends* \| [`Omit`](https://viem.sh/docs/)\<\{ `accessList?`: `undefined`; `authorizationList?`: `undefined`; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `bigint`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"legacy"`; `value?`: `bigint`; \}, `"from"`\> \| [`Omit`](https://viem.sh/docs/)\<\{ `accessList?`: [`AccessList`](https://viem.sh/docs/); `authorizationList?`: `undefined`; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `bigint`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"eip2930"`; `value?`: `bigint`; \}, `"from"`\> \| [`Omit`](https://viem.sh/docs/)\<\{ `accessList?`: [`AccessList`](https://viem.sh/docs/); `authorizationList?`: `undefined`; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"eip1559"`; `value?`: `bigint`; \}, `"from"`\> \| [`Omit`](https://viem.sh/docs/)\<\{ `accessList?`: [`AccessList`](https://viem.sh/docs/); `authorizationList?`: `undefined`; `blobs?`: \| readonly `` `0x${string}` ``[] \| readonly [`ByteArray`](https://viem.sh/docs/)[]; `blobVersionedHashes`: readonly `` `0x${string}` ``[]; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `bigint`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: readonly [`BlobSidecar`](https://viem.sh/docs/)\<`` `0x${string}` ``\>[]; `to`: `` `0x${string}` `` \| `null`; `type?`: `"eip4844"`; `value?`: `bigint`; \}, `"from"`\> \| [`Omit`](https://viem.sh/docs/)\<\{ `accessList?`: [`AccessList`](https://viem.sh/docs/); `authorizationList?`: `undefined`; `blobs`: \| readonly `` `0x${string}` ``[] \| readonly [`ByteArray`](https://viem.sh/docs/)[]; `blobVersionedHashes?`: readonly `` `0x${string}` ``[]; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: [`Kzg`](https://viem.sh/docs/); `maxFeePerBlobGas?`: `bigint`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: readonly [`BlobSidecar`](https://viem.sh/docs/)\<`` `0x${string}` ``\>[]; `to`: `` `0x${string}` `` \| `null`; `type?`: `"eip4844"`; `value?`: `bigint`; \}, `"from"`\> \| [`Omit`](https://viem.sh/docs/)\<\{ `accessList?`: [`AccessList`](https://viem.sh/docs/); `authorizationList?`: [`AuthorizationList`](https://viem.sh/docs/)\<`number`, `boolean`\>; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"eip7702"`; `value?`: `bigint`; \}, `"from"`\> & `object` & `object` | - |
-| `chainOverride` *extends* [`Chain`](https://viem.sh/docs/) \| `undefined` | `undefined` |
-| `accountOverride` *extends* `` `0x${string}` `` \| [`Account`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `request` *extends* \| `Omit`\<\{ `accessList?`: `undefined`; `authorizationList?`: `undefined`; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `bigint`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"legacy"`; `value?`: `bigint`; \}, `"from"`\> \| `Omit`\<\{ `accessList?`: `AccessList`; `authorizationList?`: `undefined`; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `bigint`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"eip2930"`; `value?`: `bigint`; \}, `"from"`\> \| `Omit`\<\{ `accessList?`: `AccessList`; `authorizationList?`: `undefined`; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"eip1559"`; `value?`: `bigint`; \}, `"from"`\> \| `Omit`\<\{ `accessList?`: `AccessList`; `authorizationList?`: `undefined`; `blobs?`: readonly `` `0x${string}` ``[] \| readonly `ByteArray`[]; `blobVersionedHashes`: readonly `` `0x${string}` ``[]; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `bigint`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: readonly `BlobSidecar`\<`` `0x${string}` ``\>[]; `to`: `` `0x${string}` `` \| `null`; `type?`: `"eip4844"`; `value?`: `bigint`; \}, `"from"`\> \| `Omit`\<\{ `accessList?`: `AccessList`; `authorizationList?`: `undefined`; `blobs`: readonly `` `0x${string}` ``[] \| readonly `ByteArray`[]; `blobVersionedHashes?`: readonly `` `0x${string}` ``[]; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `Kzg`; `maxFeePerBlobGas?`: `bigint`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: readonly `BlobSidecar`\<`` `0x${string}` ``\>[]; `to`: `` `0x${string}` `` \| `null`; `type?`: `"eip4844"`; `value?`: `bigint`; \}, `"from"`\> \| `Omit`\<\{ `accessList?`: `AccessList`; `authorizationList?`: `AuthorizationList`\<`number`, `boolean`\>; `blobs?`: `undefined`; `blobVersionedHashes?`: `undefined`; `data?`: `` `0x${string}` ``; `from?`: `` `0x${string}` ``; `gas?`: `bigint`; `gasPrice?`: `undefined`; `kzg?`: `undefined`; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `bigint`; `maxPriorityFeePerGas?`: `bigint`; `nonce?`: `number`; `sidecars?`: `undefined`; `to?`: `` `0x${string}` `` \| `null`; `type?`: `"eip7702"`; `value?`: `bigint`; \}, `"from"`\> & `object` & `object` | - |
+| `chainOverride` *extends* `Chain` \| `undefined` | `undefined` |
+| `accountOverride` *extends* `` `0x${string}` `` \| `Account` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`PrepareTransactionRequestParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`, [`Account`](https://viem.sh/docs/) \| `undefined`, `chainOverride`, `accountOverride`, `request`\> | [PrepareTransactionRequestParameters](https://viem.sh/docs/) |
+| `args` | `PrepareTransactionRequestParameters`\<`Chain` \| `undefined`, `Account` \| `undefined`, `chainOverride`, `accountOverride`, `request`\> | PrepareTransactionRequestParameters |
 
 ##### Returns
 
 `Promise`\<\{ \[K in string \| number \| symbol\]: (UnionRequiredBy\<Extract\<UnionOmit\<(...), (...)\> & ((...) extends (...) ? (...) : (...)) & ((...) extends (...) ? (...) : (...)), IsNever\<(...)\> extends true ? unknown : ExactPartial\<(...)\>\> & \{ chainId?: number \}, ParameterTypeToParameters\<request\["parameters"\] extends readonly PrepareTransactionRequestParameterType\[\] ? any\[any\]\[number\] : "type" \| "nonce" \| "chainId" \| "gas" \| "fees" \| "blobVersionedHashes"\>\> & (unknown extends request\["kzg"\] ? \{\} : Pick\<request, "kzg"\>))\[K\] \}\>
 
-The transaction request. [PrepareTransactionRequestReturnType](https://viem.sh/docs/)
+The transaction request. PrepareTransactionRequestReturnType
 
 ##### Examples
 
@@ -2677,13 +2677,13 @@ Calls a read-only function on a contract, and returns the response.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`ReadContractParameters`](https://viem.sh/docs/)\<`abi`, `functionName`, `args`\> | [ReadContractParameters](https://viem.sh/docs/) |
+| `args` | `ReadContractParameters`\<`abi`, `functionName`, `args`\> | ReadContractParameters |
 
 ##### Returns
 
-`Promise`\<[`ReadContractReturnType`](https://viem.sh/docs/)\<`abi`, `functionName`, `args`\>\>
+`Promise`\<`ReadContractReturnType`\<`abi`, `functionName`, `args`\>\>
 
-The response from the contract. Type is inferred. [ReadContractReturnType](https://viem.sh/docs/)
+The response from the contract. Type is inferred. ReadContractReturnType
 
 ##### Remarks
 
@@ -2734,13 +2734,13 @@ Sends a **signed** transaction to the network
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`SendRawTransactionParameters`](https://viem.sh/docs/) |
+| `args` | `SendRawTransactionParameters` |
 
 ##### Returns
 
 `Promise`\<`` `0x${string}` ``\>
 
-The transaction hash. [SendRawTransactionReturnType](https://viem.sh/docs/)
+The transaction hash. SendRawTransactionReturnType
 
 ##### Example
 
@@ -2774,13 +2774,13 @@ Sends a **signed** transaction to the network
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`SendRawTransactionSyncParameters`](https://viem.sh/docs/) |
+| `args` | `SendRawTransactionSyncParameters` |
 
 ##### Returns
 
-`Promise`\<[`TransactionReceipt`](https://viem.sh/docs/)\>
+`Promise`\<`TransactionReceipt`\>
 
-The transaction receipt. [SendRawTransactionSyncReturnType](https://viem.sh/docs/)
+The transaction receipt. SendRawTransactionSyncReturnType
 
 ##### Example
 
@@ -2815,11 +2815,11 @@ simulate: <calls>(args) => Promise<SimulateBlocksReturnType<calls>>;
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`SimulateBlocksParameters`](https://viem.sh/docs/)\<`calls`\> |
+| `args` | `SimulateBlocksParameters`\<`calls`\> |
 
 ##### Returns
 
-`Promise`\<[`SimulateBlocksReturnType`](https://viem.sh/docs/)\<`calls`\>\>
+`Promise`\<`SimulateBlocksReturnType`\<`calls`\>\>
 
 ##### Deprecated
 
@@ -2843,11 +2843,11 @@ Simulates a set of calls on block(s) with optional block and state overrides.
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`SimulateBlocksParameters`](https://viem.sh/docs/)\<`calls`\> |
+| `args` | `SimulateBlocksParameters`\<`calls`\> |
 
 ##### Returns
 
-`Promise`\<[`SimulateBlocksReturnType`](https://viem.sh/docs/)\<`calls`\>\>
+`Promise`\<`SimulateBlocksReturnType`\<`calls`\>\>
 
 Simulated blocks. SimulateReturnType
 
@@ -2905,13 +2905,13 @@ Simulates a set of calls.
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`SimulateCallsParameters`](https://viem.sh/docs/)\<`calls`\> |
+| `args` | `SimulateCallsParameters`\<`calls`\> |
 
 ##### Returns
 
-`Promise`\<[`SimulateCallsReturnType`](https://viem.sh/docs/)\<`calls`\>\>
+`Promise`\<`SimulateCallsReturnType`\<`calls`\>\>
 
-Results. [SimulateCallsReturnType](https://viem.sh/docs/)
+Results. SimulateCallsReturnType
 
 ##### Example
 
@@ -2957,20 +2957,20 @@ Simulates/validates a contract interaction. This is useful for retrieving **retu
 | `abi` *extends* readonly `unknown`[] \| `Abi` | - |
 | `functionName` *extends* `string` | - |
 | `args` *extends* `unknown` | - |
-| `chainOverride` *extends* [`Chain`](https://viem.sh/docs/) \| `undefined` | - |
-| `accountOverride` *extends* `` `0x${string}` `` \| [`Account`](https://viem.sh/docs/) \| `undefined` | `undefined` |
+| `chainOverride` *extends* `Chain` \| `undefined` | - |
+| `accountOverride` *extends* `` `0x${string}` `` \| `Account` \| `undefined` | `undefined` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`SimulateContractParameters`](https://viem.sh/docs/)\<`abi`, `functionName`, `args`, [`Chain`](https://viem.sh/docs/) \| `undefined`, `chainOverride`, `accountOverride`\> | [SimulateContractParameters](https://viem.sh/docs/) |
+| `args` | `SimulateContractParameters`\<`abi`, `functionName`, `args`, `Chain` \| `undefined`, `chainOverride`, `accountOverride`\> | SimulateContractParameters |
 
 ##### Returns
 
-`Promise`\<[`SimulateContractReturnType`](https://viem.sh/docs/)\<`abi`, `functionName`, `args`, [`Chain`](https://viem.sh/docs/) \| `undefined`, [`Account`](https://viem.sh/docs/) \| `undefined`, `chainOverride`, `accountOverride`\>\>
+`Promise`\<`SimulateContractReturnType`\<`abi`, `functionName`, `args`, `Chain` \| `undefined`, `Account` \| `undefined`, `chainOverride`, `accountOverride`\>\>
 
-The simulation result and write request. [SimulateContractReturnType](https://viem.sh/docs/)
+The simulation result and write request. SimulateContractReturnType
 
 ##### Remarks
 
@@ -3040,13 +3040,13 @@ Destroys a Filter that was created from one of the following Actions:
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`UninstallFilterParameters`](https://viem.sh/docs/) | [UninstallFilterParameters](https://viem.sh/docs/) |
+| `args` | `UninstallFilterParameters` | UninstallFilterParameters |
 
 ##### Returns
 
 `Promise`\<`boolean`\>
 
-A boolean indicating if the Filter was successfully uninstalled. [UninstallFilterReturnType](https://viem.sh/docs/)
+A boolean indicating if the Filter was successfully uninstalled. UninstallFilterReturnType
 
 ##### Example
 
@@ -3074,13 +3074,13 @@ Verify that a hash was signed by the provided address.
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`VerifyHashParameters`](https://viem.sh/docs/) |
+| `args` | `VerifyHashParameters` |
 
 ##### Returns
 
 `Promise`\<`boolean`\>
 
-Whether or not the signature is valid. [VerifyHashReturnType](https://viem.sh/docs/)
+Whether or not the signature is valid. VerifyHashReturnType
 
 #### verifyMessage()
 
@@ -3098,24 +3098,24 @@ Compatible with Smart Contract Accounts & Externally Owned Accounts via [ERC-649
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `address`: `` `0x${string}` ``; `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `chain?`: [`Chain`](https://viem.sh/docs/) \| `null`; `erc6492VerifierAddress?`: `` `0x${string}` ``; `factory?`: `` `0x${string}` ``; `factoryData?`: `` `0x${string}` ``; `message`: [`SignableMessage`](https://viem.sh/docs/); `multicallAddress?`: `` `0x${string}` ``; `signature`: \| `` `0x${string}` `` \| [`Signature`](https://viem.sh/docs/) \| [`ByteArray`](https://viem.sh/docs/); `universalSignatureVerifierAddress?`: `` `0x${string}` ``; \} | - |
+| `args` | \{ `address`: `` `0x${string}` ``; `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `chain?`: `Chain` \| `null`; `erc6492VerifierAddress?`: `` `0x${string}` ``; `factory?`: `` `0x${string}` ``; `factoryData?`: `` `0x${string}` ``; `message`: `SignableMessage`; `multicallAddress?`: `` `0x${string}` ``; `signature`: `` `0x${string}` `` \| `Signature` \| `ByteArray`; `universalSignatureVerifierAddress?`: `` `0x${string}` ``; \} | - |
 | `args.address` | `` `0x${string}` `` | The address that signed the original message. |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
-| `args.chain?` | [`Chain`](https://viem.sh/docs/) \| `null` | The chain to use. |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.chain?` | `Chain` \| `null` | The chain to use. |
 | `args.erc6492VerifierAddress?` | `` `0x${string}` `` | The address of the ERC-6492 signature verifier contract. |
 | `args.factory?` | `` `0x${string}` `` | - |
 | `args.factoryData?` | `` `0x${string}` `` | - |
-| `args.message` | [`SignableMessage`](https://viem.sh/docs/) | The message to be verified. |
+| `args.message` | `SignableMessage` | The message to be verified. |
 | `args.multicallAddress?` | `` `0x${string}` `` | Multicall3 address for ERC-8010 verification. |
-| `args.signature` | \| `` `0x${string}` `` \| [`Signature`](https://viem.sh/docs/) \| [`ByteArray`](https://viem.sh/docs/) | The signature that was generated by signing the message with the address's private key. |
+| `args.signature` | `` `0x${string}` `` \| `Signature` \| `ByteArray` | The signature that was generated by signing the message with the address's private key. |
 | `args.universalSignatureVerifierAddress?` | `` `0x${string}` `` | **Deprecated** use `erc6492VerifierAddress` instead. |
 
 ##### Returns
 
 `Promise`\<`boolean`\>
 
-Whether or not the signature is valid. [VerifyMessageReturnType](https://viem.sh/docs/)
+Whether or not the signature is valid. VerifyMessageReturnType
 
 #### verifySiweMessage()
 
@@ -3133,10 +3133,10 @@ Compatible with Smart Contract Accounts & Externally Owned Accounts via [ERC-649
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | \{ `address?`: `` `0x${string}` ``; `blockNumber?`: `bigint`; `blockTag?`: [`BlockTag`](https://viem.sh/docs/); `domain?`: `string`; `message`: `string`; `nonce?`: `string`; `scheme?`: `string`; `signature`: `` `0x${string}` ``; `time?`: `Date`; \} | - |
+| `args` | \{ `address?`: `` `0x${string}` ``; `blockNumber?`: `bigint`; `blockTag?`: `BlockTag`; `domain?`: `string`; `message`: `string`; `nonce?`: `string`; `scheme?`: `string`; `signature`: `` `0x${string}` ``; `time?`: `Date`; \} | - |
 | `args.address?` | `` `0x${string}` `` | Ethereum address to check against. |
 | `args.blockNumber?` | `bigint` | The balance of the account at a block number. |
-| `args.blockTag?` | [`BlockTag`](https://viem.sh/docs/) | The balance of the account at a block tag. **Default** `'latest'` |
+| `args.blockTag?` | `BlockTag` | The balance of the account at a block tag. **Default** `'latest'` |
 | `args.domain?` | `string` | [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) authority to check against. |
 | `args.message` | `string` | EIP-4361 formatted message. |
 | `args.nonce?` | `string` | Random string to check against. |
@@ -3148,7 +3148,7 @@ Compatible with Smart Contract Accounts & Externally Owned Accounts via [ERC-649
 
 `Promise`\<`boolean`\>
 
-Whether or not the signature is valid. [VerifySiweMessageReturnType](https://viem.sh/docs/)
+Whether or not the signature is valid. VerifySiweMessageReturnType
 
 #### verifyTypedData()
 
@@ -3164,13 +3164,13 @@ Verify that typed data was signed by the provided address.
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | [`VerifyTypedDataParameters`](https://viem.sh/docs/) |
+| `args` | `VerifyTypedDataParameters` |
 
 ##### Returns
 
 `Promise`\<`boolean`\>
 
-Whether or not the signature is valid. [VerifyTypedDataReturnType](https://viem.sh/docs/)
+Whether or not the signature is valid. VerifyTypedDataReturnType
 
 #### waitForTransactionReceipt()
 
@@ -3193,13 +3193,13 @@ Waits for the [Transaction](https://viem.sh/docs/glossary/terms#transaction) to 
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`WaitForTransactionReceiptParameters`](https://viem.sh/docs/)\<[`Chain`](https://viem.sh/docs/) \| `undefined`\> | [WaitForTransactionReceiptParameters](https://viem.sh/docs/) |
+| `args` | `WaitForTransactionReceiptParameters`\<`Chain` \| `undefined`\> | WaitForTransactionReceiptParameters |
 
 ##### Returns
 
-`Promise`\<[`TransactionReceipt`](https://viem.sh/docs/)\>
+`Promise`\<`TransactionReceipt`\>
 
-The transaction receipt. [WaitForTransactionReceiptReturnType](https://viem.sh/docs/)
+The transaction receipt. WaitForTransactionReceiptReturnType
 
 ##### Remarks
 
@@ -3246,13 +3246,13 @@ Watches and returns incoming block numbers.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`WatchBlockNumberParameters`](https://viem.sh/docs/) | [WatchBlockNumberParameters](https://viem.sh/docs/) |
+| `args` | `WatchBlockNumberParameters` | WatchBlockNumberParameters |
 
 ##### Returns
 
-[`WatchBlockNumberReturnType`](https://viem.sh/docs/)
+`WatchBlockNumberReturnType`
 
-A function that can be invoked to stop watching for new block numbers. [WatchBlockNumberReturnType](https://viem.sh/docs/)
+A function that can be invoked to stop watching for new block numbers. WatchBlockNumberReturnType
 
 ##### Example
 
@@ -3288,19 +3288,19 @@ Watches and returns information for incoming blocks.
 | Type Parameter | Default type |
 | ------ | ------ |
 | `includeTransactions` *extends* `boolean` | `false` |
-| `blockTag` *extends* [`BlockTag`](https://viem.sh/docs/) | `"latest"` |
+| `blockTag` *extends* `BlockTag` | `"latest"` |
 
 ##### Parameters
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`WatchBlocksParameters`](https://viem.sh/docs/)\<[`Transport`](https://viem.sh/docs/), [`Chain`](https://viem.sh/docs/) \| `undefined`, `includeTransactions`, `blockTag`\> | [WatchBlocksParameters](https://viem.sh/docs/) |
+| `args` | `WatchBlocksParameters`\<`Transport`, `Chain` \| `undefined`, `includeTransactions`, `blockTag`\> | WatchBlocksParameters |
 
 ##### Returns
 
-[`WatchBlocksReturnType`](https://viem.sh/docs/)
+`WatchBlocksReturnType`
 
-A function that can be invoked to stop watching for new block numbers. [WatchBlocksReturnType](https://viem.sh/docs/)
+A function that can be invoked to stop watching for new block numbers. WatchBlocksReturnType
 
 ##### Example
 
@@ -3339,13 +3339,13 @@ Watches and returns emitted contract event logs.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`WatchContractEventParameters`](https://viem.sh/docs/)\<`abi`, `eventName`, `strict`, [`Transport`](https://viem.sh/docs/)\> | [WatchContractEventParameters](https://viem.sh/docs/) |
+| `args` | `WatchContractEventParameters`\<`abi`, `eventName`, `strict`, `Transport`\> | WatchContractEventParameters |
 
 ##### Returns
 
-[`WatchContractEventReturnType`](https://viem.sh/docs/)
+`WatchContractEventReturnType`
 
-A function that can be invoked to stop watching for new event logs. [WatchContractEventReturnType](https://viem.sh/docs/)
+A function that can be invoked to stop watching for new event logs. WatchContractEventReturnType
 
 ##### Remarks
 
@@ -3400,13 +3400,13 @@ Watches and returns emitted [Event Logs](https://viem.sh/docs/glossary/terms#eve
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`WatchEventParameters`](https://viem.sh/docs/)\<`abiEvent`, `abiEvents`, `strict`, [`Transport`](https://viem.sh/docs/)\> | [WatchEventParameters](https://viem.sh/docs/) |
+| `args` | `WatchEventParameters`\<`abiEvent`, `abiEvents`, `strict`, `Transport`\> | WatchEventParameters |
 
 ##### Returns
 
-[`WatchEventReturnType`](https://viem.sh/docs/)
+`WatchEventReturnType`
 
-A function that can be invoked to stop watching for new Event Logs. [WatchEventReturnType](https://viem.sh/docs/)
+A function that can be invoked to stop watching for new Event Logs. WatchEventReturnType
 
 ##### Remarks
 
@@ -3448,13 +3448,13 @@ Watches and returns pending transaction hashes.
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `args` | [`WatchPendingTransactionsParameters`](https://viem.sh/docs/)\<[`Transport`](https://viem.sh/docs/)\> | [WatchPendingTransactionsParameters](https://viem.sh/docs/) |
+| `args` | `WatchPendingTransactionsParameters`\<`Transport`\> | WatchPendingTransactionsParameters |
 
 ##### Returns
 
-[`WatchPendingTransactionsReturnType`](https://viem.sh/docs/)
+`WatchPendingTransactionsReturnType`
 
-A function that can be invoked to stop watching for new pending transaction hashes. [WatchPendingTransactionsReturnType](https://viem.sh/docs/)
+A function that can be invoked to stop watching for new pending transaction hashes. WatchPendingTransactionsReturnType
 
 ##### Remarks
 
@@ -3483,7 +3483,7 @@ const unwatch = await client.watchPendingTransactions({
 recipient: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L16)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L16)
 
 ***
 
@@ -3493,7 +3493,7 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:16](https://github.com/AASt
 sender: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L14)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L14)
 
 ***
 
@@ -3503,4 +3503,4 @@ Defined in: [packages/sdk/src/utils/testScenarios.ts:14](https://github.com/AASt
 tokenAddress: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/testScenarios.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/testScenarios.ts#L17)
+Defined in: [packages/sdk/src/utils/testScenarios.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/testScenarios.ts#L17)

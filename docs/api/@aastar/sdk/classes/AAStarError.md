@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L13)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/errors/AAStarError.ts#L13)
 
 ## Extends
 
@@ -15,7 +15,7 @@ new AAStarError(
    details?): AAStarError;
 ```
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L17)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/errors/AAStarError.ts#L17)
 
 #### Parameters
 
@@ -59,7 +59,7 @@ Error.cause
 readonly code: AAStarErrorCode;
 ```
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L14)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/errors/AAStarError.ts#L14)
 
 ***
 
@@ -69,7 +69,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AASta
 readonly optional details: any;
 ```
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/errors/AAStarError.ts#L15)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/errors/AAStarError.ts#L15)
 
 ***
 

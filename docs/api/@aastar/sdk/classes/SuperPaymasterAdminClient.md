@@ -1,4 +1,4 @@
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L95)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L95)
 
 Admin Client for SuperPaymaster V3
 
@@ -10,7 +10,7 @@ Admin Client for SuperPaymaster V3
 new SuperPaymasterAdminClient(client, paymasterAddress): SuperPaymasterAdminClient;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L99)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L99)
 
 #### Parameters
 
@@ -31,7 +31,7 @@ Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:99](https://github.c
 getOperator(operator): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L104)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L104)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ static configureOperator(
 exchangeRate): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L113)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L113)
 
 #### Parameters
 
@@ -83,7 +83,7 @@ static setAPNTsToken(
 token): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L149)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L149)
 
 #### Parameters
 
@@ -109,7 +109,7 @@ static setOperatorPaused(
 paused): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L129)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L129)
 
 #### Parameters
 
@@ -135,7 +135,7 @@ static setXPNTsFactory(
 factory): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L159)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L159)
 
 #### Parameters
 
@@ -161,7 +161,7 @@ static updateReputation(
 score): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/paymaster/src/SuperPaymaster/index.ts#L139)
+Defined in: [packages/paymaster/src/SuperPaymaster/index.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/SuperPaymaster/index.ts#L139)
 
 #### Parameters
 

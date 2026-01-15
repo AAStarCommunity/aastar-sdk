@@ -2,7 +2,7 @@
 type StakingActions = object;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L4)
+Defined in: [packages/core/src/actions/staking.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L4)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [packages/core/src/actions/staking.ts:4](https://github.com/AAStarCo
 authorizedSlashers: (args) => Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L38)
+Defined in: [packages/core/src/actions/staking.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L38)
 
 #### Parameters
 
@@ -33,7 +33,7 @@ Defined in: [packages/core/src/actions/staking.ts:38](https://github.com/AAStarC
 availableBalance: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L24)
+Defined in: [packages/core/src/actions/staking.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L24)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [packages/core/src/actions/staking.ts:24](https://github.com/AAStarC
 balanceOf: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L40)
+Defined in: [packages/core/src/actions/staking.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L40)
 
 #### Parameters
 
@@ -75,14 +75,14 @@ Defined in: [packages/core/src/actions/staking.ts:40](https://github.com/AAStarC
 getLockedStake: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L21)
+Defined in: [packages/core/src/actions/staking.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L21)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
@@ -97,7 +97,7 @@ Defined in: [packages/core/src/actions/staking.ts:21](https://github.com/AAStarC
 getStake: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L39)
+Defined in: [packages/core/src/actions/staking.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L39)
 
 #### Parameters
 
@@ -118,15 +118,15 @@ Defined in: [packages/core/src/actions/staking.ts:39](https://github.com/AAStarC
 getStakeInfo: (args) => Promise<any>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L19)
+Defined in: [packages/core/src/actions/staking.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L19)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `operator`: `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); \} |
+| `args` | \{ `operator`: `Address`; `roleId`: `Hex`; \} |
 | `args.operator` | `Address` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.roleId` | `Hex` |
 
 #### Returns
 
@@ -140,7 +140,7 @@ Defined in: [packages/core/src/actions/staking.ts:19](https://github.com/AAStarC
 getStakingBalance: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L20)
+Defined in: [packages/core/src/actions/staking.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L20)
 
 #### Parameters
 
@@ -161,7 +161,7 @@ Defined in: [packages/core/src/actions/staking.ts:20](https://github.com/AAStarC
 getTotalStaked: () => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L42)
+Defined in: [packages/core/src/actions/staking.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L42)
 
 #### Returns
 
@@ -175,7 +175,7 @@ Defined in: [packages/core/src/actions/staking.ts:42](https://github.com/AAStarC
 getUserRoleLocks: (args) => Promise<any[]>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L22)
+Defined in: [packages/core/src/actions/staking.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L22)
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: [packages/core/src/actions/staking.ts:22](https://github.com/AAStarC
 GTOKEN: () => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L55)
+Defined in: [packages/core/src/actions/staking.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L55)
 
 #### Returns
 
@@ -210,14 +210,14 @@ Defined in: [packages/core/src/actions/staking.ts:55](https://github.com/AAStarC
 hasRoleLock: (args) => Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L23)
+Defined in: [packages/core/src/actions/staking.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L23)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
@@ -232,23 +232,23 @@ Defined in: [packages/core/src/actions/staking.ts:23](https://github.com/AAStarC
 lockStake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L6)
+Defined in: [packages/core/src/actions/staking.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L6)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `entryBurn`: `bigint`; `payer`: `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); `stakeAmount`: `bigint`; `user`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `entryBurn`: `bigint`; `payer`: `Address`; `roleId`: `Hex`; `stakeAmount`: `bigint`; `user`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.entryBurn` | `bigint` |
 | `args.payer` | `Address` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.roleId` | `Hex` |
 | `args.stakeAmount` | `bigint` |
 | `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -258,7 +258,7 @@ Defined in: [packages/core/src/actions/staking.ts:6](https://github.com/AAStarCo
 owner: () => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L44)
+Defined in: [packages/core/src/actions/staking.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L44)
 
 #### Returns
 
@@ -272,14 +272,14 @@ Defined in: [packages/core/src/actions/staking.ts:44](https://github.com/AAStarC
 previewExitFee: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L25)
+Defined in: [packages/core/src/actions/staking.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L25)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
@@ -294,7 +294,7 @@ Defined in: [packages/core/src/actions/staking.ts:25](https://github.com/AAStarC
 REGISTRY: () => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L54)
+Defined in: [packages/core/src/actions/staking.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L54)
 
 #### Returns
 
@@ -308,18 +308,18 @@ Defined in: [packages/core/src/actions/staking.ts:54](https://github.com/AAStarC
 renounceOwnership: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L48)
+Defined in: [packages/core/src/actions/staking.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L48)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -329,14 +329,14 @@ Defined in: [packages/core/src/actions/staking.ts:48](https://github.com/AAStarC
 roleExitConfigs: (args) => Promise<any>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L36)
+Defined in: [packages/core/src/actions/staking.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L36)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/); \} |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `roleId`: `Hex`; \} |
+| `args.roleId` | `Hex` |
 
 #### Returns
 
@@ -350,14 +350,14 @@ Defined in: [packages/core/src/actions/staking.ts:36](https://github.com/AAStarC
 roleLocks: (args) => Promise<any>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L35)
+Defined in: [packages/core/src/actions/staking.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L35)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
@@ -372,20 +372,20 @@ Defined in: [packages/core/src/actions/staking.ts:35](https://github.com/AAStarC
 setAuthorizedSlasher: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L16)
+Defined in: [packages/core/src/actions/staking.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L16)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `authorized`: `boolean`; `slasher`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `authorized`: `boolean`; `slasher`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.authorized` | `boolean` |
 | `args.slasher` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -395,19 +395,19 @@ Defined in: [packages/core/src/actions/staking.ts:16](https://github.com/AAStarC
 setRegistry: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L28)
+Defined in: [packages/core/src/actions/staking.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L28)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `registry`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `registry`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.registry` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -417,20 +417,20 @@ Defined in: [packages/core/src/actions/staking.ts:28](https://github.com/AAStarC
 setRoleExitFee: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L30)
+Defined in: [packages/core/src/actions/staking.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L30)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `feePercent`: `bigint`; `roleId`: [`Hex`](https://viem.sh/docs/); \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `feePercent`: `bigint`; `roleId`: `Hex`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.feePercent` | `bigint` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.roleId` | `Hex` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -440,19 +440,19 @@ Defined in: [packages/core/src/actions/staking.ts:30](https://github.com/AAStarC
 setTreasury: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L31)
+Defined in: [packages/core/src/actions/staking.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L31)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `treasury`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `treasury`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.treasury` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -462,22 +462,22 @@ Defined in: [packages/core/src/actions/staking.ts:31](https://github.com/AAStarC
 slash: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L14)
+Defined in: [packages/core/src/actions/staking.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L14)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; `reason`: `string`; `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `amount`: `bigint`; `reason`: `string`; `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.amount` | `bigint` |
 | `args.reason` | `string` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -487,22 +487,22 @@ Defined in: [packages/core/src/actions/staking.ts:14](https://github.com/AAStarC
 slashByDVT: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L15)
+Defined in: [packages/core/src/actions/staking.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L15)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; `reason`: `string`; `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `amount`: `bigint`; `reason`: `string`; `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.amount` | `bigint` |
 | `args.reason` | `string` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -512,19 +512,19 @@ Defined in: [packages/core/src/actions/staking.ts:15](https://github.com/AAStarC
 stake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L9)
+Defined in: [packages/core/src/actions/staking.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L9)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `amount`: `bigint`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.amount` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -534,7 +534,7 @@ Defined in: [packages/core/src/actions/staking.ts:9](https://github.com/AAStarCo
 stakes: (args) => Promise<any>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L34)
+Defined in: [packages/core/src/actions/staking.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L34)
 
 #### Parameters
 
@@ -555,19 +555,19 @@ Defined in: [packages/core/src/actions/staking.ts:34](https://github.com/AAStarC
 topUpStake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L10)
+Defined in: [packages/core/src/actions/staking.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L10)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `amount`: `bigint`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.amount` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -577,7 +577,7 @@ Defined in: [packages/core/src/actions/staking.ts:10](https://github.com/AAStarC
 totalStaked: () => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L41)
+Defined in: [packages/core/src/actions/staking.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L41)
 
 #### Returns
 
@@ -591,19 +591,19 @@ Defined in: [packages/core/src/actions/staking.ts:41](https://github.com/AAStarC
 transferOwnership: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L29)
+Defined in: [packages/core/src/actions/staking.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L29)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `newOwner`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `newOwner`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.newOwner` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -613,19 +613,19 @@ Defined in: [packages/core/src/actions/staking.ts:29](https://github.com/AAStarC
 transferStakingOwnership: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L47)
+Defined in: [packages/core/src/actions/staking.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L47)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `newOwner`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `newOwner`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.newOwner` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -635,7 +635,7 @@ Defined in: [packages/core/src/actions/staking.ts:47](https://github.com/AAStarC
 treasury: () => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L43)
+Defined in: [packages/core/src/actions/staking.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L43)
 
 #### Returns
 
@@ -649,20 +649,20 @@ Defined in: [packages/core/src/actions/staking.ts:43](https://github.com/AAStarC
 unlockAndTransfer: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L8)
+Defined in: [packages/core/src/actions/staking.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L8)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `account?`: `Account` \| `Address`; `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -672,20 +672,20 @@ Defined in: [packages/core/src/actions/staking.ts:8](https://github.com/AAStarCo
 unlockStake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L7)
+Defined in: [packages/core/src/actions/staking.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L7)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `roleId`: [`Hex`](https://viem.sh/docs/); `user`: `Address`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
-| `args.roleId` | [`Hex`](https://viem.sh/docs/) |
+| `args` | \{ `account?`: `Account` \| `Address`; `roleId`: `Hex`; `user`: `Address`; \} |
+| `args.account?` | `Account` \| `Address` |
+| `args.roleId` | `Hex` |
 | `args.user` | `Address` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -695,19 +695,19 @@ Defined in: [packages/core/src/actions/staking.ts:7](https://github.com/AAStarCo
 unstake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L11)
+Defined in: [packages/core/src/actions/staking.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L11)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/) \| `Address`; `amount`: `bigint`; \} |
-| `args.account?` | [`Account`](https://viem.sh/docs/) \| `Address` |
+| `args` | \{ `account?`: `Account` \| `Address`; `amount`: `bigint`; \} |
+| `args.account?` | `Account` \| `Address` |
 | `args.amount` | `bigint` |
 
 #### Returns
 
-`Promise`\<[`Hash`](https://viem.sh/docs/)\>
+`Promise`\<`Hash`\>
 
 ***
 
@@ -717,7 +717,7 @@ Defined in: [packages/core/src/actions/staking.ts:11](https://github.com/AAStarC
 userActiveRoles: (args) => Promise<Hex>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L37)
+Defined in: [packages/core/src/actions/staking.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L37)
 
 #### Parameters
 
@@ -729,7 +729,7 @@ Defined in: [packages/core/src/actions/staking.ts:37](https://github.com/AAStarC
 
 #### Returns
 
-`Promise`\<[`Hex`](https://viem.sh/docs/)\>
+`Promise`\<`Hex`\>
 
 ***
 
@@ -739,7 +739,7 @@ Defined in: [packages/core/src/actions/staking.ts:37](https://github.com/AAStarC
 version: () => Promise<string>;
 ```
 
-Defined in: [packages/core/src/actions/staking.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/core/src/actions/staking.ts#L51)
+Defined in: [packages/core/src/actions/staking.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/staking.ts#L51)
 
 #### Returns
 

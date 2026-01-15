@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/keys.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L16)
+Defined in: [packages/sdk/src/utils/keys.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/keys.ts#L16)
 
 密钥对接口
 
@@ -10,7 +10,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:16](https://github.com/AAStarCommuni
 address: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/keys.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L19)
+Defined in: [packages/sdk/src/utils/keys.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/keys.ts#L19)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:19](https://github.com/AAStarCommuni
 name: string;
 ```
 
-Defined in: [packages/sdk/src/utils/keys.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L17)
+Defined in: [packages/sdk/src/utils/keys.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/keys.ts#L17)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [packages/sdk/src/utils/keys.ts:17](https://github.com/AAStarCommuni
 privateKey: `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/keys.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ca5be67af1f307693964c4751e5988e8ce4adaae/packages/sdk/src/utils/keys.ts#L18)
+Defined in: [packages/sdk/src/utils/keys.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/keys.ts#L18)
