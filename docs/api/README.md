@@ -220,7 +220,7 @@ Registry contract manages roles, communities, and permissions.
 - **ABI**: `import { RegistryABI } from '@aastar/core'`
 - **Address**: `import { REGISTRY_ADDRESS } from '@aastar/core'`
 - **Actions**: `import { registryActions } from '@aastar/core'`
-- **Detailed API**: [RegistryABI](./@ aastar/core/variables/RegistryABI.md) | [registryActions](./@ aastar/core/functions/registryActions.md)
+- **Detailed API**: [RegistryABI](./@aastar/core/variables/RegistryABI.md) | [registryActions](./@aastar/core/functions/registryActions.md)
 
 #### SBT (Soul Bound Token)
 SBT contract for community membership and identity.
@@ -228,7 +228,7 @@ SBT contract for community membership and identity.
 - **ABI**: `import { MySBTABI } from '@aastar/core'`
 - **Address**: `import { SBT_ADDRESS } from '@aastar/core'`
 - **Actions**: `import { sbtActions } from '@aastar/core'`
-- **Detailed API**: [MySBTABI](./@ aastar/core/variables/MySBTABI.md) | [sbtActions](./@ aastar/core/functions/sbtActions.md)
+- **Detailed API**: [MySBTABI](./@aastar/core/variables/MySBTABI.md) | [sbtActions](./@aastar/core/functions/sbtActions.md)
 
 #### xPNTsFactory
 Factory contract for creating xPNTs tokens (spending limit tokens).
@@ -236,7 +236,7 @@ Factory contract for creating xPNTs tokens (spending limit tokens).
 - **ABI**: `import { xPNTsFactoryABI } from '@aastar/core'`
 - **Address**: `import { XPNTS_FACTORY_ADDRESS } from '@aastar/core'`
 - **Actions**: `import { xPNTsFactoryActions } from '@aastar/core'`
-- **Detailed API**: [xPNTsFactoryABI](./@ aastar/core/variables/xPNTsFactoryABI.md) | [xPNTsFactoryActions](./@ aastar/core/functions/xPNTsFactoryActions.md)
+- **Detailed API**: [xPNTsFactoryABI](./@aastar/core/variables/xPNTsFactoryABI.md) | [xPNTsFactoryActions](./@aastar/core/functions/xPNTsFactoryActions.md)
 
 #### SuperPaymaster
 SuperPaymaster contract for gasless transactions (AOA+).
@@ -244,7 +244,7 @@ SuperPaymaster contract for gasless transactions (AOA+).
 - **ABI**: `import { SuperPaymasterABI } from '@aastar/core'`
 - **Address**: `import { SUPER_PAYMASTER_ADDRESS } from '@aastar/core'`
 - **Actions**: `import { superPaymasterActions } from '@aastar/core'`
-- **Detailed API**: [SuperPaymasterABI](./@ aastar/core/variables/SuperPaymasterABI.md) | [superPaymasterActions](./@ aastar/core/functions/superPaymasterActions.md)
+- **Detailed API**: [SuperPaymasterABI](./@aastar/core/variables/SuperPaymasterABI.md) | [superPaymasterActions](./@aastar/core/functions/superPaymasterActions.md)
 
 ### Networks
 
