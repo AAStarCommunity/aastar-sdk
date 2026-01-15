@@ -9,7 +9,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "scripts",
+    "examples"
   ],
   "dependencies": {
     "@aastar/account": "workspace:*",
@@ -18,7 +20,8 @@
     "@aastar/identity": "workspace:*",
     "@aastar/paymaster": "workspace:*",
     "@aastar/tokens": "workspace:*",
-    "viem": "2.43.3"
+    "viem": "2.43.3",
+    "dotenv": "17.2.3"
   },
   "devDependencies": {
     "typescript": "5.7.2"
