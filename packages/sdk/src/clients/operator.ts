@@ -71,6 +71,9 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
     }>;
     isOperator: (operator: Address) => Promise<boolean>;
     getDepositDetails: () => Promise<{ deposit: bigint }>;
+    
+    // 🎨 Simplified Aliases (High-level)
+    deposit: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
 };
 
 
@@ -341,6 +344,10 @@ export function createOperatorClient({
         async getDepositDetails(): Promise<{ deposit: bigint }> {
             const deposit = await spActions.superPaymasterGetDeposit();
             return { deposit };
+        },
+
+        async deposit(args: { amount: bigint, account?: Account | Address }) {
+            return this.superPaymasterDeposit(args);
         }
     };
 

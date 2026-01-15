@@ -22,6 +22,10 @@
   "hideBreadcrumbs": true,
   "cleanOutputDir": true,
   "logLevel": "Info",
+  "parametersFormat": "Table",
+  "typeDeclarationFormat": "Table",
+  "useCodeBlocks": true,
+  "expandObjects": false,
   "validation": {
     "notDocumented": false,
     "invalidLink": false,
@@ -51,7 +55,7 @@
   },
   "externalSymbolLinkMappings": {
     "viem": {
-      "*": "https://viem.sh/docs/index.html"
+      "*": "https://viem.sh/docs/"
     }
   }
 }
