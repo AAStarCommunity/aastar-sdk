@@ -73,7 +73,10 @@ fi
 
 # 4. Sync main README to guide/index.md for easy entry
 if [ -f "$SDK_REPO/README.md" ]; then
+    echo -e "${YELLOW}📝 Syncing README to getting-started.md and fixing links...${NC}"
     cp "$SDK_REPO/README.md" "$DOCS_REPO/guide/getting-started.md"
+    # Fix links from ./docs/api/ to ../api/ because getting-started is now in guide/
+    sed -i '' 's|(\./docs/api/|(../api/|g' "$DOCS_REPO/guide/getting-started.md"
 fi
 
 # 5. Extract package READMEs to api/modules/
@@ -108,6 +111,13 @@ find "$DOCS_REPO/api" -type d | while read -r dir; do
         cp "$dir/README.md" "$dir/index.md"
     fi
 done
+
+# 8. Post-process to remove bloated type definitions (viem client)
+echo -e "${YELLOW}🧹 Cleaning up bloated type definitions...${NC}"
+# Use a more robust pattern to match the start of the client table row and the end of the next row (or similar structure)
+# This is a bit tricky with sed, but since we know the specific output format of TypeDoc's Table format:
+find "$DOCS_REPO/api" -name "*.md" -type f | xargs -I {} sed -i '' '/| `client` | \\| { `account`: `undefined`;/,/| `account`: `Account` | `undefined`;.* |/d' {}
+find "$DOCS_REPO/api" -name "*.md" -type f | xargs -I {} sed -i '' 's/| `client` | \\| { `account`: `undefined`;.*/| `client` | `PublicClient \| WalletClient` |/' {}
 
 echo -e "${GREEN}✅ Documentation sync complete!${NC}"
 echo ""
