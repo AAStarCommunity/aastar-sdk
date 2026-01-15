@@ -21,6 +21,7 @@
   "hidePageTitle": true,
   "hideBreadcrumbs": true,
   "cleanOutputDir": true,
+  "outputFileStrategy": "modules",
   "logLevel": "Info",
   "parametersFormat": "Table",
   "typeDeclarationFormat": "Table",
