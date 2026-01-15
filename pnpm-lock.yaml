@@ -189,6 +189,9 @@ importers:
       '@aastar/tokens':
         specifier: workspace:*
         version: link:../tokens
+      dotenv:
+        specifier: 17.2.3
+        version: 17.2.3
       viem:
         specifier: 2.43.3
         version: 2.43.3(typescript@5.7.2)
