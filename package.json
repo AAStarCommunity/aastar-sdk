@@ -1,5 +1,5 @@
 {
-  "name": "@aastar/sdk",
+  "name": "@aastar/monorepo",
   "version": "0.16.6",
   "private": false,
   "type": "module",
