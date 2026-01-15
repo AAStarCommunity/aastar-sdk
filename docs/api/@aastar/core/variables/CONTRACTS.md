@@ -1,6 +1,6 @@
 > `const` **CONTRACTS**: `object`
 
-Defined in: [packages/core/src/contracts.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/contracts.ts#L101)
+Defined in: [packages/core/src/contracts.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/contracts.ts#L101)
 
 All supported networks
 

@@ -1,6 +1,6 @@
 > **getMySBTId**(`client`, `sbtAddress`, `user`): `Promise`\<`bigint` \| `null`\>
 
-Defined in: [packages/identity/src/mysbt.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/mysbt.ts#L35)
+Defined in: [packages/identity/src/mysbt.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/mysbt.ts#L35)
 
 Fetch MySBT token ID for a specific user (if unique/SBT).
 Note: Depends on whether the contract supports getTokenId or similar.

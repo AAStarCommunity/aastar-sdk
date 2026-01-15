@@ -1,6 +1,6 @@
 > **AccountFactoryActions** = `object`
 
-Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/account.ts#L24)
+Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L24)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarC
 
 > **accountImplementation**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/account.ts#L29)
+Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L29)
 
 #### Returns
 
@@ -20,7 +20,7 @@ Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarC
 
 > **createAccount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/account.ts#L25)
+Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L25)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarC
 
 > **getAddress**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/account.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/account.ts#L26)
+Defined in: [packages/core/src/actions/account.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/account.ts#L26)
 
 #### Parameters
 

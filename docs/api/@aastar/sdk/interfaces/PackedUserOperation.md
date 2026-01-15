@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/userOp.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L6)
+Defined in: [packages/sdk/src/utils/userOp.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L6)
 
 ERC-4337 v0.7 Packed UserOperation structure.
 
@@ -8,7 +8,7 @@ ERC-4337 v0.7 Packed UserOperation structure.
 
 > **accountGasLimits**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L11)
+Defined in: [packages/sdk/src/utils/userOp.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L11)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:11](https://github.com/AAStarCommu
 
 > **callData**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L10)
+Defined in: [packages/sdk/src/utils/userOp.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L10)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:10](https://github.com/AAStarCommu
 
 > **gasFees**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L13)
+Defined in: [packages/sdk/src/utils/userOp.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L13)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:13](https://github.com/AAStarCommu
 
 > **initCode**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L9)
+Defined in: [packages/sdk/src/utils/userOp.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L9)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:9](https://github.com/AAStarCommun
 
 > **nonce**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L8)
+Defined in: [packages/sdk/src/utils/userOp.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L8)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:8](https://github.com/AAStarCommun
 
 > **paymasterAndData**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L14)
+Defined in: [packages/sdk/src/utils/userOp.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L14)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:14](https://github.com/AAStarCommu
 
 > **preVerificationGas**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L12)
+Defined in: [packages/sdk/src/utils/userOp.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L12)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [packages/sdk/src/utils/userOp.ts:12](https://github.com/AAStarCommu
 
 > **sender**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L7)
+Defined in: [packages/sdk/src/utils/userOp.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L7)
 
 ***
 
@@ -72,4 +72,4 @@ Defined in: [packages/sdk/src/utils/userOp.ts:7](https://github.com/AAStarCommun
 
 > **signature**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/userOp.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/userOp.ts#L15)
+Defined in: [packages/sdk/src/utils/userOp.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/userOp.ts#L15)

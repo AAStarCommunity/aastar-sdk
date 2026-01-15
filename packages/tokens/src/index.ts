@@ -1,6 +1,21 @@
 import { type Address, parseAbi, type WalletClient, type PublicClient, type Hash, formatEther } from 'viem';
 import { SuperPaymasterABI as SUPERPAYMASTER_ABI, CONTRACTS } from '@aastar/core';
 
+// Re-export low-level token APIs from @aastar/core for developer convenience
+export { 
+    tokenActions, 
+    gTokenActions,
+    type TokenActions,
+    // ABIs
+    GTokenABI,
+    xPNTsTokenABI,
+    xPNTsFactoryABI,
+    // Actions
+    xPNTsFactoryActions,
+    // Addresses
+    CORE_ADDRESSES
+} from '@aastar/core';
+
 const STAKING_ABI = parseAbi([
     'function stake(uint256)',
     'function withdraw(uint256)'

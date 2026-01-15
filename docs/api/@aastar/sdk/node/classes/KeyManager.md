@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L26)
+Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L26)
 
 密钥管理器
 提供密钥生成、存储、加载等工具函数
@@ -19,7 +19,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:26](https://github.com/AAStarCommuni
 
 > `static` **generateKeyPair**(`name`): [`KeyPair`](../interfaces/KeyPair.md)
 
-Defined in: [packages/sdk/src/utils/keys.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L31)
+Defined in: [packages/sdk/src/utils/keys.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L31)
 
 生成单个密钥对
 
@@ -41,7 +41,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:31](https://github.com/AAStarCommuni
 
 > `static` **generateKeyPairs**(`names`): [`KeyPair`](../interfaces/KeyPair.md)[]
 
-Defined in: [packages/sdk/src/utils/keys.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L45)
+Defined in: [packages/sdk/src/utils/keys.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L45)
 
 批量生成密钥对
 
@@ -63,7 +63,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:45](https://github.com/AAStarCommuni
 
 > `static` **generateMultiple**(`count`, `prefix`): [`KeyPair`](../interfaces/KeyPair.md)[]
 
-Defined in: [packages/sdk/src/utils/keys.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L54)
+Defined in: [packages/sdk/src/utils/keys.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L54)
 
 生成指定数量的密钥对（自动命名为 Operator_1, Operator_2, ...）
 
@@ -91,7 +91,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:54](https://github.com/AAStarCommuni
 
 > `static` **loadFromEnvFile**(`filePath`): [`KeyPair`](../interfaces/KeyPair.md)[]
 
-Defined in: [packages/sdk/src/utils/keys.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L83)
+Defined in: [packages/sdk/src/utils/keys.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L83)
 
 从 .env 文件加载密钥
 
@@ -115,7 +115,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:83](https://github.com/AAStarCommuni
 
 > `static` **loadFromJsonFile**(`filePath`): [`KeyPair`](../interfaces/KeyPair.md)[]
 
-Defined in: [packages/sdk/src/utils/keys.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L133)
+Defined in: [packages/sdk/src/utils/keys.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L133)
 
 从 JSON 文件加载密钥
 
@@ -137,7 +137,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:133](https://github.com/AAStarCommun
 
 > `static` **printKeys**(`keys`, `showPrivateKey`): `void`
 
-Defined in: [packages/sdk/src/utils/keys.ts:152](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L152)
+Defined in: [packages/sdk/src/utils/keys.ts:152](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L152)
 
 打印密钥信息（隐藏私钥）
 
@@ -163,7 +163,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:152](https://github.com/AAStarCommun
 
 > `static` **saveToEnvFile**(`filePath`, `keys`, `overwrite`): `void`
 
-Defined in: [packages/sdk/src/utils/keys.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L65)
+Defined in: [packages/sdk/src/utils/keys.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L65)
 
 保存密钥到 .env 文件
 
@@ -197,7 +197,7 @@ Defined in: [packages/sdk/src/utils/keys.ts:65](https://github.com/AAStarCommuni
 
 > `static` **saveToJsonFile**(`filePath`, `keys`, `overwrite`): `void`
 
-Defined in: [packages/sdk/src/utils/keys.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/utils/keys.ts#L111)
+Defined in: [packages/sdk/src/utils/keys.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/utils/keys.ts#L111)
 
 保存密钥到 JSON 文件（包含地址信息）
 

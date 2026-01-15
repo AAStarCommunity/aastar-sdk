@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L13)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L13)
 
 ## Extends
 
@@ -10,7 +10,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:13](https://github.com/AASta
 
 > **new AAStarError**(`message`, `code`, `details?`): `AAStarError`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L17)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L17)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: node\_modules/.pnpm/typescript@5.7.2/node\_modules/typescript/lib/li
 
 > `readonly` **code**: [`AAStarErrorCode`](../enumerations/AAStarErrorCode.md)
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L14)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L14)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:14](https://github.com/AASta
 
 > `readonly` `optional` **details**: `any`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L15)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L15)
 
 ***
 

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L36)
+Defined in: [packages/core/src/actions/StateValidator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L36)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:36](https://github.com/
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/StateValidator.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L37)
+Defined in: [packages/core/src/actions/StateValidator.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L37)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:37](https://github.com/
 
 > **aPNTs**: `bigint`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L40)
+Defined in: [packages/core/src/actions/StateValidator.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L40)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:40](https://github.com/
 
 > **eth**: `bigint`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L38)
+Defined in: [packages/core/src/actions/StateValidator.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L38)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:38](https://github.com/
 
 > **gToken**: `bigint`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L39)
+Defined in: [packages/core/src/actions/StateValidator.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L39)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [packages/core/src/actions/StateValidator.ts:39](https://github.com/
 
 > **xPNTs**: `bigint`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L41)
+Defined in: [packages/core/src/actions/StateValidator.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L41)

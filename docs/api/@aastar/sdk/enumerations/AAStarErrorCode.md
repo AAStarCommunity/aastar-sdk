@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/errors/AAStarError.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L2)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L2)
 
 ## Enumeration Members
 
@@ -6,7 +6,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:2](https://github.com/AAStar
 
 > **CONFIGURATION\_ERROR**: `"CONFIGURATION_ERROR"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L6)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L6)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:6](https://github.com/AAStar
 
 > **CONTRACT\_ERROR**: `"CONTRACT_ERROR"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L4)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L4)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:4](https://github.com/AAStar
 
 > **INSUFFICIENT\_FUNDS**: `"INSUFFICIENT_FUNDS"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L7)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L7)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:7](https://github.com/AAStar
 
 > **NETWORK\_ERROR**: `"NETWORK_ERROR"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L5)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L5)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:5](https://github.com/AAStar
 
 > **OPERATION\_FAILED**: `"OPERATION_FAILED"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L9)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L9)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:9](https://github.com/AAStar
 
 > **PERMISSION\_DENIED**: `"PERMISSION_DENIED"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L8)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L8)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:8](https://github.com/AAStar
 
 > **UNKNOWN\_ERROR**: `"UNKNOWN_ERROR"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L10)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L10)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [packages/sdk/src/errors/AAStarError.ts:10](https://github.com/AASta
 
 > **VALIDATION\_ERROR**: `"VALIDATION_ERROR"`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L3)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L3)

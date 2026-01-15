@@ -1,6 +1,6 @@
 > **paymasterFactoryActions**(`address`): (`client`) => [`PaymasterFactoryActions`](../type-aliases/PaymasterFactoryActions.md)
 
-Defined in: [packages/core/src/actions/factory.ts:400](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/factory.ts#L400)
+Defined in: [packages/core/src/actions/factory.ts:400](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/factory.ts#L400)
 
 ## Parameters
 

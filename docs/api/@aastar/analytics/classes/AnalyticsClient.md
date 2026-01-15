@@ -1,4 +1,4 @@
-Defined in: [packages/analytics/src/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/analytics/src/index.ts#L16)
+Defined in: [packages/analytics/src/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/analytics/src/index.ts#L16)
 
 Analytics client for monitoring and statistics
 
@@ -23,7 +23,7 @@ Dashboard and monitoring tools
 
 > **new AnalyticsClient**(`publicClient`, `addresses?`): `AnalyticsClient`
 
-Defined in: [packages/analytics/src/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/analytics/src/index.ts#L21)
+Defined in: [packages/analytics/src/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/analytics/src/index.ts#L21)
 
 #### Parameters
 
@@ -1693,7 +1693,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > **getRoleEntranceCost**(`roleId`): `Promise`\<\{ `entryBurn`: `bigint`; `exitFee`: \{ `minFee`: `bigint`; `percent`: `number`; \}; `minStake`: `bigint`; `totalRequired`: `bigint`; \}\>
 
-Defined in: [packages/analytics/src/index.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/analytics/src/index.ts#L119)
+Defined in: [packages/analytics/src/index.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/analytics/src/index.ts#L119)
 
 Get role entrance cost breakdown
 
@@ -1717,7 +1717,7 @@ None (public view)
 
 > **getSupplyMetrics**(): `Promise`\<\{ `cap`: `bigint`; `deflationRate`: `number`; `remainingMintable`: `bigint`; `totalLifetimeBurned`: `bigint`; `totalSupply`: `bigint`; \}\>
 
-Defined in: [packages/analytics/src/index.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/analytics/src/index.ts#L37)
+Defined in: [packages/analytics/src/index.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/analytics/src/index.ts#L37)
 
 Get complete supply metrics
 
@@ -1735,7 +1735,7 @@ None (public view)
 
 > **subscribeToBurnEvents**(`callback`): () => `void`
 
-Defined in: [packages/analytics/src/index.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/analytics/src/index.ts#L85)
+Defined in: [packages/analytics/src/index.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/analytics/src/index.ts#L85)
 
 Subscribe to real-time burn events
 

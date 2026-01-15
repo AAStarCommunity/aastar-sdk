@@ -1,4 +1,4 @@
-Defined in: [packages/identity/src/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L7)
+Defined in: [packages/identity/src/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L7)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [packages/identity/src/index.ts:7](https://github.com/AAStarCommunit
 
 > **new ReputationClient**(`client`, `reputationAddress`, `walletClient?`): `ReputationClient`
 
-Defined in: [packages/identity/src/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L10)
+Defined in: [packages/identity/src/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L10)
 
 #### Parameters
 
@@ -2721,7 +2721,7 @@ const receipt = await client.writeContractSync({
 
 > **computeScore**(`user`, `communities`, `ruleIds`, `activities`): `Promise`\<`bigint`\>
 
-Defined in: [packages/identity/src/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L21)
+Defined in: [packages/identity/src/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L21)
 
 Compute reputation score for a user
 
@@ -2753,7 +2753,7 @@ Compute reputation score for a user
 
 > **getCreditLimit**(`user`): `Promise`\<`bigint`\>
 
-Defined in: [packages/identity/src/index.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L51)
+Defined in: [packages/identity/src/index.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L51)
 
 Get credit limit based on reputation
 
@@ -2777,7 +2777,7 @@ Credit limit in wei (Mock logic closely tied to Reputation)
 
 > **getGlobalReputation**(`user`): `Promise`\<`number`\>
 
-Defined in: [packages/identity/src/index.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L35)
+Defined in: [packages/identity/src/index.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L35)
 
 Get global reputation score for a user
 
@@ -2801,7 +2801,7 @@ Reputation score
 
 > **getReputationBreakdown**(`user`): `Promise`\<\{ `activityBonus`: `number`; `baseScore`: `number`; `penaltyDeduction`: `number`; `stakingBonus`: `number`; `total`: `number`; \}\>
 
-Defined in: [packages/identity/src/index.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L70)
+Defined in: [packages/identity/src/index.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L70)
 
 Get reputation score breakdown
 
@@ -2825,7 +2825,7 @@ Detailed reputation breakdown (Mock implementation awaiting contract V4)
 
 > **submitReputationProof**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/identity/src/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/identity/src/index.ts#L94)
+Defined in: [packages/identity/src/index.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/identity/src/index.ts#L94)
 
 Submit reputation proof (off-chain data to on-chain)
 

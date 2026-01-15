@@ -1,6 +1,6 @@
 > `const` **ROLE\_KMS**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/roles.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/roles.ts#L105)
+Defined in: [packages/core/src/roles.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/roles.ts#L105)
 
 KMS Role (Key Management Service)
 

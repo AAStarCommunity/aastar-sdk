@@ -1,6 +1,6 @@
 > `const` **createError**: `object`
 
-Defined in: [packages/sdk/src/errors/AAStarError.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/sdk/src/errors/AAStarError.ts#L28)
+Defined in: [packages/sdk/src/errors/AAStarError.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/sdk/src/errors/AAStarError.ts#L28)
 
 Error factory functions for consistent error creation
 

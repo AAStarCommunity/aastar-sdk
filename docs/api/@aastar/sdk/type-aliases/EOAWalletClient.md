@@ -1,6 +1,6 @@
 > **EOAWalletClient** = [`WalletClient`](https://viem.sh/docs/index.html) & `object`
 
-Defined in: [packages/account/src/eoa.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/account/src/eoa.ts#L4)
+Defined in: [packages/account/src/eoa.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/account/src/eoa.ts#L4)
 
 ## Type Declaration
 

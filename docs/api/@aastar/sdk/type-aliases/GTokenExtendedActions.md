@@ -1,6 +1,6 @@
 > **GTokenExtendedActions** = `object`
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L5)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L5)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:5](https://github.com/A
 
 > **burn**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L10)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L10)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:10](https://github.com/
 
 > **burnFrom**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L11)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L11)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:11](https://github.com/
 
 > **cap**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L14)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L14)
 
 #### Returns
 
@@ -72,7 +72,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:14](https://github.com/
 
 > **mint**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L9)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L9)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:9](https://github.com/A
 
 > **minter**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L15)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L15)
 
 #### Returns
 
@@ -112,7 +112,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:15](https://github.com/
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L24)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L24)
 
 #### Returns
 
@@ -124,7 +124,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:24](https://github.com/
 
 > **pause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L19)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L19)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:19](https://github.com/
 
 > **paused**: () => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L21)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L21)
 
 #### Returns
 
@@ -156,7 +156,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:21](https://github.com/
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L26)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L26)
 
 #### Parameters
 
@@ -176,7 +176,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:26](https://github.com/
 
 > **setMinter**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L16)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L16)
 
 #### Parameters
 
@@ -200,7 +200,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:16](https://github.com/
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L25)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L25)
 
 #### Parameters
 
@@ -224,7 +224,7 @@ Defined in: [packages/core/src/actions/gtokenExtended.ts:25](https://github.com/
 
 > **unpause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/gtokenExtended.ts#L20)
+Defined in: [packages/core/src/actions/gtokenExtended.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/gtokenExtended.ts#L20)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L30)
+Defined in: [packages/core/src/actions/StateValidator.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L30)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:30](https://github.com/
 
 > `optional` **data**: `any`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L33)
+Defined in: [packages/core/src/actions/StateValidator.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L33)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:33](https://github.com/
 
 > `optional` **message**: `string`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L32)
+Defined in: [packages/core/src/actions/StateValidator.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L32)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [packages/core/src/actions/StateValidator.ts:32](https://github.com/
 
 > **valid**: `boolean`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/14b4a74960c3bd633bec32aa8a6aea41202defe6/packages/core/src/actions/StateValidator.ts#L31)
+Defined in: [packages/core/src/actions/StateValidator.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6b49b22ad2e2ee38472f13bd530a515b9eb58add/packages/core/src/actions/StateValidator.ts#L31)
