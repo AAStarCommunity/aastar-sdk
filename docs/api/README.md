@@ -1,10 +1,10 @@
 ## Packages
 
-- [@aastar/account](@aastar/account/README.md)
-- [@aastar/analytics](@aastar/analytics/README.md)
-- [@aastar/core](@aastar/core/README.md)
-- [@aastar/dapp](@aastar/dapp/README.md)
-- [@aastar/identity](@aastar/identity/README.md)
-- [@aastar/paymaster](@aastar/paymaster/README.md)
+- [@aastar/account](@aastar/account.md)
+- [@aastar/analytics](@aastar/analytics.md)
+- [@aastar/core](@aastar/core.md)
+- [@aastar/dapp](@aastar/dapp.md)
+- [@aastar/identity](@aastar/identity.md)
+- [@aastar/paymaster](@aastar/paymaster.md)
 - [@aastar/sdk](@aastar/sdk/README.md)
-- [@aastar/tokens](@aastar/tokens/README.md)
+- [@aastar/tokens](@aastar/tokens.md)

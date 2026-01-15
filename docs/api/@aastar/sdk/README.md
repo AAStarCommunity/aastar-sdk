@@ -152,4 +152,4 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## Modules
 
 - [](README.md)
-- [node](node/README.md)
+- [node](node.md)
