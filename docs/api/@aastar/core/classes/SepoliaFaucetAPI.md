@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/faucet.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/faucet.ts#L31)
+Defined in: [packages/core/src/actions/faucet.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/faucet.ts#L31)
 
 ## Constructors
 
@@ -26,7 +26,7 @@ static adminDepositForUser(
 amount): Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/faucet.ts:349](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/faucet.ts#L349)
+Defined in: [packages/core/src/actions/faucet.ts:349](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/faucet.ts#L349)
 
 Complex Flow:
 1. Admin mints tokens to SELF.
@@ -175,7 +175,7 @@ static fundETH(
 amount): Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/faucet.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/faucet.ts#L95)
+Defined in: [packages/core/src/actions/faucet.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/faucet.ts#L95)
 
 Funds the target with ETH if balance is below threshold.
 
@@ -320,7 +320,7 @@ static mintTestTokens(
 amount): Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/faucet.ts:279](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/faucet.ts#L279)
+Defined in: [packages/core/src/actions/faucet.ts:279](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/faucet.ts#L279)
 
 Mints tokens directly to the target.
 
@@ -469,7 +469,7 @@ static prepareTestAccount(
 }>;
 ```
 
-Defined in: [packages/core/src/actions/faucet.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/faucet.ts#L40)
+Defined in: [packages/core/src/actions/faucet.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/faucet.ts#L40)
 
 Orchestrates the complete setup for a test account.
 1. Funds ETH
@@ -631,7 +631,7 @@ static registerEndUser(
 community?): Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/faucet.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/faucet.ts#L120)
+Defined in: [packages/core/src/actions/faucet.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/faucet.ts#L120)
 
 Registers the ENDUSER role using Sponsor Mode (Admin pays stake).
 

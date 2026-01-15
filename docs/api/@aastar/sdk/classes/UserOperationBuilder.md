@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/userOp.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L31)
+Defined in: [packages/sdk/src/utils/userOp.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L31)
 
 ## Constructors
 
@@ -20,7 +20,7 @@ new UserOperationBuilder(): UserOperationBuilder;
 static getUserOpHash(__namedParameters): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L103)
+Defined in: [packages/sdk/src/utils/userOp.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L103)
 
 Computes the UserOperation hash for signing.
 
@@ -118,7 +118,7 @@ Computes the UserOperation hash for signing.
 static jsonifyUserOp(userOp): any;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:144](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L144)
+Defined in: [packages/sdk/src/utils/userOp.ts:144](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L144)
 
 Formats a PackedUserOperation into a JSON-RPC compatible object with hex-encoded strings.
 
@@ -140,7 +140,7 @@ Formats a PackedUserOperation into a JSON-RPC compatible object with hex-encoded
 static packAccountGasLimits(verificationGasLimit, callGasLimit): `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L35)
+Defined in: [packages/sdk/src/utils/userOp.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L35)
 
 Packs verificationGasLimit and callGasLimit into a bytes32 Hex string.
 
@@ -163,7 +163,7 @@ Packs verificationGasLimit and callGasLimit into a bytes32 Hex string.
 static packGasFees(maxPriorityFeePerGas, maxFeePerGas): `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L45)
+Defined in: [packages/sdk/src/utils/userOp.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L45)
 
 Packs maxPriorityFeePerGas and maxFeePerGas into a bytes32 Hex string.
 
@@ -190,7 +190,7 @@ static packPaymasterAndData(
    paymasterData): `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L55)
+Defined in: [packages/sdk/src/utils/userOp.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L55)
 
 Packs Paymaster parameters into the v0.7 paymasterAndData format.
 
@@ -221,7 +221,7 @@ static packPaymasterV4DepositData(
    validAfter): `0x${string}`;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L82)
+Defined in: [packages/sdk/src/utils/userOp.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L82)
 
 Pack PaymasterV4 Deposit-Only paymasterAndData
 
@@ -253,7 +253,7 @@ So paymasterData format must be: [token(20)][validUntil(6)][validAfter(6)]
 static toAlchemyUserOperation(userOp, options?): any;
 ```
 
-Defined in: [packages/sdk/src/utils/userOp.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/userOp.ts#L193)
+Defined in: [packages/sdk/src/utils/userOp.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/userOp.ts#L193)
 
 Converts a PackedUserOperation to the Alchemy-specific v0.7 JSON format.
 

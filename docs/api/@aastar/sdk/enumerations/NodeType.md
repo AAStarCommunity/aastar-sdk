@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/communities.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L8)
+Defined in: [packages/core/src/communities.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L8)
 
 ## Enumeration Members
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/communities.ts:8](https://github.com/AAStarCommun
 ANODE: 2;
 ```
 
-Defined in: [packages/core/src/communities.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L11)
+Defined in: [packages/core/src/communities.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L11)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/communities.ts:11](https://github.com/AAStarCommu
 KMS: 3;
 ```
 
-Defined in: [packages/core/src/communities.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L12)
+Defined in: [packages/core/src/communities.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L12)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/communities.ts:12](https://github.com/AAStarCommu
 PAYMASTER_AOA: 0;
 ```
 
-Defined in: [packages/core/src/communities.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L9)
+Defined in: [packages/core/src/communities.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L9)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [packages/core/src/communities.ts:9](https://github.com/AAStarCommun
 PAYMASTER_SUPER: 1;
 ```
 
-Defined in: [packages/core/src/communities.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L10)
+Defined in: [packages/core/src/communities.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L10)

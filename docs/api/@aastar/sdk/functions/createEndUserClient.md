@@ -2,7 +2,7 @@
 function createEndUserClient(__namedParameters): EndUserClient;
 ```
 
-Defined in: [packages/sdk/src/clients/endUser.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/clients/endUser.ts#L97)
+Defined in: [packages/sdk/src/clients/endUser.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/clients/endUser.ts#L97)
 
 ## Parameters
 

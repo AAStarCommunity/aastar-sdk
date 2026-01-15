@@ -2,7 +2,7 @@
 function validateHex(value, fieldName): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/utils/validation.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/utils/validation.ts#L57)
+Defined in: [packages/core/src/utils/validation.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/utils/validation.ts#L57)
 
 Validates a Hex string.
 

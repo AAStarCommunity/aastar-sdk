@@ -1,4 +1,4 @@
-Defined in: [packages/analytics/src/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/analytics/src/index.ts#L16)
+Defined in: [packages/analytics/src/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/analytics/src/index.ts#L16)
 
 Analytics client for monitoring and statistics
 
@@ -25,7 +25,7 @@ Dashboard and monitoring tools
 new AnalyticsClient(publicClient, addresses?): AnalyticsClient;
 ```
 
-Defined in: [packages/analytics/src/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/analytics/src/index.ts#L21)
+Defined in: [packages/analytics/src/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/analytics/src/index.ts#L21)
 
 #### Parameters
 
@@ -128,7 +128,7 @@ getRoleEntranceCost(roleId): Promise<{
 }>;
 ```
 
-Defined in: [packages/analytics/src/index.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/analytics/src/index.ts#L119)
+Defined in: [packages/analytics/src/index.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/analytics/src/index.ts#L119)
 
 Get role entrance cost breakdown
 
@@ -168,7 +168,7 @@ getSupplyMetrics(): Promise<{
 }>;
 ```
 
-Defined in: [packages/analytics/src/index.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/analytics/src/index.ts#L37)
+Defined in: [packages/analytics/src/index.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/analytics/src/index.ts#L37)
 
 Get complete supply metrics
 
@@ -194,7 +194,7 @@ None (public view)
 subscribeToBurnEvents(callback): () => void;
 ```
 
-Defined in: [packages/analytics/src/index.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/analytics/src/index.ts#L85)
+Defined in: [packages/analytics/src/index.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/analytics/src/index.ts#L85)
 
 Subscribe to real-time burn events
 

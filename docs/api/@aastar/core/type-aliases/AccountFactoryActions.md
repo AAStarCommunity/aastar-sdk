@@ -2,7 +2,7 @@
 type AccountFactoryActions = object;
 ```
 
-Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/account.ts#L24)
+Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/account.ts#L24)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarC
 accountImplementation: () => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/account.ts#L29)
+Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/account.ts#L29)
 
 #### Returns
 
@@ -26,7 +26,7 @@ Defined in: [packages/core/src/actions/account.ts:29](https://github.com/AAStarC
 createAccount: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/account.ts#L25)
+Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/account.ts#L25)
 
 #### Parameters
 
@@ -49,7 +49,7 @@ Defined in: [packages/core/src/actions/account.ts:25](https://github.com/AAStarC
 getAddress: (args) => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/account.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/account.ts#L26)
+Defined in: [packages/core/src/actions/account.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/account.ts#L26)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/BaseClient.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L4)
+Defined in: [packages/core/src/clients/BaseClient.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L4)
 
 ## Constructors
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:4](https://github.com/AASta
 new BaseClient(config): BaseClient;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L13)
+Defined in: [packages/core/src/clients/BaseClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L13)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:13](https://github.com/AASt
 protected client: object;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L5)
+Defined in: [packages/core/src/clients/BaseClient.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L5)
 
 #### account
 
@@ -1794,7 +1794,7 @@ const receipt = await client.writeContractSync({
 protected optional entryPointAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L11)
+Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L11)
 
 ***
 
@@ -1804,7 +1804,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AASt
 protected optional gTokenAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L8)
+Defined in: [packages/core/src/clients/BaseClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L8)
 
 ***
 
@@ -1814,7 +1814,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:8](https://github.com/AASta
 protected optional gTokenStakingAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L9)
+Defined in: [packages/core/src/clients/BaseClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L9)
 
 ***
 
@@ -1824,7 +1824,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:9](https://github.com/AASta
 protected optional paymasterFactoryAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L10)
+Defined in: [packages/core/src/clients/BaseClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L10)
 
 ***
 
@@ -1834,7 +1834,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:10](https://github.com/AASt
 protected optional publicClient: object;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L6)
+Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L6)
 
 #### account
 
@@ -5209,7 +5209,7 @@ const unwatch = await client.watchPendingTransactions({
 protected optional registryAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L7)
+Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L7)
 
 ## Methods
 
@@ -5219,7 +5219,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AASta
 getAddress(): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L33)
+Defined in: [packages/core/src/clients/BaseClient.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L33)
 
 Get the account address of the connected wallet
 
@@ -5783,7 +5783,7 @@ protected getStartPublicClient():
 };
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L40)
+Defined in: [packages/core/src/clients/BaseClient.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L40)
 
 Helper to ensure public client exists or fallback to wallet client (if it supports read)
 
@@ -6472,7 +6472,7 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 protected requireEntryPoint(): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L72)
+Defined in: [packages/core/src/clients/BaseClient.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L72)
 
 #### Returns
 
@@ -6486,7 +6486,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:72](https://github.com/AASt
 protected requireGToken(): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L51)
+Defined in: [packages/core/src/clients/BaseClient.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L51)
 
 #### Returns
 
@@ -6500,7 +6500,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:51](https://github.com/AASt
 protected requireGTokenStaking(): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L58)
+Defined in: [packages/core/src/clients/BaseClient.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L58)
 
 #### Returns
 
@@ -6514,7 +6514,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:58](https://github.com/AASt
 protected requirePaymasterFactory(): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L65)
+Defined in: [packages/core/src/clients/BaseClient.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L65)
 
 #### Returns
 
@@ -6528,7 +6528,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:65](https://github.com/AASt
 protected requireRegistry(): `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/BaseClient.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/BaseClient.ts#L44)
+Defined in: [packages/core/src/clients/BaseClient.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/BaseClient.ts#L44)
 
 #### Returns
 

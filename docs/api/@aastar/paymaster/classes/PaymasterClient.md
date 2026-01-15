@@ -1,4 +1,4 @@
-Defined in: [V4/PaymasterClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L8)
+Defined in: [V4/PaymasterClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L8)
 
 PaymasterClient
 Focus: Integration, Funding, Interaction.
@@ -27,7 +27,7 @@ static approveGasToken(
 amount): Promise<any>;
 ```
 
-Defined in: [V4/PaymasterClient.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L47)
+Defined in: [V4/PaymasterClient.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L47)
 
 Approve the Paymaster (or any spender) to spend gas tokens.
 
@@ -57,7 +57,7 @@ static depositFor(
 amount): Promise<any>;
 ```
 
-Defined in: [V4/PaymasterClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L34)
+Defined in: [V4/PaymasterClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L34)
 
 Deposit tokens to Paymaster for a user (enables gasless transactions).
 
@@ -86,7 +86,7 @@ static encodeExecution(
    data): `0x${string}`;
 ```
 
-Defined in: [V4/PaymasterClient.ts:378](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L378)
+Defined in: [V4/PaymasterClient.ts:378](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L378)
 
 Helper: Encode a SimpleAccount execution.
 Wraps the inner call into: `execute(target, value, data)`
@@ -112,7 +112,7 @@ This is the payload signed by the user.
 static encodeTokenTransfer(recipient, amount): `0x${string}`;
 ```
 
-Defined in: [V4/PaymasterClient.ts:365](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L365)
+Defined in: [V4/PaymasterClient.ts:365](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L365)
 
 Helper: Encode a standardized ERC-20 Transfer.
 Returns the raw function data: `transfer(to, amount)`
@@ -151,7 +151,7 @@ static estimateUserOperationGas(
 }>;
 ```
 
-Defined in: [V4/PaymasterClient.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L60)
+Defined in: [V4/PaymasterClient.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L60)
 
 Estimate Gas for a UserOperation.
 
@@ -195,7 +195,7 @@ static getDepositedBalance(
 token): Promise<bigint>;
 ```
 
-Defined in: [V4/PaymasterClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L13)
+Defined in: [V4/PaymasterClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L13)
 
 Get user's deposited balance on the Paymaster.
 
@@ -225,7 +225,7 @@ static getFeeFromReceipt(receipt, paymasterAddress):
   | null;
 ```
 
-Defined in: [V4/PaymasterClient.ts:325](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L325)
+Defined in: [V4/PaymasterClient.ts:325](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L325)
 
 Helper to extract the actual Gas Token fee from a UserOperation receipt.
 Looks for the 'PostOpProcessed' event emitted by the Paymaster.
@@ -261,7 +261,7 @@ static getTransactionFee(
 | null>;
 ```
 
-Defined in: [V4/PaymasterClient.ts:352](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L352)
+Defined in: [V4/PaymasterClient.ts:352](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L352)
 
 Get the fee for a specific transaction hash.
 Fetches the receipt (no scanning required) and decodes the log.
@@ -300,7 +300,7 @@ static submitGaslessUserOperation(
 options?): Promise<`0x${string}`>;
 ```
 
-Defined in: [V4/PaymasterClient.ts:165](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterClient.ts#L165)
+Defined in: [V4/PaymasterClient.ts:165](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterClient.ts#L165)
 
 High-level API to submit a gasless UserOperation.
 Automatically handles nonce fetching, gas estimation (if not provided), signing, and submission.

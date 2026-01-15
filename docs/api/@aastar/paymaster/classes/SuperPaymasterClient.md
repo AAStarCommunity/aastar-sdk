@@ -1,4 +1,4 @@
-Defined in: [V4/SuperPaymasterClient.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/SuperPaymasterClient.ts#L20)
+Defined in: [V4/SuperPaymasterClient.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/SuperPaymasterClient.ts#L20)
 
 SuperPaymasterClient
 High-level API for SuperPaymaster operations, including dynamic gas estimation.
@@ -29,7 +29,7 @@ static submitGaslessTransaction(
 config): Promise<`0x${string}`>;
 ```
 
-Defined in: [V4/SuperPaymasterClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/SuperPaymasterClient.ts#L26)
+Defined in: [V4/SuperPaymasterClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/SuperPaymasterClient.ts#L26)
 
 Submit a gasless transaction using SuperPaymaster.
 Automatically handles gas estimation with a smart efficiency buffer.

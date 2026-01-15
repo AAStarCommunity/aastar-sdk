@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/funding.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L65)
+Defined in: [packages/sdk/src/utils/funding.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L65)
 
 资金管理器
 提供 ETH 和 ERC20 Token 的充值、验证等工具函数
@@ -23,7 +23,7 @@ new FundingManager(): FundingManager;
 static batchFundETH(params, targets): Promise<FundingResult[]>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:236](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L236)
+Defined in: [packages/sdk/src/utils/funding.ts:236](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L236)
 
 批量充值 ETH
 
@@ -51,7 +51,7 @@ static batchFundToken(
 targets): Promise<FundingResult[]>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:261](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L261)
+Defined in: [packages/sdk/src/utils/funding.ts:261](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L261)
 
 批量充值 Token
 
@@ -77,7 +77,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:261](https://github.com/AAStarCom
 static ensureFunding(params): Promise<FundingResult[]>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:184](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L184)
+Defined in: [packages/sdk/src/utils/funding.ts:184](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L184)
 
 智能充值：检查余额，不足时自动充值
 
@@ -101,7 +101,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:184](https://github.com/AAStarCom
 static fundWithETH(params): Promise<FundingResult>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L96)
+Defined in: [packages/sdk/src/utils/funding.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L96)
 
 充值 ETH 到目标地址
 
@@ -125,7 +125,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:96](https://github.com/AAStarComm
 static fundWithToken(params): Promise<FundingResult>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L126)
+Defined in: [packages/sdk/src/utils/funding.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L126)
 
 充值 ERC20 Token 到目标地址
 
@@ -149,7 +149,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:126](https://github.com/AAStarCom
 static getETHBalance(params): Promise<bigint>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:158](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L158)
+Defined in: [packages/sdk/src/utils/funding.ts:158](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L158)
 
 检查 ETH 余额
 
@@ -173,7 +173,7 @@ ETH 余额（wei）
 static getTokenBalance(params, tokenAddress): Promise<bigint>;
 ```
 
-Defined in: [packages/sdk/src/utils/funding.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/sdk/src/utils/funding.ts#L169)
+Defined in: [packages/sdk/src/utils/funding.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/sdk/src/utils/funding.ts#L169)
 
 检查 ERC20 Token 余额
 

@@ -1,4 +1,4 @@
-Defined in: [packages/tokens/src/index.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L31)
+Defined in: [packages/tokens/src/index.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L31)
 
 ## Constructors
 
@@ -8,7 +8,7 @@ Defined in: [packages/tokens/src/index.ts:31](https://github.com/AAStarCommunity
 new FinanceClient(publicClient, walletClient): FinanceClient;
 ```
 
-Defined in: [packages/tokens/src/index.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L32)
+Defined in: [packages/tokens/src/index.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L32)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [packages/tokens/src/index.ts:32](https://github.com/AAStarCommunity
 approveAndStake(amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L169)
+Defined in: [packages/tokens/src/index.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L169)
 
 One-step stake: Approve (if needed) + Stake
 
@@ -168,7 +168,7 @@ Transaction hash of the stake action
 getAPNTsBalance(address): Promise<bigint>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L153)
+Defined in: [packages/tokens/src/index.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L153)
 
 Get aPNTs balance
 
@@ -194,7 +194,7 @@ getCirculatingSupply(): Promise<{
 }>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:207](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L207)
+Defined in: [packages/tokens/src/index.ts:207](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L207)
 
 Get circulating supply (total - locked)
 
@@ -214,7 +214,7 @@ Get circulating supply (total - locked)
 getGTokenBalance(address): Promise<bigint>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:140](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L140)
+Defined in: [packages/tokens/src/index.ts:140](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L140)
 
 Get GToken balance
 
@@ -242,7 +242,7 @@ getTokenomicsOverview(): Promise<{
 }>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:234](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L234)
+Defined in: [packages/tokens/src/index.ts:234](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L234)
 
 Get comprehensive tokenomics data
 
@@ -268,7 +268,7 @@ static depositToEntryPoint(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L92)
+Defined in: [packages/tokens/src/index.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L92)
 
 #### Parameters
 
@@ -341,7 +341,7 @@ static depositToPaymaster(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L40)
+Defined in: [packages/tokens/src/index.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L40)
 
 #### Parameters
 
@@ -414,7 +414,7 @@ static depositViaTransferAndCall(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L51)
+Defined in: [packages/tokens/src/index.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L51)
 
 #### Parameters
 
@@ -487,7 +487,7 @@ static getEntryPointBalance(
 account): Promise<bigint>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L104)
+Defined in: [packages/tokens/src/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L104)
 
 #### Parameters
 
@@ -516,7 +516,7 @@ static operatorDeposit(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L114)
+Defined in: [packages/tokens/src/index.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L114)
 
 #### Parameters
 
@@ -588,7 +588,7 @@ static operatorNotifyDeposit(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L125)
+Defined in: [packages/tokens/src/index.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L125)
 
 #### Parameters
 
@@ -660,7 +660,7 @@ static stakeGToken(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L70)
+Defined in: [packages/tokens/src/index.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L70)
 
 #### Parameters
 
@@ -733,7 +733,7 @@ static withdrawProtocolRevenue(
 amount): Promise<`0x${string}`>;
 ```
 
-Defined in: [packages/tokens/src/index.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/tokens/src/index.ts#L81)
+Defined in: [packages/tokens/src/index.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/tokens/src/index.ts#L81)
 
 #### Parameters
 

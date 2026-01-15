@@ -2,7 +2,7 @@
 type AggregatorActions = object;
 ```
 
-Defined in: [packages/core/src/actions/aggregator.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/aggregator.ts#L4)
+Defined in: [packages/core/src/actions/aggregator.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/aggregator.ts#L4)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:4](https://github.com/AASta
 getBLSThreshold: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/aggregator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/aggregator.ts#L7)
+Defined in: [packages/core/src/actions/aggregator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/aggregator.ts#L7)
 
 #### Parameters
 
@@ -33,7 +33,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:7](https://github.com/AASta
 registerBLSPublicKey: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/aggregator.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/aggregator.ts#L5)
+Defined in: [packages/core/src/actions/aggregator.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/aggregator.ts#L5)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:5](https://github.com/AASta
 setBLSThreshold: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/aggregator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/aggregator.ts#L6)
+Defined in: [packages/core/src/actions/aggregator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/aggregator.ts#L6)
 
 #### Parameters
 

@@ -2,7 +2,7 @@
 function formatUserOpV07(userOp): any;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterUtils.ts#L123)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterUtils.ts#L123)
 
 Helper to format UserOp for Alchemy/Standard Bundlers (v0.7 Decomposed)
 

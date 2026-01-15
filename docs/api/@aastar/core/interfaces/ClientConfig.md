@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/types.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L6)
+Defined in: [packages/core/src/clients/types.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L6)
 
 Base configuration for all L2 Business Clients
 
@@ -10,7 +10,7 @@ Base configuration for all L2 Business Clients
 client: object;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L11)
+Defined in: [packages/core/src/clients/types.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L11)
 
 Viem WalletClient for write operations.
 Must have an account attached.
@@ -1779,7 +1779,7 @@ const receipt = await client.writeContractSync({
 optional entryPointAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L46)
+Defined in: [packages/core/src/clients/types.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L46)
 
 ***
 
@@ -1789,7 +1789,7 @@ Defined in: [packages/core/src/clients/types.ts:46](https://github.com/AAStarCom
 optional ethUsdPriceFeedAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L45)
+Defined in: [packages/core/src/clients/types.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L45)
 
 ***
 
@@ -1799,7 +1799,7 @@ Defined in: [packages/core/src/clients/types.ts:45](https://github.com/AAStarCom
 optional gTokenAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L31)
+Defined in: [packages/core/src/clients/types.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L31)
 
 GToken contract address.
 Required for operations involving token approvals and transfers.
@@ -1812,7 +1812,7 @@ Required for operations involving token approvals and transfers.
 optional gTokenStakingAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L37)
+Defined in: [packages/core/src/clients/types.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L37)
 
 GTokenStaking contract address.
 Required for role registration that involves staking.
@@ -1825,7 +1825,7 @@ Required for role registration that involves staking.
 optional paymasterFactoryAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L43)
+Defined in: [packages/core/src/clients/types.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L43)
 
 PaymasterFactory contract address.
 Required for deploying new PaymasterV4 instances.
@@ -1838,7 +1838,7 @@ Required for deploying new PaymasterV4 instances.
 optional publicClient: object;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L19)
+Defined in: [packages/core/src/clients/types.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L19)
 
 Optional PublicClient for read operations.
 If not provided, one will be derived from the WalletClient or created internally if possible (but usually explicit is better).
@@ -5218,7 +5218,7 @@ const unwatch = await client.watchPendingTransactions({
 optional registryAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L25)
+Defined in: [packages/core/src/clients/types.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L25)
 
 Registry contract address.
 Essential for looking up other contracts if not provided explicitly.
@@ -5231,4 +5231,4 @@ Essential for looking up other contracts if not provided explicitly.
 optional xpntsFactoryAddress: `0x${string}`;
 ```
 
-Defined in: [packages/core/src/clients/types.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/clients/types.ts#L44)
+Defined in: [packages/core/src/clients/types.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/clients/types.ts#L44)

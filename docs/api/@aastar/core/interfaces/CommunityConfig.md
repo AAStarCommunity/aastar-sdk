@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/communities.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L15)
+Defined in: [packages/core/src/communities.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L15)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/communities.ts:15](https://github.com/AAStarCommu
 address: string;
 ```
 
-Defined in: [packages/core/src/communities.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L18)
+Defined in: [packages/core/src/communities.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L18)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/communities.ts:18](https://github.com/AAStarCommu
 allowPermissionlessMint: boolean;
 ```
 
-Defined in: [packages/core/src/communities.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L23)
+Defined in: [packages/core/src/communities.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L23)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/communities.ts:23](https://github.com/AAStarCommu
 ensName: string;
 ```
 
-Defined in: [packages/core/src/communities.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L17)
+Defined in: [packages/core/src/communities.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L17)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/core/src/communities.ts:17](https://github.com/AAStarCommu
 isActive: boolean;
 ```
 
-Defined in: [packages/core/src/communities.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L22)
+Defined in: [packages/core/src/communities.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L22)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/communities.ts:22](https://github.com/AAStarCommu
 name: string;
 ```
 
-Defined in: [packages/core/src/communities.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L16)
+Defined in: [packages/core/src/communities.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L16)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [packages/core/src/communities.ts:16](https://github.com/AAStarCommu
 nodeType: NodeType;
 ```
 
-Defined in: [packages/core/src/communities.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L21)
+Defined in: [packages/core/src/communities.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L21)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [packages/core/src/communities.ts:21](https://github.com/AAStarCommu
 registeredAt: number;
 ```
 
-Defined in: [packages/core/src/communities.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L25)
+Defined in: [packages/core/src/communities.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L25)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [packages/core/src/communities.ts:25](https://github.com/AAStarCommu
 stakedAmount: string;
 ```
 
-Defined in: [packages/core/src/communities.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L24)
+Defined in: [packages/core/src/communities.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L24)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [packages/core/src/communities.ts:24](https://github.com/AAStarCommu
 supportedSBTs: string[];
 ```
 
-Defined in: [packages/core/src/communities.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L20)
+Defined in: [packages/core/src/communities.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L20)
 
 ***
 
@@ -98,4 +98,4 @@ Defined in: [packages/core/src/communities.ts:20](https://github.com/AAStarCommu
 xPNTsToken: string;
 ```
 
-Defined in: [packages/core/src/communities.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/communities.ts#L19)
+Defined in: [packages/core/src/communities.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/communities.ts#L19)

@@ -2,7 +2,7 @@
 function paymasterFactoryActions(address): (client) => PaymasterFactoryActions;
 ```
 
-Defined in: [packages/core/src/actions/factory.ts:400](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/factory.ts#L400)
+Defined in: [packages/core/src/actions/factory.ts:400](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/factory.ts#L400)
 
 ## Parameters
 

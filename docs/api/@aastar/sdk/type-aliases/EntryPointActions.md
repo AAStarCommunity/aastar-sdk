@@ -2,7 +2,7 @@
 type EntryPointActions = object;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L9)
+Defined in: [packages/core/src/actions/entryPoint.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L9)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:9](https://github.com/AASta
 addStake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L16)
+Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L16)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AASt
 balanceOf: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L10)
+Defined in: [packages/core/src/actions/entryPoint.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L10)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:10](https://github.com/AASt
 delegateAndRevert: (args) => Promise<void>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L25)
+Defined in: [packages/core/src/actions/entryPoint.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L25)
 
 #### Parameters
 
@@ -79,7 +79,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:25](https://github.com/AASt
 depositTo: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L11)
+Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L11)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AASt
 eip712Domain: () => Promise<any>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L34)
+Defined in: [packages/core/src/actions/entryPoint.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L34)
 
 #### Returns
 
@@ -116,7 +116,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:34](https://github.com/AASt
 getCurrentUserOpHash: () => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L35)
+Defined in: [packages/core/src/actions/entryPoint.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L35)
 
 #### Returns
 
@@ -136,7 +136,7 @@ getDepositInfo: (args) => Promise<{
 }>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L13)
+Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L13)
 
 #### Parameters
 
@@ -163,7 +163,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AASt
 getDomainSeparatorV4: () => Promise<Hex>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L36)
+Defined in: [packages/core/src/actions/entryPoint.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L36)
 
 #### Returns
 
@@ -177,7 +177,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:36](https://github.com/AASt
 getNonce: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L12)
+Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L12)
 
 #### Parameters
 
@@ -199,7 +199,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AASt
 getPackedUserOpTypeHash: () => Promise<Hex>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L37)
+Defined in: [packages/core/src/actions/entryPoint.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L37)
 
 #### Returns
 
@@ -213,7 +213,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:37](https://github.com/AASt
 getSenderAddress: (args) => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L29)
+Defined in: [packages/core/src/actions/entryPoint.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L29)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:29](https://github.com/AASt
 getUserOpHash: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L28)
+Defined in: [packages/core/src/actions/entryPoint.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L28)
 
 #### Parameters
 
@@ -255,7 +255,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:28](https://github.com/AASt
 handleAggregatedOps: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L23)
+Defined in: [packages/core/src/actions/entryPoint.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L23)
 
 #### Parameters
 
@@ -278,7 +278,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:23](https://github.com/AASt
 handleOps: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L22)
+Defined in: [packages/core/src/actions/entryPoint.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L22)
 
 #### Parameters
 
@@ -301,7 +301,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:22](https://github.com/AASt
 incrementNonce: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L31)
+Defined in: [packages/core/src/actions/entryPoint.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L31)
 
 #### Parameters
 
@@ -323,7 +323,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:31](https://github.com/AASt
 innerHandleOp: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L24)
+Defined in: [packages/core/src/actions/entryPoint.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L24)
 
 #### Parameters
 
@@ -347,7 +347,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:24](https://github.com/AASt
 nonceSequenceNumber: (args) => Promise<bigint>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L32)
+Defined in: [packages/core/src/actions/entryPoint.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L32)
 
 #### Parameters
 
@@ -369,7 +369,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:32](https://github.com/AASt
 senderCreator: () => Promise<Address>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L30)
+Defined in: [packages/core/src/actions/entryPoint.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L30)
 
 #### Returns
 
@@ -383,7 +383,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:30](https://github.com/AASt
 supportsInterface: (args) => Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L33)
+Defined in: [packages/core/src/actions/entryPoint.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L33)
 
 #### Parameters
 
@@ -404,7 +404,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:33](https://github.com/AASt
 unlockStake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L17)
+Defined in: [packages/core/src/actions/entryPoint.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L17)
 
 #### Parameters
 
@@ -425,7 +425,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:17](https://github.com/AASt
 version: EntryPointVersion;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L39)
+Defined in: [packages/core/src/actions/entryPoint.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L39)
 
 ***
 
@@ -435,7 +435,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:39](https://github.com/AASt
 withdrawStake: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L18)
+Defined in: [packages/core/src/actions/entryPoint.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L18)
 
 #### Parameters
 
@@ -457,7 +457,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:18](https://github.com/AASt
 withdrawTo: (args) => Promise<Hash>;
 ```
 
-Defined in: [packages/core/src/actions/entryPoint.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/actions/entryPoint.ts#L19)
+Defined in: [packages/core/src/actions/entryPoint.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/actions/entryPoint.ts#L19)
 
 #### Parameters
 

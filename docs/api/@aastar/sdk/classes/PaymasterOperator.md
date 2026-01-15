@@ -1,4 +1,4 @@
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L8)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L8)
 
 PaymasterOperator
 Focus: Deployment, Configuration, Maintenance, Keeper Bots.
@@ -26,7 +26,7 @@ static addDeposit(
 amount): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L107)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L107)
 
 #### Parameters
 
@@ -51,7 +51,7 @@ static addGasToken(
 token): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L117)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L117)
 
 #### Parameters
 
@@ -77,7 +77,7 @@ static addStake(
 unstakeDelaySec): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L96)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L96)
 
 #### Parameters
 
@@ -105,7 +105,7 @@ static checkGaslessReadiness(
 token): Promise<GaslessReadinessReport>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L169)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L169)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ static ensurePriceInitialized(
 address): Promise<boolean>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L87)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L87)
 
 #### Parameters
 
@@ -157,7 +157,7 @@ static getCachedPrice(publicClient, address): Promise<{
 }>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L36)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L36)
 
 #### Parameters
 
@@ -185,7 +185,7 @@ static getDepositedBalance(
 token): Promise<bigint>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L69)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L69)
 
 #### Parameters
 
@@ -211,7 +211,7 @@ static getTokenPrice(
 token): Promise<bigint>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L54)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L54)
 
 #### Parameters
 
@@ -239,7 +239,7 @@ static prepareGaslessEnvironment(
 options): Promise<object[]>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L229)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L229)
 
 #### Parameters
 
@@ -270,7 +270,7 @@ static removeGasToken(
 token): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L127)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L127)
 
 #### Parameters
 
@@ -295,7 +295,7 @@ static setMaxGasCostCap(
 cap): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:147](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L147)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:147](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L147)
 
 #### Parameters
 
@@ -320,7 +320,7 @@ static setServiceFeeRate(
 rate): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L137)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L137)
 
 #### Parameters
 
@@ -346,7 +346,7 @@ static setTokenPrice(
 priceUSD): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L26)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L26)
 
 Set the token price (in 8 decimals, e.g., 1e8 = $1 USD).
 
@@ -371,7 +371,7 @@ Set the token price (in 8 decimals, e.g., 1e8 = $1 USD).
 static updatePrice(wallet, address): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L14)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L14)
 
 Update the cached ETH/USD price from Chainlink Oracle.
 Must be called if cachedPrice is 0 (uninitialized).
@@ -400,7 +400,7 @@ static withdrawPNT(
 amount): Promise<any>;
 ```
 
-Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/paymaster/src/V4/PaymasterOperator.ts#L157)
+Defined in: [packages/paymaster/src/V4/PaymasterOperator.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/paymaster/src/V4/PaymasterOperator.ts#L157)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/requirementChecker.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L26)
+Defined in: [packages/core/src/requirementChecker.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L26)
 
 Requirement Checker Utility
 
@@ -12,7 +12,7 @@ Centralized validation for all role requirements
 new RequirementChecker(publicClient, addresses?): RequirementChecker;
 ```
 
-Defined in: [packages/core/src/requirementChecker.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L27)
+Defined in: [packages/core/src/requirementChecker.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L27)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ checkAPNTsBalance(address, required): Promise<{
 }>;
 ```
 
-Defined in: [packages/core/src/requirementChecker.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L148)
+Defined in: [packages/core/src/requirementChecker.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L148)
 
 #### Parameters
 
@@ -139,7 +139,7 @@ checkGTokenBalance(address, required): Promise<{
 }>;
 ```
 
-Defined in: [packages/core/src/requirementChecker.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L130)
+Defined in: [packages/core/src/requirementChecker.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L130)
 
 #### Parameters
 
@@ -163,7 +163,7 @@ Defined in: [packages/core/src/requirementChecker.ts:130](https://github.com/AAS
 checkHasRole(roleId, address): Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/requirementChecker.ts:178](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L178)
+Defined in: [packages/core/src/requirementChecker.ts:178](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L178)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [packages/core/src/requirementChecker.ts:178](https://github.com/AAS
 checkHasSBT(address): Promise<boolean>;
 ```
 
-Defined in: [packages/core/src/requirementChecker.ts:166](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L166)
+Defined in: [packages/core/src/requirementChecker.ts:166](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L166)
 
 #### Parameters
 
@@ -204,7 +204,7 @@ Defined in: [packages/core/src/requirementChecker.ts:166](https://github.com/AAS
 checkRequirements(params): Promise<RoleRequirement>;
 ```
 
-Defined in: [packages/core/src/requirementChecker.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/ee044880cf09fc864d856f7ed93e9172865157d1/packages/core/src/requirementChecker.ts#L37)
+Defined in: [packages/core/src/requirementChecker.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/c62b4370b37b568ac4c9186927802ebc0956c34c/packages/core/src/requirementChecker.ts#L37)
 
 #### Parameters
 
