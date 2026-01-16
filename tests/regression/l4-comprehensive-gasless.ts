@@ -29,17 +29,17 @@ import {
     createAdminClient,
     RoleIds,
     RoleDataFactory
-} from '../../packages/sdk/dist/sdk/src/index.js';
+} from '../../packages/sdk/dist/index.js';
 import { 
     UserOpScenarioBuilder, 
     UserOpScenarioType 
-} from '../../packages/sdk/dist/sdk/src/utils/testScenarios.js';
+} from '../../packages/sdk/dist/utils/testScenarios.js';
 import { 
     UserOperationBuilder 
-} from '../../packages/sdk/dist/sdk/src/utils/userOp.js';
+} from '../../packages/sdk/dist/utils/userOp.js';
 import { 
     type ScenarioParams 
-} from '../../packages/sdk/dist/sdk/src/utils/testScenarios.js';
+} from '../../packages/sdk/dist/utils/testScenarios.js';
 import { 
     tokenActions, 
     entryPointActions, 
@@ -115,9 +115,9 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
     const jasonAcc = privateKeyToAccount(jasonKey);
     const supplierAcc = privateKeyToAccount(supplierKey);
 
-    const jasonState = state.operators['Jason (AAStar)'];
-    const anniState = state.operators['Anni (Demo)'];
-    const bobState = state.operators['Bob (Bread)'];
+    const jasonState = state.operators['jason'];
+    const anniState = state.operators['anni'];
+    const bobState = state.operators['bob'];
 
     // Safe access to operator structures
     const jasonOp = jasonState; 
@@ -125,20 +125,13 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
     const bobOp = bobState;
     const zeroAddress = '0x0000000000000000000000000000000000000000';
 
-    const jasonAddr = (jasonOp?.owner || jasonState?.address || zeroAddress) as Address;
-    const anniAddr = (anniOp?.owner || anniState?.address || zeroAddress) as Address;
-    const bobAddr = (bobOp?.owner || bobState?.address || zeroAddress) as Address;
+    const jasonAddr = (jasonOp?.owner || jasonOp?.address || zeroAddress) as Address;
+    const anniAddr = (anniOp?.owner || anniOp?.address || zeroAddress) as Address;
+    const bobAddr = (bobOp?.owner || bobOp?.address || zeroAddress) as Address;
 
-    const targetAA = jasonOp; // Assuming jasonOp has address/account for AA too? Or strictly Operators?
-    // In l4-state, 'operators' usually contains deployment info. 
-    // If we need the AA account, we should check `state.aaAccounts` or similar if it exists, 
-    // or assume Jason's entry IS the AA if configured that way.
-    // Based on previous contexts, `targetAA` usually refers to `state.aaAccounts` entry.
-    // But let's follow the user's snippet logic. 
-    // User snippet: `const targetAA = jasonOp;` 
-    // Wait, User snippet line 125: `if (!targetAA || !targetAA.address) throw new Error(...)`
-    // So jasonOp must be an object with .address.
-
+    // Fix: Select correct AA from aaAccounts
+    const targetAA = state.aaAccounts.find((aa: any) => aa.opName.includes('Jason') || aa.label.includes('Jason'));
+    
     if (!targetAA || !targetAA.address) throw new Error('Target AA account or address not found in state (Jason)');
 
     const adminClient = createAdminClient({ chain: config.chain, transport: http(config.rpcUrl), account: supplierAcc });
@@ -285,7 +278,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
     try {
         const { userOp: gaslessRegOp, opHash: gaslessRegHash } = await UserOpScenarioBuilder.buildTransferScenario(UserOpScenarioType.GASLESS_V4, {
             sender: targetAA.address,
-            paymaster: jasonState.pmV4,
+            paymaster: jasonState.paymasterV4,
             recipient: config.contracts.registry,
             tokenAddress: config.contracts.gToken,
             amount: 0n,

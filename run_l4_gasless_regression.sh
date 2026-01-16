@@ -19,6 +19,19 @@ done
 echo "📡 Network: $NETWORK"
 echo ""
 
+# Log to file
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_DIR="logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/l4_regression_${NETWORK}_${TIMESTAMP}.log"
+
+# Use a named pipe to capture output while still showing it
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "📝 Logging to: $LOG_FILE"
+echo "🕒 Start Time: $(date)"
+echo ""
+
 # Ensure setup is run first
 echo "🔧 Step 0: Running l4-setup to ensure environment is ready..."
 pnpm tsx scripts/l4-setup.ts --network=$NETWORK
