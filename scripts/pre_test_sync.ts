@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 
 // Paths
-const SUPER_PAYMASTER_ABIS = path.resolve('./abis');
+const SUPER_PAYMASTER_ABIS = path.resolve('../SuperPaymaster/abis');
 const SDK_CORE_ABIS = path.resolve('./packages/core/src/abis');
 const SUPER_PAYMASTER_CONFIG_DIR = path.resolve('../SuperPaymaster/deployments');
 const SDK_ROOT = path.resolve('.');

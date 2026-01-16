@@ -888,6 +888,8 @@ async function main() {
                 const depositInfo = await ep(publicClient).getDepositInfo({ account: pm });
                 console.log(`      💰 Deposit: ${formatEther(depositInfo.deposit)} ETH | 🧱 Stake: ${formatEther(depositInfo.stake)} ETH (Staked: ${depositInfo.staked})`);
 
+                /* 
+                // Gemini: Skipping Stake based on analysis (SuperPaymaster only accesses internal storage)
                 if (depositInfo.stake < parseEther('0.1')) {
                     console.log(`   🧱 Staking 0.2 ETH for Paymaster ${pmInfo.operatorName} to allow storage access...`);
                     
@@ -923,6 +925,7 @@ async function main() {
                         console.log(`      ✅ Staked.`);
                     } catch(e:any) { console.log(`      ❌ Stake Failed: ${e.message}`); }
                 }
+                */
             } catch(e) { }
         }
 

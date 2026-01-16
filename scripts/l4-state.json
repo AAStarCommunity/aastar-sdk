@@ -1,24 +1,24 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-16T12:48:29.135Z",
+  "timestamp": "2026-01-16T15:40:14.919Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
-      "tokenAddress": "0xb26399500aBee1123730f778a23598e0bE406CDC",
+      "tokenAddress": "0x49dA64Dd2e02bC143f972871aE0ae00d00171Ef4",
       "symbol": "aPNTs",
-      "paymasterV4": "0x2824B1f2ebFDCb6CA226237121E9F17b980DEF6D"
+      "paymasterV4": "0xda66A453F46E8f9F0b02C6E37a591f69B6a218ea"
     },
     "bob": {
       "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
-      "tokenAddress": "0x87BEAb051Ed7D8B89e0A7E1a1517326433ee2501",
+      "tokenAddress": "0x96f5b0c1B36ae6E8a2A0523617E5cc7Cf8725709",
       "symbol": "bPNTs",
-      "paymasterV4": "0x75587e0533758189D1ac753e65Cc76d116a7c511"
+      "paymasterV4": "0x299513788bdf20B7157cbd474Ee38e8124dbcd89"
     },
     "anni": {
       "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
-      "tokenAddress": "0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9",
+      "tokenAddress": "0x61AfFC425d23492d80ECc824780cbFC08ed59FB5",
       "symbol": "cPNTs",
-      "superPaymaster": "0xec7E0A785d891ad4E3365b0998C2D8ED05E8b60D"
+      "superPaymaster": "0xc45927C4Cc73A56ef49b2B989bcdf389961f2B55"
     }
   },
   "aaAccounts": [
