@@ -1,7 +1,7 @@
 {
   "name": "@aastar/monorepo",
-  "version": "0.16.7",
-  "private": false,
+  "version": "0.16.8",
+  "private": true,
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -38,7 +38,8 @@
     "test:regression:05": "tsx scripts/v2_regression/05_admin_audit.ts",
     "test:regression:bls": "ts-node scripts/15_test_bls_full.ts",
     "docs:generate": "typedoc --options typedoc.json",
-    "docs:sync": "bash scripts/extract-docs.sh"
+    "docs:sync": "bash scripts/extract-docs.sh",
+    "version:update": "node scripts/update-versions.js"
   },
   "devDependencies": {
     "@types/node": "20.11.5",
