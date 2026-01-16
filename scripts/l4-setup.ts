@@ -39,7 +39,7 @@ import {
     UserOperationBuilder,
     UserOpScenarioBuilder,
     UserOpScenarioType
-} from '../packages/sdk/dist/index.js';
+} from '../packages/sdk/src/index.js';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 // import { loadContract } from './00_utils.js'; 

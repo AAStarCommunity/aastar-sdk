@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, type Hex, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config.js';
-import { tokenActions } from '../packages/core/dist/index.js';
+import { tokenActions } from '../packages/core/src/index.js';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.sepolia' });

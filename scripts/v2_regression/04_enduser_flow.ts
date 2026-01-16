@@ -3,7 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { foundry, sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { createEndUserClient, createAdminClient, RegistryABI, RoleIds } from '../../packages/sdk/dist/index.js';
+import { createEndUserClient, createAdminClient, RegistryABI, RoleIds } from '../../packages/sdk/src/index.js';
 
 if (!(BigInt.prototype as any).toJSON) {
     (BigInt.prototype as any).toJSON = function () { return this.toString(); };

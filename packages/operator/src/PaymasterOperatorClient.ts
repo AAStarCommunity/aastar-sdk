@@ -1,5 +1,5 @@
 import { type Address, type Hash, parseEther } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterArtifact } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
 import { superPaymasterActions, tokenActions, paymasterV4Actions } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
@@ -193,7 +193,7 @@ export class PaymasterOperatorClient extends BaseClient {
             // Encode initialize data
             const { encodeFunctionData, parseEther } = await import('viem');
             const initData = encodeFunctionData({
-                abi: PaymasterArtifact.abi,
+                abi: PaymasterABI,
                 functionName: 'initialize',
                 args: [
                     '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7

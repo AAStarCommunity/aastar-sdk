@@ -2,7 +2,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { paymasterV4Actions } from '../packages/core/dist/index.js';
+import { paymasterV4Actions } from '../packages/core/src/index.js';
 import { UserOperationBuilder } from '../packages/sdk/dist/utils/userOp.js';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';

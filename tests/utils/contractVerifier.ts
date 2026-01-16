@@ -10,7 +10,7 @@ import {
     paymasterV4Actions,
     stakingActions,
     xPNTsFactoryActions 
-} from '../../packages/core/dist/index.js';
+} from '../../packages/core/src/index.js';
 
 export interface ContractInfo {
     name: string;

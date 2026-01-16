@@ -3,8 +3,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import type { NetworkConfig } from './config';
 import { UserClient } from '../../packages/enduser/dist/UserClient.js';
 import { CommunityClient } from '../../packages/enduser/dist/CommunityClient.js';
-import { PaymasterOperatorClient, ProtocolClient } from '../../packages/operator/dist/index.js';
-import { registryActions } from '../../packages/core/dist/index.js';
+import { PaymasterOperatorClient, ProtocolClient } from '../../packages/operator/src/index.js';
+import { registryActions } from '../../packages/core/src/index.js';
 
 /**
  * Comprehensive L2 Business Clients Regression Tests

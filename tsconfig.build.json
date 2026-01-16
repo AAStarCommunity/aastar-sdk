@@ -3,18 +3,14 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "node",
-    "baseUrl": ".",
-    "paths": {
-      "@aastar/*": ["packages/*/src/index.ts"]
-    },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "declaration": false,      // 不生成 .d.ts 定义文件
-    "sourceMap": false,        // 不生成 .js.map 映射文件
-    "declarationMap": false    // 不生成 .d.ts.map (如果有这个选项的话)
+    "declaration": false,
+    "sourceMap": false,
+    "declarationMap": false
   },
   "exclude": [
     "node_modules",

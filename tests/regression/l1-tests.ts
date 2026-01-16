@@ -12,7 +12,7 @@ import {
     xPNTsFactoryActions,
     dvtActions,
     aggregatorActions
-} from '../../packages/core/dist/index.js';
+} from '../../packages/core/src/index.js';
 
 
 /**

@@ -12,7 +12,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
-import { UserOpScenarioBuilder, UserOpScenarioType } from '../packages/sdk/dist/index.js';
+import { UserOpScenarioBuilder, UserOpScenarioType } from '../packages/sdk/src/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 

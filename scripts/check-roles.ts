@@ -1,6 +1,6 @@
 import { createPublicClient, http } from 'viem';
 import { loadNetworkConfig } from '../tests/regression/config.js';
-import { registryActions } from '../packages/core/dist/index.js';
+import { registryActions } from '../packages/core/src/index.js';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.sepolia' });

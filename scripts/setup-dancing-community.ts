@@ -2,13 +2,13 @@ import { createPublicClient, createWalletClient, http, parseEther, type Hex } fr
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import { CommunityClient } from '../packages/enduser/dist/CommunityClient.js';
-import { PaymasterOperatorClient } from '../packages/operator/dist/index.js';
+import { PaymasterOperatorClient } from '../packages/operator/src/index.js';
 import { 
     tokenActions, 
     registryActions, 
     xPNTsFactoryActions,
     paymasterFactoryActions 
-} from '../packages/core/dist/index.js';
+} from '../packages/core/src/index.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -183,7 +183,7 @@ async function setupDancingCommunityComplete() {
             await publicClient.waitForTransactionReceipt({ hash: approveHash });
             
             // Deposit to SuperPaymaster
-            const { superPaymasterActions } = await import('../packages/core/dist/index.js');
+            const { superPaymasterActions } = await import('../packages/core/src/index.js');
             const superPaymaster = superPaymasterActions(config.contracts.superPaymaster);
             
             const depositHash = await superPaymaster(clientJack).depositCollateral({

@@ -15,7 +15,7 @@ import {
     generateContractReport,
     type WiringCheck
 } from '../tests/utils/contractVerifier.js';
-import { registryActions } from '../packages/core/dist/index.js';
+import { registryActions } from '../packages/core/src/index.js';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';

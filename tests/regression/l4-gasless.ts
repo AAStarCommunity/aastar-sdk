@@ -10,8 +10,8 @@ import {
     UserOpScenarioType, 
     type ScenarioParams,
     UserOperationBuilder // Ensure this is imported
-} from '../../packages/sdk/dist/index.js'; // Correct import source
-import { tokenActions, entryPointActions, EntryPointVersion } from '../../packages/core/dist/index.js';
+} from '../../packages/sdk/src/index.js'; // Correct import source
+import { tokenActions, entryPointActions, EntryPointVersion } from '../../packages/core/src/index.js';
 import { fileURLToPath } from 'url';
 
 // Load L4 State

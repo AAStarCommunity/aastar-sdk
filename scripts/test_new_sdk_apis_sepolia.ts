@@ -49,7 +49,7 @@ async function main() {
     // 5. FinanceClient (Phase 2 New)
     // ---------------------------------------------------------
     console.log('\n--- Testing FinanceClient (New) ---');
-    const { FinanceClient } = await import('../packages/tokens/dist/index.js');
+    const { FinanceClient } = await import('../packages/tokens/src/index.js');
     const financeClient = new FinanceClient(publicClient, walletClient);
 
     try {
@@ -91,8 +91,8 @@ async function main() {
     // 6. ReputationClient (Phase 2 New)
     // ---------------------------------------------------------
     console.log('\n--- Testing ReputationClient (New) ---');
-    const { ReputationClient } = await import('../packages/identity/dist/index.js');
-    const { CORE_ADDRESSES } = await import('../packages/core/dist/index.js');
+    const { ReputationClient } = await import('../packages/identity/src/index.js');
+    const { CORE_ADDRESSES } = await import('../packages/core/src/index.js');
     
     // Fallback: Use MySBT address if ReputationSystem not in env, 
     // just to test instantiation and method calls (will return 0 or fail gracefully)

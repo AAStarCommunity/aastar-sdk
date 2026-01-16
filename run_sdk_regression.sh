@@ -152,7 +152,9 @@ fi
 ENV_FILE=".env.${ENV}"
 if [ -f "$ENV_FILE" ]; then
     log_step "Loading environment from $ENV_FILE"
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
+    set -a
+    source "$ENV_FILE"
+    set +a
     log_success "Environment loaded"
 else
     log_error "Environment file not found: $ENV_FILE"

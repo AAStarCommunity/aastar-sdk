@@ -9,7 +9,7 @@ import {
     SuperPaymasterOperator,
     ProtocolGovernance,
     ReputationManager
-} from '../../packages/patterns/dist/index.js';
+} from '../../packages/patterns/src/index.js';
 
 /**
  * Comprehensive L3 Scenario Patterns Regression Tests

@@ -2,8 +2,8 @@ import { type Address, type PublicClient, type WalletClient, type Chain, type Tr
 import { type ClientConfig } from './types.js';
 
 export abstract class BaseClient {
-    protected client: WalletClient<Transport, Chain, Account>;
-    protected publicClient?: PublicClient;
+    public client: WalletClient<Transport, Chain, Account>;
+    public publicClient?: PublicClient;
     protected registryAddress?: Address;
     protected gTokenAddress?: Address;
     protected gTokenStakingAddress?: Address;
@@ -37,7 +37,7 @@ export abstract class BaseClient {
     /**
      * Helper to ensure public client exists or fallback to wallet client (if it supports read)
      */
-    protected getStartPublicClient(): PublicClient | WalletClient<Transport, Chain, Account> {
+    public getStartPublicClient(): PublicClient | WalletClient<Transport, Chain, Account> {
         return this.publicClient || this.client;
     }
 

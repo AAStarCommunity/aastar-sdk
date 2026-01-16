@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config.js';
-import { tokenActions } from '../packages/core/dist/index.js';
+import { tokenActions } from '../packages/core/src/index.js';
 import { CommunityClient } from '../packages/enduser/dist/CommunityClient.js';
 import * as dotenv from 'dotenv';
 
@@ -100,7 +100,7 @@ async function testJackCommunityRegistration() {
         
         // Step 5: Verify registration
         console.log('\n🔍 Verifying registration...');
-        const { registryActions } = await import('../packages/core/dist/index.js');
+        const { registryActions } = await import('../packages/core/src/index.js');
         const registry = registryActions(config.contracts.registry);
         const ROLE_COMMUNITY = await registry(publicClient).ROLE_COMMUNITY();
         const hasRole = await registry(publicClient).hasRole({
