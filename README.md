@@ -166,6 +166,7 @@ The SDK supports doctoral data collection for the SuperPaymaster paper. Official
 本 SDK 支撑了 SuperPaymaster 论文的博士实验数据采集。官方实验记录器位于 `scripts/19_sdk_experiment_runner.ts`。
 
 - [Stage 3 Scenario Experiment Plan](./docs/STAGE_3_SCENARIO_EXP_PLAN.md)
+- [Reputation-to-Credit Mapping Whitepaper](./docs/Reputation-to-Credit_Mapping_Whitepaper.md) - 声誉与信用体系映射技术白皮书
 
 ---
 
