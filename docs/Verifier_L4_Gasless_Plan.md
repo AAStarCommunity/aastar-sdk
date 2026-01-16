@@ -91,7 +91,7 @@
     *   通过 Bread Community 的 PaymasterV4 发起交易。
     *   验证：成功，扣除 AA 的 bPNTs。
 
-### 3.4 SuperPaymasterV3 交易 (Demo Community - Credit System)
+### 3.4 SuperPaymaster 交易 (Demo Community - Credit System)
 目标：测试信用 (Credit)、债务 (Debt) 和 偿还 (Repayment) 逻辑。
 配置：Demo Community Operator (Anni) 部署的 SuperPaymaster。
 
@@ -125,7 +125,7 @@
 *   
 
 补充：
-xPNTsFactory合约初始化会设置SuperPaymaster内置为超级账户，可以直接从任意xPNTsFactory部署的xPNTs合约转账gas需要的xPNTs到自己的账户，不用approve。不过也提供了安全校验，只能用来转gas费用。
+xPNTsFactory合约初始化会设置SuperPaymaster内置为超级账户，可以直接从任意xPNTsFactory部署的xPNTs合约转账gas需要的xPNTs到自己内部的账户，不用approve(鉴于无限额度授权的风险，我们改进为部署xpnts的时候应该是默认通过DeployLive.s.sol来初始化了100美元的xPNTs给superpaymaster，这个动作需要check下是不是做了，什么时候做的，确认我说的是否正确)。不过也提供了安全校验，只能用来转gas费用。
 
 
 ## 规则补充
