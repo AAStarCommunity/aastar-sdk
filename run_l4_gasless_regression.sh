@@ -57,6 +57,7 @@ run_test "Jason AA1 Gasless" "tests/l4-test-jason1-gasless.ts"
 run_test "Jason AA2 Gasless" "tests/l4-test-jason2-gasless.ts"
 run_test "Anni Gasless" "tests/l4-test-anni-gasless.ts"
 run_test "Reputation Tiers" "tests/regression/l4-reputation-tiers.ts"
+run_test "Comprehensive Gasless" "tests/regression/l4-comprehensive-gasless.ts"
 run_test "Simple Gasless Demo" "examples/simple-gasless-demo.ts"
 
 # Summary
