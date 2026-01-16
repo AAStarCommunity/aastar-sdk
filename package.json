@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.14.3",
+  "version": "0.16.8",
   "private": false,
   "type": "module",
   "workspaces": [
