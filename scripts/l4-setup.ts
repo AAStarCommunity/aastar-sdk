@@ -893,50 +893,6 @@ async function main() {
                 const depositInfo = await ep(publicClient).getDepositInfo({ account: pm });
                 console.log(`      💰 Deposit: ${formatEther(depositInfo.deposit)} ETH | 🧱 Stake: ${formatEther(depositInfo.stake)} ETH (Staked: ${depositInfo.staked})`);
 
-                // Gemini: Enabling Stake for SuperPaymaster (Required for TIMESTAMP / Staleness Check)
-                if (depositInfo.stake < parseEther('0.1')) {
-                    console.log(`   🧱 Staking 0.2 ETH for Paymaster ${pmInfo.operatorName} to allow storage/timestamp access...`);
-                    
-                    // Query the actual owner of the Paymaster contract
-                    let actualOwner: Address;
-                    try {
-                        actualOwner = await publicClient.readContract({
-                            address: pm,
-                            abi: parseAbi(['function owner() view returns (address)']),
-                            functionName: 'owner'
-                        }) as Address;
-                    } catch {
-                        // SuperPaymaster owner might be different or proxied.
-                        // For SuperPM, we know the owner is likely Anni (or whoever deployed it).
-                        // Let's assume the mapped owner is correct if read fails.
-                        actualOwner = pmInfo.owner!;
-                    }
-                    
-                    console.log(`      🔑 Paymaster Owner: ${actualOwner}`);
-                    
-                    // Find the operator account that matches the owner
-                    const ownerOp = operators.find(o => privateKeyToAccount(o.key).address.toLowerCase() === actualOwner.toLowerCase());
-                    
-                    if (ownerOp) {
-                        const ownerAcc = privateKeyToAccount(ownerOp.key);
-                        const ownerClient = createWalletClient({ account: ownerAcc, chain: config.chain, transport: http(config.rpcUrl) });
-                        
-                        try {
-                            const h = await ownerClient.writeContract({
-                                address: pm,
-                                abi: [{name: 'addStake', type: 'function', inputs: [{type:'uint32'}], outputs: [], stateMutability: 'payable'}],
-                                functionName: 'addStake',
-                                args: [86400], // 1 day
-                                value: parseEther('0.2')
-                            });
-                            console.log(`      ⏳ Stake Tx Sent: ${h}`);
-                            await publicClient.waitForTransactionReceipt({hash:h});
-                            console.log(`      ✅ Staked.`);
-                        } catch(e:any) { console.log(`      ❌ Stake Failed: ${e.message}`); }
-                    } else {
-                         console.log(`      ❌ Owner ${actualOwner} not found in operators list. Skipping stake.`);
-                    }
-                }
             } catch(e) { }
         }
 
