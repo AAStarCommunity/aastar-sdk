@@ -1,14 +1,14 @@
 > **DVTActions** = `object`
 
-Defined in: [packages/core/src/actions/dvt.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L4)
+Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L6)
 
 ## Properties
 
-### createSlashProposal()
+### addValidator()
 
-> **createSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **addValidator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L5)
+Defined in: [packages/core/src/actions/dvt.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L17)
 
 #### Parameters
 
@@ -18,9 +18,41 @@ Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommun
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### address
+###### v
 
 `Address`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### BLS\_AGGREGATOR()
+
+> **BLS\_AGGREGATOR**: () => `Promise`\<`Address`\>
+
+Defined in: [packages/core/src/actions/dvt.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L21)
+
+#### Returns
+
+`Promise`\<`Address`\>
+
+***
+
+### createSlashProposal()
+
+> **createSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L8)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
 
 ###### level
 
@@ -44,7 +76,7 @@ Defined in: [packages/core/src/actions/dvt.ts:5](https://github.com/AAStarCommun
 
 > **executeSlashWithProof**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L7)
+Defined in: [packages/core/src/actions/dvt.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L10)
 
 #### Parameters
 
@@ -53,10 +85,6 @@ Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommun
 ###### account?
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### address
-
-`Address`
 
 ###### epoch
 
@@ -88,15 +116,11 @@ Defined in: [packages/core/src/actions/dvt.ts:7](https://github.com/AAStarCommun
 
 > **isValidator**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L8)
+Defined in: [packages/core/src/actions/dvt.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L16)
 
 #### Parameters
 
 ##### args
-
-###### address
-
-`Address`
 
 ###### user
 
@@ -108,11 +132,11 @@ Defined in: [packages/core/src/actions/dvt.ts:8](https://github.com/AAStarCommun
 
 ***
 
-### signSlashProposal()
+### markProposalExecuted()
 
-> **signSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **markProposalExecuted**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/actions/dvt.ts#L6)
+Defined in: [packages/core/src/actions/dvt.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L11)
 
 #### Parameters
 
@@ -122,9 +146,129 @@ Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommun
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### address
+###### id
+
+`bigint`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### nextProposalId()
+
+> **nextProposalId**: () => `Promise`\<`bigint`\>
+
+Defined in: [packages/core/src/actions/dvt.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L13)
+
+#### Returns
+
+`Promise`\<`bigint`\>
+
+***
+
+### owner()
+
+> **owner**: () => `Promise`\<`Address`\>
+
+Defined in: [packages/core/src/actions/dvt.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L25)
+
+#### Returns
+
+`Promise`\<`Address`\>
+
+***
+
+### proposals()
+
+> **proposals**: (`args`) => `Promise`\<\{ `executed`: `boolean`; `proposer`: `Address`; `reason`: `string`; `slashLevel`: `number`; \}\>
+
+Defined in: [packages/core/src/actions/dvt.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L12)
+
+#### Parameters
+
+##### args
+
+###### proposalId
+
+`bigint`
+
+#### Returns
+
+`Promise`\<\{ `executed`: `boolean`; `proposer`: `Address`; `reason`: `string`; `slashLevel`: `number`; \}\>
+
+***
+
+### REGISTRY()
+
+> **REGISTRY**: () => `Promise`\<`Address`\>
+
+Defined in: [packages/core/src/actions/dvt.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L22)
+
+#### Returns
+
+`Promise`\<`Address`\>
+
+***
+
+### renounceOwnership()
+
+> **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/dvt.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L27)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### setBLSAggregator()
+
+> **setBLSAggregator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/dvt.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L20)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+###### aggregator
 
 `Address`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### signSlashProposal()
+
+> **signSlashProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/dvt.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L9)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
 
 ###### proposalId
 
@@ -137,3 +281,39 @@ Defined in: [packages/core/src/actions/dvt.ts:6](https://github.com/AAStarCommun
 #### Returns
 
 `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### transferOwnership()
+
+> **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/dvt.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L26)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+###### newOwner
+
+`Address`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### version()
+
+> **version**: () => `Promise`\<`string`\>
+
+Defined in: [packages/core/src/actions/dvt.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/dvt.ts#L30)
+
+#### Returns
+
+`Promise`\<`string`\>

@@ -1,3 +1,29 @@
-> `const` **ROLE\_ANODE**: `"0x3aa2e9509f29532b71f822e18bcde843a8070a508d564188ec8a6adf59eff28a"` = `"0x3aa2e9509f29532b71f822e18bcde843a8070a508d564188ec8a6adf59eff28a"`
+> `const` **ROLE\_ANODE**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/constants.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/constants.ts#L67)
+Defined in: [packages/core/src/roles.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/roles.ts#L84)
+
+ANODE Role (Anonymous Node)
+
+## Description
+
+Anonymous infrastructure node operator
+
+## Permission
+
+Infrastructure operator
+
+## Requirement
+
+minStake: 20 GT, entryBurn: 2 GT (line 95)
+
+## Exit Fee
+
+10% (1000 basis points), min 1 GT
+
+## Lock Duration
+
+30 days
+
+## Source
+
+Registry.sol line 37: ROLE_ANODE = keccak256("ANODE")

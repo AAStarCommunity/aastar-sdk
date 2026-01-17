@@ -1,8 +1,8 @@
 > `const` **BLSHelpers**: `object`
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/crypto/blsSigner.ts#L76)
+Defined in: [packages/core/src/crypto/blsSigner.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/crypto/blsSigner.ts#L76)
 
-Helper functions for creating BLS proofs for Registry operations
+Helper functions for creating BLS proofs for Registry and BLSAggregator operations
 
 ## Type Declaration
 
@@ -18,25 +18,17 @@ Create message hash for reputation update
 
 `` `0x${string}` ``[]
 
-Array of user addresses
-
 ##### scores
 
 `bigint`[]
-
-Array of reputation scores
 
 ##### epoch
 
 `bigint`
 
-Epoch number
-
 #### Returns
 
 `` `0x${string}` ``
-
-Message hash to sign
 
 ### createSlashProposalMessage()
 
@@ -50,42 +42,60 @@ Create message hash for slash proposal
 
 `bigint`
 
-Slash proposal ID
-
 #### Returns
 
 `` `0x${string}` ``
 
-Message hash to sign
+### encodeBLSProof()
 
-### encodeReputationProof()
+> **encodeBLSProof**(`aggregatedPublicKey`, `aggregatedSignature`, `messageMappingG2`, `signerMask`): `` `0x${string}` ``
 
-> **encodeReputationProof**(`aggregatedSignature`, `aggregatedPublicKey`, `bitmap`): `` `0x${string}` ``
-
-Encode BLS proof for Registry.batchUpdateGlobalReputation
+Encode BLS proof for Registry/Aggregator (v3 format)
+Proof structure: (bytes pkG1, bytes sigG2, bytes msgG2, uint256 signerMask)
 
 #### Parameters
-
-##### aggregatedSignature
-
-`` `0x${string}` ``
-
-Aggregated BLS signature
 
 ##### aggregatedPublicKey
 
 `` `0x${string}` ``
 
-Aggregated BLS public key
+##### aggregatedSignature
 
-##### bitmap
+`` `0x${string}` ``
+
+##### messageMappingG2
+
+`` `0x${string}` ``
+
+##### signerMask
 
 `bigint`
-
-Validator participation bitmap
 
 #### Returns
 
 `` `0x${string}` ``
 
-Encoded proof bytes
+### encodeReputationProof()
+
+> **encodeReputationProof**(`signature`, `publicKey`, `signerMask`): `` `0x${string}` ``
+
+Encode Reputation Proof (for test compatibility)
+Matches format: (signature, publicKey, signerMask)
+
+#### Parameters
+
+##### signature
+
+`` `0x${string}` ``
+
+##### publicKey
+
+`` `0x${string}` ``
+
+##### signerMask
+
+`bigint`
+
+#### Returns
+
+`` `0x${string}` ``

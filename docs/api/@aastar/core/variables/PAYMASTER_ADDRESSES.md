@@ -1,6 +1,6 @@
 > `const` **PAYMASTER\_ADDRESSES**: `object`
 
-Defined in: [packages/core/src/contract-addresses.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contract-addresses.ts#L51)
+Defined in: [packages/core/src/contract-addresses.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/contract-addresses.ts#L70)
 
 Paymaster Addresses
 
@@ -8,8 +8,8 @@ Paymaster Addresses
 
 ### paymasterV4\_1
 
-> `readonly` **paymasterV4\_1**: `"0x4D6A367aA183903968833Ec4AE361CFc8dDDBA38"` = `'0x4D6A367aA183903968833Ec4AE361CFc8dDDBA38'`
+> `readonly` **paymasterV4\_1**: `` `0x${string}` ``
 
 ### paymasterV4\_1iImplementation
 
-> `readonly` **paymasterV4\_1iImplementation**: `"0x3E1C6a741f4b3f8bE24f324342539982324a6f8a"` = `'0x3E1C6a741f4b3f8bE24f324342539982324a6f8a'`
+> `readonly` **paymasterV4\_1iImplementation**: `` `0x${string}` `` = `PAYMASTER_V4_IMPL_ADDRESS`

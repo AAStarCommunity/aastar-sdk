@@ -1,6 +1,6 @@
 > **getCommunities**(`network`): `object`
 
-Defined in: [packages/core/src/contracts.ts:395](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contracts.ts#L395)
+Defined in: [packages/core/src/contracts.ts:395](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/contracts.ts#L395)
 
 Get registered communities
 
@@ -28,7 +28,7 @@ AAStar Community - Test community for development (registered: 2025-11-01)
 
 #### aastar.gasToken
 
-> `readonly` **gasToken**: `"0xBD0710596010a157B88cd141d797E8Ad4bb2306b"` = `TEST_TOKEN_ADDRESSES.aPNTs`
+> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.aPNTs`
 
 #### aastar.name
 
@@ -54,7 +54,7 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### breadCommunity.gasToken
 
-> `readonly` **gasToken**: `"0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3"` = `TEST_TOKEN_ADDRESSES.bPNTs`
+> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.bPNTs`
 
 #### breadCommunity.name
 

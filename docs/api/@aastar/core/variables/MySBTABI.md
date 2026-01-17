@@ -1,3 +1,3 @@
-> `const` **MySBTABI**: (\{ `anonymous?`: `undefined`; `inputs`: `object`[]; `name?`: `undefined`; `outputs?`: `undefined`; `stateMutability`: `string`; `type`: `string`; \} \| \{ `anonymous?`: `undefined`; `inputs`: `object`[]; `name`: `string`; `outputs`: `object`[]; `stateMutability`: `string`; `type`: `string`; \} \| \{ `anonymous?`: `undefined`; `inputs`: `object`[]; `name`: `string`; `outputs`: `object`[]; `stateMutability`: `string`; `type`: `string`; \} \| \{ `anonymous`: `boolean`; `inputs`: `object`[]; `name`: `string`; `outputs?`: `undefined`; `stateMutability?`: `undefined`; `type`: `string`; \} \| \{ `anonymous?`: `undefined`; `inputs`: `object`[]; `name`: `string`; `outputs?`: `undefined`; `stateMutability?`: `undefined`; `type`: `string`; \})[] = `MySBTABIData`
+> `const` **MySBTABI**: `any`
 
-Defined in: [packages/core/src/abis/index.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/abis/index.ts#L46)
+Defined in: [packages/core/src/abis/index.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/abis/index.ts#L75)

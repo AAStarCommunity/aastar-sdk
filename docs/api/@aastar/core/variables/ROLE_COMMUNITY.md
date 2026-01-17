@@ -1,3 +1,29 @@
-> `const` **ROLE\_COMMUNITY**: `"0xe94d78b6d8fb99b2c21131eb4552924a60f564d8515a3cc90ef300fc9735c074"` = `"0xe94d78b6d8fb99b2c21131eb4552924a60f564d8515a3cc90ef300fc9735c074"`
+> `const` **ROLE\_COMMUNITY**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/constants.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/constants.ts#L63)
+Defined in: [packages/core/src/roles.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/roles.ts#L27)
+
+Community Role
+
+## Description
+
+Community administrator, can issue xPNTs, configure SBT rules
+
+## Permission
+
+Community-level governance
+
+## Requirement
+
+minStake: 30 GT, entryBurn: 3 GT (line 99)
+
+## Exit Fee
+
+5% (500 basis points), min 1 GT
+
+## Lock Duration
+
+30 days
+
+## Source
+
+Registry.sol line 32: ROLE_COMMUNITY = keccak256("COMMUNITY")

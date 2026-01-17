@@ -1,6 +1,6 @@
 > **getContracts**(`network`): `object`
 
-Defined in: [packages/core/src/contracts.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/de58973e339aee27579a805788c7048e2d9099f3/packages/core/src/contracts.ts#L130)
+Defined in: [packages/core/src/contracts.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/contracts.ts#L130)
 
 Get all contracts for a specific network
 
@@ -34,7 +34,7 @@ AAStar Community - Test community for development (registered: 2025-11-01)
 
 #### communities.aastar.gasToken
 
-> `readonly` **gasToken**: `"0xBD0710596010a157B88cd141d797E8Ad4bb2306b"` = `TEST_TOKEN_ADDRESSES.aPNTs`
+> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.aPNTs`
 
 #### communities.aastar.name
 
@@ -60,7 +60,7 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### communities.breadCommunity.gasToken
 
-> `readonly` **gasToken**: `"0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3"` = `TEST_TOKEN_ADDRESSES.bPNTs`
+> `readonly` **gasToken**: `` `0x${string}` `` = `TEST_TOKEN_ADDRESSES.bPNTs`
 
 #### communities.breadCommunity.name
 
@@ -80,31 +80,47 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### core.aPNTs
 
-> `readonly` **aPNTs**: `` `0x${string}` `` \| `undefined`
+> `readonly` **aPNTs**: `` `0x${string}` `` = `APNTS_ADDRESS`
+
+#### core.dvtValidator
+
+> `readonly` **dvtValidator**: `` `0x${string}` `` = `DVT_VALIDATOR_ADDRESS`
+
+#### core.entryPoint
+
+> `readonly` **entryPoint**: `` `0x${string}` `` = `ENTRY_POINT_ADDRESS`
 
 #### core.gToken
 
-> `readonly` **gToken**: `` `0x${string}` ``
+> `readonly` **gToken**: `` `0x${string}` `` = `GTOKEN_ADDRESS`
 
 #### core.gTokenStaking
 
-> `readonly` **gTokenStaking**: `` `0x${string}` ``
+> `readonly` **gTokenStaking**: `` `0x${string}` `` = `GTOKEN_STAKING_ADDRESS`
 
 #### core.mySBT
 
-> `readonly` **mySBT**: `` `0x${string}` ``
+> `readonly` **mySBT**: `` `0x${string}` `` = `SBT_ADDRESS`
 
 #### core.paymasterFactory
 
-> `readonly` **paymasterFactory**: `` `0x${string}` ``
+> `readonly` **paymasterFactory**: `` `0x${string}` `` = `PAYMASTER_FACTORY_ADDRESS`
+
+#### core.paymasterV4
+
+> `readonly` **paymasterV4**: `` `0x${string}` ``
 
 #### core.registry
 
-> `readonly` **registry**: `` `0x${string}` ``
+> `readonly` **registry**: `` `0x${string}` `` = `REGISTRY_ADDRESS`
 
 #### core.superPaymaster
 
-> `readonly` **superPaymaster**: `` `0x${string}` ``
+> `readonly` **superPaymaster**: `` `0x${string}` `` = `SUPER_PAYMASTER_ADDRESS`
+
+#### core.xPNTsFactory
+
+> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
 
 ### monitoring
 
@@ -112,11 +128,11 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### monitoring.blsAggregator
 
-> `readonly` **blsAggregator**: `"0x3Cf0587912c692aa0f5FEEEDC52959ABEEEFaEc6"` = `'0x3Cf0587912c692aa0f5FEEEDC52959ABEEEFaEc6'`
+> `readonly` **blsAggregator**: `` `0x${string}` `` = `BLS_AGGREGATOR_ADDRESS`
 
 #### monitoring.dvtValidator
 
-> `readonly` **dvtValidator**: `"0x937CdD172fb0674Db688149093356F6dA95498FD"` = `'0x937CdD172fb0674Db688149093356F6dA95498FD'`
+> `readonly` **dvtValidator**: `` `0x${string}` `` = `DVT_VALIDATOR_ADDRESS`
 
 ### official
 
@@ -124,7 +140,7 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### official.entryPoint
 
-> `readonly` **entryPoint**: `"0x0000000071727De22E5E9d8BAf0edAc6f37da032"` = `'0x0000000071727De22E5E9d8BAf0edAc6f37da032'`
+> `readonly` **entryPoint**: `` `0x${string}` ``
 
 ### paymaster
 
@@ -132,11 +148,11 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### paymaster.paymasterV4\_1
 
-> `readonly` **paymasterV4\_1**: `"0x4D6A367aA183903968833Ec4AE361CFc8dDDBA38"` = `'0x4D6A367aA183903968833Ec4AE361CFc8dDDBA38'`
+> `readonly` **paymasterV4\_1**: `` `0x${string}` ``
 
 #### paymaster.paymasterV4\_1iImplementation
 
-> `readonly` **paymasterV4\_1iImplementation**: `"0x3E1C6a741f4b3f8bE24f324342539982324a6f8a"` = `'0x3E1C6a741f4b3f8bE24f324342539982324a6f8a'`
+> `readonly` **paymasterV4\_1iImplementation**: `` `0x${string}` `` = `PAYMASTER_V4_IMPL_ADDRESS`
 
 ### testAccounts
 
@@ -144,7 +160,7 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### testAccounts.simpleAccountFactory
 
-> `readonly` **simpleAccountFactory**: `"0x8B516A71c134a4b5196775e63b944f88Cc637F2b"` = `'0x8B516A71c134a4b5196775e63b944f88Cc637F2b'`
+> `readonly` **simpleAccountFactory**: `` `0x${string}` ``
 
 ### testTokens
 
@@ -152,15 +168,15 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### testTokens.aPNTs
 
-> `readonly` **aPNTs**: `"0xBD0710596010a157B88cd141d797E8Ad4bb2306b"` = `'0xBD0710596010a157B88cd141d797E8Ad4bb2306b'`
+> `readonly` **aPNTs**: `` `0x${string}` ``
 
 #### testTokens.bPNTs
 
-> `readonly` **bPNTs**: `"0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3"` = `'0x70Da2c1B7Fcf471247Bc3B09f8927a4ab1751Ba3'`
+> `readonly` **bPNTs**: `` `0x${string}` ``
 
 #### testTokens.mockUSDT
 
-> `readonly` **mockUSDT**: `"0x14EaC6C3D49AEDff3D59773A7d7bfb50182bCfDc"` = `'0x14EaC6C3D49AEDff3D59773A7d7bfb50182bCfDc'`
+> `readonly` **mockUSDT**: `` `0x${string}` ``
 
 ### tokens
 
@@ -168,7 +184,7 @@ BreadCommunity - Test community for development (registered: 2025-11-03)
 
 #### tokens.xPNTsFactory
 
-> `readonly` **xPNTsFactory**: `"0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd"` = `'0x9dD72cB42427fC9F7Bf0c949DB7def51ef29D6Bd'`
+> `readonly` **xPNTsFactory**: `` `0x${string}` `` = `XPNTS_FACTORY_ADDRESS`
 
 ## Example
 
