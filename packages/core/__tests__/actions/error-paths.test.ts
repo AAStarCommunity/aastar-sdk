@@ -17,22 +17,22 @@ describe('Error Path Coverage Tests', () => {
   describe('Contract Revert Scenarios', () => {
     it('token transfer reverts with insufficient balance', async () => {
       w.writeContract.mockRejectedValue(new Error('revert: insufficient balance'));
-      await expect(tokenActions()(w).transfer({ token: T, to: U, amount: 1000n, account: w.account })).rejects.toThrow('insufficient balance');
+      await expect(tokenActions()(w).transfer({ token: T, to: U, amount: 1000n, account: w.account! })).rejects.toThrow('insufficient balance');
     });
 
     it('approve reverts with invalid spender', async () => {
       w.writeContract.mockRejectedValue(new Error('revert: invalid spender'));
-      await expect(tokenActions()(w).approve({ token: T, spender: '0x0', amount: 100n, account: w.account })).rejects.toThrow();
+      await expect(tokenActions()(w).approve({ token: T, spender: '0x0', amount: 100n, account: w.account! })).rejects.toThrow();
     });
 
     it('registry register reverts - role not configured', async () => {
       w.writeContract.mockRejectedValue(new Error('revert: role not configured'));
-      await expect(registryActions(T)(w).registerRoleSelf({ roleId: 999n, data: '0x', account: w.account })).rejects.toThrow();
+      await expect(registryActions(T)(w).registerRoleSelf({ roleId: 999n, data: '0x', account: w.account! })).rejects.toThrow();
     });
 
     it('staking lockStake reverts - insufficient tokens', async () => {
       w.writeContract.mockRejectedValue(new Error('revert: insufficient balance'));
-      await expect(stakingActions(T)(w).lockStake({ user: U, roleId: 1n, stakeAmount: 9999n, entryBurn: 0n, payer: U, account: w.account })).rejects.toThrow();
+      await expect(stakingActions(T)(w).lockStake({ user: U, roleId: 1n, stakeAmount: 9999n, entryBurn: 0n, payer: U, account: w.account! })).rejects.toThrow();
     });
 
     it('paymaster depositFor reverts - paused', async () => {
@@ -49,7 +49,7 @@ describe('Error Path Coverage Tests', () => {
 
     it('handles network timeout on write', async () => {
       w.writeContract.mockRejectedValue(new Error('ETIMEDOUT'));
-      await expect(tokenActions()(w).mint({ token: T, to: U, amount: 100n, account: w.account })).rejects.toThrow();
+      await expect(tokenActions()(w).mint({ token: T, to: U, amount: 100n, account: w.account! })).rejects.toThrow();
     });
 
     it('handles connection refused', async () => {
@@ -81,7 +81,7 @@ describe('Error Path Coverage Tests', () => {
   describe('Empty/Null Input Handling', () => {
     it('handles empty data bytes', async () => {
       w.writeContract.mockResolvedValue('0x' as `0x${string}`);
-      await tokenActions()(w).transfer({ token: T, to: U, amount: 0n, account: w.account });
+      await tokenActions()(w).transfer({ token: T, to: U, amount: 0n, account: w.account! });
       expect(w.writeContract).toHaveBeenCalled();
     });
 
@@ -101,7 +101,7 @@ describe('Error Path Coverage Tests', () => {
 
     it('uses WalletClient for write operations', async () => {
       w.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-      await tokenActions()(w).burn({ token: T, amount: 10n, account: w.account });
+      await tokenActions()(w).burn({ token: T, amount: 10n, account: w.account! });
       expect(w.writeContract).toHaveBeenCalled();
     });
 
@@ -116,7 +116,7 @@ describe('Error Path Coverage Tests', () => {
   describe('Optional Parameter Coverage', () => {
     it('calls with account parameter provided', async () => {
       w.writeContract.mockResolvedValue('0x' as `0x${string}`);
-      await tokenActions()(w).transfer({ token: T, to: U, amount: 1n, account: w.account });
+      await tokenActions()(w).transfer({ token: T, to: U, amount: 1n, account: w.account! });
       expect(w.writeContract).toHaveBeenCalled();
     });
 
@@ -136,7 +136,7 @@ describe('Error Path Coverage Tests', () => {
   describe('Type Conversion Coverage', () => {
     it('converts number to bigint in parameters', async () => {
       w.writeContract.mockResolvedValue('0x' as `0x${string}`);
-      await stakingActions(T)(w).topUpStake({ user: U, roleId: 1n, topUpAmount: 100n, payer: U, account: w.account });
+      await stakingActions(T)(w).topUpStake({ user: U, roleId: 1n, topUpAmount: 100n, payer: U, account: w.account! });
       expect(w.writeContract).toHaveBeenCalled();
     });
 
@@ -157,12 +157,12 @@ describe('Error Path Coverage Tests', () => {
   describe('SBT Specific Error Paths', () => {
     it('airdropMint reverts - already minted', async () => {
       w.writeContract.mockRejectedValue(new Error('revert: token already exists'));
-      await expect(sbtActions(T)(w).airdropMint({ roleId: 1n, to: U, tokenURI: 'uri', account: w.account })).rejects.toThrow();
+      await expect(sbtActions(T)(w).airdropMint({ roleId: 1n, to: U, tokenURI: 'uri', account: w.account! })).rejects.toThrow();
     });
 
     it('transferFrom reverts - soulbound', async () => {
       w.writeContract.mockRejectedValue(new Error('revert: soulbound'));
-      await expect(sbtActions(T)(w).transferFrom({ from: U, to: U, tokenId: 1n, account: w.account })).rejects.toThrow();
+      await expect(sbtActions(T)(w).transferFrom({ from: U, to: U, tokenId: 1n, account: w.account! })).rejects.toThrow();
     });
 
     it('getUserSBT returns no token', async () => {
