@@ -83,7 +83,7 @@ export class SuperPaymasterClient {
         // Safety Floor: If estimate is suspiciously low (e.g. < 50k), bump it for PM logic
         // But if we bump it too high, we hit "Efficiency too low".
         // Let's trust the bundler's estimate but add a fixed safety pad for dynamic storage
-        const SAFETY_PAD = 20000n; 
+        const SAFETY_PAD = 40000n; 
         const tunedVGL = vgl + SAFETY_PAD;
 
         // Same for PostOp

@@ -501,6 +501,7 @@ async function main() {
 
     } catch (error: any) {
         console.error(`   ❌ Submission Failed:`, error.message);
+        process.exit(1);
     }
 }
 

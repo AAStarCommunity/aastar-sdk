@@ -320,7 +320,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
         console.log(`   ❌ Failed to set reputation: ${e.message}`);
     }
 
-    const anniToken = (anniState.token || zeroAddress) as Address;
+    const anniToken = (anniState.tokenAddress || zeroAddress) as Address;
     
     // Tx 1: SuperPM Normal Tx
     console.log('\n🔹 Tx 1: SuperPM cPNTs Payment (Normal)');
@@ -340,7 +340,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
             await publicClient.waitForTransactionReceipt({ hash: mintHash });
         }
 
-        const { userOp: superOp1, opHash: superHash1 } = await UserOpScenarioBuilder.buildTransferScenario(UserOpScenarioType.SUPER_PAYMASTER, {
+        const { userOp: superOp1, opHash: superHash1 } = await UserOpScenarioBuilder.buildTransferScenario(UserOpScenarioType.SUPER_CPNT, {
             sender: targetAA.address,
             paymaster: config.contracts.superPaymaster,
             operator: anniAddr,

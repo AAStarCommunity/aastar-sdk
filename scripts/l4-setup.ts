@@ -338,13 +338,18 @@ async function main() {
                 }
                 
                 // Verify operator config in SuperPaymaster
+                // Verify operator config in SuperPaymaster
                 const spActions = superPaymasterActions(config.contracts.superPaymaster);
                 const opConfig = await spActions(publicClient).operators({ operator: acc.address });
-                console.log(`      💰 aPNTs Balance: ${formatEther(opConfig.aPNTsBalance || 0n)}`);
-                console.log(`      ⚙️  Configured: ${opConfig.isConfigured}`);
+                const opBalance = (opConfig as any)[0];
+                const isConfigured = (opConfig as any)[2];
+                const xPNTsToken = (opConfig as any)[4];
+
+                console.log(`      💰 aPNTs Balance: ${formatEther(opBalance || 0n)}`);
+                console.log(`      ⚙️  Configured: ${isConfigured}`);
 
                 // Fix if not configured (Anni case)
-                if (!opConfig.isConfigured || opConfig.xPNTsToken === '0x0000000000000000000000000000000000000000') {
+                if (!isConfigured || xPNTsToken === '0x0000000000000000000000000000000000000000') {
                     const anniToken = communityMap[op.name]?.token;
                     if (anniToken) {
                         console.log(`      🔧 Configuring SuperPM Operator Anni with token ${anniToken}...`);
