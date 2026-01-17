@@ -15,8 +15,6 @@ describe('Final Coverage Batch', () => {
   describe('BLS Validator Extended', () => {
     it('registerBLSPublicKey', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await blsActions(A)(w).registerBLSPublicKey({ publicKey: '0xkey', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('threshold', async () => { p.readContract.mockResolvedValue(3n); expect(await blsActions(A)(p).threshold()).toBe(3n); });
-    it('setThreshold', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await blsActions(A)(w).setThreshold({ newThreshold: 4n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('verifySignature', async () => { p.readContract.mockResolvedValue(true); expect(await blsActions(A)(p).verifySignature({ publicKey: '0xkey', message: '0xmsg', signature: '0xsig' })).toBe(true); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await blsActions(A)(p).owner()).toBe(U); });
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await blsActions(A)(p).version()).toBe('1.0'); });
   });

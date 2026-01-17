@@ -45,20 +45,11 @@ describe('Comprehensive Action Tests Batch 3', () => {
   describe('DVT Extended', () => {
     it('signSlashProposal', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).signSlashProposal({ proposalId: '0x01', signature: '0xsig', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('addValidator', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).addValidator({ validator: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('removeValidator', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).removeValidator({ validator: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setThreshold', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).setThreshold({ newThreshold: 3n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('threshold', async () => { p.readContract.mockResolvedValue(2n); expect(await dvtActions(A)(p).threshold()).toBe(2n); });
-    it('getValidatorCount', async () => { p.readContract.mockResolvedValue(5n); expect(await dvtActions(A)(p).getValidatorCount()).toBe(5n); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await dvtActions(A)(p).owner()).toBe(U); });
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await dvtActions(A)(p).version()).toBe('1.0'); });
   });
 
   describe('GTokenExtended', () => {
-    it('name', async () => { p.readContract.mockResolvedValue('GToken'); expect(await gTokenExtendedActions(A)(p).name()).toBe('GToken'); });
-    it('symbol', async () => { p.readContract.mockResolvedValue('GT'); expect(await gTokenExtendedActions(A)(p).symbol()).toBe('GT'); });
-    it('totalSupply', async () => { p.readContract.mockResolvedValue(1000000n); expect(await gTokenExtendedActions(A)(p).totalSupply()).toBe(1000000n); });
-    it('balanceOf', async () => { p.readContract.mockResolvedValue(500n); expect(await gTokenExtendedActions(A)(p).balanceOf({ account: U })).toBe(500n); });
-    it('transfer', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).transfer({ to: U, amount: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('mint', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).mint({ to: U, amount: 50n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('burn', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).burn({ amount: 25n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });

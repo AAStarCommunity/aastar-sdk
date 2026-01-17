@@ -33,6 +33,4 @@ describe('All Remaining Functions Batch 3', () => {
   describe('Account Complete', () => {
   });
 
-  describe('AccountFactory Complete', () => {
-  });
 });

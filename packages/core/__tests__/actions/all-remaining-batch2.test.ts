@@ -20,6 +20,4 @@ describe('All Remaining Functions Batch 2', () => {
   describe('Reputation All', () => {
   });
 
-  describe('SuperPaymaster All', () => {
-  });
 });

@@ -16,11 +16,7 @@ describe('All Remaining Functions Batch 4', () => {
     it('balanceOf', async () => { p.readContract.mockResolvedValue(5000n); expect(await entryPointActions(A)(p).balanceOf({ account: U })).toBe(5000n); });
   });
 
-  describe('BLS Validator Complete', () => {
-  });
 
-  describe('DVT Validator Complete', () => {
-  });
 
   describe('GTokenExtended Complete', () => {
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await gTokenExtendedActions(A)(p).owner()).toBe(U); });
