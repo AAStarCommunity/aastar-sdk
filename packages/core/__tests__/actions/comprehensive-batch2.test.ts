@@ -71,7 +71,7 @@ describe('Comprehensive Action Tests Batch 2', () => {
     it('protocolFeeBPS', async () => { p.readContract.mockResolvedValue(100n); expect(await superPaymasterActions(A)(p).protocolFeeBPS()).toBe(100n); });
     it('protocolRevenue', async () => { p.readContract.mockResolvedValue(5000n); expect(await superPaymasterActions(A)(p).protocolRevenue()).toBe(5000n); });
     it('operators', async () => { p.readContract.mockResolvedValue({}); await superPaymasterActions(A)(p).operators({ operator: U }); expect(p.readContract).toHaveBeenCalled(); });
-    it('setProtocolFee', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).setProtocolFee({ newFeeBPS: 200n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setProtocolFee', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).setProtocolFee({ feeRecipient: U, feeBps: 200n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('withdrawProtocolRevenue', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).withdrawProtocolRevenue({ to: U, amount: 1000n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 });

@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterV4Actions } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -51,79 +51,80 @@ export class PaymasterOperatorClient extends BaseClient {
         stakeAmount?: bigint; // Optional, defaults to 50 GToken (Registry requirement)
         depositAmount?: bigint; // Optional initial deposit to SuperPaymaster
     }, options?: TransactionOptions): Promise<Hash> {
-        const registryAddr = this.requireRegistry();
-        const gTokenAddr = this.requireGToken();
-        const gTokenStakingAddr = this.requireGTokenStaking();
-        
-        const { registryActions, tokenActions } = await import('@aastar/core');
-        const registry = registryActions(registryAddr);
-        const gToken = tokenActions();
-        
-        // 1. Check prerequisites
-        const ROLE_COMMUNITY = await registry(this.getStartPublicClient()).ROLE_COMMUNITY();
-        const hasCommunity = await registry(this.getStartPublicClient()).hasRole({
-            user: this.getAddress(),
-            roleId: ROLE_COMMUNITY
-        });
-        
-        if (!hasCommunity) {
-            throw new Error('Must have ROLE_COMMUNITY before registering as SuperPaymaster operator');
-        }
-        
-        // 2. Check if already has role
-        const ROLE_PAYMASTER_SUPER = await registry(this.getStartPublicClient()).ROLE_PAYMASTER_SUPER();
-        const hasSuper = await registry(this.getStartPublicClient()).hasRole({
-            user: this.getAddress(),
-            roleId: ROLE_PAYMASTER_SUPER
-        });
-        
-        if (hasSuper) {
-            console.log('Already has ROLE_PAYMASTER_SUPER, skipping registration');
+        try {
+            const registryAddr = this.requireRegistry();
+            const gTokenAddr = this.requireGToken();
+            const gTokenStakingAddr = this.requireGTokenStaking();
             
-            // Still handle deposit if requested
-            if (params?.depositAmount) {
-                return this.depositCollateral(params.depositAmount, options);
+            const registry = registryActions(registryAddr);
+            const gToken = tokenActions();
+            const publicClient = this.getStartPublicClient();
+            
+            // 1. Check prerequisites
+            const ROLE_COMMUNITY = await registry(publicClient).ROLE_COMMUNITY();
+            const hasCommunity = await registry(publicClient).hasRole({
+                user: this.getAddress(),
+                roleId: ROLE_COMMUNITY
+            });
+            
+            if (!hasCommunity) {
+                throw new Error('Must have ROLE_COMMUNITY before registering as SuperPaymaster operator');
             }
             
-            throw new Error('Already registered as SuperPaymaster operator');
-        }
-        
-        // 3. Prepare stake amount (default 50 GToken as per Registry config)
-        const stakeAmount = params?.stakeAmount || (await import('viem')).parseEther('50');
-        
-        // 4. Check and approve GToken to GTokenStaking
-        const allowance = await gToken(this.getStartPublicClient()).allowance({
-            token: gTokenAddr,
-            owner: this.getAddress(),
-            spender: gTokenStakingAddr
-        });
-        
-        if (allowance < stakeAmount) {
-            const approveHash = await gToken(this.client).approve({
+            // 2. Check if already has role
+            const ROLE_PAYMASTER_SUPER = await registry(publicClient).ROLE_PAYMASTER_SUPER();
+            const hasSuper = await registry(publicClient).hasRole({
+                user: this.getAddress(),
+                roleId: ROLE_PAYMASTER_SUPER
+            });
+            
+            if (hasSuper) {
+                // Still handle deposit if requested
+                if (params?.depositAmount) {
+                    return this.depositCollateral(params.depositAmount, options);
+                }
+                throw new Error('Already registered as SuperPaymaster operator');
+            }
+            
+            // 3. Prepare stake amount (default 50 GToken as per Registry config)
+            const stakeAmount = params?.stakeAmount || parseEther('50');
+            
+            // 4. Check and approve GToken to GTokenStaking
+            const allowance = await gToken(publicClient).allowance({
                 token: gTokenAddr,
-                spender: gTokenStakingAddr,
-                amount: stakeAmount * BigInt(2), // Approve 2x for future use
+                owner: this.getAddress(),
+                spender: gTokenStakingAddr
+            });
+            
+            if (allowance < stakeAmount) {
+                const approveHash = await gToken(this.client).approve({
+                    token: gTokenAddr,
+                    spender: gTokenStakingAddr,
+                    amount: stakeAmount * 2n, // Approve 2x for future use
+                    account: options?.account
+                });
+                await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+            }
+            
+            // 5. Register ROLE_PAYMASTER_SUPER
+            const registerHash = await registry(this.client).registerRoleSelf({
+                roleId: ROLE_PAYMASTER_SUPER,
+                data: '0x', // SuperPaymaster role doesn't need special data
                 account: options?.account
             });
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: approveHash });
+            
+            // Wait for registration to complete
+            await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
+            
+            // 6. Optional: Deposit collateral to SuperPaymaster
+            if (params?.depositAmount) {
+                await this.depositCollateral(params.depositAmount, options);
+            }
+            
+            return registerHash;
+        } catch (error) {
+            throw error;
         }
-        
-        // 5. Register ROLE_PAYMASTER_SUPER
-        const registerHash = await registry(this.client).registerRoleSelf({
-            roleId: ROLE_PAYMASTER_SUPER,
-            data: '0x', // SuperPaymaster role doesn't need special data
-            account: options?.account
-        });
-        
-        // Wait for registration to complete
-        await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: registerHash });
-        
-        // 6. Optional: Deposit collateral to SuperPaymaster
-        if (params?.depositAmount) {
-            await this.depositCollateral(params.depositAmount, options);
-        }
-        
-        return registerHash;
     }
 
     /**
@@ -147,150 +148,136 @@ export class PaymasterOperatorClient extends BaseClient {
         deployHash: Hash; 
         registerHash: Hash;
     }> {
-        const registryAddr = this.requireRegistry();
-        const gTokenAddr = this.requireGToken();
-        const gTokenStakingAddr = this.requireGTokenStaking();
-        const factoryAddr = this.requirePaymasterFactory();
-        
-        const { registryActions, tokenActions, paymasterFactoryActions } = await import('@aastar/core');
-        const registry = registryActions(registryAddr);
-        const gToken = tokenActions();
-        const factory = paymasterFactoryActions(factoryAddr);
-        
-        // Use provided account, or client's account, or address string
-        // If string is used, Viem attempts eth_sendTransaction (RPC signing).
-        // If object is used, Viem attempts local signing (eth_sendRawTransaction).
-        const account = options?.account || this.client.account || this.getAddress();
-
-        // 1. Check prerequisites (ROLE_COMMUNITY)
-        const ROLE_COMMUNITY = await registry(this.getStartPublicClient()).ROLE_COMMUNITY();
-        const hasCommunity = await registry(this.getStartPublicClient()).hasRole({
-            user: typeof account === 'string' ? account : account.address,
-            roleId: ROLE_COMMUNITY
-        });
-        
-        if (!hasCommunity) {
-            throw new Error('Must have ROLE_COMMUNITY before deploying Paymaster V4');
-        }
-
-        // 2. Direct Deployment (PMV4-Hybrid)
-        // No legacy factory check. Always deploy new instance directly via Factory.
-        
-        let deployHash: Hash;
-        let paymasterAddress: Address;
-
-        // Restore missing variables
-        // const { parseEther } = await import('viem'); // Use top-level import
-        const ownerAddr = typeof account === 'string' ? account : account.address;
-        const treasuryAddr = ownerAddr;
-        
-        // Resolve xPNTs Factory
-        const xpntsFactory = this.xpntsFactory !== '0x0000000000000000000000000000000000000000' 
-            ? this.xpntsFactory 
-            : factoryAddr; 
-
         try {
-            // Encode initialize data
-            const { encodeFunctionData, parseEther } = await import('viem');
-            const initData = encodeFunctionData({
-                abi: PaymasterABI,
-                functionName: 'initialize',
-                args: [
-                    '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // EntryPoint v0.7
-                    ownerAddr,
-                    treasuryAddr,
-                    this.ethUsdPriceFeed,
-                    200n, // serviceFeeRate (2%)
-                    parseEther('0.1'), // maxGasCostCap
-                    3600n // priceStalenessThreshold
-                ]
-            });
+            const registryAddr = this.requireRegistry();
+            const gTokenAddr = this.requireGToken();
+            const gTokenStakingAddr = this.requireGTokenStaking();
+            const factoryAddr = this.requirePaymasterFactory();
+            
+            const registry = registryActions(registryAddr);
+            const gToken = tokenActions();
+            const factory = paymasterFactoryActions(factoryAddr);
+            const publicClient = this.getStartPublicClient();
+            
+            const account = options?.account || this.client.account || this.getAddress();
+            const accountAddr = typeof account === 'string' ? account : account.address;
 
-            console.log(`Using PaymasterFactory at ${factoryAddr} to deploy...`);
-            
-            // Use PaymasterFactory
-            deployHash = await factory(this.client).deployPaymaster({
-                owner: ownerAddr, // Required by action interface
-                version: params?.version, 
-                initData,
-                account
+            // 1. Check prerequisites (ROLE_COMMUNITY)
+            const ROLE_COMMUNITY = await registry(publicClient).ROLE_COMMUNITY();
+            const hasCommunity = await registry(publicClient).hasRole({
+                user: accountAddr,
+                roleId: ROLE_COMMUNITY
             });
             
-            const receipt = await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: deployHash });
+            if (!hasCommunity) {
+                throw new Error('Must have ROLE_COMMUNITY before deploying Paymaster V4');
+            }
+
+            // 2. Deployment (Idempotent Check)
+            const existingPaymaster = await factory(publicClient).getPaymaster({ owner: accountAddr });
+            let deployHash: Hash = '0x0000000000000000000000000000000000000000000000000000000000000000';
+            let paymasterAddress: Address;
+
+            if (existingPaymaster && existingPaymaster !== '0x0000000000000000000000000000000000000000') {
+                console.log(`    ℹ️  Paymaster already deployed at: ${existingPaymaster}`);
+                paymasterAddress = existingPaymaster;
+            } else {
+                console.log('    🛠️ Deploying Paymaster V4 with args:', {
+                    entryPoint: this.requireEntryPoint(),
+                    owner: accountAddr,
+                    priceFeed: this.ethUsdPriceFeed,
+                    factory: factoryAddr
+                });
+
+                const { encodeFunctionData } = await import('viem');
+                const initData = encodeFunctionData({
+                    abi: PaymasterABI,
+                    functionName: 'initialize',
+                    args: [
+                        this.requireEntryPoint(), // EntryPoint v0.7
+                        accountAddr,
+                        accountAddr, // Treasury defaults to owner
+                        this.ethUsdPriceFeed,
+                        200n, // serviceFeeRate (2%)
+                        parseEther('0.1'), // maxGasCostCap
+                        3600n // priceStalenessThreshold
+                    ]
+                });
+
+                deployHash = await factory(this.client).deployPaymaster({
+                    owner: accountAddr,
+                    version: params?.version, 
+                    initData,
+                    account
+                });
+                
+                await (publicClient as any).waitForTransactionReceipt({ hash: deployHash });
+                
+                paymasterAddress = await factory(publicClient).getPaymaster({ owner: accountAddr });
+            }
             
-            // Fallback: Query factory for our paymaster
-            // Use getPaymaster action (which maps to paymasterByOperator in contract)
-            paymasterAddress = await factory(this.getStartPublicClient()).getPaymaster({ owner: ownerAddr });
+            await (publicClient as any).waitForTransactionReceipt({ hash: deployHash });
+            
+            paymasterAddress = await factory(publicClient).getPaymaster({ owner: accountAddr });
             
             if (!paymasterAddress || paymasterAddress === '0x0000000000000000000000000000000000000000') {
                  throw new Error('Failed to retrieve Paymaster address from Factory');
             }
 
-            console.log('✅ Paymaster Deployed at:', paymasterAddress);
-        } catch (e: any) {
-             throw new Error(`Paymaster Deployment Failed: ${e.message}`);
-        }
-        const ROLE_PAYMASTER_AOA = await registry(this.getStartPublicClient()).ROLE_PAYMASTER_AOA();
-        const hasAOA = await registry(this.getStartPublicClient()).hasRole({
-            user: typeof account === 'string' ? account : account.address,
-            roleId: ROLE_PAYMASTER_AOA
-        });
+            // 3. Register ROLE_PAYMASTER_AOA
+            const ROLE_PAYMASTER_AOA = await registry(publicClient).ROLE_PAYMASTER_AOA();
+            const hasAOA = await registry(publicClient).hasRole({
+                user: accountAddr,
+                roleId: ROLE_PAYMASTER_AOA
+            });
 
-        if (hasAOA) {
-            console.log('Already has ROLE_PAYMASTER_AOA, skipping registration');
-            return { paymasterAddress, deployHash, registerHash: '0x0000000000000000000000000000000000000000000000000000000000000000' };
-        }
+            if (hasAOA) {
+                return { paymasterAddress, deployHash, registerHash: '0x0000000000000000000000000000000000000000000000000000000000000000' };
+            }
 
-        // Prepare stake (Default 30 GToken for AOA)
-        const { encodeAbiParameters, parseAbiParameters } = await import('viem');
-        // stakeAmount uses top-level parseEther
-        const stakeAmount = params?.stakeAmount || parseEther('30');
-        
-        // Approve GToken
-        const allowance = await gToken(this.getStartPublicClient()).allowance({
-            token: gTokenAddr,
-            owner: typeof account === 'string' ? account : account.address,
-            spender: gTokenStakingAddr
-        });
-        
-        if (allowance < stakeAmount) {
-            const approveHash = await gToken(this.client).approve({
+            const stakeAmount = params?.stakeAmount || parseEther('30');
+            
+            const allowance = await gToken(publicClient).allowance({
                 token: gTokenAddr,
-                spender: gTokenStakingAddr,
-                amount: stakeAmount * BigInt(2),
+                owner: accountAddr,
+                spender: gTokenStakingAddr
+            });
+            
+            if (allowance < stakeAmount) {
+                const approveHash = await gToken(this.client).approve({
+                    token: gTokenAddr,
+                    spender: gTokenStakingAddr,
+                    amount: stakeAmount * 2n,
+                    account: account
+                });
+                await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+            }
+
+            const { encodeAbiParameters, parseAbiParameters } = await import('viem');
+            let roleData: Hash = '0x';
+            if (stakeAmount > 0) {
+                roleData = encodeAbiParameters(
+                    parseAbiParameters('uint256'),
+                    [stakeAmount]
+                ) as Hash;
+            }
+
+            const registerHash = await registry(this.client).registerRoleSelf({
+                roleId: ROLE_PAYMASTER_AOA,
+                data: roleData,
                 account: account
             });
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: approveHash });
+            
+            await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
+
+            return {
+                paymasterAddress,
+                deployHash,
+                registerHash
+            };
+        } catch (error) {
+            throw error;
         }
-
-        // Register AOA
-        // If stakeAmount > 0 and generic role, Registry expects encoded uint256 if data.length == 32
-        // Or default if data is empty.
-        // We will encode it explicitly to be safe if amount > minStake, or just strictly always.
-        // Registry logic: if (roleData.length == 32) stakeAmount = abi.decode(roleData, (uint256));
-        // So we pass 32 bytes of stakeAmount.
-        
-        let roleData: Hash = '0x';
-        if (stakeAmount > 0) {
-            roleData = encodeAbiParameters(
-                parseAbiParameters('uint256'),
-                [stakeAmount]
-            ) as Hash;
-        }
-
-        const registerHash = await registry(this.client).registerRoleSelf({
-            roleId: ROLE_PAYMASTER_AOA,
-            data: roleData,
-            account: account
-        });
-        
-        await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: registerHash });
-
-        return {
-            paymasterAddress,
-            deployHash,
-            registerHash
-        };
     }
 
     /**
@@ -298,210 +285,180 @@ export class PaymasterOperatorClient extends BaseClient {
      * This is a helper method used by registerAsSuperPaymasterOperator.
      */
     async depositCollateral(amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        const { tokenActions, superPaymasterActions } = await import('@aastar/core');
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        
-        // V3.7: Dynamically fetch the token expected by SuperPaymaster
-        const depositToken = await pm(this.getStartPublicClient()).APNTS_TOKEN();
-        const token = tokenActions();
-        
-        // Approve SuperPaymaster to spend the token (usually aPNTs on Sepolia)
-        const allowance = await token(this.getStartPublicClient()).allowance({
-            token: depositToken,
-            owner: this.getAddress(),
-            spender: this.superPaymasterAddress
-        });
-        
-        if (allowance < amount) {
-            const approveHash = await token(this.client).approve({
+        try {
+            const pm = superPaymasterActions(this.superPaymasterAddress);
+            const publicClient = this.getStartPublicClient();
+            
+            // V3.7: Dynamically fetch the token expected by SuperPaymaster
+            const depositToken = await pm(publicClient).APNTS_TOKEN();
+            const token = tokenActions();
+            
+            // Approve SuperPaymaster to spend the token (usually aPNTs on Sepolia)
+            const allowance = await token(publicClient).allowance({
                 token: depositToken,
-                spender: this.superPaymasterAddress,
+                owner: this.getAddress(),
+                spender: this.superPaymasterAddress
+            });
+            
+            if (allowance < amount) {
+                const approveHash = await token(this.client).approve({
+                    token: depositToken,
+                    spender: this.superPaymasterAddress,
+                    amount,
+                    account: options?.account
+                });
+                await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+            }
+            
+            // Deposit to SuperPaymaster
+            return pm(this.client).deposit({
                 amount,
                 account: options?.account
             });
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: approveHash });
+        } catch (error) {
+            throw error;
         }
-        
-        // Deposit to SuperPaymaster
-        return pm(this.client).deposit({
-            amount,
-            account: options?.account
-        });
     }
 
-    // ========================================
-    // 1. 资金管理 (基于 L1 superPaymasterActions)
-    // ========================================
-
-    /**
-     * Deposit ETH/Funds into SuperPaymaster for sponsoring
-     */
-    async deposit(amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        
-        return pm(this.client).deposit({
-            amount,
-            account: options?.account
-        });
+    async updateExchangeRate(exchangeRate: bigint, options?: TransactionOptions): Promise<Hash> {
+        return this.configureOperator(undefined, undefined, exchangeRate, options);
     }
 
     /**
-     * Withdraw funds from SuperPaymaster
+     * Configure operator parameters (Token, Treasury, Exchange Rate).
+     * If parameters are undefined, existing values are preserved.
      */
-    async withdraw(to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        
-        return pm(this.client).withdrawTo({
-            to,
-            amount,
-            account: options?.account
-        });
-    }
-
-    /**
-     * Get current deposit balance
-     */
-    async getDepositDetails(): Promise<{ deposit: bigint }> {
-        // SuperPaymaster logic for checking own deposit? 
-        // Typically EntryPoint.getDepositInfo
-        // But PM might have its own accounting.
-        // Using L1 action for PM:
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        const deposit = await pm(this.getStartPublicClient()).getDeposit();
-        return { deposit };
-    }
-
-    /**
-     * Stake ETH/Funds to register as a SuperPaymaster Operator
-     */
-    async stake(amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        
-        return pm(this.client).addSuperStake({
-            amount,
-            account: options?.account
-        });
-    }
-
-    /**
-     * Unstake funds (initiates withdrawal delay)
-     */
-    async unstake(options?: TransactionOptions): Promise<Hash> {
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        
-        return pm(this.client).unlockSuperStake({
-            account: options?.account
-        });
-    }
-
-    // ========================================
-    // 2. 运营配置
-    // ========================================
-
-    /**
-     * Check if address is a valid operator
-     */
-    async isOperator(operator: Address): Promise<boolean> {
-        const pm = superPaymasterActions(this.superPaymasterAddress);
+    async configureOperator(
+        xPNTsToken?: Address, 
+        treasury?: Address, 
+        exchangeRate?: bigint, 
+        options?: TransactionOptions
+    ): Promise<Hash> {
         try {
-            const opData = await pm(this.getStartPublicClient()).operators({ operator });
-            return opData && opData.length > 0; // Assuming struct return
-        } catch {
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            const publicClient = this.getStartPublicClient();
+
+            // Fetch current config to preserve missing values
+            const currentConfig = await sp(publicClient).operators({ operator: this.getAddress() });
+            
+            // [balance, token, treasury, rate]
+            const currentToken = currentConfig[1] as Address;
+            const currentTreasury = currentConfig[2] as Address;
+            const currentRate = currentConfig[3] as bigint;
+
+            return await sp(this.client).configureOperator({
+                xPNTsToken: xPNTsToken || currentToken,
+                treasury: treasury || currentTreasury,
+                exchangeRate: exchangeRate ?? currentRate,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async withdrawCollateral(to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
+        try {
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            return await sp(this.client).withdrawTo({
+                to,
+                amount,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async isOperator(operator: Address): Promise<boolean> {
+        try {
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            const config = await sp(this.getStartPublicClient()).operators({ operator });
+            // Assuming if Treasury is set, it's a valid operator (or check Registry role)
+            // Or based on balance? 
+            // Better to check Registry for ROLE_PAYMASTER_SUPER
+            // But let's return true if config exists (non-zero treasury)
+            return config[2] !== '0x0000000000000000000000000000000000000000';
+        } catch (error) {
             return false;
         }
     }
 
-    /**
-     * Configure Operator parameters (Token, Treasury, Exchange Rate)
-     */
-    async configureOperator(xPNTsToken: Address, treasury: Address, exchangeRate: bigint, options?: TransactionOptions): Promise<Hash> {
-        const pm = superPaymasterActions(this.superPaymasterAddress);
-        
-        return pm(this.client).configureOperator({
-            xPNTsToken,
-            treasury,
-            exchangeRate,
-            account: options?.account
-        });
-    }
-
-    // ========================================
-    // 3. 支付代币管理 (基于 PaymasterV4Actions)
-    // ========================================
-
-    /**
-     * Add a supported Gas Token
-     */
-    async addGasToken(token: Address, priceFeed: Address, options?: TransactionOptions): Promise<Hash> {
-        const pm = paymasterV4Actions(this.superPaymasterAddress);
-        
-        return pm(this.client).addGasToken({
-            token,
-            priceFeed,
-            account: options?.account
-        });
-    }
-
-    /**
-     * Remove a Gas Token
-     */
-    async removeGasToken(token: Address, options?: TransactionOptions): Promise<Hash> {
-        const pm = paymasterV4Actions(this.superPaymasterAddress);
-        
-        return pm(this.client).removeGasToken({
-            token,
-            account: options?.account
-        });
-    }
-
-    /**
-     * Get list of supported Gas Tokens
-     */
-    async getSupportedGasTokens(): Promise<Address[]> {
-        const pm = paymasterV4Actions(this.superPaymasterAddress);
-        return pm(this.getStartPublicClient()).getSupportedGasTokens();
-    }
-    /**
-     * Setup Paymaster V4 Configuration (Add SBT and GasToken)
-     * @param params configuration parameters
-     */
-    async setupPaymasterV4(params: {
-        paymaster: Address;
-        sbt: Address;
-        gasToken: Address;
-        priceFeed: Address;
-    }): Promise<void> {
-        const { paymasterV4Actions } = await import('@aastar/core');
-        
-        // Use Public Client for Reads
-        const pmRead = paymasterV4Actions(params.paymaster)(this.getStartPublicClient());
-        // Use Wallet Client for Writes (this.client)
-        const pmWrite = paymasterV4Actions(params.paymaster)(this.client);
-        
-        // 1. Add SBT
-        const isSbtSupported = await pmRead.isSBTSupported({ sbt: params.sbt });
-        if (!isSbtSupported) {
-            console.log(`Adding SBT ${params.sbt} to Paymaster...`);
-            const hash = await pmWrite.addSBT({ sbt: params.sbt, account: this.client.account });
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash });
-            console.log('SBT Added.');
-        } else {
-            console.log(`SBT ${params.sbt} already supported.`);
+    async getOperatorDetails(operator?: Address): Promise<any> {
+        try {
+            const target = operator || this.getAddress();
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            return await sp(this.getStartPublicClient()).operators({ operator: target });
+        } catch (error) {
+            throw error;
         }
+    }
 
-        // 2. Add GasToken
-        const isTokenSupported = await pmRead.isGasTokenSupported({ token: params.gasToken });
-        if (!isTokenSupported) {
-            console.log(`Adding GasToken ${params.gasToken} to Paymaster...`);
-            const hash = await pmWrite.addGasToken({ 
-                token: params.gasToken, 
-                priceFeed: params.priceFeed,
-                account: this.client.account 
+    async initiateExit(options?: TransactionOptions): Promise<Hash> {
+        try {
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            return await sp(this.client).unlockSuperStake({
+                account: options?.account
             });
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash });
-            console.log('GasToken Added.');
-        } else {
-             console.log(`GasToken ${params.gasToken} already supported.`);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async withdrawStake(to: Address, options?: TransactionOptions): Promise<Hash> {
+        try {
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            return await sp(this.client).withdrawStake({
+                to,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // ========================================
+    // 3. 支付代币管理 (基于 PaymasterActions)
+    // ========================================
+
+    async addGasToken(token: Address, price: bigint, options?: TransactionOptions): Promise<Hash> {
+        try {
+            const pm = paymasterActions(this.superPaymasterAddress);
+            return await pm(this.client).setTokenPrice({
+                token,
+                price,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async getTokenPrice(token: Address): Promise<bigint> {
+        try {
+            const pm = paymasterActions(this.superPaymasterAddress);
+            return await pm(this.getStartPublicClient()).tokenPrices({ token });
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async setupPaymasterDeposit(params: {
+        paymaster: Address;
+        user: Address;
+        token: Address;
+        amount: bigint;
+    }, options?: TransactionOptions): Promise<Hash> {
+        try {
+            const pm = paymasterActions(params.paymaster);
+            return await pm(this.client).depositFor({
+                user: params.user,
+                token: params.token,
+                amount: params.amount,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
         }
     }
 }

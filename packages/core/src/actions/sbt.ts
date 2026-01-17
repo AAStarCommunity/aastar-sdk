@@ -127,336 +127,509 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     async getUserSBT({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'getUserSBT',
-            args: [user, roleId]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getUserSBT',
+                args: [user, roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getUserSBT');
+        }
     },
 
     async getSBTData({ tokenId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'getSBTData',
-            args: [tokenId]
-        });
+        try {
+            validateRequired(tokenId, 'tokenId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getSBTData',
+                args: [tokenId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getSBTData');
+        }
     },
 
     async getCommunityMembership({ user, community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'getCommunityMembership',
-            args: [user, community]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getCommunityMembership',
+                args: [user, community]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityMembership');
+        }
     },
 
     // ERC721 Standard
     async balanceOf({ owner }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'balanceOf',
-            args: [owner]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(owner, 'owner');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'balanceOf',
+                args: [owner]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'balanceOf');
+        }
     },
 
     async ownerOf({ tokenId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'ownerOf',
-            args: [tokenId]
-        }) as Promise<Address>;
+        try {
+            validateRequired(tokenId, 'tokenId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'ownerOf',
+                args: [tokenId]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ownerOf');
+        }
     },
 
     async safeTransferFrom({ from, to, tokenId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'safeTransferFrom',
-            args: [from, to, tokenId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(from, 'from');
+            validateAddress(to, 'to');
+            validateRequired(tokenId, 'tokenId');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'safeTransferFrom',
+                args: [from, to, tokenId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'safeTransferFrom');
+        }
     },
 
     async transferFrom({ from, to, tokenId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'transferFrom',
-            args: [from, to, tokenId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(from, 'from');
+            validateAddress(to, 'to');
+            validateRequired(tokenId, 'tokenId');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'transferFrom',
+                args: [from, to, tokenId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferFrom');
+        }
     },
 
     async approve({ to, tokenId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'approve',
-            args: [to, tokenId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(to, 'to');
+            validateRequired(tokenId, 'tokenId');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'approve',
+                args: [to, tokenId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'approve');
+        }
     },
 
     async setApprovalForAll({ operator, approved, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'setApprovalForAll',
-            args: [operator, approved],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'setApprovalForAll',
+                args: [operator, approved],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setApprovalForAll');
+        }
     },
 
     async getApproved({ tokenId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'getApproved',
-            args: [tokenId]
-        }) as Promise<Address>;
+        try {
+            validateRequired(tokenId, 'tokenId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getApproved',
+                args: [tokenId]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getApproved');
+        }
     },
 
     async isApprovedForAll({ owner, operator }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'isApprovedForAll',
-            args: [owner, operator]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(owner, 'owner');
+            validateAddress(operator, 'operator');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'isApprovedForAll',
+                args: [owner, operator]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isApprovedForAll');
+        }
     },
 
     // ERC721 Metadata
     async name() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'name',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'name',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'name');
+        }
     },
 
     async symbol() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'symbol',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'symbol',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'symbol');
+        }
     },
 
     async tokenURI({ tokenId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'tokenURI',
-            args: [tokenId]
-        }) as Promise<string>;
+        try {
+            validateRequired(tokenId, 'tokenId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'tokenURI',
+                args: [tokenId]
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'tokenURI');
+        }
     },
 
     // ERC721 Enumerable
     async totalSupply() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'totalSupply',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'totalSupply',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'totalSupply');
+        }
     },
 
     async tokenByIndex({ index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'tokenByIndex',
-            args: [index]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(index, 'index');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'tokenByIndex',
+                args: [index]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'tokenByIndex');
+        }
     },
 
     async tokenOfOwnerByIndex({ owner, index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'tokenOfOwnerByIndex',
-            args: [owner, index]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(owner, 'owner');
+            validateRequired(index, 'index');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'tokenOfOwnerByIndex',
+                args: [owner, index]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'tokenOfOwnerByIndex');
+        }
     },
 
     // Admin/Minting
     async mint({ to, tokenURI, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'mint',
-            args: [to, tokenURI],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(to, 'to');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'mint',
+                args: [to, tokenURI],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'mint');
+        }
     },
 
     async burn({ tokenId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'burn',
-            args: [tokenId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(tokenId, 'tokenId');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'burn',
+                args: [tokenId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'burn');
+        }
     },
 
     async setBaseURI({ baseURI, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'setBaseURI',
-            args: [baseURI],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(baseURI, 'baseURI');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'setBaseURI',
+                args: [baseURI],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setBaseURI');
+        }
     },
 
     // Constants
     async REGISTRY() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     async GTOKEN_STAKING() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'GTOKEN_STAKING',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'GTOKEN_STAKING',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'GTOKEN_STAKING');
+        }
     },
 
     async GTOKEN() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'GTOKEN',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'GTOKEN',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'GTOKEN');
+        }
     },
 
     async SUPER_PAYMASTER() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'SUPER_PAYMASTER',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'SUPER_PAYMASTER',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'SUPER_PAYMASTER');
+        }
     },
 
     // Ownership
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'owner',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     // Additional SBT-specific functions
     async mintForRole({ roleId, to, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'mintForRole',
-            args: [roleId, to],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(to, 'to');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'mintForRole',
+                args: [roleId, to],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'mintForRole');
+        }
     },
 
     async getMemberships({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'getMemberships',
-            args: [user]
-        }) as Promise<any[]>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getMemberships',
+                args: [user]
+            }) as Promise<any[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getMemberships');
+        }
     },
 
     async getActiveMemberships({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'getActiveMemberships',
-            args: [user]
-        }) as Promise<any[]>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getActiveMemberships',
+                args: [user]
+            }) as Promise<any[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getActiveMemberships');
+        }
     },
 
     async verifyCommunityMembership({ user, community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'verifyCommunityMembership',
-            args: [user, community]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(user, 'user');
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'verifyCommunityMembership',
+                args: [user, community]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'verifyCommunityMembership');
+        }
     },
 
     async userToSBT({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'userToSBT',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'userToSBT',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'userToSBT');
+        }
     },
 
     async sbtData({ tokenId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'sbtData',
-            args: [tokenId]
-        });
+        try {
+            validateRequired(tokenId, 'tokenId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'sbtData',
+                args: [tokenId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'sbtData');
+        }
     },
 
     async membershipIndex({ user, index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'membershipIndex',
-            args: [user, index]
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(index, 'index');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'membershipIndex',
+                args: [user, index]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'membershipIndex');
+        }
     },
 
     async supportsInterface({ interfaceId }) {

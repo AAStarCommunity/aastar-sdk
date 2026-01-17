@@ -41,7 +41,7 @@ describe('ReputationActions', () => {
     it('should calculate reputation', async () => {
       publicClient.readContract.mockResolvedValue([500n, 1000n]);
       const actions = reputationActions(REPUTATION_ADDRESS)(publicClient);
-      const result = await actions.calculateReputation({ user: USER_ADDRESS, community: '0xC0', timestamp: 0n });
+      const result = await actions.calculateReputation({ user: USER_ADDRESS, community: '0x1000000000000000000000000000000000000000', timestamp: 0n });
       expect(result).toHaveProperty('communityScore');
       expect(result).toHaveProperty('globalScore');
     });

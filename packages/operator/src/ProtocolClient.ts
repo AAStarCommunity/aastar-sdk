@@ -42,52 +42,60 @@ export class ProtocolClient extends BaseClient {
      * Create a new proposal
      */
     async createProposal(target: Address, calldata: Hex, description: string, options?: TransactionOptions): Promise<Hash> {
-        const dvt = dvtActions()(this.client);
-        
-        // Mapping general "createProposal" to "createSlashProposal" for now
-        // Assuming Governance uses Validator logic or this Client is for Slash.
-        // If it's general governance, we might need a different Action.
-        // Using createSlashProposal as the available action.
-        return dvt.createSlashProposal({
-            address: this.dvtValidatorAddress,
-            operator: target,
-            level: 1, // Default level
-            reason: description,
-            account: options?.account
-        });
+        try {
+            const dvt = dvtActions(this.dvtValidatorAddress)(this.client);
+            
+            // Mapping general "createProposal" to "createSlashProposal" for now
+            // Assuming Governance uses Validator logic or this Client is for Slash.
+            // Using createSlashProposal as the available action.
+            return await dvt.createSlashProposal({
+                operator: target,
+                level: 1, // Default level
+                reason: description,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     /**
      * Sign (Vote) on a proposal
      */
     async signProposal(proposalId: bigint, signature: Hex = '0x', options?: TransactionOptions): Promise<Hash> {
-        const dvt = dvtActions()(this.client);
-        
-        return dvt.signSlashProposal({
-            address: this.dvtValidatorAddress,
-            proposalId,
-            signature, 
-            account: options?.account
-        });
+        try {
+            const dvt = dvtActions(this.dvtValidatorAddress)(this.client);
+            
+            return await dvt.signSlashProposal({
+                proposalId,
+                signature, 
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     /**
      * Execute a proposal with collected signatures
      */
     async executeWithProof(proposalId: bigint, signatures: Hex[], options?: TransactionOptions): Promise<Hash> {
-        // Mock proof generation
-        const proof = '0x'; 
-        const dvt = dvtActions()(this.client);
-        
-        return dvt.executeSlashWithProof({
-            address: this.dvtValidatorAddress,
-            proposalId,
-            repUsers: [], // Needs real data
-            newScores: [],
-            epoch: 0n,
-            proof,
-            account: options?.account
-        });
+        try {
+            // Mock proof generation logic or placeholder
+            const proof = '0x' as Hex; 
+            const dvt = dvtActions(this.dvtValidatorAddress)(this.client);
+            
+            return await dvt.executeSlashWithProof({
+                proposalId,
+                repUsers: [], // Needs real data in production
+                newScores: [],
+                epoch: 0n,
+                proof,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     // ========================================
@@ -95,14 +103,21 @@ export class ProtocolClient extends BaseClient {
     // ========================================
 
     async registerBLSKey(publicKey: Hex, options?: TransactionOptions): Promise<Hash> {
-        if (!this.blsAggregatorAddress) throw new Error('BLS Aggregator address required');
-        const agg = aggregatorActions(BLS_AGGREGATOR)(this.client);
-        
-        return agg.registerBLSPublicKey({
-            address: this.blsAggregatorAddress,
-            publicKey,
-            account: options?.account
-        });
+        try {
+            if (!this.blsAggregatorAddress) {
+                throw new Error('BLS Aggregator address required for this client');
+            }
+            // Aggregator actions now handle the type internally or via mapping
+            const agg = aggregatorActions(this.blsAggregatorAddress)(this.client);
+            
+            return await agg.registerBLSPublicKey({
+                user: this.getAddress(), // Pass sender for key ownership check
+                publicKey,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     // ========================================
@@ -110,23 +125,35 @@ export class ProtocolClient extends BaseClient {
     // ========================================
 
     async setProtocolFee(recipient: Address, bps: bigint, options?: TransactionOptions): Promise<Hash> {
-        if (!this.superPaymasterAddress) throw new Error('SuperPaymaster address required');
-        const sp = superPaymasterActions(this.superPaymasterAddress);
-        
-        return sp(this.client).setProtocolFee({
-            feeRecipient: recipient,
-            feeBps: bps,
-            account: options?.account
-        });
+        try {
+            if (!this.superPaymasterAddress) {
+                throw new Error('SuperPaymaster address required for this client');
+            }
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            
+            return await sp(this.client).setProtocolFee({
+                feeRecipient: recipient,
+                feeBps: bps,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     async setTreasury(treasury: Address, options?: TransactionOptions): Promise<Hash> {
-        if (!this.superPaymasterAddress) throw new Error('SuperPaymaster address required');
-        const sp = superPaymasterActions(this.superPaymasterAddress);
-        
-        return sp(this.client).setTreasury({
-            treasury,
-            account: options?.account
-        });
+        try {
+            if (!this.superPaymasterAddress) {
+                 throw new Error('SuperPaymaster address required for this client');
+            }
+            const sp = superPaymasterActions(this.superPaymasterAddress);
+            
+            return await sp(this.client).setTreasury({
+                treasury,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 }

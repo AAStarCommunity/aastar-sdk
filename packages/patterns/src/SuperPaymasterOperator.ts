@@ -33,10 +33,12 @@ export class SuperPaymasterOperator {
         console.log('⚡ Registering as SuperPaymaster Operator...');
         const txs: Hash[] = [];
 
-        // 1. Stake to become operator
-        console.log(`💰 Staking ${params.initialStake}...`);
-        const stakeTx = await this.client.stake(params.initialStake, options);
-        txs.push(stakeTx);
+        // 1. Register & Stake
+        console.log(`💰 Registering with ${params.initialStake} stake...`);
+        const regTx = await this.client.registerAsSuperPaymasterOperator({
+            stakeAmount: params.initialStake
+        }, options);
+        txs.push(regTx);
 
         // 2. Configure operator parameters
         console.log('⚙️ Configuring operator...');
@@ -60,7 +62,7 @@ export class SuperPaymasterOperator {
      */
     async depositFunds(amount: bigint, options?: TransactionOptions): Promise<Hash> {
         console.log(`💵 Depositing ${amount} to SuperPaymaster...`);
-        return this.client.deposit(amount, options);
+        return this.client.depositCollateral(amount, options);
     }
 
     /**
@@ -68,7 +70,7 @@ export class SuperPaymasterOperator {
      */
     async withdrawFunds(to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
         console.log(`📤 Withdrawing ${amount} to ${to}...`);
-        return this.client.withdraw(to, amount, options);
+        return this.client.withdrawCollateral(to, amount, options);
     }
 
     /**
@@ -92,11 +94,11 @@ export class SuperPaymasterOperator {
     }
 
     /**
-     * Get current deposit balance
+     * Get current deposit balance (aPNTs balance)
      */
     async getDepositBalance(): Promise<bigint> {
-        const details = await this.client.getDepositDetails();
-        return details.deposit;
+        const details = await this.client.getOperatorDetails(this.client.getAddress());
+        return details[0]; // aPNTsBalance
     }
 
     // ========================================
@@ -108,7 +110,7 @@ export class SuperPaymasterOperator {
      */
     async initiateExit(options?: TransactionOptions): Promise<Hash> {
         console.log('🚪 Initiating operator exit...');
-        return this.client.unstake(options);
+        return this.client.initiateExit(options);
     }
 
     /**
@@ -117,6 +119,10 @@ export class SuperPaymasterOperator {
     async withdrawAll(to: Address, options?: TransactionOptions): Promise<Hash> {
         console.log('💸 Withdrawing all funds...');
         const balance = await this.getDepositBalance();
-        return this.client.withdraw(to, balance, options);
+        return this.client.withdrawCollateral(to, balance, options);
+    }
+
+    async withdrawStake(to: Address, options?: TransactionOptions): Promise<Hash> {
+        return this.client.withdrawStake(to, options);
     }
 }

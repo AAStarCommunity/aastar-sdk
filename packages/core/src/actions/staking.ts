@@ -96,14 +96,20 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     async unlockStake({ user, roleId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'unlockAndTransfer',
-            args: [user, roleId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'unlockAndTransfer',
+                args: [user, roleId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'unlockStake');
+        }
     },
 
     async unlockAndTransfer({ user, roleId, account }) {
@@ -143,178 +149,275 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     async slashByDVT({ user, roleId, amount, reason, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'slashByDVT',
-            args: [user, roleId, amount, reason],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'slashByDVT',
+                args: [user, roleId, amount, reason],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'slashByDVT');
+        }
     },
 
     async setAuthorizedSlasher({ slasher, authorized, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'setAuthorizedSlasher',
-            args: [slasher, authorized],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(slasher, 'slasher');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'setAuthorizedSlasher',
+                args: [slasher, authorized],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setAuthorizedSlasher');
+        }
     },
 
     // Query Functions
     async getStakeInfo({ operator, roleId }) {
-        return (client as any).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'getStakeInfo',
-            args: [operator, roleId]
-        });
+        try {
+            validateAddress(operator, 'operator');
+            validateRequired(roleId, 'roleId');
+            return await (client as any).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'getStakeInfo',
+                args: [operator, roleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getStakeInfo');
+        }
     },
 
     async getStakingBalance({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'balanceOf',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'balanceOf',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getStakingBalance');
+        }
     },
 
     async getLockedStake({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'getLockedStake',
-            args: [user, roleId]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'getLockedStake',
+                args: [user, roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getLockedStake');
+        }
     },
 
     async getUserRoleLocks({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'getUserRoleLocks',
-            args: [user]
-        }) as Promise<any[]>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'getUserRoleLocks',
+                args: [user]
+            }) as Promise<any[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getUserRoleLocks');
+        }
     },
 
     async hasRoleLock({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'hasRoleLock',
-            args: [user, roleId]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'hasRoleLock',
+                args: [user, roleId]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'hasRoleLock');
+        }
     },
 
     async availableBalance({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'availableBalance',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'availableBalance',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'availableBalance');
+        }
     },
 
     async previewExitFee({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'previewExitFee',
-            args: [user, roleId]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'previewExitFee',
+                args: [user, roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'previewExitFee');
+        }
     },
 
     // Admin Functions
     async setRegistry({ registry, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'setRegistry',
-            args: [registry],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(registry, 'registry');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'setRegistry',
+                args: [registry],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRegistry');
+        }
     },
 
     async setRoleExitFee({ roleId, feePercent, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'setRoleExitFee',
-            args: [roleId, feePercent],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAmount(feePercent, 'feePercent');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'setRoleExitFee',
+                args: [roleId, feePercent],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRoleExitFee');
+        }
     },
 
     async setTreasury({ treasury, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'setTreasury',
-            args: [treasury],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(treasury, 'treasury');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'setTreasury',
+                args: [treasury],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setTreasury');
+        }
     },
 
     // View Functions
     async stakes({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'stakes',
-            args: [user]
-        });
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'stakes',
+                args: [user]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'stakes');
+        }
     },
 
     async roleLocks({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'roleLocks',
-            args: [user, roleId]
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'roleLocks',
+                args: [user, roleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleLocks');
+        }
     },
 
     async roleExitConfigs({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'roleExitConfigs',
-            args: [roleId]
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'roleExitConfigs',
+                args: [roleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleExitConfigs');
+        }
     },
 
     async userActiveRoles({ user, index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'userActiveRoles',
-            args: [user, index]
-        }) as Promise<Hex>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'userActiveRoles',
+                args: [user, index]
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'userActiveRoles');
+        }
     },
 
     async authorizedSlashers({ slasher }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'authorizedSlashers',
-            args: [slasher]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(slasher, 'slasher');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'authorizedSlashers',
+                args: [slasher]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'authorizedSlashers');
+        }
     },
 
     async totalStaked() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'totalStaked',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'totalStaked',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'totalStaked');
+        }
     },
 
     async getTotalStaked() {
@@ -322,72 +425,101 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     async treasury() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'treasury',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'treasury',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'treasury');
+        }
     },
 
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'owner',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     // Ownership
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     // Version
     async version() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'version',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     },
 
     // Constants
     async REGISTRY() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     async GTOKEN() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'GTOKEN',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'GTOKEN',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'GTOKEN');
+        }
     }
 });

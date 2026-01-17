@@ -156,12 +156,18 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async hasRole({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'hasRole',
-            args: [roleId, user]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'hasRole',
+                args: [roleId, user]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'hasRole');
+        }
     },
 
     async unRegisterRole({ user, roleId, account }) {
@@ -182,53 +188,79 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async getRoleConfig({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getRoleConfig',
-            args: [roleId]
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getRoleConfig',
+                args: [roleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleConfig');
+        }
     },
 
     async setRoleLockDuration({ roleId, duration, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setRoleLockDuration',
-            args: [roleId, duration],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setRoleLockDuration',
+                args: [roleId, duration],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRoleLockDuration');
+        }
     },
 
     async setRoleOwner({ roleId, newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setRoleOwner',
-            args: [roleId, newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setRoleOwner',
+                args: [roleId, newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRoleOwner');
+        }
     },
 
     // Community Management
     async communityToToken({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'communityToToken',
-            args: [community]
-        }) as Promise<Address>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'communityToToken',
+                args: [community]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityToToken');
+        }
     },
 
     async getCommunityRoleData({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getCommunityRoleData',
-            args: [community]
-        });
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getCommunityRoleData',
+                args: [community]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityRoleData');
+        }
     },
 
     async isCommunityMember({ community, user }) {
@@ -242,21 +274,31 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
 
     // Credit & Reputation
     async getCreditLimit({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getCreditLimit',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getCreditLimit',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCreditLimit');
+        }
     },
 
     async getGlobalReputation({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'globalReputation',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'globalReputation',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'globalReputation');
+        }
     },
 
     async setCreditTier({ tier, params, account }) {
@@ -276,46 +318,67 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async setLevelThreshold({ level, threshold, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setLevelThreshold',
-            args: [level, threshold],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAmount(level, 'level');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setLevelThreshold',
+                args: [level, threshold],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setLevelThreshold');
+        }
     },
 
     async batchUpdateGlobalReputation({ users, scores, epoch, proof, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'batchUpdateGlobalReputation',
-            args: [users, scores, epoch, proof],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(users, 'users');
+            validateRequired(scores, 'scores');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'batchUpdateGlobalReputation',
+                args: [users, scores, epoch, proof],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'batchUpdateGlobalReputation');
+        }
     },
 
     // Blacklist Management
     async updateOperatorBlacklist({ operator, isBlacklisted, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'updateOperatorBlacklist',
-            args: [operator, isBlacklisted],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'updateOperatorBlacklist',
+                args: [operator, isBlacklisted],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'updateOperatorBlacklist');
+        }
     },
 
     async isOperatorBlacklisted({ operator }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'isOperatorBlacklisted',
-            args: [operator]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'isOperatorBlacklisted',
+                args: [operator]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isOperatorBlacklisted');
+        }
     },
 
     // Contract References
@@ -336,47 +399,67 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async setBLSAggregator({ aggregator, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setBLSAggregator',
-            args: [aggregator],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(aggregator, 'aggregator');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setBLSAggregator',
+                args: [aggregator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setBLSAggregator');
+        }
     },
 
     async setMySBT({ sbt, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setMySBT',
-            args: [sbt],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(sbt, 'sbt');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setMySBT',
+                args: [sbt],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setMySBT');
+        }
     },
 
     async setSuperPaymaster({ paymaster, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setSuperPaymaster',
-            args: [paymaster],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(paymaster, 'paymaster');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setSuperPaymaster',
+                args: [paymaster],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setSuperPaymaster');
+        }
     },
 
     async setStaking({ staking, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setStaking',
-            args: [staking],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(staking, 'staking');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setStaking',
+                args: [staking],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setStaking');
+        }
     },
 
     async setReputationSource({ source, account }) {
@@ -396,282 +479,427 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async blsValidator() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'blsValidator',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'blsValidator',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'blsValidator');
+        }
     },
 
     async blsAggregator() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'blsAggregator',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'blsAggregator',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'blsAggregator');
+        }
     },
 
     async mySBT() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'MYSBT',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'MYSBT',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'mySBT');
+        }
     },
 
     async superPaymaster() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'SUPER_PAYMASTER',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'SUPER_PAYMASTER',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'superPaymaster');
+        }
     },
 
     async staking() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'GTOKEN_STAKING',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'GTOKEN_STAKING',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'staking');
+        }
     },
 
     async reputationSource() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'reputationSource',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'reputationSource',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'reputationSource');
+        }
     },
 
     // Admin
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'owner',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     // View Functions
     async roleConfigs({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleConfigs',
-            args: [roleId]
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleConfigs',
+                args: [roleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleConfigs');
+        }
     },
 
     async roleCounts({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleCounts',
-            args: [roleId]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleCounts',
+                args: [roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleCounts');
+        }
     },
 
     // Alias: getRoleMemberCount maps to contract's getRoleUserCount
     async getRoleMemberCount({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getRoleUserCount',
-            args: [roleId]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getRoleUserCount',
+                args: [roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleMemberCount');
+        }
     },
 
     async roleMembers({ roleId, index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleMembers',
-            args: [roleId, index]
-        }) as Promise<Address>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleMembers',
+                args: [roleId, index]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleMembers');
+        }
     },
 
     async userRoles({ user, index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'userRoles',
-            args: [user, index]
-        }) as Promise<Hex>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'userRoles',
+                args: [user, index]
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'userRoles');
+        }
     },
 
     async userRoleCount({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'userRoleCount',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'userRoleCount',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'userRoleCount');
+        }
     },
 
     async globalReputation({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'globalReputation',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'globalReputation',
+                args: [user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'globalReputation');
+        }
     },
 
     async creditTiers({ tier }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'creditTiers',
-            args: [tier]
-        });
+        try {
+            validateAmount(tier, 'tier');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'creditTiers',
+                args: [tier]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'creditTiers');
+        }
     },
 
     async levelThresholds({ level }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'levelThresholds',
-            args: [level]
-        }) as Promise<bigint>;
+        try {
+            validateAmount(level, 'level');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'levelThresholds',
+                args: [level]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'levelThresholds');
+        }
     },
 
     // Community lookup functions
     async communityByNameV3({ name }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'communityByNameV3',
-            args: [name]
-        }) as Promise<Address>;
+        try {
+            validateRequired(name, 'name');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'communityByNameV3',
+                args: [name]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityByNameV3');
+        }
     },
 
     async communityByENSV3({ ensName }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'communityByENSV3',
-            args: [ensName]
-        }) as Promise<Address>;
+        try {
+            validateRequired(ensName, 'ensName');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'communityByENSV3',
+                args: [ensName]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityByENSV3');
+        }
     },
 
     async proposedRoleNames({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'proposedRoleNames',
-            args: [roleId]
-        }) as Promise<string>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'proposedRoleNames',
+                args: [roleId]
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'proposedRoleNames');
+        }
     },
 
     // Role Metadata & Members
     async roleLockDurations({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleLockDurations',
-            args: [roleId]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleLockDurations',
+                args: [roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleLockDurations');
+        }
     },
 
     async roleMetadata({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleMetadata',
-            args: [roleId]
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleMetadata',
+                args: [roleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleMetadata');
+        }
     },
 
     async roleStakes({ roleId, user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleStakes',
-            args: [roleId, user]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleStakes',
+                args: [roleId, user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleStakes');
+        }
     },
 
     async roleSBTTokenIds({ roleId, user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleSBTTokenIds',
-            args: [roleId, user]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleSBTTokenIds',
+                args: [roleId, user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleSBTTokenIds');
+        }
     },
 
     async roleOwners({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleOwners',
-            args: [roleId]
-        }) as Promise<Address>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleOwners',
+                args: [roleId]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleOwners');
+        }
     },
 
     async roleMemberIndex({ roleId, user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'roleMemberIndex',
-            args: [roleId, user]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleMemberIndex',
+                args: [roleId, user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleMemberIndex');
+        }
     },
 
     async getRoleMembers({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getRoleMembers',
-            args: [roleId]
-        }) as Promise<Address[]>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getRoleMembers',
+                args: [roleId]
+            }) as Promise<Address[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleMembers');
+        }
     },
 
     async getRoleUserCount({ roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getRoleUserCount',
-            args: [roleId]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getRoleUserCount',
+                args: [roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleUserCount');
+        }
     },
 
     async getUserRoles({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'getUserRoles',
-            args: [user]
-        }) as Promise<Hex[]>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getUserRoles',
+                args: [user]
+            }) as Promise<Hex[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getUserRoles');
+        }
     },
 
     // Admin Operations
@@ -743,159 +971,233 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async calculateExitFee({ user, roleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'calculateExitFee',
-            args: [user, roleId]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'calculateExitFee',
+                args: [user, roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'calculateExitFee');
+        }
     },
 
     async addLevelThreshold({ level, threshold, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'addLevelThreshold',
-            args: [level, threshold],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAmount(level, 'level');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'addLevelThreshold',
+                args: [level, threshold],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'addLevelThreshold');
+        }
     },
 
     async creditTierConfig({ tier }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'creditTierConfig',
-            args: [tier]
-        });
+        try {
+            validateAmount(tier, 'tier');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'creditTierConfig',
+                args: [tier]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'creditTierConfig');
+        }
     },
 
     async accountToUser({ account: userAccount }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'accountToUser',
-            args: [userAccount]
-        }) as Promise<Address>;
+        try {
+            validateAddress(userAccount, 'account');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'accountToUser',
+                args: [userAccount]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'accountToUser');
+        }
     },
 
     // Constants (Role IDs)
     async ROLE_COMMUNITY() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_COMMUNITY',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_COMMUNITY',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_COMMUNITY');
+        }
     },
 
     async ROLE_ENDUSER() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_ENDUSER',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_ENDUSER',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_ENDUSER');
+        }
     },
 
     async ROLE_PAYMASTER_SUPER() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_PAYMASTER_SUPER',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_PAYMASTER_SUPER',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_PAYMASTER_SUPER');
+        }
     },
 
     async ROLE_PAYMASTER_AOA() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_PAYMASTER_AOA',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_PAYMASTER_AOA',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_PAYMASTER_AOA');
+        }
     },
 
     async ROLE_DVT() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_DVT',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_DVT',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_DVT');
+        }
     },
 
     async ROLE_KMS() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_KMS',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_KMS',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_KMS');
+        }
     },
 
     async ROLE_ANODE() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'ROLE_ANODE',
-            args: []
-        }) as Promise<Hex>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'ROLE_ANODE',
+                args: []
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ROLE_ANODE');
+        }
     },
 
     async GTOKEN_STAKING() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'GTOKEN_STAKING',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'GTOKEN_STAKING',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'GTOKEN_STAKING');
+        }
     },
 
     async MYSBT() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'MYSBT',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'MYSBT',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'MYSBT');
+        }
     },
 
     async SUPER_PAYMASTER() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'SUPER_PAYMASTER',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'SUPER_PAYMASTER',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'SUPER_PAYMASTER');
+        }
     },
 
     async isReputationSource({ source }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'isReputationSource',
-            args: [source]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(source, 'source');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'isReputationSource',
+                args: [source]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isReputationSource');
+        }
     },
 
     async lastReputationEpoch() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'lastReputationEpoch',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'lastReputationEpoch',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'lastReputationEpoch');
+        }
     },
 
     // Version
     async version() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'version',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });

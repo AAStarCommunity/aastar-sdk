@@ -26,7 +26,7 @@ import {
     xPNTsFactoryActions,
     paymasterFactoryActions,
     accountFactoryActions,
-    paymasterV4Actions,
+    paymasterActions,
     superPaymasterActions,
     entryPointActions,
     accountActions,
@@ -245,11 +245,19 @@ async function main() {
             entryPointAddress: config.contracts.entryPoint,
             gTokenAddress: config.contracts.gToken,
             gTokenStakingAddress: config.contracts.gTokenStaking,
-            paymasterFactoryAddress: config.contracts.paymasterFactory
+            paymasterFactoryAddress: config.contracts.paymasterFactory,
+            ethUsdPriceFeedAddress: (config.contracts as any).priceFeed
         });
 
         if (op.pmType === 'V4') {
-            let pAddr = await pmFactory(publicClient).getPaymaster({ owner: acc.address });
+            let pAddr: Address | undefined;
+            try {
+                console.log(`   🔎 Checking Paymaster for ${op.name}...`);
+                pAddr = await pmFactory(publicClient).getPaymaster({ owner: acc.address });
+            } catch (e: any) {
+                console.log(`   ⚠️ Error checking Paymaster: ${e.message}`);
+                pAddr = undefined;
+            }
             if (!pAddr || pAddr === '0x0000000000000000000000000000000000000000') {
                  console.log(`   ⛽ Deploying Paymaster V4 for ${op.name}...`);
                  try {
@@ -301,7 +309,7 @@ async function main() {
             
             // ✅ Ensure GToken support (V4 price set)
             if (pmV4 && pmV4 !== 'None' && pmV4 !== 'N/A (Super)') {
-                const pmData = paymasterV4Actions(pmV4 as Address);
+                const pmData = paymasterActions(pmV4 as Address);
                 const gTokenAddr = config.contracts.gToken;
                 try {
                     const price = await pmData(publicClient).tokenPrices({ token: gTokenAddr });
@@ -423,6 +431,7 @@ async function main() {
             const implHash = await supplierClient.deployContract({
                 abi: SimpleAccountArtifact.abi,
                 bytecode: SimpleAccountArtifact.bytecode as Hex,
+                args: [config.contracts.entryPoint],
                 account: supplier
             });
             const implReceipt = await publicClient.waitForTransactionReceipt({ hash: implHash });
@@ -430,11 +439,11 @@ async function main() {
             console.log(`      ✅ SimpleAccount Impl Deployed: ${implAddr}`);
 
             // 2. Deploy Factory
-            console.log(`      🚀 Deploying SimpleAccountFactory with Impl: ${implAddr}...`);
+            console.log(`      🚀 Deploying SimpleAccountFactory with EntryPoint: ${config.contracts.entryPoint}...`);
             const factHash = await supplierClient.deployContract({
                 abi: SimpleAccountFactoryArtifact.abi,
                 bytecode: SimpleAccountFactoryArtifact.bytecode as Hex,
-                args: [implAddr],
+                args: [config.contracts.entryPoint],
                 account: supplier
             });
             const factReceipt = await publicClient.waitForTransactionReceipt({ hash: factHash });
@@ -721,7 +730,7 @@ async function main() {
     for (const aa of testAccounts) {
         const pmAddr = communityMap[aa.opName]?.pmV4;
         if (pmAddr && pmAddr !== 'None' as any) {
-            const pmData = paymasterV4Actions(pmAddr);
+            const pmData = paymasterActions(pmAddr);
             const gTokenAddr = config.contracts.gToken;
             const deposit = await pmData(publicClient).balances({ user: aa.address, token: gTokenAddr });
             if (deposit < parseEther('1000')) {

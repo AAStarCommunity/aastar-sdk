@@ -2,7 +2,7 @@ import { createClient, type Client, type Transport, type Chain, type Account, pu
 import {
     registryActions, 
     superPaymasterActions,
-    paymasterV4Actions, 
+    paymasterActions, 
     stakingActions,
     sbtActions,
     dvtActions,
@@ -10,7 +10,7 @@ import {
     aggregatorActions,
     type RegistryActions, 
     type SuperPaymasterActions,
-    type PaymasterV4Actions, 
+    type PaymasterActions, 
     type StakingActions, 
     type SBTActions,
     type DVTActions,
@@ -20,7 +20,9 @@ import {
     TOKEN_ADDRESSES 
 } from '@aastar/core';
 
-export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & SBTActions & DVTActions & XPNTsFactoryActions & AggregatorActions;
+const ADDRESS_PLACEHOLDER: Address = '0x0000000000000000000000000000000000000000';
+
+export type AdminClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterActions & StakingActions & SBTActions & DVTActions & XPNTsFactoryActions & AggregatorActions;
 
 export function createAdminClient({ 
     chain, 
@@ -42,10 +44,10 @@ export function createAdminClient({
     const actions = {
         ...registryActions(usedAddresses.registry)(baseClient as any),
         ...superPaymasterActions(usedAddresses.superPaymaster)(baseClient as any),
-        ...paymasterV4Actions(usedAddresses.paymasterV4)(baseClient as any),
+        ...paymasterActions(usedAddresses.paymasterV4)(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
-        ...dvtActions()(baseClient as any),
+        ...dvtActions(ADDRESS_PLACEHOLDER)(baseClient as any),
         ...xPNTsFactoryActions(usedAddresses.xPNTsFactory || '0x')(baseClient as any),
         ...aggregatorActions(ADDRESS_PLACEHOLDER)(baseClient as any),
     };

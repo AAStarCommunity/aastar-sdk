@@ -11,7 +11,7 @@ import {
 } from 'viem';
 import { sepolia } from 'viem/chains';
 import { registryActions } from './registry';
-import { paymasterV4Actions } from './paymasterV4';
+import { paymasterActions } from './paymaster.js';
 
 // Standard ERC20 ABI for minting/approving
 const ERC20_ABI = parseAbi([

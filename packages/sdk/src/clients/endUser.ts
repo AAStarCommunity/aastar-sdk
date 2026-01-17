@@ -3,18 +3,18 @@ import {
     registryActions, 
     sbtActions,
     superPaymasterActions,
-    paymasterV4Actions,
+    paymasterActions,
     type RegistryActions, 
     type SBTActions, 
     type SuperPaymasterActions, 
-    type PaymasterV4Actions,
+    type PaymasterActions,
     CORE_ADDRESSES, 
     TOKEN_ADDRESSES,
     TEST_ACCOUNT_ADDRESSES,
     RegistryABI
 } from '@aastar/core';
 
-export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterV4Actions & {
+export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
     /**
      * High-level API: Onboard user to community with automatic funding
      */
@@ -102,7 +102,7 @@ export function createEndUserClient({
         ...registryActions(usedAddresses.registry)(client as any),
         ...sbtActions(usedAddresses.mySBT)(client as any),
         ...superPaymasterActions(usedAddresses.superPaymaster)(client as any),
-        ...paymasterV4Actions(usedAddresses.paymasterV4)(client as any)
+        ...paymasterActions(usedAddresses.paymasterV4)(client as any)
     };
 
     return Object.assign(client, actions, {

@@ -1,0 +1,78 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.17 [39m[90m/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/packages/core[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+ [32m✓[39m __tests__/actions/all-remaining-batch4.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m __tests__/actions/all-remaining-batch3.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m __tests__/actions/comprehensive-batch3.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m __tests__/actions/tokens.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 98[2mms[22m[39m
+ [31m❯[39m __tests__/actions/edge-cases.test.ts [2m([22m[2m27 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 137[2mms[22m[39m
+       [32m✓[39m transfer with zero amount[32m 10[2mms[22m[39m
+       [32m✓[39m approve with max uint256[32m 1[2mms[22m[39m
+       [32m✓[39m balanceOf returns zero[32m 12[2mms[22m[39m
+       [32m✓[39m totalSupply returns large number[32m 1[2mms[22m[39m
+       [32m✓[39m mint to zero address should call contract[32m 1[2mms[22m[39m
+       [32m✓[39m burn entire balance[32m 2[2mms[22m[39m
+       [32m✓[39m register with role 0[32m 5[2mms[22m[39m
+       [32m✓[39m unregister non-existent role[32m 2[2mms[22m[39m
+       [32m✓[39m hasRole returns false[32m 1[2mms[22m[39m
+       [32m✓[39m configureRole with extreme values[32m 0[2mms[22m[39m
+       [32m✓[39m lockStake with minimum amount[32m 1[2mms[22m[39m
+       [32m✓[39m unlockAndTransfer with zero amount[32m 0[2mms[22m[39m
+       [32m✓[39m slash with max amount[32m 52[2mms[22m[39m
+       [32m✓[39m getStakeInfo returns empty[32m 1[2mms[22m[39m
+       [32m✓[39m topUpStake with large amount[32m 1[2mms[22m[39m
+[31m       [31m×[31m depositFor with zero amount[39m[32m 25[2mms[22m[39m
+       [32m✓[39m withdraw entire balance[32m 1[2mms[22m[39m
+       [32m✓[39m balances returns zero[32m 0[2mms[22m[39m
+       [32m✓[39m updatePrice with timestamp in future[32m 1[2mms[22m[39m
+       [32m✓[39m paused returns true[32m 0[2mms[22m[39m
+       [32m✓[39m handles contract revert simulation[32m 2[2mms[22m[39m
+       [32m✓[39m handles transaction failure[32m 1[2mms[22m[39m
+       [32m✓[39m handles invalid address format[32m 1[2mms[22m[39m
+       [32m✓[39m max roleId value[32m 1[2mms[22m[39m
+       [32m✓[39m max stake amount[32m 0[2mms[22m[39m
+       [32m✓[39m empty data bytes[32m 1[2mms[22m[39m
+       [32m✓[39m very long metadata string[32m 0[2mms[22m[39m
+ [32m✓[39m __tests__/actions/error-paths.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [32m✓[39m __tests__/actions/comprehensive-batch2.test.ts [2m([22m[2m41 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m __tests__/actions/comprehensive-batch1.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m __tests__/actions/final-coverage-batch.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m __tests__/actions/paymaster.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+ [32m✓[39m __tests__/actions/tokens-extended.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m __tests__/actions/registry.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m __tests__/actions/sbt.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m __tests__/actions/staking.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m __tests__/actions/all-remaining-batch1.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m __tests__/actions/dvt.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m __tests__/actions/superPaymaster.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m __tests__/actions/factory.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m __tests__/actions/aggregator.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m __tests__/actions/reputation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m __tests__/actions/all-remaining-batch2.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m __tests__/index.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m __tests__/actions/edge-cases.test.ts[2m > [22mEdge Cases & Error Handling Tests[2m > [22mPaymaster Edge Cases[2m > [22mdepositFor with zero amount
+[31m[1mAssertionError[22m: promise resolved "undefined" instead of rejecting[39m
+
+[32m- Expected:[39m 
+Error {
+  "message": "rejected promise",
+}
+
+[31m+ Received:[39m 
+undefined
+
+[36m [2m❯[22m __tests__/actions/edge-cases.test.ts:[2m42:154[22m[39m
+
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m21 passed[39m[22m[90m (22)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m203 passed[39m[22m[90m (204)[39m
+[2m   Start at [22m 21:01:24
+[2m   Duration [22m 8.07s[2m (transform 2.30s, setup 0ms, import 26.40s, tests 770ms, environment 20ms)[22m
+

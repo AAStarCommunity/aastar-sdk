@@ -17,7 +17,7 @@ export type DVTActions = {
     addValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
     
     // BLS Aggregator Integration
-    setBLSAggregator: (args: { bls: Address, account?: Account | Address }) => Promise<Hash>;
+    setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
     BLS_AGGREGATOR: () => Promise<Address>;
     REGISTRY: () => Promise<Address>;
     
@@ -127,12 +127,12 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     // BLS Aggregator Integration
-    async setBLSAggregator({  bls, account }) {
+    async setBLSAggregator({  aggregator, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
             functionName: 'setBLSAggregator',
-            args: [bls],
+            args: [aggregator],
             account: account as any,
             chain: (client as any).chain
         });

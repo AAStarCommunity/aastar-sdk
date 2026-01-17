@@ -18,6 +18,7 @@
     "viem": "2.43.3"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.0.17",
     "abitype": "1.2.3",
     "typescript": "5.7.2"
   }

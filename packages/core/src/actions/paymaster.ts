@@ -1,6 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { PaymasterABI } from '../abis/index.js';
-import { validateAddress, validateAmount } from '../validators/index.js';
+import { validateAddress, validateAmount, validatePositive } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
 // Paymaster Actions (Official SuperPaymaster Paymaster Contract)
@@ -39,7 +39,7 @@ export type PaymasterActions = {
     
     // Initialization & Configuration
     initialize: (args: { _entryPoint: Address, _owner: Address, _treasury: Address, _ethUsdPriceFeed: Address, _serviceFeeRate: bigint, _maxGasCostCap: bigint, _priceStalenessThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
-    setTreasury: (args: { _treasury: Address, account?: Account | Address }) => Promise<Hash>;
+    setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
     setServiceFeeRate: (args: { _serviceFeeRate: bigint, account?: Account | Address }) => Promise<Hash>;
     setMaxGasCostCap: (args: { _maxGasCostCap: bigint, account?: Account | Address }) => Promise<Hash>;
     setPriceStalenessThreshold: (args: { _priceStalenessThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -98,10 +98,10 @@ export type PaymasterActions = {
 export const paymasterActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterActions => ({
     // === NEW: Deposit-Only Model ===
     async depositFor({ user, token, amount, account }) {
+        validateAddress(user, 'user');
+        validateAddress(token, 'token');
+        validatePositive(amount, 'amount');
         try {
-            validateAddress(user, 'user');
-            validateAddress(token, 'token');
-            validateAmount(amount, 'amount');
             return await (client as any).writeContract({
                 address,
                 abi: PaymasterABI,
@@ -116,9 +116,9 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async withdraw({ token, amount, account }) {
+        validateAddress(token, 'token');
+        validateAmount(amount, 'amount');
         try {
-            validateAddress(token, 'token');
-            validateAmount(amount, 'amount');
             return await (client as any).writeContract({
                 address,
                 abi: PaymasterABI,
@@ -133,12 +133,18 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async balances({ user, token }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'balances',
-            args: [user, token]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateAddress(token, 'token');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'balances',
+                args: [user, token]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'balances');
+        }
     },
 
     async setTokenPrice({ token, price, account }) {
@@ -159,104 +165,152 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async tokenPrices({ token }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'tokenPrices',
-            args: [token]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(token, 'token');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'tokenPrices',
+                args: [token]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'tokenPrices');
+        }
     },
 
     // === DEPRECATED: Legacy Gas Token Management ===
     async addGasToken({ token, priceFeed, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'addGasToken',
-            args: [token, priceFeed],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(priceFeed, 'priceFeed');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'addGasToken',
+                args: [token, priceFeed],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'addGasToken');
+        }
     },
 
     async removeGasToken({ token, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'removeGasToken',
-            args: [token],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(token, 'token');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'removeGasToken',
+                args: [token],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'removeGasToken');
+        }
     },
 
     async getSupportedGasTokens() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'getSupportedGasTokens',
-            args: []
-        }) as Promise<Address[]>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'getSupportedGasTokens',
+                args: []
+            }) as Promise<Address[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getSupportedGasTokens');
+        }
     },
 
     async isGasTokenSupported({ token }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'isGasTokenSupported',
-            args: [token]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(token, 'token');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'isGasTokenSupported',
+                args: [token]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isGasTokenSupported');
+        }
     },
 
     // SBT Management
     async addSBT({ sbt, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'addSBT',
-            args: [sbt],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(sbt, 'sbt');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'addSBT',
+                args: [sbt],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'addSBT');
+        }
     },
 
     async removeSBT({ sbt, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'removeSBT',
-            args: [sbt],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(sbt, 'sbt');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'removeSBT',
+                args: [sbt],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'removeSBT');
+        }
     },
 
     async getSupportedSBTs() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'getSupportedSBTs',
-            args: []
-        }) as Promise<Address[]>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'getSupportedSBTs',
+                args: []
+            }) as Promise<Address[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getSupportedSBTs');
+        }
     },
 
     async isSBTSupported({ sbt }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'isSBTSupported',
-            args: [sbt]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(sbt, 'sbt');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'isSBTSupported',
+                args: [sbt]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isSBTSupported');
+        }
     },
 
     // Validation
     async validatePaymasterUserOp({ userOp, userOpHash, maxCost }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'validatePaymasterUserOp',
-            args: [userOp, userOpHash, maxCost]
-        });
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'validatePaymasterUserOp',
+                args: [userOp, userOpHash, maxCost]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'validatePaymasterUserOp');
+        }
     },
 
     async postOp({ mode, context, actualGasCost, actualUserOpFeePerGas }) {
@@ -265,143 +319,209 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
 
     // Deposit & Withdrawal
     async deposit({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'deposit',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'deposit',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'deposit');
+        }
     },
 
     async withdrawTo({ to, amount, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'withdrawTo',
-            args: [to, amount],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(to, 'to');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'withdrawTo',
+                args: [to, amount],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'withdrawTo');
+        }
     },
 
     async addStake({ unstakeDelaySec, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'addStake',
-            args: [unstakeDelaySec],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAmount(unstakeDelaySec, 'unstakeDelaySec');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'addStake',
+                args: [unstakeDelaySec],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'addStake');
+        }
     },
 
     async unlockPaymasterStake({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'unlockStake',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'unlockStake',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'unlockStake');
+        }
     },
 
     async withdrawStake({ to, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'withdrawStake',
-            args: [to],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(to, 'to');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'withdrawStake',
+                args: [to],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'withdrawStake');
+        }
     },
 
     async getDeposit() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'getDeposit',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'getDeposit',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getDeposit');
+        }
     },
 
     // EntryPoint
     async entryPoint() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'entryPoint',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'entryPoint',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'entryPoint');
+        }
     },
 
     // Ownership
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'owner',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     // Initialization & Configuration
     async initialize({ _entryPoint, _owner, _treasury, _ethUsdPriceFeed, _serviceFeeRate, _maxGasCostCap, _priceStalenessThreshold, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'initialize',
-            args: [_entryPoint, _owner, _treasury, _ethUsdPriceFeed, _serviceFeeRate, _maxGasCostCap, _priceStalenessThreshold],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(_entryPoint, 'entryPoint');
+            validateAddress(_owner, 'owner');
+            validateAddress(_treasury, 'treasury');
+            validateAddress(_ethUsdPriceFeed, 'ethUsdPriceFeed');
+            validateAmount(_serviceFeeRate, 'serviceFeeRate');
+            validateAmount(_maxGasCostCap, 'maxGasCostCap');
+            validateAmount(_priceStalenessThreshold, 'priceStalenessThreshold');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'initialize',
+                args: [_entryPoint, _owner, _treasury, _ethUsdPriceFeed, _serviceFeeRate, _maxGasCostCap, _priceStalenessThreshold],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'initialize');
+        }
     },
 
-    async setTreasury({ _treasury, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'setTreasury',
-            args: [_treasury],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async setTreasury({ treasury, account }) {
+        try {
+            validateAddress(treasury, 'treasury');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'setTreasury',
+                args: [treasury],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setTreasury');
+        }
     },
 
     async setServiceFeeRate({ _serviceFeeRate, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'setServiceFeeRate',
-            args: [_serviceFeeRate],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAmount(_serviceFeeRate, 'serviceFeeRate');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'setServiceFeeRate',
+                args: [_serviceFeeRate],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setServiceFeeRate');
+        }
     },
 
     async setMaxGasCostCap({ _maxGasCostCap, account }) {
@@ -494,12 +614,18 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async calculateCost({ gasCost, token, useRealtime }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'calculateCost',
-            args: [gasCost, token, useRealtime]
-        }) as Promise<bigint>;
+        try {
+            validateAmount(gasCost, 'gasCost');
+            validateAddress(token, 'token');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'calculateCost',
+                args: [gasCost, token, useRealtime]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'calculateCost');
+        }
     },
 
     // Registry Integration
@@ -652,11 +778,15 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async version() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'version',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });

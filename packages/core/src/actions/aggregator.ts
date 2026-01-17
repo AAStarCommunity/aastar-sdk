@@ -27,7 +27,7 @@ export type AggregatorActions = {
     
     // Registry & SuperPaymaster
     setDVTValidator: (args: { dv: Address, account?: Account | Address }) => Promise<Hash>;
-    setSuperPaymaster: (args: { sp: Address, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     DVT_VALIDATOR: () => Promise<Address>;
     SUPERPAYMASTER: () => Promise<Address>;
     REGISTRY: () => Promise<Address>;
@@ -64,232 +64,342 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
     },
 
     async blsPublicKeys({ validator }) {
-        const result = await (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'blsPublicKeys',
-            args: [validator]
-        }) as any;
-        return { publicKey: result[0], registered: result[1] };
+        try {
+            validateAddress(validator, 'validator');
+            const result = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'blsPublicKeys',
+                args: [validator]
+            }) as any;
+            return { publicKey: result[0], registered: result[1] };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'blsPublicKeys');
+        }
     },
 
     // Threshold Management
     async setBLSThreshold({ threshold, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'setThreshold',
-            args: [BigInt(threshold)],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(threshold, 'threshold');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'setThreshold',
+                args: [BigInt(threshold)],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setBLSThreshold');
+        }
     },
 
     async getBLSThreshold() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'threshold',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'threshold',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getBLSThreshold');
+        }
     },
 
     async setDefaultThreshold({ newThreshold, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'setDefaultThreshold',
-            args: [newThreshold],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(newThreshold, 'newThreshold');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'setDefaultThreshold',
+                args: [newThreshold],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setDefaultThreshold');
+        }
     },
 
     async setMinThreshold({ newThreshold, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'setMinThreshold',
-            args: [newThreshold],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(newThreshold, 'newThreshold');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'setMinThreshold',
+                args: [newThreshold],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setMinThreshold');
+        }
     },
 
     async defaultThreshold( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'defaultThreshold',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'defaultThreshold',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'defaultThreshold');
+        }
     },
 
     async minThreshold( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'minThreshold',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'minThreshold',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'minThreshold');
+        }
     },
 
     // Proposal & Execution
     async executeProposal({  proposalId, target, callData, requiredThreshold, proof, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'executeProposal',
-            args: [proposalId, target, callData, requiredThreshold, proof],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(proposalId, 'proposalId');
+            validateAddress(target, 'target');
+            validateRequired(callData, 'callData');
+            validateRequired(requiredThreshold, 'requiredThreshold');
+            validateRequired(proof, 'proof');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'executeProposal',
+                args: [proposalId, target, callData, requiredThreshold, proof],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'executeProposal');
+        }
     },
 
     async verifyAndExecute({  proposalId, operator, slashLevel, repUsers, newScores, epoch, proof, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'verifyAndExecute',
-            args: [proposalId, operator, slashLevel, repUsers, newScores, epoch, proof],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(proposalId, 'proposalId');
+            validateAddress(operator, 'operator');
+            validateRequired(slashLevel, 'slashLevel');
+            validateRequired(repUsers, 'repUsers');
+            validateRequired(newScores, 'newScores');
+            validateRequired(epoch, 'epoch');
+            validateRequired(proof, 'proof');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'verifyAndExecute',
+                args: [proposalId, operator, slashLevel, repUsers, newScores, epoch, proof],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'verifyAndExecute');
+        }
     },
 
     async executedProposals({  proposalId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'executedProposals',
-            args: [proposalId]
-        }) as Promise<boolean>;
+        try {
+            validateRequired(proposalId, 'proposalId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'executedProposals',
+                args: [proposalId]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'executedProposals');
+        }
     },
 
     async proposalNonces({  proposalId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'proposalNonces',
-            args: [proposalId]
-        }) as Promise<bigint>;
+        try {
+            validateRequired(proposalId, 'proposalId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'proposalNonces',
+                args: [proposalId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'proposalNonces');
+        }
     },
 
     // Aggregated Signatures
     async aggregatedSignatures({  index }) {
-        const result = await (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'aggregatedSignatures',
-            args: [index]
-        }) as any;
-        return {
-            signature: result[0],
-            messageHash: result[1],
-            timestamp: result[2],
-            verified: result[3]
-        };
+        try {
+            validateRequired(index, 'index');
+            const result = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'aggregatedSignatures',
+                args: [index]
+            }) as any;
+            return {
+                signature: result[0],
+                messageHash: result[1],
+                timestamp: result[2],
+                verified: result[3]
+            };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'aggregatedSignatures');
+        }
     },
 
     // Registry & SuperPaymaster
     async setDVTValidator({  dv, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'setDVTValidator',
-            args: [dv],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(dv, 'dv');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'setDVTValidator',
+                args: [dv],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setDVTValidator');
+        }
     },
 
-    async setSuperPaymaster({  sp, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'setSuperPaymaster',
-            args: [sp],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async setSuperPaymaster({  paymaster, account }) {
+        try {
+            validateAddress(paymaster, 'paymaster');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'setSuperPaymaster',
+                args: [paymaster],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setSuperPaymaster');
+        }
     },
 
     async DVT_VALIDATOR( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'DVT_VALIDATOR',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'DVT_VALIDATOR',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'DVT_VALIDATOR');
+        }
     },
 
     async SUPERPAYMASTER( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'SUPERPAYMASTER',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'SUPERPAYMASTER',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'SUPERPAYMASTER');
+        }
     },
 
     async REGISTRY( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     // Constants
     async MAX_VALIDATORS( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'MAX_VALIDATORS',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'MAX_VALIDATORS',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'MAX_VALIDATORS');
+        }
     },
 
     // Ownership
     async owner( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'owner',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async transferOwnership({  newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async renounceOwnership({  account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     // Version
     async version( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'version',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });

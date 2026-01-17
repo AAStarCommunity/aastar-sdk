@@ -1,5 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther } from 'viem';
 import { xPNTsFactoryABI, PaymasterFactoryABI } from '../abis/index.js';
+import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 // xPNTs Factory Actions (基于地址调用的通用接口)
 export type XPNTsFactoryActions = {
@@ -70,234 +72,332 @@ export type PaymasterFactoryActions = {
 
 export const xPNTsFactoryActions = (address: Address) => (client: PublicClient | WalletClient): XPNTsFactoryActions => ({
     async createToken({ name, symbol, community, account }) {
-        // Map to deployxPNTsToken
-        // Args: name, symbol, communityName, communityENS, exchangeRate, paymasterAOA
-        // We use name/symbol as community name/ens placeholder if not provided
-        // We assume msg.sender (account) is the community owner
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'deployxPNTsToken',
-            args: [
-                name, 
-                symbol, 
-                name, // communityName
-                symbol, // communityENS
-                parseEther('1'), // exchangeRate: 1:1 with 18 decimals (1e18)
-                '0x0000000000000000000000000000000000000000' // paymasterAOA
-            ],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(name, 'name');
+            validateRequired(symbol, 'symbol');
+            validateAddress(community, 'community');
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'deployxPNTsToken',
+                args: [
+                    name, 
+                    symbol, 
+                    name,
+                    symbol,
+                    parseEther('1'),
+                    '0x0000000000000000000000000000000000000000'
+                ],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createToken');
+        }
     },
 
     async deployForCommunity({ community, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'deployForCommunity',
-            args: [community],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(community, 'community');
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'deployForCommunity',
+                args: [community],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'deployForCommunity');
+        }
     },
 
     async getTokenAddress({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'getTokenAddress',
-            args: [community]
-        }) as Promise<Address>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'getTokenAddress',
+                args: [community]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getTokenAddress');
+        }
     },
 
     async predictAddress({ community, salt }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'predictAddress',
-            args: salt !== undefined ? [community, salt] : [community]
-        }) as Promise<Address>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'predictAddress',
+                args: salt !== undefined ? [community, salt] : [community]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'predictAddress');
+        }
     },
 
     async isTokenDeployed({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'isTokenDeployed',
-            args: [community]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'isTokenDeployed',
+                args: [community]
+            }) as boolean;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isTokenDeployed');
+        }
     },
 
     async getCommunityByToken({ token }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'getCommunityByToken',
-            args: [token]
-        }) as Promise<Address>;
+        try {
+            validateAddress(token, 'token');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'getCommunityByToken',
+                args: [token]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityByToken');
+        }
     },
 
     async getAllTokens() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'getAllTokens',
-            args: []
-        }) as Promise<Address[]>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'getAllTokens',
+                args: []
+            }) as Address[];
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getAllTokens');
+        }
     },
 
     async getTokenCount() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'getTokenCount',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'getTokenCount',
+                args: []
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getTokenCount');
+        }
     },
 
     async deployedTokens({ index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'deployedTokens',
-            args: [index]
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'deployedTokens',
+                args: [index]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'deployedTokens');
+        }
     },
 
     async communityToToken({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'communityToToken',
-            args: [community]
-        }) as Promise<Address>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'communityToToken',
+                args: [community]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityToToken');
+        }
     },
 
     async setRegistry({ registry, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'setRegistry',
-            args: [registry],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(registry, 'registry');
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'setRegistry',
+                args: [registry],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRegistry');
+        }
     },
 
     async setSuperPaymaster({ paymaster, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'setSuperPaymaster',
-            args: [paymaster],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(paymaster, 'paymaster');
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'setSuperPaymaster',
+                args: [paymaster],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setSuperPaymaster');
+        }
     },
 
     async setImplementation({ impl, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'setImplementation',
-            args: [impl],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(impl, 'impl');
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'setImplementation',
+                args: [impl],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setImplementation');
+        }
     },
 
     async getImplementation() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'getImplementation',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'getImplementation',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getImplementation');
+        }
     },
 
     async REGISTRY() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     async SUPER_PAYMASTER() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'SUPER_PAYMASTER',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'SUPER_PAYMASTER',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'SUPER_PAYMASTER');
+        }
     },
 
     async tokenImplementation() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'tokenImplementation',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'tokenImplementation',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'tokenImplementation');
+        }
     },
 
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'owner',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     async version() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: xPNTsFactoryABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: xPNTsFactoryABI,
+                functionName: 'version',
+                args: []
+            }) as string;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });
 
 export const paymasterFactoryActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterFactoryActions => ({
     async deployPaymaster({ owner, version, initData, account }: { owner: Address, version?: string, initData?: Hex, account?: Account | Address }) {
-        // Factory.deployPaymaster(version, initData)
-        const defaultVer = 'v4.2'; // 当前标准版本
-        const useVer = version || defaultVer;
-        
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'deployPaymaster',
-            args: [useVer, initData || '0x'], 
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(owner, 'owner');
+            // Factory.deployPaymaster(version, initData)
+            const defaultVer = 'v4.2'; // 当前标准版本
+            const useVer = version || defaultVer;
+            
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'deployPaymaster',
+                args: [useVer, initData || '0x'], 
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'deployPaymaster');
+        }
     },
 
     async calculateAddress({ owner }) {
@@ -307,131 +407,188 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
     },
 
     async getPaymaster({ owner }) {
-        // 使用 paymasterByOperator mapping（不支持 salt）
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'paymasterByOperator',
-            args: [owner]
-        }) as Promise<Address>;
+        try {
+            validateAddress(owner, 'owner');
+            // 使用 paymasterByOperator mapping（不支持 salt）
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'paymasterByOperator',
+                args: [owner]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getPaymaster');
+        }
     },
 
     async getPaymasterCount() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'getPaymasterCount',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'getPaymasterCount',
+                args: []
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getPaymasterCount');
+        }
     },
 
     async getAllPaymasters() {
-        // Not directly supported by contract as single call (it has list + pagination), using pagination shim
-        const count = await (client as PublicClient).readContract({
-            address, abi: PaymasterFactoryABI, functionName: 'getPaymasterCount', args: []
-        }) as bigint;
-        
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'getPaymasterList',
-            args: [0n, count]
-        }) as Promise<Address[]>;
+        try {
+            // Not directly supported by contract as single call (it has list + pagination), using pagination shim
+            const count = await (client as PublicClient).readContract({
+                address, abi: PaymasterFactoryABI, functionName: 'getPaymasterCount', args: []
+            }) as bigint;
+            
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'getPaymasterList',
+                args: [0n, count]
+            }) as Address[];
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getAllPaymasters');
+        }
     },
 
     async isPaymasterDeployed({ owner }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'hasPaymaster', // Corrected from isPaymasterDeployed
-            args: [owner]
-        }) as Promise<boolean>;
+        try {
+            validateAddress(owner, 'owner');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'hasPaymaster', // Corrected from isPaymasterDeployed
+                args: [owner]
+            }) as boolean;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isPaymasterDeployed');
+        }
     },
 
     async setImplementationV4({ impl, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'setImplementationV4',
-            args: [impl],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(impl, 'impl');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'setImplementationV4',
+                args: [impl],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setImplementationV4');
+        }
     },
 
     async getImplementationV4() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'getImplementationV4',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'getImplementationV4',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getImplementationV4');
+        }
     },
 
     async setRegistry({ registry, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'setRegistry',
-            args: [registry],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(registry, 'registry');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'setRegistry',
+                args: [registry],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRegistry');
+        }
     },
 
     async REGISTRY() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     async ENTRY_POINT() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'ENTRY_POINT',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'ENTRY_POINT',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'ENTRY_POINT');
+        }
     },
 
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'owner',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async defaultVersion() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'defaultVersion',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'defaultVersion',
+                args: []
+            }) as string;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'defaultVersion');
+        }
     },
 
     async version() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: PaymasterFactoryABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: PaymasterFactoryABI,
+                functionName: 'version',
+                args: []
+            }) as string;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });

@@ -83,344 +83,518 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     async getReputationRule({ ruleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getReputationRule',
-            args: [ruleId]
-        });
+        try {
+            validateRequired(ruleId, 'ruleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getReputationRule',
+                args: [ruleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getReputationRule');
+        }
     },
 
     async enableRule({ ruleId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'enableRule',
-            args: [ruleId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(ruleId, 'ruleId');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'enableRule',
+                args: [ruleId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'enableRule');
+        }
     },
 
     async disableRule({ ruleId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'disableRule',
-            args: [ruleId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(ruleId, 'ruleId');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'disableRule',
+                args: [ruleId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'disableRule');
+        }
     },
 
     async isRuleActive({ ruleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'isRuleActive',
-            args: [ruleId]
-        }) as Promise<boolean>;
+        try {
+            validateRequired(ruleId, 'ruleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'isRuleActive',
+                args: [ruleId]
+            }) as boolean;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isRuleActive');
+        }
     },
 
     async getActiveRules({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getActiveRules',
-            args: [community]
-        }) as Promise<Hex[]>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getActiveRules',
+                args: [community]
+            }) as Hex[];
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getActiveRules');
+        }
     },
 
     async getRuleCount() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getRuleCount',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getRuleCount',
+                args: []
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRuleCount');
+        }
     },
 
     // \u79ef\u5206\u8ba1\u7b97
     async computeScore({ user, communities, ruleIds, activities }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'computeScore',
-            args: [user, communities, ruleIds, activities]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'computeScore',
+                args: [user, communities, ruleIds, activities]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'computeScore');
+        }
     },
 
     async calculateReputation({ user, community, timestamp }) {
-        const result = await (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'calculateReputation',
-            args: [user, community, timestamp]
-        }) as any;
-        return { communityScore: result[0], globalScore: result[1] };
+        try {
+            validateAddress(user, 'user');
+            validateAddress(community, 'community');
+            const result = await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'calculateReputation',
+                args: [user, community, timestamp]
+            }) as any;
+            return { communityScore: result[0], globalScore: result[1] };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'calculateReputation');
+        }
     },
 
     async getReputationBreakdown({ user, community, timestamp }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getReputationBreakdown',
-            args: [user, community, timestamp]
-        });
+        try {
+            validateAddress(user, 'user');
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getReputationBreakdown',
+                args: [user, community, timestamp]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getReputationBreakdown');
+        }
     },
 
     async getUserScore({ user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getUserScore',
-            args: [user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getUserScore',
+                args: [user]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getUserScore');
+        }
     },
 
     async getCommunityScore({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getCommunityScore',
-            args: [community]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getCommunityScore',
+                args: [community]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityScore');
+        }
     },
 
     // Public mapping getter
     async communityReputations({ community, user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'communityReputations',
-            args: [community, user]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(community, 'community');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'communityReputations',
+                args: [community, user]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityReputations');
+        }
     },
 
     async setCommunityReputation({ community, user, score, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'setCommunityReputation',
-            args: [community, user, score],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(community, 'community');
+            validateAddress(user, 'user');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'setCommunityReputation',
+                args: [community, user, score],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setCommunityReputation');
+        }
     },
 
     // Rule functions
     async setRule({ ruleId, base, bonus, max, desc, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'setRule',
-            args: [ruleId, base, bonus, max, desc],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(ruleId, 'ruleId');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'setRule',
+                args: [ruleId, base, bonus, max, desc],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRule');
+        }
     },
 
     async communityRules({ community, ruleId }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'communityRules',
-            args: [community, ruleId]
-        });
+        try {
+            validateAddress(community, 'community');
+            validateRequired(ruleId, 'ruleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'communityRules',
+                args: [community, ruleId]
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityRules');
+        }
     },
 
     async communityActiveRules({ community, index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'communityActiveRules',
-            args: [community, index]
-        }) as Promise<Hex>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'communityActiveRules',
+                args: [community, index]
+            }) as Hex;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityActiveRules');
+        }
     },
 
     async defaultRule() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'defaultRule',
-            args: []
-        });
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'defaultRule',
+                args: []
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'defaultRule');
+        }
     },
 
     // NFT Boost functions
     async setNFTBoost({ collection, boost, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'setNFTBoost',
-            args: [collection, boost],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(collection, 'collection');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'setNFTBoost',
+                args: [collection, boost],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setNFTBoost');
+        }
     },
 
     async nftCollectionBoost({ collection }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'nftCollectionBoost',
-            args: [collection]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(collection, 'collection');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'nftCollectionBoost',
+                args: [collection]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'nftCollectionBoost');
+        }
     },
 
     async nftHoldStart({ user, collection }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'nftHoldStart',
-            args: [user, collection]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(user, 'user');
+            validateAddress(collection, 'collection');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'nftHoldStart',
+                args: [user, collection]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'nftHoldStart');
+        }
     },
 
     async updateNFTHoldStart({ collection, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'updateNFTHoldStart',
-            args: [collection],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(collection, 'collection');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'updateNFTHoldStart',
+                args: [collection],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'updateNFTHoldStart');
+        }
     },
 
     async boostedCollections({ index }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'boostedCollections',
-            args: [index]
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'boostedCollections',
+                args: [index]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'boostedCollections');
+        }
     },
 
     async entropyFactors({ community }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'entropyFactors',
-            args: [community]
-        }) as Promise<bigint>;
+        try {
+            validateAddress(community, 'community');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'entropyFactors',
+                args: [community]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'entropyFactors');
+        }
     },
 
     // 批量操作
     async batchUpdateScores({ users, scores, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'batchUpdateScores',
-            args: [users, scores],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(users, 'users');
+            validateRequired(scores, 'scores');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'batchUpdateScores',
+                args: [users, scores],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'batchUpdateScores');
+        }
     },
 
     async batchSyncToRegistry({ users, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'batchSyncToRegistry',
-            args: [users],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(users, 'users');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'batchSyncToRegistry',
+                args: [users],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'batchSyncToRegistry');
+        }
     },
 
     async syncToRegistry({ user, communities, ruleIds, activities, epoch, proof, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'syncToRegistry',
-            args: [user, communities, ruleIds, activities, epoch, proof],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(communities, 'communities');
+            validateRequired(ruleIds, 'ruleIds');
+            validateRequired(activities, 'activities');
+            validateRequired(epoch, 'epoch');
+            validateRequired(proof, 'proof');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'syncToRegistry',
+                args: [user, communities, ruleIds, activities, epoch, proof],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'syncToRegistry');
+        }
     },
 
     // Admin & Config
     async setRegistry({ registry, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'setRegistry',
-            args: [registry],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(registry, 'registry');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'setRegistry',
+                args: [registry],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setRegistry');
+        }
     },
 
     async setEntropyFactor({ community, factor, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'setEntropyFactor',
-            args: [community, factor],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(community, 'community');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'setEntropyFactor',
+                args: [community, factor],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setEntropyFactor');
+        }
     },
 
     async getEntropyFactor() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'getEntropyFactor',
-            args: []
-        }) as Promise<bigint>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'getEntropyFactor',
+                args: []
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getEntropyFactor');
+        }
     },
 
     // Constants
     async REGISTRY() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     // Ownership
     async owner() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'owner',
+                args: []
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
     async transferOwnership({ newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
     async renounceOwnership({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
     // Version
     async version() {
-        return (client as PublicClient).readContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'version',
+                args: []
+            }) as string;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });

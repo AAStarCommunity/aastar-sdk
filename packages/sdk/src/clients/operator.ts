@@ -6,12 +6,12 @@ import {
     RegistryABI,
     superPaymasterActions,
 
-    paymasterV4Actions,
+    paymasterActions,
     PaymasterFactoryABI,
     type StakingActions, 
     type RegistryActions,
     type SuperPaymasterActions,
-    type PaymasterV4Actions,
+    type PaymasterActions,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES,
     TEST_ACCOUNT_ADDRESSES
@@ -19,7 +19,7 @@ import {
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
 
-export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterV4Actions & StakingActions & {
+export type OperatorClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SuperPaymasterActions & PaymasterActions & StakingActions & {
     /**
      * High-level API: Setup operator with automatic funding and onboarding
      */
@@ -77,7 +77,7 @@ export function createOperatorClient({
     const spActions = superPaymasterActions(usedAddresses.superPaymaster)(client as any);
     const regActions = registryActions(usedAddresses.registry)(client as any);
     const stkActions = stakingActions(usedAddresses.gTokenStaking)(client as any);
-    const pmV4Actions = paymasterV4Actions(usedAddresses.paymasterV4)(client as any);
+    const pmV4Actions = paymasterActions(usedAddresses.paymasterV4)(client as any);
 
     const actions = {
         ...stkActions,

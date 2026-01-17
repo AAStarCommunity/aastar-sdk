@@ -157,8 +157,8 @@ export class ReputationManager {
     /**
      * Compute score for user in community
      */
-    async computeScore(user: Address, community: Address): Promise<bigint> {
+    async computeScore(user: Address, communities: Address[], ruleIds: Hex[][], activities: bigint[][]): Promise<bigint> {
         const rep = reputationActions(this.reputationAddr);
-        return rep(this.client as PublicClient).computeScore({ user, community });
+        return rep(this.client as PublicClient).computeScore({ user, communities, ruleIds, activities });
     }
 }

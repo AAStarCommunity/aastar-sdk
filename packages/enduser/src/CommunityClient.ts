@@ -47,20 +47,26 @@ export class CommunityClient extends BaseClient {
      * 2. Deploying a Token (xPNTs) via Factory
      * 3. Linking the Token to the Community in Registry
      */
-    async createCommunityToken(params: CreateCommunityParams, options?: TransactionOptions): Promise<Address> {
-        if (!this.factoryAddress) throw new Error('Factory address required');
-        const factory = xPNTsFactoryActions(this.factoryAddress);
+    async createCommunityToken(params: CreateCommunityParams, options?: TransactionOptions): Promise<Hash> {
+        try {
+            if (!this.factoryAddress) {
+                throw new Error('Factory address required for this client');
+            }
+            const factory = xPNTsFactoryActions(this.factoryAddress);
 
-        // 1. Deploy Token
-        const hash = await factory(this.client).createToken({
-            name: params.name,
-            symbol: params.tokenSymbol,
-            community: params.ensName ? '0x0000000000000000000000000000000000000000' : '0x0000000000000000000000000000000000000000', // Placeholder for community ID logic or params.ensName as Address if valid
-            account: options?.account
-        });
-
-        // We need to get the address. The action returns hash.
-        return '0x...'; // Placeholder
+            // 1. Deploy Token
+            // Note: The address calculation should be handled via event parsing or predictive deployment
+            // For now, returning the transaction hash as per L1 pattern
+            return await factory(this.client).createToken({
+                name: params.name,
+                symbol: params.tokenSymbol,
+                community: '0x0000000000000000000000000000000000000000', // Default empty community mapping
+                account: options?.account
+            });
+        } catch (error) {
+            // Error is likely already an AAStarError from L1, but we wrap it for context
+            throw error; 
+        }
     }
 
     /**
@@ -82,56 +88,60 @@ export class CommunityClient extends BaseClient {
         logoURI?: string;
         stakeAmount?: bigint;
     }, options?: TransactionOptions): Promise<Hash> {
-        const registryAddr = this.requireRegistry();
-        const registry = registryActions(registryAddr);
-        const gTokenStakingAddr = this.requireGTokenStaking();
-        const gTokenAddr = this.requireGToken();
-        
-        // 1. Get ROLE_COMMUNITY
-        const roleCommunity = await registry(this.getStartPublicClient()).ROLE_COMMUNITY();
-        
-        // 2. Prepare stake amount (default 30 GToken as per Registry config)
-        const stakeAmount = params.stakeAmount || parseEther('30');
-        
-        // 3. Check and approve GToken to GTokenStaking if needed
-        const gToken = tokenActions();
-        
-        const allowance = await gToken(this.getStartPublicClient()).allowance({
-            token: gTokenAddr,
-            owner: this.getAddress(),
-            spender: gTokenStakingAddr
-        });
-        
-        if (allowance < stakeAmount) {
-            const approveHash = await gToken(this.client).approve({
+        try {
+            const registryAddr = this.requireRegistry();
+            const registry = registryActions(registryAddr);
+            const gTokenStakingAddr = this.requireGTokenStaking();
+            const gTokenAddr = this.requireGToken();
+            
+            // 1. Get ROLE_COMMUNITY
+            const roleCommunity = await registry(this.getStartPublicClient()).ROLE_COMMUNITY();
+            
+            // 2. Prepare stake amount (default 30 GToken as per Registry config)
+            const stakeAmount = params.stakeAmount || parseEther('30');
+            
+            // 3. Check and approve GToken to GTokenStaking if needed
+            const gToken = tokenActions();
+            
+            const allowance = await gToken(this.getStartPublicClient()).allowance({
                 token: gTokenAddr,
-                spender: gTokenStakingAddr,
-                amount: stakeAmount * BigInt(2), // Approve 2x for future use
+                owner: this.getAddress(),
+                spender: gTokenStakingAddr
+            });
+            
+            if (allowance < stakeAmount) {
+                const approveHash = await gToken(this.client).approve({
+                    token: gTokenAddr,
+                    spender: gTokenStakingAddr,
+                    amount: stakeAmount * BigInt(2), // Approve 2x for future use
+                    account: options?.account
+                });
+                await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: approveHash });
+            }
+            
+            // 4. Encode CommunityRoleData
+            // struct CommunityRoleData { string name; string ensName; string website; string description; string logoURI; uint256 stakeAmount; }
+            const communityData = encodeAbiParameters(
+                parseAbiParameters('string, string, string, string, string, uint256'),
+                [
+                    params.name,
+                    params.ensName || '',
+                    params.website || '',
+                    params.description || `${params.name} Community`,
+                    params.logoURI || '',
+                    stakeAmount
+                ]
+            );
+            
+            // 5. Register role
+            return await registry(this.client).registerRoleSelf({
+                roleId: roleCommunity,
+                data: communityData,
                 account: options?.account
             });
-            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: approveHash });
+        } catch (error) {
+            throw error;
         }
-        
-        // 4. Encode CommunityRoleData
-        // struct CommunityRoleData { string name; string ensName; string website; string description; string logoURI; uint256 stakeAmount; }
-        const communityData = encodeAbiParameters(
-            parseAbiParameters('string, string, string, string, string, uint256'),
-            [
-                params.name,
-                params.ensName || '',
-                params.website || '',
-                params.description || `${params.name} Community`,
-                params.logoURI || '',
-                stakeAmount
-            ]
-        );
-        
-        // 5. Register role
-        return registry(this.client).registerRoleSelf({
-            roleId: roleCommunity,
-            data: communityData,
-            account: options?.account
-        });
     }
 
     // ========================================
@@ -142,22 +152,26 @@ export class CommunityClient extends BaseClient {
      * Airdrop SBTs to users to make them members
      */
     async airdropSBT(users: Address[], roleId: bigint, options?: TransactionOptions): Promise<Hash> {
-        if (!this.sbtAddress) throw new Error('SBT address required');
-        const sbt = sbtActions(this.sbtAddress);
+        try {
+            if (!this.sbtAddress) throw new Error('SBT address required for this client');
+            const sbt = sbtActions(this.sbtAddress);
 
-        if (users.length === 1) {
-            // Convert roleId to Hex (bytes32)
-            const roleIdHex = `0x${roleId.toString(16).padStart(64, '0')}` as Hash;
+            if (users.length === 1) {
+                // Convert roleId to Hex (bytes32)
+                const roleIdHex = `0x${roleId.toString(16).padStart(64, '0')}` as Hash;
 
-            return sbt(this.client).airdropMint({
-                to: users[0],
-                roleId: roleIdHex,
-                tokenURI: '', // Added required param
-                account: options?.account
-            });
+                return await sbt(this.client).airdropMint({
+                    to: users[0],
+                    roleId: roleIdHex,
+                    tokenURI: '', // Added required param
+                    account: options?.account
+                });
+            }
+            
+            throw new Error('Batch airdrop not fully implemented in L1 yet, use single user');
+        } catch (error) {
+            throw error;
         }
-        
-        throw new Error('Batch airdrop not fully implemented in L1 yet, use single user');
     }
 
     // ========================================
@@ -165,16 +179,20 @@ export class CommunityClient extends BaseClient {
     // ========================================
 
     async setReputationRule(ruleId: bigint, ruleConfig: any, options?: TransactionOptions): Promise<Hash> {
-        if (!this.reputationAddress) throw new Error('Reputation address required');
-        const reputation = reputationActions(this.reputationAddress);
-        
-        const ruleIdHex = `0x${ruleId.toString(16).padStart(64, '0')}` as Hash;
+        try {
+            if (!this.reputationAddress) throw new Error('Reputation address required for this client');
+            const reputation = reputationActions(this.reputationAddress);
+            
+            const ruleIdHex = `0x${ruleId.toString(16).padStart(64, '0')}` as Hash;
 
-        return reputation(this.client).setReputationRule({
-            ruleId: ruleIdHex,
-            rule: ruleConfig,
-            account: options?.account
-        });
+            return await reputation(this.client).setReputationRule({
+                ruleId: ruleIdHex,
+                rule: ruleConfig,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     // ========================================
@@ -185,27 +203,33 @@ export class CommunityClient extends BaseClient {
      * Revoke membership (Burn SBT)
      */
     async revokeMembership(tokenId: bigint, options?: TransactionOptions): Promise<Hash> {
-        if (!this.sbtAddress) throw new Error('SBT address required');
-        const sbt = sbtActions(this.sbtAddress);
-        
-        // Use burn or deactivateMembership depending on logic.
-        // burnSBT is likely the admin action
-        return sbt(this.client).burnSBT({
-            tokenId,
-            account: options?.account
-        });
+        try {
+            if (!this.sbtAddress) throw new Error('SBT address required for this client');
+            const sbt = sbtActions(this.sbtAddress);
+            
+            return await sbt(this.client).burnSBT({
+                tokenId,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     /**
      * Transfer ownership of the Community Token
      */
     async transferCommunityTokenOwnership(tokenAddress: Address, newOwner: Address, options?: TransactionOptions): Promise<Hash> {
-        const token = tokenActions()(this.client);
-        
-        return token.transferOwnership({
-            token: tokenAddress,
-            newOwner,
-            account: options?.account
-        });
+        try {
+            const token = tokenActions()(this.client);
+            
+            return await token.transferOwnership({
+                token: tokenAddress,
+                newOwner,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 }

@@ -22,7 +22,7 @@ describe('FactoryActions', () => {
     it('should deploy xPNTs token for community', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
       const actions = xPNTsFactoryActions(FACTORY_ADDRESS)(walletClient);
-      await actions.deployForCommunity({ community: '0xC0', account: walletClient.account });
+      await actions.deployForCommunity({ community: '0x1000000000000000000000000000000000000000', account: walletClient.account });
       expect(walletClient.writeContract).toHaveBeenCalled();
     });
 
