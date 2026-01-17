@@ -22,7 +22,8 @@ describe('AggregatorActions', () => {
     it('should register BLS key', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
       const actions = aggregatorActions(AGG_ADDRESS)(walletClient);
-      await actions.registerBLSPublicKey({ publicKey: '0xkey', account: walletClient.account });
+      const USER_ADDR = '0x2222222222222222222222222222222222222222' as `0x${string}`;
+      await actions.registerBLSPublicKey({ user: USER_ADDR, publicKey: '0xkey', account: walletClient.account });
       expect(walletClient.writeContract).toHaveBeenCalled();
     });
   });

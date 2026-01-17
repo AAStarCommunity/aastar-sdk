@@ -22,7 +22,8 @@ describe('DVTActions', () => {
     it('should create slash proposal', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
       const actions = dvtActions(DVT_ADDRESS)(walletClient);
-      await actions.createSlashProposal({ operator: '0xOp', level: 1, reason: 'test', account: walletClient.account });
+      const OP_ADDR = '0x3333333333333333333333333333333333333333' as `0x${string}`;
+      await actions.createSlashProposal({ operator: OP_ADDR, level: 1, reason: 'test', account: walletClient.account });
       expect(walletClient.writeContract).toHaveBeenCalled();
     });
   });
