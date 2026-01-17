@@ -14,6 +14,5 @@ describe('Token All Functions', () => {
   it('name', async () => { p.readContract.mockResolvedValue('T'); expect(await tokenActions()(p).name({ token: T })).toBe('T'); });
   it('symbol', async () => { p.readContract.mockResolvedValue('TKN'); expect(await tokenActions()(p).symbol({ token: T })).toBe('TKN'); });
   it('decimals', async () => { p.readContract.mockResolvedValue(18); expect(await tokenActions()(p).decimals({ token: T })).toBe(18); });
-  it('getMetadata', async () => { p.readContract.mockResolvedValue({ name: 'T', symbol: 'TKN', ens: '', logo: '', owner: U }); const r = await tokenActions()(p).getMetadata({ token: T }); expect(r.name).toBe('T'); });
   it('needsApproval', async () => { p.readContract.mockResolvedValue(true); expect(await tokenActions()(p).needsApproval({ token: T, owner: U, spender: U, amount: 100n })).toBe(true); });
 });

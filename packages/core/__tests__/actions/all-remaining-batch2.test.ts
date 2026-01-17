@@ -17,7 +17,5 @@ describe('All Remaining Functions Batch 2', () => {
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await paymasterActions(A)(p).version()).toBe('1.0'); });
   });
 
-  describe('Reputation All', () => {
-  });
 
 });

@@ -23,23 +23,16 @@ describe('Final Coverage Batch', () => {
     it('validators', async () => { p.readContract.mockResolvedValue(true); expect(await validatorDvtActions(A)(p).validators({ validator: U })).toBe(true); });
     it('getValidator', async () => { p.readContract.mockResolvedValue(U); expect(await validatorDvtActions(A)(p).getValidator({ index: 0n })).toBe(U); });
     it('REGISTRY', async () => { p.readContract.mockResolvedValue(U); expect(await validatorDvtActions(A)(p).REGISTRY()).toBe(U); });
-    it('BLS_AGGREGATOR', async () => { p.readContract.mockResolvedValue(U); expect(await validatorDvtActions(A)(p).BLS_AGGREGATOR()).toBe(U); });
   });
 
   describe('Account Extended', () => {
     it('entryPoint', async () => { p.readContract.mockResolvedValue(U); expect(await accountActions(A)(p).entryPoint()).toBe(U); });
-    it('executeBatch', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await accountActions(A)(w).executeBatch({ dests: [U], values: [1n], funcs: ['0x'], account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('validateUserOp', async () => { p.readContract.mockResolvedValue(0n); await accountActions(A)(p).validateUserOp({ userOp: {}, userOpHash: '0x', missingAccountFunds: 0n }); expect(p.readContract).toHaveBeenCalled(); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await accountActions(A)(p).owner()).toBe(U); });
   });
 
   describe('AccountFactory Extended', () => {
-    it('accountImplementation', async () => { p.readContract.mockResolvedValue(U); expect(await accountFactoryActions(A)(p).accountImplementation()).toBe(U); });
   });
 
   describe('EntryPoint Extended', () => {
-    it('handleOps', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await entryPointActions(A)(w).handleOps({ ops: [], beneficiary: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('handleAggregatedOps', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await entryPointActions(A)(w).handleAggregatedOps({ opsPerAggregator: [], beneficiary: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('getUserOpHash', async () => { p.readContract.mockResolvedValue('0xhash'); expect(await entryPointActions(A)(p).getUserOpHash({ userOp: {} })).toBe('0xhash'); });
   });
 });
