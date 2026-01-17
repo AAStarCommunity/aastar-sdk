@@ -17,6 +17,7 @@
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
     "prebuild": "pnpm clean",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run"
   }
 }

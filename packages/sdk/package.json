@@ -27,6 +27,7 @@
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
     "prebuild": "pnpm clean",
     "build": "tsc",
-    "example:local": "tsx examples/regression_test.ts"
+    "example:local": "tsx examples/regression_test.ts",
+    "test": "vitest run"
   }
 }

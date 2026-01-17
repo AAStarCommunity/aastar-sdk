@@ -10,12 +10,27 @@ export type ReputationActions = {
     isRuleActive: (args: { ruleId: Hex }) => Promise<boolean>;
     getActiveRules: (args: { community: Address }) => Promise<Hex[]>;
     getRuleCount: () => Promise<bigint>;
+    setRule: (args: { ruleId: Hex, base: bigint, bonus: bigint, max: bigint, desc: string, account?: Account | Address }) => Promise<Hash>;
+    communityRules: (args: { community: Address, ruleId: Hex }) => Promise<any>;
+    communityActiveRules: (args: { community: Address, index: bigint }) => Promise<Hex>;
+    defaultRule: () => Promise<any>;
     
     // 积分计算
-    computeScore: (args: { user: Address, community: Address }) => Promise<bigint>;
+    computeScore: (args: { user: Address, communities: Address[], ruleIds: Hex[][], activities: bigint[][] }) => Promise<bigint>;
+    calculateReputation: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<{ communityScore: bigint, globalScore: bigint }>;
+    getReputationBreakdown: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<any>;
     getUserScore: (args: { user: Address }) => Promise<bigint>;
     getCommunityScore: (args: { community: Address }) => Promise<bigint>;
-    communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>; // Public mapping getter
+    communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>;
+    setCommunityReputation: (args: { community: Address, user: Address, score: bigint, account?: Account | Address }) => Promise<Hash>;
+    
+    // NFT Boost
+    setNFTBoost: (args: { collection: Address, boost: bigint, account?: Account | Address }) => Promise<Hash>;
+    nftCollectionBoost: (args: { collection: Address }) => Promise<bigint>;
+    nftHoldStart: (args: { user: Address, collection: Address }) => Promise<bigint>;
+    updateNFTHoldStart: (args: { collection: Address, account?: Account | Address }) => Promise<Hash>;
+    boostedCollections: (args: { index: bigint }) => Promise<Address>;
+    entropyFactors: (args: { community: Address }) => Promise<bigint>;
     
     // 批量操作
     batchUpdateScores: (args: { users: Address[], scores: bigint[], account?: Account | Address }) => Promise<Hash>;
@@ -32,7 +47,7 @@ export type ReputationActions = {
     
     // Admin & Config
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
-    setEntropyFactor: (args: { factor: bigint, account?: Account | Address }) => Promise<Hash>;
+    setEntropyFactor: (args: { community: Address, factor: bigint, account?: Account | Address }) => Promise<Hash>;
     getEntropyFactor: () => Promise<bigint>;
     
     // Constants
@@ -41,6 +56,7 @@ export type ReputationActions = {
     // Ownership
     owner: () => Promise<Address>;
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
     version: () => Promise<string>;
@@ -117,14 +133,33 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }) as Promise<bigint>;
     },
 
-    // 积分计算
-    async computeScore({ user, community }) {
+    // \u79ef\u5206\u8ba1\u7b97
+    async computeScore({ user, communities, ruleIds, activities }) {
         return (client as PublicClient).readContract({
             address,
             abi: ReputationSystemABI,
             functionName: 'computeScore',
-            args: [user, community]
+            args: [user, communities, ruleIds, activities]
         }) as Promise<bigint>;
+    },
+
+    async calculateReputation({ user, community, timestamp }) {
+        const result = await (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'calculateReputation',
+            args: [user, community, timestamp]
+        }) as any;
+        return { communityScore: result[0], globalScore: result[1] };
+    },
+
+    async getReputationBreakdown({ user, community, timestamp }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'getReputationBreakdown',
+            args: [user, community, timestamp]
+        });
     },
 
     async getUserScore({ user }) {
@@ -152,6 +187,115 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
             abi: ReputationSystemABI,
             functionName: 'communityReputations',
             args: [community, user]
+        }) as Promise<bigint>;
+    },
+
+    async setCommunityReputation({ community, user, score, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'setCommunityReputation',
+            args: [community, user, score],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    // Rule functions
+    async setRule({ ruleId, base, bonus, max, desc, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'setRule',
+            args: [ruleId, base, bonus, max, desc],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async communityRules({ community, ruleId }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'communityRules',
+            args: [community, ruleId]
+        });
+    },
+
+    async communityActiveRules({ community, index }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'communityActiveRules',
+            args: [community, index]
+        }) as Promise<Hex>;
+    },
+
+    async defaultRule() {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'defaultRule',
+            args: []
+        });
+    },
+
+    // NFT Boost functions
+    async setNFTBoost({ collection, boost, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'setNFTBoost',
+            args: [collection, boost],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async nftCollectionBoost({ collection }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'nftCollectionBoost',
+            args: [collection]
+        }) as Promise<bigint>;
+    },
+
+    async nftHoldStart({ user, collection }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'nftHoldStart',
+            args: [user, collection]
+        }) as Promise<bigint>;
+    },
+
+    async updateNFTHoldStart({ collection, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'updateNFTHoldStart',
+            args: [collection],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async boostedCollections({ index }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'boostedCollections',
+            args: [index]
+        }) as Promise<Address>;
+    },
+
+    async entropyFactors({ community }) {
+        return (client as PublicClient).readContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'entropyFactors',
+            args: [community]
         }) as Promise<bigint>;
     },
 
@@ -201,12 +345,12 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         });
     },
 
-    async setEntropyFactor({ factor, account }) {
+    async setEntropyFactor({ community, factor, account }) {
         return (client as any).writeContract({
             address,
             abi: ReputationSystemABI,
             functionName: 'setEntropyFactor',
-            args: [factor],
+            args: [community, factor],
             account: account as any,
             chain: (client as any).chain
         });
@@ -247,6 +391,17 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
             abi: ReputationSystemABI,
             functionName: 'transferOwnership',
             args: [newOwner],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
+    async renounceOwnership({ account }) {
+        return (client as any).writeContract({
+            address,
+            abi: ReputationSystemABI,
+            functionName: 'renounceOwnership',
+            args: [],
             account: account as any,
             chain: (client as any).chain
         });

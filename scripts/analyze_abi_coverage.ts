@@ -25,7 +25,8 @@ function getAllContracts(): ContractAnalysis[] {
     const files = fs.readdirSync(ABIS_DIR).filter(f => f.endsWith('.json') && f !== 'index.ts');
     
     return files.map(file => {
-        const content = JSON.parse(fs.readFileSync(path.join(ABIS_DIR, file), 'utf8'));
+        const rawContent = JSON.parse(fs.readFileSync(path.join(ABIS_DIR, file), 'utf8'));
+        const content = Array.isArray(rawContent) ? rawContent : (rawContent.abi || []);
         const functions = content
             .filter((item: any) => item.type === 'function')
             .map((item: any) => item.name)
@@ -53,8 +54,7 @@ function analyzeActionsCoverage(contracts: ContractAnalysis[]): ContractAnalysis
         'xPNTs': 'tokens.ts',
         'xPNTsToken': 'tokens.ts',
         'SuperPaymaster': 'superPaymaster.ts',
-        'PaymasterV4_2': 'paymasterV4.ts',
-        'Paymaster': 'paymasterV4.ts',
+        'Paymaster': 'paymaster.ts',
         'MySBT': 'sbt.ts',
         'ReputationSystem': 'reputation.ts',
         'PaymasterFactory': 'factory.ts',

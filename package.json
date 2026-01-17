@@ -9,6 +9,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:coverage": "vitest run --coverage",
     "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
     "test:init": "bash run_full_regression.sh init",
     "test:admin": "ts-node scripts/10_test_protocol_admin_full.ts",
@@ -18,6 +19,7 @@
     "test:full_sdk": "bash run_full_regression.sh sdk",
     "audit": "pnpm audit --audit-level=moderate",
     "audit:fix": "pnpm audit --fix",
+    "audit:abi": "tsx scripts/analyze_abi_coverage.ts",
     "security:check": "bash scripts/security_audit.sh",
     "security:full": "pnpm audit && bash scripts/security_audit.sh",
     "precommit": "pnpm security:check",
@@ -38,17 +40,22 @@
     "docs:sync": "bash scripts/extract-docs.sh"
   },
   "devDependencies": {
+    "@types/jest": "30.0.0",
     "@types/node": "20.11.5",
     "@typescript-eslint/eslint-plugin": "8.50.1",
     "@typescript-eslint/parser": "8.50.1",
+    "@vitest/coverage-v8": "4.0.17",
     "cross-env": "10.1.0",
     "dotenv": "17.2.3",
     "eslint": "9.39.2",
+    "jest": "30.2.0",
+    "ts-jest": "29.4.6",
     "ts-node": "10.9.2",
     "tsx": "4.21.0",
     "typedoc": "^0.28.15",
     "typedoc-plugin-markdown": "^4.9.0",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "vitest": "4.0.17"
   },
   "dependencies": {
     "@noble/bls12-381": "1.4.0",

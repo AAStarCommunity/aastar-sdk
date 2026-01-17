@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest"
+    "test": "vitest run"
   },
   "keywords": ["aastar", "enduser", "web3"],
   "author": "AAstar Team",

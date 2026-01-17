@@ -2,7 +2,7 @@ export * from './registry.js';
 export * from './staking.js';
 export * from './sbt.js';
 export * from './superPaymaster.js';
-export * from './paymasterV4.js';
+export * from './paymaster.js';
 export * from './reputation.js';
 export * from './tokens.js';
 export * from './entryPoint.js';

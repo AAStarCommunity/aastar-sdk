@@ -66,6 +66,17 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         });
     },
 
+    async topUpStake({ user, roleId, stakeAmount, payer, account }) {
+        return (client as any).writeContract({
+            address,
+            abi: GTokenStakingABI,
+            functionName: 'topUpStake',
+            args: [user, roleId, stakeAmount, payer],
+            account: account as any,
+            chain: (client as any).chain
+        });
+    },
+
     async unlockStake({ user, roleId, account }) {
         return (client as any).writeContract({
             address,
@@ -127,8 +138,8 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         return (client as any).readContract({
             address,
             abi: GTokenStakingABI,
-            functionName: 'stakes',
-            args: [operator]
+            functionName: 'getStakeInfo',
+            args: [operator, roleId]
         });
     },
 
