@@ -1,58 +1,66 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { BLSAggregatorABI } from '../abis/index.js';
+import { validateAddress, validateRequired } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 export type AggregatorActions = {
     // BLS Public Key Management
-    registerBLSPublicKey: (args: { address: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
-    blsPublicKeys: (args: { address: Address, validator: Address }) => Promise<{ publicKey: Hex, registered: boolean }>;
+    registerBLSPublicKey: (args: { user: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
+    blsPublicKeys: (args: { validator: Address }) => Promise<{ publicKey: Hex, registered: boolean }>;
     
     // Threshold Management
-    setBLSThreshold: (args: { address: Address, threshold: number, account?: Account | Address }) => Promise<Hash>;
-    getBLSThreshold: (args: { address: Address }) => Promise<bigint>;
-    setDefaultThreshold: (args: { address: Address, newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
-    setMinThreshold: (args: { address: Address, newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
-    defaultThreshold: (args: { address: Address }) => Promise<bigint>;
-    minThreshold: (args: { address: Address }) => Promise<bigint>;
+    setBLSThreshold: (args: { threshold: number, account?: Account | Address }) => Promise<Hash>;
+    getBLSThreshold: () => Promise<bigint>;
+    setDefaultThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    setMinThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    defaultThreshold: () => Promise<bigint>;
+    minThreshold: () => Promise<bigint>;
     
     // Proposal & Execution
-    executeProposal: (args: { address: Address, proposalId: bigint, target: Address, callData: Hex, requiredThreshold: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
-    verifyAndExecute: (args: { address: Address, proposalId: bigint, operator: Address, slashLevel: number, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
-    executedProposals: (args: { address: Address, proposalId: bigint }) => Promise<boolean>;
-    proposalNonces: (args: { address: Address, proposalId: bigint }) => Promise<bigint>;
+    executeProposal: (args: { proposalId: bigint, target: Address, callData: Hex, requiredThreshold: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    verifyAndExecute: (args: { proposalId: bigint, operator: Address, slashLevel: number, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    executedProposals: (args: { proposalId: bigint }) => Promise<boolean>;
+    proposalNonces: (args: { proposalId: bigint }) => Promise<bigint>;
     
     // Aggregated Signatures
-    aggregatedSignatures: (args: { address: Address, index: bigint }) => Promise<{ signature: Hex, messageHash: Hex, timestamp: bigint, verified: boolean }>;
+    aggregatedSignatures: (args: { index: bigint }) => Promise<{ signature: Hex, messageHash: Hex, timestamp: bigint, verified: boolean }>;
     
     // Registry & SuperPaymaster
-    setDVTValidator: (args: { address: Address, dv: Address, account?: Account | Address }) => Promise<Hash>;
-    setSuperPaymaster: (args: { address: Address, sp: Address, account?: Account | Address }) => Promise<Hash>;
-    DVT_VALIDATOR: (args: { address: Address }) => Promise<Address>;
-    SUPERPAYMASTER: (args: { address: Address }) => Promise<Address>;
-    REGISTRY: (args: { address: Address }) => Promise<Address>;
+    setDVTValidator: (args: { dv: Address, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymaster: (args: { sp: Address, account?: Account | Address }) => Promise<Hash>;
+    DVT_VALIDATOR: () => Promise<Address>;
+    SUPERPAYMASTER: () => Promise<Address>;
+    REGISTRY: () => Promise<Address>;
     
     // Constants
-    MAX_VALIDATORS: (args: { address: Address }) => Promise<bigint>;
+    MAX_VALIDATORS: () => Promise<bigint>;
     
     // Ownership
-    owner: (args: { address: Address }) => Promise<Address>;
-    transferOwnership: (args: { address: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    renounceOwnership: (args: { address: Address, account?: Account | Address }) => Promise<Hash>;
+    owner: () => Promise<Address>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
-    version: (args: { address: Address }) => Promise<string>;
+    version: () => Promise<string>;
 };
 
 export const aggregatorActions = (address: Address) => (client: PublicClient | WalletClient): AggregatorActions => ({
     // BLS Public Key Management
-    async registerBLSPublicKey({ publicKey, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: BLSAggregatorABI,
-            functionName: 'registerBLSPublicKey',
-            args: [publicKey],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async registerBLSPublicKey({ user, publicKey, account }) {
+        try {
+            validateAddress(user, 'user');
+            validateRequired(publicKey, 'publicKey');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'registerBLSPublicKey',
+                args: [publicKey],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'registerBLSPublicKey');
+        }
     },
 
     async blsPublicKeys({ validator }) {

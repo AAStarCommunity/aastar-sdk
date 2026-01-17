@@ -1,44 +1,51 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { DVTValidatorABI } from '../abis/index.js';
+import { validateAddress, validateRequired } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 export type DVTActions = {
     // Proposal Management
-    createSlashProposal: (args: { address: Address, operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
-    signSlashProposal: (args: { address: Address, proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
-    executeSlashWithProof: (args: { address: Address, proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
-    markProposalExecuted: (args: { address: Address, id: bigint, account?: Account | Address }) => Promise<Hash>;
-    proposals: (args: { address: Address, proposalId: bigint }) => Promise<{ proposer: Address, slashLevel: number, reason: string, executed: boolean }>;
-    nextProposalId: (args: { address: Address }) => Promise<bigint>;
+    createSlashProposal: (args: { operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
+    signSlashProposal: (args: { proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
+    executeSlashWithProof: (args: { proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    markProposalExecuted: (args: { id: bigint, account?: Account | Address }) => Promise<Hash>;
+    proposals: (args: { proposalId: bigint }) => Promise<{ proposer: Address, slashLevel: number, reason: string, executed: boolean }>;
+    nextProposalId: () => Promise<bigint>;
     
     // Validator Management
-    isValidator: (args: { address: Address, user: Address }) => Promise<boolean>;
-    addValidator: (args: { address: Address, v: Address, account?: Account | Address }) => Promise<Hash>;
+    isValidator: (args: { user: Address }) => Promise<boolean>;
+    addValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
     
     // BLS Aggregator Integration
-    setBLSAggregator: (args: { address: Address, bls: Address, account?: Account | Address }) => Promise<Hash>;
-    BLS_AGGREGATOR: (args: { address: Address }) => Promise<Address>;
-    REGISTRY: (args: { address:Address }) => Promise<Address>;
+    setBLSAggregator: (args: { bls: Address, account?: Account | Address }) => Promise<Hash>;
+    BLS_AGGREGATOR: () => Promise<Address>;
+    REGISTRY: () => Promise<Address>;
     
     // Ownership
-    owner: (args: { address: Address }) => Promise<Address>;
-    transferOwnership: (args: { address: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    renounceOwnership: (args: { address: Address, account?: Account | Address }) => Promise<Hash>;
+    owner: () => Promise<Address>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
-    version: (args: { address: Address }) => Promise<string>;
+    version: () => Promise<string>;
 };
 
 export const dvtActions = (address: Address) => (client: PublicClient | WalletClient): DVTActions => ({
     // Proposal Management
-    async createSlashProposal({  operator, level, reason, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'createProposal',
-            args: [operator, level, reason],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async createSlashProposal({ operator, level, reason, account }) {
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'createProposal',
+                args: [operator, level, reason],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createSlashProposal');
+        }
     },
 
     async signSlashProposal({  proposalId, signature, account }) {

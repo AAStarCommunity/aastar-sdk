@@ -1,5 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { ReputationSystemABI } from '../abis/index.js';
+import { validateAddress, validateRequired } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 export type ReputationActions = {
     // 规则配置
@@ -65,14 +67,19 @@ export type ReputationActions = {
 export const reputationActions = (address: Address) => (client: PublicClient | WalletClient): ReputationActions => ({
     // 规则配置
     async setReputationRule({ ruleId, rule, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: ReputationSystemABI,
-            functionName: 'setReputationRule',
-            args: [ruleId, rule],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(ruleId, 'ruleId');
+            return await (client as any).writeContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'setReputationRule',
+                args: [ruleId, rule],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setReputationRule');
+        }
     },
 
     async getReputationRule({ ruleId }) {
