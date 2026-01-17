@@ -1,5 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { GTokenABI, xPNTsTokenABI } from '../abis/index.js';
+import { validateAddress, validateAmount } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 // Universal Token Actions for GToken, aPNTs, xPNTs
 export type TokenActions = {
@@ -86,25 +88,59 @@ export const gTokenActions = () => (client: PublicClient | WalletClient): TokenA
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'balanceOf', args: [account] }) as Promise<bigint>;
     },
     async transfer({ token, to, amount, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(to, 'to');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transfer');
+        }
     },
     async transferFrom({ token, from, to, amount, account }) {
         return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferFrom', args: [from, to, amount], account: account as any, chain: (client as any).chain });
     },
     async approve({ token, spender, amount, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(spender, 'spender');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'approve');
+        }
     },
     async allowance({ token, owner, spender }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'allowance', args: [owner, spender] }) as Promise<bigint>;
     },
     async mint({ token, to, amount, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(to, 'to');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'mint');
+        }
     },
     async burn({ token, amount, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
+        try {
+            validateAddress(token, 'token');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'burn');
+        }
     },
     async burnFrom({ token, from, amount, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burnFrom', args: [from, amount], account: account as any, chain: (client as any).chain });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(from, 'from');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burnFrom', args: [from, amount], account: account as any, chain: (client as any).chain });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'burnFrom');
+        }
     },
     async name({ token }) {
         return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'name', args: [] }) as Promise<string>;
@@ -345,25 +381,39 @@ export const tokenActions = () => (client: PublicClient | WalletClient): TokenAc
     },
 
     async recordDebt({ token, user, amountXPNTs, account }) {
-        return (client as any).writeContract({
-            address: token,
-            abi: xPNTsTokenABI,
-            functionName: 'recordDebt',
-            args: [user, amountXPNTs],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(user, 'user');
+            validateAmount(amountXPNTs, 'amountXPNTs');
+            return await (client as any).writeContract({
+                address: token,
+                abi: xPNTsTokenABI,
+                functionName: 'recordDebt',
+                args: [user, amountXPNTs],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'recordDebt');
+        }
     },
 
     async burnFromWithOpHash({ token, from, amount, userOpHash, account }) {
-        return (client as any).writeContract({
-            address: token,
-            abi: xPNTsTokenABI,
-            functionName: 'burnFromWithOpHash',
-            args: [from, amount, userOpHash],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(token, 'token');
+            validateAddress(from, 'from');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address: token,
+                abi: xPNTsTokenABI,
+                functionName: 'burnFromWithOpHash',
+                args: [from, amount, userOpHash],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'burnFromWithOpHash');
+        }
     },
 
     async usedOpHashes({ token, opHash }) {

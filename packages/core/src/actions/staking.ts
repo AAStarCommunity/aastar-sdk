@@ -1,9 +1,12 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { GTokenStakingABI } from '../abis/index.js';
+import { validateAddress, validateAmount } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 export type StakingActions = {
     // Staking Operations
     lockStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, entryBurn: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
+    topUpStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
     unlockStake: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     unlockAndTransfer: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     
@@ -56,25 +59,40 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
      * @warning This is a low-level internal API. Use high-level clients instead.
      */
     async lockStake({ user, roleId, stakeAmount, entryBurn, payer, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'lockStake',
-            args: [user, roleId, stakeAmount, entryBurn, payer],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateAddress(payer, 'payer');
+            validateAmount(stakeAmount, 'stakeAmount');
+            validateAmount(entryBurn, 'entryBurn');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'lockStake',
+                args: [user, roleId, stakeAmount, entryBurn, payer],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'lockStake');
+        }
     },
 
     async topUpStake({ user, roleId, stakeAmount, payer, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'topUpStake',
-            args: [user, roleId, stakeAmount, payer],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateAddress(payer, 'payer');
+            validateAmount(stakeAmount, 'stakeAmount');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'topUpStake',
+                args: [user, roleId, stakeAmount, payer],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'topUpStake');
+        }
     },
 
     async unlockStake({ user, roleId, account }) {

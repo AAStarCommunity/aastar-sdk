@@ -1,5 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { PaymasterABI } from '../abis/index.js';
+import { validateAddress, validateAmount } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 // Paymaster Actions (Official SuperPaymaster Paymaster Contract)
 export type PaymasterActions = {
@@ -96,25 +98,38 @@ export type PaymasterActions = {
 export const paymasterActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterActions => ({
     // === NEW: Deposit-Only Model ===
     async depositFor({ user, token, amount, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'depositFor',
-            args: [user, token, amount],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateAddress(token, 'token');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'depositFor',
+                args: [user, token, amount],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'depositFor');
+        }
     },
 
     async withdraw({ token, amount, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'withdraw',
-            args: [token, amount],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(token, 'token');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'withdraw',
+                args: [token, amount],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'withdraw');
+        }
     },
 
     async balances({ user, token }) {
@@ -127,14 +142,20 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async setTokenPrice({ token, price, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'setTokenPrice',
-            args: [token, price],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(token, 'token');
+            validateAmount(price, 'price');
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'setTokenPrice',
+                args: [token, price],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setTokenPrice');
+        }
     },
 
     async tokenPrices({ token }) {
@@ -449,14 +470,18 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
     },
 
     async updatePrice({ account }) {
-        return (client as any).writeContract({
-            address,
-            abi: PaymasterABI,
-            functionName: 'updatePrice',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: PaymasterABI,
+                functionName: 'updatePrice',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'updatePrice');
+        }
     },
 
     async getRealtimeTokenCost({ gasCost, token }) {

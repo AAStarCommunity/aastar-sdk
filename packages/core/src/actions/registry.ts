@@ -1,6 +1,8 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 import type { RoleConfig } from '../roles.js';
+import { validateAddress, validateRequired } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 export type RegistryActions = {
     // Role Management
@@ -104,36 +106,53 @@ export type RegistryActions = {
 export const registryActions = (address: Address) => (client: PublicClient | WalletClient): RegistryActions => ({
     // Role Management
     async configureRole({ roleId, config, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'configureRole',
-            args: [roleId, config],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateRequired(config, 'config');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'configureRole',
+                args: [roleId, config],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'configureRole');
+        }
     },
 
     async registerRole({ roleId, user, data, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'registerRole',
-            args: [roleId, user, data],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'registerRole',
+                args: [roleId, user, data],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'registerRole');
+        }
     },
 
     async registerRoleSelf({ roleId, data, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'registerRoleSelf',
-            args: [roleId, data],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'registerRoleSelf',
+                args: [roleId, data],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'registerRoleSelf');
+        }
     },
 
     async hasRole({ user, roleId }) {
@@ -146,14 +165,20 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async unRegisterRole({ user, roleId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'unregisterRole',
-            args: [user, roleId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'unregisterRole',
+                args: [user, roleId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'unRegisterRole');
+        }
     },
 
     async getRoleConfig({ roleId }) {
@@ -669,14 +694,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async exitRole({ roleId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'exitRole',
-            args: [roleId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'exitRole',
+                args: [roleId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'exitRole');
+        }
     },
 
     async calculateExitFee({ user, roleId }) {
