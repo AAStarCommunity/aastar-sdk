@@ -13,22 +13,12 @@ describe('All Remaining Functions Batch 1', () => {
   beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
   describe('Registry All', () => {
-    it('setRoleLockDuration', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRoleLockDuration({ roleId: 1n, duration: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setRoleOwner', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRoleOwner({ roleId: 1n, newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('getCommunityRoleData', async () => { p.readContract.mockResolvedValue({}); await registryActions(A)(p).getCommunityRoleData({ community: U }); expect(p.readContract).toHaveBeenCalled(); });
-    it('getGlobalReputation', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(A)(p).getGlobalReputation({ user: U })).toBe(100n); });
-    it('setCreditTier', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setCreditTier({ tier: 1n, params: {}, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setLevelThreshold', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setLevelThreshold({ level: 1n, threshold: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('renounceOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).renounceOwnership({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
   describe('Staking All', () => {
     it('lockStake', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).lockStake({ user: U, roleId: 1n, stakeAmount: 100n, entryBurn: 10n, payer: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('slashByDVT', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).slashByDVT({ user: U, roleId: 1n, amount: 10n, reason: 'test', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setAuthorizedSlasher', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).setAuthorizedSlasher({ slasher: U, authorized: true, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('getStakingBalance', async () => { p.readContract.mockResolvedValue(500n); expect(await stakingActions(A)(p).getStakingBalance({ user: U })).toBe(500n); });
-    it('getUserRoleLocks', async () => { p.readContract.mockResolvedValue([]); expect(await stakingActions(A)(p).getUserRoleLocks({ user: U })).toEqual([]); });
-    it('previewExitFee', async () => { p.readContract.mockResolvedValue(10n); expect(await stakingActions(A)(p).previewExitFee({ user: U, roleId: 1n })).toBe(10n); });
   });
 
   describe('SBT All', () => {

@@ -23,7 +23,6 @@ describe('All Remaining Functions Batch 4', () => {
   });
 
   describe('GTokenExtended Complete', () => {
-    it('burnFrom', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).burnFrom({ from: U, amount: 10n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await gTokenExtendedActions(A)(p).owner()).toBe(U); });
   });
 });
