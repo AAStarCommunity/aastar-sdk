@@ -28,9 +28,9 @@ export type DVTActions = {
     version: (args: { address: Address }) => Promise<string>;
 };
 
-export const dvtActions = () => (client: PublicClient | WalletClient): DVTActions => ({
+export const dvtActions = (address: Address) => (client: PublicClient | WalletClient): DVTActions => ({
     // Proposal Management
-    async createSlashProposal({ address, operator, level, reason, account }) {
+    async createSlashProposal({  operator, level, reason, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -41,7 +41,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         });
     },
 
-    async signSlashProposal({ address, proposalId, signature, account }) {
+    async signSlashProposal({  proposalId, signature, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -52,7 +52,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         });
     },
 
-    async executeSlashWithProof({ address, proposalId, repUsers, newScores, epoch, proof, account }) {
+    async executeSlashWithProof({  proposalId, repUsers, newScores, epoch, proof, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -63,7 +63,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         });
     },
 
-    async markProposalExecuted({ address, id, account }) {
+    async markProposalExecuted({  id, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -74,7 +74,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         });
     },
 
-    async proposals({ address, proposalId }) {
+    async proposals({  proposalId }) {
         const result = await (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,
@@ -89,7 +89,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         };
     },
 
-    async nextProposalId({ address }) {
+    async nextProposalId( ) {
         return (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,
@@ -99,7 +99,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
     },
 
     // Validator Management
-    async isValidator({ address, user }) {
+    async isValidator({  user }) {
         return (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,
@@ -108,7 +108,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         }) as Promise<boolean>;
     },
 
-    async addValidator({ address, v, account }) {
+    async addValidator({  v, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -120,7 +120,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
     },
 
     // BLS Aggregator Integration
-    async setBLSAggregator({ address, bls, account }) {
+    async setBLSAggregator({  bls, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -131,7 +131,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         });
     },
 
-    async BLS_AGGREGATOR({ address }) {
+    async BLS_AGGREGATOR( ) {
         return (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,
@@ -140,7 +140,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         }) as Promise<Address>;
     },
 
-    async REGISTRY({ address }) {
+    async REGISTRY( ) {
         return (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,
@@ -150,7 +150,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
     },
 
     // Ownership
-    async owner({ address }) {
+    async owner( ) {
         return (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,
@@ -159,7 +159,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ address, newOwner, account }) {
+    async transferOwnership({  newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -170,7 +170,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
         });
     },
 
-    async renounceOwnership({ address, account }) {
+    async renounceOwnership({  account }) {
         return (client as any).writeContract({
             address,
             abi: DVTValidatorABI,
@@ -182,7 +182,7 @@ export const dvtActions = () => (client: PublicClient | WalletClient): DVTAction
     },
 
     // Version
-    async version({ address }) {
+    async version( ) {
         return (client as PublicClient).readContract({
             address,
             abi: DVTValidatorABI,

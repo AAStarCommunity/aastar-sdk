@@ -96,7 +96,7 @@ export class ProtocolClient extends BaseClient {
 
     async registerBLSKey(publicKey: Hex, options?: TransactionOptions): Promise<Hash> {
         if (!this.blsAggregatorAddress) throw new Error('BLS Aggregator address required');
-        const agg = aggregatorActions()(this.client);
+        const agg = aggregatorActions(BLS_AGGREGATOR)(this.client);
         
         return agg.registerBLSPublicKey({
             address: this.blsAggregatorAddress,

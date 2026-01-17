@@ -47,7 +47,7 @@ export function createAdminClient({
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
         ...dvtActions()(baseClient as any),
         ...xPNTsFactoryActions(usedAddresses.xPNTsFactory || '0x')(baseClient as any),
-        ...aggregatorActions()(baseClient as any),
+        ...aggregatorActions(ADDRESS_PLACEHOLDER)(baseClient as any),
     };
 
     return Object.assign(baseClient, actions) as AdminClient;

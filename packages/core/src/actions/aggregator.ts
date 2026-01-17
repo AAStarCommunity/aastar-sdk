@@ -42,9 +42,9 @@ export type AggregatorActions = {
     version: (args: { address: Address }) => Promise<string>;
 };
 
-export const aggregatorActions = () => (client: PublicClient | WalletClient): AggregatorActions => ({
+export const aggregatorActions = (address: Address) => (client: PublicClient | WalletClient): AggregatorActions => ({
     // BLS Public Key Management
-    async registerBLSPublicKey({ address, publicKey, account }) {
+    async registerBLSPublicKey({ publicKey, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -55,7 +55,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async blsPublicKeys({ address, validator }) {
+    async blsPublicKeys({ validator }) {
         const result = await (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -66,7 +66,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Threshold Management
-    async setBLSThreshold({ address, threshold, account }) {
+    async setBLSThreshold({ threshold, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -77,7 +77,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async getBLSThreshold({ address }) {
+    async getBLSThreshold() {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -86,7 +86,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         }) as Promise<bigint>;
     },
 
-    async setDefaultThreshold({ address, newThreshold, account }) {
+    async setDefaultThreshold({ newThreshold, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -97,7 +97,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async setMinThreshold({ address, newThreshold, account }) {
+    async setMinThreshold({ newThreshold, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -108,7 +108,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async defaultThreshold({ address }) {
+    async defaultThreshold( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -117,7 +117,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         }) as Promise<bigint>;
     },
 
-    async minThreshold({ address }) {
+    async minThreshold( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -127,7 +127,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Proposal & Execution
-    async executeProposal({ address, proposalId, target, callData, requiredThreshold, proof, account }) {
+    async executeProposal({  proposalId, target, callData, requiredThreshold, proof, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -138,7 +138,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async verifyAndExecute({ address, proposalId, operator, slashLevel, repUsers, newScores, epoch, proof, account }) {
+    async verifyAndExecute({  proposalId, operator, slashLevel, repUsers, newScores, epoch, proof, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -149,7 +149,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async executedProposals({ address, proposalId }) {
+    async executedProposals({  proposalId }) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -158,7 +158,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         }) as Promise<boolean>;
     },
 
-    async proposalNonces({ address, proposalId }) {
+    async proposalNonces({  proposalId }) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -168,7 +168,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Aggregated Signatures
-    async aggregatedSignatures({ address, index }) {
+    async aggregatedSignatures({  index }) {
         const result = await (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -184,7 +184,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Registry & SuperPaymaster
-    async setDVTValidator({ address, dv, account }) {
+    async setDVTValidator({  dv, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -195,7 +195,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async setSuperPaymaster({ address, sp, account }) {
+    async setSuperPaymaster({  sp, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -206,7 +206,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async DVT_VALIDATOR({ address }) {
+    async DVT_VALIDATOR( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -215,7 +215,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         }) as Promise<Address>;
     },
 
-    async SUPERPAYMASTER({ address }) {
+    async SUPERPAYMASTER( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -224,7 +224,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         }) as Promise<Address>;
     },
 
-    async REGISTRY({ address }) {
+    async REGISTRY( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -234,7 +234,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Constants
-    async MAX_VALIDATORS({ address }) {
+    async MAX_VALIDATORS( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -244,7 +244,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Ownership
-    async owner({ address }) {
+    async owner( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,
@@ -253,7 +253,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         }) as Promise<Address>;
     },
 
-    async transferOwnership({ address, newOwner, account }) {
+    async transferOwnership({  newOwner, account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -264,7 +264,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
         });
     },
 
-    async renounceOwnership({ address, account }) {
+    async renounceOwnership({  account }) {
         return (client as any).writeContract({
             address,
             abi: BLSAggregatorABI,
@@ -276,7 +276,7 @@ export const aggregatorActions = () => (client: PublicClient | WalletClient): Ag
     },
 
     // Version
-    async version({ address }) {
+    async version( ) {
         return (client as PublicClient).readContract({
             address,
             abi: BLSAggregatorABI,

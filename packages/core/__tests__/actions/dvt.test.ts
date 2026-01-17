@@ -21,8 +21,8 @@ describe('DVTActions', () => {
   describe('createSlashProposal', () => {
     it('should create slash proposal', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-      const actions = dvtActions()(walletClient);
-      await actions.createSlashProposal({ address: DVT_ADDRESS, operator: '0xOp', level: 1, reason: 'test', account: walletClient.account });
+      const actions = dvtActions(DVT_ADDRESS)(walletClient);
+      await actions.createSlashProposal({ operator: '0xOp', level: 1, reason: 'test', account: walletClient.account });
       expect(walletClient.writeContract).toHaveBeenCalled();
     });
   });
@@ -30,8 +30,8 @@ describe('DVTActions', () => {
   describe('isValidator', () => {
     it('should check if is validator', async () => {
       publicClient.readContract.mockResolvedValue(true);
-      const actions = dvtActions()(publicClient);
-      const result = await actions.isValidator({ address: DVT_ADDRESS, user: '0xUser' });
+      const actions = dvtActions(DVT_ADDRESS)(publicClient);
+      const result = await actions.isValidator({ user: '0xUser' });
       expect(result).toBe(true);
     });
   });
