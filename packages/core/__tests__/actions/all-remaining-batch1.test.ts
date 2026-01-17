@@ -1,0 +1,53 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { registryActions } from '../../src/actions/registry';
+import { stakingActions } from '../../src/actions/staking';
+import { sbtActions } from '../../src/actions/sbt';
+import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
+
+const A = '0x1111111111111111111111111111111111111111' as `0x${string}`;
+const U = '0x2222222222222222222222222222222222222222' as `0x${string}`;
+
+describe('All Remaining Functions Batch 1', () => {
+  let p: ReturnType<typeof createMockPublicClient>;
+  let w: ReturnType<typeof createMockWalletClient>;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
+
+  describe('Registry All', () => {
+    it('setRoleLockDuration', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRoleLockDuration({ roleId: 1n, duration: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setRoleOwner', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRoleOwner({ roleId: 1n, newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('getCommunityRoleData', async () => { p.readContract.mockResolvedValue({}); await registryActions(A)(p).getCommunityRoleData({ community: U }); expect(p.readContract).toHaveBeenCalled(); });
+    it('getGlobalReputation', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(A)(p).getGlobalReputation({ user: U })).toBe(100n); });
+    it('setCreditTier', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setCreditTier({ tier: 1n, params: {}, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setLevelThreshold', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setLevelThreshold({ level: 1n, threshold: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setRegistry_MySBT', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRegistry_MySBT({ mySBT: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setRegistry_Staking', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRegistry_Staking({ staking: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setRegistry_SuperPaymaster', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setRegistry_SuperPaymaster({ superPaymaster: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('renounceOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).renounceOwnership({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+  });
+
+  describe('Staking All', () => {
+    it('lockStake', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).lockStake({ user: U, roleId: 1n, stakeAmount: 100n, entryBurn: 10n, payer: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('slashByDVT', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).slashByDVT({ user: U, roleId: 1n, amount: 10n, reason: 'test', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setAuthorizedSlasher', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).setAuthorizedSlasher({ slasher: U, authorized: true, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('getStakingBalance', async () => { p.readContract.mockResolvedValue(500n); expect(await stakingActions(A)(p).getStakingBalance({ user: U })).toBe(500n); });
+    it('getUserRoleLocks', async () => { p.readContract.mockResolvedValue([]); expect(await stakingActions(A)(p).getUserRoleLocks({ user: U })).toEqual([]); });
+    it('previewExitFee', async () => { p.readContract.mockResolvedValue(10n); expect(await stakingActions(A)(p).previewExitFee({ user: U, roleId: 1n })).toBe(10n); });
+    it('setRegistry', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).setRegistry({ registry: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('gToken', async () => { p.readContract.mockResolvedValue(U); expect(await stakingActions(A)(p).gToken()).toBe(U); });
+    it('registry', async () => { p.readContract.mockResolvedValue(U); expect(await stakingActions(A)(p).registry()).toBe(U); });
+    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+  });
+
+  describe('SBT All', () => {
+    it('safeTransferFrom', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await sbtActions(A)(w).safeTransferFrom({ from: U, to: U, tokenId: 1n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('tokenByIndex', async () => { p.readContract.mockResolvedValue(5n); expect(await sbtActions(A)(p).tokenByIndex({ index: 0n })).toBe(5n); });
+    it('tokenOfOwnerByIndex', async () => { p.readContract.mockResolvedValue(3n); expect(await sbtActions(A)(p).tokenOfOwnerByIndex({ owner: U, index: 0n })).toBe(3n); });
+    it('getSBTData', async () => { p.readContract.mockResolvedValue({}); await sbtActions(A)(p).getSBTData({ tokenId: 1n }); expect(p.readContract).toHaveBeenCalled(); });
+    it('getCommunityMembership', async () => { p.readContract.mockResolvedValue(10n); expect(await sbtActions(A)(p).getCommunityMembership({ user: U, community: U })).toBe(10n); });
+    it('isApprovedForAll', async () => { p.readContract.mockResolvedValue(true); expect(await sbtActions(A)(p).isApprovedForAll({ owner: U, operator: U })).toBe(true); });
+    it('supportsInterface', async () => { p.readContract.mockResolvedValue(true); expect(await sbtActions(A)(p).supportsInterface({ interfaceId: '0x01' })).toBe(true); });
+    it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await sbtActions(A)(p).owner()).toBe(U); });
+    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await sbtActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
+  });
+});
