@@ -1,5 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { MySBTABI } from '../abis/index.js';
+import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
+import { AAStarError } from '../errors/index.js';
 
 // MySBT (ERC721 + custom SBT functions) - 50 functions
 export type SBTActions = {
@@ -91,25 +93,37 @@ export type SBTActions = {
 export const sbtActions = (address: Address) => (client: PublicClient | WalletClient): SBTActions => ({
     // SBT specific
     async safeMintForRole({ roleId, to, tokenURI, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'safeMintForRole',
-            args: [roleId, to, tokenURI],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(to, 'to');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'safeMintForRole',
+                args: [roleId, to, tokenURI],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'safeMintForRole');
+        }
     },
 
     async airdropMint({ roleId, to, tokenURI, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: MySBTABI,
-            functionName: 'airdropMint',
-            args: [roleId, to, tokenURI],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(to, 'to');
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'airdropMint',
+                args: [roleId, to, tokenURI],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'airdropMint');
+        }
     },
 
     async getUserSBT({ user, roleId }) {

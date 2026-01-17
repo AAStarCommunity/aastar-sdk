@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 import type { RoleConfig } from '../roles.js';
-import { validateAddress, validateRequired } from '../validators/index.js';
+import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
 export type RegistryActions = {
@@ -260,14 +260,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async setCreditTier({ tier, params, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setCreditTier',
-            args: [tier, params],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAmount(tier, 'tier');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setCreditTier',
+                args: [tier, params],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setCreditTier');
+        }
     },
 
     async setLevelThreshold({ level, threshold, account }) {
@@ -315,14 +320,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
 
     // Contract References
     async setBLSValidator({ validator, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setBLSValidator',
-            args: [validator],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(validator, 'validator');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setBLSValidator',
+                args: [validator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setBLSValidator');
+        }
     },
 
     async setBLSAggregator({ aggregator, account }) {
@@ -370,14 +380,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async setReputationSource({ source, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'setReputationSource',
-            args: [source],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(source, 'source');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setReputationSource',
+                args: [source],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setReputationSource');
+        }
     },
 
     async blsValidator() {
@@ -661,36 +676,54 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
 
     // Admin Operations
     async adminConfigureRole({ roleId, config, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'adminConfigureRole',
-            args: [roleId, config],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateRequired(config, 'config');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'adminConfigureRole',
+                args: [roleId, config],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'adminConfigureRole');
+        }
     },
 
     async createNewRole({ name, config, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'createNewRole',
-            args: [name, config],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(name, 'name');
+            validateRequired(config, 'config');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'createNewRole',
+                args: [name, config],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createNewRole');
+        }
     },
 
     async safeMintForRole({ roleId, to, tokenURI, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: RegistryABI,
-            functionName: 'safeMintForRole',
-            args: [roleId, to, tokenURI],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(to, 'to');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'safeMintForRole',
+                args: [roleId, to, tokenURI],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'safeMintForRole');
+        }
     },
 
     async exitRole({ roleId, account }) {

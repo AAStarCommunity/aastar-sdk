@@ -1,6 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { GTokenStakingABI } from '../abis/index.js';
-import { validateAddress, validateAmount } from '../validators/index.js';
+import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
 export type StakingActions = {
@@ -107,26 +107,39 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     async unlockAndTransfer({ user, roleId, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'unlockAndTransfer',
-            args: [user, roleId],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'unlockAndTransfer',
+                args: [user, roleId],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'unlockAndTransfer');
+        }
     },
 
     // Slashing
     async slash({ user, roleId, amount, reason, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: GTokenStakingABI,
-            functionName: 'slash',
-            args: [user, roleId, amount, reason],
-            account: account as any,
-            chain: (client as any).chain
-        });
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'slash',
+                args: [user, roleId, amount, reason],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'slash');
+        }
     },
 
     async slashByDVT({ user, roleId, amount, reason, account }) {
