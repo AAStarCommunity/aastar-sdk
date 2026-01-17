@@ -98,6 +98,13 @@ dist
 # Sveltekit cache directory
 .svelte-kit/
 
+# Temporary Test Outputs
+packages/core/*.txt
+packages/core/test_output.txt
+packages/core/coverage_*.txt
+packages/core/final_*.txt
+*.log
+
 # vitepress build output
 **/.vitepress/dist
 
