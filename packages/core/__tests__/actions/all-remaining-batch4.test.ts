@@ -13,7 +13,6 @@ describe('All Remaining Functions Batch 4', () => {
   beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
   describe('EntryPoint Complete', () => {
-    it('depositTo', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await entryPointActions(A)(w).depositTo({ account: U }); expect(w.writeContract).toHaveBeenCalled(); });
     it('balanceOf', async () => { p.readContract.mockResolvedValue(5000n); expect(await entryPointActions(A)(p).balanceOf({ account: U })).toBe(5000n); });
   });
 

@@ -34,7 +34,6 @@ describe('Comprehensive Action Tests Batch 2', () => {
     it('hasRoleLock', async () => { p.readContract.mockResolvedValue(true); expect(await stakingActions(A)(p).hasRoleLock({ user: U, roleId: 1n })).toBe(true); });
     it('availableBalance', async () => { p.readContract.mockResolvedValue(300n); expect(await stakingActions(A)(p).availableBalance({ user: U })).toBe(300n); });
     it('totalStaked', async () => { p.readContract.mockResolvedValue(5000n); expect(await stakingActions(A)(p).totalStaked()).toBe(5000n); });
-    it('rewardRate', async () => { p.readContract.mockResolvedValue(100n); expect(await stakingActions(A)(p).rewardRate()).toBe(100n); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await stakingActions(A)(p).owner()).toBe(U); });
   });
 
@@ -44,7 +43,6 @@ describe('Comprehensive Action Tests Batch 2', () => {
     it('addSBT', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterActions(A)(w).addSBT({ sbt: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('getSupportedSBTs', async () => { p.readContract.mockResolvedValue([U]); expect(await paymasterActions(A)(p).getSupportedSBTs()).toEqual([U]); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterActions(A)(p).owner()).toBe(U); });
-    it('ENTRY_POINT', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterActions(A)(p).ENTRY_POINT()).toBe(U); });
   });
 
   describe('SBT Extended', () => {

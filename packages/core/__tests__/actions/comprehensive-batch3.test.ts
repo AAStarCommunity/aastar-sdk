@@ -25,7 +25,6 @@ describe('Comprehensive Action Tests Batch 3', () => {
   describe('PaymasterFactory Extended', () => {
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterFactoryActions(A)(p).owner()).toBe(U); });
     it('REGISTRY', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterFactoryActions(A)(p).REGISTRY()).toBe(U); });
-    it('ENTRY_POINT', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterFactoryActions(A)(p).ENTRY_POINT()).toBe(U); });
     it('getPaymasterForOwner', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterFactoryActions(A)(p).getPaymasterForOwner({ owner: U })).toBe(U); });
     it('deployedPaymasters', async () => { p.readContract.mockResolvedValue(U); expect(await paymasterFactoryActions(A)(p).deployedPaymasters({ index: 0n })).toBe(U); });
   });

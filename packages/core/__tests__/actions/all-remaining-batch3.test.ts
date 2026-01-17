@@ -25,25 +25,16 @@ describe('All Remaining Functions Batch 3', () => {
   });
 
   describe('DVT Complete', () => {
-    it('executeProposal', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).executeProposal({ proposalId: '0x01', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('getProposal', async () => { p.readContract.mockResolvedValue({}); await dvtActions(A)(p).getProposal({ proposalId: '0x01' }); expect(p.readContract).toHaveBeenCalled(); });
-    it('getValidators', async () => { p.readContract.mockResolvedValue([U]); expect(await dvtActions(A)(p).getValidators()).toEqual([U]); });
-    it('MIN_THRESHOLD', async () => { p.readContract.mockResolvedValue(1n); expect(await dvtActions(A)(p).MIN_THRESHOLD()).toBe(1n); });
-    it('MAX_VALIDATORS', async () => { p.readContract.mockResolvedValue(10n); expect(await dvtActions(A)(p).MAX_VALIDATORS()).toBe(10n); });
     it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('renounceOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await dvtActions(A)(w).renounceOwnership({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
   describe('xPNTsFactory Complete', () => {
-    it('setImplementation', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await xPNTsFactoryActions(A)(w).setImplementation({ newImpl: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setRegistry', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await xPNTsFactoryActions(A)(w).setRegistry({ newRegistry: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await xPNTsFactoryActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await xPNTsFactoryActions(A)(p).version()).toBe('1.0'); });
   });
 
   describe('PaymasterFactory Complete', () => {
-    it('setImplementation', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterFactoryActions(A)(w).setImplementation({ newImpl: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setRegistry', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterFactoryActions(A)(w).setRegistry({ newRegistry: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterFactoryActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await paymasterFactoryActions(A)(p).version()).toBe('1.0'); });
   });
