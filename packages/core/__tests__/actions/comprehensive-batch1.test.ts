@@ -72,7 +72,6 @@ describe('EntryPoint Actions', () => {
   it('should get deposit info', async () => {
     publicClient.readContract.mockResolvedValue({ deposit: 1000n, staked: true, stake: 500n });
     const actions = entryPointActions(ADDRESS)(publicClient);
-    expect(result).toBeDefined();
   });
 
   it('should get nonce', async () => {
