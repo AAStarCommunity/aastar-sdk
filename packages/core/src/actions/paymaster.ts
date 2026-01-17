@@ -50,7 +50,7 @@ export type PaymasterActions = {
     paused: () => Promise<boolean>;
     
     // Price Management
-    cachedPrice: () => Promise<{ price: bigint, timestamp: number }>;
+    cachedPrice: () => Promise<{ price: bigint, lastUpdate: number }>;
     updatePrice: (args: { account?: Account | Address }) => Promise<Hash>;
     getRealtimeTokenCost: (args: { gasCost: bigint, token: Address }) => Promise<bigint>;
     calculateCost: (args: { gasCost: bigint, token: Address, useRealtime: boolean }) => Promise<bigint>;
@@ -466,7 +466,7 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
             functionName: 'cachedPrice',
             args: []
         }) as any;
-        return { price: result[0], timestamp: Number(result[1]) };
+        return { price: result[0], lastUpdate: Number(result[1]) };
     },
 
     async updatePrice({ account }) {
