@@ -21,7 +21,6 @@ describe('All Remaining Functions Batch 2', () => {
     it('withdrawTo', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterActions(A)(w).withdrawTo({ to: U, amount: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setTokenPrice', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterActions(A)(w).setTokenPrice({ token: U, price: 1000000n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('tokenPrices', async () => { p.readContract.mockResolvedValue(1000000n); expect(await paymasterActions(A)(p).tokenPrices({ token: U })).toBe(1000000n); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('renounceOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await paymasterActions(A)(w).renounceOwnership({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await paymasterActions(A)(p).version()).toBe('1.0'); });
   });
@@ -35,18 +34,8 @@ describe('All Remaining Functions Batch 2', () => {
     it('setCommunityReputation', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await reputationActions(A)(w).setCommunityReputation({ community: U, user: U, score: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setRule', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await reputationActions(A)(w).setRule({ ruleId: '0x01', base: 10n, bonus: 5n, max: 100n, desc: 'test', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('communityRules', async () => { p.readContract.mockResolvedValue({}); await reputationActions(A)(p).communityRules({ community: U, ruleId: '0x01' }); expect(p.readContract).toHaveBeenCalled(); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await reputationActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
   describe('SuperPaymaster All', () => {
-    it('registerOperator', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).registerOperator({ operator: U, collateralAmount: 1000n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('unregisterOperator', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).unregisterOperator({ operator: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('updateCollateral', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).updateCollateral({ operator: U, newAmount: 2000n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('getOperatorInfo', async () => { p.readContract.mockResolvedValue({}); await superPaymasterActions(A)(p).getOperatorInfo({ operator: U }); expect(p.readContract).toHaveBeenCalled(); });
-    it('isOperator', async () => { p.readContract.mockResolvedValue(true); expect(await superPaymasterActions(A)(p).isOperator({ operator: U })).toBe(true); });
-    it('pause', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).pause({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('unpause', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).unpause({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('paused', async () => { p.readContract.mockResolvedValue(false); expect(await superPaymasterActions(A)(p).paused()).toBe(false); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 });

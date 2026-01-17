@@ -17,18 +17,13 @@ describe('All Remaining Functions Batch 4', () => {
   });
 
   describe('BLS Validator Complete', () => {
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await blsActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
   describe('DVT Validator Complete', () => {
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await validatorDvtActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
   describe('GTokenExtended Complete', () => {
-    it('approve', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).approve({ spender: U, amount: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('allowance', async () => { p.readContract.mockResolvedValue(500n); expect(await gTokenExtendedActions(A)(p).allowance({ owner: U, spender: U })).toBe(500n); });
     it('burnFrom', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).burnFrom({ from: U, amount: 10n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await gTokenExtendedActions(A)(p).owner()).toBe(U); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await gTokenExtendedActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 });

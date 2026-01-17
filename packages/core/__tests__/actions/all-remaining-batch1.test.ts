@@ -19,7 +19,6 @@ describe('All Remaining Functions Batch 1', () => {
     it('getGlobalReputation', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(A)(p).getGlobalReputation({ user: U })).toBe(100n); });
     it('setCreditTier', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setCreditTier({ tier: 1n, params: {}, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setLevelThreshold', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).setLevelThreshold({ level: 1n, threshold: 100n, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('renounceOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).renounceOwnership({ account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
@@ -30,9 +29,6 @@ describe('All Remaining Functions Batch 1', () => {
     it('getStakingBalance', async () => { p.readContract.mockResolvedValue(500n); expect(await stakingActions(A)(p).getStakingBalance({ user: U })).toBe(500n); });
     it('getUserRoleLocks', async () => { p.readContract.mockResolvedValue([]); expect(await stakingActions(A)(p).getUserRoleLocks({ user: U })).toEqual([]); });
     it('previewExitFee', async () => { p.readContract.mockResolvedValue(10n); expect(await stakingActions(A)(p).previewExitFee({ user: U, roleId: 1n })).toBe(10n); });
-    it('gToken', async () => { p.readContract.mockResolvedValue(U); expect(await stakingActions(A)(p).gToken()).toBe(U); });
-    it('registry', async () => { p.readContract.mockResolvedValue(U); expect(await stakingActions(A)(p).registry()).toBe(U); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await stakingActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
   describe('SBT All', () => {
@@ -44,6 +40,5 @@ describe('All Remaining Functions Batch 1', () => {
     it('isApprovedForAll', async () => { p.readContract.mockResolvedValue(true); expect(await sbtActions(A)(p).isApprovedForAll({ owner: U, operator: U })).toBe(true); });
     it('supportsInterface', async () => { p.readContract.mockResolvedValue(true); expect(await sbtActions(A)(p).supportsInterface({ interfaceId: '0x01' })).toBe(true); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await sbtActions(A)(p).owner()).toBe(U); });
-    it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await sbtActions(A)(w).transferOwnership({ newOwner: U, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 });

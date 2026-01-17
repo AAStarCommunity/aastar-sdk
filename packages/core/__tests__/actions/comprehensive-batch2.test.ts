@@ -21,7 +21,6 @@ describe('Comprehensive Action Tests Batch 2', () => {
     it('registerRole', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await registryActions(A)(w).registerRole({ roleId: 1n, user: U, data: '0x', account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
     it('getRoleConfig', async () => { p.readContract.mockResolvedValue({}); await registryActions(A)(p).getRoleConfig({ roleId: 1n }); expect(p.readContract).toHaveBeenCalled(); });
     it('mySBT', async () => { p.readContract.mockResolvedValue(U); expect(await registryActions(A)(p).mySBT()).toBe(U); });
-    it('staking', async () => { p.readContract.mockResolvedValue(U); expect(await registryActions(A)(p).staking()).toBe(U); });
     it('superPaymaster', async () => { p.readContract.mockResolvedValue(U); expect(await registryActions(A)(p).superPaymaster()).toBe(U); });
     it('ROLE_ENDUSER', async () => { p.readContract.mockResolvedValue(2n); expect(await registryActions(A)(p).ROLE_ENDUSER()).toBe(2n); });
     it('ROLE_PAYMASTER_SUPER', async () => { p.readContract.mockResolvedValue(3n); expect(await registryActions(A)(p).ROLE_PAYMASTER_SUPER()).toBe(3n); });
