@@ -128,9 +128,9 @@ describe('PaymasterActions - Core Functions', () => {
         functionName: 'cachedPrice',
         args: []
       });
-      // cachedPrice returns structured object with price and lastUpdate
+      // cachedPrice returns {price, timestamp}
       expect(result).toHaveProperty('price');
-      expect(result).toHaveProperty('lastUpdate');
+      expect(result).toHaveProperty('timestamp');
     });
   });
 
