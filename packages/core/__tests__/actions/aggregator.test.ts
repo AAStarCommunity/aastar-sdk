@@ -21,7 +21,7 @@ describe('AggregatorActions', () => {
   describe('registerBLSPublicKey', () => {
     it('should register BLS key', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-      const actions = aggregatorActions(AGG_ADDRESS)(walletClient);
+      const actions = aggregatorActions()(walletClient);
       await actions.registerBLSPublicKey({ address: AGG_ADDRESS, publicKey: '0xkey', account: walletClient.account });
       expect(walletClient.writeContract).toHaveBeenCalled();
     });
@@ -30,7 +30,7 @@ describe('AggregatorActions', () => {
   describe('getBLSThreshold', () => {
     it('should get threshold', async () => {
       publicClient.readContract.mockResolvedValue(2n);
-      const actions = aggregatorActions(AGG_ADDRESS)(publicClient);
+      const actions = aggregatorActions()(publicClient);
       const result = await actions.getBLSThreshold({ address: AGG_ADDRESS });
       expect(result).toBe(2n);
     });
