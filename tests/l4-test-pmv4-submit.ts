@@ -2,7 +2,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { paymasterV4Actions } from '../packages/core/src/index.js';
+import { paymasterActions } from '../packages/core/src/index.js';
 import { UserOperationBuilder } from '../packages/sdk/dist/utils/userOp.js';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
@@ -39,7 +39,7 @@ async function main() {
     console.log(`Bundler: ${bundlerRpc}\n`);
     
     // Step 1: Verify balance
-    const pmV4 = paymasterV4Actions(bobPaymaster);
+    const pmV4 = paymasterActions(bobPaymaster);
     const balance = await pmV4(publicClient).balances({ user: bobAA, token: bPNTs });
     console.log(`Step 1: Deposited balance: ${formatEther(balance)} bPNTs`);
     

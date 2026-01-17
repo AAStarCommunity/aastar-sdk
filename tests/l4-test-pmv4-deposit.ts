@@ -2,7 +2,7 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { paymasterV4Actions, tokenActions } from '../packages/core/src/index.js';
+import { paymasterActions, tokenActions } from '../packages/core/src/index.js';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
 import path from 'path';
@@ -28,7 +28,7 @@ async function main() {
     const bPNTs = state.operators.bob.tokenAddress as Address;
     const bobAA1 = state.aaAccounts.find((aa: any) => aa.label === 'Bob (Bread)_AA1')!.address as Address;
     
-    const pmV4 = paymasterV4Actions(bobPaymaster);
+    const pmV4 = paymasterActions(bobPaymaster);
     
     console.log('📦 Test 1: Paymaster V4 Deposit Model\n');
     console.log(`Paymaster V4: ${bobPaymaster}`);

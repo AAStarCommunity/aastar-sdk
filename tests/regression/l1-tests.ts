@@ -8,7 +8,7 @@ import {
     sbtActions,
     reputationActions,
     superPaymasterActions,
-    paymasterV4Actions,
+    paymasterActions,
     xPNTsFactoryActions,
     dvtActions,
     aggregatorActions

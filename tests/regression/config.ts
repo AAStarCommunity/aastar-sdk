@@ -77,6 +77,7 @@ export interface ContractAddresses {
     entryPoint: Address;
     paymasterV4Impl?: Address;
     simpleAccountFactory: Address;
+    priceFeed: Address;
 }
 
 export interface NetworkConfig {
@@ -190,6 +191,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             dvtValidator: getContractAddress('dvtValidator', 'DVT_VALIDATOR_ADDRESS', 'DVT_VALIDATOR'),
             entryPoint: getContractAddress('entryPoint', 'ENTRY_POINT_ADDRESS'),
             paymasterV4Impl: getContractAddress('paymasterV4Impl', 'PAYMASTER_V4_IMPL', 'PAYMASTER_ADDRESS'),
+            priceFeed: getContractAddress('priceFeed', 'PRICE_FEED_ADDRESS'),
             simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985' as Address, // Pimlico v0.7 (standard)
         },
         testAccount: {

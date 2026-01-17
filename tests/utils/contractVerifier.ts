@@ -7,7 +7,7 @@
 import { type Address, type PublicClient } from 'viem';
 import { 
     registryActions, 
-    paymasterV4Actions,
+    paymasterActions,
     stakingActions,
     xPNTsFactoryActions 
 } from '../../packages/core/src/index.js';
@@ -155,7 +155,7 @@ export async function verifyPaymasterConfig(
     errors: string[];
 }> {
     const errors: string[] = [];
-    const pmAPI = paymasterV4Actions(paymasterAddress)(client);
+    const pmAPI = paymasterActions(paymasterAddress)(client);
 
     try {
         const owner = await pmAPI.owner();

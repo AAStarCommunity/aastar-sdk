@@ -177,7 +177,7 @@ export async function runL2Tests(config: NetworkConfig) {
 
     totalTests++;
     try {
-        console.log('  Test: getDepositDetails()');
+        console.log('  Test: getOperatorDetails()');
         const operatorClient = new PaymasterOperatorClient({
             accountAddress: account.address,
             rpcUrl: config.rpcUrl,
@@ -186,8 +186,8 @@ export async function runL2Tests(config: NetworkConfig) {
             client: walletClient
         });
         
-        const details = await operatorClient.getDepositDetails();
-        console.log(`    Deposit: ${details.deposit.toString()}`);
+        const details = await operatorClient.getOperatorDetails(account.address);
+        console.log(`    Deposit: ${details[0].toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {
