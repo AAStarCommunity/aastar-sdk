@@ -192,7 +192,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             entryPoint: getContractAddress('entryPoint', 'ENTRY_POINT_ADDRESS'),
             paymasterV4Impl: getContractAddress('paymasterV4Impl', 'PAYMASTER_V4_IMPL', 'PAYMASTER_ADDRESS'),
             priceFeed: getContractAddress('priceFeed', 'PRICE_FEED_ADDRESS'),
-            simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985' as Address, // Pimlico v0.7 (standard)
+            simpleAccountFactory: getContractAddress('simpleAccountFactory', 'SIMPLE_ACCOUNT_FACTORY_ADDRESS'),
         },
         testAccount: {
             privateKey: process.env.TEST_PRIVATE_KEY as `0x${string}`,
