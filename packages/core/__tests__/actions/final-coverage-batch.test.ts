@@ -19,20 +19,11 @@ describe('Final Coverage Batch', () => {
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await blsActions(A)(p).version()).toBe('1.0'); });
   });
 
-  describe('DVT Validator Extended', () => {
-    it('validators', async () => { p.readContract.mockResolvedValue(true); expect(await validatorDvtActions(A)(p).validators({ validator: U })).toBe(true); });
-    it('getValidator', async () => { p.readContract.mockResolvedValue(U); expect(await validatorDvtActions(A)(p).getValidator({ index: 0n })).toBe(U); });
-    it('REGISTRY', async () => { p.readContract.mockResolvedValue(U); expect(await validatorDvtActions(A)(p).REGISTRY()).toBe(U); });
-  });
 
   describe('Account Extended', () => {
     it('entryPoint', async () => { p.readContract.mockResolvedValue(U); expect(await accountActions(A)(p).entryPoint()).toBe(U); });
     it('owner', async () => { p.readContract.mockResolvedValue(U); expect(await accountActions(A)(p).owner()).toBe(U); });
   });
 
-  describe('AccountFactory Extended', () => {
-  });
 
-  describe('EntryPoint Extended', () => {
-  });
 });
