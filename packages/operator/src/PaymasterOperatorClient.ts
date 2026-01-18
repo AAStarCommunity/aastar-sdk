@@ -205,7 +205,6 @@ export class PaymasterOperatorClient extends BaseClient {
                 });
 
                 deployHash = await factory(this.client).deployPaymaster({
-                    owner: accountAddr,
                     version: params?.version, 
                     initData,
                     account
@@ -335,7 +334,7 @@ export class PaymasterOperatorClient extends BaseClient {
             const publicClient = this.getStartPublicClient();
 
             // Fetch current config to preserve missing values
-            const currentConfig = await sp(publicClient).operators({ operator: this.getAddress() });
+            const currentConfig = await sp(publicClient).operators({ id: this.getAddress() });
             
             // [balance, token, treasury, rate]
             const currentToken = currentConfig[1] as Address;
@@ -344,7 +343,7 @@ export class PaymasterOperatorClient extends BaseClient {
 
             return await sp(this.client).configureOperator({
                 xPNTsToken: xPNTsToken || currentToken,
-                treasury: treasury || currentTreasury,
+                opTreasury: treasury || currentTreasury,
                 exchangeRate: exchangeRate ?? currentRate,
                 account: options?.account
             });
@@ -393,7 +392,7 @@ export class PaymasterOperatorClient extends BaseClient {
     async initiateExit(options?: TransactionOptions): Promise<Hash> {
         try {
             const sp = superPaymasterActions(this.superPaymasterAddress);
-            return await sp(this.client).unlockSuperStake({
+            return await sp(this.client).unlockStake({
                 account: options?.account
             });
         } catch (error) {

@@ -185,8 +185,12 @@ export class PaymasterClient {
         });
 
         const result = await response.json();
-
-
+        
+        // Debug logging for Candide
+        if (bundlerUrl.includes('candide')) {
+            console.log('[PaymasterClient] Candide Request:', JSON.stringify(payload.params[0], null, 2));
+            console.log('[PaymasterClient] Candide Response:', JSON.stringify(result, null, 2));
+        }
 
         const data = result.result;
 

@@ -117,10 +117,14 @@ export function formatUserOpV07(userOp: any) {
         initCode: userOp.initCode
     };
 
-    // Extract Factory/FactoryData if present
-    if (userOp.initCode && userOp.initCode !== '0x') {
+    // Extract Factory/FactoryData if present, otherwise set to empty
+    if (userOp.initCode && userOp.initCode !== '0x' && userOp.initCode.length > 42) {
         result.factory = userOp.initCode.slice(0, 42);
         result.factoryData = '0x' + userOp.initCode.slice(42);
+    } else {
+        // Candide requires these fields even if empty
+        result.factory = '0x0000000000000000000000000000000000000000';
+        result.factoryData = '0x';
     }
 
     // Unpack accountGasLimits: [verificationGasLimit(16)][callGasLimit(16)]

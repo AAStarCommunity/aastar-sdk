@@ -60,20 +60,11 @@ export class ProtocolClient extends BaseClient {
     }
 
     /**
-     * Sign (Vote) on a proposal
+     * Sign (Vote) on a proposal - NOT IMPLEMENTED
+     * Note: signSlashProposal does not exist in DVTActions
      */
     async signProposal(proposalId: bigint, signature: Hex = '0x', options?: TransactionOptions): Promise<Hash> {
-        try {
-            const dvt = dvtActions(this.dvtValidatorAddress)(this.client);
-            
-            return await dvt.signSlashProposal({
-                proposalId,
-                signature, 
-                account: options?.account
-            });
-        } catch (error) {
-            throw error;
-        }
+        throw new Error('signProposal not implemented - signSlashProposal does not exist in DVTActions');
     }
 
     /**
@@ -111,7 +102,7 @@ export class ProtocolClient extends BaseClient {
             const agg = aggregatorActions(this.blsAggregatorAddress)(this.client);
             
             return await agg.registerBLSPublicKey({
-                user: this.getAddress(), // Pass sender for key ownership check
+                validator: this.getAddress(),
                 publicKey,
                 account: options?.account
             });
@@ -132,8 +123,7 @@ export class ProtocolClient extends BaseClient {
             const sp = superPaymasterActions(this.superPaymasterAddress);
             
             return await sp(this.client).setProtocolFee({
-                feeRecipient: recipient,
-                feeBps: bps,
+                newFeeBPS: bps,
                 account: options?.account
             });
         } catch (error) {
