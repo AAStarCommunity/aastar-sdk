@@ -334,13 +334,11 @@ export class PaymasterOperatorClient extends BaseClient {
             const publicClient = this.getStartPublicClient();
 
             // Fetch current config to preserve missing values
-            const currentConfig = await sp(publicClient).operators({ id: this.getAddress() });
+            const currentConfig = await sp(publicClient).operators({ operator: this.getAddress() });
             
-            // [balance, token, treasury, rate]
-            const configArray = currentConfig as unknown as any[];
-            const currentToken = configArray[1] as Address;
-            const currentTreasury = configArray[2] as Address;
-            const currentRate = configArray[3] as bigint;
+            const currentToken = currentConfig.xPNTsToken;
+            const currentTreasury = currentConfig.treasury;
+            const currentRate = currentConfig.exchangeRate;
 
             return await sp(this.client).configureOperator({
                 xPNTsToken: xPNTsToken || currentToken,
@@ -369,13 +367,8 @@ export class PaymasterOperatorClient extends BaseClient {
     async isOperator(operator: Address): Promise<boolean> {
         try {
             const sp = superPaymasterActions(this.superPaymasterAddress);
-            const config = await sp(this.getStartPublicClient()).operators({ id: operator });
-            // Assuming if Treasury is set, it's a valid operator (or check Registry role)
-            // Or based on balance? 
-            // Better to check Registry for ROLE_PAYMASTER_SUPER
-            // But let's return true if config exists (non-zero treasury)
-            const configArray = config as unknown as any[];
-            return configArray[2] !== '0x0000000000000000000000000000000000000000';
+            const config = await sp(this.getStartPublicClient()).operators({ operator });
+            return config.isConfigured;
         } catch (error) {
             return false;
         }
@@ -385,7 +378,7 @@ export class PaymasterOperatorClient extends BaseClient {
         try {
             const target = operator || this.getAddress();
             const sp = superPaymasterActions(this.superPaymasterAddress);
-            return await sp(this.getStartPublicClient()).operators({ id: target });
+            return await sp(this.getStartPublicClient()).operators({ operator: target });
         } catch (error) {
             throw error;
         }

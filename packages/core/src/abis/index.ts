@@ -50,8 +50,6 @@ export const PaymasterFactoryABI = (PaymasterFactoryABIData as any).abi || Payma
 export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
 
 // Paymaster V4 (使用 Paymaster.json)
-export const PaymasterV4ABI = (PaymasterABIData as any).abi || PaymasterABIData;
-export const PaymasterV4Artifact = PaymasterABIData;
 export const PaymasterABI = (PaymasterABIData as any).abi || PaymasterABIData;
 export const PaymasterArtifact = PaymasterABIData;
 

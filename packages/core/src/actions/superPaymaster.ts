@@ -69,7 +69,7 @@ export type SuperPaymasterActions = {
     validatePaymasterUserOp: (args: { userOp: any, userOpHash: Hex, maxCost: bigint }) => Promise<{ context: Hex, validationData: bigint }>;
     
     // View Functions
-    operators: (args: { id: Address }) => Promise<OperatorConfig>;
+    operators: (args: { operator: Address }) => Promise<OperatorConfig>;
     getAvailableCredit: (args: { user: Address, token: Address }) => Promise<bigint>;
     getDeposit: () => Promise<bigint>;
     getLatestSlash: (args: { operator: Address }) => Promise<SlashRecord>;
@@ -565,14 +565,14 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
     },
 
     // View Functions
-    async operators({ id }) {
+    async operators({ operator }) {
         try {
-            validateAddress(id, 'id');
+            validateAddress(operator, 'operator');
             const result = await (client as PublicClient).readContract({
                 address,
                 abi: SuperPaymasterABI,
                 functionName: 'operators',
-                args: [id]
+                args: [operator]
             }) as any;
 
             if (Array.isArray(result)) {

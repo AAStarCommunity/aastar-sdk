@@ -472,4 +472,19 @@ export class PaymasterClient {
             args: [target, value, data]
         });
     }
+
+    /**
+     * More robust version of waitForUserOperationReceipt.
+     * Catches timeouts and returns a cleaner result.
+     */
+    static async waitForUserOperation(bundlerClient: any, hash: `0x${string}`, timeout = 60000) {
+        try {
+            return await bundlerClient.waitForUserOperationReceipt({ hash, timeout });
+        } catch (error: any) {
+            if (error.name === 'TimeoutError' || error.message?.includes('timed out')) {
+                return { timeout: true, hash };
+            }
+            throw error;
+        }
+    }
 }

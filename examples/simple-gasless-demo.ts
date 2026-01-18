@@ -74,20 +74,32 @@ async function main() {
         transport: http(APP_CONFIG.bundlerUrl)
     }).extend(bundlerActions);
 
-    const receipt = await bundlerClient.waitForUserOperationReceipt({ 
-        hash: txHash 
-    });
+    try {
+        const receipt = await bundlerClient.waitForUserOperationReceipt({ 
+            hash: txHash,
+            timeout: 60000 // Increase timeout to 60s
+        });
 
-    console.log(`\n🎉 Done! Transaction Hash: ${receipt.receipt.transactionHash}`);
-    console.log(`🔗 Tracking: https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
+        console.log(`\n🎉 Done! Transaction Hash: ${receipt.receipt.transactionHash}`);
+        console.log(`🔗 Tracking: https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
 
-    // 5. Decode Protocol Fee (for User Visibility)
-    const feeInfo = PaymasterClient.getFeeFromReceipt(receipt.receipt, APP_CONFIG.paymaster as `0x${string}`);
-    if (feeInfo) {
-        console.log(`\n🧾 [Instant Bill] Cost: ${formatEther(feeInfo.tokenCost)} dPNTs`);
-        console.log(`   (Sponsored ETH: ${formatEther(feeInfo.actualGasCostWei)} ETH)`);
-    } else {
-        console.log('\n⚠️ Could not decode fee from logs.');
+        // 5. Decode Protocol Fee (for User Visibility)
+        const feeInfo = PaymasterClient.getFeeFromReceipt(receipt.receipt, APP_CONFIG.paymaster as `0x${string}`);
+        if (feeInfo) {
+            console.log(`\n🧾 [Instant Bill] Cost: ${formatEther(feeInfo.tokenCost)} dPNTs`);
+            console.log(`   (Sponsored ETH: ${formatEther(feeInfo.actualGasCostWei)} ETH)`);
+        } else {
+            console.log('\n⚠️ Could not decode fee from logs.');
+        }
+    } catch (error: any) {
+        if (error.name === 'TimeoutError' || error.message?.includes('timed out')) {
+            console.log(`\n⚠️  Polling Timeout: The UserOperation was submitted but the receipt is not yet available.`);
+            console.log(`💡 UserOp Hash: ${txHash}`);
+            console.log(`🔗 You can check the status later at: https://sepolia.etherscan.io/tx/${txHash}`);
+            console.log(`   or via Bundler Explorer using the hash above.`);
+        } else {
+            console.error('\n❌ Error waiting for receipt:', error.shortMessage || error.message);
+        }
     }
 }
 

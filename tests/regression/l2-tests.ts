@@ -187,7 +187,7 @@ export async function runL2Tests(config: NetworkConfig) {
         });
         
         const details = await operatorClient.getOperatorDetails(account.address);
-        console.log(`    Deposit: ${details[0].toString()}`);
+        console.log(`    Deposit: ${details.aPNTsBalance.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {

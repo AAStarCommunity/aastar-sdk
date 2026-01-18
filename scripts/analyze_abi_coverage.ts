@@ -104,7 +104,7 @@ function generateReport(contracts: ContractAnalysis[]) {
         ['aPNTs', 'xPNTs', 'xPNTsToken', 'xPNTsFactory'].includes(c.contract)
     );
     const paymasterContracts = contracts.filter(c => 
-        ['PaymasterV4_2', 'Paymaster', 'PaymasterFactory'].includes(c.contract)
+        ['Paymaster', 'PaymasterFactory'].includes(c.contract)
     );
     const aaContracts = contracts.filter(c => 
         c.contract.includes('Account') || c.contract.includes('EntryPoint')
