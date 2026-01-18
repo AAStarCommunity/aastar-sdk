@@ -113,19 +113,21 @@ export function formatUserOpV07(userOp: any) {
         nonce: toHex(userOp.nonce),
         callData: userOp.callData,
         preVerificationGas: toHex(userOp.preVerificationGas),
-        signature: userOp.signature,
-        initCode: userOp.initCode
+        signature: userOp.signature
     };
 
-    // Extract Factory/FactoryData if present, otherwise set to empty
-    if (userOp.initCode && userOp.initCode !== '0x' && userOp.initCode.length > 42) {
-        result.factory = userOp.initCode.slice(0, 42);
-        result.factoryData = '0x' + userOp.initCode.slice(42);
-    } else {
-        // Candide requires these fields even if empty
-        result.factory = '0x0000000000000000000000000000000000000000';
-        result.factoryData = '0x';
+    // Only include factory/factoryData if account is NOT deployed (initCode not empty)
+    if (userOp.initCode && userOp.initCode !== '0x' && userOp.initCode.length > 2) {
+        result.initCode = userOp.initCode;
+        if (userOp.initCode.length > 42) {
+            result.factory = userOp.initCode.slice(0, 42);
+            result.factoryData = '0x' + userOp.initCode.slice(42);
+        } else {
+            result.factory = '0x0000000000000000000000000000000000000000';
+            result.factoryData = '0x';
+        }
     }
+    // If account is deployed, don't include any factory fields at all
 
     // Unpack accountGasLimits: [verificationGasLimit(16)][callGasLimit(16)]
     if (userOp.accountGasLimits && userOp.accountGasLimits !== '0x') {
