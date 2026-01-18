@@ -443,10 +443,10 @@ async function main() {
                 // Verify operator config in SuperPaymaster
                 // Verify operator config in SuperPaymaster
                 const spActions = superPaymasterActions(config.contracts.superPaymaster);
-                const opConfig = await spActions(publicClient).operators({ id: acc.address });
-                const opBalance = (opConfig as any)[0];
-                const isConfigured = (opConfig as any)[2];
-                const xPNTsToken = (opConfig as any)[4];
+                const opConfig = await spActions(publicClient).operators({ operator: acc.address });
+                const opBalance = opConfig.aPNTsBalance;
+                const isConfigured = opConfig.isConfigured;
+                const xPNTsToken = opConfig.xPNTsToken;
 
                 console.log(`      💰 aPNTs Balance: ${formatEther(opBalance || 0n)}`);
                 console.log(`      ⚙️  Configured: ${isConfigured}`);
@@ -1052,7 +1052,7 @@ async function main() {
     const anniOpForCredit = operators.find(o => o.name.includes('Anni'));
     if (anniOpForCredit) {
         const anniAddr = privateKeyToAccount(anniOpForCredit.key).address;
-        const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ id: anniAddr });
+        const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ operator: anniAddr });
         let internalBal = opConfig.aPNTsBalance;
         
         if (internalBal < parseEther('50000')) {
@@ -1130,7 +1130,7 @@ async function main() {
         console.log(`      ✅ SuperPM Refill Success: ${tx}`);
         await publicClient.waitForTransactionReceipt({ hash: tx });
                 
-                const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ id: anniAddr });
+                const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ operator: anniAddr });
                 internalBal = opConfig.aPNTsBalance;
             } catch(e: any) {
                 console.error(`      ❌ SuperPM Refill Failed: ${e.message}`);

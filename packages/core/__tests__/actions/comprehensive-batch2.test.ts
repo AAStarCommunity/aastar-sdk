@@ -33,7 +33,7 @@ describe('Comprehensive Action Tests Batch 2', () => {
   });
 
   describe('SuperPaymaster Extended', () => {
-    it('operators', async () => { p.readContract.mockResolvedValue([0n, 0n, true, false, U, 0, 0, U, 0n, 0n]); const res = await superPaymasterActions(A)(p).operators({ id: U }); expect(res.isConfigured).toBe(true); });
+    it('operators', async () => { p.readContract.mockResolvedValue([0n, 0n, true, false, U, 0, 0, U, 0n, 0n]); const res = await superPaymasterActions(A)(p).operators({ operator: U }); expect(res.isConfigured).toBe(true); });
     it('setOperatorPaused', async () => { w.writeContract.mockResolvedValue('0x' as `0x${string}`); await superPaymasterActions(A)(w).setOperatorPaused({ operator: U, paused: true, account: w.account }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 });

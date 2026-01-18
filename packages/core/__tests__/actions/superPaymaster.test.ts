@@ -84,7 +84,7 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       p.readContract.mockResolvedValueOnce([[100n, 100n, 100n, 'r', 1]]);
       p.readContract.mockResolvedValueOnce([100n, 100n, 100n, 'r', 1]);
       const act = superPaymasterActions(A)(p);
-      await act.operators({ id: U });
+      await act.operators({ operator: U });
       await act.getAvailableCredit({ user: U, token: U });
       await act.getDeposit();
       await act.getLatestSlash({ operator: U });
