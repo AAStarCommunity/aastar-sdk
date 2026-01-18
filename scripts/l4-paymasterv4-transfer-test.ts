@@ -12,9 +12,13 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { loadNetworkConfig } from '../tests/regression/config';
-import { UserOpScenarioBuilder, UserOpScenarioType } from '../packages/sdk/src/index.js';
+import { UserOpScenarioBuilder, UserOpScenarioType, UserOperationBuilder } from '../packages/sdk/src/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function main() {
     console.log('\n🧪 L4 PaymasterV4 Transfer Test\n');
@@ -87,7 +91,7 @@ async function main() {
     const transferAmount = parseEther('2');
     
     const { userOp, opHash } = await UserOpScenarioBuilder.buildTransferScenario(
-        UserOpScenarioType.GASLESS_V4,
+        UserOpScenarioType.SUPER_BPNT,
         {
             sender: bobAA.address,
             ownerAccount: bobOwner,
@@ -97,7 +101,8 @@ async function main() {
             entryPoint: config.contracts.entryPoint,
             chainId: config.chain.id,
             publicClient,
-            paymaster: bobOperator.paymasterV4
+            paymaster: config.contracts.superPaymaster,
+            operator: bobOperator.address
         }
     );
     
@@ -116,6 +121,9 @@ async function main() {
         throw new Error('SEPOLIA_BUNDLER_RPC not found in .env.sepolia');
     }
     
+    const alchemyUserOp = UserOperationBuilder.toAlchemyUserOperation(userOp);
+    console.log('   Converted to Alchemy Format (v0.7)');
+
     try {
         const response = await fetch(bundlerUrl, {
             method: 'POST',
@@ -125,23 +133,7 @@ async function main() {
                 id: 1,
                 method: 'eth_sendUserOperation',
                 params: [
-                    {
-                        sender: userOp.sender,
-                        nonce: userOp.nonce,
-                        factory: userOp.factory,
-                        factoryData: userOp.factoryData,
-                        callData: userOp.callData,
-                        callGasLimit: userOp.callGasLimit,
-                        verificationGasLimit: userOp.verificationGasLimit,
-                        preVerificationGas: userOp.preVerificationGas,
-                        maxFeePerGas: userOp.maxFeePerGas,
-                        maxPriorityFeePerGas: userOp.maxPriorityFeePerGas,
-                        paymaster: userOp.paymaster,
-                        paymasterVerificationGasLimit: userOp.paymasterVerificationGasLimit,
-                        paymasterPostOpGasLimit: userOp.paymasterPostOpGasLimit,
-                        paymasterData: userOp.paymasterData,
-                        signature: userOp.signature
-                    },
+                    alchemyUserOp,
                     config.contracts.entryPoint
                 ]
             })

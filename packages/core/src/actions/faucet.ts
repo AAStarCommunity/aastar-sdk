@@ -185,8 +185,7 @@ export class SepoliaFaucetAPI {
             return true;
 
         } catch (error) {
-            console.warn(`      ⚠️ Failed to sponsor ENDUSER role. Error:`, error);
-            return false;
+            throw AAStarError.fromViemError(error as Error, 'registerEndUser');
         }
     }
 
@@ -212,7 +211,7 @@ export class SepoliaFaucetAPI {
 
             if (balance < amount) {
                 console.log(`   🪙 Minting Tokens... (Current: ${formatEther(balance)})`);
-                const hash = await walletToken.transfer({ token: tokenAddr, to: target, amount });
+                const hash = await walletToken.mint({ token: tokenAddr, to: target, amount });
                 await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
                 console.log(`      -> Minted ${formatEther(amount)}. Tx: ${hash}`);
                 return true;

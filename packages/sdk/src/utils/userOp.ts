@@ -158,34 +158,19 @@ export class UserOperationBuilder {
 
         // Ensure all numeric fields are hex strings and padded
         // Helper to ensure '0x' prefix and valid hex string
-        const toHexParams = (val: bigint | string | number) => {
-            if (typeof val === 'bigint') return `0x${val.toString(16)}`;
-            if (typeof val === 'number') return `0x${val.toString(16)}`;
-            return val; // Assume hex string
-        };
-
-        result.nonce = toHexParams(result.nonce);
-        result.preVerificationGas = toHexParams(result.preVerificationGas);
-        
-        // Note: Alchemy usually accepts non-padded Quantities for nonce/preVerificationGas.
-        // But let's verify if strict padding is required by using viem's pad
-        
-        // Alchemy v0.7 Validator seems to reject PADDED Quantities (leads to 'Invalid fields').
-        // It accepts COMPACT HEX (e.g. 0x1 instead of 0x0...01).
-        // Viem toHex produces compact hex.
-        
         const toCompactHex = (val: bigint | string | number) => {
              if (typeof val === 'bigint') return `0x${val.toString(16)}`;
              if (typeof val === 'number') return `0x${val.toString(16)}`;
              if (typeof val === 'string') {
-                 // Remove leading zeros if present (but keep 0x)
-                 if (val === '0x') return '0x'; // invalid quantity? Should be 0x0?
-                 // JSON-RPC Quantity: 0x0
+                 if (val === '0x') return '0x0';
                  if (val === '0x0') return '0x0';
                  return val.replace(/^0x0+(?!$)/, '0x'); 
              }
              return val;
         };
+
+        result.nonce = toCompactHex(result.nonce);
+        result.preVerificationGas = toCompactHex(result.preVerificationGas);
 
         return result;
     }

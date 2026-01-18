@@ -38,8 +38,8 @@ export class UserOpScenarioBuilder {
         const { 
             sender, ownerAccount, recipient, tokenAddress, amount, 
             entryPoint, chainId, publicClient, paymaster, operator,
-            paymasterGasLimit = 300000n,
-            paymasterPostOpGasLimit = 50000n,
+            paymasterGasLimit = 100000n,
+            paymasterPostOpGasLimit = 40000n,
             nonceKey = 0n,
             gasToken
         } = params;

@@ -6,7 +6,11 @@
     "noEmit": false,
     "declaration": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "composite": false,
+    "assumeChangesOnlyAffectDirectDependencies": true
   },
-  "include": ["src", "src/abis/*.json"]
+  "include": ["src"]
 }

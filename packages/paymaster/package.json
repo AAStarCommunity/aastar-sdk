@@ -12,7 +12,7 @@
     "viem": "2.43.3"
   },
   "devDependencies": {
-    "typescript": "5.7.2"
+    "typescript": "5.6.3"
   },
   "scripts": {
     "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",

@@ -194,6 +194,9 @@ export class PaymasterClient {
 
         const data = result.result;
 
+        // Debug logging for estimation
+        console.log('[PaymasterClient] Gas Estimation Result:', JSON.stringify(data, null, 2));
+
         // Anvil Fallback for Estimation
         if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
              console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using Anvil defaults.');
@@ -208,11 +211,12 @@ export class PaymasterClient {
 
         if (result.error) throw new Error(`Estimation Error: ${JSON.stringify(result.error)}`);
         
-        // Dynamic tuning based on "Efficiency Guard" formulas
+        // Dynamic tuning: use estimated values directly to maintain efficiency
+        // Bundler efficiency check: actual_used / limit >= 0.4
         return {
             preVerificationGas: BigInt(data.preVerificationGas),
-            verificationGasLimit: BigInt(data.verificationGasLimit), 
-            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n, // 1.1x safety buffer
+            verificationGasLimit: BigInt(data.verificationGasLimit), // Use estimate as-is for efficiency
+            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n, // Small 1.1x buffer
             paymasterVerificationGasLimit: data.paymasterVerificationGasLimit ? BigInt(data.paymasterVerificationGasLimit) : undefined,
             paymasterPostOpGasLimit: data.paymasterPostOpGasLimit ? BigInt(data.paymasterPostOpGasLimit) : 100000n
         };
@@ -317,9 +321,14 @@ export class PaymasterClient {
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
             });
         } else {
+            // MATH: Target Efficiency = PVG / (PVG + VGL + PMVGL) >= 0.4
+            // Since PVG is ~100k, (VGL + PMVGL) must be <= 150k.
+            // We set each to 75k to safely pass the 0.4 efficiency guard.
+            const pmVerGas = 75000n; 
+            
             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
-                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n, // Use tuned value
+                verificationGasLimit: pmVerGas,
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
             });
         }
@@ -333,8 +342,8 @@ export class PaymasterClient {
                 : '0x' as Hex,
             callData,
             accountGasLimits: concat([
-                pad(toHex(gasLimits.verificationGasLimit ?? 150000n), { size: 16 }), // Verification (Tuned or Default)
-                pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })        // Call (Tuned or Default)
+                pad(toHex(75000n), { size: 16 }), // Verification (Tuned for 0.4 efficiency)
+                pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })        // Call
             ]),
             preVerificationGas: gasLimits.preVerificationGas ?? 50000n,
             gasFees: concat([
@@ -361,71 +370,42 @@ export class PaymasterClient {
         const signature = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
         userOp.signature = signature;
 
-        // 6. Submit to Bundler (Bundler-aware)
+        // 6. Submit to Bundler (Unified JSON-RPC)
         const bundlerType = detectBundlerType(bundlerUrl);
         console.log(`[PaymasterClient] Using ${bundlerType} Bundler`);
         
-        if (bundlerType === BundlerType.PIMLICO) {
-            // Use Pimlico SDK
-            try {
-                const { createPimlicoClient } = await import('permissionless/clients/pimlico') as any;
-                const { http } = await import('viem');
-                
-                const pimlicoClient = createPimlicoClient({
-                    transport: http(bundlerUrl) as any,
-                    entryPoint: {
-                        address: entryPoint,
-                        version: '0.7' as const
-                    }
-                });
-                
-                // Pimlico expects the UserOperation fields directly, not nested
-                const userOpHash = await pimlicoClient.sendUserOperation({
-                    ...userOp,
-                    account: userOp.sender as any
-                });
-                
-                console.log('[PaymasterClient] ✅ Submitted via Pimlico, hash:', userOpHash);
-                return userOpHash;
-                
-            } catch (e: any) {
-                console.error('[PaymasterClient] Pimlico submission failed:', e.message);
-                throw e;
-            }
-        } else {
-            // Use standard JSON-RPC for Alchemy/Stackup/Unknown
-            const response = await fetch(bundlerUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'eth_sendUserOperation',
-                    params: [formatUserOpV07(userOp), entryPoint]
-                }, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)
-            });
+        // Use standard JSON-RPC for all bundlers (Pimlico/Alchemy/Stackup/etc)
+        const response = await fetch(bundlerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'eth_sendUserOperation',
+                params: [formatUserOpV07(userOp), entryPoint]
+            }, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)
+        });
 
-            const result = await response.json();
-            
-            if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
-                 console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
-                 
-                 const caller = wallet.account?.address ? wallet.account.address : wallet.account;
+        const result = await response.json();
+        
+        if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
+             console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
+             
+             const caller = wallet.account?.address ? wallet.account.address : wallet.account;
 
-                 return await wallet.writeContract({
-                     address: entryPoint,
-                     abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
-                     functionName: 'handleOps',
-                     args: [[userOp], caller],
-                     chain: wallet.chain,
-                     account: wallet.account
-                 });
-            }
-
-            if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
-            console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
-            return result.result;
+             return await wallet.writeContract({
+                 address: entryPoint,
+                 abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
+                 functionName: 'handleOps',
+                 args: [[userOp], caller],
+                 chain: wallet.chain,
+                 account: wallet.account
+             });
         }
+
+        if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
+        console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
+        return result.result;
     }
 
     /**

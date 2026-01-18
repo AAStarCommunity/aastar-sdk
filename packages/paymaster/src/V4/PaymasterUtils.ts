@@ -65,7 +65,7 @@ export function buildPaymasterData(
     }
 ): `0x${string}` {
     const validityWindow = options?.validityWindow ?? 3600;
-    const verGas = options?.verificationGasLimit ?? 80000n;
+    const verGas = options?.verificationGasLimit ?? 200000n; // Increased for estimation
     const postGas = options?.postOpGasLimit ?? 100000n;
     
     const now = Math.floor(Date.now() / 1000);
