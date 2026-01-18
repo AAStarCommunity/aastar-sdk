@@ -7,10 +7,14 @@ echo ""
 
 # Parse arguments
 NETWORK="sepolia"
+SLOW_MODE=false
+TEST_DELAY=5  # Default delay in seconds between tests
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --env|--network) NETWORK="$2"; shift ;;
+        --slow) SLOW_MODE=true ;;
+        --delay) TEST_DELAY="$2"; shift ;;
         *) NETWORK="$1" ;;
     esac
     shift
@@ -21,6 +25,12 @@ done
 if [ "$NETWORK" == "anvil" ]; then
     echo "⚠️  WARNING: Running on Anvil. Gasless tests may be unstable."
     echo "    For deep debugging, please use --env sepolia."
+fi
+
+
+if [ "$SLOW_MODE" = true ]; then
+    echo "🐢 Slow Mode: ENABLED (${TEST_DELAY}s delay between tests)"
+    echo "   This helps prevent nonce conflicts and mempool pollution."
 fi
 
 echo "📡 Network: $NETWORK"
@@ -70,6 +80,13 @@ run_test() {
         FAILED_TESTS="$FAILED_TESTS\\n  - $test_name"
     fi
     echo ""
+    
+    # Add delay between tests if slow mode is enabled
+    if [ "$SLOW_MODE" = true ]; then
+        echo "⏳ Waiting ${TEST_DELAY}s before next test (--slow mode)..."
+        sleep "$TEST_DELAY"
+        echo ""
+    fi
 }
 
 # Run tests

@@ -1148,6 +1148,69 @@ async function main() {
         });
     }
 
+    // 5d. SuperPaymaster EntryPoint Stake Check (Critical for Bundler Acceptance)
+    console.log(`\n🔐 5d. Verifying SuperPaymaster EntryPoint Stake...`);
+    const ep = entryPointActions(config.contracts.entryPoint);
+    const spDepositInfo = await ep(publicClient).getDepositInfo({ account: superPM });
+    
+    console.log(`   📊 Current Stake Status:`);
+    console.log(`      Deposit: ${formatEther(spDepositInfo.deposit)} ETH`);
+    console.log(`      Staked: ${spDepositInfo.staked ? '✅ Yes' : '❌ No'}`);
+    console.log(`      Stake Amount: ${formatEther(spDepositInfo.stake)} ETH`);
+    console.log(`      Unstake Delay: ${spDepositInfo.unstakeDelaySec} seconds`);
+    
+    // Bundler Requirements (from error message)
+    const REQUIRED_STAKE = parseEther('0.1');
+    const REQUIRED_DELAY = 86400; // 1 day in seconds
+    
+    const needsStake = !spDepositInfo.staked || 
+                      spDepositInfo.stake < REQUIRED_STAKE || 
+                      spDepositInfo.unstakeDelaySec < REQUIRED_DELAY;
+    
+    if (needsStake) {
+        console.log(`\n   ⚠️  Stake requirements NOT met. Bundler requires:`);
+        console.log(`      - Minimum Stake: 0.1 ETH`);
+        console.log(`      - Minimum Unstake Delay: 86400 seconds (1 day)`);
+        console.log(`\n   🔧 Adding stake to SuperPaymaster...`);
+        
+        try {
+            // Use supplier as the one paying for the stake (owner of SuperPaymaster should be supplier)
+            const spOwner = await publicClient.readContract({
+                address: superPM,
+                abi: [{ name: 'owner', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' }],
+                functionName: 'owner'
+            }) as Address;
+            
+            console.log(`      ℹ️  SuperPaymaster Owner: ${spOwner}`);
+            console.log(`      ℹ️  Supplier Address: ${supplier.address}`);
+            
+            if (spOwner.toLowerCase() !== supplier.address.toLowerCase()) {
+                console.log(`      ⚠️  WARNING: Supplier is not the owner! Stake operation may fail.`);
+                console.log(`      Please ensure the owner account has sufficient ETH and permissions.`);
+            }
+            
+            const stakeHash = await superPaymasterActions(superPM)(supplierClient).addStake({
+                unstakeDelaySec: REQUIRED_DELAY,
+                value: REQUIRED_STAKE,
+                account: supplier
+            });
+            
+            console.log(`      📝 Stake Transaction: ${stakeHash}`);
+            await publicClient.waitForTransactionReceipt({ hash: stakeHash });
+            
+            // Verify stake was added
+            const newDepositInfo = await ep(publicClient).getDepositInfo({ account: superPM });
+            console.log(`      ✅ Stake Added Successfully!`);
+            console.log(`         New Stake: ${formatEther(newDepositInfo.stake)} ETH`);
+            console.log(`         Unstake Delay: ${newDepositInfo.unstakeDelaySec} seconds`);
+        } catch (e: any) {
+            console.error(`      ❌ Failed to add stake: ${e.message}`);
+            console.error(`      ⚠️  Anni Gasless test may FAIL without proper stake!`);
+        }
+    } else {
+        console.log(`   ✅ Stake requirements MET. Bundler will accept SuperPaymaster.`);
+    }
+
     printTable("Paymaster Status", pmStatus);
 
     // 6. UserOperation Generation Demo (5 Scenarios)
