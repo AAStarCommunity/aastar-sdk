@@ -86,11 +86,17 @@ export class SuperPaymasterClient {
         const SAFETY_PAD = 80000n; 
         const tunedVGL = vgl + SAFETY_PAD;
 
-        // CRITICAL FIX: Set paymasterVerificationGasLimit explicitly
+        // CRITICAL FIX: Set paymasterVerificationGasLimit for optimal efficiency
         // Bundler requires efficiency ratio >= 0.4 (actual_gas_used / gas_limit >= 0.4)
-        // SuperPaymaster validatePaymasterUserOp uses ~80-150k gas
-        const PM_VERIFICATION_BASE = est.paymasterVerificationGasLimit || 100000n;
-        const tunedPMVerificationGas = PM_VERIFICATION_BASE + 200000n; // Generous buffer
+        // SuperPaymaster validatePaymasterUserOp uses ~110-120k gas (measured)
+        // Test results:
+        //   - Base 300k +  200k buffer (500k total) → efficiency 0.238 ❌
+        //   - Base 300k + 20k buffer (320k total) → efficiency 0.347 ❌
+        //   - Base 300k (no buffer) → efficiency 0.366❌
+        // Analysis: actual_gas ~110k, need limit <= 275k for 0.4 ratio
+        // Strategy: Use 87% of bundler's estimate (bundler over-estimates for safety)
+        const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
+        const tunedPMVerificationGas = (bundlerEstimate * 87n) / 100n; // 87% = 261k, ratio ~0.42 ✅
 
         // Same for PostOp
         const tunedPostOp = est.paymasterPostOpGasLimit + 10000n;
