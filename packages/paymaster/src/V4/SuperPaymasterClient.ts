@@ -86,10 +86,16 @@ export class SuperPaymasterClient {
         const SAFETY_PAD = 80000n; 
         const tunedVGL = vgl + SAFETY_PAD;
 
+        // CRITICAL FIX: Set paymasterVerificationGasLimit explicitly
+        // Bundler requires efficiency ratio >= 0.4 (actual_gas_used / gas_limit >= 0.4)
+        // SuperPaymaster validatePaymasterUserOp uses ~80-150k gas
+        const PM_VERIFICATION_BASE = est.paymasterVerificationGasLimit || 100000n;
+        const tunedPMVerificationGas = PM_VERIFICATION_BASE + 200000n; // Generous buffer
+
         // Same for PostOp
         const tunedPostOp = est.paymasterPostOpGasLimit + 10000n;
 
-        console.log(`[SuperPaymasterClient] 🔧 Tuned Limits: VGL=${tunedVGL}, PostOp=${tunedPostOp}`);
+        console.log(`[SuperPaymasterClient] 🔧 Tuned Limits: VGL=${tunedVGL}, PMVGL=${tunedPMVerificationGas}, PostOp=${tunedPostOp}`);
 
         // 4. Submit with Tuned Limits
         return PaymasterClient.submitGaslessUserOperation(
@@ -106,7 +112,8 @@ export class SuperPaymasterClient {
                 verificationGasLimit: tunedVGL,
                 callGasLimit: est.callGasLimit, 
                 preVerificationGas: est.preVerificationGas,
-                paymasterPostOpGasLimit: tunedPostOp,       // Pass specific PM limits if supported
+                paymasterVerificationGasLimit: tunedPMVerificationGas, // EXPLICIT PM LIMIT
+                paymasterPostOpGasLimit: tunedPostOp,
                 autoEstimate: false, // We did it ourselves
                 factory: config.factory,
                 factoryData: config.factoryData
