@@ -160,10 +160,10 @@ export class CommunityClient extends BaseClient {
                 // Convert roleId to Hex (bytes32)
                 const roleIdHex = `0x${roleId.toString(16).padStart(64, '0')}` as Hash;
 
-                return await sbt(this.client).airdropMint({
-                    to: users[0],
+                return await sbt(this.client).mintForRole({
+                    user: users[0],
                     roleId: roleIdHex,
-                    tokenURI: '', // Added required param
+                    roleData: '0x',
                     account: options?.account
                 });
             }
@@ -202,13 +202,15 @@ export class CommunityClient extends BaseClient {
     /**
      * Revoke membership (Burn SBT)
      */
-    async revokeMembership(tokenId: bigint, options?: TransactionOptions): Promise<Hash> {
+    async revokeMembership(userAddr: Address, roleId: bigint, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.sbtAddress) throw new Error('SBT address required for this client');
             const sbt = sbtActions(this.sbtAddress);
             
+            const roleIdHex = `0x${roleId.toString(16).padStart(64, '0')}` as Hash;
+            
             return await sbt(this.client).burnSBT({
-                tokenId,
+                user: userAddr,
                 account: options?.account
             });
         } catch (error) {

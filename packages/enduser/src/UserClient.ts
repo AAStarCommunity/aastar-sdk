@@ -149,7 +149,7 @@ export class UserClient extends BaseClient {
     /**
      * Transfer GToken or any ERC20
      */
-    async transferToken(token: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
+    async transferToken(token: Address, to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
         try {
             const tokens = tokenActions()(this.client);
             
