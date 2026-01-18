@@ -6,6 +6,7 @@ export enum BundlerType {
     ALCHEMY = 'alchemy',
     PIMLICO = 'pimlico',
     STACKUP = 'stackup',
+    CANDIDE = 'candide',
     UNKNOWN = 'unknown'
 }
 
@@ -17,6 +18,7 @@ export function detectBundlerType(bundlerUrl: string): BundlerType {
     if (url.includes('alchemy.com')) return BundlerType.ALCHEMY;
     if (url.includes('pimlico.io')) return BundlerType.PIMLICO;
     if (url.includes('stackup')) return BundlerType.STACKUP;
+    if (url.includes('candide.dev')) return BundlerType.CANDIDE;
     return BundlerType.UNKNOWN;
 }
 
