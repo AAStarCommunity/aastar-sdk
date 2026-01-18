@@ -1200,8 +1200,8 @@ async function main() {
             // Verify stake was added
             const newDepositInfo = await ep(publicClient).getDepositInfo({ account: superPM });
             console.log(`      ✅ Stake Added Successfully!`);
-            console.log(`         New Stake: ${formatEther(newDepositInfo.stake)} ETH`);
-            console.log(`         Unstake Delay: ${newDepositInfo.unstakeDelaySec} seconds`);
+            console.log(`         New Stake: ${formatEther(newDepositInfo.stake || 0n)} ETH`);
+            console.log(`         Unstake Delay: ${newDepositInfo.unstakeDelaySec || 0} seconds`);
         } catch (e: any) {
             console.error(`      ❌ Failed to add stake: ${e.message}`);
             console.error(`      ⚠️  Anni Gasless test may FAIL without proper stake!`);
