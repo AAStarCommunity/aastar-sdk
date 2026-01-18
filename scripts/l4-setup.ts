@@ -1150,7 +1150,6 @@ async function main() {
 
     // 5d. SuperPaymaster EntryPoint Stake Check (Critical for Bundler Acceptance)
     console.log(`\n🔐 5d. Verifying SuperPaymaster EntryPoint Stake...`);
-    const ep = entryPointActions(config.contracts.entryPoint);
     const spDepositInfo = await ep(publicClient).getDepositInfo({ account: superPM });
     
     console.log(`   📊 Current Stake Status:`);
