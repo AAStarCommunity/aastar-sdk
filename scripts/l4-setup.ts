@@ -925,7 +925,8 @@ async function main() {
     const anniOpForCredit = operators.find(o => o.name.includes('Anni'));
     if (anniOpForCredit) {
         const anniAddr = privateKeyToAccount(anniOpForCredit.key).address;
-        let internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
+        const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ id: anniAddr });
+        let internalBal = opConfig.aPNTsBalance;
         
         if (internalBal < parseEther('50000')) {
             console.log(`   🔄 Refilling SuperPaymaster Credit for Anni...`);
@@ -998,7 +999,8 @@ async function main() {
                 const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: depositAmount, account: anniAcc });
                 await publicClient.waitForTransactionReceipt({ hash: depositHash });
                 
-                internalBal = await superPaymasterActions(superPM)(publicClient).balanceOfOperator({ operator: anniAddr });
+                const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ id: anniAddr });
+                internalBal = opConfig.aPNTsBalance;
             } catch(e: any) {
                 console.error(`      ❌ SuperPM Refill Failed: ${e.message}`);
             }

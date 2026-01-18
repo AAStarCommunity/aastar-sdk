@@ -8,18 +8,22 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
-dotenv.config({ path: '.env.sepolia' });
+// dotenv loaded by loadNetworkConfig
 
 async function main() {
-    const config = await loadNetworkConfig('sepolia');
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = await loadNetworkConfig(networkName);
     const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
     
     // 1. Roles & Accounts
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
     const jasonAccount = privateKeyToAccount(process.env.PRIVATE_KEY_JASON as `0x${string}`);
     
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
-    const anniWallet = createWalletClient({ account: anniAccount, chain: sepolia, transport: http(rpcUrl) });
+    const publicClient = createPublicClient({ chain: config.chain, transport: http(rpcUrl) });
+    const anniWallet = createWalletClient({ account: anniAccount, chain: config.chain, transport: http(rpcUrl) });
+    const jasonWallet = createWalletClient({ account: jasonAccount, chain: config.chain, transport: http(rpcUrl) });
 
     const entryPoint = config.contracts.entryPoint as Address;
 
@@ -56,10 +60,10 @@ async function main() {
         console.log('   ⚠️ Issues Detected:', report.issues.join(', '));
         console.log('\n🛠️ Step 2: Automated Self-Healing (Operator Action)...');
         const steps = await PaymasterOperator.prepareGaslessEnvironment(
-            anniWallet,
+            jasonWallet, // Corrected: Must be owner of jasonPM
             publicClient,
             entryPoint,
-            jasonPM, // Corrected to jasonPM
+            jasonPM, 
             dPNTs,
             { tokenPriceUSD: 100000000n } // $1.00
         );
@@ -107,7 +111,7 @@ async function main() {
         ]
     });
 
-    const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(rpcUrl) });
+
 
     const userOpHash = await PaymasterClient.submitGaslessUserOperation(
         publicClient,
@@ -125,8 +129,8 @@ async function main() {
 
     // Polling for receipt using Bundler Client
     const bundlerClient = createPublicClient({ 
-        chain: sepolia, 
-        transport: http(process.env.BUNDLER_URL!) 
+        chain: config.chain, 
+        transport: http(config.bundlerUrl!) 
     }).extend(bundlerActions);
 
     console.log('   ⏳ Waiting for execution (can take up to 60s)...');
@@ -144,4 +148,7 @@ async function main() {
     }
 }
 
-main().catch(console.error);
+main().catch(e => {
+    console.error(e);
+    process.exit(1);
+});
