@@ -372,7 +372,7 @@ export class PaymasterClient {
                 const { http } = await import('viem');
                 
                 const pimlicoClient = createPimlicoClient({
-                    transport: http(bundlerUrl),
+                    transport: http(bundlerUrl) as any,
                     entryPoint: {
                         address: entryPoint,
                         version: '0.7' as const
@@ -381,7 +381,7 @@ export class PaymasterClient {
                 
                 const userOpHash = await pimlicoClient.sendUserOperation({
                     userOperation: userOp as any,
-                    account: userOp.sender,
+                    account: userOp.sender as any,
                     entryPoint: entryPoint
                 });
                 

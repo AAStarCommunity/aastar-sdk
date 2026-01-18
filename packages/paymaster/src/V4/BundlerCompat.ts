@@ -1,7 +1,8 @@
-/**
- * Bundler Type Detection and Compatibility Layer
- */
+import { type Address } from 'viem';
 
+/**
+ * Bundler types we support
+ */
 export enum BundlerType {
     ALCHEMY = 'alchemy',
     PIMLICO = 'pimlico',
@@ -23,38 +24,15 @@ export function detectBundlerType(bundlerUrl: string): BundlerType {
 }
 
 /**
- * Create appropriate bundler client based on type
+ * Create a bundler client based on the bundler type
+ * Returns a simple config object to avoid type conflicts
  */
-export async function createBundlerClient(bundlerUrl: string, entryPoint: Address, chain: any) {
-    const type = detectBundlerType(bundlerUrl);
+export function createBundlerClient(bundlerUrl: string, entryPoint: Address): any {
+    const bundlerType = detectBundlerType(bundlerUrl);
     
-    switch (type) {
-        case BundlerType.PIMLICO:
-            // Dynamically import Pimlico client
-            const { createPimlicoClient } = await import('permissionless/clients/pimlico');
-            return {
-                type: BundlerType.PIMLICO,
-                client: createPimlicoClient({
-                    transport: http(bundlerUrl),
-                    entryPoint: {
-                        address: entryPoint,
-                        version: '0.7' as const
-                    }
-                })
-            };
-            
-        case BundlerType.ALCHEMY:
-        case BundlerType.STACKUP:
-        case BundlerType.UNKNOWN:
-        default:
-            // Use standard viem wallet client for Alchemy/Stackup
-            const { createWalletClient, http } = await import('viem');
-            return {
-                type,
-                client: createWalletClient({
-                    chain,
-                    transport: http(bundlerUrl)
-                })
-            };
-    }
+    return {
+        type: bundlerType,
+        url: bundlerUrl,
+        entryPoint
+    };
 }
