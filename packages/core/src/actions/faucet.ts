@@ -108,7 +108,8 @@ export class SepoliaFaucetAPI {
                 const hash = await adminWallet.sendTransaction({
                     to: target,
                     value: amount,
-                    account: adminWallet.account! 
+                    account: adminWallet.account!,
+                    chain: adminWallet.chain
                 });
                 await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
                 console.log(`      -> Sent ${formatEther(amount)} ETH. Tx: ${hash}`);
@@ -159,11 +160,12 @@ export class SepoliaFaucetAPI {
 
             // 4. Admin Approves Staking Contract (if needed)
             const adminAddr = adminWallet.account!.address;
-            const allowance = await token.allowance({ owner: adminAddr, spender: stakingAddr });
+            const allowance = await token.allowance({ token: gasToken, owner: adminAddr, spender: stakingAddr });
 
             if (allowance < parseEther('500')) {
                 console.log(`      🔓 Approving Staking Contract...`);
                 const hashApprove = await walletToken.approve({ 
+                    token: gasToken,
                     spender: stakingAddr, 
                     amount: parseEther('1000') 
                 });
@@ -206,11 +208,11 @@ export class SepoliaFaucetAPI {
             const token = gTokenActions(tokenAddr)(publicClient);
             const walletToken = gTokenActions(tokenAddr)(adminWallet);
 
-            const balance = await token.balanceOf({ account: target });
+            const balance = await token.balanceOf({ token: tokenAddr, account: target });
 
             if (balance < amount) {
                 console.log(`   🪙 Minting Tokens... (Current: ${formatEther(balance)})`);
-                const hash = await walletToken.mint({ to: target, amount });
+                const hash = await walletToken.transfer({ token: tokenAddr, to: target, amount });
                 await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
                 console.log(`      -> Minted ${formatEther(amount)}. Tx: ${hash}`);
                 return true;
@@ -244,29 +246,30 @@ export class SepoliaFaucetAPI {
             const paymaster = paymasterActions(paymasterAddr)(adminWallet);
 
             const adminAddr = adminWallet.account!.address;
-            const adminBal = await token.balanceOf({ account: adminAddr });
+            const adminBal = await token.balanceOf({ token: tokenAddr, account: adminAddr });
 
             if (adminBal < amount) {
                 console.log(`   🏧 Admin Minting to Self (for deposit)...`);
-                const hash = await walletToken.mint({ to: adminAddr, amount: amount * 10n });
+                const hash = await walletToken.mint({ token: tokenAddr, to: adminAddr, amount: amount * 10n });
                 await publicClient.waitForTransactionReceipt({ hash });
             }
 
-            const allowance = await token.allowance({ owner: adminAddr, spender: paymasterAddr });
+            const allowance = await token.allowance({ token: tokenAddr, owner: adminAddr, spender: paymasterAddr });
             
             if (allowance < amount) {
                 console.log(`   🔓 Admin Approving Paymaster...`);
                 // Use a large but finite amount instead of max uint for safety/clarity if desired, 
                 // but max uint is common in faucets.
                 const hashApprove = await walletToken.approve({ 
+                    token: tokenAddr,
                     spender: paymasterAddr, 
-                    amount: 115792089237316195423570985008687907853269984665640564039457584007913129639935n 
+                    amount: parseEther('10000') 
                 });
                 await publicClient.waitForTransactionReceipt({ hash: hashApprove });
             }
 
             console.log(`   🏦 Depositing FOR User...`);
-            const hash = await paymaster.depositFor({ target, amount });
+            const hash = await paymaster.depositFor({ user: target, token: tokenAddr, amount });
             await publicClient.waitForTransactionReceipt({ hash, timeout: 120000 });
             console.log(`      -> Deposited ${formatEther(amount)} to PM. Tx: ${hash}`);
             return true;

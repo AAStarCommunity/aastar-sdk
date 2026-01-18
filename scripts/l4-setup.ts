@@ -348,7 +348,7 @@ async function main() {
                 // Verify operator config in SuperPaymaster
                 // Verify operator config in SuperPaymaster
                 const spActions = superPaymasterActions(config.contracts.superPaymaster);
-                const opConfig = await spActions(publicClient).operators({ operator: acc.address });
+                const opConfig = await spActions(publicClient).operators({ id: acc.address });
                 const opBalance = (opConfig as any)[0];
                 const isConfigured = (opConfig as any)[2];
                 const xPNTsToken = (opConfig as any)[4];
@@ -996,8 +996,12 @@ async function main() {
                 
                 console.log(`      🔄 Depositing 50,000 into SuperPM...`);
                 // Use explicit depositAPNTs which maps to deposit(uint256)
-                const depositHash = await superPaymasterActions(superPM)(anniClient).depositAPNTs({ amount: depositAmount, account: anniAcc });
-                await publicClient.waitForTransactionReceipt({ hash: depositHash });
+                const tx = await superPaymasterActions(superPM)(anniClient).deposit({
+            amount: depositAmount,
+            account: anniAcc
+        });
+        console.log(`      ✅ SuperPM Refill Success: ${tx}`);
+        await publicClient.waitForTransactionReceipt({ hash: tx });
                 
                 const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ id: anniAddr });
                 internalBal = opConfig.aPNTsBalance;

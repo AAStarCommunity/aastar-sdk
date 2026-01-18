@@ -1,5 +1,6 @@
-import { type Address, type Hex, concat, pad, toHex, parseAbi, parseAbiItem, encodeFunctionData } from 'viem';
-import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
+import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData } from 'viem';
+import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils.js';
+import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 
 /**
  * PaymasterClient
@@ -73,6 +74,47 @@ export class PaymasterClient {
             factoryData?: Hex;
         }
     ) {
+        // 0. Check cachedPrice (Critical for Paymaster V4)
+        if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
+            try {
+                const cache = await client.readContract({
+                    address: paymasterAddress,
+                    abi: parseAbi(['function cachedPrice() view returns (uint208 price, uint48 updatedAt)']),
+                    functionName: 'cachedPrice'
+                }) as any;
+                
+                if (!cache || cache.price === 0n || cache[0] === 0n) {
+                    console.log('[PaymasterClient] ⚠️  cachedPrice is 0! Auto-initializing...');
+                    
+                    // Check if we're on testnet (chainId 11155111 = Sepolia, 11155420 = OP Sepolia)
+                    const chainId = client.chain?.id || await client.getChainId();
+                    const isTestnet = [11155111, 11155420, 31337].includes(chainId);
+                    
+                    if (isTestnet) {
+                        // Auto-call updatePrice on testnet
+                        const updateHash = await wallet.writeContract({
+                            address: paymasterAddress,
+                            abi: parseAbi(['function updatePrice() external']),
+                            functionName: 'updatePrice'
+                        });
+                        await client.waitForTransactionReceipt({ hash: updateHash });
+                        console.log('[PaymasterClient] ✅ cachedPrice initialized via updatePrice()');
+                    } else {
+                        // Mainnet: throw error, require Keeper
+                        throw new Error(
+                            `Paymaster cachedPrice is 0 on Mainnet (chainId: ${chainId}). ` +
+                            `This requires Keeper to call updatePrice(). Please ensure Keeper is running.`
+                        );
+                    }
+                }
+            } catch (e: any) {
+                // If error is our mainnet check, re-throw
+                if (e.message?.includes('requires Keeper')) throw e;
+                // Otherwise log and continue (might be old Paymaster without cachedPrice)
+                console.log('[PaymasterClient] ⚠️  Failed to check cachedPrice:', e.message?.slice(0, 50));
+            }
+        }
+        
         // 1. Construct a dummy UserOp for estimation
         let paymasterAndData: Hex;
         
@@ -84,8 +126,8 @@ export class PaymasterClient {
         } else {
              paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
-                verificationGasLimit: 60000n, // Placeholder
-                postOpGasLimit: 60000n        // Placeholder
+                verificationGasLimit: 750000n, // High 750k
+                postOpGasLimit: 500000n        // High 500k to finish postOp after catch
             });
         }
 
@@ -109,8 +151,8 @@ export class PaymasterClient {
                 ? concat([options.factory, options.factoryData]) 
                 : '0x' as Hex,
             callData,
-            accountGasLimits: concat([pad(toHex(60000n), { size: 16 }), pad(toHex(100000n), { size: 16 })]), // 60k verification, 100k call
-            preVerificationGas: 50000n, // 50k PVG
+            accountGasLimits: concat([pad(toHex(300000n), { size: 16 }), pad(toHex(100000n), { size: 16 })]), // 300k verification (Aggressive bump to fix OOG), 100k call
+            preVerificationGas: 100000n, // 100k PVG (Bumped from 50k to fix AA23)
             gasFees: concat([pad(toHex(maxPriorityFeePerGas), { size: 16 }), pad(toHex(maxFeePerGas), { size: 16 })]),
             paymasterAndData,
             signature: '0x' as `0x${string}`
@@ -315,46 +357,71 @@ export class PaymasterClient {
         const signature = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
         userOp.signature = signature;
 
-        // 6. Submit to Bundler
-        const response = await fetch(bundlerUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'eth_sendUserOperation',
-                params: [formatUserOpV07(userOp), entryPoint]
-            }, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)
-        });
-
-        const result = await response.json();
+        // 6. Submit to Bundler (Bundler-aware)
+        const bundlerType = detectBundlerType(bundlerUrl);
+        console.log(`[PaymasterClient] Using ${bundlerType} Bundler`);
         
-        if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
-             console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
-             
-             // Debug Logs
-             console.log('DEBUG Fallback:', {
-                 entryPoint,
-                 sender: userOp.sender,
-                 walletAccount: wallet.account,
-                 walletAccountType: typeof wallet.account,
-                 walletAddress: wallet.account?.address
-             });
+        if (bundlerType === BundlerType.PIMLICO) {
+            // Use Pimlico SDK
+            try {
+                const { createPimlicoClient } = await import('permissionless/clients/pimlico');
+                const { http } = await import('viem');
+                
+                const pimlicoClient = createPimlicoClient({
+                    transport: http(bundlerUrl),
+                    entryPoint: {
+                        address: entryPoint,
+                        version: '0.7' as const
+                    }
+                });
+                
+                const userOpHash = await pimlicoClient.sendUserOperation({
+                    userOperation: userOp as any,
+                    account: userOp.sender,
+                    entryPoint: entryPoint
+                });
+                
+                console.log('[PaymasterClient] ✅ Submitted via Pimlico, hash:', userOpHash);
+                return userOpHash;
+                
+            } catch (e: any) {
+                console.error('[PaymasterClient] Pimlico submission failed:', e.message);
+                throw e;
+            }
+        } else {
+            // Use standard JSON-RPC for Alchemy/Stackup/Unknown
+            const response = await fetch(bundlerUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'eth_sendUserOperation',
+                    params: [formatUserOpV07(userOp), entryPoint]
+                }, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)
+            });
 
-             const caller = wallet.account?.address ? wallet.account.address : wallet.account;
+            const result = await response.json();
+            
+            if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
+                 console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
+                 
+                 const caller = wallet.account?.address ? wallet.account.address : wallet.account;
 
-             return await wallet.writeContract({
-                 address: entryPoint,
-                 abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
-                 functionName: 'handleOps',
-                 args: [[userOp], caller],
-                 chain: wallet.chain,
-                 account: wallet.account
-             });
+                 return await wallet.writeContract({
+                     address: entryPoint,
+                     abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
+                     functionName: 'handleOps',
+                     args: [[userOp], caller],
+                     chain: wallet.chain,
+                     account: wallet.account
+                 });
+            }
+
+            if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
+            console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
+            return result.result;
         }
-
-        if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
-        return result.result;
     }
 
     /**

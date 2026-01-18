@@ -21,8 +21,8 @@ export type GaslessReadinessReport = {
     };
 };
 
-const DEFAULT_VERIFICATION_GAS_V4 = 80000n;
-const DEFAULT_POSTOP_GAS_V4 = 100000n;
+const DEFAULT_VERIFICATION_GAS_V4 = 1500000n; // ~1.5M for safety
+const DEFAULT_POSTOP_GAS_V4 = 300000n; // ~300k for postOp logic
 
 /**
  * Constructs the middleware for Paymaster V4.

@@ -1,12 +1,12 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-18T03:23:14.684Z",
+  "timestamp": "2026-01-18T04:11:40.858Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
       "tokenAddress": "0x39aC3d4E9E49F38cFaeA7e190414B266dAbcC2Fa",
       "symbol": "aPNTs",
-      "paymasterV4": "0xeF316309d8F11aB1345F9cac1732e8EE886AFe2d"
+      "paymasterV4": "0xED87358e3d2A6faa95a61c3C28daEcB893ecCCFD"
     },
     "bob": {
       "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",

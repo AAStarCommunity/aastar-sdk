@@ -500,6 +500,7 @@ async function main() {
 
         if (!success) {
             console.log('\n   ⏸️ Timeout waiting for receipt. Check Etherscan.');
+            process.exit(1); // Added this line as per instruction
         }
 
     } catch (error: any) {

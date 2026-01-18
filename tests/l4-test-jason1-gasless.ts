@@ -77,22 +77,26 @@ async function main() {
     }
 
     // --- STEP 3: USER DEPOSIT ---
-    const userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA1, dPNTs); // Corrected to jasonPM
-    if (userDeposit < parseEther('50')) {
+    // --- STEP 2.5: CHECK PRICE ---
+    const price = await PaymasterOperator.getCachedPrice(publicClient, jasonPM);
+    console.log(`   💲 Token Price on PM: ${price.price} (updated at ${price.updatedAt})`);
+    
+    // --- STEP 3: USER DEPOSIT ---
+    const userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA1, dPNTs);
+    if (userDeposit < parseEther('500')) {
         console.log(`\n🏦 Seeding User Deposit (Current: ${formatEther(userDeposit)} dPNTs)...`);
         
         const approveHash = await anniWallet.writeContract({
             address: dPNTs,
             abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
             functionName: 'approve',
-            args: [jasonPM, parseEther('200')] // Corrected to jasonPM
+            args: [jasonPM, parseEther('2000')] 
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-        // User deposit action is usually done by Client, but funded by Operator in this script
-        const depHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA1, dPNTs, parseEther('100')); // Corrected to jasonPM
+        const depHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA1, dPNTs, parseEther('1000'));
         await publicClient.waitForTransactionReceipt({ hash: depHash as `0x${string}` });
-        console.log('   ✅ User deposit seeded (100 dPNTs).');
+        console.log('   ✅ User deposit seeded (1000 dPNTs).');
     }
 
     // --- STEP 4: GASLESS EXECUTION ---

@@ -132,8 +132,9 @@ export class UserClient extends BaseClient {
             const sbt = sbtActions(this.sbtAddress);
             
             return await sbt(this.client).mintForRole({
+                user: this.accountAddress,
                 roleId,
-                to: this.accountAddress,
+                roleData: '0x',
                 account: options?.account
             });
         } catch (error) {
@@ -148,7 +149,7 @@ export class UserClient extends BaseClient {
     /**
      * Transfer GToken or any ERC20
      */
-    async transferToken(token: Address, to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
+    async transferToken(token: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
         try {
             const tokens = tokenActions()(this.client);
             

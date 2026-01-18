@@ -87,20 +87,20 @@ async function main() {
     let userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA2, dPNTs);
     console.log(`   Jason AA2 Deposit: ${formatEther(userDeposit)} dPNTs`);
 
-    if (userDeposit < parseEther('10')) {
-        console.log('   🏦 Deposit too low. Seeding 50 dPNTs from Anni EOA...');
+    if (userDeposit < parseEther('500')) {
+        console.log('   🏦 Deposit too low. Seeding 1000 dPNTs from Anni EOA...');
         // Anni EOA (Operator/Community) approves and deposits for Jason
         const approveHash = await anniWallet.writeContract({
             address: dPNTs,
             abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
             functionName: 'approve',
-            args: [jasonPM, parseEther('100')]
+            args: [jasonPM, parseEther('2000')]
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-        const depositHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA2, dPNTs, parseEther('50'));
+        const depositHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA2, dPNTs, parseEther('1000'));
         await publicClient.waitForTransactionReceipt({ hash: depositHash });
-        console.log('   ✅ 50 dPNTs deposited.');
+        console.log('   ✅ User deposit seeded.');
     }
 
     // --- STEP 4: GASLESS TRANSACTION ---
@@ -165,8 +165,8 @@ async function main() {
             console.log('   ❌ Polling timeout. Check Etherscan for status.');
         }
 
-    } catch (e: any) {
         console.error('   ❌ Submission Failed:', e.message);
+        process.exit(1);
     }
 }
 
