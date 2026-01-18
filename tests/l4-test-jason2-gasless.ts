@@ -29,7 +29,12 @@ async function main() {
     const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     const jasonAA2 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA2')?.address as Address;
-    const jasonPM = state.operators["Jason (AAStar)"].pmV4 as Address;
+    const jasonOperator = state.operators?.["Jason (AAStar)"] || state.operators?.Jason || {};
+    const jasonPM = jasonOperator.pmV4 as Address;
+    
+    if (!jasonPM || jasonPM === '0x0000000000000000000000000000000000000000') {
+        throw new Error('Jason Paymaster V4 address not found in l4-state.json. Please run l4-setup first.');
+    }
     
     const dPNTs = config.contracts.aPNTs as Address;
     const entryPoint = config.contracts.entryPoint as Address;
