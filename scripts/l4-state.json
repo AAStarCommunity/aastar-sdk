@@ -1,6 +1,6 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-18T04:11:40.858Z",
+  "timestamp": "2026-01-18T09:42:29.366Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
@@ -12,7 +12,7 @@
       "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
       "tokenAddress": "0xCe38EB4a2E70a8267B78024C88870Edd16124906",
       "symbol": "bPNTs",
-      "paymasterV4": "0x3F6E62520F68Ae8894379a7dAbF87B26beEC6AbB"
+      "paymasterV4": "0x9c0764A7364322304E5998326d58950255E0ECc2"
     },
     "anni": {
       "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",

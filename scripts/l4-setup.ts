@@ -54,8 +54,53 @@ function printTable(title: string, data: any[]) {
     console.table(data);
 }
 
-// Pimlico v0.7 Factory Address
-const FACTORY_ADDRESS = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985'; 
+// Network Defaults: simpleAccountFactory (Pimlico 0.7) and priceFeed (Chainlink ETH/USD)
+const NETWORK_DEFAULTS: Record<string, { simpleAccountFactory: Address, priceFeed: Address }> = {
+    'sepolia': {
+        simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
+        priceFeed: '0x694AA1769357215DE4FAC081bf1f309aDC325306'
+    },
+    'mainnet': {
+        simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
+        priceFeed: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419'
+    },
+    'optimism': {
+        simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
+        priceFeed: '0x13e3Ee699D1909E989722E753853AE30b17e08c5'
+    }
+};
+
+/**
+ * Ensures the network config JSON is up-to-date with essential addresses
+ */
+async function syncConfig(network: string, config: any) {
+    const defaults = NETWORK_DEFAULTS[network];
+    if (!defaults) return;
+
+    let changed = false;
+    // Load fresh JSON to avoid mixing with env fallback from loadNetworkConfig
+    const configPath = path.resolve(process.cwd(), `config.${network}.json`);
+    let rawConfig: any = {};
+    if (fs.existsSync(configPath)) {
+        rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+
+    if (!rawConfig.simpleAccountFactory || rawConfig.simpleAccountFactory === '0x0000000000000000000000000000000000000000') {
+        rawConfig.simpleAccountFactory = defaults.simpleAccountFactory;
+        config.contracts.simpleAccountFactory = defaults.simpleAccountFactory;
+        changed = true;
+    }
+    if (!rawConfig.priceFeed || rawConfig.priceFeed === '0x0000000000000000000000000000000000000000') {
+        rawConfig.priceFeed = defaults.priceFeed;
+        config.contracts.priceFeed = defaults.priceFeed;
+        changed = true;
+    }
+
+    if (changed) {
+        console.log(`  📝 Updating ${configPath} with default addresses...`);
+        fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2));
+    }
+}
 
 async function main() {
     // Helper to check and fund ETH
@@ -93,6 +138,7 @@ async function main() {
     }
     
     const config = loadNetworkConfig(networkArg as any);
+    await syncConfig(networkArg, config);
     console.log(`\n🚀 Starting L4 Assessment & Setup on ${config.name}...`);
     
     // Load .env
@@ -230,6 +276,40 @@ async function main() {
                     token = tAddr;
                     console.log(`   ✓ ${op.name} already has token: ${tAddr}`);
                 }
+
+                // Ensure operator has some tokens to deposit (Mint 1M tokens)
+                try {
+                    const balance = await publicClient.readContract({
+                        address: tAddr,
+                        abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                        functionName: 'balanceOf',
+                        args: [acc.address]
+                    }) as bigint;
+                    
+                    if (balance < parseEther('10000')) {
+                        console.log(`   🪙  Minting 1M ${op.symbol} to ${op.name}...`);
+                        const h = await publicClient.simulateContract({
+                            address: tAddr,
+                            abi: parseAbi(['function mint(address to, uint256 amount) external']),
+                            functionName: 'mint',
+                            args: [acc.address, parseEther('1000000')],
+                            account: acc.address
+                        }).then(r => opClient.writeContract(r.request))
+                        .catch(async () => {
+                            // If owner mint fails, maybe try supplier if it has role
+                            return await supplierClient.writeContract({
+                                address: tAddr,
+                                abi: parseAbi(['function mint(address to, uint256 amount) external']),
+                                functionName: 'mint',
+                                args: [acc.address, parseEther('1000000')],
+                                account: supplier
+                            });
+                        });
+                        await publicClient.waitForTransactionReceipt({ hash: h });
+                    }
+                } catch (e) {
+                    // Skip mint if not supported or no permission
+                }
             }
         }
         if(tAddr && token !== 'Error' && token !== 'None') communityMap[op.name] = { token: tAddr };
@@ -246,7 +326,7 @@ async function main() {
             gTokenAddress: config.contracts.gToken,
             gTokenStakingAddress: config.contracts.gTokenStaking,
             paymasterFactoryAddress: config.contracts.paymasterFactory,
-            ethUsdPriceFeedAddress: (config.contracts as any).priceFeed
+            ethUsdPriceFeedAddress: config.contracts.priceFeed
         });
 
         if (op.pmType === 'V4') {
@@ -310,10 +390,10 @@ async function main() {
             // ✅ Ensure GToken support (V4 price set)
             if (pmV4 && pmV4 !== 'None' && pmV4 !== 'N/A (Super)') {
                 const pmData = paymasterActions(pmV4 as Address);
-                const gTokenAddr = config.contracts.gToken;
                 try {
-                    const price = await pmData(publicClient).tokenPrices({ token: gTokenAddr });
-                    if (price === 0n) {
+                    const gTokenAddr = config.contracts.gToken;
+                    const gPrice = await pmData(publicClient).tokenPrices({ token: gTokenAddr });
+                    if (gPrice === 0n) {
                         console.log(`   🔧 Supporting GToken ($1.00) in ${op.name}'s Paymaster...`);
                         const h = await pmData(opClient).setTokenPrice({ 
                             token: gTokenAddr, 
@@ -322,12 +402,32 @@ async function main() {
                         });
                         await publicClient.waitForTransactionReceipt({ hash: h });
                     }
+
+                    // Also set community token price
+                    if (tAddr) {
+                        const tPrice = await pmData(publicClient).tokenPrices({ token: tAddr as Address });
+                        if (tPrice === 0n) {
+                            console.log(`   🔧 Supporting ${op.name}'s Token ($1.00) in Paymaster...`);
+                            const h = await pmData(opClient).setTokenPrice({
+                                token: tAddr as Address,
+                                price: 100000000n, // $1.00
+                                account: acc
+                            });
+                            await publicClient.waitForTransactionReceipt({ hash: h });
+                        }
+                    }
                 } catch (e) {
                     // console.log(`      ⚠️  Price Check skip: ${op.name}`);
                 }
             }
             
-            if(pmV4 && pmV4 !== 'None' && communityMap[op.name]) communityMap[op.name].pmV4 = pmV4 as Address;
+            if(pmV4 && pmV4 !== 'None' && pmV4 !== 'N/A (Super)') {
+                if (!communityMap[op.name]) {
+                    communityMap[op.name] = { token: tAddr as Address };
+                }
+                communityMap[op.name].pmV4 = pmV4 as Address;
+                console.log(`   📝 Registered ${op.name}'s Paymaster in map: ${pmV4}`);
+            }
         } else {
             pmV4 = "N/A (Super)";
             try {
@@ -410,8 +510,11 @@ async function main() {
     // 3. AA Setup (6 Accounts)
     console.log(`\n🏭 3. Checking & Deploying 6 Test AA Accounts (Pimlico v0.7)...`);
     
-    // Ensure Factory is Deployed (Anvil often misses this)
-    let factoryAddr = config.contracts.simpleAccountFactory || '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985' as Address;
+    // Use configured Factory Address
+    let factoryAddr = config.contracts.simpleAccountFactory;
+    if (!factoryAddr || factoryAddr === '0x0000000000000000000000000000000000000000') {
+        throw new Error('simpleAccountFactory address missing in config after sync!');
+    }
     const factoryCode = await publicClient.getBytecode({ address: factoryAddr });
     if (!factoryCode || factoryCode.length <= 2) {
         console.log(`   🏗️  SimpleAccountFactory missing at ${factoryAddr}. Deploying...`);
@@ -734,7 +837,7 @@ async function main() {
             const gTokenAddr = config.contracts.gToken;
             const deposit = await pmData(publicClient).balances({ user: aa.address, token: gTokenAddr });
             if (deposit < parseEther('1000')) {
-                console.log(`   💰 Topping up deposit for ${aa.label} in ${aa.opName}'s Paymaster...`);
+                console.log(`   💰 Topping up GToken deposit for ${aa.label} in ${aa.opName}'s Paymaster...`);
                 // Use operator owner as refiller
                 const opMatch = operators.find(o => o.name === aa.opName);
                 if (!opMatch) continue;
@@ -754,7 +857,7 @@ async function main() {
                     const h = await gTokenActions(ownerClient).approve({ 
                         token: gTokenAddr, 
                         spender: pmAddr, 
-                        amount: parseEther('100000'), 
+                        amount: parseEther('1000000'), 
                         account: ownerAcc 
                     });
                     await publicClient.waitForTransactionReceipt({ hash: h });
@@ -770,6 +873,35 @@ async function main() {
                 console.log(`      ✅ Deposited 2000 GTokens for ${aa.label}`);
             } else {
                 console.log(`   ✓ ${aa.label} already has ${formatEther(deposit)} GToken deposit`);
+            }
+
+            // Also deposit community token if it exists and different from GToken
+            const commToken = communityMap[aa.opName]?.token;
+            if (commToken && commToken.toLowerCase() !== gTokenAddr.toLowerCase()) {
+                const commDeposit = await pmData(publicClient).balances({ user: aa.address, token: commToken });
+                if (commDeposit < parseEther('1000')) {
+                    console.log(`   💰 Topping up Community Token (${aa.opName}) deposit for ${aa.label}...`);
+                    const opMatch = operators.find(o => o.name === aa.opName);
+                    if (opMatch) {
+                        const ownerAcc = privateKeyToAccount(opMatch.key);
+                        const ownerClient = createWalletClient({ account: ownerAcc, chain: config.chain, transport: http(config.rpcUrl) });
+                        
+                        // Check owner's balance first
+                        const ownerBal = await tokenActions()(publicClient).balanceOf({ token: commToken, account: ownerAcc.address });
+                        if (ownerBal < parseEther('2000')) {
+                            console.log(`      ⚠️  Owner balance low (${formatEther(ownerBal)}). Skipping community token topup.`);
+                        } else {
+                            const allowance = await tokenActions()(publicClient).allowance({ token: commToken, owner: ownerAcc.address, spender: pmAddr });
+                            if (allowance < parseEther('2000')) {
+                                const h = await tokenActions()(ownerClient).approve({ token: commToken, spender: pmAddr, amount: parseEther('1000000'), account: ownerAcc });
+                                await publicClient.waitForTransactionReceipt({ hash: h });
+                            }
+                            const h = await pmData(ownerClient).depositFor({ user: aa.address, token: commToken, amount: parseEther('2000'), account: ownerAcc });
+                            await publicClient.waitForTransactionReceipt({ hash: h });
+                            console.log(`      ✅ Deposited 2000 ${aa.opName} tokens for ${aa.label}`);
+                        }
+                    }
+                }
             }
         }
     }
@@ -1117,79 +1249,9 @@ async function main() {
             opName: aa.opName
         }))
     };
-    // 6. Verify Paymaster Token Support & Funding
-    console.log(`\n🪙 6. Verifying Paymaster Token Support & AA Funding...`);
-    const pmAbi = parseAbi([
-        'function getSupportedGasTokens() external view returns (address[])',
-        'function priceStalenessThreshold() external view returns (uint256)'
-    ]);
-    const erc20MintAbi = parseAbi([
-        'function mint(address to, uint256 amount) external',
-        'function balanceOf(address) external view returns (uint256)',
-        'function transfer(address to, uint256 amount) external returns (bool)'
-    ]);
-
-    for (const [name, data] of Object.entries(communityMap)) {
-        if (!data.pmV4 || !data.aaAddr) continue;
-        
-        const pmContract = getContract({
-            address: data.pmV4,
-            abi: pmAbi,
-            client: publicClient
-        });
-        
-        try {
-            const tokens = await pmContract.read.getSupportedGasTokens() as Address[];
-            const staleness = await pmContract.read.priceStalenessThreshold().catch(() => 900n) as bigint;
-            console.log(`   🏦 ${name} Paymaster (${trimAddress(data.pmV4)})`);
-            console.log(`      - Staleness Threshold: ${staleness}s`);
-            console.log(`      - Supported Tokens: ${tokens.map(t => trimAddress(t)).join(', ')}`);
-            
-            if (tokens.length > 0) {
-                const token = tokens[0];
-                const tokenContract = getContract({ address: token, abi: erc20MintAbi, client: publicClient });
-                const balance = await tokenContract.read.balanceOf([data.aaAddr]) as bigint;
-                
-                console.log(`      👤 AA ${name} (${trimAddress(data.aaAddr)}) Balance: ${formatEther(balance)}`);
-                
-                if (balance < parseEther('10')) {
-                    console.log(`      ⚠️ Low Balance! Funding...`);
-                    // Try Mint first (if GToken or Test Token)
-                    try {
-                        const { request } = await publicClient.simulateContract({
-                            account: walletClient.account,
-                            address: token,
-                            abi: erc20MintAbi,
-                            functionName: 'mint',
-                            args: [data.aaAddr, parseEther('100')]
-                        });
-                        const mintHash = await walletClient.writeContract(request);
-                        await publicClient.waitForTransactionReceipt({ hash: mintHash });
-                        console.log(`      ✅ Minted 100 Tokens to AA`);
-                    } catch (e) {
-                         // Fallback to Transfer
-                         console.log(`      trying transfer...`);
-                         try {
-                             const { request } = await publicClient.simulateContract({
-                                 account: walletClient.account,
-                                 address: token,
-                                 abi: erc20MintAbi,
-                                 functionName: 'transfer',
-                                 args: [data.aaAddr, parseEther('10')]
-                             });
-                             const txHash = await walletClient.writeContract(request);
-                             await publicClient.waitForTransactionReceipt({ hash: txHash });
-                             console.log(`      ✅ Transferred 10 Tokens to AA`);
-                         } catch (err: any) {
-                             console.log(`      ❌ Funding Failed: ${err.message}`);
-                         }
-                    }
-                }
-            }
-        } catch (e: any) {
-            console.log(`   ❌ Failed to verify PM ${name}: ${e.message}`);
-        }
-    }
+    // 7. Success
+    console.log(`   ✅ State Saved!`);
+    fs.writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2));
 
     console.log(`   ✅ State Saved!`);
     fs.writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2));
