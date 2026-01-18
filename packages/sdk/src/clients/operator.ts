@@ -276,5 +276,5 @@ export function createOperatorClient({
         }
     };
 
-    return Object.assign(client, actions) as OperatorClient;
+    return Object.assign(client, actions) as unknown as OperatorClient;
 }

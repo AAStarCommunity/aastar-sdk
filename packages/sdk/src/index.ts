@@ -5,7 +5,7 @@ export * from '@aastar/identity';
 export * from '@aastar/tokens';
 export * from '@aastar/tokens';
 export * from '@aastar/dapp';
-export * from '@aastar/enduser'; // Export UserClient and CommunityClient
+// export * from '@aastar/enduser'; // Commented to avoid CommunityClient conflict with clients/community.js
 
 // Export Role-Based Clients
 export * from './clients/endUser.js';
