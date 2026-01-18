@@ -6,10 +6,9 @@ import { AAStarError } from '../errors/index.js';
 export type DVTActions = {
     // Proposal Management
     createSlashProposal: (args: { operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
-    signSlashProposal: (args: { proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
     executeSlashWithProof: (args: { proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     markProposalExecuted: (args: { id: bigint, account?: Account | Address }) => Promise<Hash>;
-    proposals: (args: { proposalId: bigint }) => Promise<{ proposer: Address, slashLevel: number, reason: string, executed: boolean }>;
+    proposals: (args: { proposalId: bigint }) => Promise<{ operator: Address, slashLevel: number, reason: string, executed: boolean }>;
     nextProposalId: () => Promise<bigint>;
     
     // Validator Management
@@ -35,6 +34,7 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
     async createSlashProposal({ operator, level, reason, account }) {
         try {
             validateAddress(operator, 'operator');
+            validateRequired(reason, 'reason');
             return await (client as any).writeContract({
                 address,
                 abi: DVTValidatorABI,
@@ -48,153 +48,204 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
         }
     },
 
-    async signSlashProposal({  proposalId, signature, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'signProposal',
-            args: [proposalId, signature],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async executeSlashWithProof({ proposalId, repUsers, newScores, epoch, proof, account }) {
+        try {
+            validateRequired(proposalId, 'proposalId');
+            validateRequired(repUsers, 'repUsers');
+            validateRequired(newScores, 'newScores');
+            validateRequired(epoch, 'epoch');
+            validateRequired(proof, 'proof');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'executeWithProof',
+                args: [proposalId, repUsers, newScores, epoch, proof],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'executeSlashWithProof');
+        }
     },
 
-    async executeSlashWithProof({  proposalId, repUsers, newScores, epoch, proof, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'executeWithProof',
-            args: [proposalId, repUsers, newScores, epoch, proof],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async markProposalExecuted({ id, account }) {
+        try {
+            validateRequired(id, 'id');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'markProposalExecuted',
+                args: [id],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'markProposalExecuted');
+        }
     },
 
-    async markProposalExecuted({  id, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'markProposalExecuted',
-            args: [id],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async proposals({ proposalId }) {
+        try {
+            validateRequired(proposalId, 'proposalId');
+            const result = await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'proposals',
+                args: [proposalId]
+            }) as any;
+            return {
+                operator: result[0],
+                slashLevel: Number(result[1]),
+                reason: result[2],
+                executed: result[3]
+            };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'proposals');
+        }
     },
 
-    async proposals({  proposalId }) {
-        const result = await (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'proposals',
-            args: [proposalId]
-        }) as any;
-        return {
-            proposer: result[0],
-            slashLevel: Number(result[1]),
-            reason: result[2],
-            executed: result[3]
-        };
-    },
-
-    async nextProposalId( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'nextProposalId',
-            args: []
-        }) as Promise<bigint>;
+    async nextProposalId() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'nextProposalId',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'nextProposalId');
+        }
     },
 
     // Validator Management
-    async isValidator({  user }) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'isValidator',
-            args: [user]
-        }) as Promise<boolean>;
+    async isValidator({ user }) {
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'isValidator',
+                args: [user]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isValidator');
+        }
     },
 
-    async addValidator({  v, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'addValidator',
-            args: [v],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async addValidator({ v, account }) {
+        try {
+            validateAddress(v, 'v');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'addValidator',
+                args: [v],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'addValidator');
+        }
     },
 
     // BLS Aggregator Integration
-    async setBLSAggregator({  aggregator, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'setBLSAggregator',
-            args: [aggregator],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async setBLSAggregator({ aggregator, account }) {
+        try {
+            validateAddress(aggregator, 'aggregator');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'setBLSAggregator',
+                args: [aggregator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setBLSAggregator');
+        }
     },
 
-    async BLS_AGGREGATOR( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'BLS_AGGREGATOR',
-            args: []
-        }) as Promise<Address>;
+    async BLS_AGGREGATOR() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'BLS_AGGREGATOR',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'BLS_AGGREGATOR');
+        }
     },
 
-    async REGISTRY( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'REGISTRY',
-            args: []
-        }) as Promise<Address>;
+    async REGISTRY() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'REGISTRY',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
     },
 
     // Ownership
-    async owner( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'owner',
-            args: []
-        }) as Promise<Address>;
+    async owner() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'owner',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'owner');
+        }
     },
 
-    async transferOwnership({  newOwner, account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'transferOwnership',
-            args: [newOwner],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async transferOwnership({ newOwner, account }) {
+        try {
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
+        }
     },
 
-    async renounceOwnership({  account }) {
-        return (client as any).writeContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'renounceOwnership',
-            args: [],
-            account: account as any,
-            chain: (client as any).chain
-        });
+    async renounceOwnership({ account }) {
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
     },
 
-    // Version
-    async version( ) {
-        return (client as PublicClient).readContract({
-            address,
-            abi: DVTValidatorABI,
-            functionName: 'version',
-            args: []
-        }) as Promise<string>;
+    async version() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'version',
+                args: []
+            }) as Promise<string>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'version');
+        }
     }
 });

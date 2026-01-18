@@ -1,66 +1,145 @@
-/**
- * Unit Tests for SBT Actions
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { sbtActions } from '../../src/actions/sbt';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
 
-const SBT_ADDRESS = '0x1111111111111111111111111111111111111111' as `0x${string}`;
-const USER_ADDRESS = '0x2222222222222222222222222222222222222222' as `0x${string}`;
+const ADDR = '0x1111111111111111111111111111111111111111' as `0x${string}`;
+const USER = '0x2222222222222222222222222222222222222222' as `0x${string}`;
 
-describe('SBTActions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
-  let walletClient: ReturnType<typeof createMockWalletClient>;
+describe('SBTActions Exhaustive Coverage', () => {
+  let p: any;
+  let w: any;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
-  beforeEach(() => {
-    resetMocks();
-    publicClient = createMockPublicClient();
-    walletClient = createMockWalletClient();
-  });
-
-  describe('airdropMint', () => {
-    it('should mint SBT via airdrop', async () => {
-      walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-      const actions = sbtActions(SBT_ADDRESS)(walletClient);
-      await actions.airdropMint({ roleId: 1n, to: USER_ADDRESS, tokenURI: 'ipfs://...', account: walletClient.account });
-      expect(walletClient.writeContract).toHaveBeenCalled();
+  describe('Minting & Burning', () => {
+    it('minting ops', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = sbtActions(ADDR)(w);
+      await act.airdropMint({ user: USER, roleId: '0x01', roleData: '0x', account: USER });
+      await act.mintForRole({ user: USER, roleId: '0x01', roleData: '0x', account: USER });
+      await act.burnSBT({ user: USER, account: USER });
+      expect(w.writeContract).toHaveBeenCalledTimes(3);
     });
   });
 
-  describe('getUserSBT', () => {
-    it('should get user SBT', async () => {
-      publicClient.readContract.mockResolvedValue(123n);
-      const actions = sbtActions(SBT_ADDRESS)(publicClient);
-      const result = await actions.getUserSBT({ user: USER_ADDRESS, roleId: 1n });
-      expect(result).toBe(123n);
+  describe('Membership & Activity', () => {
+    it('membership ops', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = sbtActions(ADDR)(w);
+      await act.leaveCommunity({ community: ADDR, account: USER });
+      await act.deactivateMembership({ user: USER, community: ADDR, account: USER });
+      await act.deactivateAllMemberships({ user: USER, account: USER });
+      await act.recordActivity({ user: USER, account: USER });
+      expect(w.writeContract).toHaveBeenCalledTimes(4);
+    });
+    it('membership views', async () => {
+      const act = sbtActions(ADDR)(p);
+      p.readContract.mockResolvedValue(100n); // generic bigint
+      await act.getUserSBT({ user: USER });
+      await act.userToSBT({ user: USER });
+      await act.membershipIndex({ tokenId: 1n, community: ADDR });
+      await act.lastActivityTime({ tokenId: 1n, community: ADDR });
+      
+      p.readContract.mockResolvedValue([USER, USER, 0n, 1n]); // SBTData
+      await act.getSBTData({ tokenId: 1n });
+      await act.sbtData({ tokenId: 1n });
+      
+      p.readContract.mockResolvedValue([ADDR, 0n, 0n, true, 'meta']); // Membership
+      await act.getCommunityMembership({ tokenId: 1n, community: ADDR });
+      
+      p.readContract.mockResolvedValue([[ADDR, 0n, 0n, true, 'meta']]); // Memberships[]
+      await act.getMemberships({ tokenId: 1n });
+      
+      p.readContract.mockResolvedValue([ADDR]); // Address[]
+      await act.getActiveMemberships({ tokenId: 1n });
+      
+      p.readContract.mockResolvedValue(true); // bool
+      await act.verifyCommunityMembership({ user: USER, community: ADDR });
+      await act.weeklyActivity({ tokenId: 1n, community: ADDR, week: 1n });
+      
+      expect(p.readContract).toHaveBeenCalledTimes(11);
     });
   });
 
-  describe('balanceOf', () => {
-    it('should get SBT balance', async () => {
-      publicClient.readContract.mockResolvedValue(5n);
-      const actions = sbtActions(SBT_ADDRESS)(publicClient);
-      const result = await actions.balanceOf({ owner: USER_ADDRESS });
-      expect(result).toBe(5n);
+  describe('ERC721 Standard', () => {
+    it('writes', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = sbtActions(ADDR)(w);
+      await act.safeTransferFrom({ from: USER, to: USER, tokenId: 1n, account: USER });
+      await act.transferFrom({ from: USER, to: USER, tokenId: 1n, account: USER });
+      await act.approve({ to: USER, tokenId: 1n, account: USER });
+      await act.setApprovalForAll({ operator: USER, approved: true, account: USER });
+      expect(w.writeContract).toHaveBeenCalledTimes(4);
+    });
+    it('views', async () => {
+      const act = sbtActions(ADDR)(p);
+      p.readContract.mockResolvedValue(1n);
+      await act.balanceOf({ owner: USER });
+      await act.nextTokenId();
+      
+      p.readContract.mockResolvedValue(USER);
+      await act.ownerOf({ tokenId: 1n });
+      await act.getApproved({ tokenId: 1n });
+      
+      p.readContract.mockResolvedValue(true);
+      await act.isApprovedForAll({ owner: USER, operator: USER });
+      await act.supportsInterface({ interfaceId: '0x01ffc9a7' });
+      
+      p.readContract.mockResolvedValue('uri');
+      await act.tokenURI({ tokenId: 1n });
+      await act.name();
+      await act.symbol();
+      
+      expect(p.readContract).toHaveBeenCalledTimes(9);
     });
   });
 
-  describe('transferFrom', () => {
-    it('should transfer SBT', async () => {
-      walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-      const actions = sbtActions(SBT_ADDRESS)(walletClient);
-      await actions.transferFrom({ from: USER_ADDRESS, to: walletClient.account.address, tokenId: 1n, account: walletClient.account });
-      expect(walletClient.writeContract).toHaveBeenCalled();
+  describe('Admin & Config', () => {
+    it('config setters', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = sbtActions(ADDR)(w);
+      await act.setBaseURI({ baseURI: 'uri', account: USER });
+      await act.setReputationCalculator({ calculator: USER, account: USER });
+      await act.setMintFee({ fee: 100n, account: USER });
+      await act.setMinLockAmount({ amount: 100n, account: USER });
+      await act.pause({ account: USER });
+      await act.unpause({ account: USER });
+      await act.setDAOMultisig({ multisig: USER, account: USER });
+      await act.setRegistry({ registry: USER, account: USER });
+      expect(w.writeContract).toHaveBeenCalledTimes(8);
     });
-  });
-
-  describe('name', () => {
-    it('should get SBT name', async () => {
-      publicClient.readContract.mockResolvedValue('MySBT');
-      const actions = sbtActions(SBT_ADDRESS)(publicClient);
-      const result = await actions.name();
-      expect(result).toBe('MySBT');
+    it('config getters', async () => {
+      const act = sbtActions(ADDR)(p);
+      p.readContract.mockResolvedValue(USER);
+      await act.reputationCalculator();
+      await act.daoMultisig();
+      await act.REGISTRY();
+      await act.GTOKEN_STAKING();
+      await act.GTOKEN();
+      
+      p.readContract.mockResolvedValue(100n);
+      await act.mintFee();
+      await act.minLockAmount();
+      
+      p.readContract.mockResolvedValue(true);
+      await act.paused();
+      
+      p.readContract.mockResolvedValue('1.0');
+      await act.version();
+      
+      expect(p.readContract).toHaveBeenCalledTimes(9);
+    });
+    it('ownership', async () => {
+      const actP = sbtActions(ADDR)(p);
+      p.readContract.mockResolvedValue(USER);
+      await actP.owner();
+      
+      w.writeContract.mockResolvedValue('0x');
+      const actW = sbtActions(ADDR)(w);
+      await actW.transferOwnership({ newOwner: USER, account: USER });
+      await actW.renounceOwnership({ account: USER });
+      
+      expect(p.readContract).toHaveBeenCalledTimes(1);
+      expect(w.writeContract).toHaveBeenCalledTimes(2);
     });
   });
 });

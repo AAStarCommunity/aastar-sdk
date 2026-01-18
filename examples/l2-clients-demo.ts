@@ -99,8 +99,8 @@ async function main() {
     });
 
     try {
-        const depositInfo = await operatorClient.getDepositDetails();
-        console.log(`  ✓ Paymaster Deposit: ${depositInfo.deposit}`);
+        const details = await operatorClient.getOperatorDetails(operatorClient.account.address);
+        console.log(`  ✓ Paymaster Deposit: ${details[0]}`);
         
         // Deposit Demo
         // await operatorClient.deposit(parseEther('0.001'));

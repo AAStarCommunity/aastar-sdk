@@ -1,5 +1,5 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
-import { EntryPointABI, SimpleAccountABI, SimpleAccountFactoryABI } from '../abis/index.js';
+import { SimpleAccountABI, SimpleAccountFactoryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
@@ -11,6 +11,7 @@ export type AccountActions = {
     entryPoint: () => Promise<Address>;
     addDeposit: (args: { account?: Account | Address }) => Promise<Hash>;
     withdrawDepositTo: (args: { withdrawAddress: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    getDeposit: () => Promise<bigint>;
     owner: () => Promise<Address>;
 };
 
@@ -45,6 +46,10 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
             validateRequired(value, 'value');
             validateRequired(func, 'func');
             
+            if (dest.length !== value.length || dest.length !== func.length) {
+                throw new Error('executeBatch: Array lengths must match');
+            }
+
             // Zip arguments into Call[] struct format
             const calls = dest.map((t, i) => ({
                 target: t,
@@ -120,6 +125,19 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'withdrawDepositTo');
+        }
+    },
+
+    async getDeposit() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SimpleAccountABI,
+                functionName: 'getDeposit',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getDeposit');
         }
     },
 

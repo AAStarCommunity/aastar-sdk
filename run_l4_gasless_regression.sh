@@ -16,6 +16,13 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+# NOTE: Anvil environment is skipped for deep gasless debugging due to instability.
+# Please use Sepolia for reliable gasless transaction testing.
+if [ "$NETWORK" == "anvil" ]; then
+    echo "⚠️  WARNING: Running on Anvil. Gasless tests may be unstable."
+    echo "    For deep debugging, please use --env sepolia."
+fi
+
 echo "📡 Network: $NETWORK"
 echo ""
 
@@ -54,7 +61,7 @@ run_test() {
     echo "📋 Test: $test_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
-    if pnpm tsx "$test_file"; then
+    if pnpm tsx "$test_file" --network "$NETWORK"; then
         echo "✅ PASSED: $test_name"
         PASSED=$((PASSED + 1))
     else

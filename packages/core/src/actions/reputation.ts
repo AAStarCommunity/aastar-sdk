@@ -1,26 +1,40 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { ReputationSystemABI } from '../abis/index.js';
-import { validateAddress, validateRequired } from '../validators/index.js';
+import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
+export type ReputationRule = {
+    baseScore: bigint;
+    activityBonus: bigint;
+    maxBonus: bigint;
+    description: string;
+};
+
+export type ReputationBreakdown = {
+    baseScore: bigint;
+    nftBonus: bigint;
+    activityBonus: bigint;
+    multiplier: bigint;
+};
+
 export type ReputationActions = {
-    // 规则配置
-    setReputationRule: (args: { ruleId: Hex, rule: any, account?: Account | Address }) => Promise<Hash>;
-    getReputationRule: (args: { ruleId: Hex }) => Promise<any>;
+    // Rule Configuration
+    setReputationRule: (args: { ruleId: Hex, rule: ReputationRule, account?: Account | Address }) => Promise<Hash>;
+    getReputationRule: (args: { ruleId: Hex }) => Promise<ReputationRule>;
     enableRule: (args: { ruleId: Hex, account?: Account | Address }) => Promise<Hash>;
     disableRule: (args: { ruleId: Hex, account?: Account | Address }) => Promise<Hash>;
     isRuleActive: (args: { ruleId: Hex }) => Promise<boolean>;
     getActiveRules: (args: { community: Address }) => Promise<Hex[]>;
     getRuleCount: () => Promise<bigint>;
     setRule: (args: { ruleId: Hex, base: bigint, bonus: bigint, max: bigint, desc: string, account?: Account | Address }) => Promise<Hash>;
-    communityRules: (args: { community: Address, ruleId: Hex }) => Promise<any>;
+    communityRules: (args: { community: Address, ruleId: Hex }) => Promise<ReputationRule>;
     communityActiveRules: (args: { community: Address, index: bigint }) => Promise<Hex>;
-    defaultRule: () => Promise<any>;
+    defaultRule: () => Promise<ReputationRule>;
     
-    // 积分计算
+    // Score Calculation
     computeScore: (args: { user: Address, communities: Address[], ruleIds: Hex[][], activities: bigint[][] }) => Promise<bigint>;
     calculateReputation: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<{ communityScore: bigint, globalScore: bigint }>;
-    getReputationBreakdown: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<any>;
+    getReputationBreakdown: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<ReputationBreakdown>;
     getUserScore: (args: { user: Address }) => Promise<bigint>;
     getCommunityScore: (args: { community: Address }) => Promise<bigint>;
     communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>;
@@ -34,7 +48,7 @@ export type ReputationActions = {
     boostedCollections: (args: { index: bigint }) => Promise<Address>;
     entropyFactors: (args: { community: Address }) => Promise<bigint>;
     
-    // 批量操作
+    // Batch Operations
     batchUpdateScores: (args: { users: Address[], scores: bigint[], account?: Account | Address }) => Promise<Hash>;
     batchSyncToRegistry: (args: { users: Address[], account?: Account | Address }) => Promise<Hash>;
     syncToRegistry: (args: { 
@@ -65,10 +79,11 @@ export type ReputationActions = {
 };
 
 export const reputationActions = (address: Address) => (client: PublicClient | WalletClient): ReputationActions => ({
-    // 规则配置
+    // Rule Configuration
     async setReputationRule({ ruleId, rule, account }) {
         try {
             validateRequired(ruleId, 'ruleId');
+            validateRequired(rule, 'rule');
             return await (client as any).writeContract({
                 address,
                 abi: ReputationSystemABI,
@@ -85,12 +100,22 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     async getReputationRule({ ruleId }) {
         try {
             validateRequired(ruleId, 'ruleId');
-            return await (client as PublicClient).readContract({
+            const result = await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
                 functionName: 'getReputationRule',
                 args: [ruleId]
-            });
+            }) as any;
+
+            if (Array.isArray(result)) {
+                return {
+                    baseScore: result[0],
+                    activityBonus: result[1],
+                    maxBonus: result[2],
+                    description: result[3]
+                };
+            }
+            return result as ReputationRule;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getReputationRule');
         }
@@ -169,10 +194,13 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // \u79ef\u5206\u8ba1\u7b97
+    // Score Calculation
     async computeScore({ user, communities, ruleIds, activities }) {
         try {
             validateAddress(user, 'user');
+            validateRequired(communities, 'communities');
+            validateRequired(ruleIds, 'ruleIds');
+            validateRequired(activities, 'activities');
             return await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
@@ -194,7 +222,11 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
                 functionName: 'calculateReputation',
                 args: [user, community, timestamp]
             }) as any;
-            return { communityScore: result[0], globalScore: result[1] };
+
+            if (Array.isArray(result)) {
+                return { communityScore: result[0], globalScore: result[1] };
+            }
+            return result as { communityScore: bigint, globalScore: bigint };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'calculateReputation');
         }
@@ -204,12 +236,22 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         try {
             validateAddress(user, 'user');
             validateAddress(community, 'community');
-            return await (client as PublicClient).readContract({
+            const result = await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
                 functionName: 'getReputationBreakdown',
                 args: [user, community, timestamp]
-            });
+            }) as any;
+
+            if (Array.isArray(result)) {
+                return {
+                    baseScore: result[0],
+                    nftBonus: result[1],
+                    activityBonus: result[2],
+                    multiplier: result[3]
+                };
+            }
+            return result as ReputationBreakdown;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getReputationBreakdown');
         }
@@ -243,7 +285,6 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Public mapping getter
     async communityReputations({ community, user }) {
         try {
             validateAddress(community, 'community');
@@ -263,6 +304,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         try {
             validateAddress(community, 'community');
             validateAddress(user, 'user');
+            validateAmount(score, 'score');
             return await (client as any).writeContract({
                 address,
                 abi: ReputationSystemABI,
@@ -276,10 +318,13 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Rule functions
     async setRule({ ruleId, base, bonus, max, desc, account }) {
         try {
             validateRequired(ruleId, 'ruleId');
+            validateAmount(base, 'base');
+            validateAmount(bonus, 'bonus');
+            validateAmount(max, 'max');
+            validateRequired(desc, 'desc');
             return await (client as any).writeContract({
                 address,
                 abi: ReputationSystemABI,
@@ -297,12 +342,22 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         try {
             validateAddress(community, 'community');
             validateRequired(ruleId, 'ruleId');
-            return await (client as PublicClient).readContract({
+            const result = await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
                 functionName: 'communityRules',
                 args: [community, ruleId]
-            });
+            }) as any;
+
+            if (Array.isArray(result)) {
+                return {
+                    baseScore: result[0],
+                    activityBonus: result[1],
+                    maxBonus: result[2],
+                    description: result[3]
+                };
+            }
+            return result as ReputationRule;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'communityRules');
         }
@@ -311,6 +366,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     async communityActiveRules({ community, index }) {
         try {
             validateAddress(community, 'community');
+            validateRequired(index, 'index');
             return await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
@@ -324,21 +380,32 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
 
     async defaultRule() {
         try {
-            return await (client as PublicClient).readContract({
+            const result = await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
                 functionName: 'defaultRule',
                 args: []
-            });
+            }) as any;
+
+            if (Array.isArray(result)) {
+                return {
+                    baseScore: result[0],
+                    activityBonus: result[1],
+                    maxBonus: result[2],
+                    description: result[3]
+                };
+            }
+            return result as ReputationRule;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'defaultRule');
         }
     },
 
-    // NFT Boost functions
+    // NFT Boost
     async setNFTBoost({ collection, boost, account }) {
         try {
             validateAddress(collection, 'collection');
+            validateAmount(boost, 'boost');
             return await (client as any).writeContract({
                 address,
                 abi: ReputationSystemABI,
@@ -399,6 +466,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
 
     async boostedCollections({ index }) {
         try {
+            validateRequired(index, 'index');
             return await (client as PublicClient).readContract({
                 address,
                 abi: ReputationSystemABI,
@@ -424,7 +492,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // 批量操作
+    // Batch Operations
     async batchUpdateScores({ users, scores, account }) {
         try {
             validateRequired(users, 'users');
@@ -464,7 +532,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
             validateRequired(communities, 'communities');
             validateRequired(ruleIds, 'ruleIds');
             validateRequired(activities, 'activities');
-            validateRequired(epoch, 'epoch');
+            validateAmount(epoch, 'epoch');
             validateRequired(proof, 'proof');
             return await (client as any).writeContract({
                 address,
@@ -499,6 +567,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     async setEntropyFactor({ community, factor, account }) {
         try {
             validateAddress(community, 'community');
+            validateAmount(factor, 'factor');
             return await (client as any).writeContract({
                 address,
                 abi: ReputationSystemABI,
@@ -547,7 +616,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
                 abi: ReputationSystemABI,
                 functionName: 'owner',
                 args: []
-            }) as Address;
+            }) as Promise<Address>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'owner');
         }
@@ -584,7 +653,6 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Version
     async version() {
         try {
             return await (client as PublicClient).readContract({
@@ -592,7 +660,7 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
                 abi: ReputationSystemABI,
                 functionName: 'version',
                 args: []
-            }) as string;
+            }) as Promise<string>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'version');
         }

@@ -10,32 +10,39 @@ import {
 import fs from 'fs';
 import path from 'path';
 
-dotenv.config({ path: '.env.sepolia' });
+import { loadNetworkConfig } from './config.js';
+// dotenv loaded by loadNetworkConfig
 
 // Force load Sepolia config
-const SEPOLIA_CONFIG = JSON.parse(fs.readFileSync('./config.sepolia.json', 'utf8'));
+// Config loaded dynamically
+// const SEPOLIA_CONFIG ...
 const STATE_FILE = './scripts/l4-state.json';
 const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
 
 async function runReputationTierTest() {
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = loadNetworkConfig(networkName);
+
     console.log('🧪 Starting Tier 2 Reputation Test (Activity-based)...');
     
     // 1. Setup Clients
     const supplierAcc = privateKeyToAccount(process.env.PRIVATE_KEY_SUPPLIER as Hex);
     const anniAcc = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as Hex);
     
-    const rpcUrl = process.env.RPC_URL_SEPOLIA || '';
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+    // const rpcUrl = process.env.RPC_URL_SEPOLIA || '';
+    const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
     
-    const anniClient = createWalletClient({ account: anniAcc, chain: sepolia, transport: http(rpcUrl) });
-    const adminClient = createAdminClient({ chain: sepolia, transport: http(rpcUrl), account: supplierAcc });
+    const anniClient = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
+    const adminClient = createAdminClient({ chain: config.chain, transport: http(config.rpcUrl), account: supplierAcc });
 
     const anniAddr = anniAcc.address;
     const targetAA = state.aaAccounts.find((a: any) => a.opName === 'Anni (Demo)');
     
     if (!targetAA) throw new Error('Target AA not found');
 
-    const repSystemAddr = SEPOLIA_CONFIG.reputationSystem as Address;
+    const repSystemAddr = config.contracts.reputation as Address;
     console.log(`📍 Reputation System: ${repSystemAddr}`);
 
     // --- Tier 2: Activity Flow ---

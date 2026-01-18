@@ -3,28 +3,42 @@ import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { PaymasterClient } from '../packages/paymaster/src/V4/index.js';
-import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 import { loadNetworkConfig } from '../tests/regression/config.js';
-
-dotenv.config({ path: '.env.sepolia' });
+// dotenv loaded by loadNetworkConfig
 
 // ...
 async function main() {
-    const config = await loadNetworkConfig('sepolia');
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = await loadNetworkConfig(networkName);
+
+    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    let aaAddress = '0xECD9C07f648B09CFb78906302822Ec52Ab87dd70';
+    let pmAddress = '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82';
+    
+    if (fs.existsSync(statePath)) {
+        const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+        aaAddress = state.aaAccounts?.[0]?.address || aaAddress;
+        pmAddress = state.operators?.jason?.paymasterV4 || pmAddress;
+    }
+
     const APP_CONFIG = {
         rpcUrl: process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key',
-        bundlerUrl: process.env.BUNDLER_URL!,
-        entryPoint: config.contracts.entryPoint, // Dynamically loaded v0.7 EP
-        paymaster: '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82', // Anni PM
-        gasToken: '0x424DA26B172994f98D761a999fa2FD744CaF812b', // dPNTs
-        aaAccount: '0xECD9C07f648B09CFb78906302822Ec52Ab87dd70' // Jason AA1
+        bundlerUrl: config.bundlerUrl!,
+        entryPoint: config.contracts.entryPoint, 
+        paymaster: pmAddress, 
+        gasToken: config.contracts.aPNTs, 
+        aaAccount: aaAddress 
     };
     console.log('🚀 Developers only need these few lines:');
 
     // 1. Setup Client & Wallet
     const account = privateKeyToAccount(process.env.PRIVATE_KEY_JASON as `0x${string}`);
-    const wallet = createWalletClient({ account, chain: sepolia, transport: http(APP_CONFIG.rpcUrl) });
-    const client = createPublicClient({ chain: sepolia, transport: http(APP_CONFIG.rpcUrl) });
+    const wallet = createWalletClient({ account, chain: config.chain, transport: http(APP_CONFIG.rpcUrl) });
+    const client = createPublicClient({ chain: config.chain, transport: http(APP_CONFIG.rpcUrl) });
 
     // 2. Define Your Action (e.g. Transfer Token)
     // 💡 New Semantic Helpers: No more raw ABI encoding!
@@ -56,7 +70,7 @@ async function main() {
     // 4. Wait for Execution (Optional but recommended for confirmation)
     console.log(`\n⏳ Waiting for execution...`);
     const bundlerClient = createClient({
-        chain: sepolia,
+        chain: config.chain,
         transport: http(APP_CONFIG.bundlerUrl)
     }).extend(bundlerActions);
 
@@ -77,4 +91,7 @@ async function main() {
     }
 }
 
-main().catch(console.error);
+main().catch(e => {
+    console.error(e);
+    process.exit(1);
+});

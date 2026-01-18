@@ -175,7 +175,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         name: network,
         chain,
         rpcUrl: process.env.RPC_URL!,
-        bundlerUrl: process.env.BUNDLER_URL!, // Populate bundlerUrl from env
+        bundlerUrl: process.env.BUNDLER_URL || process.env.RPC_URL!,
         contracts: {
             registry: getContractAddress('registry', 'REGISTRY_ADDRESS'),
             gToken: getContractAddress('gToken', 'GTOKEN_ADDRESS'),

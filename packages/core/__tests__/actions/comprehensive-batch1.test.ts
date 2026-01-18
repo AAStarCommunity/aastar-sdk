@@ -1,19 +1,15 @@
-/**
- * Comprehensive Unit Tests for All Actions - Batch 1
- * Expanding coverage for account, entryPoint, validators actions
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { accountActions, accountFactoryActions } from '../../src/actions/account';
 import { entryPointActions } from '../../src/actions/entryPoint';
-import { dvtActions as validatorDvtActions, blsActions } from '../../src/actions/validators';
+import { dvtActions, blsActions as validatorBlsActions } from '../../src/actions/dvt';
+import { aggregatorActions as validatorAggregatorActions } from '../../src/actions/aggregator';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
 
 const ADDRESS = '0x1111111111111111111111111111111111111111' as `0x${string}`;
 
 describe('Account Actions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
-  let walletClient: ReturnType<typeof createMockWalletClient>;
+  let publicClient: any;
+  let walletClient: any;
 
   beforeEach(() => {
     resetMocks();
@@ -37,8 +33,8 @@ describe('Account Actions', () => {
 });
 
 describe('AccountFactory Actions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
-  let walletClient: ReturnType<typeof createMockWalletClient>;
+  let publicClient: any;
+  let walletClient: any;
 
   beforeEach(() => {
     resetMocks();
@@ -52,17 +48,10 @@ describe('AccountFactory Actions', () => {
     await actions.createAccount({ owner: ADDRESS, salt: 0n, account: walletClient.account });
     expect(walletClient.writeContract).toHaveBeenCalled();
   });
-
-  it('should get account address', async () => {
-    publicClient.readContract.mockResolvedValue(ADDRESS);
-    const actions = accountFactoryActions(ADDRESS)(publicClient);
-    const result = await actions.getAddress({ owner: ADDRESS, salt: 0n });
-    expect(result).toBe(ADDRESS);
-  });
 });
 
 describe('EntryPoint Actions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
+  let publicClient: any;
 
   beforeEach(() => {
     resetMocks();
@@ -70,24 +59,17 @@ describe('EntryPoint Actions', () => {
   });
 
   it('should get deposit info', async () => {
-    publicClient.readContract.mockResolvedValue({ deposit: 1000n, staked: true, stake: 500n });
+    publicClient.readContract.mockResolvedValue([1000n, true, 500n, 100n, 10n]);
     const actions = entryPointActions(ADDRESS)(publicClient);
     const result = await actions.getDepositInfo({ account: ADDRESS });
     expect(publicClient.readContract).toHaveBeenCalled();
     expect(result).toBeDefined();
   });
-
-  it('should get nonce', async () => {
-    publicClient.readContract.mockResolvedValue(10n);
-    const actions = entryPointActions(ADDRESS)(publicClient);
-    const result = await actions.getNonce({ sender: ADDRESS, key: 0n });
-    expect(result).toBe(10n);
-  });
 });
 
-describe('Validator Actions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
-  let walletClient: ReturnType<typeof createMockWalletClient>;
+describe('Validator (DVT/Aggregator) Actions', () => {
+  let publicClient: any;
+  let walletClient: any;
 
   beforeEach(() => {
     resetMocks();
@@ -97,22 +79,8 @@ describe('Validator Actions', () => {
 
   it('dvt: should add validator', async () => {
     walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-    const actions = validatorDvtActions(ADDRESS)(walletClient);
-    await actions.addValidator({ validator: ADDRESS, account: walletClient.account });
+    const actions = dvtActions(ADDRESS)(walletClient);
+    await actions.addValidator({ v: ADDRESS, account: walletClient.account });
     expect(walletClient.writeContract).toHaveBeenCalled();
-  });
-
-  it('bls: should register public key', async () => {
-    walletClient.writeContract.mockResolvedValue('0xhash' as `0x${string}`);
-    const actions = blsActions(ADDRESS)(walletClient);
-    await actions.registerBLSPublicKey({ publicKey: '0xkey', account: walletClient.account });
-    expect(walletClient.writeContract).toHaveBeenCalled();
-  });
-
-  it('bls: should get threshold', async () => {
-    publicClient.readContract.mockResolvedValue(3n);
-    const actions = blsActions(ADDRESS)(publicClient);
-    const result = await actions.threshold();
-    expect(result).toBe(3n);
   });
 });

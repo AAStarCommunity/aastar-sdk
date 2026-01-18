@@ -1,38 +1,46 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { RegistryABI } from '../abis/index.js';
-import type { RoleConfig } from '../roles.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
+export type RoleConfigDetailed = {
+    minStake: bigint;
+    entryBurn: bigint;
+    slashThreshold: number;
+    slashBase: number;
+    slashInc: number;
+    slashMax: number;
+    exitFeePercent: number;
+    isActive: boolean;
+    minExitFee: bigint;
+    description: string;
+    owner: Address;
+    roleLockDuration: bigint;
+};
+
 export type RegistryActions = {
     // Role Management
-    configureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
+    configureRole: (args: { roleId: Hex, config: RoleConfigDetailed, account?: Account | Address }) => Promise<Hash>;
+    adminConfigureRole: (args: { roleId: Hex, minStake: bigint, entryBurn: bigint, exitFeePercent: bigint, minExitFee: bigint, account?: Account | Address }) => Promise<Hash>;
+    createNewRole: (args: { roleId: Hex, config: RoleConfigDetailed, roleOwner: Address, account?: Account | Address }) => Promise<Hash>;
     registerRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
     registerRoleSelf: (args: { roleId: Hex, data: Hex, account?: Account | Address }) => Promise<Hash>;
-    hasRole: (args: { user: Address, roleId: Hex }) => Promise<boolean>;
-    unRegisterRole: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
-    getRoleConfig: (args: { roleId: Hex }) => Promise<any>;
+    safeMintForRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
+    hasRole: (args: { roleId: Hex, user: Address }) => Promise<boolean>;
+    getRoleConfig: (args: { roleId: Hex }) => Promise<RoleConfigDetailed>;
     setRoleLockDuration: (args: { roleId: Hex, duration: bigint, account?: Account | Address }) => Promise<Hash>;
     setRoleOwner: (args: { roleId: Hex, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    exitRole: (args: { roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     
     // Community Management
-    communityToToken: (args: { community: Address }) => Promise<Address>;
-    getCommunityRoleData: (args: { community: Address }) => Promise<any>;
-    isCommunityMember: (args: { community: Address, user: Address }) => Promise<boolean>;
-    communityByNameV3: (args: { name: string }) => Promise<Address>;
-    communityByENSV3: (args: { ensName: string }) => Promise<Address>;
-    proposedRoleNames: (args: { roleId: Hex }) => Promise<string>;
+    communityByName: (args: { name: string }) => Promise<Address>;
+    communityByENS: (args: { ensName: string }) => Promise<Address>;
     
     // Credit & Reputation
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
-    getGlobalReputation: (args: { user: Address }) => Promise<bigint>;
-    setCreditTier: (args: { tier: bigint, params: any, account?: Account | Address }) => Promise<Hash>;
-    setLevelThreshold: (args: { level: bigint, threshold: bigint, account?: Account | Address }) => Promise<Hash>;
-    batchUpdateGlobalReputation: (args: { users: Address[], scores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
-    
-    // Blacklist Management
-    updateOperatorBlacklist: (args: { operator: Address, isBlacklisted: boolean, account?: Account | Address }) => Promise<Hash>;
-    isOperatorBlacklisted: (args: { operator: Address }) => Promise<boolean>;
+    globalReputation: (args: { user: Address }) => Promise<bigint>;
+    addLevelThreshold: (args: { threshold: bigint, account?: Account | Address }) => Promise<Hash>;
+    batchUpdateGlobalReputation: (args: { proposalId: bigint, users: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     
     // Contract References
     setBLSValidator: (args: { validator: Address, account?: Account | Address }) => Promise<Hash>;
@@ -41,49 +49,31 @@ export type RegistryActions = {
     setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     setStaking: (args: { staking: Address, account?: Account | Address }) => Promise<Hash>;
     setReputationSource: (args: { source: Address, account?: Account | Address }) => Promise<Hash>;
+    
     blsValidator: () => Promise<Address>;
     blsAggregator: () => Promise<Address>;
-    mySBT: () => Promise<Address>;
-    superPaymaster: () => Promise<Address>;
-    staking: () => Promise<Address>;
+    MYSBT: () => Promise<Address>;
+    SUPER_PAYMASTER: () => Promise<Address>;
+    GTOKEN_STAKING: () => Promise<Address>;
     reputationSource: () => Promise<Address>;
-    
-    // Admin
-    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    owner: () => Promise<Address>;
-    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
+    isReputationSource: (args: { source: Address }) => Promise<boolean>;
+    lastReputationEpoch: (args: { user: Address }) => Promise<bigint>;
     
     // View Functions
-    roleConfigs: (args: { roleId: Hex }) => Promise<any>;
-    roleCounts: (args: { roleId: Hex }) => Promise<bigint>;
-    getRoleMemberCount: (args: { roleId: Hex }) => Promise<bigint>; // Alias for getRoleUserCount
+    roleConfigs: (args: { roleId: Hex }) => Promise<RoleConfigDetailed>;
+    getRoleUserCount: (args: { roleId: Hex }) => Promise<bigint>;
+    getRoleMembers: (args: { roleId: Hex }) => Promise<Address[]>;
+    getUserRoles: (args: { user: Address }) => Promise<Hex[]>;
     roleMembers: (args: { roleId: Hex, index: bigint }) => Promise<Address>;
     userRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
     userRoleCount: (args: { user: Address }) => Promise<bigint>;
-    globalReputation: (args: { user: Address }) => Promise<bigint>;
-    creditTiers: (args: { tier: bigint }) => Promise<any>;
-    levelThresholds: (args: { level: bigint }) => Promise<bigint>;
-    
-    // Role Metadata & Members
-    roleLockDurations: (args: { roleId: Hex }) => Promise<bigint>;
-    roleMetadata: (args: { roleId: Hex }) => Promise<any>;
-    roleStakes: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
-    roleSBTTokenIds: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
-    roleOwners: (args: { roleId: Hex }) => Promise<Address>;
-    roleMemberIndex: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
-    getRoleMembers: (args: { roleId: Hex }) => Promise<Address[]>;
-    getRoleUserCount: (args: { roleId: Hex }) => Promise<bigint>;
-    getUserRoles: (args: { user: Address }) => Promise<Hex[]>;
-    
-    // Admin Operations
-    adminConfigureRole: (args: { roleId: Hex, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
-    createNewRole: (args: { name: string, config: RoleConfig, account?: Account | Address }) => Promise<Hash>;
-    safeMintForRole: (args: { roleId: Hex, to: Address, tokenURI: string, account?: Account | Address }) => Promise<Hash>;
-    exitRole: (args: { roleId: Hex, account?: Account | Address }) => Promise<Hash>;
-    calculateExitFee: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
-    addLevelThreshold: (args: { level: bigint, threshold: bigint, account?: Account | Address }) => Promise<Hash>;
-    creditTierConfig: (args: { tier: bigint }) => Promise<any>;
+    creditTierConfig: (args: { tierIndex: bigint }) => Promise<bigint>;
+    levelThresholds: (args: { levelIndex: bigint }) => Promise<bigint>;
+    calculateExitFee: (args: { roleId: Hex, amount: bigint }) => Promise<bigint>;
     accountToUser: (args: { account: Address }) => Promise<Address>;
+    roleOwners: (args: { roleId: Hex }) => Promise<Address>;
+    roleStakes: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
+    roleLockDurations: (args: { roleId: Hex }) => Promise<bigint>;
     
     // Constants (Role IDs)
     ROLE_COMMUNITY: () => Promise<Hex>;
@@ -93,11 +83,11 @@ export type RegistryActions = {
     ROLE_DVT: () => Promise<Hex>;
     ROLE_KMS: () => Promise<Hex>;
     ROLE_ANODE: () => Promise<Hex>;
-    GTOKEN_STAKING: () => Promise<Address>;
-    MYSBT: () => Promise<Address>;
-    SUPER_PAYMASTER: () => Promise<Address>;
-    isReputationSource: (args: { source: Address }) => Promise<boolean>;
-    lastReputationEpoch: () => Promise<bigint>;
+    
+    // Ownership
+    owner: () => Promise<Address>;
+    transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // Version
     version: () => Promise<string>;
@@ -119,6 +109,40 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'configureRole');
+        }
+    },
+
+    async adminConfigureRole({ roleId, minStake, entryBurn, exitFeePercent, minExitFee, account }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'adminConfigureRole',
+                args: [roleId, minStake, entryBurn, exitFeePercent, minExitFee],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'adminConfigureRole');
+        }
+    },
+
+    async createNewRole({ roleId, config, roleOwner, account }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            validateRequired(config, 'config');
+            validateAddress(roleOwner, 'roleOwner');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'createNewRole',
+                args: [roleId, config, roleOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createNewRole');
         }
     },
 
@@ -155,10 +179,27 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async hasRole({ user, roleId }) {
+    async safeMintForRole({ roleId, user, data, account }) {
         try {
-            validateAddress(user, 'user');
             validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'safeMintForRole',
+                args: [roleId, user, data],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'safeMintForRole');
+        }
+    },
+
+    async hasRole({ roleId, user }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
@@ -170,32 +211,33 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async unRegisterRole({ user, roleId, account }) {
-        try {
-            validateAddress(user, 'user');
-            validateRequired(roleId, 'roleId');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'unregisterRole',
-                args: [user, roleId],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'unRegisterRole');
-        }
-    },
-
     async getRoleConfig({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
+            const result = await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
                 functionName: 'getRoleConfig',
                 args: [roleId]
-            });
+            }) as any;
+            
+            if (Array.isArray(result)) {
+                return {
+                    minStake: result[0],
+                    entryBurn: result[1],
+                    slashThreshold: result[2],
+                    slashBase: result[3],
+                    slashInc: result[4],
+                    slashMax: result[5],
+                    exitFeePercent: result[6],
+                    isActive: result[7],
+                    minExitFee: result[8],
+                    description: result[9],
+                    owner: result[10],
+                    roleLockDuration: result[11]
+                };
+            }
+            return result as RoleConfigDetailed;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getRoleConfig');
         }
@@ -204,6 +246,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     async setRoleLockDuration({ roleId, duration, account }) {
         try {
             validateRequired(roleId, 'roleId');
+            validateRequired(duration, 'duration');
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
@@ -234,42 +277,49 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    // Community Management
-    async communityToToken({ community }) {
+    async exitRole({ roleId, account }) {
         try {
-            validateAddress(community, 'community');
-            return await (client as PublicClient).readContract({
+            validateRequired(roleId, 'roleId');
+            return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'communityToToken',
-                args: [community]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'communityToToken');
-        }
-    },
-
-    async getCommunityRoleData({ community }) {
-        try {
-            validateAddress(community, 'community');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'getCommunityRoleData',
-                args: [community]
+                functionName: 'exitRole',
+                args: [roleId],
+                account: account as any,
+                chain: (client as any).chain
             });
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getCommunityRoleData');
+            throw AAStarError.fromViemError(error as Error, 'exitRole');
         }
     },
 
-    async isCommunityMember({ community, user }) {
-        // Implementation: Check if user has the community role
-        // In the AAStar system, a community member is identified by having a specific role
-        // We need to check if the user has a role associated with this community
-        // For now, we check if user has ROLE_ENDUSER which indicates general membership
-        const ROLE_ENDUSER = await this.ROLE_ENDUSER();
-        return this.hasRole({ user, roleId: ROLE_ENDUSER });
+    // Community Management
+    async communityByName({ name }) {
+        try {
+            validateRequired(name, 'name');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'communityByName',
+                args: [name]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityByName');
+        }
+    },
+
+    async communityByENS({ ensName }) {
+        try {
+            validateRequired(ensName, 'ensName');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'communityByENS',
+                args: [ensName]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'communityByENS');
+        }
     },
 
     // Credit & Reputation
@@ -287,7 +337,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async getGlobalReputation({ user }) {
+    async globalReputation({ user }) {
         try {
             validateAddress(user, 'user');
             return await (client as PublicClient).readContract({
@@ -301,83 +351,39 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async setCreditTier({ tier, params, account }) {
+    async addLevelThreshold({ threshold, account }) {
         try {
-            validateAmount(tier, 'tier');
+            validateAmount(threshold, 'threshold');
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'setCreditTier',
-                args: [tier, params],
+                functionName: 'addLevelThreshold',
+                args: [threshold],
                 account: account as any,
                 chain: (client as any).chain
             });
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setCreditTier');
+            throw AAStarError.fromViemError(error as Error, 'addLevelThreshold');
         }
     },
 
-    async setLevelThreshold({ level, threshold, account }) {
+    async batchUpdateGlobalReputation({ proposalId, users, newScores, epoch, proof, account }) {
         try {
-            validateAmount(level, 'level');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'setLevelThreshold',
-                args: [level, threshold],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setLevelThreshold');
-        }
-    },
-
-    async batchUpdateGlobalReputation({ users, scores, epoch, proof, account }) {
-        try {
+            validateAmount(proposalId, 'proposalId');
             validateRequired(users, 'users');
-            validateRequired(scores, 'scores');
+            validateRequired(newScores, 'newScores');
+            validateAmount(epoch, 'epoch');
+            validateRequired(proof, 'proof');
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
                 functionName: 'batchUpdateGlobalReputation',
-                args: [users, scores, epoch, proof],
+                args: [proposalId, users, newScores, epoch, proof],
                 account: account as any,
                 chain: (client as any).chain
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'batchUpdateGlobalReputation');
-        }
-    },
-
-    // Blacklist Management
-    async updateOperatorBlacklist({ operator, isBlacklisted, account }) {
-        try {
-            validateAddress(operator, 'operator');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'updateOperatorBlacklist',
-                args: [operator, isBlacklisted],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'updateOperatorBlacklist');
-        }
-    },
-
-    async isOperatorBlacklisted({ operator }) {
-        try {
-            validateAddress(operator, 'operator');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'isOperatorBlacklisted',
-                args: [operator]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'isOperatorBlacklisted');
         }
     },
 
@@ -504,7 +510,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async mySBT() {
+    async MYSBT() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -513,11 +519,11 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
                 args: []
             }) as Promise<Address>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'mySBT');
+            throw AAStarError.fromViemError(error as Error, 'MYSBT');
         }
     },
 
-    async superPaymaster() {
+    async SUPER_PAYMASTER() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -526,11 +532,11 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
                 args: []
             }) as Promise<Address>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'superPaymaster');
+            throw AAStarError.fromViemError(error as Error, 'SUPER_PAYMASTER');
         }
     },
 
-    async staking() {
+    async GTOKEN_STAKING() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -539,7 +545,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
                 args: []
             }) as Promise<Address>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'staking');
+            throw AAStarError.fromViemError(error as Error, 'GTOKEN_STAKING');
         }
     },
 
@@ -556,48 +562,31 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    // Admin
-    async transferOwnership({ newOwner, account }) {
+    async isReputationSource({ source }) {
         try {
-            validateAddress(newOwner, 'newOwner');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'transferOwnership',
-                args: [newOwner],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
-        }
-    },
-
-    async owner() {
-        try {
+            validateAddress(source, 'source');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'owner',
-                args: []
-            }) as Promise<Address>;
+                functionName: 'isReputationSource',
+                args: [source]
+            }) as Promise<boolean>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'owner');
+            throw AAStarError.fromViemError(error as Error, 'isReputationSource');
         }
     },
 
-    async renounceOwnership({ account }) {
+    async lastReputationEpoch({ user }) {
         try {
-            return await (client as any).writeContract({
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'renounceOwnership',
-                args: [],
-                account: account as any,
-                chain: (client as any).chain
-            });
+                functionName: 'lastReputationEpoch',
+                args: [user]
+            }) as Promise<bigint>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+            throw AAStarError.fromViemError(error as Error, 'lastReputationEpoch');
         }
     },
 
@@ -605,33 +594,36 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     async roleConfigs({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
+            const result = await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
                 functionName: 'roleConfigs',
                 args: [roleId]
-            });
+            }) as any;
+
+            if (Array.isArray(result)) {
+                return {
+                    minStake: result[0],
+                    entryBurn: result[1],
+                    slashThreshold: result[2],
+                    slashBase: result[3],
+                    slashInc: result[4],
+                    slashMax: result[5],
+                    exitFeePercent: result[6],
+                    isActive: result[7],
+                    minExitFee: result[8],
+                    description: result[9],
+                    owner: result[10],
+                    roleLockDuration: result[11]
+                };
+            }
+            return result as RoleConfigDetailed;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'roleConfigs');
         }
     },
 
-    async roleCounts({ roleId }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleCounts',
-                args: [roleId]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleCounts');
-        }
-    },
-
-    // Alias: getRoleMemberCount maps to contract's getRoleUserCount
-    async getRoleMemberCount({ roleId }) {
+    async getRoleUserCount({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
             return await (client as PublicClient).readContract({
@@ -641,13 +633,42 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
                 args: [roleId]
             }) as Promise<bigint>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getRoleMemberCount');
+            throw AAStarError.fromViemError(error as Error, 'getRoleUserCount');
+        }
+    },
+
+    async getRoleMembers({ roleId }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getRoleMembers',
+                args: [roleId]
+            }) as Promise<Address[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleMembers');
+        }
+    },
+
+    async getUserRoles({ user }) {
+        try {
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getUserRoles',
+                args: [user]
+            }) as Promise<Hex[]>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getUserRoles');
         }
     },
 
     async roleMembers({ roleId, index }) {
         try {
             validateRequired(roleId, 'roleId');
+            validateRequired(index, 'index');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
@@ -662,6 +683,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     async userRoles({ user, index }) {
         try {
             validateAddress(user, 'user');
+            validateRequired(index, 'index');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
@@ -687,117 +709,74 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async globalReputation({ user }) {
+    async creditTierConfig({ tierIndex }) {
         try {
-            validateAddress(user, 'user');
+            validateAmount(tierIndex, 'tierIndex');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'globalReputation',
-                args: [user]
+                functionName: 'creditTierConfig',
+                args: [tierIndex]
             }) as Promise<bigint>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'globalReputation');
+            throw AAStarError.fromViemError(error as Error, 'creditTierConfig');
         }
     },
 
-    async creditTiers({ tier }) {
+    async levelThresholds({ levelIndex }) {
         try {
-            validateAmount(tier, 'tier');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'creditTiers',
-                args: [tier]
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'creditTiers');
-        }
-    },
-
-    async levelThresholds({ level }) {
-        try {
-            validateAmount(level, 'level');
+            validateAmount(levelIndex, 'levelIndex');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
                 functionName: 'levelThresholds',
-                args: [level]
+                args: [levelIndex]
             }) as Promise<bigint>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'levelThresholds');
         }
     },
 
-    // Community lookup functions
-    async communityByNameV3({ name }) {
-        try {
-            validateRequired(name, 'name');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'communityByNameV3',
-                args: [name]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'communityByNameV3');
-        }
-    },
-
-    async communityByENSV3({ ensName }) {
-        try {
-            validateRequired(ensName, 'ensName');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'communityByENSV3',
-                args: [ensName]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'communityByENSV3');
-        }
-    },
-
-    async proposedRoleNames({ roleId }) {
+    async calculateExitFee({ roleId, amount }) {
         try {
             validateRequired(roleId, 'roleId');
+            validateAmount(amount, 'amount');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'proposedRoleNames',
-                args: [roleId]
-            }) as Promise<string>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'proposedRoleNames');
-        }
-    },
-
-    // Role Metadata & Members
-    async roleLockDurations({ roleId }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleLockDurations',
-                args: [roleId]
+                functionName: 'calculateExitFee',
+                args: [roleId, amount]
             }) as Promise<bigint>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleLockDurations');
+            throw AAStarError.fromViemError(error as Error, 'calculateExitFee');
         }
     },
 
-    async roleMetadata({ roleId }) {
+    async accountToUser({ account }) {
+        try {
+            validateAddress(account, 'account');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'accountToUser',
+                args: [account]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'accountToUser');
+        }
+    },
+
+    async roleOwners({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'roleMetadata',
+                functionName: 'roleOwners',
                 args: [roleId]
-            });
+            }) as Promise<Address>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleMetadata');
+            throw AAStarError.fromViemError(error as Error, 'roleOwners');
         }
     },
 
@@ -816,216 +795,17 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async roleSBTTokenIds({ roleId, user }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleSBTTokenIds',
-                args: [roleId, user]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleSBTTokenIds');
-        }
-    },
-
-    async roleOwners({ roleId }) {
+    async roleLockDurations({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'roleOwners',
-                args: [roleId]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleOwners');
-        }
-    },
-
-    async roleMemberIndex({ roleId, user }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleMemberIndex',
-                args: [roleId, user]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleMemberIndex');
-        }
-    },
-
-    async getRoleMembers({ roleId }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'getRoleMembers',
-                args: [roleId]
-            }) as Promise<Address[]>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getRoleMembers');
-        }
-    },
-
-    async getRoleUserCount({ roleId }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'getRoleUserCount',
+                functionName: 'roleLockDurations',
                 args: [roleId]
             }) as Promise<bigint>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getRoleUserCount');
-        }
-    },
-
-    async getUserRoles({ user }) {
-        try {
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'getUserRoles',
-                args: [user]
-            }) as Promise<Hex[]>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getUserRoles');
-        }
-    },
-
-    // Admin Operations
-    async adminConfigureRole({ roleId, config, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateRequired(config, 'config');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'adminConfigureRole',
-                args: [roleId, config],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'adminConfigureRole');
-        }
-    },
-
-    async createNewRole({ name, config, account }) {
-        try {
-            validateRequired(name, 'name');
-            validateRequired(config, 'config');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'createNewRole',
-                args: [name, config],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'createNewRole');
-        }
-    },
-
-    async safeMintForRole({ roleId, to, tokenURI, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(to, 'to');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'safeMintForRole',
-                args: [roleId, to, tokenURI],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'safeMintForRole');
-        }
-    },
-
-    async exitRole({ roleId, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'exitRole',
-                args: [roleId],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'exitRole');
-        }
-    },
-
-    async calculateExitFee({ user, roleId }) {
-        try {
-            validateAddress(user, 'user');
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'calculateExitFee',
-                args: [user, roleId]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'calculateExitFee');
-        }
-    },
-
-    async addLevelThreshold({ level, threshold, account }) {
-        try {
-            validateAmount(level, 'level');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'addLevelThreshold',
-                args: [level, threshold],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'addLevelThreshold');
-        }
-    },
-
-    async creditTierConfig({ tier }) {
-        try {
-            validateAmount(tier, 'tier');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'creditTierConfig',
-                args: [tier]
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'creditTierConfig');
-        }
-    },
-
-    async accountToUser({ account: userAccount }) {
-        try {
-            validateAddress(userAccount, 'account');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'accountToUser',
-                args: [userAccount]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'accountToUser');
+            throw AAStarError.fromViemError(error as Error, 'roleLockDurations');
         }
     },
 
@@ -1121,73 +901,51 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async GTOKEN_STAKING() {
+    // Ownership
+    async owner() {
         try {
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'GTOKEN_STAKING',
+                functionName: 'owner',
                 args: []
             }) as Promise<Address>;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'GTOKEN_STAKING');
+            throw AAStarError.fromViemError(error as Error, 'owner');
         }
     },
 
-    async MYSBT() {
+    async transferOwnership({ newOwner, account }) {
         try {
-            return await (client as PublicClient).readContract({
+            validateAddress(newOwner, 'newOwner');
+            return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'MYSBT',
-                args: []
-            }) as Promise<Address>;
+                functionName: 'transferOwnership',
+                args: [newOwner],
+                account: account as any,
+                chain: (client as any).chain
+            });
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'MYSBT');
+            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
         }
     },
 
-    async SUPER_PAYMASTER() {
+    async renounceOwnership({ account }) {
         try {
-            return await (client as PublicClient).readContract({
+            return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'SUPER_PAYMASTER',
-                args: []
-            }) as Promise<Address>;
+                functionName: 'renounceOwnership',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'SUPER_PAYMASTER');
+            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
         }
     },
 
-    async isReputationSource({ source }) {
-        try {
-            validateAddress(source, 'source');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'isReputationSource',
-                args: [source]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'isReputationSource');
-        }
-    },
-
-    async lastReputationEpoch() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'lastReputationEpoch',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'lastReputationEpoch');
-        }
-    },
-
-    // Version
     async version() {
         try {
             return await (client as PublicClient).readContract({

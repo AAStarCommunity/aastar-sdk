@@ -1,25 +1,28 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, encodeFunctionData, concat, type Hex, decodeErrorResult } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.ts';
+import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
 import { loadNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
-dotenv.config({ path: '.env.sepolia' });
+// dotenv loaded by loadNetworkConfig
 
 async function main() {
-    const config = await loadNetworkConfig('sepolia');
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = await loadNetworkConfig(networkName);
     const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
     
     // 1. Roles & Accounts
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
     const jasonAccount = privateKeyToAccount(process.env.PRIVATE_KEY_JASON as `0x${string}`);
     
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
-    const anniWallet = createWalletClient({ account: anniAccount, chain: sepolia, transport: http(rpcUrl) });
-    const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(rpcUrl) });
+    const publicClient = createPublicClient({ chain: config.chain, transport: http(rpcUrl) });
+    const anniWallet = createWalletClient({ account: anniAccount, chain: config.chain, transport: http(rpcUrl) });
+    const jasonWallet = createWalletClient({ account: jasonAccount, chain: config.chain, transport: http(rpcUrl) });
 
     // Load AA addresses from l4-state.json
     const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
@@ -136,7 +139,7 @@ async function main() {
 
         let receipt = null;
         for (let i = 0; i < 20; i++) {
-            const res = await fetch(process.env.BUNDLER_URL!, {
+            const res = await fetch(config.bundlerUrl!, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -167,4 +170,7 @@ async function main() {
     }
 }
 
-main().catch(console.error);
+main().catch(e => {
+    console.error(e);
+    process.exit(1);
+});

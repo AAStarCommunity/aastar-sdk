@@ -216,10 +216,6 @@ export class PaymasterOperatorClient extends BaseClient {
                 paymasterAddress = await factory(publicClient).getPaymaster({ owner: accountAddr });
             }
             
-            await (publicClient as any).waitForTransactionReceipt({ hash: deployHash });
-            
-            paymasterAddress = await factory(publicClient).getPaymaster({ owner: accountAddr });
-            
             if (!paymasterAddress || paymasterAddress === '0x0000000000000000000000000000000000000000') {
                  throw new Error('Failed to retrieve Paymaster address from Factory');
             }

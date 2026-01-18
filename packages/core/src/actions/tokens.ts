@@ -3,925 +3,479 @@ import { GTokenABI, xPNTsTokenABI } from '../abis/index.js';
 import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
-// Universal Token Actions for GToken, aPNTs, xPNTs
-export type TokenActions = {
-    // ERC20 Standard (all tokens)
+// ERC20 Standard Actions
+export type ERC20Actions = {
     totalSupply: (args: { token: Address }) => Promise<bigint>;
     balanceOf: (args: { token: Address, account: Address }) => Promise<bigint>;
     transfer: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     transferFrom: (args: { token: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     approve: (args: { token: Address, spender: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     allowance: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
-    
-    // Mintable/Burnable
-    mint: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    burn: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    burnFrom: (args: { token: Address, from: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    
-    // ERC20 Metadata
     name: (args: { token: Address }) => Promise<string>;
     symbol: (args: { token: Address }) => Promise<string>;
     decimals: (args: { token: Address }) => Promise<number>;
-    
-    // Ownable
+};
+
+// GToken Actions (extends ERC20)
+export type GTokenActions = ERC20Actions & {
+    mint: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    burn: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    burnFrom: (args: { token: Address, from: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    cap: (args: { token: Address }) => Promise<bigint>;
+    remainingMintableSupply: (args: { token: Address }) => Promise<bigint>;
+    version: (args: { token: Address }) => Promise<string>;
     owner: (args: { token: Address }) => Promise<Address>;
     transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
-    
-    // xPNTs/aPNTs specific
-    exchangeRate: (args: { token: Address }) => Promise<bigint>;
-    debts: (args: { token: Address, user: Address }) => Promise<bigint>;
-    recordDebt: (args: { token: Address, user: Address, amountXPNTs: bigint, account?: Account | Address }) => Promise<Hash>;
+};
+
+// XPNTsToken Actions (extends ERC20 + aPNTs features + Spending Limits)
+export type XPNTsTokenActions = ERC20Actions & {
+    // Mint/Burn
+    mint: (args: { token: Address, to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    burn: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    burnFrom: (args: { token: Address, from: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     burnFromWithOpHash: (args: { token: Address, from: Address, amount: bigint, userOpHash: Hex, account?: Account | Address }) => Promise<Hash>;
-    usedOpHashes: (args: { token: Address, opHash: Hex }) => Promise<boolean>;
-    communityOwner: (args: { token: Address }) => Promise<Address>;
-    transferCommunityOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
-    setSuperPaymasterAddress: (args: { token: Address, spAddress: Address, account?: Account | Address }) => Promise<Hash>;
-    updateExchangeRate: (args: { token: Address, newRate: bigint, account?: Account | Address }) => Promise<Hash>;
-    getDebt: (args: { token: Address, user: Address }) => Promise<bigint>;
-    repayDebt: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    transferAndCall: (args: { token: Address, to: Address, amount: bigint, data?: Hex, account?: Account | Address }) => Promise<Hash>;
     
-    // xPNTsToken - Spending Limits
+    // aPNTs features
+    exchangeRate: (args: { token: Address }) => Promise<bigint>;
+    updateExchangeRate: (args: { token: Address, newRate: bigint, account?: Account | Address }) => Promise<Hash>;
+    debts: (args: { token: Address, user: Address }) => Promise<bigint>;
+    getDebt: (args: { token: Address, user: Address }) => Promise<bigint>;
+    recordDebt: (args: { token: Address, user: Address, amountXPNTs: bigint, account?: Account | Address }) => Promise<Hash>;
+    repayDebt: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    
+    // Spending Limits
     spendingLimits: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
     cumulativeSpent: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
     setPaymasterLimit: (args: { token: Address, spender: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
     DEFAULT_SPENDING_LIMIT_APNTS: (args: { token: Address }) => Promise<bigint>;
     getDefaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
+    needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
     
-    // Community Metadata
-    communityENS: (args: { token: Address }) => Promise<string>;
-    communityName: (args: { token: Address }) => Promise<string>;
-    getMetadata: (args: { token: Address }) => Promise<{ name: string, symbol: string, ens: string, logo: string, owner: Address }>;
-    version: (args: { token: Address }) => Promise<string>;
+    // Auto Approval
+    addAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
+    removeAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
+    autoApprovedSpenders: (args: { token: Address, spender: Address }) => Promise<boolean>;
     
     // EIP-712 / EIP-2612
     DOMAIN_SEPARATOR: (args: { token: Address }) => Promise<Hex>;
     nonces: (args: { token: Address, owner: Address }) => Promise<bigint>;
-    autoApprovedSpenders: (args: { token: Address, spender: Address }) => Promise<boolean>;
-    needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
-    eip712Domain: (args: { token: Address }) => Promise<any>;
     permit: (args: { token: Address, owner: Address, spender: Address, value: bigint, deadline: bigint, v: number, r: Hex, s: Hex, account?: Account | Address }) => Promise<Hash>;
+    eip712Domain: (args: { token: Address }) => Promise<any>;
     
-    // aPNTs/xPNTs - Auto Approval
-    addAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
-    removeAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
-    isAutoApprovedSpender: (args: { token: Address, spender: Address }) => Promise<boolean>;
+    // ERC677
+    transferAndCall: (args: { token: Address, to: Address, amount: bigint, data?: Hex, account?: Account | Address }) => Promise<Hash>;
     
-    // Constants (aPNTs/xPNTs)
+    // Metadata & Config
+    communityENS: (args: { token: Address }) => Promise<string>;
+    communityName: (args: { token: Address }) => Promise<string>;
+    communityOwner: (args: { token: Address }) => Promise<Address>;
+    getMetadata: (args: { token: Address }) => Promise<{ name: string, symbol: string, communityName: string, communityENS: string, communityOwner: Address }>;
+    transferCommunityOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    setSuperPaymasterAddress: (args: { token: Address, spAddress: Address, account?: Account | Address }) => Promise<Hash>;
     SUPERPAYMASTER_ADDRESS: (args: { token: Address }) => Promise<Address>;
     FACTORY: (args: { token: Address }) => Promise<Address>;
+    version: (args: { token: Address }) => Promise<string>;
+    usedOpHashes: (args: { token: Address, opHash: Hex }) => Promise<boolean>;
 };
 
-function getTokenABI(token: Address): any {
-    // Auto-detect ABI based on token type or use generic xPNTsTokenABI
-    return xPNTsTokenABI;
-}
+// Unified TokenActions (deprecated legacy support)
+export type TokenActions = GTokenActions & XPNTsTokenActions;
 
-export const gTokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
-    // Use GTokenABI for everything
-    ...tokenActions()(client),
-    async totalSupply({ token }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'totalSupply', args: [] }) as Promise<bigint>;
-    },
-    async balanceOf({ token, account }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'balanceOf', args: [account] }) as Promise<bigint>;
-    },
-    async transfer({ token, to, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(to, 'to');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transfer');
-        }
-    },
-    async transferFrom({ token, from, to, amount, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferFrom', args: [from, to, amount], account: account as any, chain: (client as any).chain });
-    },
-    async approve({ token, spender, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spender, 'spender');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'approve');
-        }
-    },
-    async allowance({ token, owner, spender }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'allowance', args: [owner, spender] }) as Promise<bigint>;
-    },
-    async mint({ token, to, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(to, 'to');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'mint');
-        }
-    },
-    async burn({ token, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'burn');
-        }
-    },
-    async burnFrom({ token, from, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(from, 'from');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'burnFrom', args: [from, amount], account: account as any, chain: (client as any).chain });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'burnFrom');
-        }
-    },
-    async name({ token }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'name', args: [] }) as Promise<string>;
-    },
-    async symbol({ token }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'symbol', args: [] }) as Promise<string>;
-    },
-    async decimals({ token }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'decimals', args: [] }) as Promise<number>;
-    },
-    async owner({ token }) {
-        return (client as PublicClient).readContract({ address: token, abi: GTokenABI, functionName: 'owner', args: [] }) as Promise<Address>;
-    },
-    async transferOwnership({ token, newOwner, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'transferOwnership', args: [newOwner], account: account as any, chain: (client as any).chain });
-    },
-    async renounceOwnership({ token, account }) {
-        return (client as any).writeContract({ address: token, abi: GTokenABI, functionName: 'renounceOwnership', args: [], account: account as any, chain: (client as any).chain });
-    },
-});
-
-export const tokenActions = () => (client: PublicClient | WalletClient): TokenActions => ({
-    // ERC20 Standard
-    async totalSupply({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'totalSupply',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'totalSupply');
-        }
-    },
-
-    async balanceOf({ token, account }) {
-        try {
-            validateAddress(token, 'token');
+export const gTokenActions = (address?: Address) => (client: PublicClient | WalletClient): GTokenActions => {
+    const abi = GTokenABI;
+    const actions = {
+        async totalSupply({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'totalSupply', args: [] }) as Promise<bigint>;
+        },
+        async balanceOf({ token = address, account }: { token?: Address, account: Address }) {
+            validateAddress(token!, 'token');
             validateAddress(account, 'account');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'balanceOf',
-                args: [account]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'balanceOf');
-        }
-    },
-
-    async transfer({ token, to, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(to, 'to');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'transfer',
-                args: [to, amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transfer');
-        }
-    },
-
-    async transferFrom({ token, from, to, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(from, 'from');
-            validateAddress(to, 'to');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'transferFrom',
-                args: [from, to, amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transferFrom');
-        }
-    },
-
-    async approve({ token, spender, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spender, 'spender');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'approve',
-                args: [spender, amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'approve');
-        }
-    },
-
-    async allowance({ token, owner, spender }) {
-        try {
-            validateAddress(token, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'balanceOf', args: [account] }) as Promise<bigint>;
+        },
+        async transfer({ token = address, to, amount, account }: { token?: Address, to: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transfer'); }
+        },
+        async transferFrom({ token = address, from, to, amount, account }: { token?: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(from, 'from');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transferFrom', args: [from, to, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transferFrom'); }
+        },
+        async approve({ token = address, spender, amount, account }: { token?: Address, spender: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spender, 'spender');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'approve'); }
+        },
+        async allowance({ token = address, owner, spender }: { token?: Address, owner: Address, spender: Address }) {
+            validateAddress(token!, 'token');
             validateAddress(owner, 'owner');
             validateAddress(spender, 'spender');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'allowance',
-                args: [owner, spender]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'allowance');
-        }
-    },
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'allowance', args: [owner, spender] }) as Promise<bigint>;
+        },
+        async mint({ token = address, to, amount, account }: { token?: Address, to: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'mint'); }
+        },
+        async burn({ token = address, amount, account }: { token?: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'burn'); }
+        },
+        async burnFrom({ token = address, from, amount, account }: { token?: Address, from: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(from, 'from');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'burnFrom', args: [from, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'burnFrom'); }
+        },
+        async cap({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'cap', args: [] }) as Promise<bigint>;
+        },
+        async remainingMintableSupply({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'remainingMintableSupply', args: [] }) as Promise<bigint>;
+        },
+        async name({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'name', args: [] }) as Promise<string>;
+        },
+        async symbol({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'symbol', args: [] }) as Promise<string>;
+        },
+        async decimals({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'decimals', args: [] }) as Promise<number>;
+        },
+        async version({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'version', args: [] }) as Promise<string>;
+        },
+        async owner({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'owner', args: [] }) as Promise<Address>;
+        },
+        async transferOwnership({ token = address, newOwner, account }: { token?: Address, newOwner: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(newOwner, 'newOwner');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transferOwnership', args: [newOwner], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transferOwnership'); }
+        },
+        async renounceOwnership({ token = address, account }: { token?: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'renounceOwnership', args: [], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'renounceOwnership'); }
+        },
+    };
+    return actions as GTokenActions;
+};
 
-    // Mintable/Burnable
-    async mint({ token, to, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(to, 'to');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'mint',
-                args: [to, amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'mint');
-        }
-    },
-
-    async burn({ token, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'burn',
-                args: [amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'burn');
-        }
-    },
-
-    async burnFrom({ token, from, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(from, 'from');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'burnFrom',
-                args: [from, amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'burnFrom');
-        }
-    },
-
-    // ERC20 Metadata
-    async name({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'name',
-                args: []
-            }) as Promise<string>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'name');
-        }
-    },
-
-    async symbol({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'symbol',
-                args: []
-            }) as Promise<string>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'symbol');
-        }
-    },
-
-    async decimals({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'decimals',
-                args: []
-            }) as Promise<number>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'decimals');
-        }
-    },
-
-    // Ownable
-    async owner({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'owner',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'owner');
-        }
-    },
-
-    async transferOwnership({ token, newOwner, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(newOwner, 'newOwner');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'transferOwnership',
-                args: [newOwner],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
-        }
-    },
-
-    async renounceOwnership({ token, account }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'renounceOwnership',
-                args: [],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
-        }
-    },
-
-    // xPNTs/aPNTs specific
-    async exchangeRate({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'exchangeRate',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'exchangeRate');
-        }
-    },
-
-    async debts({ token, user }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'debts',
-                args: [user]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'debts');
-        }
-    },
-
-    async recordDebt({ token, user, amountXPNTs, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(user, 'user');
-            validateAmount(amountXPNTs, 'amountXPNTs');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'recordDebt',
-                args: [user, amountXPNTs],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'recordDebt');
-        }
-    },
-
-    async repayDebt({ token, amount, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'repayDebt',
-                args: [amount],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'repayDebt');
-        }
-    },
-
-    async transferAndCall({ token, to, amount, data = '0x', account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(to, 'to');
-            validateAmount(amount, 'amount');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'transferAndCall',
-                args: [to, amount, data],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transferAndCall');
-        }
-    },
-
-    async updateExchangeRate({ token, newRate, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAmount(newRate, 'newRate');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'updateExchangeRate',
-                args: [newRate],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'updateExchangeRate');
-        }
-    },
-
-    async getDebt({ token, user }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'getDebt',
-                args: [user]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getDebt');
-        }
-    },
-
-
-
-    async burnFromWithOpHash({ token, from, amount, userOpHash, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(from, 'from');
-            validateAmount(amount, 'amount');
-            validateRequired(userOpHash, 'userOpHash');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'burnFromWithOpHash',
-                args: [from, amount, userOpHash],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'burnFromWithOpHash');
-        }
-    },
-
-    async usedOpHashes({ token, opHash }) {
-        try {
-            validateAddress(token, 'token');
-            validateRequired(opHash, 'opHash');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'usedOpHashes',
-                args: [opHash]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'usedOpHashes');
-        }
-    },
-
-    async communityOwner({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'communityOwner',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'communityOwner');
-        }
-    },
-
-    async transferCommunityOwnership({ token, newOwner, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(newOwner, 'newOwner');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'transferCommunityOwnership',
-                args: [newOwner],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transferCommunityOwnership');
-        }
-    },
-
-    async setSuperPaymasterAddress({ token, spAddress, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spAddress, 'spAddress');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'setSuperPaymasterAddress',
-                args: [spAddress],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setSuperPaymasterAddress');
-        }
-    },
-
-    // xPNTsToken - Spending Limits
-    async spendingLimits({ token, owner, spender }) {
-        try {
-            validateAddress(token, 'token');
+export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | WalletClient): XPNTsTokenActions => {
+    const abi = xPNTsTokenABI;
+    const actions = {
+        async totalSupply({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'totalSupply', args: [] }) as Promise<bigint>;
+        },
+        async balanceOf({ token = address, account }: { token?: Address, account: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(account, 'account');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'balanceOf', args: [account] }) as Promise<bigint>;
+        },
+        async transfer({ token = address, to, amount, account }: { token?: Address, to: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transfer', args: [to, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transfer'); }
+        },
+        async transferFrom({ token = address, from, to, amount, account }: { token?: Address, from: Address, to: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(from, 'from');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transferFrom', args: [from, to, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transferFrom'); }
+        },
+        async approve({ token = address, spender, amount, account }: { token?: Address, spender: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spender, 'spender');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'approve', args: [spender, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'approve'); }
+        },
+        async allowance({ token = address, owner, spender }: { token?: Address, owner: Address, spender: Address }) {
+            validateAddress(token!, 'token');
             validateAddress(owner, 'owner');
             validateAddress(spender, 'spender');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'spendingLimits',
-                args: [owner, spender]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'spendingLimits');
-        }
-    },
-
-    async cumulativeSpent({ token, owner, spender }) {
-        try {
-            validateAddress(token, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'allowance', args: [owner, spender] }) as Promise<bigint>;
+        },
+        async mint({ token = address, to, amount, account }: { token?: Address, to: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'mint', args: [to, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'mint'); }
+        },
+        async burn({ token = address, amount, account }: { token?: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'burn', args: [amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'burn'); }
+        },
+        async burnFrom({ token = address, from, amount, account }: { token?: Address, from: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(from, 'from');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'burn', args: [from, amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'burnFrom'); }
+        },
+        async burnFromWithOpHash({ token = address, from, amount, userOpHash, account }: { token?: Address, from: Address, amount: bigint, userOpHash: Hex, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(from, 'from');
+                validateAmount(amount, 'amount');
+                validateRequired(userOpHash, 'userOpHash');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'burnFromWithOpHash', args: [from, amount, userOpHash], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'burnFromWithOpHash'); }
+        },
+        async name({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'name', args: [] }) as Promise<string>;
+        },
+        async symbol({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'symbol', args: [] }) as Promise<string>;
+        },
+        async decimals({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'decimals', args: [] }) as Promise<number>;
+        },
+        async version({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'version', args: [] }) as Promise<string>;
+        },
+        async exchangeRate({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'exchangeRate', args: [] }) as Promise<bigint>;
+        },
+        async updateExchangeRate({ token = address, newRate, account }: { token?: Address, newRate: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAmount(newRate, 'newRate');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'updateExchangeRate', args: [newRate], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'updateExchangeRate'); }
+        },
+        async debts({ token = address, user }: { token?: Address, user: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({ 
+                address: token!, 
+                abi, 
+                functionName: 'debts', 
+                args: [user] 
+            }) as bigint;
+        },
+        async getDebt({ token = address, user }: { token?: Address, user: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(user, 'user');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'getDebt', args: [user] }) as Promise<bigint>;
+        },
+        async recordDebt({ token = address, user, amountXPNTs, account }: { token?: Address, user: Address, amountXPNTs: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(user, 'user');
+                validateAmount(amountXPNTs, 'amountXPNTs');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'recordDebt', args: [user, amountXPNTs], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'recordDebt'); }
+        },
+        async repayDebt({ token = address, amount, account }: { token?: Address, amount: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'repayDebt', args: [amount], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'repayDebt'); }
+        },
+        async spendingLimits({ token = address, owner, spender }: { token?: Address, owner: Address, spender: Address }) {
+            validateAddress(token!, 'token');
             validateAddress(owner, 'owner');
             validateAddress(spender, 'spender');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'cumulativeSpent',
-                args: [owner, spender]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'cumulativeSpent');
-        }
-    },
-
-    async setPaymasterLimit({ token, spender, limit, account }) {
-        try {
-            validateAddress(token, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'spendingLimits', args: [owner, spender] }) as Promise<bigint>;
+        },
+        async cumulativeSpent({ token = address, owner, spender }: { token?: Address, owner: Address, spender: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(owner, 'owner');
             validateAddress(spender, 'spender');
-            validateAmount(limit, 'limit');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'setPaymasterLimit',
-                args: [spender, limit],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setPaymasterLimit');
-        }
-    },
-
-    async DEFAULT_SPENDING_LIMIT_APNTS({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'DEFAULT_SPENDING_LIMIT_APNTS',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'DEFAULT_SPENDING_LIMIT_APNTS');
-        }
-    },
-
-    async getDefaultSpendingLimitXPNTs({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'getDefaultSpendingLimitXPNTs',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getDefaultSpendingLimitXPNTs');
-        }
-    },
-
-    // Community Metadata
-    async communityENS({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'communityENS',
-                args: []
-            }) as Promise<string>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'communityENS');
-        }
-    },
-
-    async communityName({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'communityName',
-                args: []
-            }) as Promise<string>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'communityName');
-        }
-    },
-
-    async getMetadata({ token }) {
-        try {
-            validateAddress(token, 'token');
-            const result = await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'getMetadata',
-                args: []
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'cumulativeSpent', args: [owner, spender] }) as Promise<bigint>;
+        },
+        async setPaymasterLimit({ token = address, spender, limit, account }: { token?: Address, spender: Address, limit: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spender, 'spender');
+                validateAmount(limit, 'limit');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'setPaymasterLimit', args: [spender, limit], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'setPaymasterLimit'); }
+        },
+        async DEFAULT_SPENDING_LIMIT_APNTS({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'DEFAULT_SPENDING_LIMIT_APNTS', args: [] }) as Promise<bigint>;
+        },
+        async getDefaultSpendingLimitXPNTs({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'getDefaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
+        },
+        async needsApproval({ token = address, owner, spender, amount }: { token?: Address, owner: Address, spender: Address, amount: bigint }) {
+            validateAddress(token!, 'token');
+            validateAddress(owner, 'owner');
+            validateAddress(spender, 'spender');
+            validateAmount(amount, 'amount');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'needsApproval', args: [owner, spender, amount] }) as Promise<boolean>;
+        },
+        async addAutoApprovedSpender({ token = address, spender, account }: { token?: Address, spender: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spender, 'spender');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'addAutoApprovedSpender', args: [spender], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'addAutoApprovedSpender'); }
+        },
+        async removeAutoApprovedSpender({ token = address, spender, account }: { token?: Address, spender: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spender, 'spender');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'removeAutoApprovedSpender', args: [spender], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'removeAutoApprovedSpender'); }
+        },
+        async autoApprovedSpenders({ token = address, spender }: { token?: Address, spender: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(spender, 'spender');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'autoApprovedSpenders', args: [spender] }) as Promise<boolean>;
+        },
+        async DOMAIN_SEPARATOR({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'DOMAIN_SEPARATOR', args: [] }) as Promise<Hex>;
+        },
+        async nonces({ token = address, owner }: { token?: Address, owner: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(owner, 'owner');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'nonces', args: [owner] }) as Promise<bigint>;
+        },
+        async permit({ token = address, owner, spender, value, deadline, v, r, s, account }: { token?: Address, owner: Address, spender: Address, value: bigint, deadline: bigint, v: number, r: Hex, s: Hex, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(owner, 'owner');
+                validateAddress(spender, 'spender');
+                validateAmount(value, 'value');
+                validateRequired(deadline, 'deadline');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'permit', args: [owner, spender, value, deadline, v, r, s], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'permit'); }
+        },
+        async eip712Domain({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'eip712Domain', args: [] }) as Promise<any>;
+        },
+        async transferAndCall({ token = address, to, amount, data = '0x', account }: { token?: Address, to: Address, amount: bigint, data?: Hex, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(to, 'to');
+                validateAmount(amount, 'amount');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transferAndCall', args: [to, amount, data], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transferAndCall'); }
+        },
+        async communityENS({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'communityENS', args: [] }) as Promise<string>;
+        },
+        async communityName({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'communityName', args: [] }) as Promise<string>;
+        },
+        async communityOwner({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'communityOwner', args: [] }) as Promise<Address>;
+        },
+        async getMetadata({ token = address } = {}) {
+            const abi = xPNTsTokenABI;
+            const res = await (client as PublicClient).readContract({ 
+                address: token!, 
+                abi, 
+                functionName: 'getMetadata', 
+                args: [] 
             }) as any;
-            return {
-                name: result[0],
-                symbol: result[1],
-                ens: result[2],
-                logo: result[3],
-                owner: result[4]
-            };
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getMetadata');
-        }
-    },
 
-    async version({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'version',
-                args: []
-            }) as Promise<string>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'version');
-        }
-    },
+            if (Array.isArray(res)) {
+                return {
+                    name: res[0],
+                    symbol: res[1],
+                    communityName: res[2],
+                    communityENS: res[3],
+                    communityOwner: res[4]
+                };
+            }
+            return res as { name: string, symbol: string, communityName: string, communityENS: string, communityOwner: Address };
+        },
+        async transferCommunityOwnership({ token = address, newOwner, account }: { token?: Address, newOwner: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(newOwner, 'newOwner');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'transferCommunityOwnership', args: [newOwner], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'transferCommunityOwnership'); }
+        },
+        async setSuperPaymasterAddress({ token = address, spAddress, account }: { token?: Address, spAddress: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spAddress, 'spAddress');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'setSuperPaymasterAddress', args: [spAddress], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'setSuperPaymasterAddress'); }
+        },
+        async SUPERPAYMASTER_ADDRESS({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'SUPERPAYMASTER_ADDRESS', args: [] }) as Promise<Address>;
+        },
+        async FACTORY({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'FACTORY', args: [] }) as Promise<Address>;
+        },
+        async usedOpHashes({ token = address, opHash }: { token?: Address, opHash: Hex }) {
+            validateAddress(token!, 'token');
+            validateRequired(opHash, 'opHash');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'usedOpHashes', args: [opHash] }) as Promise<boolean>;
+        },
+    };
+    return actions as XPNTsTokenActions;
+};
 
-    // aPNTs/xPNTs - Auto Approval
-    async addAutoApprovedSpender({ token, spender, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spender, 'spender');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'addAutoApprovedSpender',
-                args: [spender],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'addAutoApprovedSpender');
-        }
-    },
-
-    async removeAutoApprovedSpender({ token, spender, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spender, 'spender');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'removeAutoApprovedSpender',
-                args: [spender],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'removeAutoApprovedSpender');
-        }
-    },
-
-    async isAutoApprovedSpender({ token, spender }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spender, 'spender');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'isAutoApprovedSpender',
-                args: [spender]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'isAutoApprovedSpender');
-        }
-    },
-
-    // EIP-712 / EIP-2612
-    async DOMAIN_SEPARATOR({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'DOMAIN_SEPARATOR',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'DOMAIN_SEPARATOR');
-        }
-    },
-
-    async nonces({ token, owner }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(owner, 'owner');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'nonces',
-                args: [owner]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'nonces');
-        }
-    },
-
-    async autoApprovedSpenders({ token, spender }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(spender, 'spender');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'autoApprovedSpenders',
-                args: [spender]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'autoApprovedSpenders');
-        }
-    },
-
-    async needsApproval({ token, owner, spender, amount }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(owner, 'owner');
-            validateAddress(spender, 'spender');
-            validateAmount(amount, 'amount');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'needsApproval',
-                args: [owner, spender, amount]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'needsApproval');
-        }
-    },
-
-    async eip712Domain({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'eip712Domain',
-                args: []
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'eip712Domain');
-        }
-    },
-
-    async permit({ token, owner, spender, value, deadline, v, r, s, account }) {
-        try {
-            validateAddress(token, 'token');
-            validateAddress(owner, 'owner');
-            validateAddress(spender, 'spender');
-            validateAmount(value, 'value');
-            return await (client as any).writeContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'permit',
-                args: [owner, spender, value, deadline, v, r, s],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'permit');
-        }
-    },
-
-    // Constants
-    async SUPERPAYMASTER_ADDRESS({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'SUPERPAYMASTER_ADDRESS',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'SUPERPAYMASTER_ADDRESS');
-        }
-    },
-
-    async FACTORY({ token }) {
-        try {
-            validateAddress(token, 'token');
-            return await (client as PublicClient).readContract({
-                address: token,
-                abi: getTokenABI(token),
-                functionName: 'FACTORY',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'FACTORY');
-        }
-    }
-});
+// Legacy compatibility
+export const tokenActions = (address?: Address) => (client: PublicClient | WalletClient): TokenActions => {
+    // This is essentially xPNTsTokenActions for now as it's the more complex one
+    return xPNTsTokenActions(address)(client) as unknown as TokenActions;
+};

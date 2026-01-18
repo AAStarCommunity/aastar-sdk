@@ -62,6 +62,7 @@ describe('PaymasterOperatorClient', () => {
     gTokenAddress: '0x4444444444444444444444444444444444444444' as `0x${string}`,
     gTokenStakingAddress: '0x5555555555555555555555555555555555555555' as `0x${string}`,
     paymasterFactoryAddress: '0x6666666666666666666666666666666666666666' as `0x${string}`,
+    entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as `0x${string}`,
   };
 
   beforeEach(() => {
@@ -133,24 +134,15 @@ describe('PaymasterOperatorClient', () => {
 
   describe('Deployment', () => {
       it('deployAndRegisterPaymasterV4 should deploy and register', async () => {
-        mocks.mockRegistry.hasRole
-            .mockResolvedValueOnce(true) // Has Community
-            .mockResolvedValueOnce(false); // Has AOA? (Checked AFTER deployment in code logic)
-            // Wait, logic: 
-            // 1. Check Community (mocked true)
-            // 2. Deploy -> deployHash
-            // 3. getPaymaster
-            // 4. Check AOA role (mocked false)
-            // 5. Register
-        
-        // We need to set up sequential mocks for hasRole carefully if called multiple times with different args
-        // But logic calls with different role IDs. 
-        // Mock implementation:
+        // Mock role checks: Community exists, AOA doesn't
         mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) => {
             if (roleId === '0x1111111111111111111111111111111111111111111111111111111111111111') return true;
             if (roleId === '0x3333333333333333333333333333333333333333333333333333333333333333') return false;
             return false;
         });
+        
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000'); // Clean deploy
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x7777777777777777777777777777777777777777'); // After deploy
 
         const result = await client.deployAndRegisterPaymasterV4();
 
@@ -163,6 +155,9 @@ describe('PaymasterOperatorClient', () => {
       });
 
       it('deployAndRegisterPaymasterV4 should skip register if already has role', async () => {
+        // Mock getPaymaster to return existing address to exercise idempotency
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValue('0x7777777777777777777777777777777777777777');
+        
         mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) => {
             if (roleId === '0x1111111111111111111111111111111111111111111111111111111111111111') return true;
             if (roleId === '0x3333333333333333333333333333333333333333333333333333333333333333') return true; // Already registered
@@ -171,7 +166,7 @@ describe('PaymasterOperatorClient', () => {
 
         const result = await client.deployAndRegisterPaymasterV4();
         
-        expect(mocks.mockPaymasterFactory.deployPaymaster).toHaveBeenCalled();
+        expect(mocks.mockPaymasterFactory.deployPaymaster).not.toHaveBeenCalled();
         expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
         expect(result.registerHash).toBe('0x0000000000000000000000000000000000000000000000000000000000000000');
       });

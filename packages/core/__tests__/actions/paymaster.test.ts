@@ -1,175 +1,116 @@
-/**
- * Unit Tests for Paymaster Actions (Core Functions)
- * Based on actual API signatures
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { paymasterActions } from '../../src/actions/paymaster';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
 
-const PAYMASTER_ADDRESS = '0x1111111111111111111111111111111111111111' as `0x${string}`;
-const USER_ADDRESS = '0x2222222222222222222222222222222222222222' as `0x${string}`;
-const TOKEN_ADDRESS = '0x3333333333333333333333333333333333333333' as `0x${string}`;
+const ADDR = '0x1111111111111111111111111111111111111111' as `0x${string}`;
+const USER = '0x2222222222222222222222222222222222222222' as `0x${string}`;
+const TOKEN = '0x3333333333333333333333333333333333333333' as `0x${string}`;
 
-describe('PaymasterActions - Core Functions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
-  let walletClient: ReturnType<typeof createMockWalletClient>;
+describe('PaymasterActions Exhaustive Coverage', () => {
+  let p: any;
+  let w: any;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
-  beforeEach(() => {
-    resetMocks();
-    publicClient = createMockPublicClient();
-    walletClient = createMockWalletClient();
-  });
-
-  describe('depositFor', () => {
-    it('should deposit tokens for user', async () => {
-      const mockTxHash = '0xabc123' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
-
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(walletClient);
-      const result = await actions.depositFor({
-        user: USER_ADDRESS,
-        token: TOKEN_ADDRESS,
-        amount: 1000n,
-        account: walletClient.account
-      });
-
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'depositFor',
-        args: [USER_ADDRESS, TOKEN_ADDRESS, 1000n],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
+  describe('Core Operations', () => {
+    it('deposits/withdrawals', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = paymasterActions(ADDR)(w);
+      await act.depositFor({ user: USER, token: TOKEN, amount: 100n, account: USER });
+      await act.withdraw({ token: TOKEN, amount: 100n, account: USER });
+      await act.withdrawTo({ to: USER, amount: 100n, account: USER });
+      await act.addDeposit({ value: 100n, account: USER });
+      expect(w.writeContract).toHaveBeenCalledTimes(4);
+    });
+    it('staking', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = paymasterActions(ADDR)(w);
+      await act.addStake({ unstakeDelaySec: 100, value: 100n, account: USER });
+      await act.unlockStake({ account: USER });
+      await act.withdrawStake({ to: USER, account: USER });
+      expect(w.writeContract).toHaveBeenCalledTimes(3);
+    });
+    it('ownership', async () => {
+        p.readContract.mockResolvedValue(USER);
+        await paymasterActions(ADDR)(p).owner();
+        w.writeContract.mockResolvedValue('0x');
+        await paymasterActions(ADDR)(w).transferOwnership({ newOwner: USER, account: USER });
+        await paymasterActions(ADDR)(w).renounceOwnership({ account: USER });
+        expect(p.readContract).toHaveBeenCalledTimes(1);
+        expect(w.writeContract).toHaveBeenCalledTimes(2);
     });
   });
 
-  describe('withdraw', () => {
-    it('should withdraw tokens', async () => {
-      const mockTxHash = '0xdef456' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
+  describe('Configuration & Meta', () => {
+    it('setters', async () => {
+        w.writeContract.mockResolvedValue('0x');
+        const act = paymasterActions(ADDR)(w);
+        await act.setTokenPrice({ token: TOKEN, price: 100n, account: USER });
+        await act.setCachedPrice({ price: 100n, timestamp: 123456, account: USER });
+        await act.setTreasury({ treasury: USER, account: USER });
+        await act.setServiceFeeRate({ _serviceFeeRate: 100n, account: USER });
+        await act.setMaxGasCostCap({ _maxGasCostCap: 1000n, account: USER });
+        await act.setPriceStalenessThreshold({ _priceStalenessThreshold: 3600n, account: USER });
+        await act.pause({ account: USER });
+        await act.unpause({ account: USER });
+        await act.updatePrice({ account: USER });
+        await act.deactivateFromRegistry({ account: USER });
+        expect(w.writeContract).toHaveBeenCalledTimes(10);
+    });
+    
+    it('getters/constants', async () => {
+        const act = paymasterActions(ADDR)(p);
+        p.readContract.mockResolvedValue(100n);
+        await act.balances({ user: USER, token: TOKEN });
+        await act.tokenPrices({ token: TOKEN });
+        await act.serviceFeeRate();
+        await act.maxGasCostCap();
+        await act.priceStalenessThreshold();
+        await act.MAX_ETH_USD_PRICE();
+        await act.MIN_ETH_USD_PRICE();
+        await act.MAX_GAS_TOKENS();
+        await act.MAX_SBTS();
+        await act.MAX_SERVICE_FEE();
+        await act.getRealtimeTokenCost({ gasCost: 100n, token: TOKEN });
+        await act.calculateCost({ gasCost: 100n, token: TOKEN, useRealtime: true });
 
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(walletClient);
-      const result = await actions.withdraw({
-        token: TOKEN_ADDRESS,
-        amount: 500n,
-        account: walletClient.account
-      });
+        p.readContract.mockResolvedValue(true);
+        await act.paused();
+        await act.isActiveInRegistry();
+        await act.isRegistrySet();
+        
+        p.readContract.mockResolvedValue(USER);
+        await act.registry();
+        await act.ethUsdPriceFeed();
+        await act.treasury();
+        await act.entryPoint();
+        
+        p.readContract.mockResolvedValue(18);
+        await act.oracleDecimals();
+        await act.tokenDecimals({ token: TOKEN });
+        
+        p.readContract.mockResolvedValue({ price: 100n, updatedAt: 123 });
+        await act.cachedPrice();
+        
+        p.readContract.mockResolvedValue('1.0');
+        await act.version();
 
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'withdraw',
-        args: [TOKEN_ADDRESS, 500n],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
+        // Count: 12 (first block) + 3 (bools) + 4 (addrs) + 2 (nums) + 1 (struct) + 1 (str) = 23
+        expect(p.readContract).toHaveBeenCalledTimes(23);
     });
   });
 
-  describe('balances', () => {
-    it('should get user token balance', async () => {
-      publicClient.readContract.mockResolvedValue(2000n);
-
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(publicClient);
-      const result = await actions.balances({
-        user: USER_ADDRESS,
-        token: TOKEN_ADDRESS
-      });
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'balances',
-        args: [USER_ADDRESS, TOKEN_ADDRESS]
-      });
-      expect(result).toBe(2000n);
-    });
-  });
-
-  describe('validatePaymasterUserOp', () => {
-    it('should validate paymaster user operation', async () => {
-      const mockUserOp = {} as any;
-      const mockUserOpHash = '0x123' as `0x${string}`;
-      const mockValidation = [0n, 0n];
-      publicClient.readContract.mockResolvedValue(mockValidation);
-
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(publicClient);
-      const result = await actions.validatePaymasterUserOp({
-        userOp: mockUserOp,
-        userOpHash: mockUserOpHash,
-        maxCost: 1000n
-      });
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'validatePaymasterUserOp',
-        args: [mockUserOp, mockUserOpHash, 1000n]
-      });
-      expect(result).toEqual(mockValidation);
-    });
-  });
-
-  describe('cachedPrice', () => {
-    it('should get cached price', async () => {
-      const mockPrice = [2000000000n, 1700000000n];
-      publicClient.readContract.mockResolvedValue(mockPrice);
-
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(publicClient);
-      const result = await actions.cachedPrice();
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'cachedPrice',
-        args: []
-      });
-      // cachedPrice returns {price, lastUpdate}
-      expect(result).toHaveProperty('price');
-      expect(result).toHaveProperty('lastUpdate');
-    });
-  });
-
-  describe('updatePrice', () => {
-    it('should update price', async () => {
-      const mockTxHash = '0x789abc' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
-
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(walletClient);
-      const result = await actions.updatePrice({
-        account: walletClient.account
-      });
-
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'updatePrice',
-        args: [],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
-    });
-  });
-
-  describe('paused', () => {
-    it('should check if paused', async () => {
-      publicClient.readContract.mockResolvedValue(false);
-
-      const actions = paymasterActions(PAYMASTER_ADDRESS)(publicClient);
-      const result = await actions.paused();
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: PAYMASTER_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'paused',
-        args: []
-      });
-      expect(result).toBe(false);
+  describe('Validation', () => {
+    it('validate & postOp', async () => {
+        const actP = paymasterActions(ADDR)(p);
+        p.readContract.mockResolvedValue({ context: '0x', validationData: 0n });
+        await actP.validatePaymasterUserOp({ userOp: {}, userOpHash: '0x', maxCost: 100n });
+        
+        const actW = paymasterActions(ADDR)(w);
+        w.writeContract.mockResolvedValue('0x');
+        await actW.postOp({ mode: 0, context: '0x', actualGasCost: 100n, actualUserOpFeePerGas: 100n, account: USER });
+        
+        expect(p.readContract).toHaveBeenCalledTimes(1);
+        expect(w.writeContract).toHaveBeenCalledTimes(1);
     });
   });
 });

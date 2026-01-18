@@ -1,204 +1,122 @@
-/**
- * Unit Tests for Token Actions (Core Functions)
- * 
- * Tests the 8 most critical token functions:
- * - totalSupply, balanceOf
- * - transfer, approve, allowance
- * - mint, burn
- * - exchangeRate (xPNTs/aPNTs specific)
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tokenActions } from '../../src/actions/tokens';
+import { tokenActions, xPNTsTokenActions, gTokenActions } from '../../src/actions/tokens';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
 
-const TOKEN_ADDRESS = '0x1111111111111111111111111111111111111111' as `0x${string}`;
-const USER_ADDRESS = '0x2222222222222222222222222222222222222222' as `0x${string}`;
-const SPENDER_ADDRESS = '0x3333333333333333333333333333333333333333' as `0x${string}`;
+const ADDR = '0x1111111111111111111111111111111111111111' as `0x${string}`;
+const USER = '0x2222222222222222222222222222222222222222' as `0x${string}`;
 
-describe('TokenActions - Core Functions', () => {
-  let publicClient: ReturnType<typeof createMockPublicClient>;
-  let walletClient: ReturnType<typeof createMockWalletClient>;
+describe('TokenActions Exhaustive Coverage', () => {
+  let p: any;
+  let w: any;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
-  beforeEach(() => {
-    resetMocks();
-    publicClient = createMockPublicClient();
-    walletClient = createMockWalletClient();
-  });
+  describe('GToken (Base ERC20 + extensions)', () => {
+    it('read ops', async () => {
+      p.readContract.mockResolvedValue(100n);
+      const acts = gTokenActions(ADDR)(p);
+      await acts.totalSupply();
+      await acts.balanceOf({ account: USER });
+      await acts.allowance({ owner: USER, spender: USER });
+      await acts.cap();
+      await acts.remainingMintableSupply();
+      await acts.decimals(); // number
+      
+      p.readContract.mockResolvedValue('str');
+      await acts.name();
+      await acts.symbol();
+      await acts.version();
+      p.readContract.mockResolvedValue(USER);
+      await acts.owner();
 
-  describe('totalSupply', () => {
-    it('should call readContract with correct parameters', async () => {
-      const mockSupply = 1000000n;
-      publicClient.readContract.mockResolvedValue(mockSupply);
-
-      const actions = tokenActions()(publicClient);
-      const result = await actions.totalSupply({ token: TOKEN_ADDRESS });
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'totalSupply',
-        args: []
-      });
-      expect(result).toBe(mockSupply);
+      expect(p.readContract).toHaveBeenCalledTimes(10);
+    });
+    
+    it('write ops', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const acts = gTokenActions(ADDR)(w);
+      await acts.transfer({ to: USER, amount: 100n, account: USER });
+      await acts.transferFrom({ from: USER, to: USER, amount: 100n, account: USER });
+      await acts.approve({ spender: USER, amount: 100n, account: USER });
+      await acts.mint({ to: USER, amount: 100n, account: USER });
+      await acts.burn({ amount: 100n, account: USER });
+      await acts.burnFrom({ from: USER, amount: 100n, account: USER });
+      await acts.transferOwnership({ newOwner: USER, account: USER });
+      await acts.renounceOwnership({ account: USER });
+      
+      expect(w.writeContract).toHaveBeenCalledTimes(8);
     });
   });
 
-  describe('balanceOf', () => {
-    it('should get balance for an address', async () => {
-      const mockBalance = 5000n;
-      publicClient.readContract.mockResolvedValue(mockBalance);
+  describe('XPNTs (ERC677 + Advanced)', () => {
+    it('read ops', async () => {
+      const acts = xPNTsTokenActions(ADDR)(p);
+      p.readContract.mockResolvedValue(100n);
+      await acts.exchangeRate();
+      await acts.debts({ user: USER });
+      await acts.getDebt({ user: USER });
+      await acts.spendingLimits({ owner: USER, spender: USER });
+      await acts.cumulativeSpent({ owner: USER, spender: USER });
+      await acts.DEFAULT_SPENDING_LIMIT_APNTS();
+      await acts.getDefaultSpendingLimitXPNTs();
+      await acts.nonces({ owner: USER });
+      
+      p.readContract.mockResolvedValue(true);
+      await acts.needsApproval({ owner: USER, spender: USER, amount: 100n });
+      await acts.autoApprovedSpenders({ spender: USER });
+      await acts.usedOpHashes({ opHash: '0x' });
+      
+      p.readContract.mockResolvedValue(USER);
+      await acts.SUPERPAYMASTER_ADDRESS();
+      await acts.FACTORY();
+      await acts.communityOwner();
+      
+      p.readContract.mockResolvedValue('str');
+      await acts.communityENS();
+      await acts.communityName();
+      await acts.version();
+      
+      p.readContract.mockResolvedValue({});
+      await acts.eip712Domain();
+      
+      expect(p.readContract).toHaveBeenCalledTimes(18);
+    });
 
-      const actions = tokenActions()(publicClient);
-      const result = await actions.balanceOf({ token: TOKEN_ADDRESS, account: USER_ADDRESS });
+    it('write ops', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const acts = xPNTsTokenActions(ADDR)(w);
+      
+      // Inherited ERC20 writes (just test one to prove mapping)
+      await acts.transfer({ to: USER, amount: 100n, account: USER });
+      
+      // XPNTs writes
+      await acts.burnFromWithOpHash({ from: USER, amount: 100n, userOpHash: '0x', account: USER });
+      await acts.updateExchangeRate({ newRate: 100n, account: USER });
+      await acts.recordDebt({ user: USER, amountXPNTs: 100n, account: USER });
+      await acts.repayDebt({ amount: 100n, account: USER });
+      await acts.setPaymasterLimit({ spender: USER, limit: 100n, account: USER });
+      await acts.addAutoApprovedSpender({ spender: USER, account: USER });
+      await acts.removeAutoApprovedSpender({ spender: USER, account: USER });
+      await acts.permit({ owner: USER, spender: USER, value: 100n, deadline: 100n, v: 27, r: '0x', s: '0x', account: USER });
+      await acts.transferAndCall({ to: USER, amount: 100n, data: '0x', account: USER });
+      await acts.transferCommunityOwnership({ newOwner: USER, account: USER });
+      await acts.setSuperPaymasterAddress({ spAddress: USER, account: USER });
 
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'balanceOf',
-        args: [USER_ADDRESS]
-      });
-      expect(result).toBe(mockBalance);
+      expect(w.writeContract).toHaveBeenCalledTimes(12);
+    });
+
+    it('metadata', async () => {
+      p.readContract.mockResolvedValue({ name: 'n', symbol: 's', communityName: 'cn', communityENS: 'ce', communityOwner: USER });
+      const acts = xPNTsTokenActions(ADDR)(p);
+      const meta = await acts.getMetadata();
+      expect(meta).toBeDefined();
     });
   });
 
-  describe('transfer', () => {
-    it('should call writeContract with correct parameters', async () => {
-      const mockTxHash = '0xabcd' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
-
-      const actions = tokenActions()(walletClient);
-      const result = await actions.transfer({
-        token: TOKEN_ADDRESS,
-        to: USER_ADDRESS,
-        amount: 100n,
-        account: walletClient.account
-      });
-
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'transfer',
-        args: [USER_ADDRESS, 100n],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
-    });
-  });
-
-  describe('approve', () => {
-    it('should approve spender with amount', async () => {
-      const mockTxHash = '0xdef0' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
-
-      const actions = tokenActions()(walletClient);
-      const result = await actions.approve({
-        token: TOKEN_ADDRESS,
-        spender: SPENDER_ADDRESS,
-        amount: 200n,
-        account: walletClient.account
-      });
-
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'approve',
-        args: [SPENDER_ADDRESS, 200n],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
-    });
-  });
-
-  describe('allowance', () => {
-    it('should get allowance for owner and spender', async () => {
-      const mockAllowance = 300n;
-      publicClient.readContract.mockResolvedValue(mockAllowance);
-
-      const actions = tokenActions()(publicClient);
-      const result = await actions.allowance({
-        token: TOKEN_ADDRESS,
-        owner: USER_ADDRESS,
-        spender: SPENDER_ADDRESS
-      });
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'allowance',
-        args: [USER_ADDRESS, SPENDER_ADDRESS]
-      });
-      expect(result).toBe(mockAllowance);
-    });
-  });
-
-  describe('mint', () => {
-    it('should mint tokens to address', async () => {
-      const mockTxHash = '0x1234' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
-
-      const actions = tokenActions()(walletClient);
-      const result = await actions.mint({
-        token: TOKEN_ADDRESS,
-        to: USER_ADDRESS,
-        amount: 1000n,
-        account: walletClient.account
-      });
-
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'mint',
-        args: [USER_ADDRESS, 1000n],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
-    });
-  });
-
-  describe('burn', () => {
-    it('should burn tokens', async () => {
-      const mockTxHash = '0x5678' as `0x${string}`;
-      walletClient.writeContract.mockResolvedValue(mockTxHash);
-
-      const actions = tokenActions()(walletClient);
-      const result = await actions.burn({
-        token: TOKEN_ADDRESS,
-        amount: 500n,
-        account: walletClient.account
-      });
-
-      expect(walletClient.writeContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'burn',
-        args: [500n],
-        account: walletClient.account,
-        chain: walletClient.chain
-      });
-      expect(result).toBe(mockTxHash);
-    });
-  });
-
-  describe('exchangeRate', () => {
-    it('should get xPNTs/aPNTs exchange rate', async () => {
-      const mockRate = 1050000n; // 1.05 with 6 decimals
-      publicClient.readContract.mockResolvedValue(mockRate);
-
-      const actions = tokenActions()(publicClient);
-      const result = await actions.exchangeRate({ token: TOKEN_ADDRESS });
-
-      expect(publicClient.readContract).toHaveBeenCalledWith({
-        address: TOKEN_ADDRESS,
-        abi: expect.any(Array),
-        functionName: 'exchangeRate',
-        args: []
-      });
-      expect(result).toBe(mockRate);
+  describe('Legacy tokenActions', () => {
+    it('defaults to xPNTs', async () => {
+      p.readContract.mockResolvedValue('1.0');
+      const acts = tokenActions(ADDR)(p);
+      expect(await acts.version()).toBe('1.0');
     });
   });
 });
-

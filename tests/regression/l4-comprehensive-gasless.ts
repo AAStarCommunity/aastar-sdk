@@ -1,5 +1,4 @@
-import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env.sepolia' });
+// dotenv loaded by loadNetworkConfig
 import * as fs from 'fs';
 import * as path from 'path';
 import { 
@@ -228,9 +227,41 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
         const ratio = Number(callGasLimit) / (Number(verificationGasLimit) + Number(callGasLimit) + Number(preVerificationGas) + 200000 + 50000);
         console.log(`   ⛽ [${label}] Gas Efficiency Ratio: ${ratio.toFixed(4)} (V:200k C:1M PMV:200k)`);
         
-        // @ts-ignore
-        const uHash = await bundlerClient.request({ method: 'eth_sendUserOperation', params: [alchemyOp, config.contracts.entryPoint] });
-        return await waitAndCheckReceipt(bundlerClient, opHash, label);
+        try {
+            // @ts-ignore
+            const uHash = await bundlerClient.request({ method: 'eth_sendUserOperation', params: [alchemyOp, config.contracts.entryPoint] });
+            return await waitAndCheckReceipt(bundlerClient, opHash, label);
+        } catch (e: any) {
+            if (e.message.includes('Method not found') || e.code === -32601) {
+                console.log('   ⚠️ Bundler missing (Method not found). Fallback to handleOps...');
+                const tuple = [
+                    op.sender,
+                    op.nonce,
+                    op.initCode,
+                    op.callData,
+                    op.accountGasLimits,
+                    op.preVerificationGas,
+                    op.gasFees,
+                    op.paymasterAndData,
+                    op.signature
+                ];
+                const tx = await userClient.writeContract({
+                    address: config.contracts.entryPoint,
+                    abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
+                    functionName: 'handleOps',
+                    args: [[tuple], jasonAcc.address]
+                });
+                console.log(`   🚀 Submitted via handleOps: ${tx}`);
+                const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+                if (receipt.status !== 'success') {
+                    console.log(`   ❌ handleOps Reverted!`);
+                    return false;
+                }
+                console.log(`   ✅ handleOps Success! Block: ${receipt.blockNumber}`);
+                return true;
+            }
+            throw e;
+        }
     };
 
     // --- CASE 3.2: Community Registration via AA ---
@@ -428,8 +459,15 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig) {
 
 // Execute if main
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const networkArg = process.argv.find(arg => arg.startsWith('--network='));
-    const network = networkArg ? networkArg.split('=')[1] : 'sepolia';
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    let network = networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia';
+    if (!network) {
+         const networkArgEquals = process.argv.find(arg => arg.startsWith('--network='));
+         if (networkArgEquals) {
+             network = networkArgEquals.split('=')[1];
+         }
+    }
     
     // @ts-ignore
     const config = loadNetworkConfig(network);

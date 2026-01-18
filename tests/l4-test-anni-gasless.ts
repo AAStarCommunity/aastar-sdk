@@ -8,11 +8,14 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import path from 'path';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
+// dotenv loaded by loadNetworkConfig
 
 async function main() {
-    const config = loadNetworkConfig('sepolia');
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(config.rpcUrl) });
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = loadNetworkConfig(networkName);
+    const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
     
     // ANNI is the operator/owner
     const anniKey = process.env.PRIVATE_KEY_ANNI as Hex;
@@ -20,7 +23,7 @@ async function main() {
     const anniAccount = privateKeyToAccount(anniKey);
     const anniWallet = createWalletClient({ 
         account: anniAccount, 
-        chain: sepolia, 
+        chain: config.chain, 
         transport: http(config.rpcUrl) 
     });
 
@@ -145,7 +148,7 @@ async function main() {
                     abi: spAbi,
                     functionName: 'configureOperator',
                     args: [cPNTs, anniAccount.address, 10n**18n], // 1:1
-                    chain: sepolia,
+                    chain: config.chain,
                     account: anniAccount
                 });
                 await publicClient.waitForTransactionReceipt({ hash: tx });
@@ -156,7 +159,7 @@ async function main() {
                     abi: spAbi,
                     functionName: 'configureOperator',
                     args: [cPNTs, anniAccount.address, operatorConfig[1]], // Use existing rate if not zero
-                    chain: sepolia,
+                    chain: config.chain,
                     account: anniAccount
                 });
                 console.log(`   📝 Fix Transaction Sent: ${fixTx}`);
@@ -349,7 +352,7 @@ async function main() {
                     abi: [{ name: 'depositAPNTs', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' }],
                     functionName: 'depositAPNTs',
                     args: [parseEther('50000')],
-                    chain: sepolia,
+                    chain: config.chain,
                     account: anniAccount
                 });
                 console.log(`   📝 Deposit Tx: ${depTx}`);
@@ -372,7 +375,7 @@ async function main() {
                     abi: [{ name: 'updatePrice', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' }],
                     functionName: 'updatePrice',
                     gas: 500000n,
-                    chain: sepolia,
+                    chain: config.chain,
                     account: anniAccount
                 });
                 console.log(`   📝 Oracle Update Tx Sent: ${upHash}`);
@@ -458,7 +461,7 @@ async function main() {
             anniWallet,
             anniAA,
             config.contracts.entryPoint as Address,
-            process.env.BUNDLER_URL!,
+            config.bundlerUrl!,
             {
                 token: cPNTs,
                 recipient: bobEOA,
@@ -474,7 +477,7 @@ async function main() {
         // Simple poll for receipt
         let success = false;
         for (let i = 0; i < 30; i++) {
-            const response = await fetch(process.env.BUNDLER_URL!, {
+            const response = await fetch(config.bundlerUrl!, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -505,4 +508,7 @@ async function main() {
     }
 }
 
-main().catch(console.error);
+main().catch(e => {
+    console.error(e);
+    process.exit(1);
+});

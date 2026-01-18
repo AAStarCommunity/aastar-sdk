@@ -11,32 +11,54 @@ export type StakingActions = {
     unlockAndTransfer: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     
     // Slashing
-    slash: (args: { user: Address, roleId: Hex, amount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
-    slashByDVT: (args: { user: Address, roleId: Hex, amount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
+    slash: (args: { user: Address, amount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
+    slashByDVT: (args: { operator: Address, roleId: Hex, penaltyAmount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
     setAuthorizedSlasher: (args: { slasher: Address, authorized: boolean, account?: Account | Address }) => Promise<Hash>;
     
     // Query Functions
-    getStakeInfo: (args: { operator: Address, roleId: Hex }) => Promise<any>;
+    getStakeInfo: (args: { operator: Address, roleId: Hex }) => Promise<{
+        amount: bigint;
+        slashedAmount: bigint;
+        stakedAt: bigint;
+        unstakeRequestedAt: bigint;
+    }>;
     getStakingBalance: (args: { user: Address }) => Promise<bigint>;
     getLockedStake: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
-    getUserRoleLocks: (args: { user: Address }) => Promise<any[]>;
+    getUserRoleLocks: (args: { user: Address }) => Promise<Array<{
+        amount: bigint;
+        entryBurn: bigint;
+        lockedAt: number;
+        roleId: Hex;
+        metadata: Hex;
+    }>>;
     hasRoleLock: (args: { user: Address, roleId: Hex }) => Promise<boolean>;
     availableBalance: (args: { user: Address }) => Promise<bigint>;
-    previewExitFee: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
+    previewExitFee: (args: { user: Address, roleId: Hex }) => Promise<{ fee: bigint; netAmount: bigint }>;
     
     // Admin Functions
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
-    setRoleExitFee: (args: { roleId: Hex, feePercent: bigint, account?: Account | Address }) => Promise<Hash>;
+    setRoleExitFee: (args: { roleId: Hex, feePercent: bigint, minFee: bigint, account?: Account | Address }) => Promise<Hash>;
     setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
     
     // View Functions
-    stakes: (args: { user: Address }) => Promise<any>;
-    roleLocks: (args: { user: Address, roleId: Hex }) => Promise<any>;
-    roleExitConfigs: (args: { roleId: Hex }) => Promise<any>;
+    stakes: (args: { user: Address }) => Promise<{
+        amount: bigint;
+        slashedAmount: bigint;
+        stakedAt: bigint;
+        unstakeRequestedAt: bigint;
+    }>;
+    roleLocks: (args: { user: Address, roleId: Hex }) => Promise<{
+        amount: bigint;
+        entryBurn: bigint;
+        lockedAt: number;
+        roleId: Hex;
+        metadata: Hex;
+    }>;
+    roleExitConfigs: (args: { roleId: Hex }) => Promise<{ feePercent: bigint; minFee: bigint }>;
     userActiveRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
     authorizedSlashers: (args: { slasher: Address }) => Promise<boolean>;
     totalStaked: () => Promise<bigint>;
-    getTotalStaked: () => Promise<bigint>; // Alias for totalStaked
+    getTotalStaked: () => Promise<bigint>;
     treasury: () => Promise<Address>;
     owner: () => Promise<Address>;
     
@@ -130,16 +152,15 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     // Slashing
-    async slash({ user, roleId, amount, reason, account }) {
+    async slash({ user, amount, reason, account }) {
         try {
             validateAddress(user, 'user');
-            validateRequired(roleId, 'roleId');
             validateAmount(amount, 'amount');
             return await (client as any).writeContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'slash',
-                args: [user, roleId, amount, reason],
+                args: [user, amount, reason],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -148,16 +169,16 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         }
     },
 
-    async slashByDVT({ user, roleId, amount, reason, account }) {
+    async slashByDVT({ operator, roleId, penaltyAmount, reason, account }) {
         try {
-            validateAddress(user, 'user');
+            validateAddress(operator, 'operator');
             validateRequired(roleId, 'roleId');
-            validateAmount(amount, 'amount');
+            validateAmount(penaltyAmount, 'penaltyAmount');
             return await (client as any).writeContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'slashByDVT',
-                args: [user, roleId, amount, reason],
+                args: [operator, roleId, penaltyAmount, reason],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -187,12 +208,18 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         try {
             validateAddress(operator, 'operator');
             validateRequired(roleId, 'roleId');
-            return await (client as any).readContract({
+            const res = await (client as PublicClient).readContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'getStakeInfo',
                 args: [operator, roleId]
-            });
+            }) as any;
+            return {
+                amount: res.amount,
+                slashedAmount: res.slashedAmount,
+                stakedAt: res.stakedAt,
+                unstakeRequestedAt: res.unstakeRequestedAt
+            };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getStakeInfo');
         }
@@ -274,12 +301,13 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         try {
             validateAddress(user, 'user');
             validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
+            const [fee, netAmount] = await (client as PublicClient).readContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'previewExitFee',
                 args: [user, roleId]
-            }) as Promise<bigint>;
+            }) as [bigint, bigint];
+            return { fee, netAmount };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'previewExitFee');
         }
@@ -302,15 +330,16 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         }
     },
 
-    async setRoleExitFee({ roleId, feePercent, account }) {
+    async setRoleExitFee({ roleId, feePercent, minFee, account }) {
         try {
             validateRequired(roleId, 'roleId');
             validateAmount(feePercent, 'feePercent');
+            validateAmount(minFee, 'minFee');
             return await (client as any).writeContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'setRoleExitFee',
-                args: [roleId, feePercent],
+                args: [roleId, feePercent, minFee],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -339,12 +368,22 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     async stakes({ user }) {
         try {
             validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
+            const res = await (client as PublicClient).readContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'stakes',
                 args: [user]
-            });
+            }) as any;
+
+            if (Array.isArray(res)) {
+                return {
+                    amount: res[0],
+                    slashedAmount: res[1],
+                    stakedAt: res[2],
+                    unstakeRequestedAt: res[3]
+                };
+            }
+            return res as { amount: bigint, slashedAmount: bigint, stakedAt: bigint, unstakeRequestedAt: bigint };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'stakes');
         }
@@ -354,12 +393,23 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
         try {
             validateAddress(user, 'user');
             validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
+            const res = await (client as PublicClient).readContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'roleLocks',
                 args: [user, roleId]
-            });
+            }) as any;
+
+            if (Array.isArray(res)) {
+                return {
+                    amount: res[0],
+                    entryBurn: res[1],
+                    lockedAt: Number(res[2]),
+                    roleId: res[3],
+                    metadata: res[4]
+                };
+            }
+            return res as { amount: bigint, entryBurn: bigint, lockedAt: number, roleId: Hex, metadata: Hex };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'roleLocks');
         }
@@ -368,12 +418,13 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     async roleExitConfigs({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
+            const [feePercent, minFee] = await (client as PublicClient).readContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'roleExitConfigs',
                 args: [roleId]
-            });
+            }) as [bigint, bigint];
+            return { feePercent, minFee };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'roleExitConfigs');
         }

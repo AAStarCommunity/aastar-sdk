@@ -144,9 +144,23 @@ export class PaymasterClient {
 
         const result = await response.json();
 
-        if (result.error) throw new Error(`Estimation Error: ${JSON.stringify(result.error)}`);
+
 
         const data = result.result;
+
+        // Anvil Fallback for Estimation
+        if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
+             console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using Anvil defaults.');
+             return {
+                 preVerificationGas: 100000n,
+                 verificationGasLimit: 1000000n, 
+                 callGasLimit: 2000000n,
+                 paymasterVerificationGasLimit: 100000n,
+                 paymasterPostOpGasLimit: 100000n
+             };
+        }
+
+        if (result.error) throw new Error(`Estimation Error: ${JSON.stringify(result.error)}`);
         
         // Dynamic tuning based on "Efficiency Guard" formulas
         return {
@@ -314,6 +328,31 @@ export class PaymasterClient {
         });
 
         const result = await response.json();
+        
+        if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
+             console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
+             
+             // Debug Logs
+             console.log('DEBUG Fallback:', {
+                 entryPoint,
+                 sender: userOp.sender,
+                 walletAccount: wallet.account,
+                 walletAccountType: typeof wallet.account,
+                 walletAddress: wallet.account?.address
+             });
+
+             const caller = wallet.account?.address ? wallet.account.address : wallet.account;
+
+             return await wallet.writeContract({
+                 address: entryPoint,
+                 abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
+                 functionName: 'handleOps',
+                 args: [[userOp], caller],
+                 chain: wallet.chain,
+                 account: wallet.account
+             });
+        }
+
         if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
         return result.result;
     }

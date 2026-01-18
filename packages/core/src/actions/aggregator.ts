@@ -5,12 +5,10 @@ import { AAStarError } from '../errors/index.js';
 
 export type AggregatorActions = {
     // BLS Public Key Management
-    registerBLSPublicKey: (args: { user: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
-    blsPublicKeys: (args: { validator: Address }) => Promise<{ publicKey: Hex, registered: boolean }>;
+    registerBLSPublicKey: (args: { validator: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
+    blsPublicKeys: (args: { validator: Address }) => Promise<{ publicKey: Hex, isActive: boolean }>;
     
     // Threshold Management
-    setBLSThreshold: (args: { threshold: number, account?: Account | Address }) => Promise<Hash>;
-    getBLSThreshold: () => Promise<bigint>;
     setDefaultThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
     setMinThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
     defaultThreshold: () => Promise<bigint>;
@@ -23,9 +21,9 @@ export type AggregatorActions = {
     proposalNonces: (args: { proposalId: bigint }) => Promise<bigint>;
     
     // Aggregated Signatures
-    aggregatedSignatures: (args: { index: bigint }) => Promise<{ signature: Hex, messageHash: Hex, timestamp: bigint, verified: boolean }>;
+    aggregatedSignatures: (args: { index: bigint }) => Promise<{ aggregatedSig: Hex, messageHash: Hex, timestamp: bigint, verified: boolean }>;
     
-    // Registry & SuperPaymaster
+    // Config
     setDVTValidator: (args: { dv: Address, account?: Account | Address }) => Promise<Hash>;
     setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     DVT_VALIDATOR: () => Promise<Address>;
@@ -46,15 +44,15 @@ export type AggregatorActions = {
 
 export const aggregatorActions = (address: Address) => (client: PublicClient | WalletClient): AggregatorActions => ({
     // BLS Public Key Management
-    async registerBLSPublicKey({ user, publicKey, account }) {
+    async registerBLSPublicKey({ validator, publicKey, account }) {
         try {
-            validateAddress(user, 'user');
+            validateAddress(validator, 'validator');
             validateRequired(publicKey, 'publicKey');
             return await (client as any).writeContract({
                 address,
                 abi: BLSAggregatorABI,
                 functionName: 'registerBLSPublicKey',
-                args: [publicKey],
+                args: [validator, publicKey],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -72,42 +70,13 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
                 functionName: 'blsPublicKeys',
                 args: [validator]
             }) as any;
-            return { publicKey: result[0], registered: result[1] };
+            return { publicKey: result[0], isActive: result[1] };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'blsPublicKeys');
         }
     },
 
     // Threshold Management
-    async setBLSThreshold({ threshold, account }) {
-        try {
-            validateRequired(threshold, 'threshold');
-            return await (client as any).writeContract({
-                address,
-                abi: BLSAggregatorABI,
-                functionName: 'setThreshold',
-                args: [BigInt(threshold)],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setBLSThreshold');
-        }
-    },
-
-    async getBLSThreshold() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: BLSAggregatorABI,
-                functionName: 'threshold',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getBLSThreshold');
-        }
-    },
-
     async setDefaultThreshold({ newThreshold, account }) {
         try {
             validateRequired(newThreshold, 'newThreshold');
@@ -140,7 +109,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async defaultThreshold( ) {
+    async defaultThreshold() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -153,7 +122,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async minThreshold( ) {
+    async minThreshold() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -167,7 +136,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
     },
 
     // Proposal & Execution
-    async executeProposal({  proposalId, target, callData, requiredThreshold, proof, account }) {
+    async executeProposal({ proposalId, target, callData, requiredThreshold, proof, account }) {
         try {
             validateRequired(proposalId, 'proposalId');
             validateAddress(target, 'target');
@@ -187,7 +156,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async verifyAndExecute({  proposalId, operator, slashLevel, repUsers, newScores, epoch, proof, account }) {
+    async verifyAndExecute({ proposalId, operator, slashLevel, repUsers, newScores, epoch, proof, account }) {
         try {
             validateRequired(proposalId, 'proposalId');
             validateAddress(operator, 'operator');
@@ -209,7 +178,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async executedProposals({  proposalId }) {
+    async executedProposals({ proposalId }) {
         try {
             validateRequired(proposalId, 'proposalId');
             return await (client as PublicClient).readContract({
@@ -223,7 +192,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async proposalNonces({  proposalId }) {
+    async proposalNonces({ proposalId }) {
         try {
             validateRequired(proposalId, 'proposalId');
             return await (client as PublicClient).readContract({
@@ -238,7 +207,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
     },
 
     // Aggregated Signatures
-    async aggregatedSignatures({  index }) {
+    async aggregatedSignatures({ index }) {
         try {
             validateRequired(index, 'index');
             const result = await (client as PublicClient).readContract({
@@ -248,7 +217,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
                 args: [index]
             }) as any;
             return {
-                signature: result[0],
+                aggregatedSig: result[0],
                 messageHash: result[1],
                 timestamp: result[2],
                 verified: result[3]
@@ -258,8 +227,8 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Registry & SuperPaymaster
-    async setDVTValidator({  dv, account }) {
+    // Config
+    async setDVTValidator({ dv, account }) {
         try {
             validateAddress(dv, 'dv');
             return await (client as any).writeContract({
@@ -275,7 +244,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async setSuperPaymaster({  paymaster, account }) {
+    async setSuperPaymaster({ paymaster, account }) {
         try {
             validateAddress(paymaster, 'paymaster');
             return await (client as any).writeContract({
@@ -291,7 +260,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async DVT_VALIDATOR( ) {
+    async DVT_VALIDATOR() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -304,7 +273,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async SUPERPAYMASTER( ) {
+    async SUPERPAYMASTER() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -317,7 +286,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async REGISTRY( ) {
+    async REGISTRY() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -330,8 +299,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Constants
-    async MAX_VALIDATORS( ) {
+    async MAX_VALIDATORS() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -344,8 +312,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Ownership
-    async owner( ) {
+    async owner() {
         try {
             return await (client as PublicClient).readContract({
                 address,
@@ -358,7 +325,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async transferOwnership({  newOwner, account }) {
+    async transferOwnership({ newOwner, account }) {
         try {
             validateAddress(newOwner, 'newOwner');
             return await (client as any).writeContract({
@@ -374,7 +341,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async renounceOwnership({  account }) {
+    async renounceOwnership({ account }) {
         try {
             return await (client as any).writeContract({
                 address,
@@ -389,8 +356,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    // Version
-    async version( ) {
+    async version() {
         try {
             return await (client as PublicClient).readContract({
                 address,

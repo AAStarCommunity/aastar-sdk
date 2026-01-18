@@ -1,79 +1,79 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-17T08:19:11.741Z",
+  "timestamp": "2026-01-18T03:23:14.684Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
-      "tokenAddress": "0xEcaEf05c902414FB41883B9FD63f8eA7f2C30dde",
+      "tokenAddress": "0x39aC3d4E9E49F38cFaeA7e190414B266dAbcC2Fa",
       "symbol": "aPNTs",
-      "paymasterV4": "0xBEf824fFB65D6FdBf9e0D7720F9FF1AA7e888a7A"
+      "paymasterV4": "0xeF316309d8F11aB1345F9cac1732e8EE886AFe2d"
     },
     "bob": {
       "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
-      "tokenAddress": "0x1331548Ff6c533d4bF1d83E2B695281011F0D1E1",
+      "tokenAddress": "0xCe38EB4a2E70a8267B78024C88870Edd16124906",
       "symbol": "bPNTs",
-      "paymasterV4": "0x5dA0849BF45745C04DdC379c0a48f2Fd6907F7d0"
+      "paymasterV4": "0x3F6E62520F68Ae8894379a7dAbF87B26beEC6AbB"
     },
     "anni": {
       "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
-      "tokenAddress": "0x24b1A3071E3EdDEe10d64ec65d6e83bE1F228E85",
+      "tokenAddress": "0x763Ae423747CE2a3b9e918A10d5309d56Ca0B0bE",
       "symbol": "cPNTs",
-      "superPaymaster": "0x61dd5F492AC5C90acA607Eba8B810c1e7Ba16f63"
+      "superPaymaster": "0x46F76974A34682AA176a1C3D81aEd8A09b013aA3"
     }
   },
   "aaAccounts": [
     {
       "label": "Jason (AAStar)_AA1",
-      "address": "0xECD9C07f648B09CFb78906302822Ec52Ab87dd70",
+      "address": "0x41D47fF9B64481A6BE0432893f8b2Cce4F91EBC5",
       "owner": "0xb5600060e6de5E11D3636731964218E53caadf0E",
       "salt": "0",
       "opName": "Jason (AAStar)"
     },
     {
       "label": "Jason (AAStar)_AA2",
-      "address": "0x179Faf25600c01DBFcEf7971f15DcFa3FbE5d31C",
+      "address": "0x36073A18eA573094c7a9B81f36C75A873D907f90",
       "owner": "0xb5600060e6de5E11D3636731964218E53caadf0E",
       "salt": "1",
       "opName": "Jason (AAStar)"
     },
     {
       "label": "Bob (Bread)_AA1",
-      "address": "0x021C8cA0a2825F69fE79177a7e19Fb0bB171D1E2",
+      "address": "0xf31745a481225776a2C9a63B2Bf8978fdb94F530",
       "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
       "salt": "0",
       "opName": "Bob (Bread)"
     },
     {
       "label": "Bob (Bread)_AA2",
-      "address": "0x8Cbe2644c3A2f71b6936636491616ee6D2e71576",
+      "address": "0x2E428674be13BE13BBF853C71F960c9Bc874274d",
       "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
       "salt": "1",
       "opName": "Bob (Bread)"
     },
     {
       "label": "Anni (Demo)_AA1",
-      "address": "0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4",
+      "address": "0xAF9e68DEfc3FF467442317fb0A76cfBd8CD39a20",
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "salt": "0",
       "opName": "Anni (Demo)"
     },
     {
       "label": "Anni (Demo)_AA2",
-      "address": "0x055dBe74925F687882A9FA62D89ba73c15aeEf03",
+      "address": "0x66B85e7dB111DE3E999a43181a3a79dac41b5258",
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "salt": "1",
       "opName": "Anni (Demo)"
     },
     {
       "label": "Charlie (Test)_AA1",
-      "address": "0xAdE1c3B76e6D54276a63e4a9A44a9cD43c6F6918",
+      "address": "0x33eaf2f70e0c6A27c5E860eC539AaC0875C4d143",
       "owner": "0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D",
       "salt": "0",
       "opName": "Charlie (Test)"
     },
     {
       "label": "Charlie (Test)_AA2",
-      "address": "0x313E1037cD3887d27283681d9d16b3986797cbD5",
+      "address": "0xa7c473ca81f4c909E37A082C4fE7A86bf334eCD2",
       "owner": "0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D",
       "salt": "1",
       "opName": "Charlie (Test)"
