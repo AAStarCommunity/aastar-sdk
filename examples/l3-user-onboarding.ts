@@ -1,74 +1,56 @@
-import { createWalletClient, createPublicClient, http, parseEther, type Hex } from 'viem';
+import { createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { UserLifecycle } from '@aastar/patterns';
+import { UserClient } from '@aastar/sdk'; // Should be available now via re-export
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 /**
- * L3 Example: User Onboarding
+ * L3 Scenario: User Onboarding
  * 
- * Demonstrates complete user onboarding with stake + SBT self-mint.
+ * Demonstrates how a new user interacts with the system:
+ * 1. Checks credit score (SBT)
+ * 2. Mints an SBT if eligible
+ * 3. Claims initial reputation
  */
-
 async function main() {
-    // 1. Setup
-    const privateKey = process.env.TEST_PRIVATE_KEY as `0x${string}`;
-    if (!privateKey) throw new Error('TEST_PRIVATE_KEY required');
-
-    const account = privateKeyToAccount(privateKey);
-    const chain = sepolia;
-
-    const publicClient = createPublicClient({
-        chain,
-        transport: http(process.env.RPC_URL)
-    });
-
-    const walletClient = createWalletClient({
+    // 1. Setup User
+    const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
+    const wallet = createWalletClient({
         account,
-        chain,
+        chain: sepolia,
         transport: http(process.env.RPC_URL)
     });
 
-    // 2. Initialize UserLifecycle
-    const userLifecycle = new UserLifecycle({
-        accountAddress: account.address,
-        rpcUrl: process.env.RPC_URL!,
-        gTokenAddress: process.env.GTOKEN_ADDRESS as `0x${string}`,
-        gTokenStakingAddress: process.env.GTOKEN_STAKING_ADDRESS as `0x${string}`,
+    console.log(`\n🚀 Starting User Onboarding for ${account.address}...`);
+
+    // 2. Initialize UserClient (New Architecture)
+    // Note: In a real app, addresses would come from config or discovery
+    const userClient = new UserClient(wallet as any, {
+        registryAddress: process.env.REGISTRY_ADDRESS as `0x${string}`,
         sbtAddress: process.env.SBT_ADDRESS as `0x${string}`,
-        publicClient,
-        walletClient
+        reputationAddress: process.env.REPUTATION_ADDRESS as `0x${string}`
     });
 
-    // 3. Check Eligibility
-    const communityAddress = process.env.COMMUNITY_ADDRESS as `0x${string}`;
-    const eligible = await userLifecycle.checkEligibility(communityAddress);
-    
-    if (!eligible) {
-        console.log('❌ Already a member or ineligible');
-        return;
+    // 3. Check SBT Status
+    console.log('\n📊 Checking SBT Status...');
+    const hasSBT = await userClient.hasSBT(account.address);
+    console.log(`   - Has SBT: ${hasSBT}`);
+
+    if (!hasSBT) {
+        console.log('   - Minting SBT...');
+        const tx = await userClient.mintSBT();
+        console.log(`   ✅ SBT Minted! Tx: ${tx}`);
     }
 
-    // 4. Onboard (Stake + Mint SBT)
-    console.log('👤 Starting onboarding...');
-    
-    const roleId = '0x0000000000000000000000000000000000000000000000000000000000000001' as Hex;
-    const result = await userLifecycle.onboard({
-        community: communityAddress,
-        roleId,
-        stakeAmount: parseEther('100')
-    });
+    // 4. Check Reputation
+    console.log('\n⭐ Checking Reputation...');
+    const score = await userClient.getReputationScore(account.address);
+    // reputation score is bigint, convert to string for display
+    console.log(`   - Current Score: ${score.toString()}`);
 
-    console.log('✅ Onboarding Complete!');
-    console.log('Stake TX:', result.stakeTx);
-    console.log('SBT Token ID:', result.sbtTokenId);
-
-    // 5. Check Status
-    const sbtBalance = await userLifecycle.getMySBTs();
-    const stakedBalance = await userLifecycle.getStakedBalance(roleId);
-    
-    console.log('\nUser Status:');
-    console.log('SBT Count:', sbtBalance.toString());
-    console.log('Staked:', stakedBalance.toString());
+    console.log('\n✅ User Onboarding Complete!');
 }
 
 main().catch(console.error);

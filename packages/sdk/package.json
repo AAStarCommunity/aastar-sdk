@@ -15,6 +15,7 @@
     "@aastar/account": "workspace:*",
     "@aastar/core": "workspace:*",
     "@aastar/dapp": "workspace:*",
+    "@aastar/enduser": "workspace:*",
     "@aastar/identity": "workspace:*",
     "@aastar/paymaster": "workspace:*",
     "@aastar/tokens": "workspace:*",

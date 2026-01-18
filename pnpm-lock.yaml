@@ -247,6 +247,9 @@ importers:
       '@aastar/dapp':
         specifier: workspace:*
         version: link:../dapp
+      '@aastar/enduser':
+        specifier: workspace:*
+        version: link:../enduser
       '@aastar/identity':
         specifier: workspace:*
         version: link:../identity

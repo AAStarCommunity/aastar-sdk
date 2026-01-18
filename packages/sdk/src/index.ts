@@ -3,7 +3,9 @@ export * from '@aastar/account';
 export * from '@aastar/paymaster';
 export * from '@aastar/identity';
 export * from '@aastar/tokens';
+export * from '@aastar/tokens';
 export * from '@aastar/dapp';
+export * from '@aastar/enduser'; // Export UserClient and CommunityClient
 
 // Export Role-Based Clients
 export * from './clients/endUser.js';
