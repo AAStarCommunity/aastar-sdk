@@ -204,7 +204,7 @@ export function createOperatorClient({
         async configureOperator({ xPNTsToken, treasury, exchangeRate, account: accountOverride }: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) {
             const tx = await spActions.configureOperator({ 
                 xPNTsToken, 
-                treasury, 
+                opTreasury: treasury, 
                 exchangeRate,
                 account: accountOverride || account
             });

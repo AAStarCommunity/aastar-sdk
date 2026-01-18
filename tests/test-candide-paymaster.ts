@@ -12,19 +12,21 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env.sepolia') });
 
 async function main() {
-    console.log('🚀 Candide Gasless Transaction with Paymaster V4\n');
+    console.log('🚀 Gasless Transaction with Paymaster V4');
     console.log('='.repeat(70));
     
-    const bundlerUrl = process.env.CANDIDE_BUNDLER_URL!;
     const rpcUrl = process.env.RPC_URL!;
     const entryPoint = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
+    const bundlerUrl = process.env.PIMLICO_BUNDLER_URL || 'https://api.candide.dev/public/v3/11155111';
+
+    console.log(`📡 URL: ${bundlerUrl}`);
     
     const publicClient = createPublicClient({
         chain: sepolia,
         transport: http(rpcUrl)
     });
     
-    const account = privateKeyToAccount(process.env.PRIVATE_KEY_JASON as Hex);
+    const account = privateKeyToAccount(process.env.PRIVATE_KEY_BOB as Hex);
     const wallet = createWalletClient({
         account,
         chain: sepolia,
@@ -34,10 +36,10 @@ async function main() {
     const statePath = path.resolve(__dirname, '../scripts/l4-state.json');
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     
-    const aaAddress = state.aaAccounts.find((a: any) => a.label === 'Jason (AAStar)_AA1')?.address as Address;
-    const paymasterAddress = state.operators.jason.paymasterV4 as Address;
-    const tokenAddress = state.operators.jason.tokenAddress as Address;
-    const recipient = state.operators.bob.address as Address;
+    const aaAddress = state.aaAccounts.find((a: any) => a.label === 'Bob (Bread)_AA1')?.address as Address;
+    const paymasterAddress = state.operators.bob.paymasterV4 as Address;
+    const tokenAddress = state.operators.bob.tokenAddress as Address;
+    const recipient = state.operators.jason.address as Address;
     
     console.log('\n📋 Configuration:');
     console.log('   AA Address:', aaAddress);

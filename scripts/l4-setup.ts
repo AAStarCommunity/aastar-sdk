@@ -288,27 +288,22 @@ async function main() {
                     
                     if (balance < parseEther('10000')) {
                         console.log(`   🪙  Minting 1M ${op.symbol} to ${op.name}...`);
-                        const h = await publicClient.simulateContract({
-                            address: tAddr,
-                            abi: parseAbi(['function mint(address to, uint256 amount) external']),
-                            functionName: 'mint',
-                            args: [acc.address, parseEther('1000000')],
-                            account: acc.address
-                        }).then(r => opClient.writeContract(r.request))
-                        .catch(async () => {
-                            // If owner mint fails, maybe try supplier if it has role
-                            return await supplierClient.writeContract({
+                        try {
+                            const h = await opClient.writeContract({
                                 address: tAddr,
                                 abi: parseAbi(['function mint(address to, uint256 amount) external']),
                                 functionName: 'mint',
                                 args: [acc.address, parseEther('1000000')],
-                                account: supplier
+                                account: acc
                             });
-                        });
-                        await publicClient.waitForTransactionReceipt({ hash: h });
+                            await publicClient.waitForTransactionReceipt({ hash: h });
+                            console.log(`      ✅ Minted 1M ${op.symbol}`);
+                        } catch (mintErr: any) {
+                            console.error(`      ❌ Mint Failed: ${mintErr.message}`);
+                        }
                     }
-                } catch (e) {
-                    // Skip mint if not supported or no permission
+                } catch (e: any) {
+                    console.error(`      ⚠️  Balance Check Failed: ${e.message}`);
                 }
             }
         }

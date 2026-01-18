@@ -1,4 +1,4 @@
-import { type Address } from 'viem';
+import { type Address, type PublicClient, type Transport, type Chain } from 'viem';
 
 /**
  * Bundler types we support
@@ -24,10 +24,19 @@ export function detectBundlerType(bundlerUrl: string): BundlerType {
 }
 
 /**
- * Create a bundler client based on the bundler type
- * Returns a simple config object to avoid type conflicts
+ * Minimal interface to satisfy basic Pimlico/Bundler needs 
+ * without bringing in heavy permissionless types that might conflict
  */
-export function createBundlerClient(bundlerUrl: string, entryPoint: Address): any {
+export interface BundlerConfig {
+    type: BundlerType;
+    url: string;
+    entryPoint: Address;
+}
+
+/**
+ * Create a bundler client config
+ */
+export function createBundlerClient(bundlerUrl: string, entryPoint: Address): BundlerConfig {
     const bundlerType = detectBundlerType(bundlerUrl);
     
     return {

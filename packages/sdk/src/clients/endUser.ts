@@ -161,7 +161,7 @@ export function createEndUserClient({
             await (client as any).waitForTransactionReceipt({ hash: regTx });
 
             // 2. Fetch SBT ID
-            const sbtId = await actions.getUserSBT({ user: accountToUse.address, roleId });
+            const sbtId = await actions.getUserSBT({ user: accountToUse.address });
             console.log(`   SDK: User joined. SBT ID: ${sbtId}`);
 
             // 3. Fetch Initial Credit for verification
@@ -177,7 +177,7 @@ export function createEndUserClient({
 
                 credit = await actions.getAvailableCredit({
                     user: (client as any).aaAddress || accountToUse.address,
-                    operator: tokenAddress
+                    token: tokenAddress
                 });
 
                 console.log(`   SDK: Activation complete. Current Credit: ${credit} points.`);
@@ -424,5 +424,5 @@ export function createEndUserClient({
 
             return { accountAddress, deployTxHash: deployHash, isDeployed: true }; 
         }
-    }) as EndUserClient;
+    }) as unknown as EndUserClient;
 }

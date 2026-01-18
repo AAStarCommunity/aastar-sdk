@@ -52,5 +52,5 @@ export function createAdminClient({
         ...aggregatorActions(ADDRESS_PLACEHOLDER)(baseClient as any),
     };
 
-    return Object.assign(baseClient, actions) as AdminClient;
+    return Object.assign(baseClient, actions) as unknown as AdminClient;
 }

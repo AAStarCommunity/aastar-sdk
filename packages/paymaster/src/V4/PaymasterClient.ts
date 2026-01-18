@@ -124,10 +124,10 @@ export class PaymasterClient {
                 postOpGasLimit: 300000n
              });
         } else {
-             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
+                     paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
-                verificationGasLimit: 750000n, // High 750k
-                postOpGasLimit: 500000n        // High 500k to finish postOp after catch
+                verificationGasLimit: 250000n, 
+                postOpGasLimit: 150000n        
             });
         }
 
@@ -151,8 +151,8 @@ export class PaymasterClient {
                 ? concat([options.factory, options.factoryData]) 
                 : '0x' as Hex,
             callData,
-            accountGasLimits: concat([pad(toHex(300000n), { size: 16 }), pad(toHex(100000n), { size: 16 })]), // 300k verification (Aggressive bump to fix OOG), 100k call
-            preVerificationGas: 100000n, // 100k PVG (Bumped from 50k to fix AA23)
+            accountGasLimits: concat([pad(toHex(250000n), { size: 16 }), pad(toHex(500000n), { size: 16 })]), 
+            preVerificationGas: 100000n, 
             gasFees: concat([pad(toHex(maxPriorityFeePerGas), { size: 16 }), pad(toHex(maxFeePerGas), { size: 16 })]),
             paymasterAndData,
             signature: '0x' as `0x${string}`
@@ -252,7 +252,7 @@ export class PaymasterClient {
             verificationGasLimit: options?.verificationGasLimit,
             callGasLimit: options?.callGasLimit,
             paymasterVerificationGasLimit: options?.paymasterVerificationGasLimit,
-            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 100000n
+            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 150000n
         };
 
         if (options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
@@ -368,7 +368,7 @@ export class PaymasterClient {
         if (bundlerType === BundlerType.PIMLICO) {
             // Use Pimlico SDK
             try {
-                const { createPimlicoClient } = await import('permissionless/clients/pimlico');
+                const { createPimlicoClient } = await import('permissionless/clients/pimlico') as any;
                 const { http } = await import('viem');
                 
                 const pimlicoClient = createPimlicoClient({

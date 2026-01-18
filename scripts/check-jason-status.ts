@@ -1,184 +1,85 @@
 
-import { createPublicClient, createWalletClient, http, parseAbi, keccak256, formatEther, parseEther, toBytes } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http, parseAbi, type Address, formatEther } from 'viem';
 import { sepolia } from 'viem/chains';
 import * as dotenv from 'dotenv';
-import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+import * as fs from 'fs';
 
-// Load env
-dotenv.config({ path: '.env.sepolia' });
-
-const CONFIG_PATH = path.resolve(process.cwd(), 'config.sepolia.json');
-const STATE_PATH = path.resolve(process.cwd(), 'scripts/l4-state.json');
-
-// ABIs
-const REGISTRY_ABI = parseAbi([
-    'function hasRole(bytes32 roleId, address user) view returns (bool)',
-    'function roleMetadata(bytes32 roleId, address user) view returns (bytes)',
-    'function registerRole(bytes32 roleId, address user, bytes roleData)',
-    'function registerRoleSelf(bytes32 roleId, bytes roleData)'
-]);
-
-const FACTORY_ABI = parseAbi([
-    'function getTokenAddress(address community) view returns (address)',
-    'function deployxPNTsToken(string name, string symbol, string communityName, string communityENS, uint256 exchangeRate, address paymasterAOA) returns (address)'
-]);
-
-const TOKEN_ABI = parseAbi([
-    'function name() view returns (string)',
-    'function symbol() view returns (string)'
-]);
-
-const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env.sepolia') });
 
 async function main() {
-    console.log('🔍 Checking Jason Account Status...');
+    const statePath = path.resolve(__dirname, '../scripts/l4-state.json');
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 
-    // 1. Load Config & State
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    const state = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
-
-    // Jason's Address
-    const jasonAddress = state.operators.jason.address;
-    const jasonKey = process.env.PRIVATE_KEY_JASON;
-    
-    if (!jasonAddress || !jasonKey) {
-        throw new Error('Jason address or private key not found');
-    }
-
-    console.log(`👤 Jason Address: ${jasonAddress}`);
-
-    // Clients
-    const client = createPublicClient({ chain: sepolia, transport: http(process.env.RPC_URL) });
-    const wallet = createWalletClient({ 
-        account: privateKeyToAccount(jasonKey as `0x${string}`), 
-        chain: sepolia, 
-        transport: http(process.env.RPC_URL) 
+    const rpcUrl = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL;
+    const client = createPublicClient({
+        chain: sepolia,
+        transport: http(rpcUrl)
     });
 
-    const registryAddr = config.registry;
-    const factoryAddr = config.xPNTsFactory;
+    const epAddr = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
 
-    // 2. Check Registry Role
-    console.log('\n🏛️  Checking Registry Status...');
-    const hasRole = await client.readContract({
-        address: registryAddr,
-        abi: REGISTRY_ABI,
-        functionName: 'hasRole',
-        args: [ROLE_COMMUNITY, jasonAddress]
-    });
+    for (const [name, op] of Object.entries(state.operators)) {
+        const o: any = op;
+        if (!o.paymasterV4 || o.paymasterV4 === 'N/A (Super)' || o.paymasterV4 === 'None') continue;
 
-    if (hasRole) {
-        console.log('✅ Jason IS registered as COMMUNITY.');
-        // Try to decode metadata (simple string decode for name if possible, complex decode is hard without full ABI)
-        // We'll skip metadata decoding for now unless critical
-    } else {
-        console.log('❌ Jason is NOT registered as COMMUNITY.');
-        console.log('🛠️  Attempting to register Jason as Community...');
+        console.log(`\n🔍 Checking Paymaster Status for ${name.toUpperCase()}...`);
+        console.log(`🏦 Paymaster: ${o.paymasterV4}`);
         
-        try {
-             // Encode RoleData: (name, ens, website, desc, logo, stake)
-             // string, string, string, string, string, uint256
-             // We use 'viem' encodeAbiParameters
-             const { encodeAbiParameters, parseAbiParameters } = await import('viem');
-             
-             const roleData = encodeAbiParameters(
-                parseAbiParameters('string, string, string, string, string, uint256'),
-                ['Jason Community', '', 'https://jason.com', 'Jason Tech Community', '', 30000000000000000000n] // 30 GTokens
-             );
-
-             // Note: This requires Jason to have GTokens and Approve Staking!
-             // Assuming Jason has enough GTokens (he usually does in tests)
-             // We need to approve Staking first
-             const STAKING = config.gTokenStaking;
-             const GTOKEN = config.gToken;
-
-             console.log('   Approving Staking...');
-             const approveHash = await wallet.writeContract({
-                 address: GTOKEN,
-                 abi: parseAbi(['function approve(address,uint256) returns (bool)']),
-                 functionName: 'approve',
-                 args: [STAKING, parseEther('1000')] // Plenty
-             });
-             await client.waitForTransactionReceipt({ hash: approveHash });
-             console.log('   ✅ Approved.');
-
-             console.log('   Registering Community...');
-             const txHash = await wallet.writeContract({
-                 address: registryAddr,
-                 abi: REGISTRY_ABI,
-                 functionName: 'registerRoleSelf',
-                 args: [ROLE_COMMUNITY, roleData]
-             });
-             await client.waitForTransactionReceipt({ hash: txHash });
-             console.log(`   ✅ Community Registered! Tx: ${txHash}`);
-        } catch (e: any) {
-            console.error(`   ❌ Registration Failed: ${e.message}`);
-            return;
+        const aaMatch = state.aaAccounts.find((a: any) => a.opName.toLowerCase().includes(name.toLowerCase()));
+        if (!aaMatch) {
+            console.log(`❌ No AA account found for operator ${name}`);
+            continue;
         }
-    }
+        const aaAddr = aaMatch.address;
+        const tokenAddr = o.tokenAddress;
 
-    // 3. Check xPNTs Token
-    console.log('\n🪙  Checking xPNTs Token Status...');
-    const tokenAddr = await client.readContract({
-        address: factoryAddr,
-        abi: FACTORY_ABI,
-        functionName: 'getTokenAddress',
-        args: [jasonAddress]
-    });
-
-    if (tokenAddr && tokenAddr !== '0x0000000000000000000000000000000000000000') {
-        const [name, symbol] = await Promise.all([
-            client.readContract({ address: tokenAddr, abi: TOKEN_ABI, functionName: 'name' }),
-            client.readContract({ address: tokenAddr, abi: TOKEN_ABI, functionName: 'symbol' })
-        ]);
-        console.log(`✅ Jason has Token: ${tokenAddr}`);
-        console.log(`   Name: ${name}`);
-        console.log(`   Symbol: ${symbol}`);
-        
-        if (symbol === 'dPNTs' || symbol.includes('cPNTs')) {
-            console.log(`   ℹ️  Note: "dPNTs (cPNTs)" confusion likely due to symbol naming.`);
-        }
-    } else {
-        console.log('❌ Jason has NO Token deployed.');
-        console.log('🛠️  Deploying Token for Jason...');
+        console.log(`👤 AA Account: ${aaAddr}`);
+        console.log(`🪙  Token:      ${tokenAddr} (${o.symbol})`);
 
         try {
-            // function deployxPNTsToken(string name, string symbol, string communityName, string communityENS, uint256 exchangeRate, address paymasterAOA)
-            const txHash = await wallet.writeContract({
-                address: factoryAddr,
-                abi: FACTORY_ABI,
-                functionName: 'deployxPNTsToken',
-                args: [
-                    'Jason Community Token',
-                    'cPNTs', // Let's use cPNTs to curb confusion
-                    'Jason Community',
-                    '',
-                    parseEther('1'), // 1:1 Exchange Rate
-                    state.operators.jason.paymasterV4 // Link to his AOA Paymaster
-                ]
+            // 1. EntryPoint
+            const pmEntryPoint = await client.readContract({
+                address: o.paymasterV4,
+                abi: parseAbi(['function entryPoint() view returns (address)']),
+                functionName: 'entryPoint'
             });
-            console.log(`   🚀 Use deploy tx: ${txHash}`);
-            const receipt = await client.waitForTransactionReceipt({ hash: txHash });
-            console.log(`   ✅ Token Deployed!`);
+            console.log(`⚙️  EntryPoint:  ${pmEntryPoint.toLowerCase() === epAddr.toLowerCase() ? '✅ Matches' : '❌ MISMATCH (' + pmEntryPoint + ')'}`);
 
-            // Read the new token address? 
-            // We can just rely on user re-running check, or fetch it again.
-            // Let's fetch it for verification.
-            const newToken = await client.readContract({
-                address: factoryAddr,
-                abi: FACTORY_ABI,
-                functionName: 'getTokenAddress',
-                args: [jasonAddress]
-            });
-            console.log(`   📍 New Token Address: ${newToken}`);
+            // 2. Token Price
+            const tokenPrice = await client.readContract({
+                address: o.paymasterV4,
+                abi: parseAbi(['function tokenPrices(address) view returns (uint256)']),
+                functionName: 'tokenPrices',
+                args: [tokenAddr]
+            }) as bigint;
+            console.log(`💰 Token Price: ${tokenPrice > 0n ? '✅ ' + tokenPrice : '❌ NOT SET'}`);
+
+            // 3. AA Internal Balance
+            const internalBalance = await client.readContract({
+                address: o.paymasterV4,
+                abi: parseAbi(['function balances(address,address) view returns (uint256)']),
+                functionName: 'balances',
+                args: [aaAddr, tokenAddr]
+            }) as bigint;
+            console.log(`💳 AA Balance:  ${internalBalance > 0n ? '✅ ' + formatEther(internalBalance) : '❌ ZERO'} ${o.symbol}`);
+
+            // 4. EP Balance
+            const epBalance = await client.readContract({
+                address: epAddr,
+                abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                functionName: 'balanceOf',
+                args: [o.paymasterV4]
+            }) as bigint;
+            console.log(`⛽ EP Balance:  ${Number(epBalance) / 1e18} ETH`);
+
         } catch (e: any) {
-            console.error(`   ❌ Deployment Failed: ${e.message}`);
+            console.error(`❌ Error checking ${name}:`, e.message);
         }
     }
-
-    console.log('\n🏁 Done.');
 }
 
-main().catch(console.error);
+main();

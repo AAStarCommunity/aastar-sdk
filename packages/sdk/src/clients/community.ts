@@ -399,5 +399,5 @@ export function createCommunityClient({
     return Object.assign(client, registryActionsObj, sbtActionsObj, { 
         launch,
         getCommunityInfo
-    }) as CommunityClient;
+    }) as unknown as CommunityClient;
 }
