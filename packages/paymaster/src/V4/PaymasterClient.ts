@@ -379,10 +379,10 @@ export class PaymasterClient {
                     }
                 });
                 
+                // Pimlico expects the UserOperation fields directly, not nested
                 const userOpHash = await pimlicoClient.sendUserOperation({
-                    userOperation: userOp as any,
-                    account: userOp.sender as any,
-                    entryPoint: entryPoint
+                    ...userOp,
+                    account: userOp.sender as any
                 });
                 
                 console.log('[PaymasterClient] ✅ Submitted via Pimlico, hash:', userOpHash);

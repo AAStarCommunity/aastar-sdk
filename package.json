@@ -65,6 +65,6 @@
     "cheerio": "1.1.2",
     "csv-writer": "1.6.0",
     "permissionless": "0.3.2",
-    "viem": "2.41.2"
+    "viem": "2.43.3"
   }
 }
