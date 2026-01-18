@@ -1153,18 +1153,18 @@ async function main() {
     const spDepositInfo = await ep(publicClient).getDepositInfo({ account: superPM });
     
     console.log(`   📊 Current Stake Status:`);
-    console.log(`      Deposit: ${formatEther(spDepositInfo.deposit)} ETH`);
+    console.log(`      Deposit: ${formatEther(spDepositInfo.deposit || 0n)} ETH`);
     console.log(`      Staked: ${spDepositInfo.staked ? '✅ Yes' : '❌ No'}`);
-    console.log(`      Stake Amount: ${formatEther(spDepositInfo.stake)} ETH`);
-    console.log(`      Unstake Delay: ${spDepositInfo.unstakeDelaySec} seconds`);
+    console.log(`      Stake Amount: ${formatEther(spDepositInfo.stake || 0n)} ETH`);
+    console.log(`      Unstake Delay: ${spDepositInfo.unstakeDelaySec || 0} seconds`);
     
     // Bundler Requirements (from error message)
     const REQUIRED_STAKE = parseEther('0.1');
     const REQUIRED_DELAY = 86400; // 1 day in seconds
     
     const needsStake = !spDepositInfo.staked || 
-                      spDepositInfo.stake < REQUIRED_STAKE || 
-                      spDepositInfo.unstakeDelaySec < REQUIRED_DELAY;
+                      (spDepositInfo.stake || 0n) < REQUIRED_STAKE || 
+                      (spDepositInfo.unstakeDelaySec || 0) < REQUIRED_DELAY;
     
     if (needsStake) {
         console.log(`\n   ⚠️  Stake requirements NOT met. Bundler requires:`);
