@@ -181,7 +181,7 @@ describe('UserClient', () => {
       await client.mintSBT('0x4444444444444444444444444444444444444444444444444444444444444444');
       expect(mocks.mockSBT.mintForRole).toHaveBeenCalledWith(expect.objectContaining({
           roleId: '0x4444444444444444444444444444444444444444444444444444444444444444',
-          to: config.accountAddress
+          user: config.accountAddress
       }));
     });
     

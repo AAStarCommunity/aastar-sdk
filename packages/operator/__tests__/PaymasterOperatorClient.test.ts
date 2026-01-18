@@ -80,7 +80,18 @@ describe('PaymasterOperatorClient', () => {
     mocks.mockSuperPaymaster.APNTS_TOKEN.mockResolvedValue('0xAPNTS');
     mocks.mockSuperPaymaster.deposit.mockResolvedValue('0xTxHash');
     mocks.mockSuperPaymaster.configureOperator.mockResolvedValue('0xTxHash');
-    mocks.mockSuperPaymaster.operators.mockResolvedValue([0n, '0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000', 0n]);
+    mocks.mockSuperPaymaster.operators.mockResolvedValue([
+        0n, // aPNTsBalance
+        '0x2222222222222222222222222222222222222222', // xPNTsToken
+        '0x3333333333333333333333333333333333333333', // opTreasury
+        150n, // exchangeRate
+        true, // isConfigured
+        false, // isPaused
+        100, // reputation
+        60, // minTxInterval
+        0n, // totalSpent
+        0n  // totalTxSponsored
+    ]);
     mocks.mockPaymasterFactory.deployPaymaster.mockResolvedValue('0xTxHash');
     mocks.mockPaymasterFactory.getPaymaster.mockResolvedValue('0x7777777777777777777777777777777777777777');
     mocks.mockPaymaster.setTokenPrice.mockResolvedValue('0xTxHash');
@@ -187,22 +198,28 @@ describe('PaymasterOperatorClient', () => {
       it('updateExchangeRate should fetch config and call configureOperator', async () => {
           // Mock operators return [balance, token, treasury, rate]
           mocks.mockSuperPaymaster.operators.mockResolvedValue([
-              1000n,
-              '0x2222222222222222222222222222222222222222',
-              '0x3333333333333333333333333333333333333333',
-              150n
+              1000n, // aPNTsBalance
+              '0x2222222222222222222222222222222222222222', // xPNTsToken
+              '0x3333333333333333333333333333333333333333', // opTreasury
+              150n, // exchangeRate
+              true, // isConfigured
+              false, // isPaused
+              100, // reputation
+              60, // minTxInterval
+              0n, // totalSpent
+              0n  // totalTxSponsored
           ]);
           mocks.mockSuperPaymaster.configureOperator.mockResolvedValue('0xTxHash');
 
           await client.updateExchangeRate(200n);
           
           expect(mocks.mockSuperPaymaster.operators).toHaveBeenCalledWith(expect.objectContaining({
-              operator: '0x1234567890123456789012345678901234567890' // Default mock address from client.ts
+              id: '0x1234567890123456789012345678901234567890' // Default mock address from client.ts
           }));
           
           expect(mocks.mockSuperPaymaster.configureOperator).toHaveBeenCalledWith(expect.objectContaining({
               xPNTsToken: '0x2222222222222222222222222222222222222222',
-              treasury: '0x3333333333333333333333333333333333333333',
+              opTreasury: '0x3333333333333333333333333333333333333333',
               exchangeRate: 200n
           }));
       });

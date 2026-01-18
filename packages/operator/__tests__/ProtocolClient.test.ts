@@ -112,11 +112,10 @@ describe('ProtocolClient', () => {
 
   describe('Global Params', () => {
       it('setProtocolFee should call superPaymaster', async () => {
-          await client.setProtocolFee('0x6666666666666666666666666666666666666666', 100n);
+          await client.setProtocolFee(100n);
           expect(mocks.mockSuperPaymasterActions).toHaveBeenCalledWith(config.superPaymasterAddress);
           expect(mocks.mockSuperPaymaster.setProtocolFee).toHaveBeenCalledWith(expect.objectContaining({
-              feeRecipient: '0x6666666666666666666666666666666666666666',
-              feeBps: 100n
+              newFeeBPS: 100n
           }));
       });
 

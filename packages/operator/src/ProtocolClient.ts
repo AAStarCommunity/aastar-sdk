@@ -59,12 +59,17 @@ export class ProtocolClient extends BaseClient {
         }
     }
 
-    /**
-     * Sign (Vote) on a proposal - NOT IMPLEMENTED
-     * Note: signSlashProposal does not exist in DVTActions
-     */
     async signProposal(proposalId: bigint, signature: Hex = '0x', options?: TransactionOptions): Promise<Hash> {
-        throw new Error('signProposal not implemented - signSlashProposal does not exist in DVTActions');
+        try {
+            const dvt = dvtActions(this.dvtValidatorAddress)(this.client);
+            return await dvt.signSlashProposal({
+                proposalId,
+                signature,
+                account: options?.account
+            });
+        } catch (error) {
+            throw error;
+        }
     }
 
     /**
@@ -115,7 +120,7 @@ export class ProtocolClient extends BaseClient {
     // 3. 全局参数管理 (Admin)
     // ========================================
 
-    async setProtocolFee(recipient: Address, bps: bigint, options?: TransactionOptions): Promise<Hash> {
+    async setProtocolFee(bps: bigint, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.superPaymasterAddress) {
                 throw new Error('SuperPaymaster address required for this client');

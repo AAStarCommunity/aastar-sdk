@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
   const mockXPNTsFactory = { createToken: vi.fn() };
   const mockRegistry = { ROLE_COMMUNITY: vi.fn(), registerRoleSelf: vi.fn() };
   const mockToken = { allowance: vi.fn(), approve: vi.fn(), transferOwnership: vi.fn() };
-  const mockSBT = { airdropMint: vi.fn(), burnSBT: vi.fn() };
+  const mockSBT = { airdropMint: vi.fn(), mintForRole: vi.fn(), burnSBT: vi.fn() };
   const mockReputation = { setReputationRule: vi.fn() };
 
   return {
@@ -141,9 +141,8 @@ describe('CommunityClient', () => {
       await client.airdropSBT([user], 1n);
       
       expect(mocks.mockSBTActions).toHaveBeenCalledWith(config.sbtAddress);
-      expect(mocks.mockSBT.airdropMint).toHaveBeenCalledWith(expect.objectContaining({
-        to: user,
-        tokenURI: ''
+      expect(mocks.mockSBT.mintForRole).toHaveBeenCalledWith(expect.objectContaining({
+        user: user
       }));
     });
 
@@ -178,10 +177,11 @@ describe('CommunityClient', () => {
 
   describe('revokeMembership', () => {
     it('should burn SBT', async () => {
-      await client.revokeMembership(123n);
+      const user = '0xUser' as `0x${string}`;
+      await client.revokeMembership(user);
       expect(mocks.mockSBTActions).toHaveBeenCalledWith(config.sbtAddress);
       expect(mocks.mockSBT.burnSBT).toHaveBeenCalledWith(expect.objectContaining({
-        tokenId: 123n
+        user: user
       }));
     });
 

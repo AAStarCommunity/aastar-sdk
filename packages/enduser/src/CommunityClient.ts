@@ -202,12 +202,10 @@ export class CommunityClient extends BaseClient {
     /**
      * Revoke membership (Burn SBT)
      */
-    async revokeMembership(userAddr: Address, roleId: bigint, options?: TransactionOptions): Promise<Hash> {
+    async revokeMembership(userAddr: Address, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.sbtAddress) throw new Error('SBT address required for this client');
             const sbt = sbtActions(this.sbtAddress);
-            
-            const roleIdHex = `0x${roleId.toString(16).padStart(64, '0')}` as Hash;
             
             return await sbt(this.client).burnSBT({
                 user: userAddr,

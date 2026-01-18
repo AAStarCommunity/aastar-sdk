@@ -6,6 +6,7 @@ import { AAStarError } from '../errors/index.js';
 export type DVTActions = {
     // Proposal Management
     createSlashProposal: (args: { operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
+    signSlashProposal: (args: { proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
     executeSlashWithProof: (args: { proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     markProposalExecuted: (args: { id: bigint, account?: Account | Address }) => Promise<Hash>;
     proposals: (args: { proposalId: bigint }) => Promise<{ operator: Address, slashLevel: number, reason: string, executed: boolean }>;
@@ -45,6 +46,23 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'createSlashProposal');
+        }
+    },
+    
+    async signSlashProposal({ proposalId, signature, account }) {
+        try {
+            validateRequired(proposalId, 'proposalId');
+            validateRequired(signature, 'signature');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'signSlashProposal',
+                args: [proposalId, signature],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'signSlashProposal');
         }
     },
 
