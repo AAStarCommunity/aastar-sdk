@@ -1,9 +1,12 @@
 {
   "name": "@aastar/analytics",
-  "version": "0.16.11",
+  "version": "0.16.12",
   "description": "Analytics client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
