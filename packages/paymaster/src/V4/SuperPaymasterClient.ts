@@ -93,10 +93,14 @@ export class SuperPaymasterClient {
         //   - Base 300k +  200k buffer (500k total) → efficiency 0.238 ❌
         //   - Base 300k + 20k buffer (320k total) → efficiency 0.347 ❌
         //   - Base 300k (no buffer) → efficiency 0.366❌
-        // Analysis: actual_gas ~110k, need limit <= 275k for 0.4 ratio
-        // Strategy: Use 87% of bundler's estimate (bundler over-estimates for safety)
+        // Analysis (Jan 19 Update 2):
+        //   Actual usage observed: ~60k gas.
+        //   Bundler estimate: ~300k gas.
+        //   Ratio at 55% (165k): 60k/165k = 0.36 ❌ (Required >= 0.4)
+        //   Target Limit: actual/0.4 = 60k/0.4 = 150k.
+        //   Strategy: Use 45% of bundler's estimate (approx 135k) to ensure efficiency >= 0.44.
         const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
-        const tunedPMVerificationGas = (bundlerEstimate * 87n) / 100n; // 87% = 261k, ratio ~0.42 ✅
+        const tunedPMVerificationGas = (bundlerEstimate * 45n) / 100n; // 45% tuning factor ✅
 
         // Same for PostOp
         const tunedPostOp = est.paymasterPostOpGasLimit + 10000n;

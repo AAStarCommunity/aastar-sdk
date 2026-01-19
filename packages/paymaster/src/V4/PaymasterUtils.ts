@@ -85,6 +85,11 @@ export function buildPaymasterData(
 /**
  * Build paymasterAndData for SuperPaymaster V3.
  * Layout: [Paymaster(20)] [verGas(16)] [postGas(16)] [operator(20)] [maxRate(32)]
+ * Total: 104 bytes
+ * 
+ * IMPORTANT: SuperPaymaster contract generates validUntil internally using:
+ *   validUntil = cachedPrice.updatedAt + priceStalenessThreshold
+ * Do NOT include validUntil/validAfter in paymasterAndData!
  */
 export function buildSuperPaymasterData(
     paymasterAddress: Address,
@@ -92,15 +97,19 @@ export function buildSuperPaymasterData(
     options?: {
         verificationGasLimit?: bigint;
         postOpGasLimit?: bigint;
+        maxRate?: bigint;
     }
 ): `0x${string}` {
     const verGas = options?.verificationGasLimit ?? 80000n;
     const postGas = options?.postOpGasLimit ?? 100000n;
+    const maxRate = options?.maxRate ?? ((1n << 256n) - 1n); // Default: max uint256, no rate limit
+    
     return concat([
         paymasterAddress,
         pad(toHex(verGas), { size: 16 }),
         pad(toHex(postGas), { size: 16 }),
-        operator
+        operator,
+        pad(toHex(maxRate), { size: 32 }) // Optional rate commitment (rug pull protection)
     ]);
 }
 

@@ -50,10 +50,10 @@ async function main() {
     console.log('🔍 Step 1: Running SDK Readiness Check...');
     const report = await PaymasterOperator.checkGaslessReadiness(
         publicClient,
-        jasonAccount.address,
+        entryPoint,
         jasonPM,
-        jasonToken,
-        entryPoint
+        jasonAA2,
+        jasonToken
     );
 
     if (!report.isReady) {
