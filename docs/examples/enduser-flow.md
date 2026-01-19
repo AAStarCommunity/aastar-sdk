@@ -11,9 +11,12 @@ This example demonstrates how an end user sends a gasless transaction using comm
 ## Code Preview
 
 ```typescript
-import { createEndUserClient } from '@aastar/core';
+import { createEndUserClient } from '@aastar/sdk';
 
-const user = createEndUserClient({ ... });
+const user = createEndUserClient({ 
+  account, 
+  paymasterUrl: 'https://paymaster.aastar.io' 
+});
 
 // Send Gasless Transaction
 const hash = await user.sendTransaction({

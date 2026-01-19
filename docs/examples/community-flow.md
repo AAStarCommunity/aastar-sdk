@@ -11,9 +11,12 @@ This example demonstrates how to manage a community, issue SBTs, and configure r
 ## Code Preview
 
 ```typescript
-import { createCommunityClient } from '@aastar/core';
+import { createCommunityClient } from '@aastar/sdk';
 
-const community = createCommunityClient({ ... });
+const community = createCommunityClient({ 
+  account, 
+  chain: sepolia 
+});
 
 // Register Community
 await community.registerCommunity({

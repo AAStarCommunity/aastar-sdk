@@ -11,17 +11,20 @@ This example demonstrates how to set up and manage a SuperPaymaster as an Operat
 ## Code Preview
 
 ```typescript
-import { createOperatorClient } from '@aastar/core';
+import { createOperatorClient } from '@aastar/sdk';
 import { parseEther } from 'viem';
 
-const operator = createOperatorClient({ ... });
+const operator = createOperatorClient({ 
+  transport: http('https://sepolia.drpc.org'),
+  chain: sepolia 
+});
 
-// Stake GTokens
+// Stake GTokens (Handles approval automatically)
 await operator.stake({
   amount: parseEther('100'),
 });
 
-// Deposit Gas Funds
+// Deposit Gas Funds (Handles approval automatically)
 await operator.deposit({
   amount: parseEther('10'),
 });

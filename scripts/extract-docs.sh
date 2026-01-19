@@ -27,6 +27,12 @@ if [ -d "$SDK_REPO/docs/guide" ]; then
 fi
 # Sync root markdown files in docs/ to guide/ for external access
 find "$SDK_REPO/docs/" -maxdepth 1 -name "*.md" -exec cp {} "$DOCS_REPO/guide/" \;
+
+# Sync Package READMEs (Specifically Analytics for the link in main README)
+mkdir -p "$DOCS_REPO/guide/packages/analytics"
+if [ -f "$SDK_REPO/packages/analytics/README.md" ]; then
+    cp "$SDK_REPO/packages/analytics/README.md" "$DOCS_REPO/guide/packages/analytics/index.md"
+fi
 # Sync ZH Guide
 if [ -d "$SDK_REPO/docs/zh/guide" ]; then
     mkdir -p "$DOCS_REPO/zh/guide"
