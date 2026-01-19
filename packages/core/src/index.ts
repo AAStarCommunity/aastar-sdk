@@ -15,6 +15,7 @@ export * from './abis/index.js'; // Assuming abis is a folder with index.ts
 export * from './clients.js';
 export * from './clients/types.js';
 export * from './clients/BaseClient.js';
+export * from './clients/BundlerClient.js';
 export * from './actions/index.js';
 export * from './crypto/index.js';
 export * from './roles.js'; // Role system
