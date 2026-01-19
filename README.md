@@ -127,7 +127,7 @@ pnpm run test:full_anvil
 ## Development Guides
 
 ### ABI Maintenance
-- [ABI Maintenance Plan](/guide/ABI_MAINTENANCE_PLAN)
+- [ABI Maintenance Plan](https://docs.aastar.io/guide/ABI_MAINTENANCE_PLAN)
 
 ---
 
@@ -196,7 +196,7 @@ npx tsx packages/analytics/src/gas-analyzer-v4.ts
 - **Profit Tracking**: Transparent breakdown of Protocol Revenue & Profit
 - **L2 Simulation**: Estimate savings for migrating UserOps to Optimism
 
-👉 **[View Full Analytics Documentation](./packages/analytics/README.md)**
+👉 **[View Full Analytics Documentation](https://docs.aastar.io/guide/packages/analytics/)**
 
 ---
 
@@ -204,8 +204,8 @@ npx tsx packages/analytics/src/gas-analyzer-v4.ts
 
 The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.
 
-- [Stage 3 Scenario Experiment Plan](/guide/STAGE_3_SCENARIO_EXP_PLAN)
-- [Reputation-to-Credit Mapping Whitepaper](/guide/Reputation-to-Credit_Mapping_Whitepaper)
+- [Stage 3 Scenario Experiment Plan](https://docs.aastar.io/guide/STAGE_3_SCENARIO_EXP_PLAN)
+- [Reputation-to-Credit Mapping Whitepaper](https://docs.aastar.io/guide/Reputation-to-Credit_Mapping_Whitepaper)
 
 ---
 
