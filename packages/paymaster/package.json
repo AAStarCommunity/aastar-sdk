@@ -1,6 +1,6 @@
 {
   "name": "@aastar/paymaster",
-  "version": "0.16.9",
+  "version": "0.16.11",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

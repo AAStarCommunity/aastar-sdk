@@ -159,6 +159,27 @@ cd projects/aastar-sdk
 
 ---
 
+## 📊 Gas Analytics & Reporting | Gas 分析与报表
+The SDK includes a powerful **Gas Analytics Module** for analyzing Paymaster efficiency, tracking costs, and generating industry comparison reports.
+SDK 包含一个强大的 **Gas 分析模块**，用于分析 Paymaster 效率、追踪成本并生成行业对比报告。
+
+### Quick Start | 快速开始
+Generate a real-time analysis of recent Sepolia transactions:
+生成最近 Sepolia 交易的实时分析：
+```bash
+npx tsx packages/analytics/src/gas-analyzer-v4.ts
+```
+
+### Key Features | 核心功能
+- **Double-Layer Analysis (双层分析)**: Intrinsic EVM Efficiency vs. Economic USD Costs
+- **Industry Benchmarking (行业对标)**: Compare AAStar vs. Optimism, Alchemy, Pimlico
+- **Profit Tracking (利润追踪)**: Transparent breakdown of Protocol Revenue & Profit
+- **L2 Simulation (L2 模拟)**: Estimate savings for migrating UserOps to Optimism
+
+👉 **[View Full Analytics Documentation | 查看完整分析文档](./packages/analytics/README.md)**
+
+---
+
 ## Academic Research / 学术研究
 
 The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.

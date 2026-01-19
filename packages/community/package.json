@@ -1,6 +1,6 @@
 {
   "name": "@aastar/community",
-  "version": "0.16.9",
+  "version": "0.16.11",
   "description": "Community management client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

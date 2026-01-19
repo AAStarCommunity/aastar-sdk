@@ -1,0 +1,134 @@
+{
+  "metadata": {
+    "generatedAt": "2026-01-19T04:45:54.407Z",
+    "totalRecords": 10,
+    "ethPriceUSD": 3300,
+    "aPNTsPriceUSD": 0.02
+  },
+  "records": [
+    {
+      "txHash": "0xc30cfcbbd448112e8a7d781f4e790f966d3604d99a212a1eff7cff74e665c287",
+      "blockNumber": "10057311",
+      "timestamp": "2026-01-16T16:03:24.000Z",
+      "gasUsed": "149034",
+      "gasPrice": "1136522270",
+      "ethCost": "169380459987180",
+      "usdCost": 0.558955517957694,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0xc30cfcbbd448112e8a7d781f4e790f966d3604d99a212a1eff7cff74e665c287",
+      "blockNumber": "10057311",
+      "timestamp": "2026-01-16T16:03:24.000Z",
+      "gasUsed": "149034",
+      "gasPrice": "1136522270",
+      "ethCost": "169380459987180",
+      "usdCost": 0.558955517957694,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0x7d9334789ac2e527cfd325452f34f0cd61c227b593562fd5857b3696c428e301",
+      "blockNumber": "10057342",
+      "timestamp": "2026-01-16T16:09:36.000Z",
+      "gasUsed": "149046",
+      "gasPrice": "1104857540",
+      "ethCost": "164674596906840",
+      "usdCost": 0.543426169792572,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0x7d9334789ac2e527cfd325452f34f0cd61c227b593562fd5857b3696c428e301",
+      "blockNumber": "10057342",
+      "timestamp": "2026-01-16T16:09:36.000Z",
+      "gasUsed": "149046",
+      "gasPrice": "1104857540",
+      "ethCost": "164674596906840",
+      "usdCost": 0.543426169792572,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0x7aa04016dda602f548cc9c7e3f992c9744e7fd067768bb408c45b81e4bd59f3c",
+      "blockNumber": "10057374",
+      "timestamp": "2026-01-16T16:16:00.000Z",
+      "gasUsed": "149046",
+      "gasPrice": "1214891090",
+      "ethCost": "181074657400140",
+      "usdCost": 0.597546369420462,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0x7aa04016dda602f548cc9c7e3f992c9744e7fd067768bb408c45b81e4bd59f3c",
+      "blockNumber": "10057374",
+      "timestamp": "2026-01-16T16:16:00.000Z",
+      "gasUsed": "149046",
+      "gasPrice": "1214891090",
+      "ethCost": "181074657400140",
+      "usdCost": 0.597546369420462,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0xbabfcb0c12c02d0e5d897e7e3f8609d1017c589e59fbe99bef278b7f2b2ee6d1",
+      "blockNumber": "10057392",
+      "timestamp": "2026-01-16T16:19:36.000Z",
+      "gasUsed": "149046",
+      "gasPrice": "1021432969",
+      "ethCost": "152240498297574",
+      "usdCost": 0.5023936443819942,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0xbabfcb0c12c02d0e5d897e7e3f8609d1017c589e59fbe99bef278b7f2b2ee6d1",
+      "blockNumber": "10057392",
+      "timestamp": "2026-01-16T16:19:36.000Z",
+      "gasUsed": "149046",
+      "gasPrice": "1021432969",
+      "ethCost": "152240498297574",
+      "usdCost": 0.5023936443819942,
+      "mode": "v4",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0
+    },
+    {
+      "txHash": "0xa7752ec38f26b59345a617db1f1e4d99dd1462940baefecb67f5cbf623f6f55a",
+      "blockNumber": "10057394",
+      "timestamp": "2026-01-16T16:20:00.000Z",
+      "gasUsed": "171495",
+      "gasPrice": "1089836121",
+      "ethCost": "186901445570895",
+      "usdCost": 0.6167747703839535,
+      "mode": "super",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0,
+      "xPNTsCharged": "0",
+      "xPNTsUSD": 0
+    },
+    {
+      "txHash": "0xa7752ec38f26b59345a617db1f1e4d99dd1462940baefecb67f5cbf623f6f55a",
+      "blockNumber": "10057394",
+      "timestamp": "2026-01-16T16:20:00.000Z",
+      "gasUsed": "171495",
+      "gasPrice": "1089836121",
+      "ethCost": "186901445570895",
+      "usdCost": 0.6167747703839535,
+      "mode": "super",
+      "aPNTsConsumed": "0",
+      "aPNTsUSD": 0,
+      "xPNTsCharged": "0",
+      "xPNTsUSD": 0
+    }
+  ]
+}

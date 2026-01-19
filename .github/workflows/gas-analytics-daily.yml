@@ -1,0 +1,52 @@
+name: Gas Analytics Daily Report
+
+on:
+  schedule:
+    # Run every day at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  analyze-and-report:
+    runs-on: ubuntu-latest
+    
+    env:
+      SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+      PRIVATE_KEY_SUPPLIER: ${{ secrets.PRIVATE_KEY_SUPPLIER }} # Needed if any tx is required, though analysis is read-only usually
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch External Data
+        # Ensure we have the latest benchmarks
+        run: npx tsx packages/analytics/src/gas-analyzer-v4.ts --fetch-only || true
+
+      - name: Generate Gas Analytics Report
+        run: |
+          mkdir -p packages/analytics/reports/daily
+          REPORT_NAME="gas_report_$(date +%Y%m%d).md"
+          npx tsx packages/analytics/src/gas-analyzer-v4.ts > packages/analytics/reports/daily/$REPORT_NAME
+          
+          # Also update the latest summary
+          cp packages/analytics/reports/daily/$REPORT_NAME packages/analytics/reports/LATEST.md
+
+      - name: Commit and Push Report
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(analytics): generate daily gas report [skip ci]"
+          file_pattern: 'packages/analytics/reports/**'

@@ -145,6 +145,11 @@ packages/core/final_*.txt
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Analytics Cache
+packages/analytics/data/transaction_cache/
+packages/analytics/data/logs/
+packages/analytics/reports/daily/
+
 # Build artifacts
 **/dist
 **/build

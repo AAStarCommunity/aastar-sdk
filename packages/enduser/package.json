@@ -1,6 +1,6 @@
 {
   "name": "@aastar/enduser",
-  "version": "0.16.9",
+  "version": "0.16.11",
   "type": "module",
   "description": "Enduser client for AAstar SDK",
   "main": "dist/index.js",
