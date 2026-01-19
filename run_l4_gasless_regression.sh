@@ -79,17 +79,9 @@ run_test() {
         FAILED=$((FAILED + 1))
         FAILED_TESTS="$FAILED_TESTS\\n  - $test_name"
     fi
-    echo ""
-    
-    # Add delay between tests if slow mode is enabled
-    if [ "$SLOW_MODE" = true ]; then
-        echo "⏳ Waiting ${TEST_DELAY}s before next test (--slow mode)..."
-        sleep "$TEST_DELAY"
-        echo ""
-    fi
 }
 
-# Run tests
+# Run tests (no delays needed - different accounts don't conflict)
 run_test "Jason AA1 Gasless" "tests/l4-test-jason1-gasless.ts"
 run_test "Jason AA2 Gasless" "tests/l4-test-jason2-gasless.ts"
 run_test "Anni Gasless" "tests/l4-test-anni-gasless.ts"
