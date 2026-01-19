@@ -76,11 +76,11 @@ export const entryPointActions = (address: Address) => (client: PublicClient | W
             }) as any;
 
             return {
-                deposit: result[0],
-                staked: result[1],
-                stake: result[2],
-                unstakeDelaySec: result[3],
-                withdrawTime: result[4]
+                deposit: result.deposit,
+                staked: result.staked,
+                stake: result.stake,
+                unstakeDelaySec: result.unstakeDelaySec,
+                withdrawTime: result.withdrawTime
             };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getDepositInfo');
