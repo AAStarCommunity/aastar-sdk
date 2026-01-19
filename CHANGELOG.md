@@ -2,9 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.16.8] - 2026-01-16
+## [0.16.11] - 2026-01-19
 
-### Build System & Engineering
+### 📊 Gas Analytics & Reporting (New Package)
+- **[NEW]** Added `@aastar/analytics` package for comprehensive gas analysis.
+- **[FEATURE]** `CostCalculator`: Calculates true L1/L2 gas costs, protocol profit (10% premium + buffer), and user savings.
+- **[FEATURE]** `AttributionAnalyzer`: Simulates L2 costs (Optimism model) to provide "Apple-to-Apple" competitiveness comparisons.
+- **[REPORT]** `gas-analyzer-v4.ts`: Generates detailed reports showing ~28% protocol profit margin and ~400x savings vs. Ethereum L1.
+
+### SDK & Core Enhancements
+- **[FIX]** **Anni Gasless Fix**: Updated `l4-setup.ts` to use `updatePriceDVT` for refreshing stale SuperPaymaster price cache, preventing "UserOperation expired" errors.
+- **[FIX]** **Duplicate Build Fix**: Resolved merge conflicts and duplicate identifiers in `packages/core` actions (e.g., `contracts.ts`, `actions/index.ts`).
+- **[FIX]** **Build System**: Removed residual `*.test.ts` files in modification directories to ensure clean `tsc` builds.
+
+### Regression & Testing
+- **[IMPROVED]** `L4 Regression`: Full automation for Setup -> Funding -> Gasless Transactions -> Analytics.
+- **[FEATURE]** `DVT Price Update`: Integrated DVT signature generation in test setup to simulate authenticated price updates.
+
 - **[BREAKING]** Decoupled development and production build configurations.
   - Added `tsconfig.build.json` for strictly clean production builds (`pnpm build`).
   - Updated root `tsconfig.json` to retain `paths` mappings for rapid development (`tsx`).

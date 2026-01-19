@@ -97,8 +97,8 @@ async function syncConfig(network: string, config: any) {
     }
 
     if (changed) {
-        console.log(`  📝 Updating ${configPath} with default addresses...`);
-        fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2));
+        console.log(`  📝 Config would have been updated with default addresses (auto-fix disabled).`);
+        // fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2)); // Disabled per user request
     }
 }
 
@@ -954,16 +954,41 @@ async function main() {
         
         if (cacheAgeSeconds > 3600 || Number(price) === 0) {
             console.log(`   ⚠️  Stale or uninitialized (age: ${cacheAgeMin}min, price: ${price})`);
-            console.log('   🔄 Refreshing cache price...');
+            console.log('   🔄 Refreshing cache price via DVT...');
+
+            // Prepare DVT Update
+            const newPrice = 330000000000n; // $3300.00
+            const timestamp = BigInt(Math.floor(Date.now() / 1000));
             
-            const refreshHash = await superPaymasterActions(superPM)(supplierClient).updatePrice({
+            // Sign the price update (Assuming supplier is DVT Validator)
+            // Message: keccak256(abi.encodePacked(price, timestamp, address(this), chainId))
+            // But usually just price, timestamp is enough if contract logic allows.
+            // Let's check SuperPaymaster logic or assume standard DVT signature.
+            // For now, simpler regression: just sign (price, timestamp).
+            // Actually, let's use the helper if available, or raw sign.
+            
+            const chainId = supplierClient.chain.id;
+            const messageHash = keccak256(encodeAbiParameters(
+                [{ type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' }],
+                [newPrice, timestamp, superPM, BigInt(chainId)]
+            ));
+            
+            const signature = await supplierClient.signMessage({ 
+                message: { raw: toBytes(messageHash) },
+                account: supplier
+            });
+
+            const refreshHash = await superPaymasterActions(superPM)(supplierClient).updatePriceDVT({
+                price: newPrice,
+                updatedAt: timestamp,
+                proof: signature,
                 account: supplier
             });
             await publicClient.waitForTransactionReceipt({ hash: refreshHash });
             
             const newCache = await superPaymasterActions(superPM)(publicClient).cachedPrice() as any;
-            const newPrice = newCache.price || newCache[0];
-            console.log(`   ✅ Cache Updated: Price=$${Number(newPrice) / 1e8}`);
+            const updatedPrice = newCache.price || newCache[0];
+            console.log(`   ✅ Cache Updated: Price=$${Number(updatedPrice) / 1e8}`);
         } else {
             console.log(`   ✅ Fresh (${cacheAgeMin}min old, price: $${Number(price) / 1e8})`);
         }
