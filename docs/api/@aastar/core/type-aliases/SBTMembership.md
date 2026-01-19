@@ -1,6 +1,6 @@
 > **SBTMembership** = `object`
 
-Defined in: [packages/core/src/actions/sbt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/sbt.ts#L6)
+Defined in: [packages/core/src/actions/sbt.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/sbt.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/sbt.ts:6](https://github.com/AAStarCommun
 
 > **community**: `Address`
 
-Defined in: [packages/core/src/actions/sbt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/sbt.ts#L7)
+Defined in: [packages/core/src/actions/sbt.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/sbt.ts#L7)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/sbt.ts:7](https://github.com/AAStarCommun
 
 > **isActive**: `boolean`
 
-Defined in: [packages/core/src/actions/sbt.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/sbt.ts#L10)
+Defined in: [packages/core/src/actions/sbt.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/sbt.ts#L10)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/sbt.ts:10](https://github.com/AAStarCommu
 
 > **joinedAt**: `bigint`
 
-Defined in: [packages/core/src/actions/sbt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/sbt.ts#L8)
+Defined in: [packages/core/src/actions/sbt.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/sbt.ts#L8)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/sbt.ts:8](https://github.com/AAStarCommun
 
 > **lastActiveTime**: `bigint`
 
-Defined in: [packages/core/src/actions/sbt.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/sbt.ts#L9)
+Defined in: [packages/core/src/actions/sbt.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/sbt.ts#L9)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [packages/core/src/actions/sbt.ts:9](https://github.com/AAStarCommun
 
 > **metadata**: `string`
 
-Defined in: [packages/core/src/actions/sbt.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/sbt.ts#L11)
+Defined in: [packages/core/src/actions/sbt.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/sbt.ts#L11)

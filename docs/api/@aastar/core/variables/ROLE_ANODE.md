@@ -1,6 +1,6 @@
 > `const` **ROLE\_ANODE**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/roles.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/roles.ts#L84)
+Defined in: [packages/core/src/roles.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/roles.ts#L84)
 
 ANODE Role (Anonymous Node)
 

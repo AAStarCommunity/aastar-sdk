@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/requirementChecker.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L42)
+Defined in: [packages/core/src/requirementChecker.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L42)
 
 Requirement Checker Utility
 
@@ -30,7 +30,7 @@ if (!result.hasEnoughGToken) {
 
 > **new RequirementChecker**(`publicClient`, `addresses?`): `RequirementChecker`
 
-Defined in: [packages/core/src/requirementChecker.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L43)
+Defined in: [packages/core/src/requirementChecker.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L43)
 
 #### Parameters
 
@@ -1708,7 +1708,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > **checkAPNTsBalance**(`address`, `required`): `Promise`\<\{ `balance`: `bigint`; `hasEnough`: `boolean`; \}\>
 
-Defined in: [packages/core/src/requirementChecker.ts:180](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L180)
+Defined in: [packages/core/src/requirementChecker.ts:180](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L180)
 
 Check aPNTs balance only (shortcut)
 
@@ -1732,7 +1732,7 @@ Check aPNTs balance only (shortcut)
 
 > **checkGTokenBalance**(`address`, `required`): `Promise`\<\{ `balance`: `bigint`; `hasEnough`: `boolean`; \}\>
 
-Defined in: [packages/core/src/requirementChecker.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L159)
+Defined in: [packages/core/src/requirementChecker.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L159)
 
 Check GToken balance only (shortcut)
 
@@ -1756,7 +1756,7 @@ Check GToken balance only (shortcut)
 
 > **checkHasRole**(`roleId`, `address`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/requirementChecker.ts:216](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L216)
+Defined in: [packages/core/src/requirementChecker.ts:216](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L216)
 
 Check if user has specific role (shortcut)
 
@@ -1780,7 +1780,7 @@ Check if user has specific role (shortcut)
 
 > **checkHasSBT**(`address`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/requirementChecker.ts:201](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L201)
+Defined in: [packages/core/src/requirementChecker.ts:201](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L201)
 
 Check if user has MySBT (shortcut)
 
@@ -1800,7 +1800,7 @@ Check if user has MySBT (shortcut)
 
 > **checkRequirements**(`params`): `Promise`\<[`RoleRequirement`](../interfaces/RoleRequirement.md)\>
 
-Defined in: [packages/core/src/requirementChecker.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/requirementChecker.ts#L59)
+Defined in: [packages/core/src/requirementChecker.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/requirementChecker.ts#L59)
 
 Check all requirements for a user
 

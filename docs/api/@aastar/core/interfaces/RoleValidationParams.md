@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/StateValidator.ts#L11)
+Defined in: [packages/core/src/actions/StateValidator.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L11)
 
 Interface definitions
 
@@ -12,7 +12,7 @@ Interface definitions
 
 > **chain**: [`Chain`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/StateValidator.ts#L8)
+Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L8)
 
 #### Inherited from
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/A
 
 > **registryAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/StateValidator.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/StateValidator.ts#L12)
+Defined in: [packages/core/src/actions/StateValidator.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L12)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:12](https://github.com/
 
 > **roleId**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/StateValidator.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/StateValidator.ts#L13)
+Defined in: [packages/core/src/actions/StateValidator.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L13)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:13](https://github.com/
 
 > **rpcUrl**: `string`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/StateValidator.ts#L7)
+Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L7)
 
 #### Inherited from
 
@@ -52,4 +52,4 @@ Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/A
 
 > **userAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/StateValidator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/StateValidator.ts#L14)
+Defined in: [packages/core/src/actions/StateValidator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L14)

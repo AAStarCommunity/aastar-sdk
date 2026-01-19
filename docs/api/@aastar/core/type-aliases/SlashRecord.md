@@ -1,6 +1,6 @@
 > **SlashRecord** = `object`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L6)
+Defined in: [packages/core/src/actions/superPaymaster.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/superPaymaster.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:6](https://github.com/A
 
 > **amount**: `bigint`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L8)
+Defined in: [packages/core/src/actions/superPaymaster.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/superPaymaster.ts#L8)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:8](https://github.com/A
 
 > **level**: `number`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L11)
+Defined in: [packages/core/src/actions/superPaymaster.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/superPaymaster.ts#L11)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:11](https://github.com/
 
 > **reason**: `string`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L10)
+Defined in: [packages/core/src/actions/superPaymaster.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/superPaymaster.ts#L10)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:10](https://github.com/
 
 > **reputationLoss**: `bigint`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L9)
+Defined in: [packages/core/src/actions/superPaymaster.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/superPaymaster.ts#L9)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:9](https://github.com/A
 
 > **timestamp**: `bigint`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L7)
+Defined in: [packages/core/src/actions/superPaymaster.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/superPaymaster.ts#L7)
