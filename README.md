@@ -112,7 +112,7 @@ pnpm run test:full_anvil
 ## Development Guides
 
 ### ABI Maintenance
-- [ABI Maintenance Plan](./docs/ABI_MAINTENANCE_PLAN.md)
+- [ABI Maintenance Plan](/guide/ABI_MAINTENANCE_PLAN)
 
 ---
 
@@ -189,8 +189,8 @@ npx tsx packages/analytics/src/gas-analyzer-v4.ts
 
 The SDK supports doctoral data collection for the SuperPaymaster paper. Official experiment logger is available at `scripts/19_sdk_experiment_runner.ts`.
 
-- [Stage 3 Scenario Experiment Plan](./docs/STAGE_3_SCENARIO_EXP_PLAN.md)
-- [Reputation-to-Credit Mapping Whitepaper](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)
+- [Stage 3 Scenario Experiment Plan](/guide/STAGE_3_SCENARIO_EXP_PLAN)
+- [Reputation-to-Credit Mapping Whitepaper](/guide/Reputation-to-Credit_Mapping_Whitepaper)
 
 ---
 

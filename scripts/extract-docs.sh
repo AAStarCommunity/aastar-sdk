@@ -20,11 +20,13 @@ mkdir -p "$DOCS_REPO/guide"
 mkdir -p "$DOCS_REPO/examples"
 
 # 1. Sync Guide folder (Maintain same structure)
-echo -e "${YELLOW}📋 Syncing Guide folder...${NC}"
+echo -e "${YELLOW}📋 Syncing Guide folder and plans...${NC}"
 # Sync EN Guide (Root)
 if [ -d "$SDK_REPO/docs/guide" ]; then
     cp -r "$SDK_REPO/docs/guide/"* "$DOCS_REPO/guide/" 2>/dev/null || true
 fi
+# Sync root markdown files in docs/ to guide/ for external access
+find "$SDK_REPO/docs/" -maxdepth 1 -name "*.md" -exec cp {} "$DOCS_REPO/guide/" \;
 # Sync ZH Guide
 if [ -d "$SDK_REPO/docs/zh/guide" ]; then
     mkdir -p "$DOCS_REPO/zh/guide"
