@@ -1,6 +1,6 @@
 {
   "name": "@aastar/operator",
-  "version": "0.16.8",
+  "version": "0.16.9",
   "description": "Operator client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

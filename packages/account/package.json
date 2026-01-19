@@ -1,6 +1,6 @@
 {
   "name": "@aastar/account",
-  "version": "0.16.8",
+  "version": "0.16.9",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

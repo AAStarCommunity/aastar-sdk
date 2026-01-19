@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.16.8",
+  "version": "0.16.9",
   "private": false,
   "type": "module",
   "workspaces": [
@@ -27,6 +27,7 @@
     "example:local": "pnpm --filter @aastar/sdk run example:local",
     "sync-config": "cp ../SuperPaymaster/script/v3/config.json ./packages/sdk/examples/config.json",
     "lint": "pnpm -r lint",
+    "version:update": "bash update-version.sh",
     "test:env": "tsx scripts/validate_env.ts",
     "test:regression": "pnpm run test:regression:00 && pnpm run test:regression:01 && pnpm run test:regression:02 && pnpm run test:regression:03 && pnpm run test:regression:04 && pnpm run test:regression:05 && pnpm run test:regression:bls",
     "test:regression:00": "tsx scripts/v2_regression/00_validate_env.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@aastar/community",
-  "version": "0.16.8",
+  "version": "0.16.9",
   "description": "Community management client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,12 @@
     "build": "tsc",
     "test": "vitest run"
   },
-  "keywords": ["aastar", "community", "dao", "web3"],
+  "keywords": [
+    "aastar",
+    "community",
+    "dao",
+    "web3"
+  ],
   "author": "AAstar Team",
   "license": "MIT",
   "dependencies": {

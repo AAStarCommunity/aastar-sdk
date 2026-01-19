@@ -27,32 +27,33 @@ async function main() {
 
     // Load AA addresses from l4-state.json
     const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
-    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
     const jasonAA2 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA2')?.address as Address;
-    const jasonOperator = state.operators?.["Jason (AAStar)"] || state.operators?.Jason || {};
-    const jasonPM = jasonOperator.pmV4 as Address;
     
-    if (!jasonPM || jasonPM === '0x0000000000000000000000000000000000000000') {
+    // FIX: Use correct key format from l4-state.json
+    // Operators use lowercase keys: "jason", "bob", "anni"
+    // Paymaster field is "paymasterV4", not "pmV4"
+    if (!state.operators?.jason?.paymasterV4) {
         throw new Error('Jason Paymaster V4 address not found in l4-state.json. Please run l4-setup first.');
     }
-    
-    const dPNTs = config.contracts.aPNTs as Address;
+    const jasonPM = state.operators.jason.paymasterV4 as Address;
+    const jasonToken = state.operators.jason.tokenAddress as Address;
     const entryPoint = config.contracts.entryPoint as Address;
 
     console.log('🚀 JASON AA2 Gasless Transaction via JASON OWN Paymaster');
     console.log(`Jason AA2: ${jasonAA2}`);
     console.log(`Operator (Jason): ${jasonAccount.address}`);
     console.log(`Paymaster: ${jasonPM}`);
-    console.log(`Token: ${dPNTs}\n`);
+    console.log(`Token: ${jasonToken}\n`);
 
     // --- STEP 1: PRE-FLIGHT CHECK ---
     console.log('🔍 Step 1: Running SDK Readiness Check...');
     const report = await PaymasterOperator.checkGaslessReadiness(
         publicClient,
-        entryPoint,
+        jasonAccount.address,
         jasonPM,
-        jasonAA2,
-        dPNTs
+        jasonToken,
+        entryPoint
     );
 
     if (!report.isReady) {
@@ -66,7 +67,7 @@ async function main() {
             publicClient,
             entryPoint,
             jasonPM,
-            dPNTs,
+            jasonToken,
             {
                 tokenPriceUSD: 100000000n, // $1.00
                 minStake: parseEther('0.1'),
@@ -90,23 +91,23 @@ async function main() {
 
     // --- STEP 3: USER DEPOSIT (If missing) ---
     console.log('\n💰 Step 3: Checking User Paymaster Deposit...');
-    let userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA2, dPNTs);
-    console.log(`   Jason AA2 Deposit: ${formatEther(userDeposit)} dPNTs`);
+    let userDeposit = await PaymasterClient.getDepositedBalance(publicClient, jasonPM, jasonAA2, jasonToken);
+    console.log(`   Jason AA2 Deposit: ${formatEther(userDeposit)} jasonToken`);
 
     if (userDeposit < parseEther('10')) {
-        console.log('   🏦 Deposit too low. Seeding 50 dPNTs from Anni EOA...');
+        console.log('   🏦 Deposit too low. Seeding 50 jasonToken from Anni EOA...');
         // Anni EOA (Operator/Community) approves and deposits for Jason
         const approveHash = await anniWallet.writeContract({
-            address: dPNTs,
+            address: jasonToken,
             abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
             functionName: 'approve',
             args: [jasonPM, parseEther('100')]
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-        const depositHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA2, dPNTs, parseEther('50'));
+        const depositHash = await PaymasterClient.depositFor(anniWallet, jasonPM, jasonAA2, jasonToken, parseEther('50'));
         await publicClient.waitForTransactionReceipt({ hash: depositHash });
-        console.log('   ✅ 50 dPNTs deposited.');
+        console.log('   ✅ 50 jasonToken deposited.');
     }
 
     // --- STEP 4: GASLESS TRANSACTION ---
@@ -115,7 +116,7 @@ async function main() {
         abi: [{ name: 'execute', type: 'function', inputs: [{ name: 'dest', type: 'address' }, { name: 'value', type: 'uint256' }, { name: 'func', type: 'bytes' }], outputs: [], stateMutability: 'nonpayable' }],
         functionName: 'execute',
         args: [
-            dPNTs, 
+            jasonToken, 
             0n, 
             encodeFunctionData({
                 abi: [{ name: 'transfer', type: 'function', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
@@ -132,7 +133,7 @@ async function main() {
             jasonAA2,
             entryPoint,
             jasonPM,
-            dPNTs,
+            jasonToken,
             config.bundlerUrl!,
             transferCalldata
             // {
@@ -166,7 +167,7 @@ async function main() {
         if (receipt) {
             console.log(`   🎉 UserOp Executed! Transaction: ${receipt.receipt.transactionHash}`);
             console.log(`   ⛽ Gas Used: ${BigInt(receipt.actualGasUsed).toString()}`);
-            console.log(`   💸 Fee Paid: ${formatEther(BigInt(receipt.actualGasCost))} ETH (sponsored by dPNTs)`);
+            console.log(`   💸 Fee Paid: ${formatEther(BigInt(receipt.actualGasCost))} ETH (sponsored by jasonToken)`);
         } else {
             console.log('   ❌ Polling timeout. Check Etherscan for status.');
         }

@@ -1,6 +1,6 @@
 {
   "name": "@aastar/enduser",
-  "version": "0.16.8",
+  "version": "0.16.9",
   "type": "module",
   "description": "Enduser client for AAstar SDK",
   "main": "dist/index.js",
@@ -9,7 +9,11 @@
     "build": "tsc",
     "test": "vitest run"
   },
-  "keywords": ["aastar", "enduser", "web3"],
+  "keywords": [
+    "aastar",
+    "enduser",
+    "web3"
+  ],
   "author": "AAstar Team",
   "license": "MIT",
   "dependencies": {
