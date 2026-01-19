@@ -1,4 +1,4 @@
-Defined in: [V4/PaymasterOperator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L8)
+Defined in: [V4/PaymasterOperator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L8)
 
 PaymasterOperator
 Focus: Deployment, Configuration, Maintenance, Keeper Bots.
@@ -19,7 +19,7 @@ Focus: Deployment, Configuration, Maintenance, Keeper Bots.
 
 > `static` **addDeposit**(`wallet`, `address`, `amount`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L107)
+Defined in: [V4/PaymasterOperator.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L107)
 
 #### Parameters
 
@@ -45,7 +45,7 @@ Defined in: [V4/PaymasterOperator.ts:107](https://github.com/AAStarCommunity/aas
 
 > `static` **addGasToken**(`wallet`, `address`, `token`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L117)
+Defined in: [V4/PaymasterOperator.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L117)
 
 #### Parameters
 
@@ -71,7 +71,7 @@ Defined in: [V4/PaymasterOperator.ts:117](https://github.com/AAStarCommunity/aas
 
 > `static` **addStake**(`wallet`, `address`, `amount`, `unstakeDelaySec`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L96)
+Defined in: [V4/PaymasterOperator.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L96)
 
 #### Parameters
 
@@ -101,7 +101,7 @@ Defined in: [V4/PaymasterOperator.ts:96](https://github.com/AAStarCommunity/aast
 
 > `static` **checkGaslessReadiness**(`publicClient`, `entryPoint`, `paymasterAddress`, `user`, `token`): `Promise`\<[`GaslessReadinessReport`](../type-aliases/GaslessReadinessReport.md)\>
 
-Defined in: [V4/PaymasterOperator.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L169)
+Defined in: [V4/PaymasterOperator.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L169)
 
 #### Parameters
 
@@ -135,7 +135,7 @@ Defined in: [V4/PaymasterOperator.ts:169](https://github.com/AAStarCommunity/aas
 
 > `static` **ensurePriceInitialized**(`wallet`, `publicClient`, `address`): `Promise`\<`boolean`\>
 
-Defined in: [V4/PaymasterOperator.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L87)
+Defined in: [V4/PaymasterOperator.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L87)
 
 #### Parameters
 
@@ -161,7 +161,7 @@ Defined in: [V4/PaymasterOperator.ts:87](https://github.com/AAStarCommunity/aast
 
 > `static` **getCachedPrice**(`publicClient`, `address`): `Promise`\<\{ `price`: `bigint`; `updatedAt`: `bigint`; \}\>
 
-Defined in: [V4/PaymasterOperator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L36)
+Defined in: [V4/PaymasterOperator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L36)
 
 #### Parameters
 
@@ -183,7 +183,7 @@ Defined in: [V4/PaymasterOperator.ts:36](https://github.com/AAStarCommunity/aast
 
 > `static` **getDepositedBalance**(`publicClient`, `address`, `user`, `token`): `Promise`\<`bigint`\>
 
-Defined in: [V4/PaymasterOperator.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L69)
+Defined in: [V4/PaymasterOperator.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L69)
 
 #### Parameters
 
@@ -213,7 +213,7 @@ Defined in: [V4/PaymasterOperator.ts:69](https://github.com/AAStarCommunity/aast
 
 > `static` **getTokenPrice**(`publicClient`, `address`, `token`): `Promise`\<`bigint`\>
 
-Defined in: [V4/PaymasterOperator.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L54)
+Defined in: [V4/PaymasterOperator.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L54)
 
 #### Parameters
 
@@ -239,7 +239,7 @@ Defined in: [V4/PaymasterOperator.ts:54](https://github.com/AAStarCommunity/aast
 
 > `static` **prepareGaslessEnvironment**(`operatorWallet`, `publicClient`, `entryPoint`, `paymasterAddress`, `token`, `options`): `Promise`\<`object`[]\>
 
-Defined in: [V4/PaymasterOperator.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L229)
+Defined in: [V4/PaymasterOperator.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L229)
 
 #### Parameters
 
@@ -287,7 +287,7 @@ Defined in: [V4/PaymasterOperator.ts:229](https://github.com/AAStarCommunity/aas
 
 > `static` **removeGasToken**(`wallet`, `address`, `token`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L127)
+Defined in: [V4/PaymasterOperator.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L127)
 
 #### Parameters
 
@@ -313,7 +313,7 @@ Defined in: [V4/PaymasterOperator.ts:127](https://github.com/AAStarCommunity/aas
 
 > `static` **setMaxGasCostCap**(`wallet`, `address`, `cap`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:147](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L147)
+Defined in: [V4/PaymasterOperator.ts:147](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L147)
 
 #### Parameters
 
@@ -339,7 +339,7 @@ Defined in: [V4/PaymasterOperator.ts:147](https://github.com/AAStarCommunity/aas
 
 > `static` **setServiceFeeRate**(`wallet`, `address`, `rate`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L137)
+Defined in: [V4/PaymasterOperator.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L137)
 
 #### Parameters
 
@@ -365,7 +365,7 @@ Defined in: [V4/PaymasterOperator.ts:137](https://github.com/AAStarCommunity/aas
 
 > `static` **setTokenPrice**(`wallet`, `address`, `token`, `priceUSD`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L26)
+Defined in: [V4/PaymasterOperator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L26)
 
 Set the token price (in 8 decimals, e.g., 1e8 = $1 USD).
 
@@ -397,7 +397,7 @@ Set the token price (in 8 decimals, e.g., 1e8 = $1 USD).
 
 > `static` **updatePrice**(`wallet`, `address`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L14)
+Defined in: [V4/PaymasterOperator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L14)
 
 Update the cached ETH/USD price from Chainlink Oracle.
 Must be called if cachedPrice is 0 (uninitialized).
@@ -422,7 +422,7 @@ Must be called if cachedPrice is 0 (uninitialized).
 
 > `static` **withdrawPNT**(`wallet`, `address`, `to`, `token`, `amount`): `Promise`\<`any`\>
 
-Defined in: [V4/PaymasterOperator.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/V4/PaymasterOperator.ts#L157)
+Defined in: [V4/PaymasterOperator.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/V4/PaymasterOperator.ts#L157)
 
 #### Parameters
 

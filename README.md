@@ -20,6 +20,7 @@
   - [Installation](#installation)
   - [Quick Start](#quick-start)
     - [End User Gasless Transaction](#end-user-gasless-transaction)
+    - [Operator Onboarding](#operator-onboarding)
   - [Testing Commands](#testing-commands)
     - [SDK Regression (Using SDK Clients)](#sdk-regression-using-sdk-clients)
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
@@ -196,7 +197,7 @@ npx tsx packages/analytics/src/gas-analyzer-v4.ts
 - **Profit Tracking**: Transparent breakdown of Protocol Revenue & Profit
 - **L2 Simulation**: Estimate savings for migrating UserOps to Optimism
 
-👉 **[View Full Analytics Documentation](https://docs.aastar.io/guide/packages/analytics/)**
+👉 **[View Full Analytics Documentation](./packages/analytics/README.md)**
 
 ---
 

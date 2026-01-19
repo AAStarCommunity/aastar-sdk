@@ -1,6 +1,6 @@
 > **getSuperPaymasterMiddleware**(`config`): `object`
 
-Defined in: [SuperPaymaster/index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/paymaster/src/SuperPaymaster/index.ts#L19)
+Defined in: [SuperPaymaster/index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/paymaster/src/SuperPaymaster/index.ts#L19)
 
 Constructs the middleware for SuperPaymaster.
 Returns the `paymasterAndData` hex string.

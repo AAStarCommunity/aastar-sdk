@@ -1,6 +1,6 @@
 > **FaucetConfig** = `object`
 
-Defined in: [packages/core/src/actions/faucet.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L24)
+Defined in: [packages/core/src/actions/faucet.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L24)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/faucet.ts:24](https://github.com/AAStarCo
 
 > `optional` **ethAmount**: `bigint`
 
-Defined in: [packages/core/src/actions/faucet.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L29)
+Defined in: [packages/core/src/actions/faucet.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L29)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/faucet.ts:29](https://github.com/AAStarCo
 
 > `optional` **paymasterV4**: `Address`
 
-Defined in: [packages/core/src/actions/faucet.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L28)
+Defined in: [packages/core/src/actions/faucet.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L28)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/faucet.ts:28](https://github.com/AAStarCo
 
 > **registry**: `Address`
 
-Defined in: [packages/core/src/actions/faucet.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L27)
+Defined in: [packages/core/src/actions/faucet.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L27)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/faucet.ts:27](https://github.com/AAStarCo
 
 > **targetAA**: `Address`
 
-Defined in: [packages/core/src/actions/faucet.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L25)
+Defined in: [packages/core/src/actions/faucet.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L25)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/faucet.ts:25](https://github.com/AAStarCo
 
 > **token**: `Address`
 
-Defined in: [packages/core/src/actions/faucet.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L26)
+Defined in: [packages/core/src/actions/faucet.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L26)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [packages/core/src/actions/faucet.ts:26](https://github.com/AAStarCo
 
 > `optional` **tokenAmount**: `bigint`
 
-Defined in: [packages/core/src/actions/faucet.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/faucet.ts#L30)
+Defined in: [packages/core/src/actions/faucet.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L30)

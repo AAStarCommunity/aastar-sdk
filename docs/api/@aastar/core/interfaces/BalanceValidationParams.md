@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L17)
+Defined in: [packages/core/src/actions/StateValidator.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L17)
 
 Interface definitions
 
@@ -16,7 +16,7 @@ Interface definitions
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/StateValidator.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L18)
+Defined in: [packages/core/src/actions/StateValidator.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L18)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:18](https://github.com/
 
 > **chain**: [`Chain`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L8)
+Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L8)
 
 #### Inherited from
 
@@ -36,7 +36,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/A
 
 > `optional` **minBalance**: `string`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L19)
+Defined in: [packages/core/src/actions/StateValidator.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L19)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:19](https://github.com/
 
 > **rpcUrl**: `string`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/3d86097d63bdcdf81fb5057263ea4258ff1adf6d/packages/core/src/actions/StateValidator.ts#L7)
+Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L7)
 
 #### Inherited from
 
