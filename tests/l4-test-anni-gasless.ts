@@ -368,24 +368,26 @@ async function main() {
     console.log('\nStep 2.5: Ensuring Oracle Price Cache...');
     const cacheAgeSeconds2 = Math.floor(Date.now() / 1000) - Number(cachedPrice[1]);
     if (cacheAgeSeconds2 > 3600) {
-            console.log(`   🕒 Cache Age: ${cacheAgeSeconds2}s. Refreshing...`);
-            try {
-                const upHash = await anniWallet.writeContract({
-                    address: anniPM,
-                    abi: [{ name: 'updatePrice', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' }],
-                    functionName: 'updatePrice',
-                    gas: 500000n,
-                    chain: config.chain,
-                    account: anniAccount
-                });
-                console.log(`   📝 Oracle Update Tx Sent: ${upHash}`);
-                await publicClient.waitForTransactionReceipt({ hash: upHash });
-                console.log('   ✅ Oracle Price Cache Updated.');
-            } catch (e: any) {
-                console.warn('   ⚠️ Oracle Update failed (might be gas issue):', e.message);
-            }
-            console.log(`   ✅ Cache is fresh (Age: ${cacheAgeSeconds2}s). Skipping update.`);
+        console.log(`   🕒 Cache Age: ${cacheAgeSeconds2}s. Refreshing...`);
+        try {
+            const upHash = await anniWallet.writeContract({
+                address: anniPM,
+                abi: [{ name: 'updatePrice', type: 'function', inputs: [], outputs: [], stateMutability: 'nonpayable' }],
+                functionName: 'updatePrice',
+                gas: 500000n,
+                chain: config.chain,
+                account: anniAccount
+            });
+            console.log(`   📝 Oracle Update Tx Sent: ${upHash}`);
+            await publicClient.waitForTransactionReceipt({ hash: upHash });
+            console.log('   ✅ Oracle Price Cache Updated.');
+        } catch (e: any) {
+            console.warn('   ⚠️ Oracle Update failed (Chainlink might be stale):', e.message);
+            console.log('   💡 TIP: Try running: npx tsx scripts/update-price-dvt.ts --network=sepolia');
         }
+    } else {
+        console.log(`   ✅ Cache is fresh (Age: ${cacheAgeSeconds2}s). Skipping update.`);
+    }
 
           // Check aPNTsPriceUSD in Paymaster Storage (DivZero check)
          console.log('   Checking SuperPaymaster aPNTsPriceUSD...');
