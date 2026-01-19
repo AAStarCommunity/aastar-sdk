@@ -18,10 +18,10 @@ const user = createEndUserClient({
   paymasterUrl: 'https://paymaster.aastar.io' 
 });
 
-// Send Gasless Transaction
-const hash = await user.sendTransaction({
-  to: dappAddress,
+// Execute Gasless Transaction
+const hash = await user.executeGasless({
+  target: dappAddress,
   data: callData,
-  communityAddress: '0x...', // Community to sponsor gas
+  operator: operatorAddress, // Operator to sponsor gas
 });
 ```

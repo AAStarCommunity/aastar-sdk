@@ -76,7 +76,6 @@ pnpm install @aastar/sdk @aastar/core viem
 ## Quick Start
 
 ### End User Gasless Transaction
-
 ```typescript
 import { createEndUserClient } from '@aastar/sdk';
 
@@ -85,10 +84,26 @@ const user = createEndUserClient({
   paymasterUrl: 'https://paymaster.aastar.io' 
 });
 
-// Send sponsored transaction
-await user.sendGaslessTransaction({
-  to: TARGET_ADDR,
-  data: CALL_DATA
+// Execute gasless via SuperPaymaster
+await user.executeGasless({
+  target: TARGET_ADDR,
+  data: CALL_DATA,
+  operator: OPERATOR_ADDR // Operator sponsoring the gas
+});
+```
+
+### Operator Onboarding
+```typescript
+import { createOperatorClient } from '@aastar/sdk';
+import { parseEther, keccak256, stringToBytes } from 'viem';
+
+const operator = createOperatorClient({ account, chain });
+
+// High-level setup: handles GToken approval, staking, and paymaster deposit
+await operator.onboardOperator({
+  stakeAmount: parseEther('100'),
+  depositAmount: parseEther('10'),
+  roleId: keccak256(stringToBytes('PAYMASTER_SUPER'))
 });
 ```
 

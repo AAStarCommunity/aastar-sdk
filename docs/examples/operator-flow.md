@@ -12,20 +12,30 @@ This example demonstrates how to set up and manage a SuperPaymaster as an Operat
 
 ```typescript
 import { createOperatorClient } from '@aastar/sdk';
-import { parseEther } from 'viem';
+import { parseEther, keccak256, stringToBytes, erc20Abi } from 'viem';
 
-const operator = createOperatorClient({ 
-  transport: http('https://sepolia.drpc.org'),
-  chain: sepolia 
+const operator = createOperatorClient({ account, chain, transport });
+
+const stakeAmount = parseEther('100');
+const GTOKEN_ADDRESS = '0x...';
+const STAKING_ADDRESS = '0x...';
+const ROLE_ID = keccak256(stringToBytes('PAYMASTER_SUPER'));
+
+// 1. Manual Approval
+const approveTx = await operator.writeContract({
+  address: GTOKEN_ADDRESS,
+  abi: erc20Abi,
+  functionName: 'approve',
+  args: [STAKING_ADDRESS, stakeAmount],
 });
+await operator.waitForTransactionReceipt({ hash: approveTx });
 
-// Stake GTokens (Handles approval automatically)
-await operator.stake({
-  amount: parseEther('100'),
-});
-
-// Deposit Gas Funds (Handles approval automatically)
-await operator.deposit({
-  amount: parseEther('10'),
+// 2. Lock Stake via StakingActions
+await operator.lockStake({
+  user: operator.account.address,
+  roleId: ROLE_ID,
+  stakeAmount: stakeAmount,
+  entryBurn: 0n,
+  payer: operator.account.address
 });
 ```

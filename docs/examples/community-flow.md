@@ -18,9 +18,12 @@ const community = createCommunityClient({
   chain: sepolia 
 });
 
-// Register Community
-await community.registerCommunity({
+// Launch community and deploy community token
+const { tokenAddress, txs } = await community.launch({
   name: 'Alpha DAO',
+  tokenName: 'Alpha Points',
+  tokenSymbol: 'ALP',
+  description: 'A research-focused community',
 });
 
 // Mint SBT
