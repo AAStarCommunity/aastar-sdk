@@ -21,3 +21,4 @@
 - [getPaymasterV4Middleware](functions/getPaymasterV4Middleware.md)
 - [getSuperPaymasterMiddleware](functions/getSuperPaymasterMiddleware.md)
 - [getUserOpHashV07](functions/getUserOpHashV07.md)
+- [tuneGasLimit](functions/tuneGasLimit.md)

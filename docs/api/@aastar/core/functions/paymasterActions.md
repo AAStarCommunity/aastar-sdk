@@ -1,6 +1,6 @@
 > **paymasterActions**(`address`): (`client`) => [`PaymasterActions`](../type-aliases/PaymasterActions.md)
 
-Defined in: [packages/core/src/actions/paymaster.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L98)
+Defined in: [packages/core/src/actions/paymaster.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L78)
 
 ## Parameters
 

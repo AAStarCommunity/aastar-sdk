@@ -11,18 +11,20 @@
 
 ---
 
-## 📚 Table of Contents / 目录
+## AAStar SDK (Mycelium Network)
 
-- [Introduction / 简介](#introduction--简介)
-- [SDK v2 Architecture / 架构设计](#sdk-v2-architecture--架构设计)
-- [Installation / 安装](#installation--安装)
-- [Quick Start / 快速开始](#quick-start--快速开始)
+## 📚 Contents
+- [Introduction](#introduction)
+- [Core Features](#core-features)
+- [SDK v2 Architecture](#sdk-v2-architecture)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
 - [Testing Commands / 测试命令](#testing-commands--测试命令)
 - [Academic Research / 学术研究](#academic-research--学术研究)
 
 ---
 
-## Introduction / 简介
+## Introduction
 
 **AAStar SDK** is a high-integration toolkit for the Mycelium network. We've refactored 17 fragmented modules into 7 professional core packages, aimed at providing a unified, high-performance, and easy-to-maintain development experience.
 

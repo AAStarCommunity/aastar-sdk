@@ -1,46 +1,14 @@
 > **PaymasterActions** = `object`
 
-Defined in: [packages/core/src/actions/paymaster.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L7)
+Defined in: [packages/core/src/actions/paymaster.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L6)
 
 ## Properties
 
-### ~~addGasToken()~~
+### addDeposit()
 
-> **addGasToken**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **addDeposit**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L20)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### priceFeed
-
-`Address`
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-#### Deprecated
-
-V4 uses depositFor + tokenPrices instead
-
-***
-
-### ~~addSBT()~~
-
-> **addSBT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L28)
+Defined in: [packages/core/src/actions/paymaster.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L62)
 
 #### Parameters
 
@@ -50,17 +18,13 @@ Defined in: [packages/core/src/actions/paymaster.ts:28](https://github.com/AASta
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### sbt
+###### value?
 
-`Address`
+`bigint`
 
 #### Returns
 
 `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-#### Deprecated
-
-V4 does not use SBT whitelist
 
 ***
 
@@ -68,7 +32,7 @@ V4 does not use SBT whitelist
 
 > **addStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L83)
+Defined in: [packages/core/src/actions/paymaster.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L64)
 
 #### Parameters
 
@@ -79,6 +43,10 @@ Defined in: [packages/core/src/actions/paymaster.ts:83](https://github.com/AASta
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
 ###### unstakeDelaySec
+
+`number`
+
+###### value?
 
 `bigint`
 
@@ -92,7 +60,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:83](https://github.com/AASta
 
 > **balances**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L12)
+Defined in: [packages/core/src/actions/paymaster.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L10)
 
 #### Parameters
 
@@ -114,13 +82,13 @@ Defined in: [packages/core/src/actions/paymaster.ts:12](https://github.com/AASta
 
 ### cachedPrice()
 
-> **cachedPrice**: () => `Promise`\<\{ `lastUpdate`: `number`; `price`: `bigint`; \}\>
+> **cachedPrice**: () => `Promise`\<\{ `price`: `bigint`; `updatedAt`: `number`; \}\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L53)
+Defined in: [packages/core/src/actions/paymaster.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L34)
 
 #### Returns
 
-`Promise`\<\{ `lastUpdate`: `number`; `price`: `bigint`; \}\>
+`Promise`\<\{ `price`: `bigint`; `updatedAt`: `number`; \}\>
 
 ***
 
@@ -128,7 +96,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:53](https://github.com/AASta
 
 > **calculateCost**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L56)
+Defined in: [packages/core/src/actions/paymaster.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L37)
 
 #### Parameters
 
@@ -156,27 +124,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:56](https://github.com/AASta
 
 > **deactivateFromRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L61)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-***
-
-### deposit()
-
-> **deposit**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L81)
+Defined in: [packages/core/src/actions/paymaster.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L42)
 
 #### Parameters
 
@@ -196,7 +144,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:81](https://github.com/AASta
 
 > **depositFor**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L10)
+Defined in: [packages/core/src/actions/paymaster.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L8)
 
 #### Parameters
 
@@ -228,7 +176,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:10](https://github.com/AASta
 
 > **entryPoint**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L89)
+Defined in: [packages/core/src/actions/paymaster.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L69)
 
 #### Returns
 
@@ -240,7 +188,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:89](https://github.com/AASta
 
 > **ethUsdPriceFeed**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L65)
+Defined in: [packages/core/src/actions/paymaster.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L46)
 
 #### Returns
 
@@ -248,23 +196,11 @@ Defined in: [packages/core/src/actions/paymaster.ts:65](https://github.com/AASta
 
 ***
 
-### getDeposit()
-
-> **getDeposit**: () => `Promise`\<`bigint`\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L86)
-
-#### Returns
-
-`Promise`\<`bigint`\>
-
-***
-
 ### getRealtimeTokenCost()
 
 > **getRealtimeTokenCost**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L55)
+Defined in: [packages/core/src/actions/paymaster.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L36)
 
 #### Parameters
 
@@ -284,43 +220,11 @@ Defined in: [packages/core/src/actions/paymaster.ts:55](https://github.com/AASta
 
 ***
 
-### ~~getSupportedGasTokens()~~
-
-> **getSupportedGasTokens**: () => `Promise`\<`Address`[]\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L24)
-
-#### Returns
-
-`Promise`\<`Address`[]\>
-
-#### Deprecated
-
-V4 uses depositFor + tokenPrices instead
-
-***
-
-### ~~getSupportedSBTs()~~
-
-> **getSupportedSBTs**: () => `Promise`\<`Address`[]\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L32)
-
-#### Returns
-
-`Promise`\<`Address`[]\>
-
-#### Deprecated
-
-V4 does not use SBT whitelist
-
-***
-
 ### initialize()
 
 > **initialize**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L41)
+Defined in: [packages/core/src/actions/paymaster.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L22)
 
 #### Parameters
 
@@ -368,35 +272,11 @@ Defined in: [packages/core/src/actions/paymaster.ts:41](https://github.com/AASta
 
 > **isActiveInRegistry**: () => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L59)
+Defined in: [packages/core/src/actions/paymaster.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L40)
 
 #### Returns
 
 `Promise`\<`boolean`\>
-
-***
-
-### ~~isGasTokenSupported()~~
-
-> **isGasTokenSupported**: (`args`) => `Promise`\<`boolean`\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L26)
-
-#### Parameters
-
-##### args
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<`boolean`\>
-
-#### Deprecated
-
-V4 uses depositFor + tokenPrices instead
 
 ***
 
@@ -404,35 +284,11 @@ V4 uses depositFor + tokenPrices instead
 
 > **isRegistrySet**: () => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L60)
+Defined in: [packages/core/src/actions/paymaster.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L41)
 
 #### Returns
 
 `Promise`\<`boolean`\>
-
-***
-
-### ~~isSBTSupported()~~
-
-> **isSBTSupported**: (`args`) => `Promise`\<`boolean`\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L34)
-
-#### Parameters
-
-##### args
-
-###### sbt
-
-`Address`
-
-#### Returns
-
-`Promise`\<`boolean`\>
-
-#### Deprecated
-
-V4 does not use SBT whitelist
 
 ***
 
@@ -440,7 +296,7 @@ V4 does not use SBT whitelist
 
 > **MAX\_ETH\_USD\_PRICE**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L74)
+Defined in: [packages/core/src/actions/paymaster.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L55)
 
 #### Returns
 
@@ -452,7 +308,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:74](https://github.com/AASta
 
 > **MAX\_GAS\_TOKENS**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L76)
+Defined in: [packages/core/src/actions/paymaster.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L57)
 
 #### Returns
 
@@ -464,7 +320,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:76](https://github.com/AASta
 
 > **MAX\_SBTS**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L77)
+Defined in: [packages/core/src/actions/paymaster.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L58)
 
 #### Returns
 
@@ -476,7 +332,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:77](https://github.com/AASta
 
 > **MAX\_SERVICE\_FEE**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L78)
+Defined in: [packages/core/src/actions/paymaster.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L59)
 
 #### Returns
 
@@ -488,7 +344,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:78](https://github.com/AASta
 
 > **maxGasCostCap**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L67)
+Defined in: [packages/core/src/actions/paymaster.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L48)
 
 #### Returns
 
@@ -500,7 +356,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:67](https://github.com/AASta
 
 > **MIN\_ETH\_USD\_PRICE**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L75)
+Defined in: [packages/core/src/actions/paymaster.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L56)
 
 #### Returns
 
@@ -512,7 +368,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:75](https://github.com/AASta
 
 > **oracleDecimals**: () => `Promise`\<`number`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L70)
+Defined in: [packages/core/src/actions/paymaster.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L51)
 
 #### Returns
 
@@ -524,7 +380,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:70](https://github.com/AASta
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L92)
+Defined in: [packages/core/src/actions/paymaster.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L72)
 
 #### Returns
 
@@ -536,7 +392,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:92](https://github.com/AASta
 
 > **pause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L48)
+Defined in: [packages/core/src/actions/paymaster.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L29)
 
 #### Parameters
 
@@ -556,7 +412,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:48](https://github.com/AASta
 
 > **paused**: () => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L50)
+Defined in: [packages/core/src/actions/paymaster.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L31)
 
 #### Returns
 
@@ -566,13 +422,17 @@ Defined in: [packages/core/src/actions/paymaster.ts:50](https://github.com/AASta
 
 ### postOp()
 
-> **postOp**: (`args`) => `Promise`\<`void`\>
+> **postOp**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L38)
+Defined in: [packages/core/src/actions/paymaster.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L19)
 
 #### Parameters
 
 ##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
 
 ###### actualGasCost
 
@@ -592,7 +452,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:38](https://github.com/AASta
 
 #### Returns
 
-`Promise`\<`void`\>
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
 ***
 
@@ -600,7 +460,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:38](https://github.com/AASta
 
 > **priceStalenessThreshold**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L68)
+Defined in: [packages/core/src/actions/paymaster.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L49)
 
 #### Returns
 
@@ -612,7 +472,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:68](https://github.com/AASta
 
 > **registry**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L62)
+Defined in: [packages/core/src/actions/paymaster.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L43)
 
 #### Returns
 
@@ -620,67 +480,11 @@ Defined in: [packages/core/src/actions/paymaster.ts:62](https://github.com/AASta
 
 ***
 
-### ~~removeGasToken()~~
-
-> **removeGasToken**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L22)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-#### Deprecated
-
-V4 uses depositFor + tokenPrices instead
-
-***
-
-### ~~removeSBT()~~
-
-> **removeSBT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/paymaster.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L30)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### sbt
-
-`Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-#### Deprecated
-
-V4 does not use SBT whitelist
-
-***
-
 ### renounceOwnership()
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L94)
+Defined in: [packages/core/src/actions/paymaster.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L74)
 
 #### Parameters
 
@@ -700,7 +504,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:94](https://github.com/AASta
 
 > **serviceFeeRate**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L66)
+Defined in: [packages/core/src/actions/paymaster.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L47)
 
 #### Returns
 
@@ -708,11 +512,39 @@ Defined in: [packages/core/src/actions/paymaster.ts:66](https://github.com/AASta
 
 ***
 
+### setCachedPrice()
+
+> **setCachedPrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/paymaster.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L14)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+###### price
+
+`bigint`
+
+###### timestamp
+
+`number`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
 ### setMaxGasCostCap()
 
 > **setMaxGasCostCap**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L44)
+Defined in: [packages/core/src/actions/paymaster.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L25)
 
 #### Parameters
 
@@ -736,7 +568,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:44](https://github.com/AASta
 
 > **setPriceStalenessThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L45)
+Defined in: [packages/core/src/actions/paymaster.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L26)
 
 #### Parameters
 
@@ -760,7 +592,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:45](https://github.com/AASta
 
 > **setServiceFeeRate**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L43)
+Defined in: [packages/core/src/actions/paymaster.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L24)
 
 #### Parameters
 
@@ -784,7 +616,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:43](https://github.com/AASta
 
 > **setTokenPrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L15)
+Defined in: [packages/core/src/actions/paymaster.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L13)
 
 #### Parameters
 
@@ -812,7 +644,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:15](https://github.com/AASta
 
 > **setTreasury**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L42)
+Defined in: [packages/core/src/actions/paymaster.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L23)
 
 #### Parameters
 
@@ -836,7 +668,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:42](https://github.com/AASta
 
 > **tokenDecimals**: (`args`) => `Promise`\<`number`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L71)
+Defined in: [packages/core/src/actions/paymaster.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L52)
 
 #### Parameters
 
@@ -856,7 +688,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:71](https://github.com/AASta
 
 > **tokenPrices**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L16)
+Defined in: [packages/core/src/actions/paymaster.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L15)
 
 #### Parameters
 
@@ -876,7 +708,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:16](https://github.com/AASta
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L93)
+Defined in: [packages/core/src/actions/paymaster.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L73)
 
 #### Parameters
 
@@ -900,7 +732,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:93](https://github.com/AASta
 
 > **treasury**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L69)
+Defined in: [packages/core/src/actions/paymaster.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L50)
 
 #### Returns
 
@@ -908,11 +740,11 @@ Defined in: [packages/core/src/actions/paymaster.ts:69](https://github.com/AASta
 
 ***
 
-### unlockPaymasterStake()
+### unlockStake()
 
-> **unlockPaymasterStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **unlockStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L84)
+Defined in: [packages/core/src/actions/paymaster.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L65)
 
 #### Parameters
 
@@ -932,7 +764,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:84](https://github.com/AASta
 
 > **unpause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L49)
+Defined in: [packages/core/src/actions/paymaster.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L30)
 
 #### Parameters
 
@@ -952,7 +784,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:49](https://github.com/AASta
 
 > **updatePrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L54)
+Defined in: [packages/core/src/actions/paymaster.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L35)
 
 #### Parameters
 
@@ -970,9 +802,9 @@ Defined in: [packages/core/src/actions/paymaster.ts:54](https://github.com/AASta
 
 ### validatePaymasterUserOp()
 
-> **validatePaymasterUserOp**: (`args`) => `Promise`\<`any`\>
+> **validatePaymasterUserOp**: (`args`) => `Promise`\<\{ `context`: [`Hex`](https://viem.sh/docs/index.html); `validationData`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L37)
+Defined in: [packages/core/src/actions/paymaster.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L18)
 
 #### Parameters
 
@@ -992,7 +824,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:37](https://github.com/AASta
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<\{ `context`: [`Hex`](https://viem.sh/docs/index.html); `validationData`: `bigint`; \}\>
 
 ***
 
@@ -1000,7 +832,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:37](https://github.com/AASta
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L95)
+Defined in: [packages/core/src/actions/paymaster.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L75)
 
 #### Returns
 
@@ -1012,7 +844,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:95](https://github.com/AASta
 
 > **withdraw**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L11)
+Defined in: [packages/core/src/actions/paymaster.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L9)
 
 #### Parameters
 
@@ -1040,7 +872,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:11](https://github.com/AASta
 
 > **withdrawStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L85)
+Defined in: [packages/core/src/actions/paymaster.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L66)
 
 #### Parameters
 
@@ -1064,7 +896,7 @@ Defined in: [packages/core/src/actions/paymaster.ts:85](https://github.com/AASta
 
 > **withdrawTo**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/paymaster.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/paymaster.ts#L82)
+Defined in: [packages/core/src/actions/paymaster.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/paymaster.ts#L63)
 
 #### Parameters
 

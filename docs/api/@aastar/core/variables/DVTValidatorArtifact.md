@@ -1,6 +1,6 @@
 > `const` **DVTValidatorArtifact**: `object` = `DVTValidatorABIData`
 
-Defined in: [packages/core/src/abis/index.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/abis/index.ts#L84)
+Defined in: [packages/core/src/abis/index.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/abis/index.ts#L82)
 
 ## Type Declaration
 

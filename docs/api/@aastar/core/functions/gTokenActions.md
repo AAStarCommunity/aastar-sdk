@@ -1,10 +1,16 @@
-> **gTokenActions**(): (`client`) => [`TokenActions`](../type-aliases/TokenActions.md)
+> **gTokenActions**(`address?`): (`client`) => [`GTokenActions`](../type-aliases/GTokenActions.md)
 
-Defined in: [packages/core/src/actions/tokens.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/tokens.ts#L81)
+Defined in: [packages/core/src/actions/tokens.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/tokens.ts#L86)
+
+## Parameters
+
+### address?
+
+`` `0x${string}` ``
 
 ## Returns
 
-> (`client`): [`TokenActions`](../type-aliases/TokenActions.md)
+> (`client`): [`GTokenActions`](../type-aliases/GTokenActions.md)
 
 ### Parameters
 
@@ -2711,4 +2717,4 @@ args: [69420],
 
 ### Returns
 
-[`TokenActions`](../type-aliases/TokenActions.md)
+[`GTokenActions`](../type-aliases/GTokenActions.md)

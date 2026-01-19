@@ -1,6 +1,12 @@
-> **tokenActions**(): (`client`) => [`TokenActions`](../type-aliases/TokenActions.md)
+> **tokenActions**(`address?`): (`client`) => [`TokenActions`](../type-aliases/TokenActions.md)
 
-Defined in: [packages/core/src/actions/tokens.ts:165](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/tokens.ts#L165)
+Defined in: [packages/core/src/actions/tokens.ts:478](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/tokens.ts#L478)
+
+## Parameters
+
+### address?
+
+`` `0x${string}` ``
 
 ## Returns
 

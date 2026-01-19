@@ -63,6 +63,12 @@ for pkg in core account paymaster tokens identity dapp; do
     fi
 done
 
+# 6. Sync Changelog
+echo -e "${YELLOW}📝 Syncing Changelog...${NC}"
+if [ -f "$SDK_REPO/CHANGELOG.md" ]; then
+    cp "$SDK_REPO/CHANGELOG.md" "$DOCS_REPO/changelog.md"
+fi
+
 echo -e "${GREEN}✅ Documentation sync complete!${NC}"
 echo ""
 echo "Synced to: $DOCS_REPO"

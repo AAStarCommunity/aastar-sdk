@@ -1,6 +1,6 @@
 > **stakingActions**(`address`): (`client`) => [`StakingActions`](../type-aliases/StakingActions.md)
 
-Defined in: [packages/core/src/actions/staking.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/staking.ts#L55)
+Defined in: [packages/core/src/actions/staking.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/staking.ts#L77)
 
 ## Parameters
 

@@ -14,7 +14,8 @@ import {
     type PaymasterActions,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES,
-    TEST_ACCOUNT_ADDRESSES
+    TEST_ACCOUNT_ADDRESSES,
+    gTokenActions
 } from '@aastar/core';
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
@@ -36,6 +37,11 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
     /** @deprecated Use onboardOperator */
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
     configureOperator: (args: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) => Promise<Hash>
+    
+    // Quick Start APIs
+    stake: (args: { amount: bigint }) => Promise<Hash>;
+    deposit: (args: { amount: bigint }) => Promise<Hash>;
+
     getOperatorStatus: (accountAddress: Address) => Promise<{
         type: 'super' | 'v4' | null;
         superPaymaster: {
@@ -66,7 +72,7 @@ export function createOperatorClient({
 }): OperatorClient {
     const client = createClient({ 
         chain, 
-        transport,
+        transport, 
         account
     })
     .extend(publicActions)
@@ -211,68 +217,148 @@ export function createOperatorClient({
             await (client as any).waitForTransactionReceipt({ hash: tx });
             return tx;
         },
+        
+        // Quick Start Implementations
+        async stake(args: { amount: bigint }) {
+            const getClient = () => client as any;
+            const gToken = usedAddresses.gToken; 
+            const staking = usedAddresses.gTokenStaking;
+            
+            // 1. Approve
+            const allowance = await getClient().readContract({
+                address: gToken,
+                abi: erc20Abi,
+                functionName: 'allowance',
+                args: [getClient().account!.address, staking]
+            }); // as bigint
+
+            if ((allowance as bigint) < args.amount) {
+                const hash = await getClient().writeContract({
+                    address: gToken,
+                    abi: erc20Abi,
+                    functionName: 'approve',
+                    args: [staking, args.amount],
+                    chain: getClient().chain,
+                    account: getClient().account
+                });
+                await getClient().waitForTransactionReceipt({ hash });
+            }
+            
+            // 2. Stake
+            return (actions as any).stake({ amount: args.amount, account: getClient().account }); // utilize imported stakingActions or call direct
+            // Actually 'stkActions' is spread above but 'stake' name might conflict with this 'stake'.
+            // The type intersection has 'stake(args: { amount: bigint, account?: ... })' from StakingActions.
+            // But here we want a simplified overload.
+            // Let's explicitly call appropriate contract function to avoid recursion if key collision.
+            
+            const hash = await getClient().writeContract({
+                address: staking,
+                abi: parseAbi(['function stake(uint256 amount) external']),
+                functionName: 'stake',
+                args: [args.amount],
+                chain: getClient().chain,
+                account: getClient().account
+            });
+            return hash;
+        },
+
+        async deposit(args: { amount: bigint }) {
+            const getClient = () => client as any;
+            const apnts = usedAddresses.aPNTs;
+            const superPM = usedAddresses.superPaymaster;
+
+            // 1. Approve
+             const allowance = await getClient().readContract({
+                address: apnts,
+                abi: erc20Abi,
+                functionName: 'allowance',
+                args: [getClient().account!.address, superPM]
+            });
+            if ((allowance as bigint) < args.amount) {
+                 const hash = await getClient().writeContract({
+                    address: apnts,
+                    abi: erc20Abi,
+                    functionName: 'approve',
+                    args: [superPM, args.amount],
+                    chain: getClient().chain,
+                    account: getClient().account
+                });
+                await getClient().waitForTransactionReceipt({ hash });
+            }
+            // 2. Deposit
+            const hash = await getClient().writeContract({
+                address: superPM,
+                abi: parseAbi(['function deposit(uint256 amount) external']),
+                functionName: 'deposit',
+                args: [args.amount],
+                chain: getClient().chain,
+                account: getClient().account
+            });
+            return hash;
+        },
+
         async getOperatorStatus(accountAddress: Address) {
-            try {
-                const hasRole = await client.readContract({
-                    address: usedAddresses.registry,
-                    abi: RegistryABI,
-                    functionName: 'hasRole',
-                    args: [keccak256(stringToBytes('PAYMASTER_SUPER')), accountAddress]
-                }) as boolean;
+            const getClient = () => client as any; // Helper to cast client
+            const superPM = usedAddresses.superPaymaster;
+            
+            // Check SuperPaymaster Role
+            const ROLE_PAYMASTER_SUPER = keccak256(stringToBytes('PAYMASTER_SUPER'));
+            const isSuper = await getClient().readContract({
+                address: usedAddresses.registry,
+                abi: RegistryABI,
+                functionName: 'hasRole',
+                args: [ROLE_PAYMASTER_SUPER, accountAddress]
+            }) as boolean;
+            
+            let operatorType: 'super' | 'v4' | null = null;
+            let superPaymasterInfo = null;
+            let paymasterV4Info = null;
 
-                let operatorType: 'super' | 'v4' | null = null;
-                let superPaymasterInfo = null;
-                let paymasterV4Info = null;
+            if (isSuper && superPM) {
+                const pmAbi = parseAbi(['function operators(address) view returns (uint128 balance, uint96 exchangeRate, bool isConfigured, bool isPaused, address token, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)']);
+                const operatorData = await getClient().readContract({
+                    address: superPM,
+                    abi: pmAbi,
+                    functionName: 'operators',
+                    args: [accountAddress]
+                }) as any;
 
-                if (hasRole && usedAddresses.superPaymaster) {
-                    const pmAbi = parseAbi(['function operators(address) view returns (uint128 balance, uint96 exchangeRate, bool isConfigured, bool isPaused, address token, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)']);
-                    const operatorData = await client.readContract({
-                        address: usedAddresses.superPaymaster!,
-                        abi: pmAbi,
-                        functionName: 'operators',
+                if (operatorData && operatorData[2]) { // isConfigured
+                    operatorType = 'super';
+                    superPaymasterInfo = {
+                        hasRole: true,
+                        isConfigured: true,
+                        balance: operatorData[0],
+                        exchangeRate: operatorData[1],
+                        treasury: operatorData[6]
+                    };
+                }
+            }
+            
+            // 检查 Paymaster V4 (Direct)
+            if (usedAddresses.paymasterFactory && usedAddresses.paymasterFactory !== '0x0000000000000000000000000000000000000000') {
+                try {
+                    const factoryAbi = parseAbi(['function getPaymasterByOperator(address) view returns (address)']);
+                    const pmAddr = await getClient().readContract({
+                        address: usedAddresses.paymasterFactory,
+                        abi: factoryAbi,
+                        functionName: 'getPaymasterByOperator',
                         args: [accountAddress]
-                    }) as any;
-
-                    if (operatorData && operatorData[2]) { // isConfigured
-                        operatorType = 'super';
-                        superPaymasterInfo = {
-                            hasRole: true,
-                            isConfigured: true,
-                            balance: operatorData[0],
-                            exchangeRate: operatorData[1],
-                            treasury: operatorData[6]
+                    }) as Address;
+        
+                    if (pmAddr !== '0x0000000000000000000000000000000000000000') {
+                        operatorType = operatorType || 'v4';
+                        paymasterV4Info = {
+                            address: pmAddr,
+                            balance: await getClient().getBalance({ address: pmAddr })
                         };
                     }
+                } catch (e) {
+                    console.warn(`   ⚠️ Failed to fetch V4 info from factory ${usedAddresses.paymasterFactory}:`, e);
                 }
-                
-                // 检查 Paymaster V4 (Direct)
-                if (usedAddresses.paymasterFactory && usedAddresses.paymasterFactory !== '0x0000000000000000000000000000000000000000') {
-                    try {
-                        const factoryAbi = parseAbi(['function getPaymasterByOperator(address) view returns (address)']);
-                        const pmAddr = await client.readContract({
-                            address: usedAddresses.paymasterFactory,
-                            abi: factoryAbi,
-                            functionName: 'getPaymasterByOperator',
-                            args: [accountAddress]
-                        }) as Address;
-            
-                        if (pmAddr !== '0x0000000000000000000000000000000000000000') {
-                            operatorType = operatorType || 'v4';
-                            paymasterV4Info = {
-                                address: pmAddr,
-                                balance: await client.getBalance({ address: pmAddr })
-                            };
-                        }
-                    } catch (e) {
-                        console.warn(`   ⚠️ Failed to fetch V4 info from factory ${usedAddresses.paymasterFactory}:`, e);
-                    }
-                }
-
-                return { type: operatorType, superPaymaster: superPaymasterInfo, paymasterV4: paymasterV4Info };
-            } catch (error) {
-                console.error('Error in getOperatorStatus:', error);
-                return { type: null, superPaymaster: null, paymasterV4: null };
             }
+
+            return { type: operatorType, superPaymaster: superPaymasterInfo, paymasterV4: paymasterV4Info };
         }
     };
 

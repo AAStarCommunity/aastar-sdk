@@ -1,6 +1,6 @@
 > **ReputationActions** = `object`
 
-Defined in: [packages/core/src/actions/reputation.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L6)
+Defined in: [packages/core/src/actions/reputation.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L20)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/reputation.ts:6](https://github.com/AASta
 
 > **batchSyncToRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L39)
+Defined in: [packages/core/src/actions/reputation.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L53)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/reputation.ts:39](https://github.com/AASt
 
 > **batchUpdateScores**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L38)
+Defined in: [packages/core/src/actions/reputation.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L52)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [packages/core/src/actions/reputation.ts:38](https://github.com/AASt
 
 > **boostedCollections**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L34)
+Defined in: [packages/core/src/actions/reputation.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L48)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [packages/core/src/actions/reputation.ts:34](https://github.com/AASt
 
 > **calculateReputation**: (`args`) => `Promise`\<\{ `communityScore`: `bigint`; `globalScore`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/reputation.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L22)
+Defined in: [packages/core/src/actions/reputation.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L36)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [packages/core/src/actions/reputation.ts:22](https://github.com/AASt
 
 > **communityActiveRules**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L17)
+Defined in: [packages/core/src/actions/reputation.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L31)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AASt
 
 > **communityReputations**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L26)
+Defined in: [packages/core/src/actions/reputation.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L40)
 
 #### Parameters
 
@@ -154,9 +154,9 @@ Defined in: [packages/core/src/actions/reputation.ts:26](https://github.com/AASt
 
 ### communityRules()
 
-> **communityRules**: (`args`) => `Promise`\<`any`\>
+> **communityRules**: (`args`) => `Promise`\<[`ReputationRule`](ReputationRule.md)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L16)
+Defined in: [packages/core/src/actions/reputation.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L30)
 
 #### Parameters
 
@@ -172,7 +172,7 @@ Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AASt
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`ReputationRule`](ReputationRule.md)\>
 
 ***
 
@@ -180,7 +180,7 @@ Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AASt
 
 > **computeScore**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L21)
+Defined in: [packages/core/src/actions/reputation.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L35)
 
 #### Parameters
 
@@ -210,13 +210,13 @@ Defined in: [packages/core/src/actions/reputation.ts:21](https://github.com/AASt
 
 ### defaultRule()
 
-> **defaultRule**: () => `Promise`\<`any`\>
+> **defaultRule**: () => `Promise`\<[`ReputationRule`](ReputationRule.md)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L18)
+Defined in: [packages/core/src/actions/reputation.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L32)
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`ReputationRule`](ReputationRule.md)\>
 
 ***
 
@@ -224,7 +224,7 @@ Defined in: [packages/core/src/actions/reputation.ts:18](https://github.com/AASt
 
 > **disableRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L11)
+Defined in: [packages/core/src/actions/reputation.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L25)
 
 #### Parameters
 
@@ -248,7 +248,7 @@ Defined in: [packages/core/src/actions/reputation.ts:11](https://github.com/AASt
 
 > **enableRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L10)
+Defined in: [packages/core/src/actions/reputation.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L24)
 
 #### Parameters
 
@@ -272,7 +272,7 @@ Defined in: [packages/core/src/actions/reputation.ts:10](https://github.com/AASt
 
 > **entropyFactors**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L35)
+Defined in: [packages/core/src/actions/reputation.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L49)
 
 #### Parameters
 
@@ -292,7 +292,7 @@ Defined in: [packages/core/src/actions/reputation.ts:35](https://github.com/AASt
 
 > **getActiveRules**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)[]\>
 
-Defined in: [packages/core/src/actions/reputation.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L13)
+Defined in: [packages/core/src/actions/reputation.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L27)
 
 #### Parameters
 
@@ -312,7 +312,7 @@ Defined in: [packages/core/src/actions/reputation.ts:13](https://github.com/AASt
 
 > **getCommunityScore**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L25)
+Defined in: [packages/core/src/actions/reputation.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L39)
 
 #### Parameters
 
@@ -332,7 +332,7 @@ Defined in: [packages/core/src/actions/reputation.ts:25](https://github.com/AASt
 
 > **getEntropyFactor**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L53)
+Defined in: [packages/core/src/actions/reputation.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L67)
 
 #### Returns
 
@@ -342,9 +342,9 @@ Defined in: [packages/core/src/actions/reputation.ts:53](https://github.com/AASt
 
 ### getReputationBreakdown()
 
-> **getReputationBreakdown**: (`args`) => `Promise`\<`any`\>
+> **getReputationBreakdown**: (`args`) => `Promise`\<[`ReputationBreakdown`](ReputationBreakdown.md)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L23)
+Defined in: [packages/core/src/actions/reputation.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L37)
 
 #### Parameters
 
@@ -364,15 +364,15 @@ Defined in: [packages/core/src/actions/reputation.ts:23](https://github.com/AASt
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`ReputationBreakdown`](ReputationBreakdown.md)\>
 
 ***
 
 ### getReputationRule()
 
-> **getReputationRule**: (`args`) => `Promise`\<`any`\>
+> **getReputationRule**: (`args`) => `Promise`\<[`ReputationRule`](ReputationRule.md)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L9)
+Defined in: [packages/core/src/actions/reputation.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L23)
 
 #### Parameters
 
@@ -384,7 +384,7 @@ Defined in: [packages/core/src/actions/reputation.ts:9](https://github.com/AASta
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`ReputationRule`](ReputationRule.md)\>
 
 ***
 
@@ -392,7 +392,7 @@ Defined in: [packages/core/src/actions/reputation.ts:9](https://github.com/AASta
 
 > **getRuleCount**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L14)
+Defined in: [packages/core/src/actions/reputation.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L28)
 
 #### Returns
 
@@ -404,7 +404,7 @@ Defined in: [packages/core/src/actions/reputation.ts:14](https://github.com/AASt
 
 > **getUserScore**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L24)
+Defined in: [packages/core/src/actions/reputation.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L38)
 
 #### Parameters
 
@@ -424,7 +424,7 @@ Defined in: [packages/core/src/actions/reputation.ts:24](https://github.com/AASt
 
 > **isRuleActive**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L12)
+Defined in: [packages/core/src/actions/reputation.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L26)
 
 #### Parameters
 
@@ -444,7 +444,7 @@ Defined in: [packages/core/src/actions/reputation.ts:12](https://github.com/AASt
 
 > **nftCollectionBoost**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L31)
+Defined in: [packages/core/src/actions/reputation.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L45)
 
 #### Parameters
 
@@ -464,7 +464,7 @@ Defined in: [packages/core/src/actions/reputation.ts:31](https://github.com/AASt
 
 > **nftHoldStart**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L32)
+Defined in: [packages/core/src/actions/reputation.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L46)
 
 #### Parameters
 
@@ -488,7 +488,7 @@ Defined in: [packages/core/src/actions/reputation.ts:32](https://github.com/AASt
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L59)
+Defined in: [packages/core/src/actions/reputation.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L73)
 
 #### Returns
 
@@ -500,7 +500,7 @@ Defined in: [packages/core/src/actions/reputation.ts:59](https://github.com/AASt
 
 > **REGISTRY**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L56)
+Defined in: [packages/core/src/actions/reputation.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L70)
 
 #### Returns
 
@@ -512,7 +512,7 @@ Defined in: [packages/core/src/actions/reputation.ts:56](https://github.com/AASt
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L61)
+Defined in: [packages/core/src/actions/reputation.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L75)
 
 #### Parameters
 
@@ -532,7 +532,7 @@ Defined in: [packages/core/src/actions/reputation.ts:61](https://github.com/AASt
 
 > **setCommunityReputation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L27)
+Defined in: [packages/core/src/actions/reputation.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L41)
 
 #### Parameters
 
@@ -564,7 +564,7 @@ Defined in: [packages/core/src/actions/reputation.ts:27](https://github.com/AASt
 
 > **setEntropyFactor**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L52)
+Defined in: [packages/core/src/actions/reputation.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L66)
 
 #### Parameters
 
@@ -592,7 +592,7 @@ Defined in: [packages/core/src/actions/reputation.ts:52](https://github.com/AASt
 
 > **setNFTBoost**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L30)
+Defined in: [packages/core/src/actions/reputation.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L44)
 
 #### Parameters
 
@@ -620,7 +620,7 @@ Defined in: [packages/core/src/actions/reputation.ts:30](https://github.com/AASt
 
 > **setRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L51)
+Defined in: [packages/core/src/actions/reputation.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L65)
 
 #### Parameters
 
@@ -644,7 +644,7 @@ Defined in: [packages/core/src/actions/reputation.ts:51](https://github.com/AASt
 
 > **setReputationRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L8)
+Defined in: [packages/core/src/actions/reputation.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L22)
 
 #### Parameters
 
@@ -656,7 +656,7 @@ Defined in: [packages/core/src/actions/reputation.ts:8](https://github.com/AASta
 
 ###### rule
 
-`any`
+[`ReputationRule`](ReputationRule.md)
 
 ###### ruleId
 
@@ -672,7 +672,7 @@ Defined in: [packages/core/src/actions/reputation.ts:8](https://github.com/AASta
 
 > **setRule**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L15)
+Defined in: [packages/core/src/actions/reputation.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L29)
 
 #### Parameters
 
@@ -712,7 +712,7 @@ Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AASt
 
 > **syncToRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L40)
+Defined in: [packages/core/src/actions/reputation.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L54)
 
 #### Parameters
 
@@ -756,7 +756,7 @@ Defined in: [packages/core/src/actions/reputation.ts:40](https://github.com/AASt
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L60)
+Defined in: [packages/core/src/actions/reputation.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L74)
 
 #### Parameters
 
@@ -780,7 +780,7 @@ Defined in: [packages/core/src/actions/reputation.ts:60](https://github.com/AASt
 
 > **updateNFTHoldStart**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/reputation.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L33)
+Defined in: [packages/core/src/actions/reputation.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L47)
 
 #### Parameters
 
@@ -804,7 +804,7 @@ Defined in: [packages/core/src/actions/reputation.ts:33](https://github.com/AASt
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/reputation.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/reputation.ts#L64)
+Defined in: [packages/core/src/actions/reputation.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/reputation.ts#L78)
 
 #### Returns
 

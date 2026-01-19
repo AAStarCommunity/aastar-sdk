@@ -1,16 +1,16 @@
-> **gTokenExtendedActions**(`address`): (`client`) => [`GTokenExtendedActions`](../type-aliases/GTokenExtendedActions.md)
+> **xPNTsTokenActions**(`address?`): (`client`) => [`XPNTsTokenActions`](../type-aliases/XPNTsTokenActions.md)
 
-Defined in: [packages/core/src/actions/gtokenExtended.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/gtokenExtended.ts#L29)
+Defined in: [packages/core/src/actions/tokens.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/tokens.ts#L197)
 
 ## Parameters
 
-### address
+### address?
 
 `` `0x${string}` ``
 
 ## Returns
 
-> (`client`): [`GTokenExtendedActions`](../type-aliases/GTokenExtendedActions.md)
+> (`client`): [`XPNTsTokenActions`](../type-aliases/XPNTsTokenActions.md)
 
 ### Parameters
 
@@ -2717,4 +2717,4 @@ args: [69420],
 
 ### Returns
 
-[`GTokenExtendedActions`](../type-aliases/GTokenExtendedActions.md)
+[`XPNTsTokenActions`](../type-aliases/XPNTsTokenActions.md)

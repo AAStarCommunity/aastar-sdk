@@ -1,14 +1,14 @@
 > **AggregatorActions** = `object`
 
-Defined in: [packages/core/src/actions/aggregator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L6)
+Defined in: [packages/core/src/actions/aggregator.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L6)
 
 ## Properties
 
 ### aggregatedSignatures()
 
-> **aggregatedSignatures**: (`args`) => `Promise`\<\{ `messageHash`: [`Hex`](https://viem.sh/docs/index.html); `signature`: [`Hex`](https://viem.sh/docs/index.html); `timestamp`: `bigint`; `verified`: `boolean`; \}\>
+> **aggregatedSignatures**: (`args`) => `Promise`\<\{ `aggregatedSig`: [`Hex`](https://viem.sh/docs/index.html); `messageHash`: [`Hex`](https://viem.sh/docs/index.html); `timestamp`: `bigint`; `verified`: `boolean`; \}\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L26)
+Defined in: [packages/core/src/actions/aggregator.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L24)
 
 #### Parameters
 
@@ -20,15 +20,15 @@ Defined in: [packages/core/src/actions/aggregator.ts:26](https://github.com/AASt
 
 #### Returns
 
-`Promise`\<\{ `messageHash`: [`Hex`](https://viem.sh/docs/index.html); `signature`: [`Hex`](https://viem.sh/docs/index.html); `timestamp`: `bigint`; `verified`: `boolean`; \}\>
+`Promise`\<\{ `aggregatedSig`: [`Hex`](https://viem.sh/docs/index.html); `messageHash`: [`Hex`](https://viem.sh/docs/index.html); `timestamp`: `bigint`; `verified`: `boolean`; \}\>
 
 ***
 
 ### blsPublicKeys()
 
-> **blsPublicKeys**: (`args`) => `Promise`\<\{ `publicKey`: [`Hex`](https://viem.sh/docs/index.html); `registered`: `boolean`; \}\>
+> **blsPublicKeys**: (`args`) => `Promise`\<\{ `isActive`: `boolean`; `publicKey`: [`Hex`](https://viem.sh/docs/index.html); \}\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L9)
+Defined in: [packages/core/src/actions/aggregator.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L9)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:9](https://github.com/AASta
 
 #### Returns
 
-`Promise`\<\{ `publicKey`: [`Hex`](https://viem.sh/docs/index.html); `registered`: `boolean`; \}\>
+`Promise`\<\{ `isActive`: `boolean`; `publicKey`: [`Hex`](https://viem.sh/docs/index.html); \}\>
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:9](https://github.com/AASta
 
 > **defaultThreshold**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L16)
+Defined in: [packages/core/src/actions/aggregator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L14)
 
 #### Returns
 
@@ -60,7 +60,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:16](https://github.com/AASt
 
 > **DVT\_VALIDATOR**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L31)
+Defined in: [packages/core/src/actions/aggregator.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L29)
 
 #### Returns
 
@@ -72,7 +72,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:31](https://github.com/AASt
 
 > **executedProposals**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L22)
+Defined in: [packages/core/src/actions/aggregator.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L20)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:22](https://github.com/AASt
 
 > **executeProposal**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L20)
+Defined in: [packages/core/src/actions/aggregator.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L18)
 
 #### Parameters
 
@@ -128,23 +128,11 @@ Defined in: [packages/core/src/actions/aggregator.ts:20](https://github.com/AASt
 
 ***
 
-### getBLSThreshold()
-
-> **getBLSThreshold**: () => `Promise`\<`bigint`\>
-
-Defined in: [packages/core/src/actions/aggregator.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L13)
-
-#### Returns
-
-`Promise`\<`bigint`\>
-
-***
-
 ### MAX\_VALIDATORS()
 
 > **MAX\_VALIDATORS**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L36)
+Defined in: [packages/core/src/actions/aggregator.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L34)
 
 #### Returns
 
@@ -156,7 +144,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:36](https://github.com/AASt
 
 > **minThreshold**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L17)
+Defined in: [packages/core/src/actions/aggregator.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L15)
 
 #### Returns
 
@@ -168,7 +156,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:17](https://github.com/AASt
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L39)
+Defined in: [packages/core/src/actions/aggregator.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L37)
 
 #### Returns
 
@@ -180,7 +168,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:39](https://github.com/AASt
 
 > **proposalNonces**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L23)
+Defined in: [packages/core/src/actions/aggregator.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L21)
 
 #### Parameters
 
@@ -200,7 +188,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:23](https://github.com/AASt
 
 > **registerBLSPublicKey**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L8)
+Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L8)
 
 #### Parameters
 
@@ -214,7 +202,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AASta
 
 [`Hex`](https://viem.sh/docs/index.html)
 
-###### user
+###### validator
 
 `Address`
 
@@ -228,7 +216,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AASta
 
 > **REGISTRY**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L33)
+Defined in: [packages/core/src/actions/aggregator.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L31)
 
 #### Returns
 
@@ -240,7 +228,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:33](https://github.com/AASt
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L41)
+Defined in: [packages/core/src/actions/aggregator.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L39)
 
 #### Parameters
 
@@ -249,30 +237,6 @@ Defined in: [packages/core/src/actions/aggregator.ts:41](https://github.com/AASt
 ###### account?
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-***
-
-### setBLSThreshold()
-
-> **setBLSThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/aggregator.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L12)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### threshold
-
-`number`
 
 #### Returns
 
@@ -284,7 +248,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:12](https://github.com/AASt
 
 > **setDefaultThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L14)
+Defined in: [packages/core/src/actions/aggregator.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L12)
 
 #### Parameters
 
@@ -308,7 +272,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:14](https://github.com/AASt
 
 > **setDVTValidator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L29)
+Defined in: [packages/core/src/actions/aggregator.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L27)
 
 #### Parameters
 
@@ -332,7 +296,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:29](https://github.com/AASt
 
 > **setMinThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L15)
+Defined in: [packages/core/src/actions/aggregator.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L13)
 
 #### Parameters
 
@@ -356,7 +320,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:15](https://github.com/AASt
 
 > **setSuperPaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L30)
+Defined in: [packages/core/src/actions/aggregator.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L28)
 
 #### Parameters
 
@@ -380,7 +344,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:30](https://github.com/AASt
 
 > **SUPERPAYMASTER**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L32)
+Defined in: [packages/core/src/actions/aggregator.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L30)
 
 #### Returns
 
@@ -392,7 +356,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:32](https://github.com/AASt
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L40)
+Defined in: [packages/core/src/actions/aggregator.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L38)
 
 #### Parameters
 
@@ -416,7 +380,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:40](https://github.com/AASt
 
 > **verifyAndExecute**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L21)
+Defined in: [packages/core/src/actions/aggregator.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L19)
 
 #### Parameters
 
@@ -464,7 +428,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:21](https://github.com/AASt
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/aggregator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/aggregator.ts#L44)
+Defined in: [packages/core/src/actions/aggregator.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/aggregator.ts#L42)
 
 #### Returns
 

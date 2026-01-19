@@ -1,14 +1,14 @@
 > **SuperPaymasterActions** = `object`
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L6)
+Defined in: [packages/core/src/actions/superPaymaster.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L27)
 
 ## Properties
 
-### addSuperStake()
+### addStake()
 
-> **addSuperStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **addStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L14)
+Defined in: [packages/core/src/actions/superPaymaster.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L36)
 
 #### Parameters
 
@@ -18,7 +18,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:14](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### amount
+###### unstakeDelaySec
+
+`number`
+
+###### value
 
 `bigint`
 
@@ -32,7 +36,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:14](https://github.com/
 
 > **APNTS\_TOKEN**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L82)
+Defined in: [packages/core/src/actions/superPaymaster.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L89)
 
 #### Returns
 
@@ -44,79 +48,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:82](https://github.com/
 
 > **aPNTsPriceUSD**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L45)
+Defined in: [packages/core/src/actions/superPaymaster.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L81)
 
 #### Returns
 
 `Promise`\<`bigint`\>
-
-***
-
-### balanceOfOperator()
-
-> **balanceOfOperator**: (`args`) => `Promise`\<`bigint`\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L44)
-
-#### Parameters
-
-##### args
-
-###### operator
-
-`Address`
-
-#### Returns
-
-`Promise`\<`bigint`\>
-
-***
-
-### blockedUsers()
-
-> **blockedUsers**: (`args`) => `Promise`\<`boolean`\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L43)
-
-#### Parameters
-
-##### args
-
-###### user
-
-`Address`
-
-#### Returns
-
-`Promise`\<`boolean`\>
-
-***
-
-### blockUser()
-
-> **blockUser**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L32)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### blocked
-
-`boolean`
-
-###### user
-
-`Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
 ***
 
@@ -124,7 +60,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:32](https://github.com/
 
 > **BLS\_AGGREGATOR**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L84)
+Defined in: [packages/core/src/actions/superPaymaster.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L91)
 
 #### Returns
 
@@ -136,7 +72,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:84](https://github.com/
 
 > **BPS\_DENOMINATOR**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L88)
+Defined in: [packages/core/src/actions/superPaymaster.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L103)
 
 #### Returns
 
@@ -146,13 +82,13 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:88](https://github.com/
 
 ### cachedPrice()
 
-> **cachedPrice**: () => `Promise`\<`any`\>
+> **cachedPrice**: () => `Promise`\<\{ `decimals`: `number`; `price`: `bigint`; `roundId`: `bigint`; `updatedAt`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L46)
+Defined in: [packages/core/src/actions/superPaymaster.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L80)
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<\{ `decimals`: `number`; `price`: `bigint`; `roundId`: `bigint`; `updatedAt`: `bigint`; \}\>
 
 ***
 
@@ -160,7 +96,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:46](https://github.com/
 
 > **configureOperator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L19)
+Defined in: [packages/core/src/actions/superPaymaster.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L41)
 
 #### Parameters
 
@@ -174,7 +110,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:19](https://github.com/
 
 `bigint`
 
-###### treasury
+###### opTreasury
 
 `Address`
 
@@ -192,7 +128,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:19](https://github.com/
 
 > **deposit**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L8)
+Defined in: [packages/core/src/actions/superPaymaster.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L29)
 
 #### Parameters
 
@@ -209,34 +145,6 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:8](https://github.com/A
 #### Returns
 
 `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-***
-
-### ~~depositAPNTs()~~
-
-> **depositAPNTs**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L10)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-#### Deprecated
-
-Use depositAPNTs for clarity
 
 ***
 
@@ -244,7 +152,7 @@ Use depositAPNTs for clarity
 
 > **depositETH**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L11)
+Defined in: [packages/core/src/actions/superPaymaster.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L30)
 
 #### Parameters
 
@@ -264,11 +172,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:11](https://github.com/
 
 ***
 
-### depositForOperator()
+### depositFor()
 
-> **depositForOperator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **depositFor**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L12)
+Defined in: [packages/core/src/actions/superPaymaster.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L31)
 
 #### Parameters
 
@@ -282,7 +190,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:12](https://github.com/
 
 `bigint`
 
-###### operator
+###### targetOperator
 
 `Address`
 
@@ -296,7 +204,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:12](https://github.com/
 
 > **entryPoint**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L52)
+Defined in: [packages/core/src/actions/superPaymaster.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L95)
 
 #### Returns
 
@@ -308,7 +216,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:52](https://github.com/
 
 > **ETH\_USD\_PRICE\_FEED**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L85)
+Defined in: [packages/core/src/actions/superPaymaster.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L92)
 
 #### Returns
 
@@ -320,7 +228,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:85](https://github.com/
 
 > **executeSlashWithBLS**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L23)
+Defined in: [packages/core/src/actions/superPaymaster.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L45)
 
 #### Parameters
 
@@ -330,23 +238,15 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:23](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### amount
+###### level
 
-`bigint`
-
-###### blsSignature
-
-[`Hex`](https://viem.sh/docs/index.html)
+`number`
 
 ###### operator
 
 `Address`
 
-###### reason
-
-`string`
-
-###### roleId
+###### proof
 
 [`Hex`](https://viem.sh/docs/index.html)
 
@@ -360,13 +260,13 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:23](https://github.com/
 
 > **getAvailableCredit**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L42)
+Defined in: [packages/core/src/actions/superPaymaster.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L73)
 
 #### Parameters
 
 ##### args
 
-###### operator
+###### token
 
 `Address`
 
@@ -384,7 +284,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:42](https://github.com/
 
 > **getDeposit**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L41)
+Defined in: [packages/core/src/actions/superPaymaster.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L74)
 
 #### Returns
 
@@ -394,9 +294,9 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:41](https://github.com/
 
 ### getLatestSlash()
 
-> **getLatestSlash**: (`args`) => `Promise`\<`any`\>
+> **getLatestSlash**: (`args`) => `Promise`\<[`SlashRecord`](SlashRecord.md)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L59)
+Defined in: [packages/core/src/actions/superPaymaster.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L75)
 
 #### Parameters
 
@@ -408,7 +308,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:59](https://github.com/
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`SlashRecord`](SlashRecord.md)\>
 
 ***
 
@@ -416,7 +316,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:59](https://github.com/
 
 > **getSlashCount**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L58)
+Defined in: [packages/core/src/actions/superPaymaster.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L76)
 
 #### Parameters
 
@@ -434,9 +334,9 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:58](https://github.com/
 
 ### getSlashHistory()
 
-> **getSlashHistory**: (`args`) => `Promise`\<`any`[]\>
+> **getSlashHistory**: (`args`) => `Promise`\<[`SlashRecord`](SlashRecord.md)[]\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L57)
+Defined in: [packages/core/src/actions/superPaymaster.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L77)
 
 #### Parameters
 
@@ -448,27 +348,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:57](https://github.com/
 
 #### Returns
 
-`Promise`\<`any`[]\>
-
-***
-
-### lastUserOpTimestamp()
-
-> **lastUserOpTimestamp**: (`args`) => `Promise`\<`bigint`\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L54)
-
-#### Parameters
-
-##### args
-
-###### user
-
-`Address`
-
-#### Returns
-
-`Promise`\<`bigint`\>
+`Promise`\<[`SlashRecord`](SlashRecord.md)[]\>
 
 ***
 
@@ -476,7 +356,19 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:54](https://github.com/
 
 > **MAX\_ETH\_USD\_PRICE**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L91)
+Defined in: [packages/core/src/actions/superPaymaster.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L97)
+
+#### Returns
+
+`Promise`\<`bigint`\>
+
+***
+
+### MAX\_PROTOCOL\_FEE()
+
+> **MAX\_PROTOCOL\_FEE**: () => `Promise`\<`bigint`\>
+
+Defined in: [packages/core/src/actions/superPaymaster.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L96)
 
 #### Returns
 
@@ -488,7 +380,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:91](https://github.com/
 
 > **MIN\_ETH\_USD\_PRICE**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L92)
+Defined in: [packages/core/src/actions/superPaymaster.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L98)
 
 #### Returns
 
@@ -498,17 +390,13 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:92](https://github.com/
 
 ### onTransferReceived()
 
-> **onTransferReceived**: (`args`) => `Promise`\<`any`\>
+> **onTransferReceived**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L76)
+Defined in: [packages/core/src/actions/superPaymaster.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L66)
 
 #### Parameters
 
 ##### args
-
-###### amount
-
-`bigint`
 
 ###### data
 
@@ -518,17 +406,25 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:76](https://github.com/
 
 `Address`
 
+###### operator
+
+`Address`
+
+###### value
+
+`bigint`
+
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
 ***
 
 ### operators()
 
-> **operators**: (`args`) => `Promise`\<`any`\>
+> **operators**: (`args`) => `Promise`\<[`OperatorConfig`](OperatorConfig.md)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L40)
+Defined in: [packages/core/src/actions/superPaymaster.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L72)
 
 #### Parameters
 
@@ -540,7 +436,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:40](https://github.com/
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`OperatorConfig`](OperatorConfig.md)\>
 
 ***
 
@@ -548,7 +444,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:40](https://github.com/
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L96)
+Defined in: [packages/core/src/actions/superPaymaster.ts:106](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L106)
 
 #### Returns
 
@@ -560,43 +456,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:96](https://github.com/
 
 > **PAYMASTER\_DATA\_OFFSET**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L86)
+Defined in: [packages/core/src/actions/superPaymaster.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L99)
 
 #### Returns
 
 `Promise`\<`bigint`\>
-
-***
-
-### postOp()
-
-> **postOp**: (`args`) => `Promise`\<`void`\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L37)
-
-#### Parameters
-
-##### args
-
-###### actualGasCost
-
-`bigint`
-
-###### actualUserOpFeePerGas
-
-`bigint`
-
-###### context
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### mode
-
-`number`
-
-#### Returns
-
-`Promise`\<`void`\>
 
 ***
 
@@ -604,7 +468,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:37](https://github.com/
 
 > **PRICE\_CACHE\_DURATION**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L89)
+Defined in: [packages/core/src/actions/superPaymaster.ts:100](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L100)
 
 #### Returns
 
@@ -612,27 +476,15 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:89](https://github.com/
 
 ***
 
-### PRICE\_STALENESS\_THRESHOLD()
+### priceStalenessThreshold()
 
-> **PRICE\_STALENESS\_THRESHOLD**: () => `Promise`\<`bigint`\>
+> **priceStalenessThreshold**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L90)
+Defined in: [packages/core/src/actions/superPaymaster.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L85)
 
 #### Returns
 
 `Promise`\<`bigint`\>
-
-***
-
-### protocolFee()
-
-> **protocolFee**: () => `Promise`\<`any`\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L47)
-
-#### Returns
-
-`Promise`\<`any`\>
 
 ***
 
@@ -640,7 +492,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:47](https://github.com/
 
 > **protocolFeeBPS**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L48)
+Defined in: [packages/core/src/actions/superPaymaster.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L82)
 
 #### Returns
 
@@ -652,7 +504,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:48](https://github.com/
 
 > **protocolRevenue**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L49)
+Defined in: [packages/core/src/actions/superPaymaster.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L83)
 
 #### Returns
 
@@ -664,7 +516,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:49](https://github.com/
 
 > **RATE\_OFFSET**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L87)
+Defined in: [packages/core/src/actions/superPaymaster.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L101)
 
 #### Returns
 
@@ -676,7 +528,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:87](https://github.com/
 
 > **REGISTRY**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L83)
+Defined in: [packages/core/src/actions/superPaymaster.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L90)
 
 #### Returns
 
@@ -688,7 +540,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:83](https://github.com/
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L97)
+Defined in: [packages/core/src/actions/superPaymaster.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L108)
 
 #### Parameters
 
@@ -704,11 +556,31 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:97](https://github.com/
 
 ***
 
-### setAPNTsPrice()
+### sbtHolders()
 
-> **setAPNTsPrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **sbtHolders**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L27)
+Defined in: [packages/core/src/actions/superPaymaster.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L86)
+
+#### Parameters
+
+##### args
+
+###### user
+
+`Address`
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+***
+
+### setAPNTSPrice()
+
+> **setAPNTSPrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/superPaymaster.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L53)
 
 #### Parameters
 
@@ -718,7 +590,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:27](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### priceUSD
+###### newPrice
 
 `bigint`
 
@@ -732,7 +604,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:27](https://github.com/
 
 > **setAPNTsToken**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L72)
+Defined in: [packages/core/src/actions/superPaymaster.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L61)
 
 #### Parameters
 
@@ -756,7 +628,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:72](https://github.com/
 
 > **setBLSAggregator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L73)
+Defined in: [packages/core/src/actions/superPaymaster.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L62)
 
 #### Parameters
 
@@ -776,35 +648,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:73](https://github.com/
 
 ***
 
-### setCachedPrice()
-
-> **setCachedPrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-Defined in: [packages/core/src/actions/superPaymaster.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L28)
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### price
-
-`bigint`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-***
-
 ### setOperatorLimits()
 
 > **setOperatorLimits**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L21)
+Defined in: [packages/core/src/actions/superPaymaster.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L43)
 
 #### Parameters
 
@@ -814,13 +662,9 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:21](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### limits
+###### minTxInterval
 
-`any`
-
-###### operator
-
-`Address`
+`number`
 
 #### Returns
 
@@ -832,7 +676,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:21](https://github.com/
 
 > **setOperatorPaused**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L20)
+Defined in: [packages/core/src/actions/superPaymaster.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L42)
 
 #### Parameters
 
@@ -860,7 +704,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:20](https://github.com/
 
 > **setProtocolFee**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L29)
+Defined in: [packages/core/src/actions/superPaymaster.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L58)
 
 #### Parameters
 
@@ -870,13 +714,9 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:29](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### feeBps
+###### newFeeBPS
 
 `bigint`
-
-###### feeRecipient
-
-`Address`
 
 #### Returns
 
@@ -888,7 +728,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:29](https://github.com/
 
 > **setTreasury**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L67)
+Defined in: [packages/core/src/actions/superPaymaster.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L59)
 
 #### Parameters
 
@@ -912,7 +752,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:67](https://github.com/
 
 > **setXPNTsFactory**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L71)
+Defined in: [packages/core/src/actions/superPaymaster.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L60)
 
 #### Parameters
 
@@ -934,9 +774,9 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:71](https://github.com/
 
 ### slashHistory()
 
-> **slashHistory**: (`args`) => `Promise`\<`any`\>
+> **slashHistory**: (`args`) => `Promise`\<[`SlashRecord`](SlashRecord.md)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L60)
+Defined in: [packages/core/src/actions/superPaymaster.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L78)
 
 #### Parameters
 
@@ -952,7 +792,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:60](https://github.com/
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<[`SlashRecord`](SlashRecord.md)\>
 
 ***
 
@@ -960,7 +800,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:60](https://github.com/
 
 > **slashOperator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L24)
+Defined in: [packages/core/src/actions/superPaymaster.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L46)
 
 #### Parameters
 
@@ -970,13 +810,17 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:24](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### amount
+###### level
 
-`bigint`
+`number`
 
 ###### operator
 
 `Address`
+
+###### penaltyAmount
+
+`bigint`
 
 ###### reason
 
@@ -992,7 +836,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:24](https://github.com/
 
 > **totalTrackedBalance**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L53)
+Defined in: [packages/core/src/actions/superPaymaster.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L84)
 
 #### Returns
 
@@ -1004,7 +848,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:53](https://github.com/
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L95)
+Defined in: [packages/core/src/actions/superPaymaster.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L107)
 
 #### Parameters
 
@@ -1028,7 +872,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:95](https://github.com/
 
 > **treasury**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L50)
+Defined in: [packages/core/src/actions/superPaymaster.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L93)
 
 #### Returns
 
@@ -1036,11 +880,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:50](https://github.com/
 
 ***
 
-### unlockSuperStake()
+### unlockStake()
 
-> **unlockSuperStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **unlockStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L15)
+Defined in: [packages/core/src/actions/superPaymaster.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L37)
 
 #### Parameters
 
@@ -1060,7 +904,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:15](https://github.com/
 
 > **updateBlockedStatus**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L33)
+Defined in: [packages/core/src/actions/superPaymaster.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L49)
 
 #### Parameters
 
@@ -1070,13 +914,17 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:33](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### blocked
-
-`boolean`
-
-###### user
+###### operator
 
 `Address`
+
+###### statuses
+
+`boolean`[]
+
+###### users
+
+`Address`[]
 
 #### Returns
 
@@ -1088,7 +936,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:33](https://github.com/
 
 > **updatePrice**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L63)
+Defined in: [packages/core/src/actions/superPaymaster.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L54)
 
 #### Parameters
 
@@ -1108,7 +956,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:63](https://github.com/
 
 > **updatePriceDVT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L64)
+Defined in: [packages/core/src/actions/superPaymaster.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L55)
 
 #### Parameters
 
@@ -1126,6 +974,10 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:64](https://github.com/
 
 [`Hex`](https://viem.sh/docs/index.html)
 
+###### updatedAt
+
+`bigint`
+
 #### Returns
 
 `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
@@ -1136,7 +988,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:64](https://github.com/
 
 > **updateReputation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L22)
+Defined in: [packages/core/src/actions/superPaymaster.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L44)
 
 #### Parameters
 
@@ -1146,7 +998,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:22](https://github.com/
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
 
-###### newReputation
+###### newScore
 
 `bigint`
 
@@ -1160,11 +1012,63 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:22](https://github.com/
 
 ***
 
+### updateSBTStatus()
+
+> **updateSBTStatus**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+Defined in: [packages/core/src/actions/superPaymaster.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L50)
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+###### status
+
+`boolean`
+
+###### user
+
+`Address`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+***
+
+### userOpState()
+
+> **userOpState**: (`args`) => `Promise`\<\{ `isBlocked`: `boolean`; `lastTimestamp`: `number`; \}\>
+
+Defined in: [packages/core/src/actions/superPaymaster.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L79)
+
+#### Parameters
+
+##### args
+
+###### operator
+
+`Address`
+
+###### user
+
+`Address`
+
+#### Returns
+
+`Promise`\<\{ `isBlocked`: `boolean`; `lastTimestamp`: `number`; \}\>
+
+***
+
 ### validatePaymasterUserOp()
 
-> **validatePaymasterUserOp**: (`args`) => `Promise`\<`any`\>
+> **validatePaymasterUserOp**: (`args`) => `Promise`\<\{ `context`: [`Hex`](https://viem.sh/docs/index.html); `validationData`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L36)
+Defined in: [packages/core/src/actions/superPaymaster.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L69)
 
 #### Parameters
 
@@ -1184,7 +1088,19 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:36](https://github.com/
 
 #### Returns
 
-`Promise`\<`any`\>
+`Promise`\<\{ `context`: [`Hex`](https://viem.sh/docs/index.html); `validationData`: `bigint`; \}\>
+
+***
+
+### VALIDATION\_BUFFER\_BPS()
+
+> **VALIDATION\_BUFFER\_BPS**: () => `Promise`\<`bigint`\>
+
+Defined in: [packages/core/src/actions/superPaymaster.ts:102](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L102)
+
+#### Returns
+
+`Promise`\<`bigint`\>
 
 ***
 
@@ -1192,7 +1108,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:36](https://github.com/
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:100](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L100)
+Defined in: [packages/core/src/actions/superPaymaster.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L111)
 
 #### Returns
 
@@ -1200,11 +1116,11 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:100](https://github.com
 
 ***
 
-### withdrawAPNTs()
+### withdraw()
 
-> **withdrawAPNTs**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+> **withdraw**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L79)
+Defined in: [packages/core/src/actions/superPaymaster.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L33)
 
 #### Parameters
 
@@ -1228,7 +1144,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:79](https://github.com/
 
 > **withdrawProtocolRevenue**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L68)
+Defined in: [packages/core/src/actions/superPaymaster.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L63)
 
 #### Parameters
 
@@ -1237,6 +1153,10 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:68](https://github.com/
 ###### account?
 
 [`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+###### amount
+
+`bigint`
 
 ###### to
 
@@ -1252,7 +1172,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:68](https://github.com/
 
 > **withdrawStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L16)
+Defined in: [packages/core/src/actions/superPaymaster.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L38)
 
 #### Parameters
 
@@ -1276,7 +1196,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:16](https://github.com/
 
 > **withdrawTo**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L13)
+Defined in: [packages/core/src/actions/superPaymaster.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L32)
 
 #### Parameters
 
@@ -1304,7 +1224,7 @@ Defined in: [packages/core/src/actions/superPaymaster.ts:13](https://github.com/
 
 > **xpntsFactory**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/superPaymaster.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/f3911a6f6e88b2f77186db63ad0182c2cfe13b9d/packages/core/src/actions/superPaymaster.ts#L51)
+Defined in: [packages/core/src/actions/superPaymaster.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/821d2a29b60e7240ef51d199eec866aa227da0bf/packages/core/src/actions/superPaymaster.ts#L94)
 
 #### Returns
 
