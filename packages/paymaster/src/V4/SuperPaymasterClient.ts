@@ -1,6 +1,6 @@
 import { type Address, type Hex, concat, pad, toHex, encodeFunctionData, parseAbi } from 'viem';
 import { PaymasterClient } from './PaymasterClient';
-import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
+import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils';
 
 export type GaslessTransactionConfig = {
     token: Address;
@@ -90,17 +90,13 @@ export class SuperPaymasterClient {
         // Bundler requires efficiency ratio >= 0.4 (actual_gas_used / gas_limit >= 0.4)
         // SuperPaymaster validatePaymasterUserOp uses ~110-120k gas (measured)
         // Test results:
-        //   - Base 300k +  200k buffer (500k total) → efficiency 0.238 ❌
-        //   - Base 300k + 20k buffer (320k total) → efficiency 0.347 ❌
-        //   - Base 300k (no buffer) → efficiency 0.366❌
-        // Analysis (Jan 19 Update 2):
-        //   Actual usage observed: ~60k gas.
-        //   Bundler estimate: ~300k gas.
-        //   Ratio at 55% (165k): 60k/165k = 0.36 ❌ (Required >= 0.4)
-        //   Target Limit: actual/0.4 = 60k/0.4 = 150k.
-        //   Strategy: Use 45% of bundler's estimate (approx 135k) to ensure efficiency >= 0.44.
+        // Analysis (Jan 19 Update-Final-Final):
+        //   Instead of fixed percentage, use "Dynamic Nominal Gas Tuning".
+        //   SuperPaymaster validation common case is ~58k-66k. Worst case (refresh) 115k.
+        //   Setting nominal benchmark to 60k gives Ceiling = 60k / 0.45 = 133,333.
+        //   This satisfies 0.4 efficiency (58/133=0.43) AND execution (115 < 133).
         const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
-        const tunedPMVerificationGas = (bundlerEstimate * 45n) / 100n; // 45% tuning factor ✅
+        const tunedPMVerificationGas = tuneGasLimit(bundlerEstimate, 60_000n, 0.45);
 
         // Same for PostOp
         const tunedPostOp = est.paymasterPostOpGasLimit + 10000n;

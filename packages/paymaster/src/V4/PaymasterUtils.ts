@@ -185,3 +185,15 @@ export function getUserOpHashV07(userOp: any, entryPoint: Address, chainId: bigi
         [hashedUserOp, entryPoint, chainId]
     ));
 }
+
+/**
+ * Tune gas limit using a dynamic nominal ceiling to satisfy Bundler efficiency (0.4)
+ * Target: Actual / Limit >= targetEfficiency
+ */
+export function tuneGasLimit(estimate: bigint, nominalActual: bigint, targetEfficiency = 0.45): bigint {
+    if (estimate === 0n) return 0n;
+    // targetEfficiency = actual / ceiling => ceiling = actual / targetEfficiency
+    const ceiling = (nominalActual * 100n) / BigInt(Math.floor(targetEfficiency * 100));
+    // Return the more restrictive limit to ensure efficiency ratio is met
+    return estimate < ceiling ? estimate : ceiling;
+}
