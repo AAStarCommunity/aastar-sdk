@@ -1113,48 +1113,23 @@ async function main() {
                 
                 
                 // Check and set spending limit for SuperPaymaster
-                // xPNTsToken has a default limit of 5000 aPNTs, we need to increase it
-                console.log(`      🔧 Setting spending limit for SuperPM to 100,000...`);
-                const setLimitHash = await (anniClient as any).writeContract({
-                    address: checkToken,
-                    abi: [{
-                        "type": "function",
-                        "name": "setPaymasterLimit",
-                        "inputs": [
-                            {"name": "spender", "type": "address"},
-                            {"name": "limit", "type": "uint256"}
-                        ],
-                        "outputs": [],
-                        "stateMutability": "nonpayable"
-                    }],
-                    functionName: 'setPaymasterLimit',
-                    args: [superPM, parseEther('100000')],
-                    account: anniAcc,
-                    chain: config.chain
-                });
-                await publicClient.waitForTransactionReceipt({ hash: setLimitHash });
+                // xPNTsToken v3.0.0 has a fixed MAX_SINGLE_TX_LIMIT of 5000 ether.
+                // We no longer need setPaymasterLimit.
                 
-                const currentAllowance = await tokenActions()(publicClient).allowance({ token: checkToken, owner: anniAddr, spender: superPM });
                 const depositAmount = parseEther('50000');
-
-                if (currentAllowance < depositAmount) {
-                    console.log(`      📝 Approving SuperPM to spend ${formatEther(depositAmount)}...`);
-                    const approveHash = await tokenActions()(anniClient).approve({ token: checkToken, spender: superPM, amount: parseEther('100000'), account: anniAcc });
-                    await publicClient.waitForTransactionReceipt({ hash: approveHash });
-                    
-                    // Double check allowance
-                    const newAllowance = await tokenActions()(publicClient).allowance({ token: checkToken, owner: anniAddr, spender: superPM });
-                    console.log(`      ✅ New Allowance: ${formatEther(newAllowance)}`);
-                }
+                const singleTxLimit = parseEther('5000');
                 
-                console.log(`      🔄 Depositing 50,000 into SuperPM...`);
-                // Use explicit depositAPNTs which maps to deposit(uint256)
-                const tx = await superPaymasterActions(superPM)(anniClient).deposit({
-            amount: depositAmount,
-            account: anniAcc
-        });
-        console.log(`      ✅ SuperPM Refill Success: ${tx}`);
-        await publicClient.waitForTransactionReceipt({ hash: tx });
+                console.log(`      🔄 Depositing 50,000 into SuperPM (splitting into ${Number(depositAmount / singleTxLimit)} chunks)...`);
+                
+                for (let i = 0; i < Number(depositAmount / singleTxLimit); i++) {
+                    const tx = await superPaymasterActions(superPM)(anniClient).deposit({
+                        amount: singleTxLimit,
+                        account: anniAcc
+                    });
+                    process.stdout.write(`.` ); // progress indicator
+                    await publicClient.waitForTransactionReceipt({ hash: tx });
+                }
+                console.log('\n      ✅ SuperPM Refill Success');
                 
                 const opConfig = await superPaymasterActions(superPM)(publicClient).operators({ operator: anniAddr });
                 internalBal = opConfig.aPNTsBalance;

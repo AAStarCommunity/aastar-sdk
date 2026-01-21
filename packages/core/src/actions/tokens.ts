@@ -45,18 +45,15 @@ export type XPNTsTokenActions = ERC20Actions & {
     recordDebt: (args: { token: Address, user: Address, amountXPNTs: bigint, account?: Account | Address }) => Promise<Hash>;
     repayDebt: (args: { token: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
-    // Spending Limits
-    spendingLimits: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
-    cumulativeSpent: (args: { token: Address, owner: Address, spender: Address }) => Promise<bigint>;
-    setPaymasterLimit: (args: { token: Address, spender: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
-    DEFAULT_SPENDING_LIMIT_APNTS: (args: { token: Address }) => Promise<bigint>;
-    getDefaultSpendingLimitXPNTs: (args: { token: Address }) => Promise<bigint>;
-    needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
-    
     // Auto Approval
     addAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
     removeAutoApprovedSpender: (args: { token: Address, spender: Address, account?: Account | Address }) => Promise<Hash>;
     autoApprovedSpenders: (args: { token: Address, spender: Address }) => Promise<boolean>;
+    emergencyRevokePaymaster: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    
+    // Constants & View
+    MAX_SINGLE_TX_LIMIT: (args: { token: Address }) => Promise<bigint>;
+    needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
     
     // EIP-712 / EIP-2612
     DOMAIN_SEPARATOR: (args: { token: Address }) => Promise<Hex>;
@@ -326,33 +323,9 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
                 return await (client as any).writeContract({ address: token!, abi, functionName: 'repayDebt', args: [amount], account: account as any, chain: (client as any).chain });
             } catch (error) { throw AAStarError.fromViemError(error as Error, 'repayDebt'); }
         },
-        async spendingLimits({ token = address, owner, spender }: { token?: Address, owner: Address, spender: Address }) {
+        async MAX_SINGLE_TX_LIMIT({ token = address } = {}) {
             validateAddress(token!, 'token');
-            validateAddress(owner, 'owner');
-            validateAddress(spender, 'spender');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'spendingLimits', args: [owner, spender] }) as Promise<bigint>;
-        },
-        async cumulativeSpent({ token = address, owner, spender }: { token?: Address, owner: Address, spender: Address }) {
-            validateAddress(token!, 'token');
-            validateAddress(owner, 'owner');
-            validateAddress(spender, 'spender');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'cumulativeSpent', args: [owner, spender] }) as Promise<bigint>;
-        },
-        async setPaymasterLimit({ token = address, spender, limit, account }: { token?: Address, spender: Address, limit: bigint, account?: Account | Address }) {
-            try {
-                validateAddress(token!, 'token');
-                validateAddress(spender, 'spender');
-                validateAmount(limit, 'limit');
-                return await (client as any).writeContract({ address: token!, abi, functionName: 'setPaymasterLimit', args: [spender, limit], account: account as any, chain: (client as any).chain });
-            } catch (error) { throw AAStarError.fromViemError(error as Error, 'setPaymasterLimit'); }
-        },
-        async DEFAULT_SPENDING_LIMIT_APNTS({ token = address } = {}) {
-            validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'DEFAULT_SPENDING_LIMIT_APNTS', args: [] }) as Promise<bigint>;
-        },
-        async getDefaultSpendingLimitXPNTs({ token = address } = {}) {
-            validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'getDefaultSpendingLimitXPNTs', args: [] }) as Promise<bigint>;
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'MAX_SINGLE_TX_LIMIT', args: [] }) as Promise<bigint>;
         },
         async needsApproval({ token = address, owner, spender, amount }: { token?: Address, owner: Address, spender: Address, amount: bigint }) {
             validateAddress(token!, 'token');
@@ -379,6 +352,12 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
             validateAddress(token!, 'token');
             validateAddress(spender, 'spender');
             return (client as PublicClient).readContract({ address: token!, abi, functionName: 'autoApprovedSpenders', args: [spender] }) as Promise<boolean>;
+        },
+        async emergencyRevokePaymaster({ token = address, account }: { token?: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'emergencyRevokePaymaster', args: [], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'emergencyRevokePaymaster'); }
         },
         async DOMAIN_SEPARATOR({ token = address } = {}) {
             validateAddress(token!, 'token');

@@ -14,19 +14,19 @@ describe('TokenActions Exhaustive Coverage', () => {
     it('read ops', async () => {
       p.readContract.mockResolvedValue(100n);
       const acts = gTokenActions(ADDR)(p);
-      await acts.totalSupply();
-      await acts.balanceOf({ account: USER });
-      await acts.allowance({ owner: USER, spender: USER });
-      await acts.cap();
-      await acts.remainingMintableSupply();
-      await acts.decimals(); // number
+      await acts.totalSupply({ token: ADDR });
+      await acts.balanceOf({ token: ADDR, account: USER });
+      await acts.allowance({ token: ADDR, owner: USER, spender: USER });
+      await acts.cap({ token: ADDR });
+      await acts.remainingMintableSupply({ token: ADDR });
+      await acts.decimals({ token: ADDR }); // number
       
       p.readContract.mockResolvedValue('str');
-      await acts.name();
-      await acts.symbol();
-      await acts.version();
+      await acts.name({ token: ADDR });
+      await acts.symbol({ token: ADDR });
+      await acts.version({ token: ADDR });
       p.readContract.mockResolvedValue(USER);
-      await acts.owner();
+      await acts.owner({ token: ADDR });
 
       expect(p.readContract).toHaveBeenCalledTimes(10);
     });
@@ -34,14 +34,14 @@ describe('TokenActions Exhaustive Coverage', () => {
     it('write ops', async () => {
       w.writeContract.mockResolvedValue('0x');
       const acts = gTokenActions(ADDR)(w);
-      await acts.transfer({ to: USER, amount: 100n, account: USER });
-      await acts.transferFrom({ from: USER, to: USER, amount: 100n, account: USER });
-      await acts.approve({ spender: USER, amount: 100n, account: USER });
-      await acts.mint({ to: USER, amount: 100n, account: USER });
-      await acts.burn({ amount: 100n, account: USER });
-      await acts.burnFrom({ from: USER, amount: 100n, account: USER });
-      await acts.transferOwnership({ newOwner: USER, account: USER });
-      await acts.renounceOwnership({ account: USER });
+      await acts.transfer({ token: ADDR, to: USER, amount: 100n, account: USER });
+      await acts.transferFrom({ token: ADDR, from: USER, to: USER, amount: 100n, account: USER });
+      await acts.approve({ token: ADDR, spender: USER, amount: 100n, account: USER });
+      await acts.mint({ token: ADDR, to: USER, amount: 100n, account: USER });
+      await acts.burn({ token: ADDR, amount: 100n, account: USER });
+      await acts.burnFrom({ token: ADDR, from: USER, amount: 100n, account: USER });
+      await acts.transferOwnership({ token: ADDR, newOwner: USER, account: USER });
+      await acts.renounceOwnership({ token: ADDR, account: USER });
       
       expect(w.writeContract).toHaveBeenCalledTimes(8);
     });
@@ -51,34 +51,31 @@ describe('TokenActions Exhaustive Coverage', () => {
     it('read ops', async () => {
       const acts = xPNTsTokenActions(ADDR)(p);
       p.readContract.mockResolvedValue(100n);
-      await acts.exchangeRate();
-      await acts.debts({ user: USER });
-      await acts.getDebt({ user: USER });
-      await acts.spendingLimits({ owner: USER, spender: USER });
-      await acts.cumulativeSpent({ owner: USER, spender: USER });
-      await acts.DEFAULT_SPENDING_LIMIT_APNTS();
-      await acts.getDefaultSpendingLimitXPNTs();
-      await acts.nonces({ owner: USER });
+      await acts.exchangeRate({ token: ADDR });
+      await acts.debts({ token: ADDR, user: USER });
+      await acts.getDebt({ token: ADDR, user: USER });
+      await acts.MAX_SINGLE_TX_LIMIT({ token: ADDR });
+      await acts.nonces({ token: ADDR, owner: USER });
       
       p.readContract.mockResolvedValue(true);
-      await acts.needsApproval({ owner: USER, spender: USER, amount: 100n });
-      await acts.autoApprovedSpenders({ spender: USER });
-      await acts.usedOpHashes({ opHash: '0x' });
+      await acts.needsApproval({ token: ADDR, owner: USER, spender: USER, amount: 100n });
+      await acts.autoApprovedSpenders({ token: ADDR, spender: USER });
+      await acts.usedOpHashes({ token: ADDR, opHash: '0x' });
       
       p.readContract.mockResolvedValue(USER);
-      await acts.SUPERPAYMASTER_ADDRESS();
-      await acts.FACTORY();
-      await acts.communityOwner();
+      await acts.SUPERPAYMASTER_ADDRESS({ token: ADDR });
+      await acts.FACTORY({ token: ADDR });
+      await acts.communityOwner({ token: ADDR });
       
       p.readContract.mockResolvedValue('str');
-      await acts.communityENS();
-      await acts.communityName();
-      await acts.version();
+      await acts.communityENS({ token: ADDR });
+      await acts.communityName({ token: ADDR });
+      await acts.version({ token: ADDR });
       
       p.readContract.mockResolvedValue({});
-      await acts.eip712Domain();
+      await acts.eip712Domain({ token: ADDR });
       
-      expect(p.readContract).toHaveBeenCalledTimes(18);
+      expect(p.readContract).toHaveBeenCalledTimes(15);
     });
 
     it('write ops', async () => {
@@ -86,20 +83,20 @@ describe('TokenActions Exhaustive Coverage', () => {
       const acts = xPNTsTokenActions(ADDR)(w);
       
       // Inherited ERC20 writes (just test one to prove mapping)
-      await acts.transfer({ to: USER, amount: 100n, account: USER });
+      await acts.transfer({ token: ADDR, to: USER, amount: 100n, account: USER });
       
       // XPNTs writes
-      await acts.burnFromWithOpHash({ from: USER, amount: 100n, userOpHash: '0x', account: USER });
-      await acts.updateExchangeRate({ newRate: 100n, account: USER });
-      await acts.recordDebt({ user: USER, amountXPNTs: 100n, account: USER });
-      await acts.repayDebt({ amount: 100n, account: USER });
-      await acts.setPaymasterLimit({ spender: USER, limit: 100n, account: USER });
-      await acts.addAutoApprovedSpender({ spender: USER, account: USER });
-      await acts.removeAutoApprovedSpender({ spender: USER, account: USER });
-      await acts.permit({ owner: USER, spender: USER, value: 100n, deadline: 100n, v: 27, r: '0x', s: '0x', account: USER });
-      await acts.transferAndCall({ to: USER, amount: 100n, data: '0x', account: USER });
-      await acts.transferCommunityOwnership({ newOwner: USER, account: USER });
-      await acts.setSuperPaymasterAddress({ spAddress: USER, account: USER });
+      await acts.burnFromWithOpHash({ token: ADDR, from: USER, amount: 100n, userOpHash: '0x', account: USER });
+      await acts.updateExchangeRate({ token: ADDR, newRate: 100n, account: USER });
+      await acts.recordDebt({ token: ADDR, user: USER, amountXPNTs: 100n, account: USER });
+      await acts.repayDebt({ token: ADDR, amount: 100n, account: USER });
+      await acts.addAutoApprovedSpender({ token: ADDR, spender: USER, account: USER });
+      await acts.removeAutoApprovedSpender({ token: ADDR, spender: USER, account: USER });
+      await acts.emergencyRevokePaymaster({ token: ADDR, account: USER });
+      await acts.permit({ token: ADDR, owner: USER, spender: USER, value: 100n, deadline: 100n, v: 27, r: '0x', s: '0x', account: USER });
+      await acts.transferAndCall({ token: ADDR, to: USER, amount: 100n, data: '0x', account: USER });
+      await acts.transferCommunityOwnership({ token: ADDR, newOwner: USER, account: USER });
+      await acts.setSuperPaymasterAddress({ token: ADDR, spAddress: USER, account: USER });
 
       expect(w.writeContract).toHaveBeenCalledTimes(12);
     });
@@ -107,7 +104,7 @@ describe('TokenActions Exhaustive Coverage', () => {
     it('metadata', async () => {
       p.readContract.mockResolvedValue({ name: 'n', symbol: 's', communityName: 'cn', communityENS: 'ce', communityOwner: USER });
       const acts = xPNTsTokenActions(ADDR)(p);
-      const meta = await acts.getMetadata();
+      const meta = await acts.getMetadata({ token: ADDR });
       expect(meta).toBeDefined();
     });
   });
@@ -116,7 +113,7 @@ describe('TokenActions Exhaustive Coverage', () => {
     it('defaults to xPNTs', async () => {
       p.readContract.mockResolvedValue('1.0');
       const acts = tokenActions(ADDR)(p);
-      expect(await acts.version()).toBe('1.0');
+      expect(await acts.version({ token: ADDR })).toBe('1.0');
     });
   });
 });
