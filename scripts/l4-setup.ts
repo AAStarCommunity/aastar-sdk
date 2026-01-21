@@ -46,7 +46,8 @@ import * as dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const STATE_FILE = path.resolve(__dirname, 'l4-state.json');
+const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
+const STATE_FILE = path.resolve(__dirname, `l4-state.${networkArg}.json`);
 
 // --- Helper: Console Table ---
 function printTable(title: string, data: any[]) {
@@ -167,7 +168,7 @@ async function main() {
 
     const registry = registryActions(config.contracts.registry);
     const gToken = gTokenActions();
-    const xPNTsToken = tokenActions();
+    const tokenMethods = tokenActions();
     const xpntsFactory = xPNTsFactoryActions(config.contracts.xPNTsFactory);
     const pmFactory = paymasterFactoryActions(config.contracts.paymasterFactory);
 
@@ -492,7 +493,7 @@ async function main() {
             console.log(`   💸 Jason minting 100,000 aPNTs to Anni...`);
             const jasonClient = createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) });
             const mintAmount = requiredAPNTs - anniAPNTsBal;
-            const h = await tokenActions()(jasonClient).mint({
+            const h = await tokenMethods(jasonClient).mint({
                 token: aPNTsToken, to: anniAddr, amount: mintAmount, account: jasonAcc
             });
             await publicClient.waitForTransactionReceipt({ hash: h });
@@ -626,7 +627,7 @@ async function main() {
                 console.log(`   🎫 Funding ${issuerName} Token (10,000) to ${aa.label}...`);
                 try {
                     const mintAmount = parseEther('10000') - xpBal;
-                    const h = await tokenActions()(issuerClient).mint({
+                    const h = await tokenMethods(issuerClient).mint({
                         token: tAddr, to: aa.address, amount: mintAmount, account: privateKeyToAccount(issuerOp.key)
                     });
                     

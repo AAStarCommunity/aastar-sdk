@@ -28,7 +28,7 @@ async function main() {
     const entryPoint = config.contracts.entryPoint as Address;
 
     // Load AA addresses from l4-state.json
-    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     const jasonAA1 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA1')?.address as Address;
     

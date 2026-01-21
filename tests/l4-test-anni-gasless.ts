@@ -28,7 +28,7 @@ async function main() {
     });
 
     // Load AA addresses from l4-state.json
-    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     const anniAA = state.aaAccounts.find((aa: any) => aa.label === 'Anni (Demo)_AA1')?.address as Address;
     

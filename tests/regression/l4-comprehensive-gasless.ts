@@ -55,11 +55,10 @@ import {
 // Load L4 State
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const STATE_FILE = path.resolve(__dirname, '../../scripts/l4-state.json');
-
-function loadState(): any {
+function loadState(networkName: string): any {
+    const STATE_FILE = path.resolve(__dirname, `../../scripts/l4-state.${networkName}.json`);
     if (!fs.existsSync(STATE_FILE)) {
-        throw new Error(`L4 State file not found at ${STATE_FILE}. Please run 'pnpm tsx scripts/l4-setup.ts' first.`);
+        throw new Error(`L4 State file not found at ${STATE_FILE}. Please run 'pnpm tsx scripts/l4-setup.ts --network=${networkName}' first.`);
     }
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
 }
@@ -88,9 +87,9 @@ async function waitAndCheckReceipt(bundlerClient: any, opHash: Hash, label: stri
     }
 }
 
-export async function runComprehensiveGaslessTests(config: NetworkConfig) {
-    const state = loadState();
-    console.log(`   📂 Loaded state from: ${STATE_FILE}`);
+export async function runComprehensiveGaslessTests(config: NetworkConfig, networkName: string = 'sepolia') {
+    const state = loadState(networkName);
+    console.log(`   📂 Loaded state for network: ${networkName}`);
     
     const publicClient = createPublicClient({
         chain: config.chain,
@@ -471,7 +470,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     
     // @ts-ignore
     const config = loadNetworkConfig(network);
-    runComprehensiveGaslessTests(config).catch(error => {
+    runComprehensiveGaslessTests(config, network).catch(error => {
         console.error('❌ Fatal Error:', error);
         process.exit(1);
     });

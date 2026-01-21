@@ -16,14 +16,17 @@ import { loadNetworkConfig } from './config.js';
 // Force load Sepolia config
 // Config loaded dynamically
 // const SEPOLIA_CONFIG ...
-const STATE_FILE = './scripts/l4-state.json';
-const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+
 
 async function runReputationTierTest() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
     const config = loadNetworkConfig(networkName);
+
+    const STATE_FILE = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
+    if (!fs.existsSync(STATE_FILE)) throw new Error(`State file not found: ${STATE_FILE}`);
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
 
     console.log('🧪 Starting Tier 2 Reputation Test (Activity-based)...');
     

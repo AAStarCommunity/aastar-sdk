@@ -47,6 +47,11 @@ export class SuperPaymasterClient {
         });
 
         // 2. Initial Gas Estimation (Bundler Query)
+        console.log(`[SuperPaymasterClient] 🎯 Target Info:`);
+        console.log(`   - Paymaster: ${config.paymasterAddress}`);
+        console.log(`   - Token: ${config.token}`);
+        console.log(`   - Operator: ${config.operator}`);
+
         console.log('[SuperPaymasterClient] ☁️  Estimating Gas usage...');
         const est = await PaymasterClient.estimateUserOperationGas(
             client,

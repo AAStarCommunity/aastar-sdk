@@ -3,6 +3,8 @@ import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { SuperPaymasterClient, PaymasterClient } from '../packages/paymaster/src/V4/index.js';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 
@@ -18,16 +20,37 @@ async function main() {
     console.log('🌟 Starting SuperPaymaster Demo...');
 
     // 1. Load Configuration
-    // In a real app, these would be constants or environment variables
-    const config = await loadNetworkConfig('sepolia');
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+
+    const config = await loadNetworkConfig(networkName);
+    
+    // Default Addresses (Fallback)
+    let tokenAddress = '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9';
+    let operatorAddress = '0xEcAACb915f7D92e9916f449F7ad42BD0408733c9'; 
+    let aaAccountAddress = '0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4';
+    
+    // Load from State File if available
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
+    if (fs.existsSync(statePath)) {
+        try {
+            const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+            if (state.operators?.anni?.address) operatorAddress = state.operators.anni.address;
+            if (state.aaAccounts?.[2]?.address) aaAccountAddress = state.aaAccounts[2].address; // Anni is usually 3rd
+            // cPNTs logic might be missing, defaulting to config.contracts.aPNTs if safer
+             if (config.contracts.aPNTs) tokenAddress = config.contracts.aPNTs;
+        } catch (e) { console.warn("State load failed", e); }
+    }
+
     const APP_CONFIG = {
         rpcUrl: process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key',
-        bundlerUrl: process.env.BUNDLER_URL!,
+        bundlerUrl: config.bundlerUrl!,
         entryPoint: config.contracts.entryPoint,
         superPaymaster: config.contracts.superPaymaster, 
-        token: '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9', // cPNTs (Anni's Token)
-        operator: '0xEcAACb915f7D92e9916f449F7ad42BD0408733c9', // Anni's Operator Address
-        aaAccount: '0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4', // Anni's AA Account (User)
+        token: tokenAddress, 
+        operator: operatorAddress,
+        aaAccount: aaAccountAddress, 
         recipient: '0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C' // Random Recipient
     };
 

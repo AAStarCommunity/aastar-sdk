@@ -15,7 +15,7 @@ async function main() {
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
     const config = await loadNetworkConfig(networkName);
 
-    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     let aaAddress = '0xECD9C07f648B09CFb78906302822Ec52Ab87dd70';
     let pmAddress = '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82';
     

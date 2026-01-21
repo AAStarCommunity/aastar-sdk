@@ -19,6 +19,14 @@ const ANVIL_DEFAULT_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae7
 
 export type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
 
+export const BLOCK_EXPLORERS: Record<NetworkName, string> = {
+    'anvil': 'http://127.0.0.1:8545',
+    'sepolia': 'https://sepolia.etherscan.io',
+    'op-sepolia': 'https://sepolia-optimism.etherscan.io',
+    'op-mainnet': 'https://optimistic.etherscan.io',
+    'mainnet': 'https://etherscan.io'
+};
+
 /**
  * Load contract addresses from config files
  * Priority: SDK root config.{network}.json > SuperPaymaster deployments > .env
@@ -93,6 +101,7 @@ export interface NetworkConfig {
     supplierAccount?: { // Added supplierAccount
         privateKey: Hex;
     };
+    explorerUrl: string;
 }
 
 /**
@@ -198,7 +207,8 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             privateKey: process.env.TEST_PRIVATE_KEY as `0x${string}`,
             address: (process.env.TEST_ACCOUNT_ADDRESS as Address) || privateKeyToAccount(process.env.TEST_PRIVATE_KEY as Hex).address
         },
-        supplierAccount: supplierPrivateKey ? { privateKey: supplierPrivateKey } : undefined
+        supplierAccount: supplierPrivateKey ? { privateKey: supplierPrivateKey } : undefined,
+        explorerUrl: BLOCK_EXPLORERS[network] || ''
     };
 }
 
@@ -214,4 +224,5 @@ export function validateConfig(config: NetworkConfig): void {
     console.log(`   - Registry: ${config.contracts.registry}`);
     console.log(`   - GToken: ${config.contracts.gToken}`);
     console.log(`   - SuperPaymaster: ${config.contracts.superPaymaster}`);
+    console.log(`✅ Explorer: ${config.explorerUrl}`);
 }

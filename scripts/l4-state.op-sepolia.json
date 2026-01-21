@@ -1,0 +1,82 @@
+{
+  "network": "op-sepolia",
+  "timestamp": "2026-01-21T07:29:54.516Z",
+  "operators": {
+    "jason": {
+      "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "tokenAddress": "0xec466d6ea945c10b9f0c3cc852c211085700a04b",
+      "symbol": "aPNTs",
+      "paymasterV4": "0xA17208906F19820C0dF46160f750171E7fB50171"
+    },
+    "bob": {
+      "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
+      "tokenAddress": "0xA994e83b360ADBcB501BE1Ee1Ca5e38B8FB15f2c",
+      "symbol": "bPNTs",
+      "paymasterV4": "0xCA336C01502971ABdc8A4c742d783395c8dA36DA"
+    },
+    "anni": {
+      "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
+      "tokenAddress": "0x6331f6F1DD52ED1105a354461b41534f47aa865e",
+      "symbol": "cPNTs",
+      "superPaymaster": "0xa1d77367893a18c222fe136e17d1ad070479fb58"
+    }
+  },
+  "aaAccounts": [
+    {
+      "label": "Jason (AAStar)_AA1",
+      "address": "0xECD9C07f648B09CFb78906302822Ec52Ab87dd70",
+      "owner": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "salt": "0",
+      "opName": "Jason (AAStar)"
+    },
+    {
+      "label": "Jason (AAStar)_AA2",
+      "address": "0x179Faf25600c01DBFcEf7971f15DcFa3FbE5d31C",
+      "owner": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "salt": "1",
+      "opName": "Jason (AAStar)"
+    },
+    {
+      "label": "Bob (Bread)_AA1",
+      "address": "0x021C8cA0a2825F69fE79177a7e19Fb0bB171D1E2",
+      "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
+      "salt": "0",
+      "opName": "Bob (Bread)"
+    },
+    {
+      "label": "Bob (Bread)_AA2",
+      "address": "0x8Cbe2644c3A2f71b6936636491616ee6D2e71576",
+      "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
+      "salt": "1",
+      "opName": "Bob (Bread)"
+    },
+    {
+      "label": "Anni (Demo)_AA1",
+      "address": "0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4",
+      "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
+      "salt": "0",
+      "opName": "Anni (Demo)"
+    },
+    {
+      "label": "Anni (Demo)_AA2",
+      "address": "0x055dBe74925F687882A9FA62D89ba73c15aeEf03",
+      "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
+      "salt": "1",
+      "opName": "Anni (Demo)"
+    },
+    {
+      "label": "Charlie (Test)_AA1",
+      "address": "0xA4B43330919Da938f0D8aE29d1e04CA63460671d",
+      "owner": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "salt": "0",
+      "opName": "Charlie (Test)"
+    },
+    {
+      "label": "Charlie (Test)_AA2",
+      "address": "0x7E0dCE56a27785ef528455E78f3839968F869e41",
+      "owner": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "salt": "1",
+      "opName": "Charlie (Test)"
+    }
+  ]
+}

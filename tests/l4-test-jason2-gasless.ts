@@ -26,7 +26,7 @@ async function main() {
     const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(rpcUrl) });
 
     // Load AA addresses from l4-state.json
-    const statePath = path.resolve(process.cwd(), 'scripts/l4-state.json');
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     const state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
     const jasonAA2 = state.aaAccounts.find((aa: any) => aa.label === 'Jason (AAStar)_AA2')?.address as Address;
     
