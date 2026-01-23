@@ -1,0 +1,48 @@
+{
+  "network": "anvil",
+  "timestamp": "2026-01-23T05:38:10.949Z",
+  "operators": {
+    "jason": {
+      "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "tokenAddress": "0xF8FB86C01EEaE29Dda13b65B3715D06A3D023832",
+      "symbol": "aPNTs",
+      "paymasterV4": "0x99425b4109853329697e3d39394F08BBfA7F1DFe"
+    },
+    "anni": {
+      "address": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "tokenAddress": "0xca3C40f0aCe79d72eCe5F8005264DaFB3dB4595B",
+      "symbol": "cPNTs",
+      "superPaymaster": "0x0aec7c174554AF8aEc3680BB58431F6618311510"
+    }
+  },
+  "aaAccounts": [
+    {
+      "label": "Jason (AAStar)_AA1",
+      "address": "0x4148A29baf11f336DCFc1E1dfBa9998E5F8ED44F",
+      "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "salt": "0",
+      "opName": "Jason (AAStar)"
+    },
+    {
+      "label": "Jason (AAStar)_AA2",
+      "address": "0x726F62589Fa755e4295311B20a97111e2E35502b",
+      "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "salt": "1",
+      "opName": "Jason (AAStar)"
+    },
+    {
+      "label": "Anni (Demo)_AA1",
+      "address": "0x657042F40f97Eaa16A3e4Ff0FbF6dF4E2f117EE6",
+      "owner": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "salt": "0",
+      "opName": "Anni (Demo)"
+    },
+    {
+      "label": "Anni (Demo)_AA2",
+      "address": "0x6828d985A41D7DE8501654977e8704Cf37ffe427",
+      "owner": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "salt": "1",
+      "opName": "Anni (Demo)"
+    }
+  ]
+}

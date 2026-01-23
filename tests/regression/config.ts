@@ -156,8 +156,21 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
     // Load contract addresses from SuperPaymaster deployments (with .env fallback)
     const deployments = loadDeployments(network);
     
+    // Third-party addresses that should be read from ENV first (not overwritten by sync)
+    const THIRD_PARTY_KEYS = ['entryPoint', 'simpleAccountFactory', 'priceFeed'];
+    
     const getContractAddress = (deploymentKey: string, envKey: string, envFallback?: string): Address => {
-        // 1. Try deployments first
+        // For third-party contracts, prioritize ENV over config.json (to avoid sync overwrites)
+        // EXCEPT on anvil where everything is deployed locally and config.json is the source of truth
+        if (network !== 'anvil' && THIRD_PARTY_KEYS.includes(deploymentKey)) {
+            const envAddr = process.env[envKey] || (envFallback && process.env[envFallback]);
+            if (envAddr) {
+                // console.log(`    ✅ Third-party address from ENV: ${deploymentKey} -> ${envAddr}`);
+                return envAddr as Address;
+            }
+        }
+        
+        // 1. Try deployments first (for our own deployed contracts, and for ALL contracts on anvil)
         if (deployments[deploymentKey]) {
             // console.log(`    Address found in deployments: ${deploymentKey} -> ${deployments[deploymentKey]}`);
             return deployments[deploymentKey];

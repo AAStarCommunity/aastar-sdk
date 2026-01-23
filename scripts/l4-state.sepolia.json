@@ -1,24 +1,18 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-21T10:30:18.406Z",
+  "timestamp": "2026-01-23T05:49:00.093Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
-      "tokenAddress": "0x482f323A38Ae8384B1fe584ecA733B01dD177C9f",
+      "tokenAddress": "0xCBF7Ee38868c19a311DaE6cb9967fC46948162D1",
       "symbol": "aPNTs",
-      "paymasterV4": "0xC99ABF6b0F5a1945C6a26890a200f6230024f3B6"
-    },
-    "bob": {
-      "address": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
-      "tokenAddress": "0x4C7eCD6c4d2A228f03bfb458C71F0157066ADb51",
-      "symbol": "bPNTs",
-      "paymasterV4": "0xe7dff0412Ac69C9E7577C91999a81A46d9f7fA37"
+      "paymasterV4": "0x5f65e0113022063F324c900Faf8895Ef6ad6174b"
     },
     "anni": {
       "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
-      "tokenAddress": "0xd7F80cEAc5Ca8EF3FDe108B849a8EF3880d3078A",
+      "tokenAddress": "0x6Af896AE19ecDaf2Fd3B399507FCa9E378Ce39ff",
       "symbol": "cPNTs",
-      "superPaymaster": "0x99d868B4e698513f7632eb158f09C27568C42238"
+      "superPaymaster": "0x1A9CBd8A70ef257c4A3d8320aD8E781Ed629Ec67"
     }
   },
   "aaAccounts": [
@@ -37,20 +31,6 @@
       "opName": "Jason (AAStar)"
     },
     {
-      "label": "Bob (Bread)_AA1",
-      "address": "0x021C8cA0a2825F69fE79177a7e19Fb0bB171D1E2",
-      "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
-      "salt": "0",
-      "opName": "Bob (Bread)"
-    },
-    {
-      "label": "Bob (Bread)_AA2",
-      "address": "0x8Cbe2644c3A2f71b6936636491616ee6D2e71576",
-      "owner": "0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C",
-      "salt": "1",
-      "opName": "Bob (Bread)"
-    },
-    {
       "label": "Anni (Demo)_AA1",
       "address": "0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4",
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
@@ -63,20 +43,6 @@
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "salt": "1",
       "opName": "Anni (Demo)"
-    },
-    {
-      "label": "Charlie (Test)_AA1",
-      "address": "0xAdE1c3B76e6D54276a63e4a9A44a9cD43c6F6918",
-      "owner": "0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D",
-      "salt": "0",
-      "opName": "Charlie (Test)"
-    },
-    {
-      "label": "Charlie (Test)_AA2",
-      "address": "0x313E1037cD3887d27283681d9d16b3986797cbD5",
-      "owner": "0x4F0b7d0EaD970f6573FEBaCFD0Cd1FaB3b64870D",
-      "salt": "1",
-      "opName": "Charlie (Test)"
     }
   ]
 }
