@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.13] - 2026-01-23
+
+### 🛡️ Security & Stability
+- **[SECURITY]** **Strict Address Resolution**: 
+  - Enforced strict environment variable lookup for third-party contract addresses (`entryPoint`, `simpleAccountFactory`, `priceFeed`) on non-Anvil networks.
+  - Eliminated fallback to outdated `config.json` files to prevent deployment misconfigurations.
+- **[SECURITY]** **Token Transfer Limits**:
+  - Updated ABI to reflect new `MAX_SINGLE_TX_LIMIT` enforcement in `xPNTsToken`. SDK transactions respecting standard limits will continue to work; anomalous high-value transfers may now revert at the contract level.
+- **[SECURITY]** **Operator Firewall**:
+  - Updated ABI to reflect `autoApprovedSpenders` logic. 
+
+### ⚙️ Core Improvements
+- **[FIX]** **xPNTsToken Initialization**: Adjusted factory logic to support EIP-1167 Minimal Clones using `initialize()` pattern.
+- **[SYNC]** **Contract ABIs**: Synchronized all ABIs with `SuperPaymaster` `v3.6.3`, including new governance functions `renounceFactory` and `emergencyRevokePaymaster`.
+
+
 ## [0.16.11] - 2026-01-19
 
 ### 📊 Gas Analytics & Reporting (New Package)

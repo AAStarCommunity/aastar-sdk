@@ -18,6 +18,9 @@ import {
     encodeAbiParameters
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { createBundlerClient } from 'viem/account-abstraction';
+// Import SDK Clients for reliable submission
+import { PaymasterClient, SuperPaymasterClient } from '../packages/paymaster/src/V4/index.js'; 
 import { loadNetworkConfig } from '../tests/regression/config';
 import { 
     tokenActions, 
@@ -68,6 +71,10 @@ const NETWORK_DEFAULTS: Record<string, { simpleAccountFactory: Address, priceFee
     'optimism': {
         simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
         priceFeed: '0x13e3Ee699D1909E989722E753853AE30b17e08c5'
+    },
+    'op-sepolia': {
+        simpleAccountFactory: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985', 
+        priceFeed: '0x61Ec26aA57019C486B10502285c5A3D4A4750AD7'
     }
 };
 
@@ -161,7 +168,7 @@ async function main() {
     
     const operators = [
         { name: 'Jason (AAStar)', key: (process.env.PRIVATE_KEY_JASON) as Hex, role: 'Operator', symbol: 'aPNTs', pmType: 'V4', communityName: 'AAStar' },
-        { name: 'Anni (Demo)', key: (process.env.PRIVATE_KEY_ANNI) as Hex, role: 'Operator', symbol: 'cPNTs', pmType: 'Super', communityName: 'Demo' },
+        { name: 'Anni (Mycelium)', key: (process.env.PRIVATE_KEY_ANNI) as Hex, role: 'Operator', symbol: 'PNTs', pmType: 'Super', communityName: 'Mycelium' },
     ].filter(op => op.key && op.key.startsWith('0x'));
 
     const registry = registryActions(config.contracts.registry);
@@ -461,9 +468,40 @@ async function main() {
                     const anniToken = communityMap[op.name]?.token;
                     if (anniToken) {
                         console.log(`      🔧 Configuring SuperPM Operator Anni with token ${anniToken}...`);
+                        // Ensure it's called by an account with ROLE_COMMUNITY and ROLE_PAYMASTER_SUPER
+                        // Acc is the Anni Community account, which should have these roles.
                         const h = await operatorSdk.configureOperator(anniToken, acc.address, parseEther('1'));
                         await publicClient.waitForTransactionReceipt({ hash: h });
                         console.log(`      ✅ Operator Configured.`);
+                    }
+                }
+
+                // NEW: Ensure Linkage (xPNTsToken.setSuperPaymasterAddress)
+                const anniToken = communityMap[op.name]?.token;
+                if (anniToken) {
+                    try {
+                        const spAddrInToken = await publicClient.readContract({
+                            address: anniToken,
+                            abi: parseAbi(['function SUPERPAYMASTER_ADDRESS() view returns (address)']),
+                            functionName: 'SUPERPAYMASTER_ADDRESS'
+                        }) as Address;
+                        
+                        if (spAddrInToken.toLowerCase() !== config.contracts.superPaymaster.toLowerCase()) {
+                            console.log(`      🔗 Linking xPNTsToken ${anniToken} to SuperPM ${config.contracts.superPaymaster}...`);
+                            const tx = await opClient.writeContract({
+                                address: anniToken,
+                                abi: parseAbi(['function setSuperPaymasterAddress(address)']),
+                                functionName: 'setSuperPaymasterAddress',
+                                args: [config.contracts.superPaymaster],
+                                account: acc
+                            });
+                            await publicClient.waitForTransactionReceipt({ hash: tx });
+                            console.log(`      ✅ Linked.`);
+                        } else {
+                            console.log(`      ✓ xPNTsToken already linked to SuperPaymaster.`);
+                        }
+                    } catch (e: any) {
+                        console.log(`      ⚠️ Linkage Check Failed for ${anniToken}: ${e.message}`);
                     }
                 }
             } catch(e:any) { console.log(`      ⚠️ SuperPM Role Check/Reg Failed: ${e.message}`); }
@@ -497,11 +535,15 @@ async function main() {
             console.log(`   💸 Jason minting 10,000 aPNTs to Anni...`);
             const jasonClient = createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) });
             const mintAmount = requiredAPNTs - anniAPNTsBal;
-            const h = await tokenMethods(jasonClient).mint({
-                token: aPNTsToken, to: anniAddr, amount: mintAmount, account: jasonAcc
-            });
-            await publicClient.waitForTransactionReceipt({ hash: h });
-            console.log(`   ✅ Anni now has 10,000 aPNTs for SuperPaymaster deposit`);
+            try {
+                const h = await tokenMethods(jasonClient).mint({
+                    token: aPNTsToken, to: anniAddr, amount: mintAmount, account: jasonAcc
+                });
+                await publicClient.waitForTransactionReceipt({ hash: h });
+                console.log(`   ✅ Anni now has 10,000 aPNTs for SuperPaymaster deposit`);
+            } catch (e: any) {
+                console.log(`   ⚠️ Mint Failed: ${e.message}`);
+            }
         } else {
             console.log(`   ✓ Anni already has ${formatEther(anniAPNTsBal)} aPNTs`);
         }
@@ -618,7 +660,7 @@ async function main() {
              gtBal = await gToken(publicClient).balanceOf({ token: config.contracts.gToken, account: aa.address });
         }
 
-        // xPNTs Tokens - 按文档要求: 各10,000 a/b/cPNTs
+        // xPNTs Tokens - 按文档要求: 各10,000 a/b/PNTs
         for (const tAddr of allTokens) {
             const issuerName = Object.keys(communityMap).find(k => communityMap[k].token === tAddr);
             if (!issuerName) continue;
@@ -855,6 +897,42 @@ async function main() {
     console.log(`\n   📊 Total: ${registeredCount} registered, ${skippedCount} skipped`);
 
     // 4b. Ensure AA Deposits in Paymasters
+    // 4c. Sync SBT Status with SuperPaymaster (Trigger via Registry re-registration)
+    console.log(`\n🔐 4c. Syncing SBT holders with SuperPaymaster via Registry re-registration...`);
+    for (const aaAccount of testAccounts) {
+        try {
+            const roleEndUser = await registry(publicClient).ROLE_ENDUSER();
+            
+            console.log(`      🔄 Re-triggering registration for ${aaAccount.label} (${aaAccount.address}) to sync SBT...`);
+            // We need to call this from a Community account that manages this AA.
+            // Jason manages Jason AAs, Anni manages Anni AAs, Bob manages Bob AAs.
+            const manager = operators.find(op => aaAccount.opName.includes(op.name.split(' ')[0])) || operators[0];
+            const managerAcc = privateKeyToAccount(manager.key);
+            const managerClient = createWalletClient({ 
+                account: managerAcc, 
+                chain: config.chain, 
+                transport: http(config.rpcUrl) 
+            });
+
+            // Fetch existing metadata to preserve it
+            const existingMetadata = await registry(publicClient).roleMetadata({ 
+                roleId: roleEndUser, 
+                user: aaAccount.address 
+            }) as Hex;
+            
+            const h = await registry(managerClient).registerRole({
+                roleId: roleEndUser,
+                user: aaAccount.address,
+                data: existingMetadata,
+                account: managerAcc
+            });
+            await publicClient.waitForTransactionReceipt({ hash: h });
+            console.log(`      ✅ SBT Status Synced for ${aaAccount.address}`);
+        } catch (e: any) {
+            console.warn(`   ⚠️  Failed to sync SBT status for ${aaAccount.label}: ${e.message}`);
+        }
+    }
+
     console.log('\n🤝 4b. Ensuring AA Deposits in Paymasters (V4 Only)...');
     for (const aa of testAccounts) {
         const pmAddr = communityMap[aa.opName]?.pmV4;
@@ -1243,61 +1321,8 @@ async function main() {
 
     printTable("Paymaster Status", pmStatus);
 
-    // 6. UserOperation Generation Demo (5 Scenarios)
-    console.log(`\n📦 6. Constructing 5 Different UserOperation Scenarios (v0.7)...`);
-    
-    // Scenarios setup: Jason (AA1) as Sender
-    const targetAA = testAccounts[0]; // Jason (AAStar)_AA1
-    const jasonAcc = privateKeyToAccount(operators[0].key);
-    const recipientEOA = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' as Address; // vitalik.eth
-    
-    // Scenarios setup
-    const jPNTsToken = communityMap['Jason (AAStar)']?.token;
-    
-    if (targetAA && jPNTsToken) {
-        const scenarios = [
-            { type: UserOpScenarioType.NATIVE, label: '1. Standard ERC-4337 (User pays ETH)' },
-            { type: UserOpScenarioType.GASLESS_V4, label: '2. Gasless via PaymasterV4 (Jason Community)', paymaster: communityMap['Jason (AAStar)']?.pmV4 },
-            { type: UserOpScenarioType.SUPER_BPNT, label: '3. SuperPaymaster (Internal Settlement)', paymaster: superPM, operator: jasonAcc.address, token: jPNTsToken }
-        ];
-
-        for (const scene of scenarios) {
-            console.log(`\n--- ${scene.label} ---`);
-            const { userOp, opHash } = await UserOpScenarioBuilder.buildTransferScenario(scene.type, {
-                sender: targetAA.address,
-                ownerAccount: jasonAcc,
-                recipient: recipientEOA,
-                tokenAddress: jPNTsToken, 
-                amount: parseEther('1'),
-                entryPoint: epAddr,
-                chainId: config.chain.id,
-                publicClient,
-                paymaster: scene.paymaster,
-                operator: scene.operator
-            });
-            
-            console.log(`   UserOp Hash: ${opHash}`);
-            console.log(`   Internal Payer Token: ${scene.token || 'N/A'}`);
-            console.log(`   Paymaster: ${scene.paymaster || 'None'}`);
-            console.log(`   Signature (First 32 bytes): ${userOp.signature.slice(0, 66)}...`);
-        }
-
-        console.log(`================================================================`);
-        console.log(`📖 SDK UserOperation Construction Guide`);
-        console.log(`================================================================`);
-        console.log(`API: UserOpScenarioBuilder.buildTransferScenario(type, params)`);
-        console.log(`Context: Transferring 1 token from Jason (AA1) to recipient`);
-        console.log(`\nAvailable Scenarios:`);
-        console.log(`1. NATIVE       : Standard 4337, AA pays gas in ETH`);
-        console.log(`2. GASLESS_V4   : Gasless via PaymasterV4 (Community sponsored)`);
-        console.log(`3. SUPER_BPNT   : SuperPaymaster (Internal token settlement)`);
-        console.log(`\nUsage Example:`);
-        console.log(`const { userOp } = await UserOpScenarioBuilder.buildTransferScenario(`);
-        console.log(`    UserOpScenarioType.SUPER_BPNT, { ...params }`);
-        console.log(`);`);
-        console.log(`// userOp is now ready for eth_sendUserOperation (Hex-compliant)`);
-        console.log(`================================================================`);
-    }
+    // 6. UserOperation Generation (Moved to l4-regression.ts)
+    console.log(`\n📦 6. Traffic Generation moved to 'npm run test:regression:l4' (scripts/l4-regression.ts)`);
 
     // 7. Save State
     console.log(`\n💾 Saving State to ${STATE_FILE}...`);
@@ -1313,8 +1338,8 @@ async function main() {
             },
             anni: {
                 address: privateKeyToAccount(operators[1].key).address,
-                tokenAddress: communityMap['Anni (Demo)']?.token,
-                symbol: 'cPNTs',
+                tokenAddress: communityMap['Anni (Mycelium)']?.token, // Fixed typo
+                symbol: 'PNTs',
                 superPaymaster: superPM
             }
         },

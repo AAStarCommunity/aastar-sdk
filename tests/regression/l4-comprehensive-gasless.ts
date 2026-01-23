@@ -27,7 +27,9 @@ import {
     createEndUserClient,
     createAdminClient,
     RoleIds,
-    RoleDataFactory
+    RoleDataFactory,
+    SuperPaymasterClient,
+    PaymasterClient
 } from '../../packages/sdk/dist/index.js';
 import { 
     UserOpScenarioBuilder, 
@@ -108,24 +110,23 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
     // 1. Setup Test Actors
     const jasonKey = process.env.PRIVATE_KEY_JASON as Hex;
     const supplierKey = config.supplierAccount?.privateKey;
-    if (!jasonKey || !supplierKey) throw new Error('Missing keys in .env.sepolia');
+    if (!jasonKey || !supplierKey) throw new Error(`Missing keys in environment for network: ${networkName}`);
     
     const jasonAcc = privateKeyToAccount(jasonKey);
     const supplierAcc = privateKeyToAccount(supplierKey);
 
     const jasonState = state.operators['jason'];
     const anniState = state.operators['anni'];
-    const bobState = state.operators['bob'];
 
     // Safe access to operator structures
     const jasonOp = jasonState; 
     const anniOp = anniState;
-    const bobOp = bobState;
     const zeroAddress = '0x0000000000000000000000000000000000000000';
 
     const jasonAddr = (jasonOp?.owner || jasonOp?.address || zeroAddress) as Address;
     const anniAddr = (anniOp?.owner || anniOp?.address || zeroAddress) as Address;
-    const bobAddr = (bobOp?.owner || bobOp?.address || zeroAddress) as Address;
+    // Use Anni as recipient for transfers (Bob removed per user request)
+    const recipientAddr = anniAddr;
 
     // Fix: Select correct AA from aaAccounts
     const targetAA = state.aaAccounts.find((aa: any) => aa.opName.includes('Jason') || aa.label.includes('Jason'));
@@ -275,7 +276,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
     }
 
     const MEMBER_ROLE = RoleIds.ENDUSER;
-    const bobCommunity = bobAddr; 
+    const bobCommunity = recipientAddr; 
     const anniCommunity = anniAddr;
     // Case 1: With ETH
     console.log('🔹 Case 1: Registration with ETH (Native)');
@@ -370,21 +371,24 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
             await publicClient.waitForTransactionReceipt({ hash: mintHash });
         }
 
-        const { userOp: superOp1, opHash: superHash1 } = await UserOpScenarioBuilder.buildTransferScenario(UserOpScenarioType.SUPER_CPNT, {
-            sender: targetAA.address,
-            paymaster: config.contracts.superPaymaster,
-            operator: anniAddr,
-            recipient: bobAddr,
-            amount: parseEther('0.1'),
-            tokenAddress: anniToken,
-            entryPoint: config.contracts.entryPoint,
-            chainId: config.chain.id,
+        console.log(`   🚀 Sending via SuperPaymasterClient...`);
+        const txHash = await SuperPaymasterClient.submitGaslessTransaction(
             publicClient,
-            ownerAccount: jasonAcc,
-            nonceKey: BigInt(Date.now())
-        } as ScenarioParams);
+            createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) }),
+            targetAA.address,
+            config.contracts.entryPoint,
+            config.bundlerUrl,
+            {
+                token: anniToken,
+                recipient: recipientAddr,
+                amount: parseEther('0.1'),
+                operator: anniAddr,
+                paymasterAddress: config.contracts.superPaymaster
+            }
+        );
+        console.log(`   ✅ Sent! Hash: ${txHash}`);
+        await waitAndCheckReceipt(bundlerClient, txHash, "SuperPM Normal Tx");
 
-        await submitAlchemyOp(superOp1, "SuperPM Normal Tx");
     } catch (e: any) {
          console.log(`   ⚠️ SuperPM Tx 1 failed: ${e.message}`);
     }
@@ -395,39 +399,51 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
     const freshBal = await publicClient.readContract({ address: anniToken, abi: erc20Abi, functionName: 'balanceOf', args: [targetAA.address] }) as bigint;
     if (freshBal > 0n) {
         console.log(`   🔥 Clearing AA cPNTs balance...`);
-        const { userOp: burnOp, opHash: burnHash } = await UserOpScenarioBuilder.buildTransferScenario(UserOpScenarioType.NATIVE, {
-             sender: targetAA.address,
-             recipient: '0x000000000000000000000000000000000000dead',
-             amount: freshBal,
-             tokenAddress: anniToken,
-             entryPoint: config.contracts.entryPoint,
-             chainId: config.chain.id,
-             publicClient,
-             ownerAccount: jasonAcc,
-             nonceKey: BigInt(Date.now())
-        } as unknown as ScenarioParams);
-        
-        await submitAlchemyOp(burnOp, "Clear Balance");
+        // We use sdk submit for burn too if simpler, using Paymaster V4 (since simple transfer)
+        // Or just SuperPaymasterClient with 0 amount (no, wait, we need to burn tokens)
+        // Let's stick to manual burn for now or use the previous working manual logic just for this native/setup op
+        // Actually, let's just use SuperPaymasterClient to send it to DEAD address with full balance
+        try {
+            const burnHash = await SuperPaymasterClient.submitGaslessTransaction(
+                publicClient,
+                createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) }),
+                targetAA.address,
+                config.contracts.entryPoint,
+                config.bundlerUrl,
+                {
+                    token: anniToken,
+                    recipient: '0x000000000000000000000000000000000000dead',
+                    amount: freshBal,
+                    operator: anniAddr,
+                    paymasterAddress: config.contracts.superPaymaster
+                }
+            );
+            await waitAndCheckReceipt(bundlerClient, burnHash, "Clear Balance");
+        } catch (e: any) {
+             console.log(`   ⚠️ Clear Balance failed: ${e.message}`);
+        }
     }
 
     // Now try Tx without balance -> Should trigger Credit -> Debt
     try {
         console.log(`   🚀 Attempting Tx without cPNTs balance (Expect Credit usage)...`);
-        const { userOp: debtOp, opHash: debtHash } = await UserOpScenarioBuilder.buildTransferScenario(UserOpScenarioType.SUPER_CPNT, {
-            sender: targetAA.address,
-            paymaster: config.contracts.superPaymaster,
-            operator: anniAddr,
-            recipient: bobAddr,
-            amount: 0n, // Just a call to trigger gas payment
-            tokenAddress: anniToken,
-            entryPoint: config.contracts.entryPoint,
-            chainId: config.chain.id,
+        
+        const debtHash = await SuperPaymasterClient.submitGaslessTransaction(
             publicClient,
-            ownerAccount: jasonAcc,
-            nonceKey: BigInt(Date.now())
-        } as ScenarioParams);
-
-        const success = await submitAlchemyOp(debtOp, "SuperPM Debt Tx");
+            createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) }),
+            targetAA.address,
+            config.contracts.entryPoint,
+            config.bundlerUrl,
+            {
+                token: anniToken,
+                recipient: recipientAddr,
+                amount: 0n, // Minimal transfer
+                operator: anniAddr,
+                paymasterAddress: config.contracts.superPaymaster
+            }
+        );
+        
+        const success = await waitAndCheckReceipt(bundlerClient, debtHash, "SuperPM Debt Tx");
         
         if (success) {
             const debt = await publicClient.readContract({ address: anniToken, abi: xPNTsTokenABI, functionName: 'debts', args: [targetAA.address] }) as bigint;
@@ -459,13 +475,17 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
 // Execute if main
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const args = process.argv.slice(2);
-    const networkArgIndex = args.indexOf('--network');
-    let network = networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia';
-    if (!network) {
-         const networkArgEquals = process.argv.find(arg => arg.startsWith('--network='));
-         if (networkArgEquals) {
-             network = networkArgEquals.split('=')[1];
-         }
+    let network = 'sepolia';
+    const networkArg = args.find(arg => arg.startsWith('--network'));
+    if (networkArg) {
+        if (networkArg.includes('=')) {
+            network = networkArg.split('=')[1];
+        } else {
+            const index = args.indexOf('--network');
+            if (index >= 0 && args[index + 1]) {
+                network = args[index + 1];
+            }
+        }
     }
     
     // @ts-ignore

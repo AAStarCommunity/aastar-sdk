@@ -1,6 +1,6 @@
 {
   "network": "sepolia",
-  "timestamp": "2026-01-23T06:29:49.704Z",
+  "timestamp": "2026-01-23T08:37:03.162Z",
   "operators": {
     "jason": {
       "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
@@ -11,7 +11,7 @@
     "anni": {
       "address": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "tokenAddress": "0x6Af896AE19ecDaf2Fd3B399507FCa9E378Ce39ff",
-      "symbol": "cPNTs",
+      "symbol": "PNTs",
       "superPaymaster": "0x1A9CBd8A70ef257c4A3d8320aD8E781Ed629Ec67"
     }
   },
@@ -31,18 +31,18 @@
       "opName": "Jason (AAStar)"
     },
     {
-      "label": "Anni (Demo)_AA1",
+      "label": "Anni (Mycelium)_AA1",
       "address": "0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4",
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "salt": "0",
-      "opName": "Anni (Demo)"
+      "opName": "Anni (Mycelium)"
     },
     {
-      "label": "Anni (Demo)_AA2",
+      "label": "Anni (Mycelium)_AA2",
       "address": "0x055dBe74925F687882A9FA62D89ba73c15aeEf03",
       "owner": "0xEcAACb915f7D92e9916f449F7ad42BD0408733c9",
       "salt": "1",
-      "opName": "Anni (Demo)"
+      "opName": "Anni (Mycelium)"
     }
   ]
 }

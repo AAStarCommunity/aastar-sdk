@@ -80,8 +80,9 @@ async function main() {
             timeout: 60000 // Increase timeout to 60s
         });
 
+        const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';
         console.log(`\n🎉 Done! Transaction Hash: ${receipt.receipt.transactionHash}`);
-        console.log(`🔗 Tracking: https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
+        console.log(`🔗 Tracking: ${explorerUrl}/tx/${receipt.receipt.transactionHash}`);
 
         // 5. Decode Protocol Fee (for User Visibility)
         const feeInfo = PaymasterClient.getFeeFromReceipt(receipt.receipt, APP_CONFIG.paymaster as `0x${string}`);
@@ -95,7 +96,8 @@ async function main() {
         if (error.name === 'TimeoutError' || error.message?.includes('timed out')) {
             console.log(`\n⚠️  Polling Timeout: The UserOperation was submitted but the receipt is not yet available.`);
             console.log(`💡 UserOp Hash: ${txHash}`);
-            console.log(`🔗 You can check the status later at: https://sepolia.etherscan.io/tx/${txHash}`);
+            const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';
+            console.log(`🔗 You can check the status later at: ${explorerUrl}/tx/${txHash}`);
             console.log(`   or via Bundler Explorer using the hash above.`);
         } else {
             console.error('\n❌ Error waiting for receipt:', error.shortMessage || error.message);

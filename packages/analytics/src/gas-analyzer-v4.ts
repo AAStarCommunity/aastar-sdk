@@ -15,22 +15,51 @@ import { AttributionAnalyzer } from './analyzers/AttributionAnalyzer.js';
 import { ComparisonAnalyzer } from './analyzers/ComparisonAnalyzer.js';
 import { TrendAnalyzer } from './analyzers/TrendAnalyzer.js';
 import { PriceOracle } from './utils/PriceOracle.js';
-import * as dotenv from 'dotenv';
-import type { Hash } from 'viem';
+const PRICE_FEED_DECIMALS = 8;
 
-dotenv.config({ path: '.env.sepolia' });
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
+import { sepolia, optimismSepolia } from 'viem/chains';
+
+// Parse network argument
+const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
+const envFile = `.env.${networkArg}`;
+dotenv.config({ path: envFile });
 
 async function main() {
-  console.log('# 🏆 AAStar Gasless 深度分析报告 (v4.1)\n');
+  console.log(`# 🏆 AAStar Gasless 深度分析报告 (v4.1) - Network: ${networkArg}\n`);
   
-  const rpcUrl = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL_SEPOLIA;
-  if (!rpcUrl) throw new Error('Missing RPC URL');
+  const rpcUrl = process.env.RPC_URL || process.env.SEPOLIA_RPC_URL || process.env.OP_SEPOLIA_RPC_URL;
+  if (!rpcUrl) throw new Error(`Missing RPC URL in ${envFile}`);
+
+  // Load Config
+  let configPath = path.resolve(process.cwd(), `config.${networkArg}.json`);
+  if (!fs.existsSync(configPath)) {
+      // Try fallback to SuperPaymaster
+      const fallbackPath = path.resolve(process.cwd(), `../../projects/SuperPaymaster/deployments/config.${networkArg}.json`);
+      if (fs.existsSync(fallbackPath)) {
+          configPath = fallbackPath;
+          console.log(`ℹ️  Using config from SuperPaymaster: ${configPath}`);
+      } else {
+          console.warn(`⚠️  Config file not found for ${networkArg}. using defaults/hardcoded address.`);
+      }
+  }
+  
+  let spAddress = '0xe74304CC5860b950a45967e12321Dff8B5CdcaA0'; // Default Sepolia
+  if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.superPaymaster) spAddress = config.superPaymaster;
+  }
+  console.log(`ℹ️  Target SuperPaymaster: ${spAddress}`);
+
+  const chain = networkArg === 'op-sepolia' ? optimismSepolia : sepolia;
 
   const priceOracle = new PriceOracle();
   const ethPrice = await priceOracle.getEthPrice();
   const apntsPrice = await priceOracle.getAPNTsPrice();
 
-  const collector = new DataCollector(rpcUrl);
+  const collector = new DataCollector(rpcUrl, chain, spAddress);
   const calculator = new CostCalculator(ethPrice, apntsPrice);
   const attributionAnalyzer = new AttributionAnalyzer();
   const comparisonAnalyzer = new ComparisonAnalyzer();
@@ -39,7 +68,7 @@ async function main() {
   // 1. 数据采集与成本计算
   const parser = new LogParser();
   const records = await parser.parseAll();
-  const txHashes = records.filter(r => r.network === 'sepolia').map(r => r.txHash as Hash);
+  const txHashes = records.filter(r => r.network === networkArg).map(r => r.txHash as Hash);
   
   console.log(`\n📡 正在处理 ${txHashes.length} 笔交易数据...\n`);
   const onChainData = await collector.enrichBatch(txHashes, 5);

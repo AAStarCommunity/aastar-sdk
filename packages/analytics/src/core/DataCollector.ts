@@ -8,7 +8,7 @@
  * - 实现缓存机制避免重复 RPC 调用
  */
 
-import { createPublicClient, http, type PublicClient, type Hash, type TransactionReceipt } from 'viem';
+import { createPublicClient, http, type PublicClient, type Hash, type TransactionReceipt, type Chain } from 'viem';
 import { sepolia } from 'viem/chains';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -37,13 +37,15 @@ export class DataCollector {
   private client: PublicClient;
   private cacheDir: string;
   private cacheEnabled: boolean;
+  private superPaymasterAddress: string;
 
-  constructor(rpcUrl: string, cacheDir?: string, enableCache = true) {
+  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress: string = '0xe74304CC5860b950a45967e12321Dff8B5CdcaA0', cacheDir?: string, enableCache = true) {
     this.client = createPublicClient({
-      chain: sepolia,
+      chain,
       transport: http(rpcUrl),
     });
     
+    this.superPaymasterAddress = superPaymasterAddress;
     this.cacheDir = cacheDir || path.resolve(__dirname, '../../../../packages/analytics/data/transaction_cache');
     this.cacheEnabled = enableCache;
     
@@ -51,6 +53,8 @@ export class DataCollector {
       fs.mkdirSync(this.cacheDir, { recursive: true });
     }
   }
+
+  // ... (enrichFromChain remains same)
 
   /**
    * 从链上获取交易数据（带缓存）
@@ -120,7 +124,6 @@ export class DataCollector {
    * 获取 Oracle 更新历史（用于计算分摊成本）
    */
   async getOracleUpdates(fromBlock: bigint, toBlock: bigint): Promise<any[]> {
-    const SUPER_PAYMASTER_ADDRESS = '0xe74304CC5860b950a45967e12321Dff8B5CdcaA0'; // Sepolia
     const CHUNK_SIZE = 5n; // Alchemy 免费版限制极严
     
     const allLogs: any[] = [];
@@ -130,7 +133,7 @@ export class DataCollector {
         const end = current + CHUNK_SIZE - 1n > toBlock ? toBlock : current + CHUNK_SIZE - 1n;
         
         const logs = await this.client.getLogs({
-          address: SUPER_PAYMASTER_ADDRESS,
+          address: this.superPaymasterAddress as `0x${string}`,
           event: {
             type: 'event',
             name: 'PriceUpdated',

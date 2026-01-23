@@ -10,8 +10,11 @@ import * as path from 'path';
 dotenv.config({ path: '.env.sepolia' });
 
 async function main() {
-    const config = await loadNetworkConfig('sepolia');
-    const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = await loadNetworkConfig(networkName);
+    const rpcUrl = process.env.RPC_URL || config.rpcUrl;
     
     // Dynamic import to avoid config mismatch
     const { PaymasterClient, PaymasterOperator } = await import('../packages/paymaster/src/V4/index.js');

@@ -52,7 +52,10 @@ export class LogParser {
     const fileName = path.basename(filePath);
     
     // 从文件名提取网络和时间戳
-    const network = fileName.includes('anvil') ? 'anvil' : 'sepolia';
+    let network: 'anvil' | 'sepolia' | 'op-sepolia' = 'sepolia';
+    if (fileName.includes('anvil')) network = 'anvil';
+    if (fileName.includes('op-sepolia')) network = 'op-sepolia';
+
     const timestampMatch = fileName.match(/(\d{8}_\d{6})/);
     const timestamp = timestampMatch 
       ? this.parseTimestamp(timestampMatch[1])

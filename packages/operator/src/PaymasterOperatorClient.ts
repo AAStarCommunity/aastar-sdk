@@ -143,6 +143,7 @@ export class PaymasterOperatorClient extends BaseClient {
         stakeAmount?: bigint; // Optional, defaults to 30 GToken (Registry requirement for AOA)
         version?: string; // Optional, defaults to Factory default or V4.0.0
         salt?: bigint; // Optional, for deterministic deployment
+        priceFeed?: Address;
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 
         deployHash: Hash; 
@@ -200,7 +201,7 @@ export class PaymasterOperatorClient extends BaseClient {
                         this.ethUsdPriceFeed,
                         200n, // serviceFeeRate (2%)
                         parseEther('0.1'), // maxGasCostCap
-                        3600n // priceStalenessThreshold
+                        3600n // priceStalenessThreshold (1 hour)
                     ]
                 });
 

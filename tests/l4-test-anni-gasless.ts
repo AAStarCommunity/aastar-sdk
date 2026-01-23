@@ -30,7 +30,11 @@ async function main() {
     // Load AA addresses from l4-state.json
     const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-    const anniAA = state.aaAccounts.find((aa: any) => aa.label === 'Anni (Demo)_AA1')?.address as Address;
+    const anniAA = state.aaAccounts.find((aa: any) => aa.label === 'Anni (Mycelium)_AA1')?.address as Address;
+    
+    if (!anniAA) {
+        throw new Error(`❌ Anni (Mycelium)_AA1 not found in l4-state.${networkName}.json! Ensure l4-setup.ts ran correctly.`);
+    }
     
     // ✅ FIX: Query Anni's own cPNTs token from xPNTsFactory
     const xpntsFactory = xPNTsFactoryActions(config.contracts.xPNTsFactory);
@@ -127,49 +131,24 @@ async function main() {
     console.log(`   ⏸️  Paused: ${operatorConfig[3]}`);
     console.log(`   🎫 xPNTs Token: ${operatorConfig[4]}`);
     
+    // Load Supplier (Admin) for diagnostic purposes
+    const supplierKey = process.env.PRIVATE_KEY_SUPPLIER as Hex;
+    if (!supplierKey) throw new Error("PRIVATE_KEY_SUPPLIER missing in .env");
+    const supplierAcc = privateKeyToAccount(supplierKey);
+    const supplierWallet = createWalletClient({
+        account: supplierAcc,
+        chain: config.chain,
+        transport: http(config.rpcUrl)
+    });
+
     // Verify xPNTs token matches cPNTs
     if (operatorConfig[4].toLowerCase() === cPNTs.toLowerCase()) {
         console.log(`   ✅ Token Match: Operator's xPNTs = cPNTs`);
     } else {
         console.log(`   ⚠️  Token Mismatch! Expected: ${cPNTs}, Got: ${operatorConfig[4]}`);
+        console.log(`      (This should have been fixed by l4-setup.ts)`);
     }
 
-    // ✅ AUTO-FIX: If exchangeRate is 0, configure it now
-    if (operatorConfig[1] === 0n || !operatorConfig[2] || operatorConfig[4] === '0x0000000000000000000000000000000000000000') {
-        console.log('\n🔧 AUTO-FIX: Operator not fully configured. Fixing now...');
-        const spAbi = [
-            { name: 'configureOperator', type: 'function', inputs: [{ name: 'xPNTsToken', type: 'address' }, { name: 'owner', type: 'address' }, { name: 'exchangeRate', type: 'uint96' }], outputs: [], stateMutability: 'nonpayable' }
-        ];
-        try {
-            if (operatorConfig[1] === 0n) {
-                console.log('   🔧 Auto-fixing zero Exchange Rate...');
-                const tx = await anniWallet.writeContract({
-                    address: anniPM,
-                    abi: spAbi,
-                    functionName: 'configureOperator',
-                    args: [cPNTs, anniAccount.address, 10n**18n], // 1:1
-                    chain: config.chain,
-                    account: anniAccount
-                });
-                await publicClient.waitForTransactionReceipt({ hash: tx });
-                console.log('   ✅ Exchange Rate fixed to 1:1.');
-            } else {
-                const fixTx = await anniWallet.writeContract({
-                    address: anniPM,
-                    abi: spAbi,
-                    functionName: 'configureOperator',
-                    args: [cPNTs, anniAccount.address, operatorConfig[1]], // Use existing rate if not zero
-                    chain: config.chain,
-                    account: anniAccount
-                });
-                console.log(`   📝 Fix Transaction Sent: ${fixTx}`);
-                await publicClient.waitForTransactionReceipt({ hash: fixTx });
-                console.log('   ✅ Operator Configured Successfully.');
-            }
-        } catch (e: any) {
-            console.warn('   ❌ Auto-fix failed:', e.message);
-        }
-    }
     
     // Query Cache Price and Token Prices
     const cachePriceAbi = [{
