@@ -12,19 +12,19 @@ All core contracts for SuperPaymaster have been successfully deployed to the **O
 
 | Contract Name | Address | Etherscan Link |
 | :--- | :--- | :--- |
-| **Registry** | `0x183bd22e16bc4e4f487619e96dacd8a08b2aa815` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x183bd22e16bc4e4f487619e96dacd8a08b2aa815) |
-| **GToken** | `0x851571543ad6d749cc765fabc99cd8f1b193e920` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x851571543ad6d749cc765fabc99cd8f1b193e920) |
-| **GTokenStaking** | `0xa1a0e154d96c2c0413cdcefa4e32d68d3f0af377` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xa1a0e154d96c2c0413cdcefa4e32d68d3f0af377) |
-| **MySBT** | `0x65eb6490da70f68ab2165a98155948ecb8188a46` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x65eb6490da70f68ab2165a98155948ecb8188a46) |
-| **SuperPaymaster** | `0xa1d77367893a18c222fe136e17d1ad070479fb58` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xa1d77367893a18c222fe136e17d1ad070479fb58) |
-| **aPNTs (xPNTsToken)** | `0xec466d6ea945c10b9f0c3cc852c211085700a04b` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xec466d6ea945c10b9f0c3cc852c211085700a04b) |
-| **ReputationSystem** | `0xa5b38a88ad47a081a54f712b9c64f4dd4b06843e` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xa5b38a88ad47a081a54f712b9c64f4dd4b06843e) |
-| **BLSAggregator** | `0xd7cbbef07b06508eadbdae2dabc4ec95ae0ca52d` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xd7cbbef07b06508eadbdae2dabc4ec95ae0ca52d) |
-| **DVTValidator** | `0x3dfc3378d40a244b5fa2f545b917d19de218a49b` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x3dfc3378d40a244b5fa2f545b917d19de218a49b) |
-| **BLSValidator** | `0x84de8cecc85eef310167d46c9758e3d1288e2aad` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x84de8cecc85eef310167d46c9758e3d1288e2aad) |
-| **xPNTsFactory** | `0xba4c617a5b4bb3e2f3a06a7dcbf28463a9020256` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xba4c617a5b4bb3e2f3a06a7dcbf28463a9020256) |
-| **PaymasterFactory** | `0x439300f74c57539ac79b725dd325b4bcf93eda01` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x439300f74c57539ac79b725dd325b4bcf93eda01) |
-| **PaymasterV4Impl** | `0x29b60d1ea9fef550b019425f1baee429e4515256` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x29b60d1ea9fef550b019425f1baee429e4515256) |
+| **Registry** | `0x940783455629a89071069901B6C6045E15661e21` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x940783455629a89071069901B6C6045E15661e21) |
+| **GToken** | `0x49d25DD6678a0ee528aa9f12c50e5aF173ccBbEe` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x49d25DD6678a0ee528aa9f12c50e5aF173ccBbEe) |
+| **GTokenStaking** | `0x27F2DFD2A6BAaeDE6c30E9c432bA6ad63d8B309c` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x27F2DFD2A6BAaeDE6c30E9c432bA6ad63d8B309c) |
+| **MySBT** | `0x8e75673DCb7cdA3b2e6aa84C340bc3343Ea55335` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x8e75673DCb7cdA3b2e6aa84C340bc3343Ea55335) |
+| **SuperPaymaster** | `0x5F9b838F8A496C9702AeE7D3aAD4F963336e44b6` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x5F9b838F8A496C9702AeE7D3aAD4F963336e44b6) |
+| **aPNTs (xPNTsToken)** | `0xFbca7093Cc7d89b2B0b66436AefE40E5EFaBA156` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xFbca7093Cc7d89b2B0b66436AefE40E5EFaBA156) |
+| **ReputationSystem** | `0xA72aD8E610a8981961A81Ff9940268fb03f3F1c2` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xA72aD8E610a8981961A81Ff9940268fb03f3F1c2) |
+| **BLSAggregator** | `0x7B11B0322153523A8ce1376486dBFaC0d21a6345` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x7B11B0322153523A8ce1376486dBFaC0d21a6345) |
+| **DVTValidator** | `0xE8C24Fd2d1ec96b42b269FD729FAadaD9561C90E` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xE8C24Fd2d1ec96b42b269FD729FAadaD9561C90E) |
+| **BLSValidator** | `0x4F3726E6a41c6D0D2ba6E23f4Df22C5C34473809` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x4F3726E6a41c6D0D2ba6E23f4Df22C5C34473809) |
+| **xPNTsFactory** | `0x57CDD8601a0E108d6445E78a927d7edB7386B28c` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0x57CDD8601a0E108d6445E78a927d7edB7386B28c) |
+| **PaymasterFactory** | `0xEaE0F05Ce2B61f23775f321B99CBD8891747c8D7` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xEaE0F05Ce2B61f23775f321B99CBD8891747c8D7) |
+| **PaymasterV4Impl** | `0xd795972b95CC693385311085D788e8eb72c514e2` | [View on Etherscan](https://sepolia-optimism.etherscan.io/address/0xd795972b95CC693385311085D788e8eb72c514e2) |
 
 ---
-*Date: 2026-01-21 14:00:00*
+*Date: 2026-01-23 20:15:00*
