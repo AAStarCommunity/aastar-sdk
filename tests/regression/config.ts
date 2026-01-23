@@ -164,10 +164,10 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         // EXCEPT on anvil where everything is deployed locally and config.json is the source of truth
         if (network !== 'anvil' && THIRD_PARTY_KEYS.includes(deploymentKey)) {
             const envAddr = process.env[envKey] || (envFallback && process.env[envFallback]);
-            if (envAddr) {
-                // console.log(`    ✅ Third-party address from ENV: ${deploymentKey} -> ${envAddr}`);
-                return envAddr as Address;
+            if (!envAddr) {
+                throw new Error(`STRICT MODE: Missing required Third-Party Contract Address in ENV: ${deploymentKey} (checked ${envKey}${envFallback ? ` / ${envFallback}` : ''})`);
             }
+            return envAddr as Address;
         }
         
         // 1. Try deployments first (for our own deployed contracts, and for ALL contracts on anvil)

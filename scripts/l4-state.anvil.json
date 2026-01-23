@@ -1,45 +1,45 @@
 {
   "network": "anvil",
-  "timestamp": "2026-01-23T05:38:10.949Z",
+  "timestamp": "2026-01-23T06:25:47.825Z",
   "operators": {
     "jason": {
       "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "tokenAddress": "0xF8FB86C01EEaE29Dda13b65B3715D06A3D023832",
+      "tokenAddress": "0xeD0539581313ed4c625cC985DFc27CaAE05B680d",
       "symbol": "aPNTs",
-      "paymasterV4": "0x99425b4109853329697e3d39394F08BBfA7F1DFe"
+      "paymasterV4": "0xDFDfFB3aa2F9370c016015DcFB295De5fEa0D719"
     },
     "anni": {
       "address": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-      "tokenAddress": "0xca3C40f0aCe79d72eCe5F8005264DaFB3dB4595B",
+      "tokenAddress": "0xeaef2b74fDE829beb43032406439d94ae499feB2",
       "symbol": "cPNTs",
-      "superPaymaster": "0x0aec7c174554AF8aEc3680BB58431F6618311510"
+      "superPaymaster": "0x3f9A1B67F3a3548e0ea5c9eaf43A402d12b6a273"
     }
   },
   "aaAccounts": [
     {
       "label": "Jason (AAStar)_AA1",
-      "address": "0x4148A29baf11f336DCFc1E1dfBa9998E5F8ED44F",
+      "address": "0xf5f09cAc9B86192FC2346D267947832092944BD3",
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "salt": "0",
       "opName": "Jason (AAStar)"
     },
     {
       "label": "Jason (AAStar)_AA2",
-      "address": "0x726F62589Fa755e4295311B20a97111e2E35502b",
+      "address": "0xea119Ca42dF6D3bB411926A0d271598309eAB996",
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "salt": "1",
       "opName": "Jason (AAStar)"
     },
     {
       "label": "Anni (Demo)_AA1",
-      "address": "0x657042F40f97Eaa16A3e4Ff0FbF6dF4E2f117EE6",
+      "address": "0xcA9A88cD879196eA45e7581493B9fC962081B852",
       "owner": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
       "salt": "0",
       "opName": "Anni (Demo)"
     },
     {
       "label": "Anni (Demo)_AA2",
-      "address": "0x6828d985A41D7DE8501654977e8704Cf37ffe427",
+      "address": "0x6Bb36c65e1F8C2181c1d62DEb8e832cCca133203",
       "owner": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
       "salt": "1",
       "opName": "Anni (Demo)"
