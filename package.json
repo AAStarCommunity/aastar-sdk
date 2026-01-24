@@ -1,6 +1,7 @@
 {
   "name": "@aastar/monorepo",
   "version": "0.16.14",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "workspaces": [

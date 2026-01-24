@@ -1,6 +1,7 @@
 {
   "name": "@aastar/aastar",
   "version": "0.16.14",
+  "license": "MIT",
   "private": false,
   "description": "AAStar SDK - All in one package",
   "main": "dist/index.js",
