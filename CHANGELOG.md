@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.14] - 2026-01-24
+
+### 🌍 Multi-Chain & Infrastructure
+- **[FEATURE]** **Standardized Config Loader**: 
+  - Restructured `config.ts` to implement a robust multi-chain loading priority.
+  - Internal Protocol Contracts (Registry, Paymasters, GToken) now strictly prioritize `config.{network}.json`.
+  - Infrastructure Contracts (EntryPoint, PriceFeed) and URLs (RPC, Bundler) are now sourced primarily from `.env.{network}`.
+- **[FIX]** **Hardcoded Dependencies Cleanup**: 
+  - Successfully removed all remaining hardcoded `0x` addresses and `sepolia` string literals across all `tests/` and `examples/` scripts.
+  - Every script now supports the `--network` parameter for dynamic environment switching.
+- **[REPAIR]** **Reputation Activity Metrics**: Corrected the `opName` lookup string in `l4-reputation-tiers.ts` to align with the latest `l4-setup.ts` state files.
+
+### ⚡ Gasless Execution Efficiency
+- **[IMPROVED]** **SuperPaymaster Verification Tuning**: 
+  - Implemented "Dynamic Nominal Gas Tuning" in `SuperPaymasterClient` to optimize `paymasterVerificationGasLimit`.
+  - Resolved "Efficiency too low" (AA30) errors on Alchemy/Optimism-Sepolia by maintaining a strict balance between execution safety and bundler efficiency ratios (>= 0.4).
+
 ## [0.16.13] - 2026-01-23
 
 ### 🛡️ Security & Stability

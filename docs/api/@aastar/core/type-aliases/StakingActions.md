@@ -1,6 +1,6 @@
 > **StakingActions** = `object`
 
-Defined in: [packages/core/src/actions/staking.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L6)
+Defined in: [packages/core/src/actions/staking.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/staking.ts:6](https://github.com/AAStarCo
 
 > **authorizedSlashers**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/staking.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L59)
+Defined in: [packages/core/src/actions/staking.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L59)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/actions/staking.ts:59](https://github.com/AAStarC
 
 > **availableBalance**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/staking.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L35)
+Defined in: [packages/core/src/actions/staking.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L35)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/actions/staking.ts:35](https://github.com/AAStarC
 
 > **getLockedStake**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/staking.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L26)
+Defined in: [packages/core/src/actions/staking.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L26)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [packages/core/src/actions/staking.ts:26](https://github.com/AAStarC
 
 > **getStakeInfo**: (`args`) => `Promise`\<\{ `amount`: `bigint`; `slashedAmount`: `bigint`; `stakedAt`: `bigint`; `unstakeRequestedAt`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/staking.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L19)
+Defined in: [packages/core/src/actions/staking.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L19)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [packages/core/src/actions/staking.ts:19](https://github.com/AAStarC
 
 > **getStakingBalance**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/staking.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L25)
+Defined in: [packages/core/src/actions/staking.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L25)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [packages/core/src/actions/staking.ts:25](https://github.com/AAStarC
 
 > **getTotalStaked**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/staking.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L61)
+Defined in: [packages/core/src/actions/staking.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L61)
 
 #### Returns
 
@@ -128,7 +128,7 @@ Defined in: [packages/core/src/actions/staking.ts:61](https://github.com/AAStarC
 
 > **getUserRoleLocks**: (`args`) => `Promise`\<`object`[]\>
 
-Defined in: [packages/core/src/actions/staking.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L27)
+Defined in: [packages/core/src/actions/staking.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L27)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [packages/core/src/actions/staking.ts:27](https://github.com/AAStarC
 
 > **GTOKEN**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/staking.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L74)
+Defined in: [packages/core/src/actions/staking.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L74)
 
 #### Returns
 
@@ -160,7 +160,7 @@ Defined in: [packages/core/src/actions/staking.ts:74](https://github.com/AAStarC
 
 > **hasRoleLock**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/staking.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L34)
+Defined in: [packages/core/src/actions/staking.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L34)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [packages/core/src/actions/staking.ts:34](https://github.com/AAStarC
 
 > **lockStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L8)
+Defined in: [packages/core/src/actions/staking.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L8)
 
 #### Parameters
 
@@ -224,7 +224,7 @@ Defined in: [packages/core/src/actions/staking.ts:8](https://github.com/AAStarCo
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/staking.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L63)
+Defined in: [packages/core/src/actions/staking.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L63)
 
 #### Returns
 
@@ -236,7 +236,7 @@ Defined in: [packages/core/src/actions/staking.ts:63](https://github.com/AAStarC
 
 > **previewExitFee**: (`args`) => `Promise`\<\{ `fee`: `bigint`; `netAmount`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/staking.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L36)
+Defined in: [packages/core/src/actions/staking.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L36)
 
 #### Parameters
 
@@ -260,7 +260,7 @@ Defined in: [packages/core/src/actions/staking.ts:36](https://github.com/AAStarC
 
 > **REGISTRY**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/staking.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L73)
+Defined in: [packages/core/src/actions/staking.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L73)
 
 #### Returns
 
@@ -272,7 +272,7 @@ Defined in: [packages/core/src/actions/staking.ts:73](https://github.com/AAStarC
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L67)
+Defined in: [packages/core/src/actions/staking.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L67)
 
 #### Parameters
 
@@ -292,7 +292,7 @@ Defined in: [packages/core/src/actions/staking.ts:67](https://github.com/AAStarC
 
 > **roleExitConfigs**: (`args`) => `Promise`\<\{ `feePercent`: `bigint`; `minFee`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/staking.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L57)
+Defined in: [packages/core/src/actions/staking.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L57)
 
 #### Parameters
 
@@ -312,7 +312,7 @@ Defined in: [packages/core/src/actions/staking.ts:57](https://github.com/AAStarC
 
 > **roleLocks**: (`args`) => `Promise`\<\{ `amount`: `bigint`; `entryBurn`: `bigint`; `lockedAt`: `number`; `metadata`: [`Hex`](https://viem.sh/docs/index.html); `roleId`: [`Hex`](https://viem.sh/docs/index.html); \}\>
 
-Defined in: [packages/core/src/actions/staking.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L50)
+Defined in: [packages/core/src/actions/staking.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L50)
 
 #### Parameters
 
@@ -336,7 +336,7 @@ Defined in: [packages/core/src/actions/staking.ts:50](https://github.com/AAStarC
 
 > **setAuthorizedSlasher**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L16)
+Defined in: [packages/core/src/actions/staking.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L16)
 
 #### Parameters
 
@@ -364,7 +364,7 @@ Defined in: [packages/core/src/actions/staking.ts:16](https://github.com/AAStarC
 
 > **setRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L39)
+Defined in: [packages/core/src/actions/staking.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L39)
 
 #### Parameters
 
@@ -388,7 +388,7 @@ Defined in: [packages/core/src/actions/staking.ts:39](https://github.com/AAStarC
 
 > **setRoleExitFee**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L40)
+Defined in: [packages/core/src/actions/staking.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L40)
 
 #### Parameters
 
@@ -420,7 +420,7 @@ Defined in: [packages/core/src/actions/staking.ts:40](https://github.com/AAStarC
 
 > **setTreasury**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L41)
+Defined in: [packages/core/src/actions/staking.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L41)
 
 #### Parameters
 
@@ -444,7 +444,7 @@ Defined in: [packages/core/src/actions/staking.ts:41](https://github.com/AAStarC
 
 > **slash**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L14)
+Defined in: [packages/core/src/actions/staking.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L14)
 
 #### Parameters
 
@@ -476,7 +476,7 @@ Defined in: [packages/core/src/actions/staking.ts:14](https://github.com/AAStarC
 
 > **slashByDVT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L15)
+Defined in: [packages/core/src/actions/staking.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L15)
 
 #### Parameters
 
@@ -512,7 +512,7 @@ Defined in: [packages/core/src/actions/staking.ts:15](https://github.com/AAStarC
 
 > **stakes**: (`args`) => `Promise`\<\{ `amount`: `bigint`; `slashedAmount`: `bigint`; `stakedAt`: `bigint`; `unstakeRequestedAt`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/staking.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L44)
+Defined in: [packages/core/src/actions/staking.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L44)
 
 #### Parameters
 
@@ -532,7 +532,7 @@ Defined in: [packages/core/src/actions/staking.ts:44](https://github.com/AAStarC
 
 > **topUpStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L9)
+Defined in: [packages/core/src/actions/staking.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L9)
 
 #### Parameters
 
@@ -568,7 +568,7 @@ Defined in: [packages/core/src/actions/staking.ts:9](https://github.com/AAStarCo
 
 > **totalStaked**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/staking.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L60)
+Defined in: [packages/core/src/actions/staking.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L60)
 
 #### Returns
 
@@ -580,7 +580,7 @@ Defined in: [packages/core/src/actions/staking.ts:60](https://github.com/AAStarC
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L66)
+Defined in: [packages/core/src/actions/staking.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L66)
 
 #### Parameters
 
@@ -604,7 +604,7 @@ Defined in: [packages/core/src/actions/staking.ts:66](https://github.com/AAStarC
 
 > **treasury**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/staking.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L62)
+Defined in: [packages/core/src/actions/staking.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L62)
 
 #### Returns
 
@@ -616,7 +616,7 @@ Defined in: [packages/core/src/actions/staking.ts:62](https://github.com/AAStarC
 
 > **unlockAndTransfer**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L11)
+Defined in: [packages/core/src/actions/staking.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L11)
 
 #### Parameters
 
@@ -644,7 +644,7 @@ Defined in: [packages/core/src/actions/staking.ts:11](https://github.com/AAStarC
 
 > **unlockStake**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L10)
+Defined in: [packages/core/src/actions/staking.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L10)
 
 #### Parameters
 
@@ -672,7 +672,7 @@ Defined in: [packages/core/src/actions/staking.ts:10](https://github.com/AAStarC
 
 > **userActiveRoles**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/staking.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L58)
+Defined in: [packages/core/src/actions/staking.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L58)
 
 #### Parameters
 
@@ -696,7 +696,7 @@ Defined in: [packages/core/src/actions/staking.ts:58](https://github.com/AAStarC
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/staking.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/staking.ts#L70)
+Defined in: [packages/core/src/actions/staking.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/staking.ts#L70)
 
 #### Returns
 

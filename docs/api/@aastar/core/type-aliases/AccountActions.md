@@ -1,6 +1,6 @@
 > **AccountActions** = `object`
 
-Defined in: [packages/core/src/actions/account.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L7)
+Defined in: [packages/core/src/actions/account.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L7)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/account.ts:7](https://github.com/AAStarCo
 
 > **addDeposit**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/account.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L12)
+Defined in: [packages/core/src/actions/account.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L12)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/actions/account.ts:12](https://github.com/AAStarC
 
 > **entryPoint**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/account.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L11)
+Defined in: [packages/core/src/actions/account.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L11)
 
 #### Returns
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/account.ts:11](https://github.com/AAStarC
 
 > **execute**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/account.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L8)
+Defined in: [packages/core/src/actions/account.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L8)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [packages/core/src/actions/account.ts:8](https://github.com/AAStarCo
 
 > **executeBatch**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/account.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L9)
+Defined in: [packages/core/src/actions/account.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L9)
 
 #### Parameters
 
@@ -104,7 +104,7 @@ Defined in: [packages/core/src/actions/account.ts:9](https://github.com/AAStarCo
 
 > **getDeposit**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/account.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L14)
+Defined in: [packages/core/src/actions/account.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L14)
 
 #### Returns
 
@@ -116,7 +116,7 @@ Defined in: [packages/core/src/actions/account.ts:14](https://github.com/AAStarC
 
 > **getNonce**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/account.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L10)
+Defined in: [packages/core/src/actions/account.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L10)
 
 #### Returns
 
@@ -128,7 +128,7 @@ Defined in: [packages/core/src/actions/account.ts:10](https://github.com/AAStarC
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/account.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L15)
+Defined in: [packages/core/src/actions/account.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L15)
 
 #### Returns
 
@@ -140,7 +140,7 @@ Defined in: [packages/core/src/actions/account.ts:15](https://github.com/AAStarC
 
 > **withdrawDepositTo**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/account.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/account.ts#L13)
+Defined in: [packages/core/src/actions/account.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L13)
 
 #### Parameters
 

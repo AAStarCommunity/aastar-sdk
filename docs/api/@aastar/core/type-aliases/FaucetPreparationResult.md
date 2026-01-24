@@ -1,6 +1,6 @@
 > **FaucetPreparationResult** = `object`
 
-Defined in: [packages/core/src/actions/faucet.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L17)
+Defined in: [packages/core/src/actions/faucet.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/faucet.ts#L17)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/faucet.ts:17](https://github.com/AAStarCo
 
 > **ethFunded**: `boolean`
 
-Defined in: [packages/core/src/actions/faucet.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L18)
+Defined in: [packages/core/src/actions/faucet.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/faucet.ts#L18)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/faucet.ts:18](https://github.com/AAStarCo
 
 > **paymasterDeposited**: `boolean`
 
-Defined in: [packages/core/src/actions/faucet.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L21)
+Defined in: [packages/core/src/actions/faucet.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/faucet.ts#L21)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/faucet.ts:21](https://github.com/AAStarCo
 
 > **roleRegistered**: `boolean`
 
-Defined in: [packages/core/src/actions/faucet.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L19)
+Defined in: [packages/core/src/actions/faucet.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/faucet.ts#L19)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [packages/core/src/actions/faucet.ts:19](https://github.com/AAStarCo
 
 > **tokenMinted**: `boolean`
 
-Defined in: [packages/core/src/actions/faucet.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/faucet.ts#L20)
+Defined in: [packages/core/src/actions/faucet.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/faucet.ts#L20)

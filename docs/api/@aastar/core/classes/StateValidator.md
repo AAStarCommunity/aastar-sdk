@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L44)
+Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L44)
 
 ## Constructors
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/
 
 > `static` **getAccountBalances**(`params`): `Promise`\<[`AccountBalance`](../interfaces/AccountBalance.md)[]\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L58)
+Defined in: [packages/core/src/actions/StateValidator.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L58)
 
 Batch fetch balances for multiple accounts
 
@@ -58,7 +58,7 @@ Batch fetch balances for multiple accounts
 
 > `static` **validateDeployment**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L232)
+Defined in: [packages/core/src/actions/StateValidator.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L232)
 
 Deployment Validation
 
@@ -78,7 +78,7 @@ Deployment Validation
 
 > `static` **validateETHBalance**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L153)
+Defined in: [packages/core/src/actions/StateValidator.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L153)
 
 ETH Balance Validation
 
@@ -98,7 +98,7 @@ ETH Balance Validation
 
 > `static` **validateRole**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L114)
+Defined in: [packages/core/src/actions/StateValidator.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L114)
 
 Role Validation
 
@@ -118,7 +118,7 @@ Role Validation
 
 > `static` **validateTokenBalance**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:189](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/StateValidator.ts#L189)
+Defined in: [packages/core/src/actions/StateValidator.ts:189](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L189)
 
 Token Balance Validation
 

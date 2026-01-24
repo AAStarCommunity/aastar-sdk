@@ -1,6 +1,6 @@
 > **packUserOpLimits**(`high`, `low`): `` `0x${string}` ``
 
-Defined in: [packages/account/src/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/account/src/index.ts#L9)
+Defined in: [packages/account/src/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/account/src/index.ts#L9)
 
 Common Pack Logic for v0.7 UserOperations
 

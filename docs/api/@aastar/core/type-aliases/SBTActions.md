@@ -1,6 +1,6 @@
 > **SBTActions** = `object`
 
-Defined in: [packages/core/src/actions/sbt.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L22)
+Defined in: [packages/core/src/actions/sbt.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L22)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/sbt.ts:22](https://github.com/AAStarCommu
 
 > **airdropMint**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L24)
+Defined in: [packages/core/src/actions/sbt.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L24)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/sbt.ts:24](https://github.com/AAStarCommu
 
 > **approve**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L41)
+Defined in: [packages/core/src/actions/sbt.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L41)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [packages/core/src/actions/sbt.ts:41](https://github.com/AAStarCommu
 
 > **balanceOf**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L37)
+Defined in: [packages/core/src/actions/sbt.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L37)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [packages/core/src/actions/sbt.ts:37](https://github.com/AAStarCommu
 
 > **burnSBT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L56)
+Defined in: [packages/core/src/actions/sbt.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L56)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [packages/core/src/actions/sbt.ts:56](https://github.com/AAStarCommu
 
 > **daoMultisig**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L83)
+Defined in: [packages/core/src/actions/sbt.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L83)
 
 #### Returns
 
@@ -124,7 +124,7 @@ Defined in: [packages/core/src/actions/sbt.ts:83](https://github.com/AAStarCommu
 
 > **deactivateAllMemberships**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L62)
+Defined in: [packages/core/src/actions/sbt.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L62)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [packages/core/src/actions/sbt.ts:62](https://github.com/AAStarCommu
 
 > **deactivateMembership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L61)
+Defined in: [packages/core/src/actions/sbt.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L61)
 
 #### Parameters
 
@@ -176,7 +176,7 @@ Defined in: [packages/core/src/actions/sbt.ts:61](https://github.com/AAStarCommu
 
 > **getActiveMemberships**: (`args`) => `Promise`\<`Address`[]\>
 
-Defined in: [packages/core/src/actions/sbt.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L30)
+Defined in: [packages/core/src/actions/sbt.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L30)
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: [packages/core/src/actions/sbt.ts:30](https://github.com/AAStarCommu
 
 > **getApproved**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L43)
+Defined in: [packages/core/src/actions/sbt.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L43)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [packages/core/src/actions/sbt.ts:43](https://github.com/AAStarCommu
 
 > **getCommunityMembership**: (`args`) => `Promise`\<[`SBTMembership`](SBTMembership.md)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L28)
+Defined in: [packages/core/src/actions/sbt.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L28)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [packages/core/src/actions/sbt.ts:28](https://github.com/AAStarCommu
 
 > **getMemberships**: (`args`) => `Promise`\<[`SBTMembership`](SBTMembership.md)[]\>
 
-Defined in: [packages/core/src/actions/sbt.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L29)
+Defined in: [packages/core/src/actions/sbt.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L29)
 
 #### Parameters
 
@@ -260,7 +260,7 @@ Defined in: [packages/core/src/actions/sbt.ts:29](https://github.com/AAStarCommu
 
 > **getSBTData**: (`args`) => `Promise`\<[`SBTData`](SBTData.md)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L27)
+Defined in: [packages/core/src/actions/sbt.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L27)
 
 #### Parameters
 
@@ -280,7 +280,7 @@ Defined in: [packages/core/src/actions/sbt.ts:27](https://github.com/AAStarCommu
 
 > **getUserSBT**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L26)
+Defined in: [packages/core/src/actions/sbt.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L26)
 
 #### Parameters
 
@@ -300,7 +300,7 @@ Defined in: [packages/core/src/actions/sbt.ts:26](https://github.com/AAStarCommu
 
 > **GTOKEN**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L93)
+Defined in: [packages/core/src/actions/sbt.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L93)
 
 #### Returns
 
@@ -312,7 +312,7 @@ Defined in: [packages/core/src/actions/sbt.ts:93](https://github.com/AAStarCommu
 
 > **GTOKEN\_STAKING**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L92)
+Defined in: [packages/core/src/actions/sbt.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L92)
 
 #### Returns
 
@@ -324,7 +324,7 @@ Defined in: [packages/core/src/actions/sbt.ts:92](https://github.com/AAStarCommu
 
 > **isApprovedForAll**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L44)
+Defined in: [packages/core/src/actions/sbt.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L44)
 
 #### Parameters
 
@@ -348,7 +348,7 @@ Defined in: [packages/core/src/actions/sbt.ts:44](https://github.com/AAStarCommu
 
 > **lastActivityTime**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L66)
+Defined in: [packages/core/src/actions/sbt.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L66)
 
 #### Parameters
 
@@ -372,7 +372,7 @@ Defined in: [packages/core/src/actions/sbt.ts:66](https://github.com/AAStarCommu
 
 > **leaveCommunity**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L60)
+Defined in: [packages/core/src/actions/sbt.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L60)
 
 #### Parameters
 
@@ -396,7 +396,7 @@ Defined in: [packages/core/src/actions/sbt.ts:60](https://github.com/AAStarCommu
 
 > **membershipIndex**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L34)
+Defined in: [packages/core/src/actions/sbt.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L34)
 
 #### Parameters
 
@@ -420,7 +420,7 @@ Defined in: [packages/core/src/actions/sbt.ts:34](https://github.com/AAStarCommu
 
 > **minLockAmount**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L74)
+Defined in: [packages/core/src/actions/sbt.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L74)
 
 #### Returns
 
@@ -432,7 +432,7 @@ Defined in: [packages/core/src/actions/sbt.ts:74](https://github.com/AAStarCommu
 
 > **mintFee**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L72)
+Defined in: [packages/core/src/actions/sbt.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L72)
 
 #### Returns
 
@@ -444,7 +444,7 @@ Defined in: [packages/core/src/actions/sbt.ts:72](https://github.com/AAStarCommu
 
 > **mintForRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L25)
+Defined in: [packages/core/src/actions/sbt.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L25)
 
 #### Parameters
 
@@ -476,7 +476,7 @@ Defined in: [packages/core/src/actions/sbt.ts:25](https://github.com/AAStarCommu
 
 > **name**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L47)
+Defined in: [packages/core/src/actions/sbt.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L47)
 
 #### Returns
 
@@ -488,7 +488,7 @@ Defined in: [packages/core/src/actions/sbt.ts:47](https://github.com/AAStarCommu
 
 > **nextTokenId**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L52)
+Defined in: [packages/core/src/actions/sbt.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L52)
 
 #### Returns
 
@@ -500,7 +500,7 @@ Defined in: [packages/core/src/actions/sbt.ts:52](https://github.com/AAStarCommu
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L96)
+Defined in: [packages/core/src/actions/sbt.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L96)
 
 #### Returns
 
@@ -512,7 +512,7 @@ Defined in: [packages/core/src/actions/sbt.ts:96](https://github.com/AAStarCommu
 
 > **ownerOf**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L38)
+Defined in: [packages/core/src/actions/sbt.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L38)
 
 #### Parameters
 
@@ -532,7 +532,7 @@ Defined in: [packages/core/src/actions/sbt.ts:38](https://github.com/AAStarCommu
 
 > **pause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L78)
+Defined in: [packages/core/src/actions/sbt.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L78)
 
 #### Parameters
 
@@ -552,7 +552,7 @@ Defined in: [packages/core/src/actions/sbt.ts:78](https://github.com/AAStarCommu
 
 > **paused**: () => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L80)
+Defined in: [packages/core/src/actions/sbt.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L80)
 
 #### Returns
 
@@ -564,7 +564,7 @@ Defined in: [packages/core/src/actions/sbt.ts:80](https://github.com/AAStarCommu
 
 > **recordActivity**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L65)
+Defined in: [packages/core/src/actions/sbt.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L65)
 
 #### Parameters
 
@@ -588,7 +588,7 @@ Defined in: [packages/core/src/actions/sbt.ts:65](https://github.com/AAStarCommu
 
 > **REGISTRY**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L91)
+Defined in: [packages/core/src/actions/sbt.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L91)
 
 #### Returns
 
@@ -600,7 +600,7 @@ Defined in: [packages/core/src/actions/sbt.ts:91](https://github.com/AAStarCommu
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L98)
+Defined in: [packages/core/src/actions/sbt.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L98)
 
 #### Parameters
 
@@ -620,7 +620,7 @@ Defined in: [packages/core/src/actions/sbt.ts:98](https://github.com/AAStarCommu
 
 > **reputationCalculator**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L68)
+Defined in: [packages/core/src/actions/sbt.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L68)
 
 #### Returns
 
@@ -632,7 +632,7 @@ Defined in: [packages/core/src/actions/sbt.ts:68](https://github.com/AAStarCommu
 
 > **safeTransferFrom**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L39)
+Defined in: [packages/core/src/actions/sbt.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L39)
 
 #### Parameters
 
@@ -668,7 +668,7 @@ Defined in: [packages/core/src/actions/sbt.ts:39](https://github.com/AAStarCommu
 
 > **sbtData**: (`args`) => `Promise`\<[`SBTData`](SBTData.md)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L33)
+Defined in: [packages/core/src/actions/sbt.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L33)
 
 #### Parameters
 
@@ -688,7 +688,7 @@ Defined in: [packages/core/src/actions/sbt.ts:33](https://github.com/AAStarCommu
 
 > **setApprovalForAll**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L42)
+Defined in: [packages/core/src/actions/sbt.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L42)
 
 #### Parameters
 
@@ -716,7 +716,7 @@ Defined in: [packages/core/src/actions/sbt.ts:42](https://github.com/AAStarCommu
 
 > **setBaseURI**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L57)
+Defined in: [packages/core/src/actions/sbt.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L57)
 
 #### Parameters
 
@@ -740,7 +740,7 @@ Defined in: [packages/core/src/actions/sbt.ts:57](https://github.com/AAStarCommu
 
 > **setDAOMultisig**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L84)
+Defined in: [packages/core/src/actions/sbt.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L84)
 
 #### Parameters
 
@@ -764,7 +764,7 @@ Defined in: [packages/core/src/actions/sbt.ts:84](https://github.com/AAStarCommu
 
 > **setMinLockAmount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L75)
+Defined in: [packages/core/src/actions/sbt.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L75)
 
 #### Parameters
 
@@ -788,7 +788,7 @@ Defined in: [packages/core/src/actions/sbt.ts:75](https://github.com/AAStarCommu
 
 > **setMintFee**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L73)
+Defined in: [packages/core/src/actions/sbt.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L73)
 
 #### Parameters
 
@@ -812,7 +812,7 @@ Defined in: [packages/core/src/actions/sbt.ts:73](https://github.com/AAStarCommu
 
 > **setRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L85)
+Defined in: [packages/core/src/actions/sbt.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L85)
 
 #### Parameters
 
@@ -836,7 +836,7 @@ Defined in: [packages/core/src/actions/sbt.ts:85](https://github.com/AAStarCommu
 
 > **setReputationCalculator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L69)
+Defined in: [packages/core/src/actions/sbt.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L69)
 
 #### Parameters
 
@@ -860,7 +860,7 @@ Defined in: [packages/core/src/actions/sbt.ts:69](https://github.com/AAStarCommu
 
 > **supportsInterface**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L53)
+Defined in: [packages/core/src/actions/sbt.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L53)
 
 #### Parameters
 
@@ -880,7 +880,7 @@ Defined in: [packages/core/src/actions/sbt.ts:53](https://github.com/AAStarCommu
 
 > **symbol**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L48)
+Defined in: [packages/core/src/actions/sbt.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L48)
 
 #### Returns
 
@@ -892,7 +892,7 @@ Defined in: [packages/core/src/actions/sbt.ts:48](https://github.com/AAStarCommu
 
 > **tokenURI**: (`args`) => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L49)
+Defined in: [packages/core/src/actions/sbt.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L49)
 
 #### Parameters
 
@@ -912,7 +912,7 @@ Defined in: [packages/core/src/actions/sbt.ts:49](https://github.com/AAStarCommu
 
 > **transferFrom**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L40)
+Defined in: [packages/core/src/actions/sbt.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L40)
 
 #### Parameters
 
@@ -944,7 +944,7 @@ Defined in: [packages/core/src/actions/sbt.ts:40](https://github.com/AAStarCommu
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L97)
+Defined in: [packages/core/src/actions/sbt.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L97)
 
 #### Parameters
 
@@ -968,7 +968,7 @@ Defined in: [packages/core/src/actions/sbt.ts:97](https://github.com/AAStarCommu
 
 > **unpause**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/sbt.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L79)
+Defined in: [packages/core/src/actions/sbt.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L79)
 
 #### Parameters
 
@@ -988,7 +988,7 @@ Defined in: [packages/core/src/actions/sbt.ts:79](https://github.com/AAStarCommu
 
 > **userToSBT**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L32)
+Defined in: [packages/core/src/actions/sbt.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L32)
 
 #### Parameters
 
@@ -1008,7 +1008,7 @@ Defined in: [packages/core/src/actions/sbt.ts:32](https://github.com/AAStarCommu
 
 > **verifyCommunityMembership**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L31)
+Defined in: [packages/core/src/actions/sbt.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L31)
 
 #### Parameters
 
@@ -1032,7 +1032,7 @@ Defined in: [packages/core/src/actions/sbt.ts:31](https://github.com/AAStarCommu
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L88)
+Defined in: [packages/core/src/actions/sbt.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L88)
 
 #### Returns
 
@@ -1044,7 +1044,7 @@ Defined in: [packages/core/src/actions/sbt.ts:88](https://github.com/AAStarCommu
 
 > **weeklyActivity**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/sbt.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/sbt.ts#L67)
+Defined in: [packages/core/src/actions/sbt.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/sbt.ts#L67)
 
 #### Parameters
 

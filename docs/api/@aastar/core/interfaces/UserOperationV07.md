@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/BundlerClient.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L4)
+Defined in: [packages/core/src/clients/BundlerClient.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L4)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:4](https://github.com/AA
 
 > **accountGasLimits**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L9)
+Defined in: [packages/core/src/clients/BundlerClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L9)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:9](https://github.com/AA
 
 > **callData**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L8)
+Defined in: [packages/core/src/clients/BundlerClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L8)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:8](https://github.com/AA
 
 > **gasFees**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L11)
+Defined in: [packages/core/src/clients/BundlerClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L11)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:11](https://github.com/A
 
 > **initCode**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L7)
+Defined in: [packages/core/src/clients/BundlerClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L7)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:7](https://github.com/AA
 
 > **nonce**: `bigint`
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L6)
+Defined in: [packages/core/src/clients/BundlerClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L6)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:6](https://github.com/AA
 
 > **paymasterAndData**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L12)
+Defined in: [packages/core/src/clients/BundlerClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L12)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:12](https://github.com/A
 
 > **preVerificationGas**: `bigint`
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L10)
+Defined in: [packages/core/src/clients/BundlerClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L10)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:10](https://github.com/A
 
 > **sender**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L5)
+Defined in: [packages/core/src/clients/BundlerClient.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L5)
 
 ***
 
@@ -70,4 +70,4 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:5](https://github.com/AA
 
 > **signature**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/clients/BundlerClient.ts#L13)
+Defined in: [packages/core/src/clients/BundlerClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L13)

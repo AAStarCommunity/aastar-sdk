@@ -1,6 +1,6 @@
 > **xPNTsTokenActions**(`address?`): (`client`) => [`XPNTsTokenActions`](../type-aliases/XPNTsTokenActions.md)
 
-Defined in: [packages/core/src/actions/tokens.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/tokens.ts#L197)
+Defined in: [packages/core/src/actions/tokens.ts:194](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L194)
 
 ## Parameters
 

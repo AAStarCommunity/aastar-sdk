@@ -1,6 +1,6 @@
 > **XPNTsTokenActions** = [`ERC20Actions`](ERC20Actions.md) & `object`
 
-Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/aa02be8b7cbec344159ad823f08cb0202e9ec8b8/packages/core/src/actions/tokens.ts#L33)
+Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L33)
 
 ## Type Declaration
 
@@ -180,30 +180,6 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 `Promise`\<`Address`\>
 
-### cumulativeSpent()
-
-> **cumulativeSpent**: (`args`) => `Promise`\<`bigint`\>
-
-#### Parameters
-
-##### args
-
-###### owner
-
-`Address`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<`bigint`\>
-
 ### debts()
 
 > **debts**: (`args`) => `Promise`\<`bigint`\>
@@ -217,22 +193,6 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 `Address`
 
 ###### user
-
-`Address`
-
-#### Returns
-
-`Promise`\<`bigint`\>
-
-### DEFAULT\_SPENDING\_LIMIT\_APNTS()
-
-> **DEFAULT\_SPENDING\_LIMIT\_APNTS**: (`args`) => `Promise`\<`bigint`\>
-
-#### Parameters
-
-##### args
-
-###### token
 
 `Address`
 
@@ -271,6 +231,26 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 #### Returns
 
 `Promise`\<`any`\>
+
+### emergencyRevokePaymaster()
+
+> **emergencyRevokePaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
+
+#### Parameters
+
+##### args
+
+###### account?
+
+[`Account`](https://viem.sh/docs/index.html) \| `Address`
+
+###### token
+
+`Address`
+
+#### Returns
+
+`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
 ### exchangeRate()
 
@@ -324,22 +304,6 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 `Promise`\<`bigint`\>
 
-### getDefaultSpendingLimitXPNTs()
-
-> **getDefaultSpendingLimitXPNTs**: (`args`) => `Promise`\<`bigint`\>
-
-#### Parameters
-
-##### args
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<`bigint`\>
-
 ### getMetadata()
 
 > **getMetadata**: (`args`) => `Promise`\<\{ `communityENS`: `string`; `communityName`: `string`; `communityOwner`: `Address`; `name`: `string`; `symbol`: `string`; \}\>
@@ -355,6 +319,22 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 #### Returns
 
 `Promise`\<\{ `communityENS`: `string`; `communityName`: `string`; `communityOwner`: `Address`; `name`: `string`; `symbol`: `string`; \}\>
+
+### MAX\_SINGLE\_TX\_LIMIT()
+
+> **MAX\_SINGLE\_TX\_LIMIT**: (`args`) => `Promise`\<`bigint`\>
+
+#### Parameters
+
+##### args
+
+###### token
+
+`Address`
+
+#### Returns
+
+`Promise`\<`bigint`\>
 
 ### mint()
 
@@ -556,34 +536,6 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-### setPaymasterLimit()
-
-> **setPaymasterLimit**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-#### Parameters
-
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### limit
-
-`bigint`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
 ### setSuperPaymasterAddress()
 
 > **setSuperPaymasterAddress**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
@@ -607,30 +559,6 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 #### Returns
 
 `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
-
-### spendingLimits()
-
-> **spendingLimits**: (`args`) => `Promise`\<`bigint`\>
-
-#### Parameters
-
-##### args
-
-###### owner
-
-`Address`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
-
-#### Returns
-
-`Promise`\<`bigint`\>
 
 ### SUPERPAYMASTER\_ADDRESS()
 
