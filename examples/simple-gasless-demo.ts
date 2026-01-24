@@ -26,7 +26,7 @@ async function main() {
     }
 
     const APP_CONFIG = {
-        rpcUrl: process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key',
+        rpcUrl: process.env.RPC_URL || config.rpcUrl,
         bundlerUrl: config.bundlerUrl!,
         entryPoint: config.contracts.entryPoint, 
         paymaster: pmAddress, 

@@ -19,7 +19,7 @@ async function main() {
     
     // ANNI is the operator/owner
     const anniKey = process.env.PRIVATE_KEY_ANNI as Hex;
-    if (!anniKey) throw new Error('PRIVATE_KEY_ANNI missing in .env.sepolia');
+    if (!anniKey) throw new Error(`PRIVATE_KEY_ANNI missing in .env.${networkName}`);
     const anniAccount = privateKeyToAccount(anniKey);
     const anniWallet = createWalletClient({ 
         account: anniAccount, 
@@ -41,7 +41,7 @@ async function main() {
     const cPNTs = await xpntsFactory(publicClient).getTokenAddress({ community: anniAccount.address });
     
     if (!cPNTs || cPNTs === '0x0000000000000000000000000000000000000000') {
-        throw new Error(`❌ Anni has NO deployed token! Please run: NETWORK_NAME=sepolia npx tsx scripts/l4-setup.ts --network=sepolia`);
+        throw new Error(`❌ Anni has NO deployed token! Please run: NETWORK_NAME=${networkName} npx tsx scripts/l4-setup.ts --network=${networkName}`);
     }
     
     const anniPM = state.operators.anni?.superPaymaster || config.contracts.superPaymaster as Address;
@@ -239,7 +239,7 @@ async function main() {
             { name: 'answeredInRound', type: 'uint80' }
         ], stateMutability: 'view'
     }];
-    const feedAddr = "0x694AA1769357215DE4FAC081bf1f309aDC325306"; // Hardcoded from cast check
+    const feedAddr = config.contracts.priceFeed; // Use configured Price Feed
     try {
         const feedData = await publicClient.readContract({
             address: feedAddr, abi: feedAbi, functionName: 'latestRoundData'
@@ -362,7 +362,7 @@ async function main() {
             console.log('   ✅ Oracle Price Cache Updated.');
         } catch (e: any) {
             console.warn('   ⚠️ Oracle Update failed (Chainlink might be stale):', e.message);
-            console.log('   💡 TIP: Try running: npx tsx scripts/update-price-dvt.ts --network=sepolia');
+            console.log(`   💡 TIP: Try running: npx tsx scripts/update-price-dvt.ts --network=${networkName}`);
         }
     } else {
         console.log(`   ✅ Cache is fresh (Age: ${cacheAgeSeconds2}s). Skipping update.`);

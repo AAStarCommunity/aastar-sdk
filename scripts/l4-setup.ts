@@ -850,12 +850,20 @@ async function main() {
                 continue;
             }
 
-            // Verify again
-            const isMemberNow = await registry(publicClient).hasRole({ user: aa.address, roleId: ROLE_ENDUSER_ID });
+            // Verify again with retries (handle node latency)
+            let isMemberNow = false;
+            console.log(`      ⏳ Verifying registration (with 3 retries)...`);
+            for (let i = 0; i < 3; i++) {
+                isMemberNow = await registry(publicClient).hasRole({ user: aa.address, roleId: ROLE_ENDUSER_ID });
+                if (isMemberNow) break;
+                await new Promise(r => setTimeout(r, 2000));
+                process.stdout.write('.');
+            }
+
             if (isMemberNow) {
-                 console.log(`      ✅ Verification Passed: ${aa.label} is ENDUSER`);
+                 console.log(`\n      ✅ Verification Passed: ${aa.label} is ENDUSER`);
             } else {
-                 console.log(`      ❌ Verification Failed: Role not granted`);
+                 console.log(`\n      ❌ Verification Failed: Role not granted after 3 retries.`);
             }
         } else {
             // Check SBT balance anyway to ensure it's not missing despite having role
@@ -951,6 +959,18 @@ async function main() {
                 
                 const gTokenActions = tokenActions();
                 
+                // Ensure operator has GTokens
+                const ownerGTokenBal = await gTokenActions(publicClient).balanceOf({ token: gTokenAddr, account: ownerAcc.address });
+                if (ownerGTokenBal < parseEther('2000')) {
+                    console.log(`      🪙  Operator balance low. Minting GTokens...`);
+                    const supplier = privateKeyToAccount(config.supplierAccount!.privateKey);
+                    const stopH = await gTokenActions(createWalletClient({ account: supplier, chain: config.chain, transport: http(config.rpcUrl) })).mint({
+                        token: gTokenAddr, to: ownerAcc.address, amount: parseEther('5000'), account: supplier
+                    });
+                    await publicClient.waitForTransactionReceipt({ hash: stopH });
+                }
+
+                
                 const allowance = await gTokenActions(publicClient).allowance({ 
                     token: gTokenAddr, 
                     owner: ownerAcc.address, 
@@ -991,9 +1011,22 @@ async function main() {
                         const ownerClient = createWalletClient({ account: ownerAcc, chain: config.chain, transport: http(config.rpcUrl) });
                         
                         // Check owner's balance first
-                        const ownerBal = await tokenActions()(publicClient).balanceOf({ token: commToken, account: ownerAcc.address });
+                        let ownerBal = await tokenActions()(publicClient).balanceOf({ token: commToken, account: ownerAcc.address });
                         if (ownerBal < parseEther('2000')) {
-                            console.log(`      ⚠️  Owner balance low (${formatEther(ownerBal)}). Skipping community token topup.`);
+                            console.log(`      🎫  Operator community token balance low. Attempting to mint...`);
+                            try {
+                                const h_mint = await tokenActions()(ownerClient).mint({
+                                    token: commToken, to: ownerAcc.address, amount: parseEther('10000'), account: ownerAcc
+                                });
+                                await publicClient.waitForTransactionReceipt({ hash: h_mint });
+                                ownerBal = await tokenActions()(publicClient).balanceOf({ token: commToken, account: ownerAcc.address });
+                            } catch(e:any) {
+                                console.log(`      ⚠️  Mint failed: ${e.message}. Skipping community token topup.`);
+                            }
+                        }
+
+                        if (ownerBal < parseEther('2000')) {
+                            console.log(`      ⚠️  Owner balance still low (${formatEther(ownerBal)}). Skipping community token topup.`);
                         } else {
                             const allowance = await tokenActions()(publicClient).allowance({ token: commToken, owner: ownerAcc.address, spender: pmAddr });
                             if (allowance < parseEther('2000')) {

@@ -7,7 +7,7 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
-dotenv.config({ path: '.env.sepolia' });
+// Network environment handled by loadNetworkConfig
 
 async function main() {
     const args = process.argv.slice(2);
@@ -24,9 +24,9 @@ async function main() {
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
     const jasonAccount = privateKeyToAccount(process.env.PRIVATE_KEY_JASON as `0x${string}`);
     
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
-    const anniWallet = createWalletClient({ account: anniAccount, chain: sepolia, transport: http(rpcUrl) });
-    const jasonWallet = createWalletClient({ account: jasonAccount, chain: sepolia, transport: http(rpcUrl) });
+    const publicClient = createPublicClient({ chain: config.chain, transport: http(rpcUrl) });
+    const anniWallet = createWalletClient({ account: anniAccount, chain: config.chain, transport: http(rpcUrl) });
+    const jasonWallet = createWalletClient({ account: jasonAccount, chain: config.chain, transport: http(rpcUrl) });
 
     // Load AA addresses from l4-state.json
     const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
@@ -149,7 +149,7 @@ async function main() {
 
         let receipt = null;
         for (let i = 0; i < 20; i++) {
-            const res = await fetch(process.env.BUNDLER_URL!, {
+            const res = await fetch(config.bundlerUrl!, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -168,9 +168,11 @@ async function main() {
         }
 
         if (receipt) {
+            const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';
             console.log(`   🎉 UserOp Executed! Transaction: ${receipt.receipt.transactionHash}`);
             console.log(`   ⛽ Gas Used: ${BigInt(receipt.actualGasUsed).toString()}`);
             console.log(`   💸 Fee Paid: ${formatEther(BigInt(receipt.actualGasCost))} ETH (sponsored by jasonToken)`);
+            console.log(`   🔗 Explorer: ${explorerUrl}/tx/${receipt.receipt.transactionHash}`);
         } else {
             console.log('   ❌ Polling timeout. Check Etherscan for status.');
         }

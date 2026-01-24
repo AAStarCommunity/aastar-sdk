@@ -41,7 +41,7 @@ async function runReputationTierTest() {
     const adminClient = createAdminClient({ chain: config.chain, transport: http(config.rpcUrl), account: supplierAcc });
 
     const anniAddr = anniAcc.address;
-    const targetAA = state.aaAccounts.find((a: any) => a.opName === 'Anni (Demo)');
+    const targetAA = state.aaAccounts.find((a: any) => a.opName === 'Anni (Mycelium)');
     
     if (!targetAA) throw new Error('Target AA not found');
 

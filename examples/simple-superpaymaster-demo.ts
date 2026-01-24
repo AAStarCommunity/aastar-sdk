@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { loadNetworkConfig } from '../tests/regression/config.js';
 
-dotenv.config({ path: '.env.sepolia' });
+// Environment loading handled by loadNetworkConfig
 
 /**
  * 🚀 Simple SuperPaymaster Demo
@@ -59,8 +59,8 @@ async function main() {
     // 2. Setup Clients
     // NOTE: If using KMS, replace 'privateKeyToAccount' with your custom KMS signer
     const account = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`); 
-    const wallet = createWalletClient({ account, chain: sepolia, transport: http(APP_CONFIG.rpcUrl) });
-    const client = createPublicClient({ chain: sepolia, transport: http(APP_CONFIG.rpcUrl) });
+    const wallet = createWalletClient({ account, chain: config.chain, transport: http(APP_CONFIG.rpcUrl) });
+    const client = createPublicClient({ chain: config.chain, transport: http(APP_CONFIG.rpcUrl) });
 
     console.log(`👤 User: ${account.address}`);
     console.log(`🏦 Paymaster: ${APP_CONFIG.superPaymaster}`);
@@ -94,7 +94,7 @@ async function main() {
     // 4. Wait for Execution
     console.log(`⏳ Waiting for execution...`);
     const bundlerClient = createClient({
-        chain: sepolia,
+        chain: config.chain,
         transport: http(APP_CONFIG.bundlerUrl)
     }).extend(bundlerActions);
 
@@ -103,7 +103,8 @@ async function main() {
     });
 
     console.log(`\n🎉 Transaction Mined!`);
-    console.log(`🔗 https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
+    const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';
+    console.log(`🔗 ${explorerUrl}/tx/${receipt.receipt.transactionHash}`);
 
     // 5. Check Cost (Optional)
     const feeInfo = PaymasterClient.getFeeFromReceipt(receipt.receipt, APP_CONFIG.superPaymaster as `0x${string}`);

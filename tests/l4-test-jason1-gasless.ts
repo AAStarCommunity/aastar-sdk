@@ -15,7 +15,7 @@ async function main() {
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
     const config = await loadNetworkConfig(networkName);
-    const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
+    const rpcUrl = process.env.RPC_URL || config.rpcUrl;
     
     // 1. Roles & Accounts
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
@@ -144,8 +144,9 @@ async function main() {
             timeout: 120000 // 2 minutes timeout
         });
         
+        const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';
         console.log(`\n🎉 SUCCESS! Transaction confirmed: ${receipt.receipt.transactionHash}`);
-        console.log(`🔗 Etherscan: https://sepolia.etherscan.io/tx/${receipt.receipt.transactionHash}`);
+        console.log(`🔗 Explorer: ${explorerUrl}/tx/${receipt.receipt.transactionHash}`);
     } catch (e) {
         console.log('\n⌛ Still pending or timed out... check on jiffyscan later.');
         console.error(e);
