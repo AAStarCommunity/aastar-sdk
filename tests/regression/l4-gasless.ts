@@ -1,5 +1,4 @@
-import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env.sepolia' });
+// Environment loading handled by loadNetworkConfig
 import * as fs from 'fs';
 import * as path from 'path';
 import { type Address, type Hash, type Hex, parseEther, formatEther, createWalletClient, http, createPublicClient, encodeFunctionData, keccak256, encodeAbiParameters, toHex, stringToBytes, parseAbi } from 'viem';
@@ -14,14 +13,10 @@ import {
 import { tokenActions, entryPointActions, EntryPointVersion } from '../../packages/core/src/index.js';
 import { fileURLToPath } from 'url';
 
-// Load L4 State
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const STATE_FILE = path.resolve(__dirname, '../../scripts/l4-state.json');
-
-function loadState(): any {
+function loadState(networkName: string): any {
+    const STATE_FILE = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     if (!fs.existsSync(STATE_FILE)) {
-        throw new Error(`L4 State file not found at ${STATE_FILE}. Please run 'pnpm tsx scripts/l4-setup.ts' first.`);
+        throw new Error(`L4 State file not found at ${STATE_FILE}. Please run 'pnpm tsx scripts/l4-setup.ts --network=${networkName}' first.`);
     }
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
 }
@@ -197,12 +192,12 @@ const PAYMASTER_V4_DEPOSIT_ABI = [
   }
 ] as const;
 
-export async function runGaslessTests(config: NetworkConfig) {
+export async function runGaslessTests(config: NetworkConfig, networkName: string = 'sepolia') {
     console.log('\n═══════════════════════════════════════════════');
-    console.log('⛽ Running L4 Gasless Verification Tests (Stage 3)');
+    console.log(`⛽ Running L4 Gasless Verification Tests (${networkName})`);
     console.log('═══════════════════════════════════════════════\n');
 
-    const state = loadState();
+    const state = loadState(networkName);
     const publicClient = createPublicClient({
         chain: config.chain,
         transport: http(config.rpcUrl)
@@ -311,9 +306,9 @@ export async function runGaslessTests(config: NetworkConfig) {
             }) as bigint;
             console.log(`   🔍 Member SBT Balance: ${sbtBal.toString()}`);
             if (sbtBal === 0n) {
-                console.error('   ❌ Error: sender missing required SBT membership for gasless tests.');
-                console.log('      Please run: pnpm tsx scripts/l4-setup.ts --network=sepolia first.');
-                process.exit(1);
+                console.error(`   ❌ Error: sender missing required SBT membership for gasless tests on ${networkName}.`);
+                console.log(`      Please run: pnpm tsx scripts/l4-setup.ts --network=${networkName} first.`);
+                throw new Error('Missing SBT');
             }
         }
         

@@ -5,24 +5,36 @@ import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4
 import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.sepolia' });
+// Environment and network config handled by loadNetworkConfig
 
 async function main() {
     console.log('🛠️  Preparing Gasless Environment...');
     
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    
     // 0. Load Config & Operator Account (Anni)
-    const config = await loadNetworkConfig('sepolia');
-    const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
+    const config = await loadNetworkConfig(networkName);
+    const rpcUrl = config.rpcUrl;
     const anniAccount = privateKeyToAccount(process.env.PRIVATE_KEY_ANNI as `0x${string}`);
-    const client = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
-    const operatorWallet = createWalletClient({ account: anniAccount, chain: sepolia, transport: http(rpcUrl) });
+    const client = createPublicClient({ chain: config.chain, transport: http(rpcUrl) });
+    const operatorWallet = createWalletClient({ account: anniAccount, chain: config.chain, transport: http(rpcUrl) });
+
+    // Load state
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
+    if (!fs.existsSync(statePath)) throw new Error(`State file not found: ${statePath}. Please run l4-setup first.`);
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 
     const APP_CONFIG = {
-        paymaster: '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82' as Address, // Anni PM
-        gasToken: '0x424DA26B172994f98D761a999fa2FD744CaF812b' as Address,   // dPNTs
-        aaAccount: '0xECD9C07f648B09CFb78906302822Ec52Ab87dd70' as Address,  // Jason AA1
+        paymaster: state.operators?.anni?.paymasterV4 || state.operators?.anni?.superPaymaster as Address,
+        gasToken: config.contracts.aPNTs as Address,
+        aaAccount: state.aaAccounts.find((a: any) => a.label.includes('Anni'))?.address as Address,
         entryPoint: config.contracts.entryPoint as Address
     };
+    
+    if (!APP_CONFIG.paymaster) throw new Error("Anni Paymaster not found in state.");
+    if (!APP_CONFIG.aaAccount) throw new Error("Anni AA account not found in state.");
 
     console.log(`Operator: ${anniAccount.address}`);
     console.log(`Paymaster: ${APP_CONFIG.paymaster}`);

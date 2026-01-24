@@ -16,14 +16,14 @@ async function main() {
     const config = await loadNetworkConfig(networkName);
 
     const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
-    let aaAddress = '0xECD9C07f648B09CFb78906302822Ec52Ab87dd70';
-    let pmAddress = '0x82862b7c3586372DF1c80Ac60adA57e530b0eB82';
+    if (!fs.existsSync(statePath)) throw new Error(`State file not found: ${statePath}. Please run l4-setup first.`);
     
-    if (fs.existsSync(statePath)) {
-        const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-        aaAddress = state.aaAccounts?.[0]?.address || aaAddress;
-        pmAddress = state.operators?.jason?.paymasterV4 || pmAddress;
-    }
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const aaAddress = state.aaAccounts?.[0]?.address;
+    const pmAddress = state.operators?.jason?.paymasterV4;
+
+    if (!aaAddress) throw new Error("No AA account found in state.");
+    if (!pmAddress) throw new Error("Jason Paymaster V4 not found in state.");
 
     const APP_CONFIG = {
         rpcUrl: process.env.RPC_URL || config.rpcUrl,

@@ -156,7 +156,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
     // Load contract addresses from SuperPaymaster deployments (with .env fallback)
     const deployments = loadDeployments(network);
     
-    // Third-party addresses that should be read from ENV first (not overwritten by sync)
+    // Third-party addresses that should be read from ENV first (infrastructure)
     const THIRD_PARTY_KEYS = ['entryPoint', 'simpleAccountFactory', 'priceFeed'];
     
     const getContractAddress = (deploymentKey: string, envKey: string, envFallback?: string): Address => {
@@ -164,26 +164,24 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         // EXCEPT on anvil where everything is deployed locally and config.json is the source of truth
         if (network !== 'anvil' && THIRD_PARTY_KEYS.includes(deploymentKey)) {
             const envAddr = process.env[envKey] || (envFallback && process.env[envFallback]);
-            if (!envAddr) {
-                throw new Error(`STRICT MODE: Missing required Third-Party Contract Address in ENV: ${deploymentKey} (checked ${envKey}${envFallback ? ` / ${envFallback}` : ''})`);
+            if (envAddr) {
+                console.log(`    ✅ Found Third-Party in ENV: ${deploymentKey} -> ${envAddr}`);
+                return envAddr as Address;
             }
-            return envAddr as Address;
+            // If missing in ENV, fallback to deployments (some networks might have them synced)
         }
         
-        // 1. Try deployments first (for our own deployed contracts, and for ALL contracts on anvil)
+        // 1. Try deployments first (for internal protocol contracts)
         if (deployments[deploymentKey]) {
-            // console.log(`    Address found in deployments: ${deploymentKey} -> ${deployments[deploymentKey]}`);
             return deployments[deploymentKey];
-        } else {
-            console.warn(`    ⚠️  Missing in deployments: ${deploymentKey}`);
         }
-        // 2. Fallback to .env
+        
+        // 2. Fallback to .env (for external deps or if sync hasn't run)
         const addr = process.env[envKey] || (envFallback && process.env[envFallback]);
         if (!addr) {
-            console.error(`    ❌ Missing contract address: ${deploymentKey} (env: ${envKey} or ${envFallback})`);
-            throw new Error(`Missing contract address: ${deploymentKey} (env: ${envKey}${envFallback ? ` or ${envFallback}` : ''}) in ${envFile}`);
+            throw new Error(`CRITICAL: Missing contract address for ${deploymentKey}. Checked: config.${network}.json and ENV (vars: ${envKey}, ${envFallback})`);
         }
-        console.log(`    ✅ Found in ENV: ${deploymentKey} -> ${addr}`);
+        console.log(`    ⚠️  Using ENV fallback for internal contract: ${deploymentKey} -> ${addr}`);
         return addr as Address;
     };
 
@@ -197,7 +195,7 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
         name: network,
         chain,
         rpcUrl: process.env.RPC_URL!,
-        bundlerUrl: process.env.BUNDLER_URL || process.env.RPC_URL!,
+        bundlerUrl: process.env.BUNDLER_URL || process.env.RPC_URL!, // Sourced from ENV
         contracts: {
             registry: getContractAddress('registry', 'REGISTRY_ADDRESS'),
             gToken: getContractAddress('gToken', 'GTOKEN_ADDRESS'),

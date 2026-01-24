@@ -26,21 +26,26 @@ async function main() {
 
     const config = await loadNetworkConfig(networkName);
     
-    // Default Addresses (Fallback)
-    let tokenAddress = '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9';
-    let operatorAddress = '0xEcAACb915f7D92e9916f449F7ad42BD0408733c9'; 
-    let aaAccountAddress = '0xBC7626E94a215F6614d1B6aFA740787A2E50aaA4';
+    // Addresses loaded dynamically from state
+    let tokenAddress: Address;
+    let operatorAddress: Address;
+    let aaAccountAddress: Address;
     
-    // Load from State File if available
+    // Load from State File
     const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
-    if (fs.existsSync(statePath)) {
-        try {
-            const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-            if (state.operators?.anni?.address) operatorAddress = state.operators.anni.address;
-            if (state.aaAccounts?.[2]?.address) aaAccountAddress = state.aaAccounts[2].address; // Anni is usually 3rd
-            // cPNTs logic might be missing, defaulting to config.contracts.aPNTs if safer
-             if (config.contracts.aPNTs) tokenAddress = config.contracts.aPNTs;
-        } catch (e) { console.warn("State load failed", e); }
+    if (!fs.existsSync(statePath)) throw new Error(`State file not found: ${statePath}. Run l4-setup first.`);
+    
+    try {
+        const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+        operatorAddress = state.operators?.anni?.address as Address;
+        aaAccountAddress = state.aaAccounts.find((a: any) => a.label.includes('Anni'))?.address as Address;
+        tokenAddress = config.contracts.aPNTs as Address;
+        
+        if (!operatorAddress || !aaAccountAddress) {
+            throw new Error("Could not find Anni operator or AA in state file.");
+        }
+    } catch (e: any) { 
+        throw new Error(`Failed to load state: ${e.message}`);
     }
 
     const APP_CONFIG = {

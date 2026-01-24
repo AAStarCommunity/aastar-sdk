@@ -6,9 +6,9 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env.sepolia') });
+import { loadNetworkConfig } from './regression/config.js';
+
+// Environment and network config handled by loadNetworkConfig
 
 // Simple UserOp hash function for v0.7
 function getUserOpHash(userOp: any, entryPoint: Address, chainId: bigint): Hex {
@@ -45,29 +45,35 @@ async function main() {
     console.log('🚀 Testing Candide Bundler with SimpleAccount (No Paymaster)\n');
     console.log('='.repeat(70));
     
-    const bundlerUrl = process.env.CANDIDE_BUNDLER_URL!;
-    const rpcUrl = process.env.RPC_URL!;
-    const entryPoint = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
+    const args = process.argv.slice(2);
+    const networkArgIndex = args.indexOf('--network');
+    const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
+    const config = await loadNetworkConfig(networkName);
+    
+    const bundlerUrl = config.bundlerUrl;
+    const rpcUrl = config.rpcUrl;
+    const entryPoint = config.contracts.entryPoint;
     
     const publicClient = createPublicClient({
-        chain: sepolia,
+        chain: config.chain,
         transport: http(rpcUrl)
     });
     
     const account = privateKeyToAccount(process.env.PRIVATE_KEY_JASON as Hex);
     const wallet = createWalletClient({
         account,
-        chain: sepolia,
+        chain: config.chain,
         transport: http(rpcUrl)
     });
     
     // Load state
-    const statePath = path.resolve(__dirname, '../scripts/l4-state.json');
+    const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
+    if (!fs.existsSync(statePath)) throw new Error(`State file not found: ${statePath}`);
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     
     const aaAddress = state.aaAccounts.find((a: any) => a.label === 'Jason (AAStar)_AA1')?.address as Address;
     const tokenAddress = state.operators.jason.tokenAddress as Address;
-    const recipient = state.operators.bob.address as Address;
+    const recipient = state.operators?.bob?.address || state.operators?.anni?.address as Address;
     
     console.log('\n📋 Configuration:');
     console.log('   AA Address:', aaAddress);
@@ -128,7 +134,7 @@ async function main() {
     console.log(JSON.stringify(userOp, null, 2));
     
     // Sign UserOperation
-    const userOpHash = getUserOpHash(userOp, entryPoint, BigInt(sepolia.id));
+    const userOpHash = getUserOpHash(userOp, entryPoint, BigInt(config.chain.id));
     const signature = await wallet.signMessage({ message: { raw: userOpHash } });
     userOp.signature = signature;
     
