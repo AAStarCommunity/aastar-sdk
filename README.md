@@ -16,7 +16,8 @@
   - [📚 Contents](#-contents)
   - [Introduction](#introduction)
     - [Core Features](#core-features)
-  - [SDK v2 Architecture](#sdk-v2-architecture)
+  - [Verified Contracts (Current Deployment)](#verified-contracts-current-deployment)
+- [SDK v2 Architecture](#sdk-v2-architecture)
   - [Installation](#installation)
   - [Quick Start](#quick-start)
     - [End User Gasless Transaction](#end-user-gasless-transaction)
@@ -216,3 +217,10 @@ The SDK supports doctoral data collection for the SuperPaymaster paper. Official
 - **GitHub**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)
 
 MIT © AAStar Community
+
+## Verified Contracts (Current Deployment)
+
+The following contract addresses have been successfully verified on their respective testnets as of January 24, 2026.
+
+- [Sepolia Verified Contracts](./docs/verify.sepolia.contracts.md)
+- [Optimism Sepolia Verified Contracts](./docs/verify.op-sepolia.contracts.md)
