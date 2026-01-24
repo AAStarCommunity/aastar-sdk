@@ -1,6 +1,6 @@
 > **RegistryActions** = `object`
 
-Defined in: [packages/core/src/actions/registry.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L21)
+Defined in: [packages/core/src/actions/registry.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L21)
 
 ## Properties
 
@@ -8,15 +8,14 @@ Defined in: [packages/core/src/actions/registry.ts:21](https://github.com/AAStar
 
 > **accountToUser**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L74)
+Defined in: [packages/core/src/actions/registry.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L74)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; \} |
+| `args.account` | `Address` |
 
 #### Returns
 
@@ -28,19 +27,15 @@ Defined in: [packages/core/src/actions/registry.ts:74](https://github.com/AAStar
 
 > **addLevelThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L43)
+Defined in: [packages/core/src/actions/registry.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L43)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### threshold
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `threshold`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.threshold` | `bigint` |
 
 #### Returns
 
@@ -52,35 +47,19 @@ Defined in: [packages/core/src/actions/registry.ts:43](https://github.com/AAStar
 
 > **adminConfigureRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L24)
+Defined in: [packages/core/src/actions/registry.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L24)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### entryBurn
-
-`bigint`
-
-###### exitFeePercent
-
-`bigint`
-
-###### minExitFee
-
-`bigint`
-
-###### minStake
-
-`bigint`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `entryBurn`: `bigint`; `exitFeePercent`: `bigint`; `minExitFee`: `bigint`; `minStake`: `bigint`; `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.entryBurn` | `bigint` |
+| `args.exitFeePercent` | `bigint` |
+| `args.minExitFee` | `bigint` |
+| `args.minStake` | `bigint` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -92,35 +71,19 @@ Defined in: [packages/core/src/actions/registry.ts:24](https://github.com/AAStar
 
 > **batchUpdateGlobalReputation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L44)
+Defined in: [packages/core/src/actions/registry.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L44)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### epoch
-
-`bigint`
-
-###### newScores
-
-`bigint`[]
-
-###### proof
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### proposalId
-
-`bigint`
-
-###### users
-
-`Address`[]
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `epoch`: `bigint`; `newScores`: `bigint`[]; `proof`: [`Hex`](https://viem.sh/docs/index.html); `proposalId`: `bigint`; `users`: `Address`[]; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.epoch` | `bigint` |
+| `args.newScores` | `bigint`[] |
+| `args.proof` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.proposalId` | `bigint` |
+| `args.users` | `Address`[] |
 
 #### Returns
 
@@ -132,7 +95,7 @@ Defined in: [packages/core/src/actions/registry.ts:44](https://github.com/AAStar
 
 > **blsAggregator**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L55)
+Defined in: [packages/core/src/actions/registry.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L55)
 
 #### Returns
 
@@ -144,7 +107,7 @@ Defined in: [packages/core/src/actions/registry.ts:55](https://github.com/AAStar
 
 > **blsValidator**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L54)
+Defined in: [packages/core/src/actions/registry.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L54)
 
 #### Returns
 
@@ -156,19 +119,15 @@ Defined in: [packages/core/src/actions/registry.ts:54](https://github.com/AAStar
 
 > **calculateExitFee**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L73)
+Defined in: [packages/core/src/actions/registry.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L73)
 
 #### Parameters
 
-##### args
-
-###### amount
-
-`bigint`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `amount`: `bigint`; `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.amount` | `bigint` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -180,15 +139,14 @@ Defined in: [packages/core/src/actions/registry.ts:73](https://github.com/AAStar
 
 > **communityByENS**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L38)
+Defined in: [packages/core/src/actions/registry.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L38)
 
 #### Parameters
 
-##### args
-
-###### ensName
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `ensName`: `string`; \} |
+| `args.ensName` | `string` |
 
 #### Returns
 
@@ -200,15 +158,14 @@ Defined in: [packages/core/src/actions/registry.ts:38](https://github.com/AAStar
 
 > **communityByName**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L37)
+Defined in: [packages/core/src/actions/registry.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L37)
 
 #### Parameters
 
-##### args
-
-###### name
-
-`string`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `name`: `string`; \} |
+| `args.name` | `string` |
 
 #### Returns
 
@@ -220,23 +177,16 @@ Defined in: [packages/core/src/actions/registry.ts:37](https://github.com/AAStar
 
 > **configureRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L23)
+Defined in: [packages/core/src/actions/registry.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L23)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### config
-
-[`RoleConfigDetailed`](RoleConfigDetailed.md)
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `config`: [`RoleConfigDetailed`](RoleConfigDetailed.md); `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.config` | [`RoleConfigDetailed`](RoleConfigDetailed.md) |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -248,27 +198,17 @@ Defined in: [packages/core/src/actions/registry.ts:23](https://github.com/AAStar
 
 > **createNewRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L25)
+Defined in: [packages/core/src/actions/registry.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L25)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### config
-
-[`RoleConfigDetailed`](RoleConfigDetailed.md)
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### roleOwner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `config`: [`RoleConfigDetailed`](RoleConfigDetailed.md); `roleId`: [`Hex`](https://viem.sh/docs/index.html); `roleOwner`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.config` | [`RoleConfigDetailed`](RoleConfigDetailed.md) |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.roleOwner` | `Address` |
 
 #### Returns
 
@@ -280,15 +220,14 @@ Defined in: [packages/core/src/actions/registry.ts:25](https://github.com/AAStar
 
 > **creditTierConfig**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L71)
+Defined in: [packages/core/src/actions/registry.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L71)
 
 #### Parameters
 
-##### args
-
-###### tierIndex
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `tierIndex`: `bigint`; \} |
+| `args.tierIndex` | `bigint` |
 
 #### Returns
 
@@ -300,19 +239,15 @@ Defined in: [packages/core/src/actions/registry.ts:71](https://github.com/AAStar
 
 > **exitRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L33)
+Defined in: [packages/core/src/actions/registry.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L33)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -324,15 +259,14 @@ Defined in: [packages/core/src/actions/registry.ts:33](https://github.com/AAStar
 
 > **getCreditLimit**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L41)
+Defined in: [packages/core/src/actions/registry.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L41)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -344,15 +278,14 @@ Defined in: [packages/core/src/actions/registry.ts:41](https://github.com/AAStar
 
 > **getRoleConfig**: (`args`) => `Promise`\<[`RoleConfigDetailed`](RoleConfigDetailed.md)\>
 
-Defined in: [packages/core/src/actions/registry.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L30)
+Defined in: [packages/core/src/actions/registry.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L30)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -364,15 +297,14 @@ Defined in: [packages/core/src/actions/registry.ts:30](https://github.com/AAStar
 
 > **getRoleMembers**: (`args`) => `Promise`\<`Address`[]\>
 
-Defined in: [packages/core/src/actions/registry.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L66)
+Defined in: [packages/core/src/actions/registry.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L66)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -384,15 +316,14 @@ Defined in: [packages/core/src/actions/registry.ts:66](https://github.com/AAStar
 
 > **getRoleUserCount**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L65)
+Defined in: [packages/core/src/actions/registry.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L65)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -404,15 +335,14 @@ Defined in: [packages/core/src/actions/registry.ts:65](https://github.com/AAStar
 
 > **getUserRoles**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)[]\>
 
-Defined in: [packages/core/src/actions/registry.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L67)
+Defined in: [packages/core/src/actions/registry.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L67)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -424,15 +354,14 @@ Defined in: [packages/core/src/actions/registry.ts:67](https://github.com/AAStar
 
 > **globalReputation**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L42)
+Defined in: [packages/core/src/actions/registry.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L42)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -444,7 +373,7 @@ Defined in: [packages/core/src/actions/registry.ts:42](https://github.com/AAStar
 
 > **GTOKEN\_STAKING**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L58)
+Defined in: [packages/core/src/actions/registry.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L58)
 
 #### Returns
 
@@ -456,19 +385,15 @@ Defined in: [packages/core/src/actions/registry.ts:58](https://github.com/AAStar
 
 > **hasRole**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/registry.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L29)
+Defined in: [packages/core/src/actions/registry.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L29)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); `user`: `Address`; \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -480,15 +405,14 @@ Defined in: [packages/core/src/actions/registry.ts:29](https://github.com/AAStar
 
 > **isReputationSource**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/registry.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L60)
+Defined in: [packages/core/src/actions/registry.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L60)
 
 #### Parameters
 
-##### args
-
-###### source
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `source`: `Address`; \} |
+| `args.source` | `Address` |
 
 #### Returns
 
@@ -500,15 +424,14 @@ Defined in: [packages/core/src/actions/registry.ts:60](https://github.com/AAStar
 
 > **lastReputationEpoch**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L61)
+Defined in: [packages/core/src/actions/registry.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L61)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -520,15 +443,14 @@ Defined in: [packages/core/src/actions/registry.ts:61](https://github.com/AAStar
 
 > **levelThresholds**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L72)
+Defined in: [packages/core/src/actions/registry.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L72)
 
 #### Parameters
 
-##### args
-
-###### levelIndex
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `levelIndex`: `bigint`; \} |
+| `args.levelIndex` | `bigint` |
 
 #### Returns
 
@@ -540,7 +462,7 @@ Defined in: [packages/core/src/actions/registry.ts:72](https://github.com/AAStar
 
 > **MYSBT**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L56)
+Defined in: [packages/core/src/actions/registry.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L56)
 
 #### Returns
 
@@ -552,7 +474,7 @@ Defined in: [packages/core/src/actions/registry.ts:56](https://github.com/AAStar
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L89)
+Defined in: [packages/core/src/actions/registry.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L89)
 
 #### Returns
 
@@ -564,27 +486,17 @@ Defined in: [packages/core/src/actions/registry.ts:89](https://github.com/AAStar
 
 > **registerRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L26)
+Defined in: [packages/core/src/actions/registry.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L26)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### data
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `data`: [`Hex`](https://viem.sh/docs/index.html); `roleId`: [`Hex`](https://viem.sh/docs/index.html); `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.data` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -596,23 +508,16 @@ Defined in: [packages/core/src/actions/registry.ts:26](https://github.com/AAStar
 
 > **registerRoleSelf**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L27)
+Defined in: [packages/core/src/actions/registry.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L27)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### data
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `data`: [`Hex`](https://viem.sh/docs/index.html); `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.data` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -624,15 +529,14 @@ Defined in: [packages/core/src/actions/registry.ts:27](https://github.com/AAStar
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L91)
+Defined in: [packages/core/src/actions/registry.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L91)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
 
 #### Returns
 
@@ -644,7 +548,7 @@ Defined in: [packages/core/src/actions/registry.ts:91](https://github.com/AAStar
 
 > **reputationSource**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L59)
+Defined in: [packages/core/src/actions/registry.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L59)
 
 #### Returns
 
@@ -656,7 +560,7 @@ Defined in: [packages/core/src/actions/registry.ts:59](https://github.com/AAStar
 
 > **ROLE\_ANODE**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L86)
+Defined in: [packages/core/src/actions/registry.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L86)
 
 #### Returns
 
@@ -668,7 +572,7 @@ Defined in: [packages/core/src/actions/registry.ts:86](https://github.com/AAStar
 
 > **ROLE\_COMMUNITY**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L80)
+Defined in: [packages/core/src/actions/registry.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L80)
 
 #### Returns
 
@@ -680,7 +584,7 @@ Defined in: [packages/core/src/actions/registry.ts:80](https://github.com/AAStar
 
 > **ROLE\_DVT**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L84)
+Defined in: [packages/core/src/actions/registry.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L84)
 
 #### Returns
 
@@ -692,7 +596,7 @@ Defined in: [packages/core/src/actions/registry.ts:84](https://github.com/AAStar
 
 > **ROLE\_ENDUSER**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L81)
+Defined in: [packages/core/src/actions/registry.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L81)
 
 #### Returns
 
@@ -704,7 +608,7 @@ Defined in: [packages/core/src/actions/registry.ts:81](https://github.com/AAStar
 
 > **ROLE\_KMS**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L85)
+Defined in: [packages/core/src/actions/registry.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L85)
 
 #### Returns
 
@@ -716,7 +620,7 @@ Defined in: [packages/core/src/actions/registry.ts:85](https://github.com/AAStar
 
 > **ROLE\_PAYMASTER\_AOA**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L83)
+Defined in: [packages/core/src/actions/registry.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L83)
 
 #### Returns
 
@@ -728,7 +632,7 @@ Defined in: [packages/core/src/actions/registry.ts:83](https://github.com/AAStar
 
 > **ROLE\_PAYMASTER\_SUPER**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L82)
+Defined in: [packages/core/src/actions/registry.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L82)
 
 #### Returns
 
@@ -740,15 +644,14 @@ Defined in: [packages/core/src/actions/registry.ts:82](https://github.com/AAStar
 
 > **roleConfigs**: (`args`) => `Promise`\<[`RoleConfigDetailed`](RoleConfigDetailed.md)\>
 
-Defined in: [packages/core/src/actions/registry.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L64)
+Defined in: [packages/core/src/actions/registry.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L64)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -760,15 +663,14 @@ Defined in: [packages/core/src/actions/registry.ts:64](https://github.com/AAStar
 
 > **roleLockDurations**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L77)
+Defined in: [packages/core/src/actions/registry.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L77)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -780,19 +682,15 @@ Defined in: [packages/core/src/actions/registry.ts:77](https://github.com/AAStar
 
 > **roleMembers**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L68)
+Defined in: [packages/core/src/actions/registry.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L68)
 
 #### Parameters
 
-##### args
-
-###### index
-
-`bigint`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `index`: `bigint`; `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.index` | `bigint` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -804,19 +702,15 @@ Defined in: [packages/core/src/actions/registry.ts:68](https://github.com/AAStar
 
 > **roleMetadata**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L34)
+Defined in: [packages/core/src/actions/registry.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L34)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); `user`: `Address`; \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -828,15 +722,14 @@ Defined in: [packages/core/src/actions/registry.ts:34](https://github.com/AAStar
 
 > **roleOwners**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L75)
+Defined in: [packages/core/src/actions/registry.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L75)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -848,19 +741,15 @@ Defined in: [packages/core/src/actions/registry.ts:75](https://github.com/AAStar
 
 > **roleStakes**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L76)
+Defined in: [packages/core/src/actions/registry.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L76)
 
 #### Parameters
 
-##### args
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `roleId`: [`Hex`](https://viem.sh/docs/index.html); `user`: `Address`; \} |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -872,27 +761,17 @@ Defined in: [packages/core/src/actions/registry.ts:76](https://github.com/AAStar
 
 > **safeMintForRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L28)
+Defined in: [packages/core/src/actions/registry.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L28)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### data
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `data`: [`Hex`](https://viem.sh/docs/index.html); `roleId`: [`Hex`](https://viem.sh/docs/index.html); `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.data` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -904,19 +783,15 @@ Defined in: [packages/core/src/actions/registry.ts:28](https://github.com/AAStar
 
 > **setBLSAggregator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L48)
+Defined in: [packages/core/src/actions/registry.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L48)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### aggregator
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `aggregator`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.aggregator` | `Address` |
 
 #### Returns
 
@@ -928,19 +803,15 @@ Defined in: [packages/core/src/actions/registry.ts:48](https://github.com/AAStar
 
 > **setBLSValidator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L47)
+Defined in: [packages/core/src/actions/registry.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L47)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### validator
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `validator`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.validator` | `Address` |
 
 #### Returns
 
@@ -952,19 +823,15 @@ Defined in: [packages/core/src/actions/registry.ts:47](https://github.com/AAStar
 
 > **setMySBT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L49)
+Defined in: [packages/core/src/actions/registry.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L49)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### sbt
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `sbt`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.sbt` | `Address` |
 
 #### Returns
 
@@ -976,19 +843,15 @@ Defined in: [packages/core/src/actions/registry.ts:49](https://github.com/AAStar
 
 > **setReputationSource**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L52)
+Defined in: [packages/core/src/actions/registry.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L52)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### source
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `source`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.source` | `Address` |
 
 #### Returns
 
@@ -1000,23 +863,16 @@ Defined in: [packages/core/src/actions/registry.ts:52](https://github.com/AAStar
 
 > **setRoleLockDuration**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L31)
+Defined in: [packages/core/src/actions/registry.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L31)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### duration
-
-`bigint`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `duration`: `bigint`; `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.duration` | `bigint` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -1028,23 +884,16 @@ Defined in: [packages/core/src/actions/registry.ts:31](https://github.com/AAStar
 
 > **setRoleOwner**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L32)
+Defined in: [packages/core/src/actions/registry.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L32)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newOwner
-
-`Address`
-
-###### roleId
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `newOwner`: `Address`; `roleId`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.newOwner` | `Address` |
+| `args.roleId` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -1056,19 +905,15 @@ Defined in: [packages/core/src/actions/registry.ts:32](https://github.com/AAStar
 
 > **setStaking**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L51)
+Defined in: [packages/core/src/actions/registry.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L51)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### staking
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `staking`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.staking` | `Address` |
 
 #### Returns
 
@@ -1080,19 +925,15 @@ Defined in: [packages/core/src/actions/registry.ts:51](https://github.com/AAStar
 
 > **setSuperPaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L50)
+Defined in: [packages/core/src/actions/registry.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L50)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### paymaster
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `paymaster`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.paymaster` | `Address` |
 
 #### Returns
 
@@ -1104,7 +945,7 @@ Defined in: [packages/core/src/actions/registry.ts:50](https://github.com/AAStar
 
 > **SUPER\_PAYMASTER**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L57)
+Defined in: [packages/core/src/actions/registry.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L57)
 
 #### Returns
 
@@ -1116,19 +957,15 @@ Defined in: [packages/core/src/actions/registry.ts:57](https://github.com/AAStar
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L90)
+Defined in: [packages/core/src/actions/registry.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L90)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newOwner
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `newOwner`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.newOwner` | `Address` |
 
 #### Returns
 
@@ -1140,15 +977,14 @@ Defined in: [packages/core/src/actions/registry.ts:90](https://github.com/AAStar
 
 > **userRoleCount**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L70)
+Defined in: [packages/core/src/actions/registry.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L70)
 
 #### Parameters
 
-##### args
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `user`: `Address`; \} |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -1160,19 +996,15 @@ Defined in: [packages/core/src/actions/registry.ts:70](https://github.com/AAStar
 
 > **userRoles**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L69)
+Defined in: [packages/core/src/actions/registry.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L69)
 
 #### Parameters
 
-##### args
-
-###### index
-
-`bigint`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `index`: `bigint`; `user`: `Address`; \} |
+| `args.index` | `bigint` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -1184,7 +1016,7 @@ Defined in: [packages/core/src/actions/registry.ts:69](https://github.com/AAStar
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/registry.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/registry.ts#L94)
+Defined in: [packages/core/src/actions/registry.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L94)
 
 #### Returns
 

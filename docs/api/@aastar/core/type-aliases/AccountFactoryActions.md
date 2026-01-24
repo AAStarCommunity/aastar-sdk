@@ -1,6 +1,6 @@
 > **AccountFactoryActions** = `object`
 
-Defined in: [packages/core/src/actions/account.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L19)
+Defined in: [packages/core/src/actions/account.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/account.ts#L19)
 
 ## Properties
 
@@ -8,23 +8,16 @@ Defined in: [packages/core/src/actions/account.ts:19](https://github.com/AAStarC
 
 > **createAccount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/account.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L20)
+Defined in: [packages/core/src/actions/account.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/account.ts#L20)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### owner
-
-`Address`
-
-###### salt
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `owner`: `Address`; `salt`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.owner` | `Address` |
+| `args.salt` | `bigint` |
 
 #### Returns
 
@@ -36,19 +29,15 @@ Defined in: [packages/core/src/actions/account.ts:20](https://github.com/AAStarC
 
 > **getAddress**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/account.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/account.ts#L21)
+Defined in: [packages/core/src/actions/account.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/account.ts#L21)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
-
-###### salt
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; `salt`: `bigint`; \} |
+| `args.owner` | `Address` |
+| `args.salt` | `bigint` |
 
 #### Returns
 

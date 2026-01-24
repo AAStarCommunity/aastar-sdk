@@ -1,4 +1,5 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData } from 'viem';
+import { type PublicClient } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 
@@ -7,6 +8,11 @@ import { detectBundlerType, BundlerType } from './BundlerCompat.js';
  * Focus: Integration, Funding, Interaction.
  */
 export class PaymasterClient {
+    /**
+     * @private
+     * Static utility class, should not be instantiated.
+     */
+    private constructor() {}
     
     /**
      * Get user's deposited balance on the Paymaster.

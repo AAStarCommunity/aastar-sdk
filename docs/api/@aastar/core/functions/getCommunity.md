@@ -1,22 +1,15 @@
 > **getCommunity**(`network`, `communityName`): \{ `ensName`: `"aastar.eth"`; `gasToken`: `` `0x${string}` ``; `name`: `"AAStar"`; `owner`: `"0x411BD567E46C0781248dbB6a9211891C032885e5"`; `stake`: `"50"`; \} \| \{ `ensName`: `"bread.eth"`; `gasToken`: `` `0x${string}` ``; `name`: `"BreadCommunity"`; `owner`: `"0xe24b6f321B0140716a2b671ed0D983bb64E7DaFA"`; `stake`: `"50"`; \}
 
-Defined in: [packages/core/src/contracts.ts:412](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/contracts.ts#L412)
+Defined in: [packages/core/src/contracts.ts:412](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/contracts.ts#L412)
 
 Get a specific community
 
 ## Parameters
 
-### network
-
-`"sepolia"`
-
-Network name
-
-### communityName
-
-Community name (aastar, builderDao)
-
-`"aastar"` | `"breadCommunity"`
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"sepolia"` | Network name |
+| `communityName` | `"aastar"` \| `"breadCommunity"` | Community name (aastar, builderDao) |
 
 ## Returns
 

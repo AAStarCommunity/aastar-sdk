@@ -1,17 +1,7 @@
-Defined in: [V4/SuperPaymasterClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/V4/SuperPaymasterClient.ts#L19)
+Defined in: [V4/SuperPaymasterClient.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/SuperPaymasterClient.ts#L20)
 
 SuperPaymasterClient
 High-level API for SuperPaymaster operations, including dynamic gas estimation.
-
-## Constructors
-
-### Constructor
-
-> **new SuperPaymasterClient**(): `SuperPaymasterClient`
-
-#### Returns
-
-`SuperPaymasterClient`
 
 ## Methods
 
@@ -19,36 +9,21 @@ High-level API for SuperPaymaster operations, including dynamic gas estimation.
 
 > `static` **submitGaslessTransaction**(`client`, `wallet`, `aaAddress`, `entryPoint`, `bundlerUrl`, `config`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [V4/SuperPaymasterClient.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/V4/SuperPaymasterClient.ts#L25)
+Defined in: [V4/SuperPaymasterClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/SuperPaymasterClient.ts#L32)
 
 Submit a gasless transaction using SuperPaymaster.
 Automatically handles gas estimation with a smart efficiency buffer.
 
 #### Parameters
 
-##### client
-
-`any`
-
-##### wallet
-
-`any`
-
-##### aaAddress
-
-`` `0x${string}` ``
-
-##### entryPoint
-
-`` `0x${string}` ``
-
-##### bundlerUrl
-
-`string`
-
-##### config
-
-[`GaslessTransactionConfig`](../type-aliases/GaslessTransactionConfig.md)
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `any` |
+| `wallet` | `any` |
+| `aaAddress` | `` `0x${string}` `` |
+| `entryPoint` | `` `0x${string}` `` |
+| `bundlerUrl` | `string` |
+| `config` | [`GaslessTransactionConfig`](../type-aliases/GaslessTransactionConfig.md) |
 
 #### Returns
 

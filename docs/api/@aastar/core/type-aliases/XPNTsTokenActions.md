@@ -1,6 +1,6 @@
 > **XPNTsTokenActions** = [`ERC20Actions`](ERC20Actions.md) & `object`
 
-Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L33)
+Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L33)
 
 ## Type Declaration
 
@@ -10,19 +10,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `spender`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -34,15 +27,11 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `spender`: `Address`; `token`: `Address`; \} |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -54,19 +43,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -78,23 +60,13 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### from
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `from`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.from` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -106,27 +78,14 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### from
-
-`Address`
-
-###### token
-
-`Address`
-
-###### userOpHash
-
-[`Hex`](https://viem.sh/docs/index.html)
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `from`: `Address`; `token`: `Address`; `userOpHash`: [`Hex`](https://viem.sh/docs/index.html); \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.from` | `Address` |
+| `args.token` | `Address` |
+| `args.userOpHash` | [`Hex`](https://viem.sh/docs/index.html) |
 
 #### Returns
 
@@ -138,11 +97,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -154,11 +112,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -170,11 +127,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -186,15 +142,11 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; `user`: `Address`; \} |
+| `args.token` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -206,11 +158,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -222,11 +173,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -238,15 +188,11 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -258,11 +204,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -274,11 +219,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -290,15 +234,11 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; `user`: `Address`; \} |
+| `args.token` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -310,11 +250,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -326,11 +265,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -342,23 +280,13 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### to
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `to`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.to` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -370,23 +298,13 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### amount
-
-`bigint`
-
-###### owner
-
-`Address`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `amount`: `bigint`; `owner`: `Address`; `spender`: `Address`; `token`: `Address`; \} |
+| `args.amount` | `bigint` |
+| `args.owner` | `Address` |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -398,15 +316,11 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; `token`: `Address`; \} |
+| `args.owner` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -418,43 +332,18 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### deadline
-
-`bigint`
-
-###### owner
-
-`Address`
-
-###### r
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### s
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
-
-###### v
-
-`number`
-
-###### value
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `deadline`: `bigint`; `owner`: `Address`; `r`: [`Hex`](https://viem.sh/docs/index.html); `s`: [`Hex`](https://viem.sh/docs/index.html); `spender`: `Address`; `token`: `Address`; `v`: `number`; `value`: `bigint`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.deadline` | `bigint` |
+| `args.owner` | `Address` |
+| `args.r` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.s` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
+| `args.v` | `number` |
+| `args.value` | `bigint` |
 
 #### Returns
 
@@ -466,23 +355,13 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amountXPNTs
-
-`bigint`
-
-###### token
-
-`Address`
-
-###### user
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amountXPNTs`: `bigint`; `token`: `Address`; `user`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amountXPNTs` | `bigint` |
+| `args.token` | `Address` |
+| `args.user` | `Address` |
 
 #### Returns
 
@@ -494,19 +373,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `spender`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -518,19 +390,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -542,19 +407,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### spAddress
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `spAddress`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.spAddress` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -566,11 +424,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -582,27 +439,14 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### data?
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### to
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `data?`: [`Hex`](https://viem.sh/docs/index.html); `to`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.data?` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.to` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -614,19 +458,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newOwner
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `newOwner`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.newOwner` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -638,19 +475,12 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### newRate
-
-`bigint`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `newRate`: `bigint`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.newRate` | `bigint` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -662,15 +492,11 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### opHash
-
-[`Hex`](https://viem.sh/docs/index.html)
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `opHash`: [`Hex`](https://viem.sh/docs/index.html); `token`: `Address`; \} |
+| `args.opHash` | [`Hex`](https://viem.sh/docs/index.html) |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -682,11 +508,10 @@ Defined in: [packages/core/src/actions/tokens.ts:33](https://github.com/AAStarCo
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 

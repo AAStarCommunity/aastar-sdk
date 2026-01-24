@@ -1,12 +1,19 @@
 
 export * from './mysbt.js';
 
-import { createAAStarPublicClient, ReputationSystemABI } from '@aastar/core';
-import { type Address, type PublicClient, type Hash, type WalletClient, parseAbi } from 'viem';
+import { createAAStarPublicClient, ReputationSystemABI, type PublicClient, type WalletClient } from '@aastar/core';
+import { type Address, type Hash, parseAbi } from 'viem';
 
 export class ReputationClient {
+    /** @internal */
     private walletClient?: WalletClient;
 
+    /**
+     * Initialize ReputationClient
+     * @param client The public client for queries
+     * @param reputationAddress The address of the reputation system contract
+     * @param walletClient Optional wallet client for write operations
+     */
     constructor(
         private client: PublicClient, 
         private reputationAddress: Address,

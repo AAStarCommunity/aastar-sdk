@@ -1,6 +1,6 @@
-import { Address, Hash, PublicClient, WalletClient, parseEther, Hex } from 'viem';
+import { Address, Hash, parseEther, Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { accountFactoryActions, TEST_ACCOUNT_ADDRESSES } from '@aastar/core';
+import { accountFactoryActions, TEST_ACCOUNT_ADDRESSES, type PublicClient, type WalletClient } from '@aastar/core';
 
 /**
  * PhD Paper Experiment Test Toolkit
@@ -33,7 +33,9 @@ import { accountFactoryActions, TEST_ACCOUNT_ADDRESSES } from '@aastar/core';
  */
 export class TestAccountManager {
     constructor(
+        /** @internal */
         private publicClient: PublicClient,
+        /** @internal */
         private walletClient: WalletClient
     ) {
         if (!walletClient.account) {

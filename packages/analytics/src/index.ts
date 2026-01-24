@@ -1,4 +1,5 @@
-import { Address, Hash, PublicClient, zeroAddress, parseAbiItem, Log, parseAbi } from 'viem';
+import { Address, Hash, zeroAddress, parseAbiItem, Log, parseAbi } from 'viem';
+import { type PublicClient } from '@aastar/core';
 
 /**
  * Analytics client for monitoring and statistics
@@ -14,11 +15,15 @@ import { Address, Hash, PublicClient, zeroAddress, parseAbiItem, Log, parseAbi }
  * - Investors & Researchers
  */
 export class AnalyticsClient {
+    /** @internal */
     private publicClient: PublicClient;
+    /** @internal */
     private gtokenAddress?: Address;
+    /** @internal */
     private registryAddress?: Address;
 
     constructor(
+        /** @internal */
         publicClient: PublicClient,
         addresses?: {
             gtoken?: Address;

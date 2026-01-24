@@ -1,4 +1,4 @@
-Defined in: [SuperPaymaster/index.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L95)
+Defined in: [SuperPaymaster/index.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L95)
 
 Admin Client for SuperPaymaster V3
 
@@ -8,17 +8,14 @@ Admin Client for SuperPaymaster V3
 
 > **new SuperPaymasterAdminClient**(`client`, `paymasterAddress`): `SuperPaymasterAdminClient`
 
-Defined in: [SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L99)
+Defined in: [SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L99)
 
 #### Parameters
 
-##### client
-
-`any`
-
-##### paymasterAddress
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `any` |
+| `paymasterAddress` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -30,13 +27,13 @@ Defined in: [SuperPaymaster/index.ts:99](https://github.com/AAStarCommunity/aast
 
 > **getOperator**(`operator`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L104)
+Defined in: [SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L104)
 
 #### Parameters
 
-##### operator
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `operator` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -48,29 +45,17 @@ Defined in: [SuperPaymaster/index.ts:104](https://github.com/AAStarCommunity/aas
 
 > `static` **configureOperator**(`wallet`, `paymaster`, `token`, `treasury`, `exchangeRate`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L113)
+Defined in: [SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L113)
 
 #### Parameters
 
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### token
-
-`` `0x${string}` ``
-
-##### treasury
-
-`` `0x${string}` ``
-
-##### exchangeRate
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `wallet` | `any` |
+| `paymaster` | `` `0x${string}` `` |
+| `token` | `` `0x${string}` `` |
+| `treasury` | `` `0x${string}` `` |
+| `exchangeRate` | `bigint` |
 
 #### Returns
 
@@ -82,21 +67,15 @@ Defined in: [SuperPaymaster/index.ts:113](https://github.com/AAStarCommunity/aas
 
 > `static` **setAPNTsToken**(`wallet`, `paymaster`, `token`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L149)
+Defined in: [SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L149)
 
 #### Parameters
 
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### token
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `wallet` | `any` |
+| `paymaster` | `` `0x${string}` `` |
+| `token` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -108,25 +87,16 @@ Defined in: [SuperPaymaster/index.ts:149](https://github.com/AAStarCommunity/aas
 
 > `static` **setOperatorPaused**(`wallet`, `paymaster`, `operator`, `paused`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L129)
+Defined in: [SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L129)
 
 #### Parameters
 
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### operator
-
-`` `0x${string}` ``
-
-##### paused
-
-`boolean`
+| Parameter | Type |
+| ------ | ------ |
+| `wallet` | `any` |
+| `paymaster` | `` `0x${string}` `` |
+| `operator` | `` `0x${string}` `` |
+| `paused` | `boolean` |
 
 #### Returns
 
@@ -138,21 +108,15 @@ Defined in: [SuperPaymaster/index.ts:129](https://github.com/AAStarCommunity/aas
 
 > `static` **setXPNTsFactory**(`wallet`, `paymaster`, `factory`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L159)
+Defined in: [SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L159)
 
 #### Parameters
 
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### factory
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `wallet` | `any` |
+| `paymaster` | `` `0x${string}` `` |
+| `factory` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -164,25 +128,16 @@ Defined in: [SuperPaymaster/index.ts:159](https://github.com/AAStarCommunity/aas
 
 > `static` **updateReputation**(`wallet`, `paymaster`, `operator`, `score`): `Promise`\<`any`\>
 
-Defined in: [SuperPaymaster/index.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/SuperPaymaster/index.ts#L139)
+Defined in: [SuperPaymaster/index.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/SuperPaymaster/index.ts#L139)
 
 #### Parameters
 
-##### wallet
-
-`any`
-
-##### paymaster
-
-`` `0x${string}` ``
-
-##### operator
-
-`` `0x${string}` ``
-
-##### score
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `wallet` | `any` |
+| `paymaster` | `` `0x${string}` `` |
+| `operator` | `` `0x${string}` `` |
+| `score` | `bigint` |
 
 #### Returns
 

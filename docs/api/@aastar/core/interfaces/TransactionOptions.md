@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/types.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/types.ts#L52)
+Defined in: [packages/core/src/clients/types.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/types.ts#L53)
 
 Common options for transaction methods
 
@@ -8,7 +8,7 @@ Common options for transaction methods
 
 > `optional` **account**: `` `0x${string}` `` \| [`Account`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/clients/types.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/types.ts#L57)
+Defined in: [packages/core/src/clients/types.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/types.ts#L58)
 
 Override the account to use for the transaction.
 If not provided, uses the account from the WalletClient.
@@ -19,6 +19,6 @@ If not provided, uses the account from the WalletClient.
 
 > `optional` **value**: `bigint`
 
-Defined in: [packages/core/src/clients/types.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/types.ts#L62)
+Defined in: [packages/core/src/clients/types.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/types.ts#L63)
 
 Optional value to send with the transaction (in wei)

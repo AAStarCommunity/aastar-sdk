@@ -25,6 +25,7 @@ AAStar Shared Configuration Package
 - [CommunityConfig](interfaces/CommunityConfig.md)
 - [ContractVersion](interfaces/ContractVersion.md)
 - [DeploymentValidationParams](interfaces/DeploymentValidationParams.md)
+- [PublicClient](interfaces/PublicClient.md)
 - [RoleConfig](interfaces/RoleConfig.md)
 - [RoleRequirement](interfaces/RoleRequirement.md)
 - [RoleValidationParams](interfaces/RoleValidationParams.md)
@@ -34,6 +35,7 @@ AAStar Shared Configuration Package
 - [UserOperationV07](interfaces/UserOperationV07.md)
 - [ValidationParams](interfaces/ValidationParams.md)
 - [ValidationResult](interfaces/ValidationResult.md)
+- [WalletClient](interfaces/WalletClient.md)
 
 ## Type Aliases
 

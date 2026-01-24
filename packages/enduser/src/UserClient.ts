@@ -427,7 +427,7 @@ export class UserClient extends BaseClient {
 
             const signature = await this.client.signMessage({
                 message: { raw: hash },
-                account: this.client.account
+                account: this.client.account!
             });
 
             const signedUserOp = {

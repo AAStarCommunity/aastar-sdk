@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/BundlerClient.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L31)
+Defined in: [packages/core/src/clients/BundlerClient.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L31)
 
 BundlerClient
 Low-level JSON-RPC client for ERC-4337 Bundlers.
@@ -9,17 +9,14 @@ Low-level JSON-RPC client for ERC-4337 Bundlers.
 
 > **new BundlerClient**(`url`, `entryPoint`): `BundlerClient`
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L32)
+Defined in: [packages/core/src/clients/BundlerClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L32)
 
 #### Parameters
 
-##### url
-
-`string`
-
-##### entryPoint
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `url` | `string` |
+| `entryPoint` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -31,7 +28,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:32](https://github.com/A
 
 > `readonly` **entryPoint**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L34)
+Defined in: [packages/core/src/clients/BundlerClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L34)
 
 ***
 
@@ -39,7 +36,7 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:34](https://github.com/A
 
 > `readonly` **url**: `string`
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L33)
+Defined in: [packages/core/src/clients/BundlerClient.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L33)
 
 ## Methods
 
@@ -47,15 +44,15 @@ Defined in: [packages/core/src/clients/BundlerClient.ts:33](https://github.com/A
 
 > **estimateUserOperationGas**(`userOp`): `Promise`\<`any`\>
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:115](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L115)
+Defined in: [packages/core/src/clients/BundlerClient.ts:115](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L115)
 
 eth_estimateUserOperationGas
 
 #### Parameters
 
-##### userOp
-
-`Partial`\<[`UserOperationV07`](../interfaces/UserOperationV07.md)\>
+| Parameter | Type |
+| ------ | ------ |
+| `userOp` | `Partial`\<[`UserOperationV07`](../interfaces/UserOperationV07.md)\> |
 
 #### Returns
 
@@ -67,15 +64,15 @@ eth_estimateUserOperationGas
 
 > **getUserOperationByHash**(`hash`): `Promise`\<`any`\>
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L129)
+Defined in: [packages/core/src/clients/BundlerClient.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L129)
 
 eth_getUserOperationByHash
 
 #### Parameters
 
-##### hash
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `hash` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -87,15 +84,15 @@ eth_getUserOperationByHash
 
 > **getUserOperationReceipt**(`hash`): `Promise`\<`any`\>
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L122)
+Defined in: [packages/core/src/clients/BundlerClient.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L122)
 
 eth_getUserOperationReceipt (v0.7 support prep)
 
 #### Parameters
 
-##### hash
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `hash` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -107,15 +104,15 @@ eth_getUserOperationReceipt (v0.7 support prep)
 
 > **sendUserOperation**(`userOp`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/core/src/clients/BundlerClient.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/clients/BundlerClient.ts#L108)
+Defined in: [packages/core/src/clients/BundlerClient.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/BundlerClient.ts#L108)
 
 eth_sendUserOperation
 
 #### Parameters
 
-##### userOp
-
-[`UserOperationV07`](../interfaces/UserOperationV07.md)
+| Parameter | Type |
+| ------ | ------ |
+| `userOp` | [`UserOperationV07`](../interfaces/UserOperationV07.md) |
 
 #### Returns
 

@@ -1,15 +1,15 @@
 > **getPaymasterV4Middleware**(`config`): `object`
 
-Defined in: [V4/PaymasterUtils.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/V4/PaymasterUtils.ts#L31)
+Defined in: [V4/PaymasterUtils.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L31)
 
 Constructs the middleware for Paymaster V4.
 Returns the `paymasterAndData` hex string.
 
 ## Parameters
 
-### config
-
-[`PaymasterV4MiddlewareConfig`](../type-aliases/PaymasterV4MiddlewareConfig.md)
+| Parameter | Type |
+| ------ | ------ |
+| `config` | [`PaymasterV4MiddlewareConfig`](../type-aliases/PaymasterV4MiddlewareConfig.md) |
 
 ## Returns
 
@@ -21,11 +21,10 @@ Returns the `paymasterAndData` hex string.
 
 #### Parameters
 
-##### args
-
-###### userOperation
-
-`any`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `userOperation`: `any`; \} |
+| `args.userOperation` | `any` |
 
 #### Returns
 

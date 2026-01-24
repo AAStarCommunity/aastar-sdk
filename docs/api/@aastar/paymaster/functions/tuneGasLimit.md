@@ -1,23 +1,17 @@
 > **tuneGasLimit**(`estimate`, `nominalActual`, `targetEfficiency`): `bigint`
 
-Defined in: [V4/PaymasterUtils.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/V4/PaymasterUtils.ts#L193)
+Defined in: [V4/PaymasterUtils.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L193)
 
 Tune gas limit using a dynamic nominal ceiling to satisfy Bundler efficiency (0.4)
 Target: Actual / Limit >= targetEfficiency
 
 ## Parameters
 
-### estimate
-
-`bigint`
-
-### nominalActual
-
-`bigint`
-
-### targetEfficiency
-
-`number` = `0.45`
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `estimate` | `bigint` | `undefined` |
+| `nominalActual` | `bigint` | `undefined` |
+| `targetEfficiency` | `number` | `0.45` |
 
 ## Returns
 

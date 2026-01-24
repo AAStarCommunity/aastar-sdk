@@ -1,6 +1,6 @@
 > **EntryPointActions** = `object`
 
-Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/entryPoint.ts#L11)
+Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L11)
 
 ## Properties
 
@@ -8,15 +8,14 @@ Defined in: [packages/core/src/actions/entryPoint.ts:11](https://github.com/AASt
 
 > **balanceOf**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/entryPoint.ts#L12)
+Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L12)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; \} |
+| `args.account` | `Address` |
 
 #### Returns
 
@@ -28,23 +27,16 @@ Defined in: [packages/core/src/actions/entryPoint.ts:12](https://github.com/AASt
 
 > **depositTo**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/entryPoint.ts#L13)
+Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L13)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
-
-###### amount
-
-`bigint`
-
-###### txAccount?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; `amount`: `bigint`; `txAccount?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; \} |
+| `args.account` | `Address` |
+| `args.amount` | `bigint` |
+| `args.txAccount?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
 
 #### Returns
 
@@ -56,7 +48,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:13](https://github.com/AASt
 
 > **entryPointAddress**: `Address`
 
-Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/entryPoint.ts#L16)
+Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L16)
 
 ***
 
@@ -64,15 +56,14 @@ Defined in: [packages/core/src/actions/entryPoint.ts:16](https://github.com/AASt
 
 > **getDepositInfo**: (`args`) => `Promise`\<\{ `deposit`: `bigint`; `stake`: `bigint`; `staked`: `boolean`; `unstakeDelaySec`: `number`; `withdrawTime`: `number`; \}\>
 
-Defined in: [packages/core/src/actions/entryPoint.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/entryPoint.ts#L15)
+Defined in: [packages/core/src/actions/entryPoint.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L15)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; \} |
+| `args.account` | `Address` |
 
 #### Returns
 
@@ -84,19 +75,15 @@ Defined in: [packages/core/src/actions/entryPoint.ts:15](https://github.com/AASt
 
 > **getNonce**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/entryPoint.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/entryPoint.ts#L14)
+Defined in: [packages/core/src/actions/entryPoint.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L14)
 
 #### Parameters
 
-##### args
-
-###### key
-
-`bigint`
-
-###### sender
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `key`: `bigint`; `sender`: `Address`; \} |
+| `args.key` | `bigint` |
+| `args.sender` | `Address` |
 
 #### Returns
 

@@ -4,7 +4,12 @@
     "packages/core",
     "packages/account",
     "packages/paymaster",
-    "packages/tokens"
+    "packages/tokens",
+    "packages/community",
+    "packages/identity",
+    "packages/analytics",
+    "packages/enduser",
+    "packages/dapp"
   ],
   "entryPointStrategy": "packages",
   "out": "docs/api",
@@ -12,6 +17,9 @@
   "exclude": ["**/node_modules/**", "**/dist/**", "**/tests/**"],
   "excludeExternals": true,
   "skipErrorChecking": true,
+  "parametersFormat": "table",
+  "typeDeclarationFormat": "list",
+  "expandObjects": false,
   "readme": "none",
   "hidePageHeader": true,
   "hidePageTitle": true,

@@ -1,16 +1,14 @@
 > **isV2Contract**(`address`): `boolean`
 
-Defined in: [packages/core/src/contract-versions.ts:340](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/contract-versions.ts#L340)
+Defined in: [packages/core/src/contract-versions.ts:340](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/contract-versions.ts#L340)
 
 Check if an address is a V2 contract
 
 ## Parameters
 
-### address
-
-`string`
-
-Contract address to check
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `address` | `string` | Contract address to check |
 
 ## Returns
 

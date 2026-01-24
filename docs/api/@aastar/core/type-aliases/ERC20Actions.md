@@ -1,6 +1,6 @@
 > **ERC20Actions** = `object`
 
-Defined in: [packages/core/src/actions/tokens.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L7)
+Defined in: [packages/core/src/actions/tokens.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L7)
 
 ## Properties
 
@@ -8,23 +8,16 @@ Defined in: [packages/core/src/actions/tokens.ts:7](https://github.com/AAStarCom
 
 > **allowance**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/tokens.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L13)
+Defined in: [packages/core/src/actions/tokens.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L13)
 
 #### Parameters
 
-##### args
-
-###### owner
-
-`Address`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `owner`: `Address`; `spender`: `Address`; `token`: `Address`; \} |
+| `args.owner` | `Address` |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -36,27 +29,17 @@ Defined in: [packages/core/src/actions/tokens.ts:13](https://github.com/AAStarCo
 
 > **approve**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/tokens.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L12)
+Defined in: [packages/core/src/actions/tokens.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L12)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### spender
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `spender`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.spender` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -68,19 +51,15 @@ Defined in: [packages/core/src/actions/tokens.ts:12](https://github.com/AAStarCo
 
 > **balanceOf**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/tokens.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L9)
+Defined in: [packages/core/src/actions/tokens.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L9)
 
 #### Parameters
 
-##### args
-
-###### account
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account`: `Address`; `token`: `Address`; \} |
+| `args.account` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -92,15 +71,14 @@ Defined in: [packages/core/src/actions/tokens.ts:9](https://github.com/AAStarCom
 
 > **decimals**: (`args`) => `Promise`\<`number`\>
 
-Defined in: [packages/core/src/actions/tokens.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L16)
+Defined in: [packages/core/src/actions/tokens.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L16)
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -112,15 +90,14 @@ Defined in: [packages/core/src/actions/tokens.ts:16](https://github.com/AAStarCo
 
 > **name**: (`args`) => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/tokens.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L14)
+Defined in: [packages/core/src/actions/tokens.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L14)
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -132,15 +109,14 @@ Defined in: [packages/core/src/actions/tokens.ts:14](https://github.com/AAStarCo
 
 > **symbol**: (`args`) => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/tokens.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L15)
+Defined in: [packages/core/src/actions/tokens.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L15)
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -152,15 +128,14 @@ Defined in: [packages/core/src/actions/tokens.ts:15](https://github.com/AAStarCo
 
 > **totalSupply**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/tokens.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L8)
+Defined in: [packages/core/src/actions/tokens.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L8)
 
 #### Parameters
 
-##### args
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `token`: `Address`; \} |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -172,27 +147,17 @@ Defined in: [packages/core/src/actions/tokens.ts:8](https://github.com/AAStarCom
 
 > **transfer**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/tokens.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L10)
+Defined in: [packages/core/src/actions/tokens.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L10)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### to
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `to`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.to` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 
@@ -204,31 +169,18 @@ Defined in: [packages/core/src/actions/tokens.ts:10](https://github.com/AAStarCo
 
 > **transferFrom**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/tokens.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/tokens.ts#L11)
+Defined in: [packages/core/src/actions/tokens.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/tokens.ts#L11)
 
 #### Parameters
 
-##### args
-
-###### account?
-
-[`Account`](https://viem.sh/docs/index.html) \| `Address`
-
-###### amount
-
-`bigint`
-
-###### from
-
-`Address`
-
-###### to
-
-`Address`
-
-###### token
-
-`Address`
+| Parameter | Type |
+| ------ | ------ |
+| `args` | \{ `account?`: [`Account`](https://viem.sh/docs/index.html) \| `Address`; `amount`: `bigint`; `from`: `Address`; `to`: `Address`; `token`: `Address`; \} |
+| `args.account?` | [`Account`](https://viem.sh/docs/index.html) \| `Address` |
+| `args.amount` | `bigint` |
+| `args.from` | `Address` |
+| `args.to` | `Address` |
+| `args.token` | `Address` |
 
 #### Returns
 

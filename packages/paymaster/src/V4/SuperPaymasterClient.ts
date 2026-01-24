@@ -1,4 +1,5 @@
 import { type Address, type Hex, concat, pad, toHex, encodeFunctionData, parseAbi } from 'viem';
+import { type PublicClient } from '@aastar/core';
 import { PaymasterClient } from './PaymasterClient';
 import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils';
 
@@ -17,6 +18,12 @@ export type GaslessTransactionConfig = {
  * High-level API for SuperPaymaster operations, including dynamic gas estimation.
  */
 export class SuperPaymasterClient {
+    /**
+     * @private
+     * Static utility class, should not be instantiated.
+     */
+    private constructor() {}
+
 
     /**
      * Submit a gasless transaction using SuperPaymaster.

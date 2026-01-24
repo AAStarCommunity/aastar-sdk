@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L44)
+Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/StateValidator.ts#L44)
 
 ## Constructors
 
@@ -16,37 +16,21 @@ Defined in: [packages/core/src/actions/StateValidator.ts:44](https://github.com/
 
 > `static` **getAccountBalances**(`params`): `Promise`\<[`AccountBalance`](../interfaces/AccountBalance.md)[]\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L58)
+Defined in: [packages/core/src/actions/StateValidator.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/StateValidator.ts#L58)
 
 Batch fetch balances for multiple accounts
 
 #### Parameters
 
-##### params
-
-###### addresses
-
-`` `0x${string}` ``[]
-
-###### aPNTsAddress?
-
-`` `0x${string}` ``
-
-###### chain
-
-[`Chain`](https://viem.sh/docs/index.html)
-
-###### gTokenAddress?
-
-`` `0x${string}` ``
-
-###### rpcUrl
-
-`string`
-
-###### xPNTsAddress?
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `params` | \{ `addresses`: `` `0x${string}` ``[]; `aPNTsAddress?`: `` `0x${string}` ``; `chain`: [`Chain`](https://viem.sh/docs/index.html); `gTokenAddress?`: `` `0x${string}` ``; `rpcUrl`: `string`; `xPNTsAddress?`: `` `0x${string}` ``; \} |
+| `params.addresses` | `` `0x${string}` ``[] |
+| `params.aPNTsAddress?` | `` `0x${string}` `` |
+| `params.chain` | [`Chain`](https://viem.sh/docs/index.html) |
+| `params.gTokenAddress?` | `` `0x${string}` `` |
+| `params.rpcUrl` | `string` |
+| `params.xPNTsAddress?` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -58,15 +42,15 @@ Batch fetch balances for multiple accounts
 
 > `static` **validateDeployment**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L232)
+Defined in: [packages/core/src/actions/StateValidator.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/StateValidator.ts#L232)
 
 Deployment Validation
 
 #### Parameters
 
-##### params
-
-[`DeploymentValidationParams`](../interfaces/DeploymentValidationParams.md)
+| Parameter | Type |
+| ------ | ------ |
+| `params` | [`DeploymentValidationParams`](../interfaces/DeploymentValidationParams.md) |
 
 #### Returns
 
@@ -78,15 +62,15 @@ Deployment Validation
 
 > `static` **validateETHBalance**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L153)
+Defined in: [packages/core/src/actions/StateValidator.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/StateValidator.ts#L153)
 
 ETH Balance Validation
 
 #### Parameters
 
-##### params
-
-[`BalanceValidationParams`](../interfaces/BalanceValidationParams.md)
+| Parameter | Type |
+| ------ | ------ |
+| `params` | [`BalanceValidationParams`](../interfaces/BalanceValidationParams.md) |
 
 #### Returns
 
@@ -98,15 +82,15 @@ ETH Balance Validation
 
 > `static` **validateRole**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L114)
+Defined in: [packages/core/src/actions/StateValidator.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/StateValidator.ts#L114)
 
 Role Validation
 
 #### Parameters
 
-##### params
-
-[`RoleValidationParams`](../interfaces/RoleValidationParams.md)
+| Parameter | Type |
+| ------ | ------ |
+| `params` | [`RoleValidationParams`](../interfaces/RoleValidationParams.md) |
 
 #### Returns
 
@@ -118,15 +102,15 @@ Role Validation
 
 > `static` **validateTokenBalance**(`params`): `Promise`\<[`ValidationResult`](../interfaces/ValidationResult.md)\>
 
-Defined in: [packages/core/src/actions/StateValidator.ts:189](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/actions/StateValidator.ts#L189)
+Defined in: [packages/core/src/actions/StateValidator.ts:189](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/StateValidator.ts#L189)
 
 Token Balance Validation
 
 #### Parameters
 
-##### params
-
-[`TokenBalanceValidationParams`](../interfaces/TokenBalanceValidationParams.md)
+| Parameter | Type |
+| ------ | ------ |
+| `params` | [`TokenBalanceValidationParams`](../interfaces/TokenBalanceValidationParams.md) |
 
 #### Returns
 

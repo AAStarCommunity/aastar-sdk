@@ -6,7 +6,7 @@ import { MySBTABI } from '@aastar/core';
  * Check if user holds MySBT token (identity verification).
  */
 export async function checkMySBT(
-    client: PublicClient,
+    client: any,
     sbtAddress: Address,
     user: Address
 ): Promise<{ hasSBT: boolean; balance?: bigint }> {
@@ -33,7 +33,7 @@ export async function checkMySBT(
  * Note: Depends on whether the contract supports getTokenId or similar.
  */
 export async function getMySBTId(
-    client: PublicClient,
+    client: any,
     sbtAddress: Address,
     user: Address
 ): Promise<bigint | null> {

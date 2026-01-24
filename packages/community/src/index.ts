@@ -1,5 +1,5 @@
-import { Address, Hash, PublicClient, WalletClient, parseEther, parseAbi } from 'viem';
-import { ROLE_COMMUNITY, RequirementChecker, type RoleRequirement } from '@aastar/core';
+import { Address, Hash, parseEther, parseAbi } from 'viem';
+import { ROLE_COMMUNITY, RequirementChecker, type RoleRequirement, type PublicClient, type WalletClient } from '@aastar/core';
 
 // Import contract addresses dynamically to avoid circular dependency
 let CONTRACTS: any;
@@ -64,13 +64,25 @@ export interface CommunityStats {
  * - Protocol Partners
  */
 export class CommunityClient {
+    /** @internal */
     private publicClient: PublicClient;
+    /** @internal */
     private walletClient: WalletClient;
+    /** @internal */
     private requirementChecker: RequirementChecker;
+    /** @internal */
     private registryAddress?: Address;
+    /** @internal */
     private gtokenAddress?: Address;
+    /** @internal */
     private stakingAddress?: Address;
 
+    /**
+     * Initialize CommunityClient
+     * @param publicClient The public client for queries
+     * @param walletClient The wallet client for transactions
+     * @param addresses Optional contract address overrides
+     */
     constructor(
         publicClient: PublicClient,
         walletClient: WalletClient,

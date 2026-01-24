@@ -1,4 +1,4 @@
-Defined in: [packages/account/src/index.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/account/src/index.ts#L40)
+Defined in: [packages/account/src/index.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/account/src/index.ts#L40)
 
 UserOperation Client for handling high-level flows
 
@@ -18,21 +18,15 @@ UserOperation Client for handling high-level flows
 
 > `static` **estimateGas**(`bundler`, `op`, `entryPoint`): `Promise`\<`any`\>
 
-Defined in: [packages/account/src/index.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/account/src/index.ts#L41)
+Defined in: [packages/account/src/index.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/account/src/index.ts#L41)
 
 #### Parameters
 
-##### bundler
-
-`any`
-
-##### op
-
-`any`
-
-##### entryPoint
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `bundler` | `any` |
+| `op` | `any` |
+| `entryPoint` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -44,17 +38,14 @@ Defined in: [packages/account/src/index.ts:41](https://github.com/AAStarCommunit
 
 > `static` **getReceipt**(`bundler`, `hash`): `Promise`\<`any`\>
 
-Defined in: [packages/account/src/index.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/account/src/index.ts#L55)
+Defined in: [packages/account/src/index.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/account/src/index.ts#L55)
 
 #### Parameters
 
-##### bundler
-
-`any`
-
-##### hash
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `bundler` | `any` |
+| `hash` | `` `0x${string}` `` |
 
 #### Returns
 
@@ -66,21 +57,15 @@ Defined in: [packages/account/src/index.ts:55](https://github.com/AAStarCommunit
 
 > `static` **sendUserOp**(`bundler`, `op`, `entryPoint`): `Promise`\<`any`\>
 
-Defined in: [packages/account/src/index.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/account/src/index.ts#L48)
+Defined in: [packages/account/src/index.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/account/src/index.ts#L48)
 
 #### Parameters
 
-##### bundler
-
-`any`
-
-##### op
-
-`any`
-
-##### entryPoint
-
-`` `0x${string}` ``
+| Parameter | Type |
+| ------ | ------ |
+| `bundler` | `any` |
+| `op` | `any` |
+| `entryPoint` | `` `0x${string}` `` |
 
 #### Returns
 

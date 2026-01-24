@@ -1,4 +1,5 @@
-import { type Address, type PublicClient, type WalletClient, type Chain, type Transport, type Account } from 'viem';
+import { type Address, type Chain, type Transport, type Account } from 'viem';
+import { type PublicClient, type WalletClient } from './doc-types.js';
 
 /**
  * Base configuration for all L2 Business Clients
@@ -8,7 +9,7 @@ export interface ClientConfig {
      * Viem WalletClient for write operations.
      * Must have an account attached.
      */
-    client: WalletClient<Transport, Chain, Account>;
+    client: WalletClient;
     
     /**
      * Optional PublicClient for read operations.

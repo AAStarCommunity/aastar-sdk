@@ -9,7 +9,7 @@ import {
     encodeFunctionData, 
     keccak256,
 } from 'viem';
-import { SimpleAccountFactoryABI } from '@aastar/core';
+import { SimpleAccountFactoryABI, type PublicClient } from '@aastar/core';
 import { getUserOpHash } from '../index.js';
 
 export type SimpleSmartAccount = LocalAccount & {

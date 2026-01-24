@@ -2,7 +2,8 @@
  * Unified requirement checker for role registration
  * Provides centralized validation for GToken, aPNTs, MySBT, and role permissions
  */
-import { Address, PublicClient, parseAbi } from 'viem';
+import { Address, parseAbi } from 'viem';
+import { type PublicClient } from './clients/doc-types.js';
 import type { RoleRequirement } from './roles.js';
 
 const ERC20_ABI = parseAbi([
@@ -41,7 +42,9 @@ const MYSBT_ABI = parseAbi([
  */
 export class RequirementChecker {
     constructor(
+        /** @internal */
         private publicClient: PublicClient,
+        /** @internal */
         private addresses?: {
             registry?: Address;
             gtoken?: Address;

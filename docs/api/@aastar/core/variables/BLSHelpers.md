@@ -1,6 +1,6 @@
 > `const` **BLSHelpers**: `object`
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/crypto/blsSigner.ts#L76)
+Defined in: [packages/core/src/crypto/blsSigner.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L76)
 
 Helper functions for creating BLS proofs for Registry and BLSAggregator operations
 
@@ -14,17 +14,11 @@ Create message hash for reputation update
 
 #### Parameters
 
-##### users
-
-`` `0x${string}` ``[]
-
-##### scores
-
-`bigint`[]
-
-##### epoch
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `users` | `` `0x${string}` ``[] |
+| `scores` | `bigint`[] |
+| `epoch` | `bigint` |
 
 #### Returns
 
@@ -38,9 +32,9 @@ Create message hash for slash proposal
 
 #### Parameters
 
-##### proposalId
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `proposalId` | `bigint` |
 
 #### Returns
 
@@ -55,21 +49,12 @@ Proof structure: (bytes pkG1, bytes sigG2, bytes msgG2, uint256 signerMask)
 
 #### Parameters
 
-##### aggregatedPublicKey
-
-`` `0x${string}` ``
-
-##### aggregatedSignature
-
-`` `0x${string}` ``
-
-##### messageMappingG2
-
-`` `0x${string}` ``
-
-##### signerMask
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `aggregatedPublicKey` | `` `0x${string}` `` |
+| `aggregatedSignature` | `` `0x${string}` `` |
+| `messageMappingG2` | `` `0x${string}` `` |
+| `signerMask` | `bigint` |
 
 #### Returns
 
@@ -84,17 +69,11 @@ Matches format: (signature, publicKey, signerMask)
 
 #### Parameters
 
-##### signature
-
-`` `0x${string}` ``
-
-##### publicKey
-
-`` `0x${string}` ``
-
-##### signerMask
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `signature` | `` `0x${string}` `` |
+| `publicKey` | `` `0x${string}` `` |
+| `signerMask` | `bigint` |
 
 #### Returns
 

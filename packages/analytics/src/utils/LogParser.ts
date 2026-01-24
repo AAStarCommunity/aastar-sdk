@@ -15,7 +15,7 @@ export interface TransactionRecord {
   txHash: string;           // 交易哈希
   userOpHash?: string;      // UserOperation 哈希
   testType: string;         // 测试类型 (jason1-gasless, anni-gasless, etc.)
-  network: 'anvil' | 'sepolia'; // 网络环境
+  network: 'anvil' | 'sepolia' | 'op-sepolia'; // 网络环境
   timestamp: Date;          // 日志时间戳
   logFile: string;          // 来源日志文件
   success: boolean;         // 是否成功

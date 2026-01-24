@@ -1,16 +1,14 @@
 > **getBlockExplorer**(`network`): `""` \| `"https://sepolia.etherscan.io"`
 
-Defined in: [packages/core/src/networks.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/networks.ts#L75)
+Defined in: [packages/core/src/networks.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/networks.ts#L75)
 
 Get block explorer URL
 
 ## Parameters
 
-### network
-
-Network name
-
-`"anvil"` | `"sepolia"`
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"anvil"` \| `"sepolia"` | Network name |
 
 ## Returns
 

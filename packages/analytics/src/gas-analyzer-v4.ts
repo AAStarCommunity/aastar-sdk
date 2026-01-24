@@ -8,6 +8,7 @@
  * - 竞争力模型评分与优化建议
  */
 
+import { type Hash } from 'viem';
 import { LogParser } from './utils/LogParser.js';
 import { DataCollector } from './core/DataCollector.js';
 import { CostCalculator } from './core/CostCalculator.js';

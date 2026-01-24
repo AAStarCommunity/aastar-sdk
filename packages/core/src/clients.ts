@@ -1,5 +1,5 @@
-
-import { createPublicClient, http, type Chain, type PublicClient } from 'viem';
+import { createPublicClient, http, type Chain } from 'viem';
+import { type PublicClient } from './clients/doc-types.js';
 import { sepolia, optimism } from 'viem/chains';
 
 /**

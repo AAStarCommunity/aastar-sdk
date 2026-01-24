@@ -1,6 +1,6 @@
 > **buildSuperPaymasterData**(`paymasterAddress`, `operator`, `options?`): `` `0x${string}` ``
 
-Defined in: [V4/PaymasterUtils.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/paymaster/src/V4/PaymasterUtils.ts#L94)
+Defined in: [V4/PaymasterUtils.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L94)
 
 Build paymasterAndData for SuperPaymaster V3.
 Layout: [Paymaster(20)] [verGas(16)] [postGas(16)] [operator(20)] [maxRate(32)]
@@ -12,27 +12,14 @@ Do NOT include validUntil/validAfter in paymasterAndData!
 
 ## Parameters
 
-### paymasterAddress
-
-`` `0x${string}` ``
-
-### operator
-
-`` `0x${string}` ``
-
-### options?
-
-#### maxRate?
-
-`bigint`
-
-#### postOpGasLimit?
-
-`bigint`
-
-#### verificationGasLimit?
-
-`bigint`
+| Parameter | Type |
+| ------ | ------ |
+| `paymasterAddress` | `` `0x${string}` `` |
+| `operator` | `` `0x${string}` `` |
+| `options?` | \{ `maxRate?`: `bigint`; `postOpGasLimit?`: `bigint`; `verificationGasLimit?`: `bigint`; \} |
+| `options.maxRate?` | `bigint` |
+| `options.postOpGasLimit?` | `bigint` |
+| `options.verificationGasLimit?` | `bigint` |
 
 ## Returns
 

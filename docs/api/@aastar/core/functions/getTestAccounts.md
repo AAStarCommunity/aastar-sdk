@@ -1,16 +1,14 @@
 > **getTestAccounts**(`network`): `object`
 
-Defined in: [packages/core/src/contracts.ts:248](https://github.com/AAStarCommunity/aastar-sdk/blob/6388ef6d7c1f0b08255a8800bb272255cd49bb47/packages/core/src/contracts.ts#L248)
+Defined in: [packages/core/src/contracts.ts:248](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/contracts.ts#L248)
 
 Get test account contracts (SimpleAccountFactory, etc.)
 
 ## Parameters
 
-### network
-
-`"sepolia"`
-
-Network name
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `network` | `"sepolia"` | Network name |
 
 ## Returns
 

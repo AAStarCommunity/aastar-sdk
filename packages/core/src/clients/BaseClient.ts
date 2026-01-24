@@ -1,8 +1,9 @@
-import { type Address, type PublicClient, type WalletClient, type Chain, type Transport, type Account } from 'viem';
+import { type Address, type Chain, type Transport, type Account } from 'viem';
+import { type PublicClient, type WalletClient } from './doc-types.js';
 import { type ClientConfig } from './types.js';
 
 export abstract class BaseClient {
-    public client: WalletClient<Transport, Chain, Account>;
+    public client: WalletClient;
     public publicClient?: PublicClient;
     protected registryAddress?: Address;
     protected gTokenAddress?: Address;
@@ -31,13 +32,13 @@ export abstract class BaseClient {
      * Get the account address of the connected wallet
      */
     public getAddress(): Address {
-        return this.client.account.address;
+        return this.client.account!.address;
     }
 
     /**
      * Helper to ensure public client exists or fallback to wallet client (if it supports read)
      */
-    public getStartPublicClient(): PublicClient | WalletClient<Transport, Chain, Account> {
+    public getStartPublicClient(): PublicClient | WalletClient {
         return this.publicClient || this.client;
     }
 

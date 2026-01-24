@@ -4,11 +4,11 @@ import { createAAStarPublicClient, RegistryABI } from '@aastar/core';
 import { type Address, type Chain, type Transport } from 'viem';
 
 type UseCreditScoreConfig = {
-    chain: Chain;
+    chain: any;
     rpcUrl?: string; // Optional if transport is provided
     registryAddress: Address;
     userAddress: Address;
-    transport?: Transport;
+    transport?: any;
 };
 
 export function useCreditScore({ chain, rpcUrl, registryAddress, userAddress }: UseCreditScoreConfig) {

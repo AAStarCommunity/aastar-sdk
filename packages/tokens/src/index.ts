@@ -1,5 +1,5 @@
-import { type Address, parseAbi, type WalletClient, type PublicClient, type Hash, formatEther } from 'viem';
-import { SuperPaymasterABI as SUPERPAYMASTER_ABI, CONTRACTS } from '@aastar/core';
+import { type Address, parseAbi, type Hash, formatEther } from 'viem';
+import { SuperPaymasterABI as SUPERPAYMASTER_ABI, CONTRACTS, type PublicClient, type WalletClient } from '@aastar/core';
 
 const STAKING_ABI = parseAbi([
     'function stake(uint256)',
@@ -14,6 +14,11 @@ const ERC20_ABI = parseAbi([
 ]);
 
 export class FinanceClient {
+    /**
+     * Initialize FinanceClient
+     * @param publicClient The public client for queries
+     * @param walletClient The wallet client for transactions
+     */
     constructor(
         private publicClient: PublicClient,
         private walletClient: WalletClient
