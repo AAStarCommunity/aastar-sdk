@@ -27,7 +27,7 @@ npx tsx scripts/l4-setup.ts --network=$ENV
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🧪 Phase 2: Gasless Transactions (L4)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-./scripts/run_l4_gasless_regression.sh
+./scripts/run_l4_gasless_regression.sh --network $ENV
 
 # 3. Analytics Phase
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
