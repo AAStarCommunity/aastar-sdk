@@ -31,6 +31,7 @@ export type RegistryActions = {
     setRoleLockDuration: (args: { roleId: Hex, duration: bigint, account?: Account | Address }) => Promise<Hash>;
     setRoleOwner: (args: { roleId: Hex, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     exitRole: (args: { roleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    roleMetadata: (args: { roleId: Hex, user: Address }) => Promise<Hex>;
     
     // Community Management
     communityByName: (args: { name: string }) => Promise<Address>;
@@ -290,6 +291,21 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'exitRole');
+        }
+    },
+
+    async roleMetadata({ roleId, user }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'roleMetadata',
+                args: [roleId, user]
+            }) as Promise<Hex>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'roleMetadata');
         }
     },
 

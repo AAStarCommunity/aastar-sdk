@@ -61,6 +61,7 @@ describe('RegistryActions Bulk Coverage', () => {
     it('roleOwners', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).roleOwners({ roleId: '0x01' })).toBe(USER); });
     it('roleStakes', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).roleStakes({ roleId: '0x01', user: USER })).toBe(100n); });
     it('roleLockDurations', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).roleLockDurations({ roleId: '0x01' })).toBe(100n); });
+    it('roleMetadata', async () => { p.readContract.mockResolvedValue('0x'); expect(await registryActions(ADDR)(p).roleMetadata({ roleId: '0x01', user: USER })).toBe('0x'); });
   });
 
   describe('Constants (Role IDs)', () => {
