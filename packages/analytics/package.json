@@ -1,6 +1,9 @@
 {
   "name": "@aastar/analytics",
-  "version": "0.16.12",
+  "version": "0.16.14",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Analytics client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

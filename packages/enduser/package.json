@@ -1,6 +1,9 @@
 {
   "name": "@aastar/enduser",
-  "version": "0.16.12",
+  "version": "0.16.14",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "description": "Enduser client for AAstar SDK",
   "main": "dist/index.js",
