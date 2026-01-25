@@ -50,7 +50,7 @@ export function getNetworkConfig(network: string) {
             return { chain: optimism, rpc: process.env.OPTIMISM_RPC_URL };
         case 'op-sepolia':
         case 'optimism-sepolia':
-            return { chain: optimismSepolia, rpc: process.env.OPTIMISM_SEPOLIA_RPC_URL };
+            return { chain: optimismSepolia, rpc: process.env.OP_SEPOLIA_RPC_URL || process.env.OPTIMISM_SEPOLIA_RPC_URL };
         case 'local':
         case 'anvil':
             return { chain: foundry, rpc: "http://127.0.0.1:8545" };

@@ -8,6 +8,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface PriceCache {
   eth_usd: number;
@@ -20,7 +24,7 @@ export class PriceOracle {
   private cacheDuration: number; // 缓存有效期（秒）
 
   constructor(cacheFile?: string, cacheDuration = 3600) {
-    this.cacheFile = cacheFile || path.resolve(__dirname, '../../../../packages/analytics/data/eth_price_cache.json');
+    this.cacheFile = cacheFile || path.resolve(__dirname, '../../../data/eth_price_cache.json');
     this.cacheDuration = cacheDuration;
   }
 

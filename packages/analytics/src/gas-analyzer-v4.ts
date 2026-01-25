@@ -70,9 +70,16 @@ async function main() {
   const parser = new LogParser();
   const records = await parser.parseAll();
   const txHashes = records.filter(r => r.network === networkArg).map(r => r.txHash as Hash);
+
+  console.log(`\n📡 正在处理 ${txHashes.length} 笔交易记录...`);
   
-  console.log(`\n📡 正在处理 ${txHashes.length} 笔交易数据...\n`);
-  const onChainData = await collector.enrichBatch(txHashes, 5);
+  // 仅分析最新的 50 笔交易，以提高效率并确保 RPC 稳定性
+  const LIMIT = 50;
+  // records 已经按日志时间戳排序，所以 txHashes 的顺序也是稳健的
+  const recentTxHashes = txHashes.slice(-LIMIT);
+  
+  console.log(`ℹ️  由于性能优化，仅对最近 ${recentTxHashes.length} 笔交易进行深度穿透分析...\n`);
+  const onChainData = await collector.enrichBatch(recentTxHashes, 5);
   const breakdowns = calculator.calculateBatch(onChainData);
   const avg = calculator.calculateAverage(breakdowns);
 

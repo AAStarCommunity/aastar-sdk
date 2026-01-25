@@ -8,6 +8,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface L2Benchmark {
   name: string;
@@ -29,7 +33,7 @@ export class BenchmarkLoader {
   private cacheDir: string;
 
   constructor(cacheDir?: string) {
-    this.cacheDir = cacheDir || path.resolve(__dirname, '../../../../packages/analytics/data');
+    this.cacheDir = cacheDir || path.resolve(__dirname, '../../../../data');
   }
 
   /**

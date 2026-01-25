@@ -12,7 +12,11 @@ import { createPublicClient, http, type PublicClient, type Hash, type Transactio
 import { sepolia } from 'viem/chains';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { EventDecoder, type DecodedPaymasterEvent } from '../utils/EventDecoder.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface OnChainData {
   txHash: Hash;
@@ -39,14 +43,14 @@ export class DataCollector {
   private cacheEnabled: boolean;
   private superPaymasterAddress: string;
 
-  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress: string = '0xe74304CC5860b950a45967e12321Dff8B5CdcaA0', cacheDir?: string, enableCache = true) {
+  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress: string = '0xe74304CC5860B950A45967E12321Dff8B5CdcaA0', cacheDir?: string, enableCache = true) {
     this.client = createPublicClient({
       chain,
       transport: http(rpcUrl),
     });
     
     this.superPaymasterAddress = superPaymasterAddress;
-    this.cacheDir = cacheDir || path.resolve(__dirname, '../../../../packages/analytics/data/transaction_cache');
+    this.cacheDir = cacheDir || path.resolve(__dirname, '../../../../data/transaction_cache');
     this.cacheEnabled = enableCache;
     
     if (this.cacheEnabled && !fs.existsSync(this.cacheDir)) {

@@ -35,7 +35,7 @@ if (!process.env.PRIVATE_KEY) {
 function validateEnv(network: string) {
     const required = ['PRIVATE_KEY', 'PIMLICO_API_KEY'];
     if (network === 'sepolia') required.push('SEPOLIA_RPC_URL');
-    if (network === 'op-sepolia') required.push('OPTIMISM_SEPOLIA_RPC_URL');
+    if (network === 'op-sepolia') required.push('OP_SEPOLIA_RPC_URL');
     
     const missing = required.filter(k => !process.env[k]);
     if (missing.length > 0) {
@@ -55,12 +55,15 @@ if (!fs.existsSync(statePath)) {
 const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 
 // Extract Accounts
-const ACCOUNT_AA1 = state.aaAccounts.find((a: any) => a.label.includes('Jason') && a.salt === "0")?.address as Hex;
-const ACCOUNT_AA2 = state.aaAccounts.find((a: any) => a.label.includes('Jason') && a.salt === "1")?.address as Hex;
-const SUPER_PAYMASTER_ADDR = state.operators.anni.superPaymaster as Hex;
+const ACCOUNT_AA1 = state.aaAccounts.find((a: any) => a.label.includes('Jason') && (a.salt === "0" || a.salt === 0))?.address as Hex;
+const ACCOUNT_ANNI_AA1 = state.aaAccounts.find((a: any) => a.label.includes('Anni') && (a.salt === "0" || a.salt === 0))?.address as Hex;
 
-if (!ACCOUNT_AA1 || !ACCOUNT_AA2 || !SUPER_PAYMASTER_ADDR) {
-    throw new Error("Missing required accounts in state file");
+const SUPER_PAYMASTER_ADDR = state.operators.anni.superPaymaster as Hex;
+const SUPER_PAYMASTER_OPERATOR = state.operators.anni.address as Hex; // EOA
+
+if (!ACCOUNT_AA1 || !ACCOUNT_ANNI_AA1 || !SUPER_PAYMASTER_ADDR || !SUPER_PAYMASTER_OPERATOR) {
+    console.error("DEBUG: State extraction failed:", { ACCOUNT_AA1, ACCOUNT_ANNI_AA1, SUPER_PAYMASTER_ADDR, SUPER_PAYMASTER_OPERATOR });
+    throw new Error("Missing required accounts/operators in state file");
 }
 
 async function main() {
@@ -69,11 +72,16 @@ async function main() {
     const config = getNetworkConfig(networkName);
     const resolvedRpcUrl = config.rpc || (process.env.ALCHEMY_API_KEY ? `https://${networkName === 'sepolia' ? 'eth-sepolia' : 'opt-sepolia'}.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}` : "");
     const privateKey = process.env.PRIVATE_KEY as Hex;
-    const bundlerUrl = process.env.BUNDLER_URL || `https://api.pimlico.io/v2/${networkName === 'sepolia' ? 'sepolia' : 'optimism-sepolia'}/rpc?apikey=${process.env.PIMLICO_API_KEY}`;
+    
+    // Prioritize Pimlico if API Key is present, otherwise use env BUNDLER_URL
+    const bundlerUrl = process.env.PIMLICO_API_KEY 
+        ? `https://api.pimlico.io/v2/${networkName === 'sepolia' ? 'sepolia' : 'optimism-sepolia'}/rpc?apikey=${process.env.PIMLICO_API_KEY}`
+        : (process.env.BUNDLER_URL || "");
 
     console.log(`   RPC Configured: ${!!config.rpc}`);
     console.log(`   Alchemy Key Present: ${!!process.env.ALCHEMY_API_KEY}`);
     console.log(`   Resolved RPC: ${resolvedRpcUrl ? 'Yes' : 'No'}`);
+    console.log(`   Bundler URL: ${bundlerUrl}`);
     console.log(`   Private Key Present: ${!!privateKey}`);
 
     if (!resolvedRpcUrl || !privateKey) {
@@ -89,7 +97,7 @@ async function main() {
 
     // Debug Check
     await generator.checkAccount(ACCOUNT_AA1);
-    await generator.checkAccount(ACCOUNT_AA2);
+    await generator.checkAccount(ACCOUNT_ANNI_AA1);
 
     console.log("-----------------------------------------");
     
@@ -104,9 +112,12 @@ async function main() {
 
     console.log("-----------------------------------------");
     console.log("🏁 Phase 2: SuperPaymaster (Gasless)");
-    console.log("   Account: " + ACCOUNT_AA2);
+    console.log("   Account: " + ACCOUNT_ANNI_AA1);
     console.log("   Paymaster: " + SUPER_PAYMASTER_ADDR);
-    await generator.runSuperPaymaster(5, ACCOUNT_AA2, SUPER_PAYMASTER_ADDR);
+    console.log("   Operator: " + SUPER_PAYMASTER_OPERATOR);
+    
+    const anniKey = process.env.PRIVATE_KEY_ANNI as Hex;
+    await generator.runSuperPaymaster(10, ACCOUNT_ANNI_AA1, SUPER_PAYMASTER_ADDR, SUPER_PAYMASTER_OPERATOR, anniKey);
 
     console.log("-----------------------------------------");
     console.log("✅ Traffic Generation Complete.");

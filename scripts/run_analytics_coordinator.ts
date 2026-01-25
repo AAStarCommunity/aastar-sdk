@@ -14,7 +14,7 @@ dotenv.config({ path: ENV_FILE });
 function validateEnv(network: string) {
     const required = ['PRIVATE_KEY', 'ETHERSCAN_API_KEY'];
     if (network === 'sepolia') required.push('SEPOLIA_RPC_URL');
-    if (network === 'op-sepolia') required.push('OPTIMISM_SEPOLIA_RPC_URL');
+    if (network === 'op-sepolia') required.push('OP_SEPOLIA_RPC_URL');
 
     const missing = required.filter(k => !process.env[k]);
     if (missing.length > 0) {

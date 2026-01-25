@@ -152,38 +152,69 @@ export class TrafficGenerator {
      * Group 3: SuperPaymaster (Treatment A)
      * Logic: Gasless transfer via Credit system
      */
-    async runSuperPaymaster(runs: number, smartAccountAddress: Hex, operatorAddress: Hex) {
+    async runSuperPaymaster(runs: number, smartAccountAddress: Hex, superPaymasterAddress: Hex, operatorAddress: Hex, operatorKey?: Hex) {
         console.log(`\n🏎️  Starting SuperPaymaster Traffic (${runs} runs)...`);
         
-        const userClient = new UserClient({
-            accountAddress: smartAccountAddress,
-            client: this.wallet,
-            publicClient: this.client,
-            bundlerClient: this.getBundlerClient(),
-            entryPointAddress: ENTRY_POINT_V07
-        });
+        // Use the specialized operator key if provided (to ensure valid Owner signature), 
+        // otherwise fallback to the default wallet
+        const signingWallet = operatorKey 
+            ? createWalletClient({
+                chain: this.chain,
+                transport: http(this.config.rpcUrl),
+                account: privateKeyToAccount(operatorKey)
+              })
+            : this.wallet;
 
-        console.log(`   Target SA: ${smartAccountAddress}`);
-        console.log(`   Operator: ${operatorAddress}`);
+        // For Phase 2, we skip the UserClient.executeGasless and use the high-level SuperPaymasterClient directly
+        // to ensure we follow the proven success logic in l4-regression.ts
+        const { SuperPaymasterClient: SDKSuperPaymasterClient } = await import('@aastar/paymaster');
 
         for (let i = 0; i < runs; i++) {
             try {
-                const hash = await userClient.executeGasless({
-                    target: smartAccountAddress,
-                    value: 0n,
-                    data: '0x',
-                    paymaster: operatorAddress, 
-                    paymasterType: 'Super'
-                });
+                // Use the provided wallet as both the owner/signer and the operator (sponsor) for these transactions
+                // matching the demo flow
+                const hash = await SDKSuperPaymasterClient.submitGaslessTransaction(
+                    this.client,
+                    signingWallet,
+                    smartAccountAddress,
+                    ENTRY_POINT_V07,
+                    this.config.bundlerUrl || '',
+                    {
+                        token: await this.getTokenForOperator(operatorAddress), 
+                        recipient: smartAccountAddress, // Send to self to preserve tokens
+                        amount: parseEther('0.1'),
+                        operator: operatorAddress,
+                        paymasterAddress: superPaymasterAddress
+                    }
+                );
 
                 console.log(`   [${i+1}/${runs}] SPM Tx: ${hash}`);
-                await this.client.waitForTransactionReceipt({ hash });
+                
+                // Wait for receipt using the bundler client with explicit actions
+                const bundlerUrl = this.config.bundlerUrl;
+                if (bundlerUrl) {
+                    const { bundlerActions } = await import('viem/account-abstraction');
+                    const bundler = createPublicClient({
+                        chain: this.chain,
+                        transport: http(bundlerUrl)
+                    }).extend(bundlerActions);
+                    await bundler.waitForUserOperationReceipt({ hash: hash as Hex });
+                } else {
+                    await this.client.waitForTransactionReceipt({ hash: hash as Hex });
+                }
+                
                 if (i < runs - 1) await this.delay(20000);
             } catch (e: any) {
                 console.error(`   ❌ Run ${i+1} failed: ${e.message}`);
-                if (i < runs - 1) await this.delay(5000);
+                if (i < runs - 1) await this.delay(10000);
             }
         }
+    }
+
+    private async getTokenForOperator(operator: Hex): Promise<Hex> {
+        // Simple mapping based on known state or defaulting to aPNTs
+        // In l4-regression, Anni uses state.operators.anni.tokenAddress
+        return '0x986383dF2A5303DDc87e0c5d4505bf5fd3BD4212'; // aPNTs on Sepolia
     }
 
     /**

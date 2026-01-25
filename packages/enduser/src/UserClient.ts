@@ -1,8 +1,7 @@
-import { type Address, type Hash, type Hex } from 'viem';
+import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
-import { encodeFunctionData } from 'viem';
 
 export interface UserClientConfig extends ClientConfig {
     accountAddress: Address; // The AA account address
@@ -371,11 +370,13 @@ export class UserClient extends BaseClient {
         data: Hex;
         paymaster: Address;
         paymasterType: 'V4' | 'Super';
+        operator?: Address; // Added for SuperPaymaster
+        maxRate?: bigint;   // Added for SuperPaymaster
     }, options?: TransactionOptions): Promise<Hash> {
         try {
             const client = this.bundlerClient ? this.bundlerClient.extend(bundlerActions) : (this.client as any).extend(bundlerActions);
+            
             const ep = this.requireEntryPoint();
-            const publicClient = this.getStartPublicClient();
             
             // 1. Prepare Call Data
             const callData = encodeFunctionData({
@@ -384,66 +385,30 @@ export class UserClient extends BaseClient {
                 args: [params.target, params.value, params.data]
             });
 
-            // 2. Prepare Paymaster Data
-            let paymasterAndData: Hex = params.paymaster;
-            // Note: In real scenarios, PM V4 or Super might need additional encoded data.
-            // For now, we use the address as the base.
-
-            // 3. Estimate Gas
-            const sender = this.accountAddress;
-            const nonce = await this.getNonce();
+            // 3. Delegate to PaymasterClient for v0.7 Gasless Submission
+            // This ensures we follow the exact same logic as successful demo scripts
+            // We dynamic import to avoid circular dependencies if any
+            const { PaymasterClient: SDKPaymasterClient } = await import('../../paymaster/src/V4/PaymasterClient.js');
             
-            const userOpPartial = {
-                sender,
-                nonce,
-                initCode: '0x' as Hex,
+            const txHash = await SDKPaymasterClient.submitGaslessUserOperation(
+                this.client,
+                this.client, // WalletClient acts as signer
+                this.accountAddress,
+                ep,
+                params.paymaster,
+                params.target, // placeholder for token if V4
+                this.bundlerClient?.transport?.url || (this.client.transport as any).url || '', 
                 callData,
-                paymasterAndData,
-                signature: '0x' as Hex
-            };
+                {
+                    operator: params.operator,
+                    autoEstimate: true, // Let SDK handle estimation & tuning
+                    paymasterPostOpGasLimit: 100000n // conservative default
+                }
+            );
 
-            const gasEstimate = await (client as any).request({
-                method: 'eth_estimateUserOperationGas',
-                params: [userOpPartial, ep]
-            });
-
-            // 4. Construct Final UserOp 
-            const fees = await (publicClient as any).estimateFeesPerGas();
-            
-            const userOp: UserOperation = {
-                ...userOpPartial,
-                callGasLimit: gasEstimate.callGasLimit,
-                verificationGasLimit: gasEstimate.verificationGasLimit + 50000n,
-                preVerificationGas: gasEstimate.preVerificationGas,
-                maxFeePerGas: fees.maxFeePerGas || fees.gasPrice || 1000000000n,
-                maxPriorityFeePerGas: fees.maxPriorityFeePerGas || 1000000000n
-            };
-
-            // 5. Sign
-            const chainId = this.client.chain?.id || 31337;
-            const hash = getUserOperationHash({
-                userOperation: userOp,
-                entryPointAddress: ep,
-                entryPointVersion: '0.7',
-                chainId
-            });
-
-            const signature = await this.client.signMessage({
-                message: { raw: hash },
-                account: this.client.account!
-            });
-
-            const signedUserOp = {
-                ...userOp,
-                signature
-            };
-
-            // 6. Send
-            return await (client as any).request({
-                method: 'eth_sendUserOperation',
-                params: [signedUserOp, ep]
-            });
-        } catch (error) {
+            return txHash;
+        } catch (error: any) {
+            console.error("   ❌ executeGasless Error:", error.message);
             throw error;
         }
     }
