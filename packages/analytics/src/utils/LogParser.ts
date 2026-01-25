@@ -88,10 +88,10 @@ export class LogParser {
         }
     }
 
-    // Deduplicate by TxHash
-    const uniqueRecords = Array.from(new Map(records.map(item => [item.txHash, item])).values());
+    // Deduplicate by TxHash (Strict Lowercase)
+    const uniqueRecords = Array.from(new Map(records.map(item => [item.txHash.toLowerCase(), item])).values());
 
-    console.log(`✅ 解析完成：提取 ${uniqueRecords.length} 条唯一交易记录 (Legacy: ${records.length - uniqueRecords.length} duplicates)`);
+    console.log(`✅ 解析完成：提取 ${uniqueRecords.length} 条唯一交易记录 (Legacy/Duplicate dropped: ${records.length - uniqueRecords.length})`);
     return uniqueRecords;
   }
 

@@ -5,10 +5,18 @@
 This module is the core data intelligence engine for the AAStar ecosystem. It has been upgraded to support **Scientific Data Collection** for the "Asset-Oriented Abstraction" thesis, moving beyond simple log analysis to rigorous, on-chain ground truth verification.
 工作流：
 
-收集数据（日常运行）：pnpm tsx scripts/run_analytics_coordinator.ts --network sepolia
-产生新实验数据（需要时运行）：pnpm tsx scripts/run_analytics_coordinator.ts --network sepolia --gen-traffic
-分析报告（查看结果）：npx tsx packages/analytics/src/gas-analyzer-v4.ts --network sepolia
-三个步骤是解耦的，按需执行即可
+收集数据（日常运行）：
+pnpm tsx scripts/run_analytics_coordinator.ts --network sepolia
+产生新实验数据（需要时运行）：
+pnpm tsx scripts/run_analytics_coordinator.ts --network sepolia --gen-traffic
+
+收集events
+pnpm tsx scripts/run_analytics_coordinator.ts --network sepolia --fetch-events
+
+分析报告（查看结果）：
+pnpm tsx packages/analytics/src/gas-analyzer-v4.ts --network sepolia
+
+步骤是解耦的，按需执行即可
 ---
 
 ## 🏗 System Architecture
