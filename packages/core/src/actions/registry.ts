@@ -90,6 +90,10 @@ export type RegistryActions = {
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
+    // AccessControl
+    grantRole: (args: { roleId: Hex, user: Address, account?: Account | Address }) => Promise<Hash>;
+    revokeRole: (args: { roleId: Hex, user: Address, account?: Account | Address }) => Promise<Hash>;
+    
     // Version
     version: () => Promise<string>;
 };
@@ -961,7 +965,43 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
         }
     },
+    
+    // AccessControl
+    async grantRole({ roleId, user, account }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'grantRole',
+                args: [roleId, user],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'grantRole');
+        }
+    },
 
+    async revokeRole({ roleId, user, account }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'revokeRole',
+                args: [roleId, user],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'revokeRole');
+        }
+    },
+
+    // Version
     async version() {
         try {
             return await (client as PublicClient).readContract({

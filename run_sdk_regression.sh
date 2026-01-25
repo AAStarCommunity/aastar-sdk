@@ -203,6 +203,19 @@ fi
 # 7. Run L1/L2/L3 Regression Tests
 # ========================================
 echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Running SDK Unit Tests (L3 APIs)            ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
+
+pnpm -r test
+UNIT_TEST_EXIT_CODE=$?
+
+if [ $UNIT_TEST_EXIT_CODE -ne 0 ]; then
+    echo -e "\n${RED}❌ Unit Tests Failed! Stopping Regression.${NC}"
+    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
+    exit $UNIT_TEST_EXIT_CODE
+fi
+
+echo -e "\n${BLUE}╔════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Running L1/L2/L3 API Regression Tests       ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
 
