@@ -32,16 +32,67 @@ export class LogParser {
    * 解析所有日志文件
    */
   async parseAll(): Promise<TransactionRecord[]> {
-    const logFiles = this.getLogFiles();
     const records: TransactionRecord[] = [];
 
-    for (const logFile of logFiles) {
-      const fileRecords = await this.parseFile(logFile);
-      records.push(...fileRecords);
+    // 1. Parse Legacy Log Files
+    try {
+        const logFiles = this.getLogFiles();
+        for (const logFile of logFiles) {
+        const fileRecords = await this.parseFile(logFile);
+        records.push(...fileRecords);
+        }
+    } catch (e) {
+        console.warn(`⚠️  Legacy logs skipped: ${e}`);
     }
 
-    console.log(`✅ 解析完成：从 ${logFiles.length} 个日志文件中提取 ${records.length} 条交易记录`);
-    return records;
+    // 2. Parse Historical JSONs (Ground Truth)
+    const historicalDir = path.resolve(process.cwd(), 'packages/analytics/data/historical');
+    if (fs.existsSync(historicalDir)) {
+        const files = fs.readdirSync(historicalDir).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+            const data = JSON.parse(fs.readFileSync(path.join(historicalDir, file), 'utf8'));
+            if (Array.isArray(data.transactions)) {
+                for (const tx of data.transactions) {
+                    records.push({
+                        txHash: tx.hash,
+                        testType: data.label || 'Historical',
+                        network: data.network?.toString() === '11155111' ? 'sepolia' : 'op-sepolia',
+                        timestamp: new Date(parseInt(tx.timeStamp) * 1000),
+                        logFile: file,
+                        success: tx.isError === '0'
+                    });
+                }
+            }
+        }
+    }
+
+    // 3. Parse Event JSONs (AA Events)
+    const eventsDir = path.resolve(process.cwd(), 'packages/analytics/data/events');
+    if (fs.existsSync(eventsDir)) {
+        const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+            const data = JSON.parse(fs.readFileSync(path.join(eventsDir, file), 'utf8'));
+            if (Array.isArray(data.events)) {
+                for (const evt of data.events) {
+                    records.push({
+                        txHash: evt.transactionHash,
+                        userOpHash: evt.topics[1], // topic1 is userOpHash
+                        testType: data.label || 'Event',
+                        network: data.network?.toString() === '11155111' ? 'sepolia' : 'op-sepolia',
+                        timestamp: new Date(parseInt(evt.timeStamp) * 1000),
+                        logFile: file,
+                        success: true
+                    });
+                }
+            }
+        }
+    }
+
+    // Deduplicate by TxHash
+    const uniqueRecords = Array.from(new Map(records.map(item => [item.txHash, item])).values());
+
+    console.log(`✅ 解析完成：提取 ${uniqueRecords.length} 条唯一交易记录 (Legacy: ${records.length - uniqueRecords.length} duplicates)`);
+    return uniqueRecords;
   }
 
   /**

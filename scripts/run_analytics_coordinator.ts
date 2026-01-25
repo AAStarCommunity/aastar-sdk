@@ -3,6 +3,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import { HistoricalFetcher } from './libs/HistoricalFetcher.js';
+import { EventFetcher } from './libs/EventFetcher.js';
 // import { TrafficGenerator } from '../packages/analytics/src/generators/TrafficGenerator.js'; 
 
 const NETWORK = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
@@ -58,6 +59,37 @@ async function main() {
             if (opData.superPaymaster) {
                 const txs = await fetcher.fetchTransactions(opData.superPaymaster);
                 await fetcher.saveHistory(opData.superPaymaster, txs, `${name}_SuperPaymaster`);
+            }
+        }
+    }
+
+    // 2b. Fetch Events (Optional but Recommended for AA)
+    if (process.argv.includes('--fetch-events')) {
+        console.log("\n📡 Event Fetching Requested (--fetch-events)");
+        const eventFetcher = new EventFetcher(NETWORK);
+
+        // Fetch for AA Accounts (as SENDER)
+        if (Array.isArray(state.aaAccounts)) {
+            for (const acct of state.aaAccounts) {
+                if (acct.address) {
+                    const logs = await eventFetcher.fetchUserOps(acct.address, 'sender');
+                    await eventFetcher.saveEvents(acct.address, logs, acct.label || 'Unknown_AA');
+                }
+            }
+        }
+
+        // Fetch for Paymasters (as PAYMASTER)
+        if (state.operators) {
+            for (const [name, data] of Object.entries(state.operators)) {
+                const opData = data as any;
+                 if (opData.paymasterV4) {
+                    const logs = await eventFetcher.fetchUserOps(opData.paymasterV4, 'paymaster');
+                    await eventFetcher.saveEvents(opData.paymasterV4, logs, `${name}_PaymasterV4`);
+                }
+                if (opData.superPaymaster) {
+                    const logs = await eventFetcher.fetchUserOps(opData.superPaymaster, 'paymaster');
+                    await eventFetcher.saveEvents(opData.superPaymaster, logs, `${name}_SuperPaymaster`);
+                }
             }
         }
     }
