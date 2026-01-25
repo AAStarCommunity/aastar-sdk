@@ -1,0 +1,33 @@
+{
+  "name": "@aastar/admin",
+  "version": "0.16.14",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "description": "Admin/Governance client for AAstar SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "aastar",
+    "admin",
+    "governance",
+    "web3"
+  ],
+  "author": "AAstar Team",
+  "license": "MIT",
+  "dependencies": {
+    "@aastar/core": "workspace:*",
+    "viem": "2.43.3"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
+}
