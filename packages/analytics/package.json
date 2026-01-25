@@ -4,6 +4,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "type": "module",
   "description": "Analytics client for AAstar SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,7 +24,8 @@
   "license": "MIT",
   "dependencies": {
     "@aastar/core": "workspace:*",
-    "viem": "2.43.3"
+    "viem": "2.43.3",
+    "@aastar/enduser": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.7.2"

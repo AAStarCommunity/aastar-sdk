@@ -5,14 +5,12 @@ import {
     http, 
     parseEther, 
     type Hex, 
-    type Account,
-    type Chain
+    type Account, 
+    type Chain 
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { getNetworkConfig } from '../../../../scripts/00_utils.js'; // Adjust path as needed
-// Dynamic imports for SDK to avoid circular deps during init
-import type { EndUserClient } from '../../../enduser/src/index.js'; // Adjust path
-import type { OperatorClient } from '../../../operator/src/index.js';
+import { getNetworkConfig, ENTRY_POINT_V07 } from '../../../../scripts/00_utils.js';
+import { UserClient } from '@aastar/enduser';
 
 export interface TrafficConfig {
     network: string;
@@ -45,6 +43,36 @@ export class TrafficGenerator {
         });
     }
 
+    private getBundlerClient() {
+        if (!this.config.bundlerUrl) return undefined;
+        return createPublicClient({
+             chain: this.chain,
+             transport: http(this.config.bundlerUrl)
+        });
+    }
+
+    /**
+     * Debug: Check account status
+     */
+    async checkAccount(address: Hex) {
+        console.log(`   🔍 Checking account ${address}...`);
+        const code = await this.client.getBytecode({ address });
+        console.log(`      Code Size: ${code ? code.length : 0}`);
+        if (!code) console.warn(`      ⚠️  Warning: Account not deployed!`);
+        
+        try {
+            const nonce = await this.client.readContract({
+                address: ENTRY_POINT_V07,
+                abi: [{ name: 'getNonce', type: 'function', inputs: [{ name: 'sender', type: 'address' }, { name: 'key', type: 'uint192' }], outputs: [{ name: 'nonce', type: 'uint256' }] }],
+                functionName: 'getNonce',
+                args: [address, 0n]
+            });
+            console.log(`      Nonce: ${nonce}`);
+        } catch (e: any) {
+            console.error(`      ❌ Failed to fetch nonce: ${e.message}`);
+        }
+    }
+
     /**
      * Group 1: EOA (Baseline)
      * Simple native transfer
@@ -70,31 +98,54 @@ export class TrafficGenerator {
     }
 
     /**
-     * Group 2: Standard AA (Pimlico/Alchemy)
-     * Requires EndUserClient initialized with Bundler
+     * Helper: Delay for rate limiting
      */
-    async runStandardAA(runs: number, targetAddress: Hex) {
+    private async delay(ms: number) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Group 2: Standard AA (Pimlico/Alchemy)
+     * Requires UserClient initialized with Bundler
+     */
+    async runStandardAA(runs: number, smartAccountAddress: Hex) {
         console.log(`\n🚕 Starting Standard AA Traffic (${runs} runs)...`);
         
-        if (!this.config.bundlerUrl && !this.config.pimlicoKey) {
-            console.warn("   ⚠️ Missing Bundler URL/Key. Skipping.");
+        if (!this.config.bundlerUrl) {
+            console.warn("   ⚠️ Missing Bundler URL. Skipping.");
             return;
         }
-
-        // Import SDK dynamically
-        const { EndUserClient } = await import('../../../enduser/src/index.js');
         
-        // Setup ephemeral AA account
-        const owner = privateKeyToAccount(generatePrivateKey());
-        const aaClient = new EndUserClient(this.client, createWalletClient({
-            account: owner,
-            chain: this.chain,
-            transport: http(this.config.rpcUrl)
-        }));
+        const userClient = new UserClient({
+            accountAddress: smartAccountAddress,
+            client: this.wallet,
+            publicClient: this.client,
+            bundlerClient: this.getBundlerClient(),
+            entryPointAddress: ENTRY_POINT_V07
+        });
 
-        // We need a specific "Standard Paymaster" provider here
-        // For now, this is a placeholder for the logic wrapping a Pimlico Paymaster Client
-        console.log("   ℹ️  Standard AA Generator logic requires Pimlico Client integration (Todo)");
+        console.log(`   Target SA: ${smartAccountAddress}`);
+
+        for (let i = 0; i < runs; i++) {
+            try {
+                // Send to self to minimize setup, just measuring gas
+                // Note: user must have gas or paymaster
+                // Standard Paymaster usage not explicitly configured here yet, 
+                // assuming account has native balance or bundler endpoint handles sponsorship
+                const hash = await userClient.execute(
+                    smartAccountAddress, 
+                    0n,
+                    "0x"
+                );
+                
+                console.log(`   [${i+1}/${runs}] AA Tx: ${hash}`);
+                await this.client.waitForTransactionReceipt({ hash });
+                if (i < runs - 1) await this.delay(20000); 
+            } catch (e: any) {
+                console.error(`   ❌ Run ${i+1} failed: ${e.message}`);
+                if (i < runs - 1) await this.delay(5000);
+            }
+        }
     }
 
     /**
@@ -104,32 +155,33 @@ export class TrafficGenerator {
     async runSuperPaymaster(runs: number, smartAccountAddress: Hex, operatorAddress: Hex) {
         console.log(`\n🏎️  Starting SuperPaymaster Traffic (${runs} runs)...`);
         
-        const { EndUserClient } = await import('../../../enduser/src/index.js');
-        
-        // We assume smartAccountAddress is already deployed and has Credit
-        const aaClient = new EndUserClient(this.client, this.wallet); 
-        // Note: In reality, we need the OWNER key of the smartAccountAddress, not the deployer key
-        // This suggests we need to pass the owner key in config or derive it
-        
+        const userClient = new UserClient({
+            accountAddress: smartAccountAddress,
+            client: this.wallet,
+            publicClient: this.client,
+            bundlerClient: this.getBundlerClient(),
+            entryPointAddress: ENTRY_POINT_V07
+        });
+
         console.log(`   Target SA: ${smartAccountAddress}`);
         console.log(`   Operator: ${operatorAddress}`);
 
         for (let i = 0; i < runs; i++) {
             try {
-               /* 
-               // Pseudo-code for SDK call
-               const receipt = await aaClient.executeGasless({
-                   account: smartAccountAddress, 
-                   target: "0x0000000000000000000000000000000000000000",
-                   value: 0n,
-                   data: "0x",
-                   operator: operatorAddress
-               });
-               console.log(`   [${i+1}/${runs}] SPM Tx: ${receipt.transactionHash}`);
-               */ 
-               console.log(`   [${i+1}/${runs}] (Simulation) executed gasless op via ${operatorAddress}`);
+                const hash = await userClient.executeGasless({
+                    target: smartAccountAddress,
+                    value: 0n,
+                    data: '0x',
+                    paymaster: operatorAddress, 
+                    paymasterType: 'Super'
+                });
+
+                console.log(`   [${i+1}/${runs}] SPM Tx: ${hash}`);
+                await this.client.waitForTransactionReceipt({ hash });
+                if (i < runs - 1) await this.delay(20000);
             } catch (e: any) {
                 console.error(`   ❌ Run ${i+1} failed: ${e.message}`);
+                if (i < runs - 1) await this.delay(5000);
             }
         }
     }

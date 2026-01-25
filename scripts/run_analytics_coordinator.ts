@@ -11,6 +11,21 @@ const ENV_FILE = path.resolve(process.cwd(), `.env.${NETWORK}`);
 console.log(`Loading Env: ${ENV_FILE}`);
 dotenv.config({ path: ENV_FILE });
 
+function validateEnv(network: string) {
+    const required = ['PRIVATE_KEY', 'ETHERSCAN_API_KEY'];
+    if (network === 'sepolia') required.push('SEPOLIA_RPC_URL');
+    if (network === 'op-sepolia') required.push('OPTIMISM_SEPOLIA_RPC_URL');
+
+    const missing = required.filter(k => !process.env[k]);
+    if (missing.length > 0) {
+        console.error(`❌ Error: Missing required environment variables for ${network}:`);
+        missing.forEach(m => console.error(`   - ${m}`));
+        process.exit(1);
+    }
+}
+
+validateEnv(NETWORK);
+
 async function main() {
     console.log(`\n🎼 Analytics Coordinator - Network: ${NETWORK}`);
     
@@ -96,9 +111,44 @@ async function main() {
 
     // 3. Traffic Generation (Optional)
     if (process.argv.includes('--gen-traffic')) {
-        console.log("\n🚦 Traffic Generation Requested (Implementation Validating...)");
-        // const generator = new TrafficGenerator({...});
-        // await generator.runEOA(5);
+        console.log("\n🚦 Traffic Generation Requested");
+        // Lazy import to avoid load-time dependency issues if unused
+        const { TrafficGenerator } = await import('../packages/analytics/src/generators/TrafficGenerator.js');
+        
+        // Find how many runs (default 20 as requested)
+        const runsArg = process.argv.find(arg => arg.startsWith('--runs='));
+        const runs = runsArg ? parseInt(runsArg.split('=')[1]) : 20;
+        
+        let rawKey = process.env.PRIVATE_KEY;
+        if (!rawKey) {
+            // Fallback: Manual regex parse
+            try {
+                const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+                const match = envContent.match(/^PRIVATE_KEY=(.*)$/m);
+                if (match) rawKey = match[1].trim();
+            } catch (e) {
+                console.warn("⚠️ Failed to manually parse env file");
+            }
+        }
+
+        // Clean up quotes if present
+        if (rawKey && (rawKey.startsWith('"') || rawKey.startsWith("'"))) {
+            rawKey = rawKey.slice(1, -1);
+        }
+
+        const privateKey = (rawKey && rawKey.startsWith('0x') ? rawKey : `0x${rawKey}`) as `0x${string}`;
+        
+        console.log(`\n🔑 Loaded Key: ${privateKey ? privateKey.substring(0, 6) + '...' : 'undefined'}`);
+
+        const generator = new TrafficGenerator({
+            network: NETWORK,
+            rpcUrl: process.env.RPC_URL || process.env[`${NETWORK.toUpperCase()}_RPC_URL`] || process.env.SEPOLIA_RPC_URL || '',
+            privateKey: privateKey || '0x0000000000000000000000000000000000000000000000000000000000000000'
+        });
+
+        if (generator) {
+             await generator.runEOA(runs);
+        }
     }
 
     console.log("\n✅ Coordination Complete. Run gas-analyzer-v4.ts to generate report.");

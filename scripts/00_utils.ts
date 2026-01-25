@@ -48,6 +48,7 @@ export function getNetworkConfig(network: string) {
             return { chain: sepolia, rpc: process.env.SEPOLIA_RPC_URL };
         case 'optimism':
             return { chain: optimism, rpc: process.env.OPTIMISM_RPC_URL };
+        case 'op-sepolia':
         case 'optimism-sepolia':
             return { chain: optimismSepolia, rpc: process.env.OPTIMISM_SEPOLIA_RPC_URL };
         case 'local':

@@ -41,13 +41,14 @@ export class HistoricalFetcher {
 
     private getApiKey(network: string): string {
         if (network.includes('optimism') || network.includes('op-')) {
-            return process.env.OPTIMISM_ETHERSCAN_API_KEY || '';
+            // Fallback to generic ETHERSCAN_API_KEY if OP specific one is missing
+            return process.env.OPTIMISM_ETHERSCAN_API_KEY || process.env.ETHERSCAN_API_KEY || '';
         }
         return process.env.ETHERSCAN_API_KEY || '';
     }
 
     private getBaseUrl(network: string): string {
-        // Unified V2 Endpoint for Etherscan-supported chains
+        // Unified V2 Endpoint for all Etherscan-supported chains
         return 'https://api.etherscan.io/v2/api';
     }
 

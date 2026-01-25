@@ -12,6 +12,7 @@ export interface UserClientConfig extends ClientConfig {
     gTokenStakingAddress?: Address; // For staking/investing
     registryAddress?: Address; // For role management
     gTokenAddress?: Address; // For fee payment approval
+    bundlerClient?: any;
 }
 
 export class UserClient extends BaseClient {
@@ -21,9 +22,11 @@ export class UserClient extends BaseClient {
     public gTokenStakingAddress?: Address;
     public registryAddress?: Address;
     public gTokenAddress?: Address;
+    public bundlerClient?: any;
 
     constructor(config: UserClientConfig) {
         super(config);
+        this.bundlerClient = config.bundlerClient;
         this.accountAddress = config.accountAddress;
         this.sbtAddress = config.sbtAddress;
         this.entryPointAddress = config.entryPointAddress;
@@ -370,7 +373,7 @@ export class UserClient extends BaseClient {
         paymasterType: 'V4' | 'Super';
     }, options?: TransactionOptions): Promise<Hash> {
         try {
-            const client = (this.client as any).extend(bundlerActions);
+            const client = this.bundlerClient ? this.bundlerClient.extend(bundlerActions) : (this.client as any).extend(bundlerActions);
             const ep = this.requireEntryPoint();
             const publicClient = this.getStartPublicClient();
             
@@ -399,9 +402,9 @@ export class UserClient extends BaseClient {
                 signature: '0x' as Hex
             };
 
-            const gasEstimate = await (client as any).estimateUserOperationGas({
-                 userOperation: userOpPartial as any,
-                 entryPoint: ep
+            const gasEstimate = await (client as any).request({
+                method: 'eth_estimateUserOperationGas',
+                params: [userOpPartial, ep]
             });
 
             // 4. Construct Final UserOp 
@@ -436,9 +439,9 @@ export class UserClient extends BaseClient {
             };
 
             // 6. Send
-            return await (client as any).sendUserOperation({
-                userOperation: signedUserOp,
-                entryPoint: ep
+            return await (client as any).request({
+                method: 'eth_sendUserOperation',
+                params: [signedUserOp, ep]
             });
         } catch (error) {
             throw error;
