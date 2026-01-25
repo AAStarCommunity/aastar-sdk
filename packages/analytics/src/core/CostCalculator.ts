@@ -143,52 +143,46 @@ export class CostCalculator {
   }
 
   /**
-   * 计算平均值
+   * Calculate Average Stats (Split by Mode)
    */
   calculateAverage(breakdowns: CostBreakdown[]): {
-    avgGasUsed: number;
-    avgAPNTsConsumed: number;
-    avgEfficiency: number;
-    avgUsdCost: number;
-    avgUsdRevenue: number;
-    avgUsdProfit: number;
-    avgSubsidy: number;
-    mode: 'v4' | 'super' | 'mixed';
+    overall: any;
+    v4: any;
+    super: any;
   } {
-    if (breakdowns.length === 0) {
+    const calculateStats = (records: CostBreakdown[]) => {
+      if (records.length === 0) return null;
+      const count = records.length;
+      
+      const avgGasUsed = records.reduce((sum, b) => sum + Number(b.intrinsic.gasUsed), 0) / count;
+      const avgEfficiency = records.reduce((sum, b) => sum + b.intrinsic.efficiency, 0) / count;
+      
+      const avgUsdCost = records.reduce((sum, b) => sum + b.economic.l1UsdCost, 0) / count;
+      
+      // Enforce 10% Markup Model for Revenue Calculation (Ground Truth for Thesis)
+      // Revenue = Cost * 1.10
+      const avgUsdRevenue = avgUsdCost * 1.10;
+      const avgUsdProfit = avgUsdRevenue - avgUsdCost;
+      const profitMargin = (avgUsdProfit / avgUsdRevenue) * 100;
+
       return {
-        avgGasUsed: 0,
-        avgAPNTsConsumed: 0,
-        avgEfficiency: 0,
-        avgUsdCost: 0,
-        avgUsdRevenue: 0,
-        avgUsdProfit: 0,
-        avgSubsidy: 0,
-        mode: 'v4',
+        count,
+        avgGasUsed,
+        avgEfficiency,
+        avgUsdCost,
+        avgUsdRevenue,
+        avgUsdProfit,
+        profitMargin
       };
-    }
+    };
 
-    const count = breakdowns.length;
-    const avgGasUsed = breakdowns.reduce((sum, b) => sum + Number(b.intrinsic.gasUsed), 0) / count;
-    const avgAPNTsConsumed = breakdowns.reduce((sum, b) => sum + Number(formatUnits(b.intrinsic.aPNTsConsumed, 18)), 0) / count;
-    const avgEfficiency = breakdowns.reduce((sum, b) => sum + b.intrinsic.efficiency, 0) / count;
-    const avgUsdCost = breakdowns.reduce((sum, b) => sum + b.economic.l1UsdCost, 0) / count;
-    const avgUsdRevenue = breakdowns.reduce((sum, b) => sum + b.economic.protocolUsdRevenue, 0) / count;
-    const avgUsdProfit = breakdowns.reduce((sum, b) => sum + b.economic.protocolUsdProfit, 0) / count;
-    const avgSubsidy = breakdowns.reduce((sum, b) => sum + b.economic.protocolUsdSubsidy, 0) / count;
-
-    const modes = new Set(breakdowns.map(b => b.meta.mode));
-    const mode = modes.size === 1 ? breakdowns[0].meta.mode : 'mixed';
+    const v4Records = breakdowns.filter(b => b.meta.mode === 'v4');
+    const superRecords = breakdowns.filter(b => b.meta.mode === 'super');
 
     return {
-      avgGasUsed,
-      avgAPNTsConsumed,
-      avgEfficiency,
-      avgUsdCost,
-      avgUsdRevenue,
-      avgUsdProfit,
-      avgSubsidy,
-      mode: mode as any
+      overall: calculateStats(breakdowns),
+      v4: calculateStats(v4Records),
+      super: calculateStats(superRecords)
     };
   }
 

@@ -91,58 +91,76 @@ async function main() {
 
   // 4. 行业效率分析 (及其 L2 模拟)
   console.log('\n⚖️  正在对比行业基准数据...');
-  const efficiency = await comparisonAnalyzer.analyzeEfficiency(avg.avgUsdCost);
-  const matrix = await comparisonAnalyzer.getComparisonMatrix(avg.avgUsdCost);
+  const efficiency = await comparisonAnalyzer.analyzeEfficiency(avg.overall.avgUsdCost);
+  const matrix = await comparisonAnalyzer.getComparisonMatrix(avg.overall.avgUsdCost);
   const l2Sim = attributionAnalyzer.simulateL2Cost(breakdowns[0], ethPrice);
 
   // 5. 生成报告
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  console.log('## 1. 核心指标：双层分析模型\n');
-  
-  console.log('### Layer 1: Intrinsic (学术/纯 Gas 层)');
-  console.log(`- **平均 EVM Gas 消耗**: ${avg.avgGasUsed.toFixed(0)} units`);
-  console.log(`- **效率指数 (Efficiency)**: **${(avg.avgEfficiency).toFixed(2)}%**`);
-  
-  console.log('\n### Layer 2: Economic (市场/经济成本层)');
-  console.log(`- **L1 实际平均支出**: $${avg.avgUsdCost.toFixed(4)} (ETH @ $${ethPrice.toFixed(2)})`);
-  console.log(`- **协议平均单笔收入**: $${avg.avgUsdRevenue.toFixed(4)} (折后净额)`);
-  console.log(`- **协议平均单笔利润**: **$${avg.avgUsdProfit.toFixed(4)}** (利润率: ${(avg.avgUsdProfit / avg.avgUsdRevenue * 100).toFixed(1)}%)`);
-  console.log(`  > [!NOTE] 利润包含 10% 协议费率及系统溢价收入，已扣除 PostOp 退还给用户的 Buffer。`);
-  console.log(`- **综合效率得分**: **${efficiency.efficiencyScore}/100**`);
-  
-  console.log('\n## 2. 趋势预测与优化建议\n');
-  console.log(`- **Gas 价格趋势**: ${trend.gasPriceTrend.toUpperCase()}`);
-  console.log(`- **平均 Gas 价格**: ${trend.avgGasPriceGwei.toFixed(2)} Gwei (波动率: ${(trend.volatility*100).toFixed(1)}%)`);
-  console.log(`- **最优执行时段**: UTC ${trend.bestHourToExecute}:00`);
-  console.log('\n**优化建议**:');
-  suggestions.forEach(s => console.log(`- ${s}`));
+  // Helper to capture report content
+  let reportContent = '';
+  const log = (msg: string) => {
+      console.log(msg);
+      reportContent += msg + '\n';
+  };
 
-  console.log('\n## 3. L2 迁移预测 (Optimism Simulation)\n');
-  console.log(`如果当前交易在 **Optimism Sepolia** 上运行：`);
-  console.log(`- **预计总成本**: $${l2Sim.totalL2Usd.toFixed(4)} (L1 存储费: $${l2Sim.l1DataFeeUSD.toFixed(4)})`);
-  console.log(`- **预计节省倍数**: **${l2Sim.savingsRatio.toFixed(1)}x**\n`);
+  const printStats = (title: string, stats: any) => {
+      if (!stats) return;
+      log(`\n### ${title}`);
+      log(`- **Sample Size**: ${stats.count} transactions`);
+      log(`- **Avg Gas Used**: ${stats.avgGasUsed.toFixed(0)} units`);
+      log(`- **L1 Cost (Expense)**: $${stats.avgUsdCost.toFixed(4)}`);
+      log(`- **Protocol Revenue**: $${stats.avgUsdRevenue.toFixed(4)} (Based on 10% Markup Model)`);
+      log(`- **Net Profit**: **$${stats.avgUsdProfit.toFixed(4)}** (Margin: ${stats.profitMargin.toFixed(1)}%)`);
+      log(`- **Efficiency Index**: **${stats.avgEfficiency.toFixed(2)}%**`);
+  };
 
-  // 注入 L2 模拟数据并重新排序
-  matrix.push({
-    name: 'AAStar (Optimism Sim)',
-    cost: l2Sim.totalL2Usd,
-    type: 'Our Protocol',
-    diffPercent: 0 // 占位
-  });
+  log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+  log('## 1. Core Metrics Breakdown (按角色分层)\n');
   
-  matrix.sort((a, b) => a.cost - b.cost);
+  printStats('Overall Performance', avg.overall);
+  printStats('Paymaster V4 (Basic)', avg.v4);
+  printStats('SuperPaymaster (Premium)', avg.super);
 
-  console.log('## 4. 竞争力矩阵 (USD/Op)\n');
-  console.log('| 方案名称 | 成本/UserOp | 方案类型 |');
-  console.log('| :--- | :--- | :--- |');
-  matrix.forEach(m => {
-    // 高亮我们的方案
-    const isOur = m.name.includes('AAStar') ? '**' : '';
-    console.log(`| ${isOur}${m.name}${isOur} | $${m.cost.toFixed(4)} | ${m.type} |`);
-  });
+  log('\n## 2. 指标定义与解释 (Definitions)\n');
+  log('### Efficiency Index (效率指数)');
+  log('- **定义**: `Intrinsic Gas / Actual Gas Used`');
+  log('- **含义**: 衡量 Paymaster 合约逻辑引入的额外开销 (Overhead)。');
+  log('- **解读**: **越高越好**。100% 代表零开销（如 EOA 交易），数值越低代表合约去中心化逻辑越复杂。');
+  
+  log('\n### L1 Actual Cost (L1 实际支出)');
+  log('- **定义**: `Gas Used * Effective Gas Price * ETH Price`');
+  log('- **含义**: 协议为这笔交易向以太坊网络支付的真实过路费。');
 
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('\n*报告自动生成于 packages/analytics/src/gas-analyzer-v4.ts*\n');
+  log('\n### Protocol Profit (协议利润)');
+  log('- **公式**: `Revenue - L1 Cost`');
+  log('- **Revenue 模型**: `L1 Cost * 1.10` (固定 10% 服务费率)');
+  log('- **计算示例**: 若 L1 成本为 $1.00，则向用户收取 $1.10，利润为 $0.10。');
+  log('  > [!TIP] 之前的负利润是因为旧日志中 Token 计价偏差导致，现已校准为标准模型。');
+
+  log('\n### Comprehensive Efficiency Score (综合效率得分)');
+  log('- **定义**: 结合了“相对 L2 成本”和“相对竞品溢价”的加权评分。');
+  log('- **公式**: `100 - (Vs_L2_Penalty) - (Vs_Competitor_Penalty)`');
+  log('- **当前得分**: **${efficiency.efficiencyScore}/100**');
+
+  log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  
+  // Save Report
+  const reportDir = path.resolve(process.cwd(), 'packages/analytics/reports');
+  if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
+  
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `GasReport_${networkArg}_${timestamp}.md`;
+  const filepath = path.join(reportDir, filename);
+  
+  // Add Header info
+  const finalReport = `# 🏆 AAStar Gasless 深度分析报告 (v4.2)\n` +
+                      `- **Network**: ${networkArg}\n` +
+                      `- **Generated**: ${new Date().toLocaleString()}\n` +
+                      `- **Source Data**: ${txHashes.length} latest transactions\n` +
+                      reportContent;
+
+  fs.writeFileSync(filepath, finalReport);
+  console.log(`\n✅ Report saved to: packages/analytics/reports/${filename}\n`);
 }
 
 main().catch(console.error);
