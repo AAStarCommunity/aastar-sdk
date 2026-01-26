@@ -134,9 +134,10 @@ async function main() {
     });
 
     logStep(2, "Alice Launching Community (One-Click Setup)...");
+    const communityName = `AliceDAO_${aliceAcc.address.slice(2, 8)}`;
     const { tokenAddress, hashes: hLaunch } = await aliceCommunity.setupCommunity({
-        name: "AliceDAO",
-        tokenName: "Alice Token",
+        name: communityName,
+        tokenName: `${communityName} Token`,
         tokenSymbol: "ALICE",
         description: "Demo Community",
         stakeAmount: parseEther('30') // Default
