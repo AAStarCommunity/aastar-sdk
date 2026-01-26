@@ -176,6 +176,10 @@ export class CommunityClient extends BaseClient {
                 stakeAmount: params.stakeAmount
             }, options);
             hashes.push(hReg);
+            
+            // Critical: Factory requires caller to be registered in Registry.
+            // We must wait for the registration to be mined.
+            await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: hReg });
         }
 
         // 2. Deploy Token (Idempotent check via Factory)
