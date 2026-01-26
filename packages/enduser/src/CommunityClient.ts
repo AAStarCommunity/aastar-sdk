@@ -197,9 +197,11 @@ export class CommunityClient extends BaseClient {
                 }, options);
                 hashes.push(hToken);
                 
-                // Note: We can't get the address synchronously without waiting. 
-                // In L3 pattern, we usually return hashes.
-                // The user can fetch token address later using factory.getTokenAddress(community)
+                // Critical: Wait for token deployment to fetch the address
+                await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: hToken });
+                
+                // Fetch the actual address
+                tokenAddress = await factoryReader.getTokenAddress({ community: this.getAddress() });
             }
         }
 

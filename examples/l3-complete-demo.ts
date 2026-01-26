@@ -81,26 +81,36 @@ async function main() {
     });
 
     // Fund Alice
-    const minEth = parseEther('0.02');
+    const minEth = parseEther('0.1'); // Increased for full lifecycle on Sepolia
     let aliceBal = await publicClient.getBalance({ address: aliceAcc.address });
     if (aliceBal < minEth) {
-        console.log(`   💸 Sending 0.02 ETH to Alice...`);
+        console.log(`   💸 Sending 0.1 ETH to Alice...`);
         const h = await supplierClient.sendTransaction({ to: aliceAcc.address, value: minEth });
         await publicClient.waitForTransactionReceipt({ hash: h });
     }
 
     // Fund GToken (for stake)
     // Note: Assuming Supplier is GToken owner or has mint capabilities for test
-    // Usually supplier has OWNER role of GToken on testnet
     const gToken = gTokenActions()(supplierClient);
     console.log(`   🪙 Minting 100 GTokens to Alice...`);
-    const hMint = await gToken.mint({
+    const hMintG = await gToken.mint({
         token: config.contracts.gToken,
         to: aliceAcc.address,
         amount: parseEther('100'),
         account: supplierAcc
     });
-    await publicClient.waitForTransactionReceipt({ hash: hMint });
+    await publicClient.waitForTransactionReceipt({ hash: hMintG });
+
+    // Fund aPNTs (for deposit/collateral)
+    const aPNTsToken = tokenActions();
+    console.log(`   🪙 Minting 100 aPNTs to Alice...`);
+    const hMintA = await aPNTsToken.mint({
+        token: config.contracts.aPNTs,
+        to: aliceAcc.address,
+        amount: parseEther('100'),
+        account: supplierAcc
+    });
+    await publicClient.waitForTransactionReceipt({ hash: hMintA });
 
     // Initialize OperatorLifecycle
     const aliceL3 = new OperatorLifecycle({
@@ -203,9 +213,11 @@ async function main() {
     }
 
     // Fund Bob's AA for initial stake
-    console.log(`   💸 Funding Bob's AA with 0.02 ETH + 10 GTokens...`);
-    await supplierClient.sendTransaction({ to: bobAA, value: parseEther('0.02') }); // Gas for approve
-    await gToken.mint({ token: config.contracts.gToken, to: bobAA, amount: parseEther('10'), account: supplierAcc });
+    console.log(`   💸 Funding Bob's AA with 0.1 ETH + 20 GTokens...`);
+    const hFBob = await supplierClient.sendTransaction({ to: bobAA, value: parseEther('0.1') });
+    await publicClient.waitForTransactionReceipt({ hash: hFBob });
+    const hMintBob = await gToken.mint({ token: config.contracts.gToken, to: bobAA, amount: parseEther('20'), account: supplierAcc });
+    await publicClient.waitForTransactionReceipt({ hash: hMintBob });
 
     // Initialize UserLifecycle
     const bobL3 = new UserLifecycle({
