@@ -32,11 +32,13 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
      */
     async checkReadiness(): Promise<OperatorStatus> {
         const isOp = await this.isOperator(this.getAddress());
-        const balance = await this.getTokenBalance(); // Logic to get current stake/deposit
+        // For SuperPaymaster, balance is 'aPNTsBalance' (Collateral)
+        const details = await this.getOperatorDetails();
+        const balance = details.aPNTsBalance || 0n;
         
         return {
             isConfigured: isOp,
-            isActive: isOp, // Simplification, real logic might check activity
+            isActive: isOp, // Simplification
             balance
         };
     }
@@ -98,19 +100,31 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
         const recipient = to || this.getAddress();
         const hashes: Hash[] = [];
 
-        // 1. Withdraw Collateral from SuperPaymaster
-        // We first need to check the balance. 
-        // Note: Real implementation needs a getter for deposit balance.
-        // Assuming we withdraw everything available.
-        // For now, we reuse withdrawCollateral if amount is known, 
-        // or we need to add a "withdrawAll" to the underlying actions/contracts if supported.
-        // As a fallback pattern, we often just withdraw the stake after unlock period.
-        
-        const h1 = await this.withdrawStake(recipient, options);
-        hashes.push(h1);
+        // 1. Withdraw Collateral from SuperPaymaster (if any)
+        // Note: We need to know the balance to withdraw exact amount.
+        // For current L3 pattern, we assume the user tracks it or we fetch it.
+        const stats = await this.checkReadiness();
+        if (stats.balance > 0n) {
+             const hCol = await this.withdrawCollateral(recipient, stats.balance, options);
+             hashes.push(hCol);
+        }
 
-        // 2. Withdraw remaining GTokens if any (optional cleanup)
-        // ...
+        // 2. Exit Role in Registry (Unstake GToken)
+        // This will fail if lock duration > 0 and not yet cooldown.
+        // Or it will initiate cooldown.
+        const client = this.getStartPublicClient();
+        const registry = registryActions(this.registryAddress as Address); // Use local registry address
+        const registryWriter = registryActions(this.registryAddress as Address)(this.client);
+        
+        // Check if we have the role
+        // For Super Operator
+        const ROLE_PAYMASTER_SUPER = await registry(client).ROLE_PAYMASTER_SUPER();
+        const hasRole = await registry(client).hasRole({ user: this.getAddress(), roleId: ROLE_PAYMASTER_SUPER });
+        
+        if (hasRole) {
+            const hExit = await registryWriter.exitRole({ roleId: ROLE_PAYMASTER_SUPER, account: options?.account });
+            hashes.push(hExit);
+        }
 
         return hashes;
     }

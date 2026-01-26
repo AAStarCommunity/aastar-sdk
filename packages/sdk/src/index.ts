@@ -9,7 +9,10 @@ export * from '@aastar/dapp';
 // Export Role-Based Clients
 export * from './clients/endUser.js';
 export * from './clients/operator.js';
-export * from './clients/community.js';
+export { 
+    createCommunityClient, 
+    type CommunityClient as LegacyCommunityClient 
+} from './clients/community.js'; // Restored for backward compatibility (launch API)
 export * from './clients/admin.js';
 export * from './clients/ExperimentClient.js';
 

@@ -120,18 +120,36 @@ async function main() {
     const status = await aliceL3.checkReadiness();
     console.log(`   📊 Status Before: Configured=${status.isConfigured}, Balance=${formatEther(status.balance)}`);
 
-    // Onboard as Super Operator
-    logStep(2, "Alice Onboarding as SuperPaymaster Operator...");
-    // 1. Get ROLE_COMMUNITY first (Prerequisite)
-    // In real flow, this is DAO decided. Here Supplier grants it.
-    const registryReader = registryActions(config.contracts.registry)(publicClient);
-    const registryWriter = registryActions(config.contracts.registry)(supplierClient);
-    
-    const ROLE_COMMUNITY = await registryReader.ROLE_COMMUNITY();
-    console.log(`   🛡️  Granting ROLE_COMMUNITY to Alice...`);
-    const hGrant = await registryWriter.grantRole({ roleId: ROLE_COMMUNITY, user: aliceAcc.address });
-    await publicClient.waitForTransactionReceipt({ hash: hGrant });
+    // Initialize CommunityClient for Alice (Community Leader)
+    const { CommunityClient } = await import('@aastar/sdk');
+    const aliceCommunity = new CommunityClient({
+        client: aliceClient,
+        publicClient,
+        registryAddress: config.contracts.registry,
+        factoryAddress: config.contracts.xPNTsFactory,
+        gTokenAddress: config.contracts.gToken,
+        gTokenStakingAddress: config.contracts.gTokenStaking,
+        sbtAddress: config.contracts.sbt,
+        reputationAddress: config.contracts.reputation
+    });
 
+    logStep(2, "Alice Launching Community (One-Click Setup)...");
+    const { tokenAddress, hashes: hLaunch } = await aliceCommunity.setupCommunity({
+        name: "AliceDAO",
+        tokenName: "Alice Token",
+        tokenSymbol: "ALICE",
+        description: "Demo Community",
+        stakeAmount: parseEther('30') // Default
+    });
+    console.log(`   ✅ Community Launched! Hashes: ${hLaunch.join(', ')}`);
+    console.log(`   🪙 Token Address: ${tokenAddress}`);
+    // Wait for txs
+    for(const hash of hLaunch) await publicClient.waitForTransactionReceipt({ hash });
+
+
+    // Onboard as SuperPaymaster Operator
+    logStep(3, "Alice Onboarding as SuperPaymaster Operator...");
+    
     // 2. Setup Node
     console.log(`   ⚙️  Setting up Node (Deposit + Register)...`);
     const hSetup = await aliceL3.setupNode({
@@ -209,7 +227,7 @@ async function main() {
     // ==========================================
     // EXECUTION: ONBOARDING
     // ==========================================
-    logStep(4, "Bob Onboarding to Alice's Community...");
+    logStep(5, "Bob Onboarding to Alice's Community...");
     
     // 1. Check Eligibility
     const canJoin = await bobL3.checkEligibility(aliceAcc.address);
@@ -229,7 +247,7 @@ async function main() {
     // ==========================================
     // EXECUTION: GASLESS TX
     // ==========================================
-    logStep(5, "Bob Executing Gasless Transaction...");
+    logStep(6, "Bob Executing Gasless Transaction...");
     
     // 1. Enable Gasless
     await bobL3.enableGasless({
@@ -267,16 +285,31 @@ async function main() {
     // ==========================================
     // EXECUTION: EXIT
     // ==========================================
-    logStep(6, "Exit Phase...");
+    logStep(7, "Exit Phase...");
 
     console.log(`   🚪 Bob leaving community...`);
     const hExit = await bobL3.leaveCommunity(aliceAcc.address);
     await publicClient.waitForTransactionReceipt({ hash: hExit });
     console.log(`   ✅ Bob Left (SBT Burned): ${hExit}`);
 
-    console.log(`   🏦 Alice withdrawing funds...`);
-    const hWithdraw = await aliceL3.withdrawAllFunds();
-    console.log(`   ✅ Withdrawal Txs: ${hWithdraw.join(', ')}`);
+    console.log(`   🏦 Alice withdrawing funds & exiting role...`);
+    try {
+        const hWithdraw = await aliceL3.withdrawAllFunds();
+        console.log(`   ✅ Exit/Withdrawal Txs Submitted: ${hWithdraw.join(', ')}`);
+        
+        // Wait and check status
+        for (const hash of hWithdraw) {
+             try {
+                const r = await publicClient.waitForTransactionReceipt({ hash });
+                console.log(`      Found Receipt: ${r.transactionHash} (Status: ${r.status})`);
+             } catch (e: any) {
+                 console.log(`      Tx Reverted/Failed: ${hash}`);
+             }
+        }
+    } catch (e: any) {
+        console.log(`   ⚠️ Withdrawal/Exit Failed (Expected if Locked): ${e.message}`);
+        console.log(`   ℹ️ Note: Registry roles typically have a lock period (e.g. 30 days) before exit is final.`);
+    }
     
     console.log("\n🎉 L3 Demo Complete!");
 }

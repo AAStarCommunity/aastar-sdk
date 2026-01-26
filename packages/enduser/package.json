@@ -1,6 +1,6 @@
 {
   "name": "@aastar/enduser",
-  "version": "0.16.14",
+  "version": "0.16.15",
   "publishConfig": {
     "access": "public"
   },

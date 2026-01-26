@@ -5,8 +5,8 @@ import { parseEther } from 'viem';
 
 // Define mocks using vi.hoisted to ensure they are available for vi.mock
 const mocks = vi.hoisted(() => {
-  const mockXPNTsFactory = { createToken: vi.fn() };
-  const mockRegistry = { ROLE_COMMUNITY: vi.fn(), registerRoleSelf: vi.fn() };
+  const mockXPNTsFactory = { createToken: vi.fn(), getTokenAddress: vi.fn() };
+  const mockRegistry = { ROLE_COMMUNITY: vi.fn(), registerRoleSelf: vi.fn(), hasRole: vi.fn() };
   const mockToken = { allowance: vi.fn(), approve: vi.fn(), transferOwnership: vi.fn() };
   const mockSBT = { airdropMint: vi.fn(), mintForRole: vi.fn(), burnSBT: vi.fn() };
   const mockReputation = { setReputationRule: vi.fn() };
@@ -187,7 +187,7 @@ describe('CommunityClient', () => {
 
     it('should throw if sbtAddress is missing', async () => {
       client.sbtAddress = undefined;
-      await expect(client.revokeMembership(123n))
+      await expect(client.revokeMembership('0xUser'))
         .rejects.toThrow('SBT address required');
     });
   });
@@ -200,6 +200,77 @@ describe('CommunityClient', () => {
         token: '0xToken',
         newOwner: '0x2222222222222222222222222222222222222222'
       }));
+    });
+  });
+
+  describe('setupCommunity', () => {
+    it('should successfully register and deploy token when fresh', async () => {
+      // 1. Mock hasRole = false
+      mocks.mockRegistry.hasRole = vi.fn().mockResolvedValue(false);
+      // 2. Mock getTokenAddress = null/empty
+      mocks.mockXPNTsFactory.getTokenAddress = vi.fn().mockResolvedValue('0x0000000000000000000000000000000000000000');
+      
+      const result = await client.setupCommunity({
+        name: 'MyDAO',
+        tokenName: 'DAO Token',
+        tokenSymbol: 'DAO'
+      });
+      
+      // Verification
+      expect(mocks.mockRegistry.registerRoleSelf).toHaveBeenCalled();
+      expect(mocks.mockXPNTsFactory.createToken).toHaveBeenCalled();
+      expect(result.hashes.length).toBe(2);
+    });
+
+    it('should skip registration if already has role', async () => {
+      // 1. Mock hasRole = true
+      mocks.mockRegistry.hasRole = vi.fn().mockResolvedValue(true);
+      // 2. Mock getTokenAddress = empty
+      mocks.mockXPNTsFactory.getTokenAddress = vi.fn().mockResolvedValue('0x0000000000000000000000000000000000000000');
+      
+      const result = await client.setupCommunity({
+        name: 'MyDAO',
+        tokenName: 'DAO Token',
+        tokenSymbol: 'DAO'
+      });
+      
+      expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+      expect(mocks.mockXPNTsFactory.createToken).toHaveBeenCalled();
+      expect(result.hashes.length).toBe(1);
+    });
+
+    it('should skip token deployment if already exists', async () => {
+      // 1. Mock hasRole = false
+      mocks.mockRegistry.hasRole = vi.fn().mockResolvedValue(false);
+      // 2. Mock getTokenAddress = 0x123
+      mocks.mockXPNTsFactory.getTokenAddress = vi.fn().mockResolvedValue('0x1234567890123456789012345678901234567890');
+      
+      const result = await client.setupCommunity({
+        name: 'MyDAO',
+        tokenName: 'DAO Token',
+        tokenSymbol: 'DAO'
+      });
+      
+      expect(mocks.mockRegistry.registerRoleSelf).toHaveBeenCalled();
+      expect(mocks.mockXPNTsFactory.createToken).not.toHaveBeenCalled();
+      expect(result.tokenAddress).toBe('0x1234567890123456789012345678901234567890');
+      expect(result.hashes.length).toBe(1);
+    });
+
+    it('should perform idempotent no-op if everything exists', async () => {
+       mocks.mockRegistry.hasRole = vi.fn().mockResolvedValue(true);
+       mocks.mockXPNTsFactory.getTokenAddress = vi.fn().mockResolvedValue('0xExistingToken');
+       
+       const result = await client.setupCommunity({
+         name: 'MyDAO',
+         tokenName: 'DAO Token',
+         tokenSymbol: 'DAO'
+       });
+       
+       expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+       expect(mocks.mockXPNTsFactory.createToken).not.toHaveBeenCalled();
+       expect(result.tokenAddress).toBe('0xExistingToken');
+       expect(result.hashes.length).toBe(0);
     });
   });
 });

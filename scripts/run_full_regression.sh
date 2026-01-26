@@ -23,6 +23,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 export NETWORK=$ENV
 npx tsx scripts/l4-setup.ts --network=$ENV
 
+# 1.5 Unit Testing Phase (SDK)
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🧩 Phase 1.5: SDK Unit Tests"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+pnpm --filter @aastar/enduser --filter @aastar/operator --filter @aastar/admin test
+
 # 2. Execution Phase (Gasless Tests)
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🧪 Phase 2: Gasless Transactions (L4)"

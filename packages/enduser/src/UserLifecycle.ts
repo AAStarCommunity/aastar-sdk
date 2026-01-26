@@ -46,8 +46,11 @@ export class UserLifecycle extends BaseClient {
     public entryPointAddress: Address;
     public gaslessConfig?: GaslessConfig;
 
+    public config: UserLifecycleConfig;
+
     constructor(config: UserLifecycleConfig) {
         super(config);
+        this.config = config;
         this.accountAddress = config.accountAddress;
         this.registryAddress = config.registryAddress;
         this.sbtAddress = config.sbtAddress;

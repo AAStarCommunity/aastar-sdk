@@ -59,6 +59,13 @@ vi.mock('@aastar/core', async () => {
   };
 });
 
+// Mock PaymasterClient dynamic import
+vi.mock('../../paymaster/src/V4/PaymasterClient.js', () => ({
+    PaymasterClient: {
+        submitGaslessUserOperation: vi.fn().mockResolvedValue('0xUserOpHash')
+    }
+}));
+
 vi.mock('viem/account-abstraction', async () => {
   const actual = await vi.importActual('viem/account-abstraction');
   return {
@@ -139,6 +146,8 @@ describe('UserClient', () => {
     
     // Also mock signMessage on the client itself if used directly
     (client as any).client.signMessage = vi.fn().mockResolvedValue('0xSig');
+    // Mock transport for fallback url check
+    (client as any).client.transport = { url: 'https://mock.rpc' };
   });
 
   describe('Basic Account Operations', () => {

@@ -95,11 +95,27 @@ importers:
         specifier: 5.7.2
         version: 5.7.2
 
+  packages/admin:
+    dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)
+    devDependencies:
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+
   packages/analytics:
     dependencies:
       '@aastar/core':
         specifier: workspace:*
         version: link:../core
+      '@aastar/enduser':
+        specifier: workspace:*
+        version: link:../enduser
       viem:
         specifier: 2.43.3
         version: 2.43.3(typescript@5.7.2)
@@ -228,6 +244,9 @@ importers:
       '@aastar/account':
         specifier: workspace:*
         version: link:../account
+      '@aastar/admin':
+        specifier: workspace:*
+        version: link:../admin
       '@aastar/core':
         specifier: workspace:*
         version: link:../core
@@ -240,6 +259,9 @@ importers:
       '@aastar/identity':
         specifier: workspace:*
         version: link:../identity
+      '@aastar/operator':
+        specifier: workspace:*
+        version: link:../operator
       '@aastar/paymaster':
         specifier: workspace:*
         version: link:../paymaster

@@ -144,6 +144,64 @@ export class CommunityClient extends BaseClient {
         }
     }
 
+    /**
+     * One-click Setup: Register Community + Deploy Token
+     * Orchestrates the complete community initialization flow.
+     */
+    async setupCommunity(params: {
+        name: string;
+        tokenName: string;
+        tokenSymbol: string;
+        description?: string;
+        logoURI?: string;
+        website?: string;
+        stakeAmount?: bigint;
+    }, options?: TransactionOptions): Promise<{ tokenAddress: Address; hashes: Hash[] }> {
+        const hashes: Hash[] = [];
+        let tokenAddress: Address = '0x0000000000000000000000000000000000000000';
+
+        // 1. Register as Community (Idempotent check handled inside or by registry)
+        // We should check hasRole first to avoid errors if already registered
+        const registry = registryActions(this.requireRegistry())(this.getStartPublicClient());
+        const ROLE_COMMUNITY = await registry.ROLE_COMMUNITY();
+        const hasRole = await registry.hasRole({ roleId: ROLE_COMMUNITY, user: this.getAddress() });
+
+        if (!hasRole) {
+            const hReg = await this.registerAsCommunity({
+                name: params.name,
+                ensName: params.website, // Mapping website to ENS param for now as per legacy behavior
+                website: params.website,
+                description: params.description,
+                logoURI: params.logoURI,
+                stakeAmount: params.stakeAmount
+            }, options);
+            hashes.push(hReg);
+        }
+
+        // 2. Deploy Token (Idempotent check via Factory)
+        if (this.factoryAddress) {
+            const factoryReader = xPNTsFactoryActions(this.factoryAddress)(this.getStartPublicClient());
+            const existingToken = await factoryReader.getTokenAddress({ community: this.getAddress() });
+
+            if (existingToken && existingToken !== '0x0000000000000000000000000000000000000000') {
+                tokenAddress = existingToken;
+            } else {
+                const hToken = await this.createCommunityToken({
+                    name: params.tokenName,
+                    tokenSymbol: params.tokenSymbol,
+                    description: params.description
+                }, options);
+                hashes.push(hToken);
+                
+                // Note: We can't get the address synchronously without waiting. 
+                // In L3 pattern, we usually return hashes.
+                // The user can fetch token address later using factory.getTokenAddress(community)
+            }
+        }
+
+        return { tokenAddress, hashes };
+    }
+
     // ========================================
     // 2. 成员管理
     // ========================================

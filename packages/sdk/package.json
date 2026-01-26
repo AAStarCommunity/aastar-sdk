@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.16.14",
+  "version": "0.16.15",
   "description": "AAStar SDK - The all-in-one package for Mycelium Network",
   "type": "module",
   "publishConfig": {
@@ -20,6 +20,8 @@
     "@aastar/identity": "workspace:*",
     "@aastar/paymaster": "workspace:*",
     "@aastar/tokens": "workspace:*",
+    "@aastar/operator": "workspace:*",
+    "@aastar/admin": "workspace:*",
     "viem": "2.43.3"
   },
   "devDependencies": {
