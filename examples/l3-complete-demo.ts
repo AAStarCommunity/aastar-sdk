@@ -102,7 +102,7 @@ async function main() {
     await publicClient.waitForTransactionReceipt({ hash: hMintG });
 
     // Fund aPNTs (for deposit/collateral)
-    const aPNTsToken = tokenActions();
+    const aPNTsToken = tokenActions()(supplierClient);
     console.log(`   🪙 Minting 100 aPNTs to Alice...`);
     const hMintA = await aPNTsToken.mint({
         token: config.contracts.aPNTs,
