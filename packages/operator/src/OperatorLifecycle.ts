@@ -60,6 +60,20 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 depositAmount: params.depositAmount
             }, options);
             hashes.push(h);
+
+            // Fetch Token Address and Configure
+            const factory = await import('@aastar/core').then(m => m.xPNTsFactoryActions(this.xpntsFactory!)(this.getStartPublicClient()));
+            const token = await factory.getTokenAddress({ community: this.getAddress() });
+            
+            if (token && token !== '0x0000000000000000000000000000000000000000') {
+                const hConfig = await this.configureOperator(
+                    token,
+                    this.getAddress(), // Default treasury to self
+                    parseEther('1'),    // Default 1:1 rate
+                    options
+                );
+                hashes.push(hConfig);
+            }
         } else {
             const result = await this.deployAndRegisterPaymasterV4({
                 stakeAmount: params.stakeAmount

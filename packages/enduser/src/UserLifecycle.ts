@@ -70,7 +70,8 @@ export class UserLifecycle extends BaseClient {
      */
     async checkEligibility(community: Address): Promise<boolean> {
         // Validation logic (e.g., check blacklist or whitelist via Registry)
-        const registry = registryActions(this.registryAddress)(this.client);
+        const publicClient = this.getStartPublicClient();
+        const registry = registryActions(this.registryAddress)(publicClient);
         // Placeholder: simplistic check, real logic might involve community specific rules
         return true; 
     }
@@ -178,7 +179,8 @@ export class UserLifecycle extends BaseClient {
     // ===========================================
 
     async getMyReputation(): Promise<ReputationData> {
-        const registry = registryActions(this.registryAddress)(this.client);
+        const publicClient = this.getStartPublicClient();
+        const registry = registryActions(this.registryAddress)(publicClient);
         
         const [score, creditLimit] = await Promise.all([
             registry.globalReputation({ user: this.accountAddress }),

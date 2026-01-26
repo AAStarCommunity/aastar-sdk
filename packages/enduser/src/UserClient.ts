@@ -294,7 +294,8 @@ export class UserClient extends BaseClient {
             const ROLE_ENDUSER = keccak256(toBytes("ENDUSER"));
             // Correct mapping for Registry Actions
             const registry = registryActions(this.registryAddress);
-            const tokens = tokenActions()(this.getStartPublicClient());
+            const publicClient = this.getStartPublicClient();
+            const tokens = tokenActions()(publicClient);
 
             // 1. Check Allowance
             const allowance = await tokens.allowance({
@@ -340,6 +341,9 @@ export class UserClient extends BaseClient {
             });
             
             txs.push({ target: this.registryAddress, value: 0n, data: registerData });
+            
+            console.log(`   🔍 Debug Onboard: Community=${communityAddress}, AA=${this.accountAddress}, Stake=${stakeAmount}`);
+            console.log(`   🔍 Debug Batch: Txs=${txs.length}, Targets=${txs.map(t => t.target)}`);
 
             // 3. Execute
             if (txs.length === 1) {
