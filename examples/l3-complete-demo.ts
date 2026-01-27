@@ -1,15 +1,20 @@
-
-import { 
-    createPublicClient, 
-    createWalletClient, 
-    http, 
-    parseEther, 
-    formatEther, 
-    type Address, 
+import {
+    createClient,
+    createPublicClient,
+    createWalletClient,
+    http,
+    parseEther,
+    formatEther,
+    type Address,
     type Hex,
-    parseAbi
+    parseAbi,
+    encodeFunctionData,
+    keccak256,
+    encodeAbiParameters,
+    toBytes
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
+import { bundlerActions } from 'viem/account-abstraction';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,12 +32,34 @@ import {
     registryActions, 
     tokenActions, 
     gTokenActions, 
-    paymasterActions 
+    paymasterActions,
+    superPaymasterActions
 } from '@aastar/core';
 
 // Helper to print step header
 function logStep(step: number, msg: string) {
     console.log(`\n🔹 Step ${step}: ${msg}`);
+}
+
+// Helper to wait for tx with timeout and detailed logging
+async function waitTx(hash: Hex, description = "Tx") {
+    console.log(`      ⏳ Waiting for ${description} (${hash})...`);
+    try {
+        const receipt = await publicClient.waitForTransactionReceipt({ 
+            hash, 
+            timeout: 120_000, // 2 minutes
+            confirmations: 1 
+        });
+        if (receipt.status === 'reverted') {
+            console.error(`      ❌ ${description} Reverted! Hash: ${hash}`);
+            throw new Error(`${description} Reverted`);
+        }
+        console.log(`      ✅ ${description} Confirmed in block ${receipt.blockNumber}`);
+        return receipt;
+    } catch (e: any) {
+        console.error(`      ⚠️ Timeout or Error waiting for ${description}: ${e.message}`);
+        throw e;
+    }
 }
 
 async function main() {
@@ -54,6 +81,8 @@ async function main() {
         chain: config.chain,
         transport: http(config.rpcUrl)
     });
+    // @ts-ignore
+    global.publicClient = publicClient; // Hack for helper access
 
     const supplierAcc = privateKeyToAccount(process.env.PRIVATE_KEY_SUPPLIER as Hex);
     const supplierClient = createWalletClient({
@@ -86,11 +115,10 @@ async function main() {
     if (aliceBal < minEth) {
         console.log(`   💸 Sending 0.1 ETH to Alice...`);
         const h = await supplierClient.sendTransaction({ to: aliceAcc.address, value: minEth });
-        await publicClient.waitForTransactionReceipt({ hash: h });
+        await waitTx(h, "Fund Alice ETH");
     }
 
     // Fund GToken (for stake)
-    // Note: Assuming Supplier is GToken owner or has mint capabilities for test
     const gToken = gTokenActions()(supplierClient);
     console.log(`   🪙 Minting 100 GTokens to Alice...`);
     const hMintG = await gToken.mint({
@@ -99,18 +127,18 @@ async function main() {
         amount: parseEther('100'),
         account: supplierAcc
     });
-    await publicClient.waitForTransactionReceipt({ hash: hMintG });
+    await waitTx(hMintG, "Mint GToken");
 
     // Fund aPNTs (for deposit/collateral)
     const aPNTsToken = tokenActions()(supplierClient);
-    console.log(`   🪙 Minting 100 aPNTs to Alice...`);
+    console.log(`   🪙 Minting 4,000 aPNTs to Alice...`);
     const hMintA = await aPNTsToken.mint({
         token: config.contracts.aPNTs,
         to: aliceAcc.address,
-        amount: parseEther('100'),
+        amount: parseEther('4000'),
         account: supplierAcc
     });
-    await publicClient.waitForTransactionReceipt({ hash: hMintA });
+    await waitTx(hMintA, "Mint aPNTs");
 
     // Initialize OperatorLifecycle
     const aliceL3 = new OperatorLifecycle({
@@ -145,20 +173,45 @@ async function main() {
 
     logStep(2, "Alice Launching Community (One-Click Setup)...");
     const communityName = `AliceDAO_${aliceAcc.address.slice(2, 8)}`;
-    const { tokenAddress, hashes: hLaunch } = await aliceCommunity.setupCommunity({
-        name: communityName,
-        tokenName: `${communityName} Token`,
-        tokenSymbol: "ALICE",
-        description: "Demo Community",
-        stakeAmount: parseEther('30') // Default
-    });
-    console.log(`   ✅ Community Launched! Hashes: ${hLaunch.join(', ')}`);
-    console.log(`   🪙 Token Address: ${tokenAddress}`);
-    // Wait for txs
-    for(const hash of hLaunch) await publicClient.waitForTransactionReceipt({ hash });
+    let tokenAddress: Address = '0x0000000000000000000000000000000000000000';
+    let hLaunch: Hex[] = [];
+
+    // Retry Loop for Step 2 (Flaky on OP Sepolia)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            console.log(`   🔄 Attempt ${attempt}/3 to launch community...`);
+            const res = await aliceCommunity.setupCommunity({
+                name: communityName,
+                tokenName: `${communityName} Token`,
+                tokenSymbol: "ALICE",
+                description: "Demo Community",
+                stakeAmount: parseEther('30') // Default
+            });
+            tokenAddress = res.tokenAddress;
+            hLaunch = res.hashes;
+            console.log(`   ✅ Community Launched! Hashes: ${hLaunch.join(', ')}`);
+            for(const hash of hLaunch) await waitTx(hash, "Community Launch");
+            break; // Success
+        } catch (e: any) {
+            console.warn(`   ⚠️ Attempt ${attempt} failed: ${e.message}`);
+            if (attempt === 3) throw e;
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
 
 
     // Onboard as SuperPaymaster Operator
+    // Link xPNTsToken to SuperPaymaster (Required before configureOperator)
+    console.log("   🔗 Linking Token to SuperPaymaster...");
+    const xPNTsToken = tokenActions()(aliceClient);
+    const hLink = await xPNTsToken.setSuperPaymasterAddress({
+        token: tokenAddress,
+        spAddress: config.contracts.superPaymaster,
+        account: aliceAcc
+    });
+    await waitTx(hLink, "Link Token to SuperPM");
+
+    // Step 3: Alice Onboarding as SuperPaymaster Operator
     logStep(3, "Alice Onboarding as SuperPaymaster Operator...");
     
     // 2. Setup Node
@@ -166,11 +219,73 @@ async function main() {
     const hSetup = await aliceL3.setupNode({
         type: 'SUPER',
         stakeAmount: parseEther('50'),
-        depositAmount: parseEther('10') // Initial collateral
+        depositAmount: 0n // Defer deposit to handle latency
     });
-    console.log(`   ✅ Setup Hashes: ${hSetup.join(', ')}`);
-    // Wait for txs
-    for(const hash of hSetup) await publicClient.waitForTransactionReceipt({ hash });
+    for(const hash of hSetup) await waitTx(hash, "Setup Node (Register)");
+
+    // Wait for Role to be indexed (Fix for 'Unauthorized' error on Deposit)
+    console.log("   ⏳ Waiting for SuperPM Role to index...");
+    const registryActions = await import('@aastar/core').then(m => m.registryActions);
+    const registryContract = registryActions(config.contracts.registry)(publicClient);
+    const ROLE_SUPER = await registryContract.ROLE_PAYMASTER_SUPER();
+    
+    for(let i=0; i<10; i++) {
+        const hasRole = await registryContract.hasRole({ roleId: ROLE_SUPER, user: aliceAcc.address });
+        if(hasRole) {
+            console.log("   ✅ Role Verified on-chain.");
+            break;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // Now Deposit
+    console.log("   💰 Depositing Collateral (4000 aPNTs)...");
+    const hDeposit = await aliceL3.depositCollateral(parseEther('4000'));
+    await waitTx(hDeposit, "Deposit Collateral");
+
+    // Force Configure Operator (Ensure isConfigured = true)
+    console.log("   ⚙️  Forcing Operator Configuration...");
+    const hConfig = await aliceL3.configureOperator(
+        tokenAddress, 
+        aliceAcc.address, 
+        parseEther('1')
+    );
+    await waitTx(hConfig, "Configure Operator");
+
+    // Force Update Price to prevent Stale Price Error (Using DVT)
+    console.log("   🔄 Refreshing Oracle Price (DVT)...");
+    try {
+        const superPM = config.contracts.superPaymaster;
+        
+        // Prepare DVT Update
+        const newPrice = 330000000000n; // $3300.00
+        const timestamp = BigInt(Math.floor(Date.now() / 1000));
+        
+        // Sign the price update (Supplier = DVT Validator in this env)
+        const chainId = supplierClient.chain.id;
+        const messageHash = keccak256(encodeAbiParameters(
+            [{ type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' }],
+            [newPrice, timestamp, superPM, BigInt(chainId)]
+        ));
+        
+        const signature = await supplierClient.signMessage({ 
+            message: { raw: toBytes(messageHash) },
+            account: supplierAcc
+        });
+
+        // Use superPaymasterActions if available, or direct write
+        const hPrice = await superPaymasterActions(superPM)(supplierClient).updatePriceDVT({
+            price: newPrice,
+            updatedAt: timestamp,
+            proof: signature,
+            account: supplierAcc
+        });
+
+        await waitTx(hPrice, "Update Price DVT");
+        console.log("   ✅ Price Updated via DVT!");
+    } catch (e: any) {
+        console.log(`   ⚠️ Price update failed: ${e.message}`);
+    }
 
     // Verify
     const statusAfter = await aliceL3.checkReadiness();
@@ -182,11 +297,6 @@ async function main() {
     logStep(3, "Creating New User (Bob)...");
     const bobKey = generatePrivateKey();
     const bobAcc = privateKeyToAccount(bobKey);
-    // Ideally we deploy an AA account here. 
-    // For simplicity of this demo script (which focuses on Lifecycle API), 
-    // we use the EOA as the 'account' but wrap it in UserLifecycle which works for EOAs too (mostly)
-    // BUT UserClient usually requires SimpleAccount structure for `execute`.
-    // Let's use `l4-setup` logic to create an AA account for Bob.
     
     // We'll use the Factory from config
     const { accountFactoryActions } = await import('@aastar/core');
@@ -199,25 +309,30 @@ async function main() {
     console.log(`   🤖 Bob (AA): ${bobAA}`);
     
     // Deploy AA if needed
+    // 🚀 Ensure Bob's EOA has enough for gas
+    const bobEOABalance = await publicClient.getBalance({ address: bobAcc.address });
+    if (bobEOABalance < parseEther('0.05')) {
+        console.log(`   💸 Funding Bob's EOA for gas...`);
+        const hF = await supplierClient.sendTransaction({ to: bobAcc.address, value: parseEther('0.05') });
+        await waitTx(hF, "Fund Bob EOA");
+    }
+
+    // Deploy AA if needed
     const code = await publicClient.getBytecode({ address: bobAA });
     if (!code || code.length <= 2) {
-        // Fund EOA first
-        const hF = await supplierClient.sendTransaction({ to: bobAcc.address, value: parseEther('0.02') });
-        await publicClient.waitForTransactionReceipt({ hash: hF });
-
         console.log(`   🚀 Deploying Bob's AA Account...`);
         const hDeploy = await factoryActions(bobClient).createAccount({
             owner: bobAcc.address, salt, account: bobAcc
         });
-        await publicClient.waitForTransactionReceipt({ hash: hDeploy });
+        await waitTx(hDeploy, "Deploy Bob AA");
     }
 
     // Fund Bob's AA for initial stake
     console.log(`   💸 Funding Bob's AA with 0.1 ETH + 20 GTokens...`);
-    const hFBob = await supplierClient.sendTransaction({ to: bobAA, value: parseEther('0.1') });
-    await publicClient.waitForTransactionReceipt({ hash: hFBob });
+    const hFBob = await supplierClient.sendTransaction({ to: bobAA, value: parseEther('0.1'), gas: 100000n });
+    await waitTx(hFBob, "Fund Bob AA ETH");
     const hMintBob = await gToken.mint({ token: config.contracts.gToken, to: bobAA, amount: parseEther('20'), account: supplierAcc });
-    await publicClient.waitForTransactionReceipt({ hash: hMintBob });
+    await waitTx(hMintBob, "Fund Bob AA GToken");
 
     // Initialize UserLifecycle
     const bobL3 = new UserLifecycle({
@@ -230,10 +345,9 @@ async function main() {
         gTokenStakingAddress: config.contracts.gTokenStaking,
         entryPointAddress: config.contracts.entryPoint
     });
-    // Inject bundler client if needed for gasless, but we will rely on BaseClient defaults for now or configure later
-    // L3 needs bundlerUrl for gasless.
-    (bobL3.config as any).bundlerClient = (config as any).bundlerUrl ? createWalletClient({ // hack for now, strictly should createBundlerClient
-         chain: config.chain, transport: http('https://api.pimlico.io/v1/sepolia/rpc?apikey=' + process.env.PIMLICO_API_KEY) // Fallback
+    // Inject bundler client if needed for gasless
+    (bobL3.config as any).bundlerClient = (config as any).bundlerUrl ? createWalletClient({ 
+         chain: config.chain, transport: http('https://api.pimlico.io/v1/sepolia/rpc?apikey=' + process.env.PIMLICO_API_KEY)
     }) : undefined;
 
 
@@ -242,19 +356,25 @@ async function main() {
     // ==========================================
     logStep(5, "Bob Onboarding to Alice's Community...");
     
-    // 1. Check Eligibility
+    // 1. Check Alice's Status again (Registry Level)
+    const registry = await import('@aastar/core').then(m => m.registryActions(config.contracts.registry)(publicClient));
+    const ROLE_COMMUNITY = await registry.ROLE_COMMUNITY();
+    const aliceHasCommRole = await registry.hasRole({ roleId: ROLE_COMMUNITY, user: aliceAcc.address });
+    console.log(`   🔸 Alice Community Role: ${aliceHasCommRole}`);
+
+    // Check Bob's GToken balance
+    const bobGTokenBalance = await gTokenActions()(publicClient).balanceOf({ token: config.contracts.gToken, account: bobAA });
+    console.log(`   🔸 Bob's AA GToken Balance: ${formatEther(bobGTokenBalance)}`);
+
+    // 2. Check Eligibility
     const canJoin = await bobL3.checkEligibility(aliceAcc.address);
     console.log(`   🧐 Eligible: ${canJoin}`);
 
     if (canJoin) {
-        // 2. Onboard (Approve + Register + Mint)
-        // Alice needs to be a Community first? Alice is Operator.
-        // Registry validates `community` param. Usually Operator address is the Community ID.
-        // We verified Alice has ROLE_COMMUNITY above.
-        
         console.log(`   📝 Bob calling onboard()...`);
         const res = await bobL3.onboard(aliceAcc.address, parseEther('0.4'));
         console.log(`   ✅ Onboard Result: Success=${res.success}, Tx=${res.txHash}`);
+        if(res.txHash) await waitTx(res.txHash, "Onboard");
     }
 
     // ==========================================
@@ -262,37 +382,41 @@ async function main() {
     // ==========================================
     logStep(6, "Bob Executing Gasless Transaction...");
     
-    // 1. Enable Gasless
-    await bobL3.enableGasless({
-        paymasterUrl: 'https://...ignored_for_super...', // SuperPaymaster uses on-chain logic
-        policy: 'CREDIT' // Trigger SuperPaymaster path
-    });
+    // Use SuperPaymasterClient directly (same as simple-superpaymaster-demo.ts)
+    const { SuperPaymasterClient } = await import('../packages/paymaster/src/V4/SuperPaymasterClient.js');
 
-    // 2. Prepare Tx (e.g., self-transfer 0 ETH just to test execution)
-    // Note: To work, Paymaster needs to relay this.
-    // SuperPaymaster needs Bob to have Credit or Token.
-    // Basic Reputation check:
-    const rep = await bobL3.getMyReputation();
-    console.log(`   🌟 Bob's Reputation: Score=${rep.score}, CreditLimit=${formatEther(rep.creditLimit)}`);
-    
-    // If no credit, execution might fail unless Sponsored Policy allows.
-    // For demo, we assume the initial Stake (0.4 GT) gave some initial credit or Alice sponsors.
-    // Let's rely on standard policy.
-    
     try {
-        const txHash = await bobL3.executeGaslessTx({
-            target: bobAA,
-            value: 0n,
-            data: '0x',
-            operator: aliceAcc.address // Specify Alice as the preferred operator
-        });
-        console.log(`   🚀 Gasless Tx Sent: ${txHash}`);
+        const userOpHash = await SuperPaymasterClient.submitGaslessTransaction(
+            publicClient,
+            bobClient,
+            bobAA,
+            config.contracts.entryPoint,
+            config.bundlerUrl!,
+            {
+                token: config.contracts.gToken,
+                recipient: aliceAcc.address,
+                amount: parseEther('1'), // Transfer 1.0 GToken back to Alice
+                operator: aliceAcc.address, // Alice sponsors this tx
+                paymasterAddress: config.contracts.superPaymaster
+            }
+        );
         
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-        console.log(`   ✅ Tx Confirmed in Block ${receipt.blockNumber}`);
+        console.log(`   ✅ UserOp Hash: ${userOpHash}`);
+        
+        // Wait for execution
+        const bundlerClient = createClient({
+            chain: config.chain,
+            transport: http(config.bundlerUrl!)
+        }).extend(bundlerActions);
+
+        const receipt = await bundlerClient.waitForUserOperationReceipt({ 
+            hash: userOpHash 
+        });
+        
+        console.log(`   ✅ Gasless Tx Success! Tx Hash: ${receipt.receipt.transactionHash}`);
     } catch (e: any) {
-        console.log(`   ⚠️ Gasless Tx Failed (Expected if no credit/bundler): ${e.message}`);
-        // Continuing demo to show Exit...
+        console.log(`   ⚠️ Gasless Tx Failed: ${e.message}`);
+    // Continuing demo to show Exit...
     }
 
     // ==========================================
@@ -302,7 +426,7 @@ async function main() {
 
     console.log(`   🚪 Bob leaving community...`);
     const hExit = await bobL3.leaveCommunity(aliceAcc.address);
-    await publicClient.waitForTransactionReceipt({ hash: hExit });
+    await waitTx(hExit, "Bob Leave Community");
     console.log(`   ✅ Bob Left (SBT Burned): ${hExit}`);
 
     console.log(`   🏦 Alice withdrawing funds & exiting role...`);
@@ -313,7 +437,7 @@ async function main() {
         // Wait and check status
         for (const hash of hWithdraw) {
              try {
-                const r = await publicClient.waitForTransactionReceipt({ hash });
+                const r = await waitTx(hash, "Exit/Withdraw");
                 console.log(`      Found Receipt: ${r.transactionHash} (Status: ${r.status})`);
              } catch (e: any) {
                  console.log(`      Tx Reverted/Failed: ${hash}`);

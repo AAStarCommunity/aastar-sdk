@@ -60,7 +60,7 @@ export class CommunityClient extends BaseClient {
             return await factory(this.client).createToken({
                 name: params.name,
                 symbol: params.tokenSymbol,
-                community: '0x0000000000000000000000000000000000000000', // Default empty community mapping
+                community: this.getAddress(),
                 account: options?.account
             });
         } catch (error) {
@@ -200,8 +200,16 @@ export class CommunityClient extends BaseClient {
                 // Critical: Wait for token deployment to fetch the address
                 await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: hToken });
                 
-                // Fetch the actual address
-                tokenAddress = await factoryReader.getTokenAddress({ community: this.getAddress() });
+                // Fetch the actual address (with retries for latency)
+                for (let i = 0; i < 5; i++) {
+                    tokenAddress = await factoryReader.getTokenAddress({ community: this.getAddress() });
+                    if (tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000') break;
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+                
+                if (!tokenAddress || tokenAddress === '0x0000000000000000000000000000000000000000') {
+                    console.warn(`Warning: Token address not found after 10s. Factory might be slow indexing.`);
+                }
             }
         }
 

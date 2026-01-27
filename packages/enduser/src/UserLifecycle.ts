@@ -83,7 +83,7 @@ export class UserLifecycle extends BaseClient {
      */
     async onboard(community: Address, stakeAmount: bigint = parseEther('0.4')): Promise<OnboardResult> {
         try {
-            const registry = registryActions(this.registryAddress)(this.client);
+            const registry = registryActions(this.registryAddress)(this.getStartPublicClient());
             const userClient = await import('./UserClient.js').then(m => new m.UserClient({
                 ...this.config,
                 accountAddress: this.accountAddress,
@@ -96,11 +96,16 @@ export class UserLifecycle extends BaseClient {
             // Use UserClient's batch execution capability for atomic onboarding
             const txHash = await userClient.registerAsEndUser(community, stakeAmount);
             
-            // Post-check: Verify role
-            const hasRole = await registry.hasRole({ 
-                roleId: await registry.ROLE_ENDUSER(), 
-                user: this.accountAddress 
-            });
+            // Post-check: Verify role with retry
+            let hasRole = false;
+            for (let i = 0; i < 5; i++) {
+                hasRole = await registry.hasRole({ 
+                    roleId: await registry.ROLE_ENDUSER(), 
+                    user: this.accountAddress 
+                });
+                if (hasRole) break;
+                await new Promise(r => setTimeout(r, 2000));
+            }
 
             return {
                 success: hasRole,
@@ -162,16 +167,13 @@ export class UserLifecycle extends BaseClient {
         });
     }
 
-    /**
-     * Claim a specific SBT Role
-     */
-    async claimSBT(roleId: Hex): Promise<Hash> {
+    async claimSBT(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
         const userClient = await import('./UserClient.js').then(m => new m.UserClient({
             ...this.config,
             accountAddress: this.accountAddress,
             sbtAddress: this.sbtAddress
         }));
-        return await userClient.mintSBT(roleId);
+        return await userClient.mintSBT(roleId, options);
     }
 
     // ===========================================
@@ -203,38 +205,30 @@ export class UserLifecycle extends BaseClient {
     // 4. Exit Phase (Cleanup)
     // ===========================================
 
-    /**
-     * Leave community: Unbind assets, Burn SBT, Remove Role
-     */
-    async leaveCommunity(community: Address): Promise<Hash> {
-        const sbt = sbtActions(this.sbtAddress)(this.client);
-        // 1. Leave Logic (contracts usually handle burn)
-        return await sbt.leaveCommunity({ 
-            community, 
-            account: this.accountAddress // Self-exit
-        });
+    async leaveCommunity(community: Address, options?: TransactionOptions): Promise<Hash> {
+        const userClient = await import('./UserClient.js').then(m => new m.UserClient({
+            ...this.config,
+            accountAddress: this.accountAddress,
+            sbtAddress: this.sbtAddress
+        }));
+        return await userClient.leaveCommunity(community, options);
     }
 
-    /**
-     * Exit a specific role in Registry
-     */
-    async exitRole(roleId: Hex): Promise<Hash> {
-        const registry = registryActions(this.registryAddress)(this.client);
-        return await registry.exitRole({ 
-            roleId, 
-            account: this.accountAddress 
-        });
+    async exitRole(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
+        const userClient = await import('./UserClient.js').then(m => new m.UserClient({
+            ...this.config,
+            accountAddress: this.accountAddress,
+            registryAddress: this.registryAddress
+        }));
+        return await userClient.exitRole(roleId, options);
     }
 
-    /**
-     * Unstake all GTokens from Staking contract
-     */
-    async unstakeAll(roleId: Hex): Promise<Hash> {
-        const staking = stakingActions(this.gTokenStakingAddress)(this.client);
-        return await staking.unlockAndTransfer({
-            user: this.accountAddress,
-            roleId,
-            account: this.accountAddress
-        });
+    async unstakeAll(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
+        const userClient = await import('./UserClient.js').then(m => new m.UserClient({
+            ...this.config,
+            accountAddress: this.accountAddress,
+            gTokenStakingAddress: this.gTokenStakingAddress
+        }));
+        return await userClient.unstakeFromRole(roleId, options);
     }
 }

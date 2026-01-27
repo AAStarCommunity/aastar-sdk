@@ -125,20 +125,18 @@ export class UserClient extends BaseClient {
         }
     }
 
-    /**
-     * Self-mint SBT for a role (user self-service)
-     */
     async mintSBT(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.sbtAddress) throw new Error('SBT address required for this client');
-            const sbt = sbtActions(this.sbtAddress);
+            const { encodeFunctionData } = await import('viem');
             
-            return await sbt(this.client).mintForRole({
-                user: this.accountAddress,
-                roleId,
-                roleData: '0x',
-                account: options?.account
+            const data = encodeFunctionData({
+                abi: [{ name: 'mintForRole', type: 'function', inputs: [{ name: 'user', type: 'address' }, { name: 'roleId', type: 'bytes32' }, { name: 'roleData', type: 'bytes' }], outputs: [{ type: 'uint256' }] }],
+                functionName: 'mintForRole',
+                args: [this.accountAddress, roleId, '0x']
             });
+
+            return await this.execute(this.sbtAddress, 0n, data, options);
         } catch (error) {
             throw error;
         }
@@ -148,19 +146,16 @@ export class UserClient extends BaseClient {
     // 3. 资产管理 (基于 L1 tokenActions)
     // ========================================
 
-    /**
-     * Transfer GToken or any ERC20
-     */
     async transferToken(token: Address, to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
         try {
-            const tokens = tokenActions()(this.client);
-            
-            return await tokens.transfer({
-                token,
-                to,
-                amount,
-                account: options?.account
+            const { encodeFunctionData } = await import('viem');
+            const data = encodeFunctionData({
+                abi: [{ name: 'transfer', type: 'function', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }],
+                functionName: 'transfer',
+                args: [to, amount]
             });
+
+            return await this.execute(token, 0n, data, options);
         } catch (error) {
             throw error;
         }
@@ -186,40 +181,35 @@ export class UserClient extends BaseClient {
     // 4. 委托与质押 (Delegation & Staking)
     // ========================================
 
-    /**
-     * Delegate stake to a role (Delegate to an operator/community)
-     */
     async stakeForRole(roleId: Hex, amount: bigint, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required for this client');
-            const staking = stakingActions(this.gTokenStakingAddress);
+            const { encodeFunctionData } = await import('viem');
             
-            return await staking(this.client).lockStake({
-                user: this.accountAddress,
-                roleId,
-                stakeAmount: amount,
-                entryBurn: 0n,
-                payer: this.accountAddress,
-                account: options?.account
+            const data = encodeFunctionData({
+                abi: [{ name: 'lockStake', type: 'function', inputs: [{ name: 'user', type: 'address' }, { name: 'roleId', type: 'bytes32' }, { name: 'stakeAmount', type: 'uint256' }, { name: 'entryBurn', type: 'uint256' }, { name: 'payer', type: 'address' }], outputs: [] }],
+                functionName: 'lockStake',
+                args: [this.accountAddress, roleId, amount, 0n, this.accountAddress]
             });
+
+            return await this.execute(this.gTokenStakingAddress, 0n, data, options);
         } catch (error) {
             throw error;
         }
     }
 
-    /**
-     * Unstake from a role
-     */
     async unstakeFromRole(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required for this client');
-            const staking = stakingActions(this.gTokenStakingAddress);
+            const { encodeFunctionData } = await import('viem');
             
-            return await staking(this.client).unlockAndTransfer({
-                user: this.accountAddress,
-                roleId,
-                account: options?.account
+            const data = encodeFunctionData({
+                abi: [{ name: 'unlockAndTransfer', type: 'function', inputs: [{ name: 'user', type: 'address' }, { name: 'roleId', type: 'bytes32' }], outputs: [{ name: 'netAmount', type: 'uint256' }] }],
+                functionName: 'unlockAndTransfer',
+                args: [this.accountAddress, roleId]
             });
+
+            return await this.execute(this.gTokenStakingAddress, 0n, data, options);
         } catch (error) {
             throw error;
         }
@@ -246,35 +236,35 @@ export class UserClient extends BaseClient {
     // 5. 生命周期管理 (Lifecycle)
     // ========================================
 
-    /**
-     * Exit a specific role (Cleanup registry status)
-     */
     async exitRole(roleId: Hex, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.registryAddress) throw new Error('Registry address required for this client');
-            const registry = registryActions(this.registryAddress);
+            const { encodeFunctionData } = await import('viem');
             
-            return await registry(this.client).exitRole({
-                roleId,
-                account: options?.account
+            const data = encodeFunctionData({
+                abi: [{ name: 'exitRole', type: 'function', inputs: [{ name: 'roleId', type: 'bytes32' }], outputs: [] }],
+                functionName: 'exitRole',
+                args: [roleId]
             });
+
+            return await this.execute(this.registryAddress, 0n, data, options);
         } catch (error) {
             throw error;
         }
     }
 
-    /**
-     * Leave a community (Burn SBT and clean up)
-     */
     async leaveCommunity(community: Address, options?: TransactionOptions): Promise<Hash> {
         try {
             if (!this.sbtAddress) throw new Error('SBT address required for this client');
-            const sbt = sbtActions(this.sbtAddress);
+            const { encodeFunctionData } = await import('viem');
             
-            return await sbt(this.client).leaveCommunity({
-                community,
-                account: options?.account
+            const data = encodeFunctionData({
+                abi: [{ name: 'leaveCommunity', type: 'function', inputs: [{ name: 'comm', type: 'address' }], outputs: [] }],
+                functionName: 'leaveCommunity',
+                args: [community]
             });
+
+            return await this.execute(this.sbtAddress, 0n, data, options);
         } catch (error) {
             throw error;
         }
@@ -303,6 +293,7 @@ export class UserClient extends BaseClient {
                 owner: this.accountAddress,
                 spender: this.gTokenStakingAddress
             });
+            console.log(`   🔍 Debug Allowance: Account=${this.accountAddress}, Allowance=${allowance}, Needed=${stakeAmount}`);
             
             const txs: { target: Address, value: bigint, data: Hex }[] = [];
 
@@ -345,17 +336,15 @@ export class UserClient extends BaseClient {
             console.log(`   🔍 Debug Onboard: Community=${communityAddress}, AA=${this.accountAddress}, Stake=${stakeAmount}`);
             console.log(`   🔍 Debug Batch: Txs=${txs.length}, Targets=${txs.map(t => t.target)}`);
 
-            // 3. Execute
-            if (txs.length === 1) {
-                return await this.execute(txs[0].target, txs[0].value, txs[0].data, options);
-            } else {
-                return await this.executeBatch(
-                    txs.map(t => t.target), 
-                    txs.map(t => t.value), 
-                    txs.map(t => t.data), 
-                    options
-                );
+            // 3. Execute separately for stability (Batch execution has issues on current AA deployment)
+            const hashes: Hash[] = [];
+            for (const tx of txs) {
+                const h = await this.execute(tx.target, tx.value, tx.data, options);
+                hashes.push(h);
+                // Wait for each tx to ensure sequential state updates (approve -> register)
+                await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: h });
             }
+            return hashes[hashes.length - 1];
         } catch (error) {
             throw error;
         }
@@ -390,10 +379,49 @@ export class UserClient extends BaseClient {
             });
 
             // 3. Delegate to PaymasterClient for v0.7 Gasless Submission
-            // This ensures we follow the exact same logic as successful demo scripts
             // We dynamic import to avoid circular dependencies if any
             const { PaymasterClient: SDKPaymasterClient } = await import('../../paymaster/src/V4/PaymasterClient.js');
             
+            let verificationGasLimit: bigint | undefined;
+            let paymasterVerificationGasLimit: bigint | undefined;
+            let paymasterPostOpGasLimit: bigint | undefined;
+            let autoEstimate = true;
+
+            if (params.paymasterType === 'Super') {
+                // Apply Smart Buffer Strategy via PaymasterUtils (Same as SuperPaymasterClient)
+                const { tuneGasLimit } = await import('../../paymaster/src/V4/PaymasterUtils.js');
+                
+                const est = await SDKPaymasterClient.estimateUserOperationGas(
+                    this.client,
+                    this.client, 
+                    this.accountAddress,
+                    ep,
+                    params.paymaster,
+                    params.target, // placeholder
+                    this.bundlerClient?.transport?.url || (this.client.transport as any).url || '', 
+                    callData,
+                    {
+                        operator: params.operator,
+                        factory: undefined,
+                        factoryData: undefined
+                    }
+                );
+                
+                // Matches SuperPaymasterClient Logic exactly:
+                const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
+                // Nominal 60k, Efficiency 0.45
+                paymasterVerificationGasLimit = tuneGasLimit(bundlerEstimate, 60_000n, 0.45);
+                
+                // Safety Pad for VGL (Moderate, not 1M)
+                const SAFETY_PAD = 80000n;
+                verificationGasLimit = est.verificationGasLimit + SAFETY_PAD;
+                
+                // PostOp Tuning
+                paymasterPostOpGasLimit = est.paymasterPostOpGasLimit + 10000n;
+                
+                autoEstimate = false; // logic handled
+            }
+
             const txHash = await SDKPaymasterClient.submitGaslessUserOperation(
                 this.client,
                 this.client, // WalletClient acts as signer
@@ -405,8 +433,10 @@ export class UserClient extends BaseClient {
                 callData,
                 {
                     operator: params.operator,
-                    autoEstimate: true, // Let SDK handle estimation & tuning
-                    paymasterPostOpGasLimit: 100000n // conservative default
+                    autoEstimate, 
+                    verificationGasLimit,
+                    paymasterVerificationGasLimit,
+                    paymasterPostOpGasLimit
                 }
             );
 
