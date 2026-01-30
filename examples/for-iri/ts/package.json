@@ -1,0 +1,20 @@
+{
+  "name": "aastar-sdk-iri-examples-ts",
+  "version": "1.0.0",
+  "description": "TypeScript examples for integrating with AAstar SDK",
+  "type": "module",
+  "scripts": {
+    "scenario:1": "tsx src/1-operator-setup.ts",
+    "scenario:2": "tsx src/2-community-setup.ts",
+    "scenario:3": "tsx src/3-query-info.ts"
+  },
+  "dependencies": {
+    "viem": "^2.21.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

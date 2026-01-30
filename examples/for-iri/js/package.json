@@ -1,0 +1,15 @@
+{
+  "name": "aastar-sdk-iri-examples-js",
+  "version": "1.0.0",
+  "description": "JavaScript examples for integrating with AAstar SDK",
+  "type": "module",
+  "scripts": {
+    "scenario:1": "node src/1-operator-setup.js",
+    "scenario:2": "node src/2-community-setup.js",
+    "scenario:3": "node src/3-query-info.js"
+  },
+  "dependencies": {
+    "viem": "^2.21.0",
+    "dotenv": "^16.4.5"
+  }
+}
