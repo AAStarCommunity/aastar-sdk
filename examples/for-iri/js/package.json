@@ -6,10 +6,12 @@
   "scripts": {
     "scenario:1": "node src/1-operator-setup.js",
     "scenario:2": "node src/2-community-setup.js",
-    "scenario:3": "node src/3-query-info.js"
+    "scenario:3": "node src/3-query-info.js",
+    "scenario:4": "node src/4-gasless-tx.js"
   },
   "dependencies": {
     "viem": "^2.21.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "@aastar/sdk": "workspace:*"
   }
 }

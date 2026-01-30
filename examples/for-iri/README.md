@@ -100,6 +100,12 @@ These examples are designed to be copied into your own project and adapted as ne
     -   查询用户角色 (社区负责人, 运营商, SuperPaymaster 等)。
     -   查询代币余额 (GToken)。
 
+4.  **Gasless 交易 (`4-gasless-tx`)**
+    -   环境: Alice 启动社区并发行 Token。
+    -   环境: Bob (用户) 获取智能账户 (AA) 并获得 Token。
+    -   **演示**: Bob 转账 2 个 Token 给 Alice，**无需支付 ETH**。
+    -   交易手续费由 SuperPaymaster 代付 (使用社区 Token)。
+
 ### 使用方法
 
 1.  **选择语言**: 进入 `ts` 或 `js` 文件夹。

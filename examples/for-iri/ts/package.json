@@ -6,11 +6,13 @@
   "scripts": {
     "scenario:1": "tsx src/1-operator-setup.ts",
     "scenario:2": "tsx src/2-community-setup.ts",
-    "scenario:3": "tsx src/3-query-info.ts"
+    "scenario:3": "tsx src/3-query-info.ts",
+    "scenario:4": "tsx src/4-gasless-tx.ts"
   },
   "dependencies": {
     "viem": "^2.21.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "@aastar/sdk": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0",
