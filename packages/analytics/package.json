@@ -25,7 +25,8 @@
   "dependencies": {
     "@aastar/core": "workspace:*",
     "viem": "2.43.3",
-    "@aastar/enduser": "workspace:*"
+    "@aastar/enduser": "workspace:*",
+    "@aastar/paymaster": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.7.2"

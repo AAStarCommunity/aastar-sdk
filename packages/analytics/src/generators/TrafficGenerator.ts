@@ -9,7 +9,11 @@ import {
     type Chain 
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { getNetworkConfig, ENTRY_POINT_V07 } from '../../../../scripts/00_utils.js';
+import { 
+    ENTRY_POINT_ADDRESS, 
+    getNetwork,
+    APNTS_ADDRESS
+} from '@aastar/core';
 import { UserClient } from '@aastar/enduser';
 
 export interface TrafficConfig {
@@ -21,26 +25,27 @@ export interface TrafficConfig {
 }
 
 export class TrafficGenerator {
-    private client;
-    private wallet;
+    private client: any;
+    private wallet: any;
     private chain: Chain;
     private config: TrafficConfig;
 
     constructor(config: TrafficConfig) {
         this.config = config;
-        const { chain } = getNetworkConfig(config.network);
-        this.chain = chain;
+        const chain = getNetwork(config.network as any);
+        if (!chain) throw new Error(`Unsupported network: ${config.network}`);
+        this.chain = chain as unknown as Chain;
         
         this.client = createPublicClient({
             chain,
             transport: http(config.rpcUrl)
-        });
+        } as any);
 
         this.wallet = createWalletClient({
             chain,
             transport: http(config.rpcUrl),
             account: privateKeyToAccount(config.privateKey)
-        });
+        } as any);
     }
 
     private getBundlerClient() {
@@ -62,7 +67,7 @@ export class TrafficGenerator {
         
         try {
             const nonce = await this.client.readContract({
-                address: ENTRY_POINT_V07,
+                address: ENTRY_POINT_ADDRESS,
                 abi: [{ name: 'getNonce', type: 'function', inputs: [{ name: 'sender', type: 'address' }, { name: 'key', type: 'uint192' }], outputs: [{ name: 'nonce', type: 'uint256' }] }],
                 functionName: 'getNonce',
                 args: [address, 0n]
@@ -84,11 +89,12 @@ export class TrafficGenerator {
         for (let i = 0; i < runs; i++) {
             try {
                 // Send to self to minimize setup, just measuring gas
-                const hash = await this.wallet.sendTransaction({
+                const hash = await (this.wallet as any).sendTransaction({
                     to: account.address,
                     value: parseEther('0.0001'),
-                    account
-                });
+                    account,
+                    chain: this.chain
+                } as any);
                 console.log(`   [${i+1}/${runs}] EOA Tx: ${hash}`);
                 await this.client.waitForTransactionReceipt({ hash });
             } catch (e: any) {
@@ -118,10 +124,10 @@ export class TrafficGenerator {
         
         const userClient = new UserClient({
             accountAddress: smartAccountAddress,
-            client: this.wallet,
-            publicClient: this.client,
-            bundlerClient: this.getBundlerClient(),
-            entryPointAddress: ENTRY_POINT_V07
+            client: this.wallet as any,
+            publicClient: this.client as any,
+            bundlerClient: this.getBundlerClient() as any,
+            entryPointAddress: ENTRY_POINT_ADDRESS
         });
 
         console.log(`   Target SA: ${smartAccountAddress}`);
@@ -174,10 +180,10 @@ export class TrafficGenerator {
                 // Use the provided wallet as both the owner/signer and the operator (sponsor) for these transactions
                 // matching the demo flow
                 const hash = await SDKSuperPaymasterClient.submitGaslessTransaction(
-                    this.client,
-                    signingWallet,
+                    this.client as any,
+                    signingWallet as any,
                     smartAccountAddress,
-                    ENTRY_POINT_V07,
+                    ENTRY_POINT_ADDRESS,
                     this.config.bundlerUrl || '',
                     {
                         token: await this.getTokenForOperator(operatorAddress), 
@@ -213,8 +219,7 @@ export class TrafficGenerator {
 
     private async getTokenForOperator(operator: Hex): Promise<Hex> {
         // Simple mapping based on known state or defaulting to aPNTs
-        // In l4-regression, Anni uses state.operators.anni.tokenAddress
-        return '0x986383dF2A5303DDc87e0c5d4505bf5fd3BD4212'; // aPNTs on Sepolia
+        return APNTS_ADDRESS; // aPNTs from core config
     }
 
     /**

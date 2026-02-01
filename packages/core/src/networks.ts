@@ -25,6 +25,28 @@ export const NETWORKS = {
       decimals: 18,
     },
   },
+  optimism: {
+    chainId: 10,
+    name: 'Optimism',
+    rpcUrl: 'https://mainnet.optimism.io',
+    blockExplorer: 'https://optimistic.etherscan.io',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
+  'op-sepolia': {
+    chainId: 11155420,
+    name: 'Optimism Sepolia',
+    rpcUrl: 'https://sepolia.optimism.io',
+    blockExplorer: 'https://optimism-sepolia.blockscout.com',
+    nativeCurrency: {
+      name: 'Sepolia Ether',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
 } as const;
 
 export type SupportedNetwork = keyof typeof NETWORKS;

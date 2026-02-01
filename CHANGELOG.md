@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.16.16] - 2026-02-01
-**SDK Code Integrity Hash**: `c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
+**SDK Code Integrity Hash**: `b7a6229407d2fbc2b7308e84c711ed41ff6ee8498a29b9ace0207ac4efbb10c8`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 ### 🌍 Infrastructure & Distribution

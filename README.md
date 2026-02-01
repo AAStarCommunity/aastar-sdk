@@ -16,8 +16,7 @@
   - [📚 Contents](#-contents)
   - [Introduction](#introduction)
     - [Core Features](#core-features)
-  - [Verified Contracts (Current Deployment)](#verified-contracts-current-deployment)
-- [SDK v2 Architecture](#sdk-v2-architecture)
+  - [SDK v2 Architecture](#sdk-v2-architecture)
   - [Installation](#installation)
   - [Quick Start](#quick-start)
     - [End User Gasless Transaction](#end-user-gasless-transaction)
@@ -37,7 +36,11 @@
     - [Quick Start](#quick-start-1)
     - [Key Features](#key-features)
   - [Academic Research](#academic-research)
+    - [Architecture Design (L3 Refinement)](#architecture-design-l3-refinement)
   - [Support](#support)
+  - [Verified Contracts (Current Deployment)](#verified-contracts-current-deployment)
+  - [🛡️ SDK Integrity Verification](#️-sdk-integrity-verification)
+    - [deployment update](#deployment-update)
 ---
 
 ## Introduction
@@ -238,11 +241,22 @@ The following contract addresses have been successfully verified on their respec
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
-**Current Code Integrity Hash (v0.16.16)**:
-`c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
+**Current Code Integrity Hash (v0.16.16)**: `b7a6229407d2fbc2b7308e84c711ed41ff6ee8498a29b9ace0207ac4efbb10c8`
 
 To verify, run this stable command (it verifies all code but excludes .md files to ensure stability):
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 ```
 The resulting hash must match the one listed in the [Changelog](./CHANGELOG.md).
+
+### deployment update
+
+自动化生产器 (update-version.sh)：
+现在当你执行 ./update-version.sh <version> 时，它会自动计算代码哈希（排除 .md 文件）。
+它会自动扫描并同步更新所有相关文档：README.md、CHANGELOG.md、docs/guide/*.md 以及 Configuration_Sync.md 中的哈希记录。
+发布防卫门禁 (publish.sh & dry-run-publish.sh)：
+在正式发布（或模拟发布）前，脚本会自动对比“文档记录哈希”与“当前代码真实哈希”。
+拦截机制：如果你在升级版本后又临时修改了代码（即使只改了一个字符），发布将被强制拦截，并提示你重新同步哈希。
+文档对齐：
+所有发布流程相关的变动已同步到 
+docs/Configuration_Sync.md。

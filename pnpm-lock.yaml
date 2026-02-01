@@ -116,6 +116,9 @@ importers:
       '@aastar/enduser':
         specifier: workspace:*
         version: link:../enduser
+      '@aastar/paymaster':
+        specifier: workspace:*
+        version: link:../paymaster
       viem:
         specifier: 2.43.3
         version: 2.43.3(typescript@5.7.2)
