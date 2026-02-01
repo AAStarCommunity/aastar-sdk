@@ -1,0 +1,49 @@
+/**
+ * Canonical Contract Addresses for Supported Networks
+ * These are hardcoded as defaults for NPM distribution.
+ */
+
+export const CANONICAL_ADDRESSES = {
+  // --- Sepolia (Chain ID: 11155111) ---
+  11155111: {
+    registry: "0x7Ba70C5bFDb3A4d0cBd220534f3BE177fefc1788",
+    gToken: "0x9ceDeC089921652D050819ca5BE53765fc05aa9E",
+    staking: "0x1118eAf2427a5B9e488e28D35338d22EaCBc37fC",
+    sbt: "0x677423f5Dad98D19cAE8661c36F094289cb6171a",
+    reputationSystem: "0x4b256541Ff4021f8D8229908C2BEd9c15Fd8afCC",
+    superPaymaster: "0x16cE0c7d846f9446bbBeb9C5a84A4D140fAeD94A",
+    paymasterFactory: "0xfDE4671581F21C9e54Cafa95FA6Da98678750F4d",
+    paymasterV4Impl: "0x0EBEDa248D53678D493f62719b3ce34DDb3CAcFf",
+    xPNTsFactory: "0x6EafdA3477F3eec1F848505e1c06dFB5532395b6",
+    blsAggregator: "0xe380d443842A8A37F691B9f3EF58e40073759edc",
+    blsValidator: "0x04590731005d25d379A55b6c3136B5CD1eaC757F",
+    dvtValidator: "0xcB42417Cfb374e923BAF729040d9973FB7676537",
+    entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+    aPNTs: "0xDf669834F04988BcEE0E3B6013B6b867Bd38778d",
+    priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+    simpleAccountFactory: "0x91E60482a2B343004dF29EB205C4F6916E864700"
+  },
+
+  // --- OP Sepolia (Chain ID: 11155420) ---
+  11155420: {
+    registry: "0xcf6860Ab57de8669756997e414D9c52B6e301972",
+    gToken: "0xC341c88453372021d0221834307613c2e99fE718",
+    staking: "0x5f57B931C849e8E255F22755506eB2255aB22a7C",
+    sbt: "0x2c3Ca1553dC1B8870381E8E56C7b3e3A3ae162f0",
+    reputationSystem: "0x891EC0f84D9275839B8dAf74e87B23F2DBd7f9c9",
+    superPaymaster: "0x9eC1FE8134A1C05aD34ba2E4e8758dAe0a009B94",
+    paymasterFactory: "0x1e3b9d12eAc27867a523d0537902441B0E7D98d8",
+    paymasterV4Impl: "0x906123080207F250B1C9F299991512Cb31f35b2f",
+    xPNTsFactory: "0x7792a49C9E91e0E9B631B27D885d15e971B7482A",
+    blsAggregator: "0x6e06b17b1a4D2D973F7E3e026e24b4393315736c",
+    blsValidator: "0x260fa905CcE1f5b29Afe9d627c01fAAE4A66A7F5",
+    dvtValidator: "0x0087cA806109E150438116cAA414580BB5fa9195",
+    entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+    aPNTs: "0x3BBcA92Ad828b3dD619c980Ba09f929b9d2BC440",
+    priceFeed: "0x61Ec26aA57019C486B10502285c5A3D4A4750AD7",
+    simpleAccountFactory: "0x91E6060613810449d098b0b5Ec8b51A0FE8c8985"
+  }
+} as const;
+
+export type CanonicalAddresses = (typeof CANONICAL_ADDRESSES)[keyof typeof CANONICAL_ADDRESSES];
+export type SupportedChainId = keyof typeof CANONICAL_ADDRESSES;

@@ -1,35 +1,41 @@
 import { createRequire } from 'module';
+import { CANONICAL_ADDRESSES } from './addresses.js';
 
 const require = createRequire(import.meta.url);
 
 const network = process.env.NETWORK || 'anvil';
 let config: any = {};
+
+// 1. Try to load local config (for development/monorepo use)
 try {
   config = require(`../../../config.${network}.json`);
 } catch (e) {
-  console.warn(`Warning: Could not load config.${network}.json. Contract addresses may be undefined.`);
+  // console.warn(`Warning: Could not load config.${network}.json. Falling back to code defaults.`);
 }
 
+// 2. Identify Chain ID and resolve canonical defaults
+const chainIdStr = process.env.CHAIN_ID || config.chainId;
+const chainId = chainIdStr ? Number(chainIdStr) : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0));
+const defaults = (CANONICAL_ADDRESSES as any)[chainId] || {};
+
 /**
- * Contract Addresses (loaded from config.{network}.json)
+ * Contract Addresses (Priority: ENV > Local Config > Canonical Defaults)
  */
-export const CONTRACT_SRC_HASH = config.srcHash;
-export const REGISTRY_ADDRESS = config.registry as `0x${string}`;
-export const GTOKEN_ADDRESS = config.gToken as `0x${string}`;
-export const GTOKEN_STAKING_ADDRESS = config.staking as `0x${string}`;
-export const SBT_ADDRESS = config.sbt as `0x${string}`;
-export const REPUTATION_SYSTEM_ADDRESS = config.reputationSystem as `0x${string}`;
-export const SUPER_PAYMASTER_ADDRESS = config.superPaymaster as `0x${string}`;
-export const PAYMASTER_FACTORY_ADDRESS = config.paymasterFactory as `0x${string}`;
-export const PAYMASTER_V4_IMPL_ADDRESS = config.paymasterV4Impl as `0x${string}`;
-export const XPNTS_FACTORY_ADDRESS = config.xPNTsFactory as `0x${string}`;
-export const BLS_AGGREGATOR_ADDRESS = config.blsAggregator as `0x${string}`;
-export const BLS_VALIDATOR_ADDRESS = config.blsValidator as `0x${string}`;
-export const DVT_VALIDATOR_ADDRESS = config.dvtValidator as `0x${string}`;
-export const ENTRY_POINT_ADDRESS = config.entryPoint as `0x${string}`;
-export const ENTRY_POINT_0_8_ADDRESS = config.entryPoint08 as `0x${string}`;
-export const ENTRY_POINT_0_9_ADDRESS = config.entryPoint09 as `0x${string}`;
-export const APNTS_ADDRESS = config.aPNTs as `0x${string}`;
+export const CONTRACT_SRC_HASH = process.env.SRC_HASH || config.srcHash || defaults.srcHash;
+export const REGISTRY_ADDRESS = (process.env.REGISTRY || config.registry || defaults.registry) as `0x${string}`;
+export const GTOKEN_ADDRESS = (process.env.GTOKEN || config.gToken || defaults.gToken) as `0x${string}`;
+export const GTOKEN_STAKING_ADDRESS = (process.env.STAKING || config.staking || defaults.staking) as `0x${string}`;
+export const SBT_ADDRESS = (process.env.SBT || config.sbt || defaults.sbt) as `0x${string}`;
+export const REPUTATION_SYSTEM_ADDRESS = (process.env.REPUTATION_SYSTEM || config.reputationSystem || defaults.reputationSystem) as `0x${string}`;
+export const SUPER_PAYMASTER_ADDRESS = (process.env.SUPER_PAYMASTER || config.superPaymaster || defaults.superPaymaster) as `0x${string}`;
+export const PAYMASTER_FACTORY_ADDRESS = (process.env.PAYMASTER_FACTORY || config.paymasterFactory || defaults.paymasterFactory) as `0x${string}`;
+export const PAYMASTER_V4_IMPL_ADDRESS = (process.env.PAYMASTER_V4_IMPL || config.paymasterV4Impl || defaults.paymasterV4Impl) as `0x${string}`;
+export const XPNTS_FACTORY_ADDRESS = (process.env.XPNTS_FACTORY || config.xPNTsFactory || defaults.xPNTsFactory) as `0x${string}`;
+export const BLS_AGGREGATOR_ADDRESS = (process.env.BLS_AGGREGATOR || config.blsAggregator || defaults.blsAggregator) as `0x${string}`;
+export const BLS_VALIDATOR_ADDRESS = (process.env.BLS_VALIDATOR || config.blsValidator || defaults.blsValidator) as `0x${string}`;
+export const DVT_VALIDATOR_ADDRESS = (process.env.DVT_VALIDATOR || config.dvtValidator || defaults.dvtValidator) as `0x${string}`;
+export const ENTRY_POINT_ADDRESS = (process.env.ENTRY_POINT || config.entryPoint || defaults.entryPoint) as `0x${string}`;
+export const APNTS_ADDRESS = (process.env.APNTS || config.aPNTs || defaults.aPNTs) as `0x${string}`;
 
 /**
  * Common Constants
