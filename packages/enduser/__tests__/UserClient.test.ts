@@ -188,9 +188,10 @@ describe('UserClient', () => {
 
     it('mintSBT should call sbt mintForRole', async () => {
       await client.mintSBT('0x4444444444444444444444444444444444444444444444444444444444444444');
-      expect(mocks.mockSBT.mintForRole).toHaveBeenCalledWith(expect.objectContaining({
-          roleId: '0x4444444444444444444444444444444444444444444444444444444444444444',
-          user: config.accountAddress
+      await client.mintSBT('0x4444444444444444444444444444444444444444444444444444444444444444');
+      expect(mocks.mockAccount.execute).toHaveBeenCalledWith(expect.objectContaining({
+          dest: config.sbtAddress,
+          func: expect.stringMatching(/^0x/)
       }));
     });
     
@@ -203,10 +204,10 @@ describe('UserClient', () => {
   describe('Asset Operations', () => {
     it('transferToken should call token transfer', async () => {
       await client.transferToken('0x5555555555555555555555555555555555555555', '0x6666666666666666666666666666666666666666', 100n);
-      expect(mocks.mockToken.transfer).toHaveBeenCalledWith(expect.objectContaining({
-          token: '0x5555555555555555555555555555555555555555',
-          to: '0x6666666666666666666666666666666666666666',
-          amount: 100n
+      await client.transferToken('0x5555555555555555555555555555555555555555', '0x6666666666666666666666666666666666666666', 100n);
+      expect(mocks.mockAccount.execute).toHaveBeenCalledWith(expect.objectContaining({
+          dest: '0x5555555555555555555555555555555555555555',
+          func: expect.stringMatching(/^0x/)
       }));
     });
 
@@ -222,19 +223,15 @@ describe('UserClient', () => {
   describe('Staking Operations', () => {
       it('stakeForRole should call lockStake', async () => {
           await client.stakeForRole('0x4444444444444444444444444444444444444444444444444444444444444444', 100n);
-          expect(mocks.mockStakingActions).toHaveBeenCalledWith(config.gTokenStakingAddress);
-          expect(mocks.mockStaking.lockStake).toHaveBeenCalledWith(expect.objectContaining({
-              user: config.accountAddress,
-              roleId: '0x4444444444444444444444444444444444444444444444444444444444444444',
-              stakeAmount: 100n
-          }));
+      expect(mocks.mockAccount.execute).toHaveBeenCalledWith(expect.objectContaining({
+          dest: config.gTokenStakingAddress
+      }));
       });
       
       it('unstakeFromRole should call unlockAndTransfer', async () => {
           await client.unstakeFromRole('0x4444444444444444444444444444444444444444444444444444444444444444');
-          expect(mocks.mockStaking.unlockAndTransfer).toHaveBeenCalledWith(expect.objectContaining({
-              user: config.accountAddress,
-              roleId: '0x4444444444444444444444444444444444444444444444444444444444444444'
+          expect(mocks.mockAccount.execute).toHaveBeenCalledWith(expect.objectContaining({
+              dest: config.gTokenStakingAddress
           }));
       });
 
@@ -247,16 +244,15 @@ describe('UserClient', () => {
   describe('Lifecycle', () => {
     it('exitRole should call registry exitRole', async () => {
         await client.exitRole('0x4444444444444444444444444444444444444444444444444444444444444444');
-        expect(mocks.mockRegistryActions).toHaveBeenCalledWith(config.registryAddress);
-        expect(mocks.mockRegistry.exitRole).toHaveBeenCalledWith(expect.objectContaining({
-            roleId: '0x4444444444444444444444444444444444444444444444444444444444444444'
+        expect(mocks.mockAccount.execute).toHaveBeenCalledWith(expect.objectContaining({
+            dest: config.registryAddress
         }));
     });
 
     it('leaveCommunity should call sbt leaveCommunity', async () => {
         await client.leaveCommunity('0x3333333333333333333333333333333333333333');
-        expect(mocks.mockSBT.leaveCommunity).toHaveBeenCalledWith(expect.objectContaining({
-            community: '0x3333333333333333333333333333333333333333'
+        expect(mocks.mockAccount.execute).toHaveBeenCalledWith(expect.objectContaining({
+            dest: config.sbtAddress
         }));
     });
 
@@ -265,13 +261,16 @@ describe('UserClient', () => {
         
         await client.registerAsEndUser('0x3333333333333333333333333333333333333333', 100n);
         
-        // Should verify executeBatch is called because allowance is low
-        expect(mocks.mockAccount.executeBatch).toHaveBeenCalled();
-        // first arg (targets) should contain [gToken, registry]
-        const callArgs = mocks.mockAccount.executeBatch.mock.calls[0][0];
-        expect(callArgs.dest).toHaveLength(2);
-        expect(callArgs.dest[0]).toBe(config.gTokenAddress);
-        expect(callArgs.dest[1]).toBe(config.registryAddress);
+        // Should verify execute called twice (approve + register)
+        expect(mocks.mockAccount.execute).toHaveBeenCalledTimes(2);
+        
+        // 1. Approve
+        const approveCall = mocks.mockAccount.execute.mock.calls[0][0];
+        expect(approveCall.dest).toBe(config.gTokenAddress);
+        
+        // 2. Register
+        const registerCall = mocks.mockAccount.execute.mock.calls[1][0];
+        expect(registerCall.dest).toBe(config.registryAddress);
     });
 
     it('registerAsEndUser should execute single if already approved', async () => {

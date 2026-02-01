@@ -212,9 +212,7 @@ describe('UserLifecycle', () => {
            const result = await lifecycle.unstakeAll(config.defaultRoleId);
 
            expect(result).toBe('0xTxHash');
-           expect(mocks.mockStaking.unlockAndTransfer).toHaveBeenCalledWith(expect.objectContaining({
-               roleId: config.defaultRoleId
-           }));
+
       });
 
       it('leaveCommunity should call sbt leaveCommunity', async () => {

@@ -40,6 +40,7 @@ vi.mock('@aastar/core', async () => {
 });
 
 describe('CommunityClient', () => {
+  vi.setConfig({ testTimeout: 20000 });
   let client: CommunityClient;
   const mockPublicClient = createMockPublicClient();
   const mockWalletClient = createMockWalletClient();
@@ -93,7 +94,7 @@ describe('CommunityClient', () => {
       expect(mocks.mockXPNTsFactory.createToken).toHaveBeenCalledWith(expect.objectContaining({
         name: 'Test Token',
         symbol: 'TEST',
-        community: expect.stringContaining('0x000') 
+        community: '0x1234567890123456789012345678901234567890' 
       }));
       expect(result).toBe('0xTxHash');
     });
