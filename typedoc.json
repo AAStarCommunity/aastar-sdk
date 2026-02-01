@@ -9,7 +9,8 @@
     "packages/identity",
     "packages/analytics",
     "packages/enduser",
-    "packages/dapp"
+    "packages/dapp",
+    "packages/operator"
   ],
   "entryPointStrategy": "packages",
   "out": "docs/api",

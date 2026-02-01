@@ -86,7 +86,7 @@ echo -e "${YELLOW}📦 Extracting package documentation...${NC}"
 mkdir -p "$DOCS_REPO/api/modules"
 # Standardize package entry points to avoid 404s
 # We provide BOTH @aastar/pkg.md and @aastar/pkg/index.md to satisfy different link styles
-for pkg in core account paymaster tokens identity dapp sdk; do
+for pkg in core account paymaster tokens identity dapp sdk community operator enduser analytics; do
     if [ -f "$SDK_REPO/packages/$pkg/README.md" ]; then
         # 1. Provide as a module for the sidebar (/api/@aastar/sdk.html)
         mkdir -p "$DOCS_REPO/api/@aastar"

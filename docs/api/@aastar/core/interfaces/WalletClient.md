@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/doc-types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/clients/doc-types.ts#L13)
+Defined in: [packages/core/src/clients/doc-types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/clients/doc-types.ts#L13)
 
 Wallet Client Interface
 Standardized interface for interacting with Ethereum wallets and accounts.

@@ -16,13 +16,16 @@ AAstar SDK 提供了一套完整的工具集用于交互 AAstar 协议。它采�
 
 ### Core Modules | 核心模块
 
-- **`@aastar/community`**: Launch & manage DAOs. (启动和管理 DAO)
-- **`@aastar/operator`**: Run Paymasters & earn rewards. (运行 Paymaster 并赚取收益)
-- **`@aastar/enduser`**: Join communities & enjoy gasless txs. (加入社区并享受免 Gas 交易)
-- **`@aastar/analytics`**: Monitor ecosystem data. (监控生态系统数据)
-- **`@aastar/tokens`**: GToken & XPNTs finance tools. (GToken 和 XPNTs 金融工具)
-- **`@aastar/identity`**: Reputation & SBT management. (声誉和 SBT 管理)
-- **`@aastar/account`**: Smart Account (ERC-4337) utilities. (智能账户工具)
+- **[`@aastar/community`](./@aastar/community)**: Launch & manage DAOs. (启动和管理 DAO)
+- **[`@aastar/operator`](./@aastar/operator)**: Run Paymasters & earn rewards. (运行 Paymaster 并赚取收益)
+- **[`@aastar/enduser`](./@aastar/enduser)**: Join communities & enjoy gasless txs. (加入社区并享受免 Gas 交易)
+- **[`@aastar/analytics`](./@aastar/analytics)**: Monitor ecosystem data. (监控生态系统数据)
+- **[`@aastar/tokens`](./@aastar/tokens)**: GToken & XPNTs finance tools. (GToken 和 XPNTs 金融工具)
+- **[`@aastar/identity`](./@aastar/identity)**: Reputation & SBT management. (声誉和 SBT 管理)
+- **[`@aastar/account`](./@aastar/account)**: Smart Account (ERC-4337) utilities. (智能账户工具)
+- **[`@aastar/core`](./@aastar/core)**: Shared logic, Roles, and configuration. (共享逻辑、角色和配置)
+- **[`@aastar/paymaster`](./@aastar/paymaster)**: Low-level Paymaster interactions. (低层级 Paymaster 交互)
+- **[`@aastar/dapp`](./@aastar/dapp)**: Pre-built UI components and React hooks. (预建 UI 组件和 React hooks)
 
 ---
 
@@ -135,6 +138,8 @@ AAstar SDK 基于 **viem** 构建，确保轻量级和类型安全的交互。�
 | `@aastar/enduser` | User onboarding, SBT minting |
 | `@aastar/tokens` | Finance, Tokenomics, Approval flows |
 | `@aastar/identity` | Reputation, Credit limits, ZK Proofs |
+| `@aastar/paymaster` | EntryPoint & Paymaster low-level API |
+| `@aastar/dapp` | React Components & Integration Hooks |
 
 ---
 

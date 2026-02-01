@@ -1,6 +1,6 @@
 > **registryActions**(`address`): (`client`) => [`RegistryActions`](../type-aliases/RegistryActions.md)
 
-Defined in: [packages/core/src/actions/registry.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/registry.ts#L97)
+Defined in: [packages/core/src/actions/registry.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L101)
 
 ## Parameters
 

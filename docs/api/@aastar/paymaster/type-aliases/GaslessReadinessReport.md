@@ -1,6 +1,6 @@
 > **GaslessReadinessReport** = `object`
 
-Defined in: [V4/PaymasterUtils.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L10)
+Defined in: [V4/PaymasterUtils.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/paymaster/src/V4/PaymasterUtils.ts#L10)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [V4/PaymasterUtils.ts:10](https://github.com/AAStarCommunity/aastar-
 
 > **details**: `object`
 
-Defined in: [V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
+Defined in: [V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
 
 #### ethUsdPrice
 
@@ -44,7 +44,7 @@ Defined in: [V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-
 
 > **isReady**: `boolean`
 
-Defined in: [V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
+Defined in: [V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
 
 ***
 
@@ -52,4 +52,4 @@ Defined in: [V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-
 
 > **issues**: `string`[]
 
-Defined in: [V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
+Defined in: [V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/paymaster/src/V4/PaymasterUtils.ts#L12)

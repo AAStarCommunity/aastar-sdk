@@ -7,5 +7,6 @@
 - [@aastar/dapp](@aastar/dapp/README.md)
 - [@aastar/enduser](@aastar/enduser/README.md)
 - [@aastar/identity](@aastar/identity/README.md)
+- [@aastar/operator](@aastar/operator/README.md)
 - [@aastar/paymaster](@aastar/paymaster/README.md)
 - [@aastar/tokens](@aastar/tokens/README.md)

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/crypto/blsSigner.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L9)
+Defined in: [packages/core/src/crypto/blsSigner.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L9)
 
 BLS Signer for Registry reputation updates and DVT operations
 
@@ -10,7 +10,7 @@ Uses BLS12-381 curve for signature aggregation
 
 > **new BLSSigner**(`privateKeyHex`): `BLSSigner`
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L12)
+Defined in: [packages/core/src/crypto/blsSigner.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L12)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/crypto/blsSigner.ts:12](https://github.com/AAStar
 
 > **getPublicKey**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L31)
+Defined in: [packages/core/src/crypto/blsSigner.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L31)
 
 Get BLS public key
 
@@ -44,7 +44,7 @@ Public key as hex string
 
 > **sign**(`message`): `` `0x${string}` ``
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L21)
+Defined in: [packages/core/src/crypto/blsSigner.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L21)
 
 Sign a message with BLS private key
 
@@ -66,7 +66,7 @@ BLS signature as hex string
 
 > `static` **aggregatePublicKeys**(`pubKeys`): `` `0x${string}` ``
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L52)
+Defined in: [packages/core/src/crypto/blsSigner.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L52)
 
 Aggregate multiple BLS public keys
 
@@ -88,7 +88,7 @@ Aggregated public key (uncompressed G1 - 96 bytes for EVM)
 
 > `static` **aggregateSignatures**(`signatures`): `` `0x${string}` ``
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L41)
+Defined in: [packages/core/src/crypto/blsSigner.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L41)
 
 Aggregate multiple BLS signatures
 
@@ -110,7 +110,7 @@ Aggregated signature
 
 > `static` **verify**(`message`, `signature`, `publicKey`): `boolean`
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/crypto/blsSigner.ts#L65)
+Defined in: [packages/core/src/crypto/blsSigner.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/crypto/blsSigner.ts#L65)
 
 Verify a BLS signature
 

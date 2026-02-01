@@ -1,5 +1,5 @@
 > `const` **DEFAULT\_TIMEOUT\_MS**: `30000` = `30000`
 
-Defined in: [packages/core/src/constants.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/constants.ts#L114)
+Defined in: [packages/core/src/constants.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/constants.ts#L120)
 
 Timeouts

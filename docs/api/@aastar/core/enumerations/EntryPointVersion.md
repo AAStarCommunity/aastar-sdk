@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/entryPoint.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L6)
+Defined in: [packages/core/src/actions/entryPoint.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/entryPoint.ts#L6)
 
 ## Enumeration Members
 
@@ -6,7 +6,7 @@ Defined in: [packages/core/src/actions/entryPoint.ts:6](https://github.com/AASta
 
 > **V06**: `"0.6"`
 
-Defined in: [packages/core/src/actions/entryPoint.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L7)
+Defined in: [packages/core/src/actions/entryPoint.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/entryPoint.ts#L7)
 
 ***
 
@@ -14,4 +14,4 @@ Defined in: [packages/core/src/actions/entryPoint.ts:7](https://github.com/AASta
 
 > **V07**: `"0.7"`
 
-Defined in: [packages/core/src/actions/entryPoint.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/entryPoint.ts#L8)
+Defined in: [packages/core/src/actions/entryPoint.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/entryPoint.ts#L8)

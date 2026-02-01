@@ -1,6 +1,6 @@
-> **getBlockExplorer**(`network`): `""` \| `"https://sepolia.etherscan.io"`
+> **getBlockExplorer**(`network`): `""` \| `"https://sepolia.etherscan.io"` \| `"https://optimistic.etherscan.io"` \| `"https://optimism-sepolia.blockscout.com"`
 
-Defined in: [packages/core/src/networks.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/networks.ts#L75)
+Defined in: [packages/core/src/networks.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/networks.ts#L97)
 
 Get block explorer URL
 
@@ -8,11 +8,11 @@ Get block explorer URL
 
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
-| `network` | `"anvil"` \| `"sepolia"` | Network name |
+| `network` | `"anvil"` \| `"sepolia"` \| `"op-sepolia"` \| `"optimism"` | Network name |
 
 ## Returns
 
-`""` \| `"https://sepolia.etherscan.io"`
+`""` \| `"https://sepolia.etherscan.io"` \| `"https://optimistic.etherscan.io"` \| `"https://optimism-sepolia.blockscout.com"`
 
 Block explorer base URL
 

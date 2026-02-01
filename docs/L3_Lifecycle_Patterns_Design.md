@@ -18,6 +18,7 @@ Gasless原生: 所有Pattern支持Gasless配置
 未注册 → 加入社区(质押+SBT) → Gasless交易 → 更新信誉 → 绑定NFT → 退出社区
 L3 Methods:
 
+```typescript
 class UserLifecycle {
   // 注册阶段
   checkEligibility(community): Promise<boolean>
@@ -41,6 +42,7 @@ class UserLifecycle {
   exitRole(roleId): Promise<Hash>
   unstakeAll(): Promise<Hash>
 }
+```
 🏛️ 2. 社区管理员 (Community Admin) - CommunityManager
 职责: 启动社区、治理规则、成员管理
 
@@ -49,6 +51,7 @@ class UserLifecycle {
 EOA → 注册社区 → 发行Token → 设置治理 → 管理成员 → 移交多签
 L3 Methods:
 
+```typescript
 class CommunityManager {
   // 启动阶段 (已有 CommunityLaunchpad)
   launch(params): Promise<LaunchResult>
@@ -77,6 +80,7 @@ class CommunityManager {
   getMembers(): Promise<Member[]>
   getTreasuryBalance(): Promise<bigint>
 }
+```
 🚀 3. Paymaster 运营商 (PM Operator) - 
 PaymasterOperator
 职责: 部署节点、配置Gas、管理流动性
@@ -86,6 +90,7 @@ PaymasterOperator
 EOA → 资源检查 → 质押注册 → 部署节点 → 配置Token → 运营管理 → 退出/撤资
 L3 Methods:
 
+```typescript
 class PaymasterOperator {
   // 启动阶段 (已有 OperatorLifecycle)
   checkReadiness(): Promise<OperatorStatus>
@@ -111,6 +116,7 @@ class PaymasterOperator {
   completeExit(): Promise<Hash>
   withdrawAllFunds(): Promise<Hash>
 }
+```
 ⚡ 4. SuperPaymaster 运营商 - SuperPaymasterOperator ⭐ (新增)
 职责: 管理全局Gas池、设置协议参数
 
@@ -119,6 +125,7 @@ class PaymasterOperator {
 协议批准 → 质押注册 → 配置国库 → 设置费率 → 管理流动性 → 退出
 L3 Methods:
 
+```typescript
 class SuperPaymasterOperator {
   // 注册阶段 ⭐ (新增)
   registerAsOperator(collateral: bigint): Promise<Hash>
@@ -143,6 +150,7 @@ class SuperPaymasterOperator {
   unstakeOperator(): Promise<Hash>
   withdrawAllRewards(): Promise<Hash>
 }
+```
 🏛️ 5. 协议管理员 (Protocol Admin) - ProtocolGovernance ⭐ (增强)
 职责: 全局参数治理、合约升级
 
@@ -151,6 +159,7 @@ class SuperPaymasterOperator {
 部署EOA → 初始配置 → 日常治理 → 移交DAO多签
 L3 Methods:
 
+```typescript
 class ProtocolGovernance {
   // 全局参数管理 ⭐ (增强)
   setGlobalMinStake(amount: bigint): Promise<Hash>
@@ -181,6 +190,7 @@ class ProtocolGovernance {
   getAllOperators(): Promise<Operator[]>
   getProposals(): Promise<Proposal[]>
 }
+```
 🔐 6. DVT 验证器 (DVT Operator) - DVTNodeManager ⭐ (新增)
 职责: 分布式验证、BLS签名、治理投票
 
@@ -189,6 +199,7 @@ class ProtocolGovernance {
 生成BLS密钥 → 注册验证器 → 加入验证集 → 签名验证 → 退出验证集
 L3 Methods:
 
+```typescript
 class DVTNodeManager {
   // 注册阶段
   generateBLSKeyPair(): Promise<BLSKeyPair>
@@ -213,6 +224,7 @@ class DVTNodeManager {
   leaveValidatorSet(): Promise<Hash>
   withdrawStake(): Promise<Hash>
 }
+```
 🔑 7. KMS 节点 (KMS Node) - KMSNodeManager ⭐ (新增)
 职责: 密钥管理、签名服务
 
@@ -221,6 +233,7 @@ class DVTNodeManager {
 初始化节点 → 注册到Registry → 提供签名服务 → 密钥轮换 → 退出
 L3 Methods:
 
+```typescript
 class KMSNodeManager {
   // 初始化
   initializeNode(config: KMSConfig): Promise<Hash>
@@ -243,8 +256,10 @@ class KMSNodeManager {
   deactivateNode(): Promise<Hash>
   exportKeys(backup: boolean): Promise<KeyBackup>
 }
+```
 🎨 Reputation 管理增强 ⭐
 ReputationManager (新增)
+```typescript
 class ReputationManager {
   // 规则管理
   addRule(community: Address, rule: ReputationRule): Promise<Hash>
@@ -262,8 +277,10 @@ class ReputationManager {
   getCommunityRules(community: Address): Promise<ReputationRule[]>
   getTopUsers(limit: number): Promise<User[]>
 }
+```
 🎯 NFT 绑定增强 ⭐
 NFTManager (新增)
+```typescript
 class NFTManager {
   // NFT绑定
   bindNFTToSBT(sbtId: bigint, nftAddr: Address, nftId: bigint): Promise<Hash>
@@ -276,6 +293,7 @@ class NFTManager {
   // 批量操作
   batchBindNFTs(bindings: NFTBinding[]): Promise<Hash>
 }
+```
 📋 实现优先级 (修订)
 P0 - 核心生命周期 (立即实现)
 ✅ 

@@ -1,6 +1,6 @@
 > **ReputationBreakdown** = `object`
 
-Defined in: [packages/core/src/actions/reputation.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/reputation.ts#L13)
+Defined in: [packages/core/src/actions/reputation.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/reputation.ts#L13)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/reputation.ts:13](https://github.com/AASt
 
 > **activityBonus**: `bigint`
 
-Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/reputation.ts#L16)
+Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/reputation.ts#L16)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/reputation.ts:16](https://github.com/AASt
 
 > **baseScore**: `bigint`
 
-Defined in: [packages/core/src/actions/reputation.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/reputation.ts#L14)
+Defined in: [packages/core/src/actions/reputation.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/reputation.ts#L14)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/reputation.ts:14](https://github.com/AASt
 
 > **multiplier**: `bigint`
 
-Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/reputation.ts#L17)
+Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/reputation.ts#L17)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [packages/core/src/actions/reputation.ts:17](https://github.com/AASt
 
 > **nftBonus**: `bigint`
 
-Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/actions/reputation.ts#L15)
+Defined in: [packages/core/src/actions/reputation.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/reputation.ts#L15)

@@ -1,6 +1,6 @@
 > `const` **NETWORKS**: `object`
 
-Defined in: [packages/core/src/networks.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/7f5ed5aca89613e9b5624bea21ce22cf3df12963/packages/core/src/networks.ts#L5)
+Defined in: [packages/core/src/networks.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/networks.ts#L5)
 
 Blockchain Network Configuration
 
@@ -41,6 +41,78 @@ Blockchain Network Configuration
 #### anvil.rpcUrl
 
 > `readonly` **rpcUrl**: `"http://127.0.0.1:8545"` = `'http://127.0.0.1:8545'`
+
+### op-sepolia
+
+> `readonly` **op-sepolia**: `object`
+
+#### op-sepolia.blockExplorer
+
+> `readonly` **blockExplorer**: `"https://optimism-sepolia.blockscout.com"` = `'https://optimism-sepolia.blockscout.com'`
+
+#### op-sepolia.chainId
+
+> `readonly` **chainId**: `11155420` = `11155420`
+
+#### op-sepolia.name
+
+> `readonly` **name**: `"Optimism Sepolia"` = `'Optimism Sepolia'`
+
+#### op-sepolia.nativeCurrency
+
+> `readonly` **nativeCurrency**: `object`
+
+#### op-sepolia.nativeCurrency.decimals
+
+> `readonly` **decimals**: `18` = `18`
+
+#### op-sepolia.nativeCurrency.name
+
+> `readonly` **name**: `"Sepolia Ether"` = `'Sepolia Ether'`
+
+#### op-sepolia.nativeCurrency.symbol
+
+> `readonly` **symbol**: `"ETH"` = `'ETH'`
+
+#### op-sepolia.rpcUrl
+
+> `readonly` **rpcUrl**: `"https://sepolia.optimism.io"` = `'https://sepolia.optimism.io'`
+
+### optimism
+
+> `readonly` **optimism**: `object`
+
+#### optimism.blockExplorer
+
+> `readonly` **blockExplorer**: `"https://optimistic.etherscan.io"` = `'https://optimistic.etherscan.io'`
+
+#### optimism.chainId
+
+> `readonly` **chainId**: `10` = `10`
+
+#### optimism.name
+
+> `readonly` **name**: `"Optimism"` = `'Optimism'`
+
+#### optimism.nativeCurrency
+
+> `readonly` **nativeCurrency**: `object`
+
+#### optimism.nativeCurrency.decimals
+
+> `readonly` **decimals**: `18` = `18`
+
+#### optimism.nativeCurrency.name
+
+> `readonly` **name**: `"Ether"` = `'Ether'`
+
+#### optimism.nativeCurrency.symbol
+
+> `readonly` **symbol**: `"ETH"` = `'ETH'`
+
+#### optimism.rpcUrl
+
+> `readonly` **rpcUrl**: `"https://mainnet.optimism.io"` = `'https://mainnet.optimism.io'`
 
 ### sepolia
 

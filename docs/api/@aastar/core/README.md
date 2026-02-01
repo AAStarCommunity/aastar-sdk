@@ -108,8 +108,6 @@ AAStar Shared Configuration Package
 - [DVT\_VALIDATOR\_ADDRESS](variables/DVT_VALIDATOR_ADDRESS.md)
 - [DVTValidatorABI](variables/DVTValidatorABI.md)
 - [DVTValidatorArtifact](variables/DVTValidatorArtifact.md)
-- [ENTRY\_POINT\_0\_8\_ADDRESS](variables/ENTRY_POINT_0_8_ADDRESS.md)
-- [ENTRY\_POINT\_0\_9\_ADDRESS](variables/ENTRY_POINT_0_9_ADDRESS.md)
 - [ENTRY\_POINT\_ADDRESS](variables/ENTRY_POINT_ADDRESS.md)
 - [EntryPointABI](variables/EntryPointABI.md)
 - [EntryPointArtifact](variables/EntryPointArtifact.md)
