@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.16] - 2026-02-01
+**SDK Integrity Hash**: `38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`
+
+### 🌍 Infrastructure & Distribution
+- **[FEATURE]** **Canonical Address Solidification**: 
+  - Hardcoded canonical contract addresses for Sepolia and OP Sepolia within `@aastar/core`.
+  - SDK is now self-contained and ready for NPM distribution without requiring local JSON configuration files.
+  - Maintained三级优先级 (ENV > Local Config > Canonical Defaults) to support flexible development.
+- **[FIX]** **SuperPaymaster Price Refresh**: 
+  - Fixed "UserOperation expired" errors by enabling automated owner-based price refreshes in `l4-setup.ts`.
+  - Added Chainlink fallback logic for robust price synchronization on testnets.
+
+### 🛡️ Integrity
+- **[ADDED]** **SDK Source Integrity Monitoring**: 
+  - Introduced a unique SHA-256 hash for the entire SDK source tree to ensure verifiable releases.
+
 ## [0.16.14] - 2026-01-24
 
 ### 🌍 Multi-Chain & Infrastructure

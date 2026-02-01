@@ -230,3 +230,18 @@ The following contract addresses have been successfully verified on their respec
 
 - [Sepolia Verified Contracts](./docs/verify.sepolia.contracts.md)
 - [Optimism Sepolia Verified Contracts](./docs/verify.op-sepolia.contracts.md)
+
+---
+
+## 🛡️ SDK Integrity Verification
+
+To ensure you are using an official release, you can verify the integrity of the SDK source code.
+
+**Current Version Integrity Hash (v0.16.16)**:
+`38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`
+
+You can verify your local installation by running:
+```bash
+git ls-files -z | xargs -0 sha256sum | sha256sum
+```
+The resulting hash must match the one listed in the [Changelog](./CHANGELOG.md).
