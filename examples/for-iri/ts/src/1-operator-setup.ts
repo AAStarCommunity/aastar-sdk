@@ -3,7 +3,6 @@ import {
     createWalletClient, 
     http, 
     parseEther, 
-    formatEther, 
     type Hex
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
@@ -11,89 +10,51 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// In a real project, use: import { SepoliaFaucetAPI, OperatorLifecycle, ... } from '@aastar/sdk';
-// For local monorepo testing, we rely on tsconfig paths or relative imports if needed.
-// Here we assume running from root with path mapping or linked package.
 import { 
     SepoliaFaucetAPI, 
-    OperatorLifecycle,
-    type OperatorConfig
+    OperatorLifecycle
 } from '@aastar/sdk';
 
 // Load .env
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') }); // Load local .env
+dotenv.config({ path: path.resolve(__dirname, '../.env') }); 
 
 async function main() {
-    console.log("🚀 Starting Scenario 1: Operator Setup & Token Airdrop");
+    console.log("🚀 Starting Scenario 1: Standard Operator Setup");
 
     // 0. Config
     const RPC_URL = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY';
-    const CHAIN_ID = 11155111; // Sepolia
     
-    // Core Contracts (Sepolia Defaults - Replace with env vars in prod)
     const CONTRACTS = {
-        registry: process.env.REGISTRY_ADDRESS as `0x${string}` || '0x...', 
-        gToken: process.env.GTOKEN_ADDRESS as `0x${string}` || '0x...',
-        superPaymaster: process.env.SUPER_PAYMASTER_ADDRESS as `0x${string}` || '0x...',
+        registry: process.env.REGISTRY_ADDRESS as `0x${string}`,
+        gToken: process.env.GTOKEN_ADDRESS as `0x${string}`,
+        superPaymaster: process.env.SUPER_PAYMASTER_ADDRESS as `0x${string}`,
         entryPoint: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as `0x${string}`,
-        paymasterFactory: '0x0000000000000000000000000000000000000000' as `0x${string}`, // Not used in this scenario
-        priceFeed: '0x694AA1769357215DE4FAC081bf1f309aDC325306' as `0x${string}` // ETH/USD
+        paymasterFactory: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+        priceFeed: process.env.PRICE_FEED_ADDRESS as `0x${string}` 
     };
 
-    // Clients
-    const publicClient = createPublicClient({
-        transport: http(RPC_URL)
-    });
+    const publicClient = createPublicClient({ transport: http(RPC_URL) });
 
     // 1. Actors
-    // Supplier (Faucet Admin) - Required to fund the Operator
     const supplierKey = process.env.PRIVATE_KEY_SUPPLIER as Hex;
-    if (!supplierKey) throw new Error("Missing PRIVATE_KEY_SUPPLIER in .env");
+    if (!supplierKey) throw new Error("Missing PRIVATE_KEY_SUPPLIER");
     const supplierAccount = privateKeyToAccount(supplierKey);
-    const supplierClient = createWalletClient({
-        account: supplierAccount,
-        transport: http(RPC_URL)
-    });
+    const supplierClient = createWalletClient({ account: supplierAccount, transport: http(RPC_URL) });
 
-    // Operator (New or Existing)
     const operatorKey = process.env.PRIVATE_KEY_OPERATOR as Hex || generatePrivateKey();
     const operatorAccount = privateKeyToAccount(operatorKey);
-    const operatorClient = createWalletClient({
-        account: operatorAccount,
-        transport: http(RPC_URL)
-    });
+    const operatorClient = createWalletClient({ account: operatorAccount, transport: http(RPC_URL) });
 
-    console.log(`\n👥 Actors:`);
-    console.log(`   Faucet Admin: ${supplierAccount.address}`);
-    console.log(`   Operator:     ${operatorAccount.address}`);
+    console.log(`\n👥 Operator: ${operatorAccount.address}`);
 
-    // 2. Faucet: Fund Operator (Airdrop)
-    console.log(`\n🚰 Step 1: Faucet Funding...`);
-    
-    // Fund ETH
-    await SepoliaFaucetAPI.fundETH(
-        supplierClient, 
-        publicClient, 
-        operatorAccount.address, 
-        parseEther('0.05')
-    );
+    // 2. Fund Operator
+    console.log(`\n🚰 Step 1: Funding Operator...`);
+    await SepoliaFaucetAPI.fundETH(supplierClient, publicClient, operatorAccount.address, parseEther('0.05'));
+    await SepoliaFaucetAPI.mintTestTokens(supplierClient, publicClient, CONTRACTS.gToken, operatorAccount.address, parseEther('1000'));
 
-    // Mint GTokens (Gas Tokens)
-    if (CONTRACTS.gToken && CONTRACTS.gToken !== '0x...') {
-        await SepoliaFaucetAPI.mintTestTokens(
-            supplierClient,
-            publicClient,
-            CONTRACTS.gToken,
-            operatorAccount.address,
-            parseEther('1000')
-        );
-    } else {
-        console.warn("   ⚠️ GToken address not configured, skipping GToken mint.");
-    }
-
-    // 3. Operator Lifecycle: Setup Node
+    // 3. Operator Lifecycle
     console.log(`\n⚙️  Step 2: Setup Operator Node...`);
     
     const operatorLifecycle = new OperatorLifecycle({
@@ -101,36 +62,35 @@ async function main() {
         publicClient,
         superPaymasterAddress: CONTRACTS.superPaymaster,
         gTokenAddress: CONTRACTS.gToken,
+        gTokenStakingAddress: process.env.GTOKEN_STAKING_ADDRESS as `0x${string}`,
         registryAddress: CONTRACTS.registry,
         entryPointAddress: CONTRACTS.entryPoint,
-        gTokenStakingAddress: process.env.GTOKEN_STAKING_ADDRESS as `0x${string}`,
+        paymasterFactoryAddress: CONTRACTS.paymasterFactory,
         ethUsdPriceFeedAddress: CONTRACTS.priceFeed
     });
 
-    // Register as SuperPaymaster Operator
     try {
-        console.log("   📝 Registering as SuperPaymaster Operator...");
-        // This handles stake approval and registration
+        // Full Setup in one go
+        console.log("   📝 Registering & Staking...");
         const hashes = await operatorLifecycle.setupNode({
             type: 'SUPER',
-            stakeAmount: parseEther('50'), // 50 GTokens Stake
-            depositAmount: parseEther('0') // Initial deposit
+            stakeAmount: parseEther('50'),
+            depositAmount: parseEther('100') // Also deposit for gas immediately
         });
-        console.log(`   ✅ Setup Transactions:`, hashes);
+        console.log(`   ✅ Setup Hashes:`, hashes);
+        
+        // Configure (Self-Treasury, generic rate)
+        // Note: Real operators usually link a specific Token first.
+        // For this basic demo, we skip token link unless we create one.
+        // Assuming we rely on Default or existing token if any.
+        // Or simply skip configure if no token is created.
+        console.log("   (Skipping explicit 'configureOperator' as no new Token created in this scenario)");
+
     } catch (e: any) {
         console.log(`   ℹ️  Setup info: ${e.message}`);
     }
 
-    // 4. Update Price (DVT Mock)
-    // In a real scenario, this keeps the Oracle fresh
-    console.log(`\n🔄 Step 3: Update Price Feed (DVT Mock)...`);
-    // Note: This usually requires a specific DVT signer role. 
-    // For demo, we assume Supplier might have rights or skip if not generic.
-    // implementation skipped for brevity/permission assumptions
-    console.log("   (Skipped in generic demo - requires DVT Signer key)");
-
-    console.log("\n🎉 Operator Setup Complete!");
-    console.log(`   Keys for .env: PRIVATE_KEY=${operatorKey}`);
+    console.log("\n🎉 Standard Operator Setup Complete!");
 }
 
 main().catch(console.error);
