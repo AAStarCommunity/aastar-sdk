@@ -67,7 +67,10 @@ vi.mock('../src/UserClient.js', () => {
             return {
                 registerAsEndUser: vi.fn().mockResolvedValue('0xRegisterTxHash'),
                 executeGasless: vi.fn().mockResolvedValue('0xGaslessTxHash'),
-                mintSBT: vi.fn().mockResolvedValue('0xMintTxHash')
+                mintSBT: vi.fn().mockResolvedValue('0xMintTxHash'),
+                leaveCommunity: vi.fn().mockResolvedValue('0xTxHash'),
+                exitRole: vi.fn().mockResolvedValue('0xTxHash'),
+                unstakeFromRole: vi.fn().mockResolvedValue('0xTxHash')
             };
         })
     };

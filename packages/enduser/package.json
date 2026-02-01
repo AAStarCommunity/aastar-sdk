@@ -1,6 +1,6 @@
 {
   "name": "@aastar/enduser",
-  "version": "0.16.15",
+  "version": "0.16.16",
   "publishConfig": {
     "access": "public"
   },
@@ -27,6 +27,7 @@
     "viem": "2.43.3"
   },
   "devDependencies": {
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "vitest": "4.0.17"
   }
 }
