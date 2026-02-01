@@ -235,7 +235,8 @@ The following contract addresses have been successfully verified on their respec
 
 ## 🛡️ SDK Integrity Verification
 
-To ensure you are using an official release, you can verify the integrity of the SDK source code.
+> [!IMPORTANT]
+> **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK source code immediately after installation.
 
 **Current Version Integrity Hash (v0.16.16)**:
 `38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`

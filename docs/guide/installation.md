@@ -8,7 +8,21 @@ The `@aastar/sdk` package provides the easiest entry point by grouping all core 
 
 ```bash
 pnpm add @aastar/sdk viem@2.x
+pnpm add @aastar/sdk viem@2.x
 ```
+
+### 🛡️ Integrity Verification
+
+> [!IMPORTANT]
+> **Security Check**: Before using the SDK, verify that the downloaded source code matches the official release hash.
+
+Run the following command in your project root:
+```bash
+git ls-files -z | xargs -0 sha256sum | sha256sum
+```
+**Expected Hash for v0.16.16**: `38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`
+
+---
 
 ## Modular Installation (Optional)
 
