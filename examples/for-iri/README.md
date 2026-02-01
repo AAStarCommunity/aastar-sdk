@@ -30,6 +30,14 @@ These examples are designed to be copied into your own project and adapted as ne
     -   Checking User Roles (Community Leader, Operator, SuperPaymaster).
     -   Checking Token Balances (GToken).
 
+4.  **Gasless Transaction (`4-gasless-tx`)**
+    -   **Scenario**: Bob (User) sends community tokens to Alice without paying ETH gas.
+    -   Demonstrates `UserLifecycle.executeGaslessTx` and high-level Gasless APIs.
+
+5.  **Complete L3 Lifecycle (`l3-lifecycle-demo.ts`)**
+    -   **AIO Demo**: Runs the entire protocol lifecycle in one script.
+    -   Community Launch -> Operator Setup -> User Onboard -> Gasless Tx -> Exit.
+
 ### How to use
 
 1.  **Choose your language**: Go to `ts` or `js` folder.
@@ -104,7 +112,12 @@ These examples are designed to be copied into your own project and adapted as ne
     -   环境: Alice 启动社区并发行 Token。
     -   环境: Bob (用户) 获取智能账户 (AA) 并获得 Token。
     -   **演示**: Bob 转账 2 个 Token 给 Alice，**无需支付 ETH**。
+    -   **演示**: Bob 转账 2 个 Token 给 Alice，**无需支付 ETH**。
     -   交易手续费由 SuperPaymaster 代付 (使用社区 Token)。
+
+5.  **完整 L3 生命周期 (`l3-lifecycle-demo.ts`)**
+    -   **全流程演示**: 在一个脚本中运行整个协议生命周期。
+    -   包含: 社区启动 -> 运营商设置 -> 用户入驻 -> Gasless 交易 -> 退出流程。
 
 ### 使用方法
 
