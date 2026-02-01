@@ -16,11 +16,11 @@ pnpm add @aastar/sdk viem@2.x
 > [!IMPORTANT]
 > **Security Check**: Before using the SDK, verify that the downloaded source code matches the official release hash.
 
-Run the following command in your project root:
+Run the following command in your project root (verifies code, excludes .md):
 ```bash
-git ls-files -z | xargs -0 sha256sum | sha256sum
+git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 ```
-**Expected Hash for v0.16.16**: `38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`
+**Expected Hash for v0.16.16**: `c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
 
 ---
 

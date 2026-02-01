@@ -3,7 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.16.16] - 2026-02-01
-**SDK Integrity Hash**: `38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`
+**SDK Code Integrity Hash**: `c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 ### 🌍 Infrastructure & Distribution
 - **[FEATURE]** **Canonical Address Solidification**: 
@@ -17,6 +18,20 @@ All notable changes to this project will be documented in this file.
 ### 🛡️ Integrity
 - **[ADDED]** **SDK Source Integrity Monitoring**: 
   - Introduced a unique SHA-256 hash for the entire SDK source tree to ensure verifiable releases.
+
+## 🛡️ SDK Integrity Verification
+
+> [!IMPORTANT]
+> **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
+
+**Current Code Integrity Hash (v0.16.16)**:
+`c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
+
+To verify, run this stable command (excludes non-code markdown files):
+```bash
+git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
+```
+The resulting hash must match the one listed in the [Changelog](./CHANGELOG.md).
 
 ## [0.16.14] - 2026-01-24
 

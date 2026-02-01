@@ -236,13 +236,13 @@ The following contract addresses have been successfully verified on their respec
 ## 🛡️ SDK Integrity Verification
 
 > [!IMPORTANT]
-> **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK source code immediately after installation.
+> **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
-**Current Version Integrity Hash (v0.16.16)**:
-`38165cf40f900e72bd0dce2452c640d21e06fd7a15993de62f90a8a6503c735d`
+**Current Code Integrity Hash (v0.16.16)**:
+`c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
 
-You can verify your local installation by running:
+To verify, run this stable command (it verifies all code but excludes .md files to ensure stability):
 ```bash
-git ls-files -z | xargs -0 sha256sum | sha256sum
+git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 ```
 The resulting hash must match the one listed in the [Changelog](./CHANGELOG.md).
