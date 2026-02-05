@@ -28,8 +28,8 @@ async function runBugHuntingTests() {
     dotenv.config({ path: envPath, override: true });
 
     const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
-    const PRIVATE_KEY = process.env.PRIVATE_KEY as Hex;
-    if (!PRIVATE_KEY) throw new Error("❌ PRIVATE_KEY not found in .env");
+    const PRIVATE_KEY = (process.env.PRIVATE_KEY || process.env.TEST_PRIVATE_KEY || process.env.PRIVATE_KEY_JASON) as Hex;
+    if (!PRIVATE_KEY) throw new Error("❌ PRIVATE_KEY (sign or test) not found in .env");
 
     // 3. Map Addresses
     const REGISTRY_ADDRESS = config.registry as Hex;
@@ -93,7 +93,12 @@ async function runBugHuntingTests() {
     console.log('📊 Bug Hunting Summary');
     console.log('='.repeat(50));
     console.log(`Total Tests: ${totalTests} | Passed: ${passedTests} | Failed: ${totalTests - passedTests}`);
-    if (bugs.length === 0) console.log('\n✅ System is stable.');
+    if (bugs.length > 0 || totalTests !== passedTests) {
+        process.exit(1);
+    }
 }
 
-runBugHuntingTests().catch(console.error);
+runBugHuntingTests().catch(err => {
+    console.error(err);
+    process.exit(1);
+});
