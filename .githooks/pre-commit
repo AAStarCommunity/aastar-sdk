@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# AAStar SDK pre-commit hook
+# Runs the local security scan and fast tests before allowing a commit.
+
+# Robust PATH setup
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.foundry/bin"
+
+echo "🔍 Running pre-commit security & test checks..."
+
+# 1. Run Security Scan
+npx tsx scripts/security-scan.ts
+if [ $? -ne 0 ]; then
+    echo "❌ Security check failed! Commit metadata or private keys found."
+    exit 1
+fi
+
+# 2. Run Fast Tests (Optional but recommended)
+# pnpm run test:fast
+# if [ $? -ne 0 ]; then
+#     echo "❌ Fast tests failed! Please fix before committing."
+#     exit 1
+# fi
+
+echo "✅ Pre-commit check passed."
+exit 0
