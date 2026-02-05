@@ -1,4 +1,4 @@
-import { type Address, type Hash, parseEther, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { type Address, type Hash, type Hex, parseEther, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
 import { registryActions, sbtActions, xPNTsFactoryActions, reputationActions, tokenActions } from '@aastar/core';
 
@@ -66,6 +66,65 @@ export class CommunityClient extends BaseClient {
         } catch (error) {
             // Error is likely already an AAStarError from L1, but we wrap it for context
             throw error; 
+        }
+    }
+
+    /**
+     * Get Community Details (Decodes Role Metadata)
+     * @param communityAddress - The address of the community manager (defaults to self)
+     */
+    async getCommunityInfo(communityAddress?: Address): Promise<{
+        name: string;
+        ensName: string;
+        website: string;
+        description: string;
+        logoURI: string;
+        stakeAmount: bigint;
+    }> {
+        try {
+            const target = communityAddress || this.getAddress();
+            const registryAddr = this.requireRegistry();
+            const registry = registryActions(registryAddr);
+            const publicClient = this.getStartPublicClient();
+            
+            // 1. Get Role ID
+            const API_ROLE_COMMUNITY = await registry(publicClient).ROLE_COMMUNITY();
+            
+            // 2. Fetch Metadata (Hex)
+            const metadataHex = await registry(publicClient).roleMetadata({
+                roleId: API_ROLE_COMMUNITY,
+                user: target
+            });
+
+            if (!metadataHex || metadataHex === '0x') {
+                throw new Error('No metadata found for this community');
+            }
+
+            // 3. Decode
+            // struct CommunityRoleData { string name; string ensName; string website; string description; string logoURI; uint256 stakeAmount; }
+            let dataToDecode = metadataHex;
+            
+            // Check for common 'bytes' or 'tuple' wrapper offset (0x20)
+            if (metadataHex.startsWith('0x0000000000000000000000000000000000000000000000000000000000000020')) {
+                dataToDecode = `0x${metadataHex.slice(66)}`; 
+            }
+
+            const { decodeAbiParameters, parseAbiParameters } = await import('viem');
+            const [name, ensName, website, description, logoURI, stakeAmount] = decodeAbiParameters(
+                parseAbiParameters('string, string, string, string, string, uint256'),
+                dataToDecode as Hex
+            );
+
+            return {
+                name,
+                ensName,
+                website,
+                description,
+                logoURI,
+                stakeAmount
+            };
+        } catch (error) {
+            throw error;
         }
     }
 

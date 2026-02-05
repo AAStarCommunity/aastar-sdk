@@ -213,9 +213,10 @@ The SDK supports doctoral data collection for the SuperPaymaster paper. Official
 - [Reputation-to-Credit Mapping Whitepaper](https://docs.aastar.io/guide/Reputation-to-Credit_Mapping_Whitepaper)
 
 ### Architecture Design (L3 Refinement)
-- **[L3 Demo API & Walkthrough](./docs/guide/L3-demo-API-and-simple-demo-walk-through.md)** (API Review & Comparison)
+- **[L3 Complete Demo Walkthrough](../aastar-docs/guide/docs/L3_Complete_Demo_Walkthrough.md)** (Detailed Step-by-Step Guide)
 - **[L3 Lifecycle Patterns Design](./docs/L3_Lifecycle_Patterns_Design.md)** (Architecture Specification)
 - **[L3 Lifecycle Developer Guide](./docs/L3_Lifecycle_Developer_Guide.md)** (Quick Start & API Reference)
+- **[Account Initialization Guide (CN)](./docs/Account_Initialization_Guide_CN.md)** (Seamless Setup Guide)
 - [L3 Use Case Gap Analysis](./docs/L3_Use_Case_Analysis.md)
 
 ---

@@ -34,6 +34,62 @@ export class UserClient extends BaseClient {
         this.gTokenAddress = config.gTokenAddress;
     }
 
+    /**
+     * Deploy a new Smart Account (Supports multiple factory types)
+     * Static helper to facilitate onboarding before instantiating the UserClient.
+     * 
+     * @param client - WalletClient to sign the deployment transaction
+     * @param params - Deployment parameters
+     * @returns Object containing the deployed account address and transaction hash
+     */
+    static async deployAccount(
+        client: any, 
+        params: {
+            owner: Address;
+            salt?: bigint;
+            factoryAddress?: Address;
+            publicClient?: any;
+            accountType?: 'simple' | 'kernel' | 'safe' | string;
+            customAbi?: any;
+        }
+    ): Promise<{ accountAddress: Address; hash: Hash }> {
+        const { accountFactoryActions, SimpleAccountFactoryABI } = await import('@aastar/core');
+        
+        // 1. Determine Factory ABI (Ensure it's the raw ABI array)
+        let abi = params.customAbi || (SimpleAccountFactoryABI?.abi || SimpleAccountFactoryABI);
+        
+        // In the future, we can add more built-in ABIs here based on accountType
+        // if (params.accountType === 'kernel') abi = KernelFactoryABI;
+        
+        const factoryAddr = params.factoryAddress || '0x9406Cc6185a346906296840746125a0E44976454'; // Default v0.7 Factory
+        const salt = params.salt || 0n;
+        
+        // Use publicClient for reading if provided, otherwise fallback to client (which might be a Full Client)
+        const readClient = params.publicClient || client;
+        
+        // Use the generic actions with the selected ABI
+        const factoryRead = accountFactoryActions(factoryAddr, abi)(readClient);
+        const factoryWrite = accountFactoryActions(factoryAddr, abi)(client);
+        
+        // 1. Predict Address
+        const accountAddress = await factoryRead.getAddress({
+            owner: params.owner,
+            salt
+        });
+
+        // 2. Deploy
+        try {
+            const hash = await factoryWrite.createAccount({
+                owner: params.owner,
+                salt,
+                account: client.account
+            });
+            return { accountAddress, hash };
+        } catch (error: any) {
+            throw error;
+        }
+    }
+
     // ========================================
     // 1. 账户基本操作 (基于 L1 simpleAccountActions)
     // ========================================

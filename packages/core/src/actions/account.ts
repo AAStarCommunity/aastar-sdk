@@ -155,14 +155,14 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
     }
 });
 
-export const accountFactoryActions = (address: Address) => (client: PublicClient | WalletClient): AccountFactoryActions => ({
+export const accountFactoryActions = (address: Address, abi: any = SimpleAccountFactoryABI) => (client: PublicClient | WalletClient): AccountFactoryActions => ({
     async createAccount({ owner, salt, account }) {
         try {
             validateAddress(owner, 'owner');
             validateRequired(salt, 'salt');
             return await (client as any).writeContract({
                 address,
-                abi: SimpleAccountFactoryABI,
+                abi: abi || SimpleAccountFactoryABI,
                 functionName: 'createAccount',
                 args: [owner, salt],
                 account: account as any,
@@ -179,7 +179,7 @@ export const accountFactoryActions = (address: Address) => (client: PublicClient
             validateRequired(salt, 'salt');
             return await (client as PublicClient).readContract({
                 address,
-                abi: SimpleAccountFactoryABI,
+                abi: abi || SimpleAccountFactoryABI,
                 functionName: 'getAddress',
                 args: [owner, salt]
             }) as Promise<Address>;
