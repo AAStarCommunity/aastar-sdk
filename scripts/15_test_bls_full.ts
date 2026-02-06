@@ -21,7 +21,7 @@ dotenv.config({ path: path.resolve(process.cwd(), envPath), override: true });
 const isSepolia = process.env.REVISION_ENV === 'sepolia';
 const chain = isSepolia ? sepolia : foundry;
 const RPC_URL = process.env.RPC_URL || (isSepolia ? process.env.SEPOLIA_RPC_URL : 'http://127.0.0.1:8545');
-let BLS_VALIDATOR_ADDR: Hex = ((process.env.BLS_VALIDATOR_ADDR || process.env.BLS_VALIDATOR_ADDRESS) as Hex) || '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82'; 
+let BLS_VALIDATOR_ADDR: Hex = ((process.env.BLS_VALIDATOR_ADDR || process.env.BLS_VALIDATOR_ADDRESS) as Hex) || '0x04590731005d25d379A55b6c3136B5CD1eaC757F'; 
 
 const validatorAbi = [
   {
@@ -128,6 +128,17 @@ async function main() {
     const messageHex = toHex(message);
 
     try {
+        // Use estimateContractGas to get the EXECUTION COST
+        const gasEstimate = await client.estimateContractGas({
+            address: BLS_VALIDATOR_ADDR,
+            abi: validatorAbi,
+            functionName: 'verifyProof',
+            args: [proof, messageHex],
+            account: '0x0000000000000000000000000000000000000000' // Dummy sender
+        });
+
+        console.log(`\n⛽ BLS Verification Gas Cost: ${gasEstimate.toString()} wei`);
+
         const isValid = await client.readContract({
             address: BLS_VALIDATOR_ADDR,
             abi: validatorAbi,
@@ -141,7 +152,7 @@ async function main() {
             console.log("❌ BLS Verification FAILED!");
         }
     } catch (e: any) {
-        console.error("❌ Error during verification:", e.shortMessage || e.message);
+        console.error("❌ Error during verification (likely precompile failure):", e.shortMessage || e.message);
     }
 }
 
