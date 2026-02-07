@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../aastar-sdk-demo"
+		},
+		{
+			"path": "../registry"
+		},
+		{
+			"path": "../../../../crypto-projects/AirAccount-Plugin"
+		}
+	],
+	"settings": {}
+}
