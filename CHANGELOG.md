@@ -10,8 +10,8 @@ All notable changes to this project will be documented in this file.
   - **Browser**: Adds `dist/index.js` (Pure ESM) which is free of Node.js specific code (`createRequire`, `fs`), ensuring seamless integration with Vite/Next.js.
   - **Node.js**: Adds `dist/index.node.js` which automatically loads local `config.{network}.json` for backward compatibility.
   - Refactored `constants.ts` to support dynamic configuration injection via `applyConfig()`.
-## [0.16.16] - 2026-02-01
-**SDK Code Integrity Hash**: `b7a6229407d2fbc2b7308e84c711ed41ff6ee8498a29b9ace0207ac4efbb10c8`
+## [0.16.18] - 2026-02-07
+**SDK Code Integrity Hash**: `dee2f7f6da3180d6b8779714d5f123be332786e18227337789e2a1f6b26b5b81`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 ### 🌍 Infrastructure & Distribution

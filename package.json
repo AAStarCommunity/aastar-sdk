@@ -1,6 +1,6 @@
 {
   "name": "@aastar/monorepo",
-  "version": "0.16.16",
+  "version": "0.16.18",
   "license": "MIT",
   "private": true,
   "type": "module",

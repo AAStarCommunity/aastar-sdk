@@ -242,7 +242,7 @@ The following contract addresses have been successfully verified on their respec
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
-**Current Code Integrity Hash (v0.16.16)**: `b7a6229407d2fbc2b7308e84c711ed41ff6ee8498a29b9ace0207ac4efbb10c8`
+**Current Code Integrity Hash (v0.16.18)**: `dee2f7f6da3180d6b8779714d5f123be332786e18227337789e2a1f6b26b5b81`
 
 To verify, run this stable command (it verifies all code but excludes .md files to ensure stability):
 ```bash

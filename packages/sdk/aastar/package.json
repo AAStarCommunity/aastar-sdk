@@ -1,6 +1,6 @@
 {
   "name": "@aastar/aastar",
-  "version": "0.16.16",
+  "version": "0.16.18",
   "license": "MIT",
   "private": false,
   "description": "AAStar SDK - All in one package",
