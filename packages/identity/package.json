@@ -1,6 +1,6 @@
 {
   "name": "@aastar/identity",
-  "version": "0.16.18",
+  "version": "0.16.19",
   "publishConfig": {
     "access": "public"
   },
