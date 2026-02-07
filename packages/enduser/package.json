@@ -24,6 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@aastar/core": "workspace:*",
+    "@aastar/paymaster": "workspace:*",
     "viem": "2.43.3"
   },
   "devDependencies": {
