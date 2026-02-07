@@ -435,8 +435,9 @@ export class UserClient extends BaseClient {
             });
 
             // 3. Delegate to PaymasterClient for v0.7 Gasless Submission
+            // This ensures we follow the exact same logic as successful demo scripts
             // We dynamic import to avoid circular dependencies if any
-            const { PaymasterClient: SDKPaymasterClient } = await import('../../paymaster/src/V4/PaymasterClient.js');
+            const { PaymasterClient: SDKPaymasterClient } = await import('@aastar/paymaster');
             
             let verificationGasLimit: bigint | undefined;
             let paymasterVerificationGasLimit: bigint | undefined;
