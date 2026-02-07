@@ -60,7 +60,7 @@ vi.mock('@aastar/core', async () => {
 });
 
 // Mock PaymasterClient dynamic import
-vi.mock('../../paymaster/src/V4/PaymasterClient.js', () => ({
+vi.mock('@aastar/paymaster', () => ({
     PaymasterClient: {
         submitGaslessUserOperation: vi.fn().mockResolvedValue('0xUserOpHash')
     }
