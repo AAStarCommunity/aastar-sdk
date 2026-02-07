@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
     "outDir": "./dist",
-    // "rootDir": "./src",  <-- Removed to support importing from other packages if needed via relative paths, though workspace imports should be used.
+    "rootDir": "./src",
     "noEmit": false,
     "declaration": true
   },

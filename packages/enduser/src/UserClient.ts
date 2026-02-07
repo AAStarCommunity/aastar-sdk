@@ -446,7 +446,7 @@ export class UserClient extends BaseClient {
 
             if (params.paymasterType === 'Super') {
                 // Apply Smart Buffer Strategy via PaymasterUtils (Same as SuperPaymasterClient)
-                const { tuneGasLimit } = await import('../../paymaster/src/V4/PaymasterUtils.js');
+                const { tuneGasLimit } = await import('@aastar/paymaster');
                 
                 const est = await SDKPaymasterClient.estimateUserOperationGas(
                     this.client,
