@@ -1,41 +1,73 @@
-import { createRequire } from 'module';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 
-const require = createRequire(import.meta.url);
-
 const network = process.env.NETWORK || 'anvil';
-let config: any = {};
-
-// 1. Try to load local config (for development/monorepo use)
-try {
-  config = require(`../../../config.${network}.json`);
-} catch (e) {
-  // console.warn(`Warning: Could not load config.${network}.json. Falling back to code defaults.`);
-}
+let internalConfig: any = {};
 
 // 2. Identify Chain ID and resolve canonical defaults
-const chainIdStr = process.env.CHAIN_ID || config.chainId;
-const chainId = chainIdStr ? Number(chainIdStr) : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0));
-const defaults = (CANONICAL_ADDRESSES as any)[chainId] || {};
+// Use a function or getter to ensure it updates if config updates? 
+// For simplicity, we initialize once, and update in applyConfig.
+let chainIdStr = process.env.CHAIN_ID || internalConfig.chainId;
+let chainId = chainIdStr ? Number(chainIdStr) : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0));
+let defaults = (CANONICAL_ADDRESSES as any)[chainId] || {};
+
+/**
+ * Helper to resolve address
+ */
+function resolveAddr(envKey: string, configKey: string): `0x${string}` {
+    return (process.env[envKey] || internalConfig[configKey] || defaults[configKey]) as `0x${string}`;
+}
+
+function resolveVal(envKey: string, configKey: string) {
+    return process.env[envKey] || internalConfig[configKey] || defaults[configKey];
+}
 
 /**
  * Contract Addresses (Priority: ENV > Local Config > Canonical Defaults)
  */
-export const CONTRACT_SRC_HASH = process.env.SRC_HASH || config.srcHash || defaults.srcHash;
-export const REGISTRY_ADDRESS = (process.env.REGISTRY || config.registry || defaults.registry) as `0x${string}`;
-export const GTOKEN_ADDRESS = (process.env.GTOKEN || config.gToken || defaults.gToken) as `0x${string}`;
-export const GTOKEN_STAKING_ADDRESS = (process.env.STAKING || config.staking || defaults.staking) as `0x${string}`;
-export const SBT_ADDRESS = (process.env.SBT || config.sbt || defaults.sbt) as `0x${string}`;
-export const REPUTATION_SYSTEM_ADDRESS = (process.env.REPUTATION_SYSTEM || config.reputationSystem || defaults.reputationSystem) as `0x${string}`;
-export const SUPER_PAYMASTER_ADDRESS = (process.env.SUPER_PAYMASTER || config.superPaymaster || defaults.superPaymaster) as `0x${string}`;
-export const PAYMASTER_FACTORY_ADDRESS = (process.env.PAYMASTER_FACTORY || config.paymasterFactory || defaults.paymasterFactory) as `0x${string}`;
-export const PAYMASTER_V4_IMPL_ADDRESS = (process.env.PAYMASTER_V4_IMPL || config.paymasterV4Impl || defaults.paymasterV4Impl) as `0x${string}`;
-export const XPNTS_FACTORY_ADDRESS = (process.env.XPNTS_FACTORY || config.xPNTsFactory || defaults.xPNTsFactory) as `0x${string}`;
-export const BLS_AGGREGATOR_ADDRESS = (process.env.BLS_AGGREGATOR || config.blsAggregator || defaults.blsAggregator) as `0x${string}`;
-export const BLS_VALIDATOR_ADDRESS = (process.env.BLS_VALIDATOR || config.blsValidator || defaults.blsValidator) as `0x${string}`;
-export const DVT_VALIDATOR_ADDRESS = (process.env.DVT_VALIDATOR || config.dvtValidator || defaults.dvtValidator) as `0x${string}`;
-export const ENTRY_POINT_ADDRESS = (process.env.ENTRY_POINT || config.entryPoint || defaults.entryPoint) as `0x${string}`;
-export const APNTS_ADDRESS = (process.env.APNTS || config.aPNTs || defaults.aPNTs) as `0x${string}`;
+export let CONTRACT_SRC_HASH = resolveVal('SRC_HASH', 'srcHash');
+export let REGISTRY_ADDRESS = resolveAddr('REGISTRY', 'registry');
+export let GTOKEN_ADDRESS = resolveAddr('GTOKEN', 'gToken');
+export let GTOKEN_STAKING_ADDRESS = resolveAddr('STAKING', 'staking');
+export let SBT_ADDRESS = resolveAddr('SBT', 'sbt');
+export let REPUTATION_SYSTEM_ADDRESS = resolveAddr('REPUTATION_SYSTEM', 'reputationSystem');
+export let SUPER_PAYMASTER_ADDRESS = resolveAddr('SUPER_PAYMASTER', 'superPaymaster');
+export let PAYMASTER_FACTORY_ADDRESS = resolveAddr('PAYMASTER_FACTORY', 'paymasterFactory');
+export let PAYMASTER_V4_IMPL_ADDRESS = resolveAddr('PAYMASTER_V4_IMPL', 'paymasterV4Impl');
+export let XPNTS_FACTORY_ADDRESS = resolveAddr('XPNTS_FACTORY', 'xPNTsFactory');
+export let BLS_AGGREGATOR_ADDRESS = resolveAddr('BLS_AGGREGATOR', 'blsAggregator');
+export let BLS_VALIDATOR_ADDRESS = resolveAddr('BLS_VALIDATOR', 'blsValidator');
+export let DVT_VALIDATOR_ADDRESS = resolveAddr('DVT_VALIDATOR', 'dvtValidator');
+export let ENTRY_POINT_ADDRESS = resolveAddr('ENTRY_POINT', 'entryPoint');
+export let APNTS_ADDRESS = resolveAddr('APNTS', 'aPNTs');
+
+/**
+ * Apply external configuration (for Node.js environment)
+ */
+export function applyConfig(newConfig: any) {
+    internalConfig = newConfig;
+    
+    // Re-calculate derived values
+    chainIdStr = process.env.CHAIN_ID || internalConfig.chainId;
+    chainId = chainIdStr ? Number(chainIdStr) : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0));
+    defaults = (CANONICAL_ADDRESSES as any)[chainId] || {};
+
+    // Re-assign exports
+    CONTRACT_SRC_HASH = resolveVal('SRC_HASH', 'srcHash');
+    REGISTRY_ADDRESS = resolveAddr('REGISTRY', 'registry');
+    GTOKEN_ADDRESS = resolveAddr('GTOKEN', 'gToken');
+    GTOKEN_STAKING_ADDRESS = resolveAddr('STAKING', 'staking');
+    SBT_ADDRESS = resolveAddr('SBT', 'sbt');
+    REPUTATION_SYSTEM_ADDRESS = resolveAddr('REPUTATION_SYSTEM', 'reputationSystem');
+    SUPER_PAYMASTER_ADDRESS = resolveAddr('SUPER_PAYMASTER', 'superPaymaster');
+    PAYMASTER_FACTORY_ADDRESS = resolveAddr('PAYMASTER_FACTORY', 'paymasterFactory');
+    PAYMASTER_V4_IMPL_ADDRESS = resolveAddr('PAYMASTER_V4_IMPL', 'paymasterV4Impl');
+    XPNTS_FACTORY_ADDRESS = resolveAddr('XPNTS_FACTORY', 'xPNTsFactory');
+    BLS_AGGREGATOR_ADDRESS = resolveAddr('BLS_AGGREGATOR', 'blsAggregator');
+    BLS_VALIDATOR_ADDRESS = resolveAddr('BLS_VALIDATOR', 'blsValidator');
+    DVT_VALIDATOR_ADDRESS = resolveAddr('DVT_VALIDATOR', 'dvtValidator');
+    ENTRY_POINT_ADDRESS = resolveAddr('ENTRY_POINT', 'entryPoint');
+    APNTS_ADDRESS = resolveAddr('APNTS', 'aPNTs');
+}
 
 /**
  * Common Constants

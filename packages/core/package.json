@@ -1,6 +1,6 @@
 {
   "name": "@aastar/core",
-  "version": "0.16.16",
+  "version": "0.16.17",
   "publishConfig": {
     "access": "public"
   },
@@ -8,6 +8,13 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "browser": "./dist/index.js",
+      "import": "./dist/index.node.js",
+      "require": "./dist/index.node.js"
+    }
+  },
   "files": [
     "dist"
   ],
