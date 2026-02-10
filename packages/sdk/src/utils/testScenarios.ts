@@ -69,7 +69,7 @@ export class UserOpScenarioBuilder {
             }),
             initCode: '0x' as Hex,
             callData,
-            accountGasLimits: UserOperationBuilder.packAccountGasLimits(250000n, 150000n),
+            accountGasLimits: UserOperationBuilder.packAccountGasLimits(type === UserOpScenarioType.NATIVE ? 75000n : 250000n, 150000n),
             preVerificationGas: 80000n,
             gasFees: UserOperationBuilder.packGasFees(2000000000n, 2000000000n), // 2 Gwei
             paymasterAndData: '0x' as Hex,

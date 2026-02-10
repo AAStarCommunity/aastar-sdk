@@ -35,6 +35,17 @@ echo "🧪 Phase 2: Gasless Transactions (L4)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ./scripts/run_l4_gasless_regression.sh --network $ENV
 
+# 2.5 Cryptography Verification Phase (EIP-2537)
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔐 Phase 2.5: EIP-2537 Precompile Verification"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+if [[ "$ENV" == "sepolia" || "$ENV" == "op-sepolia" ]]; then
+    pnpm run test:eip2537 -- --network $ENV --json --out packages/analytics/data/historical/eip2537_checks.jsonl
+    echo "✅ Logged to packages/analytics/data/historical/eip2537_checks.jsonl"
+else
+    echo "⏭️  Skipped (only supported on sepolia/op-sepolia envs)"
+fi
+
 # 3. Analytics Phase
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📊 Phase 3: Gas Analytics & Reporting"

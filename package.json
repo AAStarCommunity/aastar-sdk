@@ -39,6 +39,7 @@
     "test:regression:05": "tsx scripts/v2_regression/05_admin_audit.ts",
     "test:regression:l4": "tsx scripts/l4-regression.ts",
     "test:regression:bls": "ts-node scripts/15_test_bls_full.ts",
+    "test:eip2537": "tsx scripts/16_verify_eip2537_precompiles.ts",
     "docs:generate": "typedoc --options typedoc.json",
     "docs:sync": "bash scripts/extract-docs.sh"
   },

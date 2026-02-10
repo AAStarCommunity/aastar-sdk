@@ -24,6 +24,7 @@
   - [Testing Commands](#testing-commands)
     - [SDK Regression (Using SDK Clients)](#sdk-regression-using-sdk-clients)
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
+    - [EIP-2537 Precompile Verification](#eip-2537-precompile-verification)
   - [Development Guides](#development-guides)
     - [ABI Maintenance](#abi-maintenance)
   - [Development Workflow](#development-workflow)
@@ -126,6 +127,15 @@ pnpm run test:full_sdk
 ```bash
 pnpm run test:full_anvil
 ```
+
+### EIP-2537 Precompile Verification
+```bash
+pnpm run test:eip2537 -- --network sepolia
+pnpm run test:eip2537 -- --network op-sepolia
+```
+
+The full regression pipeline (`./scripts/run_full_regression.sh --env sepolia|op-sepolia`) also runs this check and appends a machine-readable record to:
+- [packages/analytics/data/historical/eip2537_checks.jsonl](./packages/analytics/data/historical/eip2537_checks.jsonl)
 
 ---
 
