@@ -1,6 +1,7 @@
 
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, parseAbi } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { registryActions, superPaymasterActions, xPNTsTokenActions } from '../packages/core/src/actions/index.js';
 import { PaymasterClient, SuperPaymasterClient, formatUserOpV07 } from '../packages/paymaster/src/V4/index.js'; 
 import { UserOpScenarioBuilder, UserOpScenarioType } from '../packages/sdk/src/utils/testScenarios.js';
 import { loadNetworkConfig } from '../tests/regression/config.js';
@@ -96,39 +97,7 @@ async function main() {
         try {
             if (scene.type === UserOpScenarioType.GASLESS_V4) {
                console.log(`   🚀 Sending Gasless UserOperation via SDK...`);
-               const paymasterOracleAbi = parseAbi([
-                    'function updatePrice()',
-                    'function updatePriceDVT(int256 price, uint256 updatedAt, bytes proof)',
-                    'function cachedPrice() view returns (int256 price, uint256 updatedAt, uint80 roundId, uint8 decimals)'
-               ]);
-
                const ownerWallet = createWalletClient({ account: sceneOwner, chain: config.chain, transport: http(config.rpcUrl) });
-
-               try {
-                    console.log(`   🧭 Refreshing PaymasterV4 price cache...`);
-                    try {
-                        const hash = await ownerWallet.writeContract({
-                            address: scene.paymaster!,
-                            abi: paymasterOracleAbi,
-                            functionName: 'updatePrice'
-                        });
-                        await publicClient.waitForTransactionReceipt({ hash });
-                        console.log(`   ✅ Price cache refreshed via updatePrice: ${hash}`);
-                    } catch {
-                        const price = 300000000000n;
-                        const updatedAt = BigInt(Math.floor(Date.now() / 1000));
-                        const hash = await ownerWallet.writeContract({
-                            address: scene.paymaster!,
-                            abi: paymasterOracleAbi,
-                            functionName: 'updatePriceDVT',
-                            args: [price, updatedAt, '0x']
-                        });
-                        await publicClient.waitForTransactionReceipt({ hash });
-                        console.log(`   ✅ Price cache refreshed via updatePriceDVT: ${hash}`);
-                    }
-               } catch (e: any) {
-                    console.log(`   ⚠️ PaymasterV4 price cache refresh skipped: ${e.message}`);
-               }
 
                const callData = PaymasterClient.encodeExecution(
                     sceneToken, 
@@ -151,49 +120,25 @@ async function main() {
 
             } else if (scene.type === UserOpScenarioType.SUPER_BPNT) {
                 console.log(`   🚀 Sending SuperPaymaster UserOperation via SDK...`);
-                const superPaymasterAbi = parseAbi([
-                    'function operators(address operator) view returns (uint128 aPNTsBalance, uint96 exchangeRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
-                    'function getAvailableCredit(address user, address token) view returns (uint256)'
-                ]);
-                const superPaymasterOracleAbi = parseAbi([
-                    'function updatePrice()',
-                    'function updatePriceDVT(int256 price, uint256 updatedAt, bytes proof)',
-                    'function cachedPrice() view returns (int256 price, uint256 updatedAt, uint80 roundId, uint8 decimals)'
-                ]);
-                const registryAbi = parseAbi(['function getCreditLimit(address user) view returns (uint256)']);
-                const xpntsAbi = parseAbi([
-                    'function getDebt(address user) view returns (uint256)',
-                    'function exchangeRate() view returns (uint256)'
-                ]);
+                const superPaymasterRead = superPaymasterActions(scene.paymaster! as any)(publicClient);
+                const superPaymasterWrite = superPaymasterActions(scene.paymaster! as any)(supplierWallet);
+                const registryRead = registryActions(config.contracts.registry as any)(publicClient);
 
                 try {
-                    const cache: any = await publicClient.readContract({
-                        address: scene.paymaster!,
-                        abi: superPaymasterOracleAbi,
-                        functionName: 'cachedPrice'
-                    });
-                    const cachedUpdatedAt = BigInt(cache[1] as bigint);
+                    const cache = await superPaymasterRead.cachedPrice();
+                    const cachedUpdatedAt = cache.updatedAt;
                     const now = BigInt(Math.floor(Date.now() / 1000));
                     const isStale = cachedUpdatedAt === 0n || cachedUpdatedAt + 3600n < now;
                     if (isStale) {
                         console.log(`   🧭 Refreshing SuperPaymaster price cache...`);
                         try {
-                            const hash = await supplierWallet.writeContract({
-                                address: scene.paymaster!,
-                                abi: superPaymasterOracleAbi,
-                                functionName: 'updatePrice'
-                            });
+                            const hash = await superPaymasterWrite.updatePrice({ account: supplier });
                             await publicClient.waitForTransactionReceipt({ hash });
                             console.log(`   ✅ Price cache refreshed via updatePrice: ${hash}`);
                         } catch (e: any) {
                             const price = 300000000000n;
                             const updatedAt = BigInt(Math.floor(Date.now() / 1000));
-                            const hash = await supplierWallet.writeContract({
-                                address: scene.paymaster!,
-                                abi: superPaymasterOracleAbi,
-                                functionName: 'updatePriceDVT',
-                                args: [price, updatedAt, '0x']
-                            });
+                            const hash = await superPaymasterWrite.updatePriceDVT({ price, updatedAt, proof: '0x', account: supplier });
                             await publicClient.waitForTransactionReceipt({ hash });
                             console.log(`   ✅ Price cache refreshed via updatePriceDVT: ${hash}`);
                         }
@@ -204,13 +149,8 @@ async function main() {
 
                 let xpntsToken = '0x0000000000000000000000000000000000000000';
                 try {
-                    const opCfg: any = await publicClient.readContract({
-                        address: scene.paymaster!,
-                        abi: superPaymasterAbi,
-                        functionName: 'operators',
-                        args: [sceneOwner.address]
-                    });
-                    xpntsToken = opCfg[4] as string;
+                    const opCfg = await superPaymasterRead.operators({ operator: sceneOwner.address as any });
+                    xpntsToken = opCfg.xPNTsToken as any;
                 } catch (e: any) {
                     console.log(`   ⚠️ Failed to read operator config: ${e.message}`);
                 }
@@ -223,41 +163,23 @@ async function main() {
                 let exchangeRate = 0n;
 
                 if (xpntsToken !== '0x0000000000000000000000000000000000000000') {
+                    const xpntsRead = xPNTsTokenActions(xpntsToken as any)(publicClient);
                     try {
-                        exchangeRate = (await publicClient.readContract({
-                            address: xpntsToken as any,
-                            abi: xpntsAbi,
-                            functionName: 'exchangeRate'
-                        })) as bigint;
+                        exchangeRate = await xpntsRead.exchangeRate({ token: xpntsToken as any });
                     } catch {}
 
                     try {
-                        debtBefore = (await publicClient.readContract({
-                            address: xpntsToken as any,
-                            abi: xpntsAbi,
-                            functionName: 'getDebt',
-                            args: [sceneSender]
-                        })) as bigint;
+                        debtBefore = await xpntsRead.getDebt({ token: xpntsToken as any, user: sceneSender as any });
                     } catch (e: any) {
                         console.log(`   ⚠️ Failed to read debt (before): ${e.message}`);
                     }
 
                     try {
-                        creditLimit = (await publicClient.readContract({
-                            address: config.contracts.registry,
-                            abi: registryAbi,
-                            functionName: 'getCreditLimit',
-                            args: [sceneSender]
-                        })) as bigint;
+                        creditLimit = await registryRead.getCreditLimit({ user: sceneSender as any });
                     } catch {}
 
                     try {
-                        creditBefore = (await publicClient.readContract({
-                            address: scene.paymaster!,
-                            abi: superPaymasterAbi,
-                            functionName: 'getAvailableCredit',
-                            args: [sceneSender, xpntsToken as any]
-                        })) as bigint;
+                        creditBefore = await superPaymasterRead.getAvailableCredit({ user: sceneSender as any, token: xpntsToken as any });
                     } catch {}
 
                     console.log(`   📌 xPNTsToken: ${xpntsToken}`);
@@ -287,24 +209,15 @@ async function main() {
                 await waitForReceipt(bundlerRpc, txHash);
 
                 if (xpntsToken !== '0x0000000000000000000000000000000000000000') {
+                    const xpntsRead = xPNTsTokenActions(xpntsToken as any)(publicClient);
                     try {
-                        debtAfter = (await publicClient.readContract({
-                            address: xpntsToken as any,
-                            abi: xpntsAbi,
-                            functionName: 'getDebt',
-                            args: [sceneSender]
-                        })) as bigint;
+                        debtAfter = await xpntsRead.getDebt({ token: xpntsToken as any, user: sceneSender as any });
                     } catch (e: any) {
                         console.log(`   ⚠️ Failed to read debt (after): ${e.message}`);
                     }
 
                     try {
-                        creditAfter = (await publicClient.readContract({
-                            address: scene.paymaster!,
-                            abi: superPaymasterAbi,
-                            functionName: 'getAvailableCredit',
-                            args: [sceneSender, xpntsToken as any]
-                        })) as bigint;
+                        creditAfter = await superPaymasterRead.getAvailableCredit({ user: sceneSender as any, token: xpntsToken as any });
                     } catch {}
 
                     const deltaDebt = debtAfter - debtBefore;

@@ -89,26 +89,40 @@ export class PaymasterClient {
                     functionName: 'cachedPrice'
                 }) as any;
                 
-                if (!cache || cache.price === 0n || cache[0] === 0n) {
-                    console.log('[PaymasterClient] ⚠️  cachedPrice is 0! Auto-initializing...');
-                    
+                const cachedPrice: bigint = (cache?.price ?? cache?.[0] ?? 0n) as bigint;
+                const cachedUpdatedAt: bigint = (cache?.updatedAt ?? cache?.[1] ?? 0n) as bigint;
+                const now = BigInt(Math.floor(Date.now() / 1000));
+                let stalenessThreshold = 0n;
+
+                try {
+                    stalenessThreshold = await client.readContract({
+                        address: paymasterAddress,
+                        abi: parseAbi(['function priceStalenessThreshold() view returns (uint256)']),
+                        functionName: 'priceStalenessThreshold'
+                    }) as bigint;
+                } catch {}
+
+                const isStale =
+                    cachedPrice === 0n ||
+                    cachedUpdatedAt === 0n ||
+                    (stalenessThreshold > 0n && cachedUpdatedAt + stalenessThreshold < now);
+
+                if (isStale) {
                     // Check if we're on testnet (chainId 11155111 = Sepolia, 11155420 = OP Sepolia)
                     const chainId = client.chain?.id || await client.getChainId();
                     const isTestnet = [11155111, 11155420, 31337].includes(chainId);
-                    
+
                     if (isTestnet) {
-                        // Auto-call updatePrice on testnet
                         const updateHash = await wallet.writeContract({
                             address: paymasterAddress,
                             abi: parseAbi(['function updatePrice() external']),
                             functionName: 'updatePrice'
                         });
                         await client.waitForTransactionReceipt({ hash: updateHash });
-                        console.log('[PaymasterClient] ✅ cachedPrice initialized via updatePrice()');
+                        console.log('[PaymasterClient] ✅ cachedPrice refreshed via updatePrice()');
                     } else {
-                        // Mainnet: throw error, require Keeper
                         throw new Error(
-                            `Paymaster cachedPrice is 0 on Mainnet (chainId: ${chainId}). ` +
+                            `Paymaster cachedPrice is stale on Mainnet (chainId: ${chainId}). ` +
                             `This requires Keeper to call updatePrice(). Please ensure Keeper is running.`
                         );
                     }
