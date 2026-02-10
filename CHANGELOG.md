@@ -2,14 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.16.17] - 2026-02-07
+## [0.16.21] - 2026-02-10
+**SDK Code Integrity Hash**: `e596ff3d6e2bed8220b721d124c7dcaacf39f6fee41fb4cf180c796a7da0e1aa`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
-### 🌍 Infrastructure & Compatibility
-- **[FEATURE]** **Universal Browser Support**:
-  - Refactored `@aastar/core` to support dual entry points via `package.json` exports.
-  - **Browser**: Adds `dist/index.js` (Pure ESM) which is free of Node.js specific code (`createRequire`, `fs`), ensuring seamless integration with Vite/Next.js.
-  - **Node.js**: Adds `dist/index.node.js` which automatically loads local `config.{network}.json` for backward compatibility.
-  - Refactored `constants.ts` to support dynamic configuration injection via `applyConfig()`.
+### ⚡ Gasless Execution
+- **[FIX]** **Paymaster V4 Cached Price Staleness**:
+  - `PaymasterClient` now treats stale `cachedPrice` as invalid.
+  - Testnets auto-refresh via `updatePrice()` when needed; mainnet requires a running keeper.
+- **[FIX]** **Native UserOp Gas Defaults**:
+  - Reduced `UserOpScenarioType.NATIVE` `verificationGasLimit` to a more realistic default.
+
+### 🧰 Tooling & Regression
+- **[ADDED]** EIP-2537 precompile verification script and historical check dataset.
+
 ## [0.16.20] - 2026-02-07
 **SDK Code Integrity Hash**: `0a9c8a4a778bb1b64fac6fd29d8a61b2f9b02566f33b2de65e2c26e536f9fff8`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
@@ -27,13 +33,22 @@ All notable changes to this project will be documented in this file.
 - **[ADDED]** **SDK Source Integrity Monitoring**: 
   - Introduced a unique SHA-256 hash for the entire SDK source tree to ensure verifiable releases.
 
+## [0.16.17] - 2026-02-07
+
+### 🌍 Infrastructure & Compatibility
+- **[FEATURE]** **Universal Browser Support**:
+  - Refactored `@aastar/core` to support dual entry points via `package.json` exports.
+  - **Browser**: Adds `dist/index.js` (Pure ESM) which is free of Node.js specific code (`createRequire`, `fs`), ensuring seamless integration with Vite/Next.js.
+  - **Node.js**: Adds `dist/index.node.js` which automatically loads local `config.{network}.json` for backward compatibility.
+  - Refactored `constants.ts` to support dynamic configuration injection via `applyConfig()`.
+
 ## 🛡️ SDK Integrity Verification
 
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
-**Current Code Integrity Hash (v0.16.16)**:
-`c7883438abea48bb6530183d4fc94dbd11e5f299cd07b4bef32ef4e796551304`
+**Current Code Integrity Hash (v0.16.21)**:
+`e596ff3d6e2bed8220b721d124c7dcaacf39f6fee41fb4cf180c796a7da0e1aa`
 
 To verify, run this stable command (excludes non-code markdown files):
 ```bash

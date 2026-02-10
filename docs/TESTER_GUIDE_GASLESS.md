@@ -66,6 +66,8 @@ console.log("Steps taken:", steps);
 
 The SDK provides these APIs in `PaymasterV4Client`:
 
+On mainnet you should run a keeper to keep `cachedPrice` fresh. If `cachedPrice.updatedAt + priceStalenessThreshold < now`, Bundlers may reject the UserOp as expired.
+
 ```typescript
 import { PaymasterOperator } from '@aastar/paymaster';
 
