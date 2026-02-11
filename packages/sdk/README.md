@@ -16,16 +16,16 @@ AAstar SDK 提供了一套完整的工具集用于交互 AAstar 协议。它采�
 
 ### Core Modules | 核心模块
 
-- **[`@aastar/community`](./@aastar/community)**: Launch & manage DAOs. (启动和管理 DAO)
-- **[`@aastar/operator`](./@aastar/operator)**: Run Paymasters & earn rewards. (运行 Paymaster 并赚取收益)
-- **[`@aastar/enduser`](./@aastar/enduser)**: Join communities & enjoy gasless txs. (加入社区并享受免 Gas 交易)
-- **[`@aastar/analytics`](./@aastar/analytics)**: Monitor ecosystem data. (监控生态系统数据)
-- **[`@aastar/tokens`](./@aastar/tokens)**: GToken & XPNTs finance tools. (GToken 和 XPNTs 金融工具)
-- **[`@aastar/identity`](./@aastar/identity)**: Reputation & SBT management. (声誉和 SBT 管理)
-- **[`@aastar/account`](./@aastar/account)**: Smart Account (ERC-4337) utilities. (智能账户工具)
-- **[`@aastar/core`](./@aastar/core)**: Shared logic, Roles, and configuration. (共享逻辑、角色和配置)
-- **[`@aastar/paymaster`](./@aastar/paymaster)**: Low-level Paymaster interactions. (低层级 Paymaster 交互)
-- **[`@aastar/dapp`](./@aastar/dapp)**: Pre-built UI components and React hooks. (预建 UI 组件和 React hooks)
+- **[`@aastar/community`](https://docs.aastar.io/api/@aastar/community)**: Launch & manage DAOs. (启动和管理 DAO)
+- **[`@aastar/operator`](https://docs.aastar.io/api/@aastar/operator)**: Run Paymasters & earn rewards. (运行 Paymaster 并赚取收益)
+- **[`@aastar/enduser`](https://docs.aastar.io/api/@aastar/enduser)**: Join communities & enjoy gasless txs. (加入社区并享受免 Gas 交易)
+- **[`@aastar/analytics`](https://docs.aastar.io/api/@aastar/analytics)**: Monitor ecosystem data. (监控生态系统数据)
+- **[`@aastar/tokens`](https://docs.aastar.io/api/@aastar/tokens)**: GToken & XPNTs finance tools. (GToken 和 XPNTs 金融工具)
+- **[`@aastar/identity`](https://docs.aastar.io/api/@aastar/identity)**: Reputation & SBT management. (声誉和 SBT 管理)
+- **[`@aastar/account`](https://docs.aastar.io/api/@aastar/account)**: Smart Account (ERC-4337) utilities. (智能账户工具)
+- **[`@aastar/core`](https://docs.aastar.io/api/@aastar/core)**: Shared logic, Roles, and configuration. (共享逻辑、角色和配置)
+- **[`@aastar/paymaster`](https://docs.aastar.io/api/@aastar/paymaster)**: Low-level Paymaster interactions. (低层级 Paymaster 交互)
+- **[`@aastar/dapp`](https://docs.aastar.io/api/@aastar/dapp)**: Pre-built UI components and React hooks. (预建 UI 组件和 React hooks)
 
 ---
 
@@ -36,6 +36,18 @@ pnpm add @aastar/sdk viem
 # or
 npm install @aastar/sdk viem
 ```
+
+---
+
+## 📚 Documentation | 文档导航
+
+- **Docs Home**: https://docs.aastar.io/
+- **API Reference**: https://docs.aastar.io/api/
+- **Examples**: https://docs.aastar.io/examples/
+- **Deployments**: https://docs.aastar.io/guide/deployments/verify.sepolia.contracts
+- **Configuration Sync**: https://docs.aastar.io/guide/docs/Configuration_Sync
+- **Regression Testing**: https://docs.aastar.io/guide/docs/Regression_Testing_Guide
+- **Gasless Tester Guide**: https://docs.aastar.io/guide/docs/TESTER_GUIDE_GASLESS
 
 ---
 
@@ -160,14 +172,14 @@ npx tsx packages/analytics/src/gas-analyzer-v4.ts
 - **Profit Tracking (利润追踪)**: Transparent breakdown of Protocol Revenue & Profit
 - **L2 Simulation (L2 模拟)**: Estimate savings for migrating UserOps to Optimism
 
-👉 **[View Full Analytics Documentation | 查看完整分析文档](./packages/analytics/README.md)**
+👉 **[View Full Analytics Documentation | 查看完整分析文档](https://docs.aastar.io/guide/packages/analytics/)**
 
 ---
 
 ## 🤝 Contributing | 贡献
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.  
-欢迎贡献！更多详情请参考 [贡献指南](CONTRIBUTING.md)。
+We welcome contributions! Please see our Contributing Guide for details.  
+欢迎贡献！更多详情请参考贡献指南。
 
 ---
 
