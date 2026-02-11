@@ -1,6 +1,6 @@
 {
   "name": "@aastar/paymaster",
-  "version": "0.16.21",
+  "version": "0.16.22",
   "publishConfig": {
     "access": "public"
   },

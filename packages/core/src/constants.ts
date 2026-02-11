@@ -6,7 +6,7 @@ let internalConfig: any = {};
 
 // 2. Identify Chain ID and resolve canonical defaults
 let chainIdStr = (typeof process !== 'undefined' && process.env && process.env.CHAIN_ID) || internalConfig.chainId;
-let chainId = chainIdStr ? Number(chainIdStr) : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0));
+let chainId = chainIdStr ? Number(chainIdStr) : (network === 'optimism' ? 10 : (network === 'mainnet' ? 1 : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0))));
 let defaults = (CANONICAL_ADDRESSES as any)[chainId] || {};
 
 /**
@@ -50,7 +50,7 @@ export function applyConfig(newConfig: any) {
     // Re-calculate derived values
     const envChainId = (typeof process !== 'undefined' && process.env) ? process.env.CHAIN_ID : undefined;
     chainIdStr = envChainId || internalConfig.chainId;
-    chainId = chainIdStr ? Number(chainIdStr) : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0));
+    chainId = chainIdStr ? Number(chainIdStr) : (network === 'optimism' ? 10 : (network === 'mainnet' ? 1 : (network === 'sepolia' ? 11155111 : (network === 'op-sepolia' ? 11155420 : 0))));
     defaults = (CANONICAL_ADDRESSES as any)[chainId] || {};
 
     // Re-assign exports
