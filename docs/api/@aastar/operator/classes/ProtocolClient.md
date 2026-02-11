@@ -1,4 +1,4 @@
-Defined in: [operator/src/ProtocolClient.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L25)
+Defined in: [operator/src/ProtocolClient.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L25)
 
 Client for Protocol Governors and Validators (Infrastructure)
 
@@ -12,7 +12,7 @@ Client for Protocol Governors and Validators (Infrastructure)
 
 > **new ProtocolClient**(`config`): `ProtocolClient`
 
-Defined in: [operator/src/ProtocolClient.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L30)
+Defined in: [operator/src/ProtocolClient.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L30)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [operator/src/ProtocolClient.ts:30](https://github.com/AAStarCommuni
 
 > `optional` **blsAggregatorAddress**: `` `0x${string}` ``
 
-Defined in: [operator/src/ProtocolClient.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L27)
+Defined in: [operator/src/ProtocolClient.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L27)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:5
 
 > **dvtValidatorAddress**: `` `0x${string}` ``
 
-Defined in: [operator/src/ProtocolClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L26)
+Defined in: [operator/src/ProtocolClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L26)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:7
 
 > `optional` **superPaymasterAddress**: `` `0x${string}` ``
 
-Defined in: [operator/src/ProtocolClient.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L28)
+Defined in: [operator/src/ProtocolClient.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L28)
 
 ## Methods
 
@@ -142,7 +142,7 @@ Defined in: [operator/src/ProtocolClient.ts:28](https://github.com/AAStarCommuni
 
 > **createProposal**(`target`, `calldata`, `description`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/ProtocolClient.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L44)
+Defined in: [operator/src/ProtocolClient.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L44)
 
 Create a new proposal
 
@@ -165,7 +165,7 @@ Create a new proposal
 
 > **executeWithProof**(`proposalId`, `signatures`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/ProtocolClient.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L78)
+Defined in: [operator/src/ProtocolClient.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L78)
 
 Execute a proposal with collected signatures
 
@@ -223,7 +223,7 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 > **registerBLSKey**(`publicKey`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/ProtocolClient.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L101)
+Defined in: [operator/src/ProtocolClient.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L101)
 
 #### Parameters
 
@@ -322,7 +322,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:21
 
 > **setProtocolFee**(`bps`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/ProtocolClient.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L123)
+Defined in: [operator/src/ProtocolClient.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L123)
 
 #### Parameters
 
@@ -341,7 +341,7 @@ Defined in: [operator/src/ProtocolClient.ts:123](https://github.com/AAStarCommun
 
 > **setTreasury**(`treasury`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/ProtocolClient.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L139)
+Defined in: [operator/src/ProtocolClient.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L139)
 
 #### Parameters
 
@@ -360,7 +360,7 @@ Defined in: [operator/src/ProtocolClient.ts:139](https://github.com/AAStarCommun
 
 > **signProposal**(`proposalId`, `signature`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/ProtocolClient.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L62)
+Defined in: [operator/src/ProtocolClient.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L62)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/faucet.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/faucet.ts#L36)
+Defined in: [packages/core/src/actions/faucet.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/faucet.ts#L36)
 
 SepoliaFaucetAPI provides orchestration for setting up test accounts on Sepolia/Anvil.
 
@@ -18,7 +18,7 @@ SepoliaFaucetAPI provides orchestration for setting up test accounts on Sepolia/
 
 > `static` **adminDepositForUser**(`adminWallet`, `publicClient`, `paymasterAddr`, `target`, `tokenAddr`, `amount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/faucet.ts#L229)
+Defined in: [packages/core/src/actions/faucet.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/faucet.ts#L229)
 
 Admin mints tokens to self, approves Paymaster, and deposits FOR user.
 
@@ -158,7 +158,7 @@ Admin mints tokens to self, approves Paymaster, and deposits FOR user.
 
 > `static` **fundETH**(`adminWallet`, `publicClient`, `target`, `amount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/faucet.ts#L99)
+Defined in: [packages/core/src/actions/faucet.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/faucet.ts#L99)
 
 Funds the target with ETH if balance is below threshold.
 
@@ -296,7 +296,7 @@ Funds the target with ETH if balance is below threshold.
 
 > `static` **mintTestTokens**(`adminWallet`, `publicClient`, `tokenAddr`, `target`, `amount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/faucet.ts#L195)
+Defined in: [packages/core/src/actions/faucet.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/faucet.ts#L195)
 
 Mints tokens directly to the target.
 
@@ -435,7 +435,7 @@ Mints tokens directly to the target.
 
 > `static` **prepareTestAccount**(`adminWallet`, `publicClient`, `config`): `Promise`\<[`FaucetPreparationResult`](../type-aliases/FaucetPreparationResult.md)\>
 
-Defined in: [packages/core/src/actions/faucet.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/faucet.ts#L45)
+Defined in: [packages/core/src/actions/faucet.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/faucet.ts#L45)
 
 Orchestrates the complete setup for a test account.
 1. Funds ETH
@@ -576,7 +576,7 @@ Orchestrates the complete setup for a test account.
 
 > `static` **registerEndUser**(`adminWallet`, `publicClient`, `registryAddr`, `target`, `gasToken`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/faucet.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/faucet.ts#L128)
+Defined in: [packages/core/src/actions/faucet.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/faucet.ts#L128)
 
 Registers the ENDUSER role using Sponsor Mode (Admin pays stake).
 

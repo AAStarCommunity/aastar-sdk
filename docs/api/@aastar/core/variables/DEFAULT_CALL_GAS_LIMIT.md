@@ -1,3 +1,3 @@
 > `const` **DEFAULT\_CALL\_GAS\_LIMIT**: `100000n` = `100000n`
 
-Defined in: [packages/core/src/constants.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/constants.ts#L114)
+Defined in: [packages/core/src/constants.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/constants.ts#L98)

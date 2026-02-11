@@ -1,4 +1,4 @@
-Defined in: [index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L7)
+Defined in: [index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L7)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/4bac
 
 > **new ReputationClient**(`client`, `reputationAddress`, `walletClient?`): `ReputationClient`
 
-Defined in: [index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L17)
+Defined in: [index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L17)
 
 Initialize ReputationClient
 
@@ -28,7 +28,7 @@ Initialize ReputationClient
 
 > **computeScore**(`user`, `communities`, `ruleIds`, `activities`): `Promise`\<`bigint`\>
 
-Defined in: [index.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L28)
+Defined in: [index.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L28)
 
 Compute reputation score for a user
 
@@ -51,7 +51,7 @@ Compute reputation score for a user
 
 > **getCreditLimit**(`user`): `Promise`\<`bigint`\>
 
-Defined in: [index.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L58)
+Defined in: [index.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L58)
 
 Get credit limit based on reputation
 
@@ -73,7 +73,7 @@ Credit limit in wei (Mock logic closely tied to Reputation)
 
 > **getGlobalReputation**(`user`): `Promise`\<`number`\>
 
-Defined in: [index.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L42)
+Defined in: [index.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L42)
 
 Get global reputation score for a user
 
@@ -95,7 +95,7 @@ Reputation score
 
 > **getReputationBreakdown**(`user`): `Promise`\<\{ `activityBonus`: `number`; `baseScore`: `number`; `penaltyDeduction`: `number`; `stakingBonus`: `number`; `total`: `number`; \}\>
 
-Defined in: [index.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L77)
+Defined in: [index.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L77)
 
 Get reputation score breakdown
 
@@ -117,7 +117,7 @@ Detailed reputation breakdown (Mock implementation awaiting contract V4)
 
 > **submitReputationProof**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [index.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/identity/src/index.ts#L101)
+Defined in: [index.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/identity/src/index.ts#L101)
 
 Submit reputation proof (off-chain data to on-chain)
 

@@ -1,4 +1,4 @@
-Defined in: [operator/src/ProtocolClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L11)
+Defined in: [operator/src/ProtocolClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L11)
 
 ## Enumeration Members
 
@@ -6,7 +6,7 @@ Defined in: [operator/src/ProtocolClient.ts:11](https://github.com/AAStarCommuni
 
 > **Active**: `1`
 
-Defined in: [operator/src/ProtocolClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L13)
+Defined in: [operator/src/ProtocolClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L13)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [operator/src/ProtocolClient.ts:13](https://github.com/AAStarCommuni
 
 > **Canceled**: `2`
 
-Defined in: [operator/src/ProtocolClient.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L14)
+Defined in: [operator/src/ProtocolClient.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L14)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [operator/src/ProtocolClient.ts:14](https://github.com/AAStarCommuni
 
 > **Defeated**: `3`
 
-Defined in: [operator/src/ProtocolClient.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L15)
+Defined in: [operator/src/ProtocolClient.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L15)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [operator/src/ProtocolClient.ts:15](https://github.com/AAStarCommuni
 
 > **Executed**: `7`
 
-Defined in: [operator/src/ProtocolClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L19)
+Defined in: [operator/src/ProtocolClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L19)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [operator/src/ProtocolClient.ts:19](https://github.com/AAStarCommuni
 
 > **Expired**: `6`
 
-Defined in: [operator/src/ProtocolClient.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L18)
+Defined in: [operator/src/ProtocolClient.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L18)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [operator/src/ProtocolClient.ts:18](https://github.com/AAStarCommuni
 
 > **Pending**: `0`
 
-Defined in: [operator/src/ProtocolClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L12)
+Defined in: [operator/src/ProtocolClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L12)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [operator/src/ProtocolClient.ts:12](https://github.com/AAStarCommuni
 
 > **Queued**: `5`
 
-Defined in: [operator/src/ProtocolClient.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L17)
+Defined in: [operator/src/ProtocolClient.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L17)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [operator/src/ProtocolClient.ts:17](https://github.com/AAStarCommuni
 
 > **Succeeded**: `4`
 
-Defined in: [operator/src/ProtocolClient.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/operator/src/ProtocolClient.ts#L16)
+Defined in: [operator/src/ProtocolClient.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/operator/src/ProtocolClient.ts#L16)

@@ -1,5 +1,3 @@
 > `const` **BPS\_DENOMINATOR**: `10000` = `10000`
 
-Defined in: [packages/core/src/constants.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/constants.ts#L62)
-
-Basis points denominator (100% = 10000 basis points)
+Defined in: [packages/core/src/constants.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/constants.ts#L80)

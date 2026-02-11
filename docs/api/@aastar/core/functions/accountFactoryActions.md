@@ -1,12 +1,13 @@
-> **accountFactoryActions**(`address`): (`client`) => [`AccountFactoryActions`](../type-aliases/AccountFactoryActions.md)
+> **accountFactoryActions**(`address`, `abi`): (`client`) => [`AccountFactoryActions`](../type-aliases/AccountFactoryActions.md)
 
-Defined in: [packages/core/src/actions/account.ts:158](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/account.ts#L158)
+Defined in: [packages/core/src/actions/account.ts:158](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/account.ts#L158)
 
 ## Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `address` | `` `0x${string}` `` |
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `address` | `` `0x${string}` `` | `undefined` |
+| `abi` | `any` | `SimpleAccountFactoryABI` |
 
 ## Returns
 

@@ -1,4 +1,4 @@
-Defined in: [enduser/src/UserLifecycle.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L10)
+Defined in: [enduser/src/UserLifecycle.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L10)
 
 Base configuration for all L2 Business Clients
 
@@ -12,7 +12,7 @@ Base configuration for all L2 Business Clients
 
 > **accountAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserLifecycle.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L11)
+Defined in: [enduser/src/UserLifecycle.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L11)
 
 ***
 
@@ -35,7 +35,7 @@ Must have an account attached.
 
 > **entryPointAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserLifecycle.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L16)
+Defined in: [enduser/src/UserLifecycle.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L16)
 
 #### Overrides
 
@@ -59,7 +59,7 @@ Defined in: core/dist/clients/types.d.ts:40
 
 > `optional` **gasless**: [`GaslessConfig`](GaslessConfig.md)
 
-Defined in: [enduser/src/UserLifecycle.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L17)
+Defined in: [enduser/src/UserLifecycle.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L17)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [enduser/src/UserLifecycle.ts:17](https://github.com/AAStarCommunity
 
 > **gTokenAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserLifecycle.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L14)
+Defined in: [enduser/src/UserLifecycle.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L14)
 
 GToken contract address.
 Required for operations involving token approvals and transfers.
@@ -82,7 +82,7 @@ Required for operations involving token approvals and transfers.
 
 > **gTokenStakingAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserLifecycle.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L15)
+Defined in: [enduser/src/UserLifecycle.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L15)
 
 GTokenStaking contract address.
 Required for role registration that involves staking.
@@ -129,7 +129,7 @@ However, explicitly accepting PublicClient encourages separation.
 
 > **registryAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserLifecycle.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L12)
+Defined in: [enduser/src/UserLifecycle.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L12)
 
 Registry contract address.
 Essential for looking up other contracts if not provided explicitly.
@@ -144,7 +144,7 @@ Essential for looking up other contracts if not provided explicitly.
 
 > **sbtAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserLifecycle.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/enduser/src/UserLifecycle.ts#L13)
+Defined in: [enduser/src/UserLifecycle.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/UserLifecycle.ts#L13)
 
 ***
 

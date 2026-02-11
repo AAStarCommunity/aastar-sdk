@@ -1,5 +1,3 @@
 > `const` **DEFAULT\_TOKEN\_SYMBOL**: `"GT"` = `'GT'`
 
-Defined in: [packages/core/src/constants.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/constants.ts#L107)
-
-Default Values
+Defined in: [packages/core/src/constants.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/constants.ts#L95)

@@ -1,6 +1,6 @@
 > **RegistryActions** = `object`
 
-Defined in: [packages/core/src/actions/registry.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L21)
+Defined in: [packages/core/src/actions/registry.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L21)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/registry.ts:21](https://github.com/AAStar
 
 > **accountToUser**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L74)
+Defined in: [packages/core/src/actions/registry.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L74)
 
 #### Parameters
 
@@ -27,7 +27,7 @@ Defined in: [packages/core/src/actions/registry.ts:74](https://github.com/AAStar
 
 > **addLevelThreshold**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L43)
+Defined in: [packages/core/src/actions/registry.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L43)
 
 #### Parameters
 
@@ -47,7 +47,7 @@ Defined in: [packages/core/src/actions/registry.ts:43](https://github.com/AAStar
 
 > **adminConfigureRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L24)
+Defined in: [packages/core/src/actions/registry.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L24)
 
 #### Parameters
 
@@ -71,7 +71,7 @@ Defined in: [packages/core/src/actions/registry.ts:24](https://github.com/AAStar
 
 > **batchUpdateGlobalReputation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L44)
+Defined in: [packages/core/src/actions/registry.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L44)
 
 #### Parameters
 
@@ -95,7 +95,7 @@ Defined in: [packages/core/src/actions/registry.ts:44](https://github.com/AAStar
 
 > **blsAggregator**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L55)
+Defined in: [packages/core/src/actions/registry.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L55)
 
 #### Returns
 
@@ -107,7 +107,7 @@ Defined in: [packages/core/src/actions/registry.ts:55](https://github.com/AAStar
 
 > **blsValidator**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L54)
+Defined in: [packages/core/src/actions/registry.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L54)
 
 #### Returns
 
@@ -119,7 +119,7 @@ Defined in: [packages/core/src/actions/registry.ts:54](https://github.com/AAStar
 
 > **calculateExitFee**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L73)
+Defined in: [packages/core/src/actions/registry.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L73)
 
 #### Parameters
 
@@ -139,7 +139,7 @@ Defined in: [packages/core/src/actions/registry.ts:73](https://github.com/AAStar
 
 > **communityByENS**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L38)
+Defined in: [packages/core/src/actions/registry.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L38)
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: [packages/core/src/actions/registry.ts:38](https://github.com/AAStar
 
 > **communityByName**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L37)
+Defined in: [packages/core/src/actions/registry.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L37)
 
 #### Parameters
 
@@ -177,7 +177,7 @@ Defined in: [packages/core/src/actions/registry.ts:37](https://github.com/AAStar
 
 > **configureRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L23)
+Defined in: [packages/core/src/actions/registry.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L23)
 
 #### Parameters
 
@@ -198,7 +198,7 @@ Defined in: [packages/core/src/actions/registry.ts:23](https://github.com/AAStar
 
 > **createNewRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L25)
+Defined in: [packages/core/src/actions/registry.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L25)
 
 #### Parameters
 
@@ -220,7 +220,7 @@ Defined in: [packages/core/src/actions/registry.ts:25](https://github.com/AAStar
 
 > **creditTierConfig**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L71)
+Defined in: [packages/core/src/actions/registry.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L71)
 
 #### Parameters
 
@@ -239,7 +239,7 @@ Defined in: [packages/core/src/actions/registry.ts:71](https://github.com/AAStar
 
 > **exitRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L33)
+Defined in: [packages/core/src/actions/registry.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L33)
 
 #### Parameters
 
@@ -259,7 +259,7 @@ Defined in: [packages/core/src/actions/registry.ts:33](https://github.com/AAStar
 
 > **getCreditLimit**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L41)
+Defined in: [packages/core/src/actions/registry.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L41)
 
 #### Parameters
 
@@ -278,7 +278,7 @@ Defined in: [packages/core/src/actions/registry.ts:41](https://github.com/AAStar
 
 > **getRoleConfig**: (`args`) => `Promise`\<[`RoleConfigDetailed`](RoleConfigDetailed.md)\>
 
-Defined in: [packages/core/src/actions/registry.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L30)
+Defined in: [packages/core/src/actions/registry.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L30)
 
 #### Parameters
 
@@ -297,7 +297,7 @@ Defined in: [packages/core/src/actions/registry.ts:30](https://github.com/AAStar
 
 > **getRoleMembers**: (`args`) => `Promise`\<`Address`[]\>
 
-Defined in: [packages/core/src/actions/registry.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L66)
+Defined in: [packages/core/src/actions/registry.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L66)
 
 #### Parameters
 
@@ -316,7 +316,7 @@ Defined in: [packages/core/src/actions/registry.ts:66](https://github.com/AAStar
 
 > **getRoleUserCount**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L65)
+Defined in: [packages/core/src/actions/registry.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L65)
 
 #### Parameters
 
@@ -335,7 +335,7 @@ Defined in: [packages/core/src/actions/registry.ts:65](https://github.com/AAStar
 
 > **getUserRoles**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)[]\>
 
-Defined in: [packages/core/src/actions/registry.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L67)
+Defined in: [packages/core/src/actions/registry.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L67)
 
 #### Parameters
 
@@ -354,7 +354,7 @@ Defined in: [packages/core/src/actions/registry.ts:67](https://github.com/AAStar
 
 > **globalReputation**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L42)
+Defined in: [packages/core/src/actions/registry.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L42)
 
 #### Parameters
 
@@ -373,7 +373,7 @@ Defined in: [packages/core/src/actions/registry.ts:42](https://github.com/AAStar
 
 > **grantRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L94)
+Defined in: [packages/core/src/actions/registry.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L94)
 
 #### Parameters
 
@@ -394,7 +394,7 @@ Defined in: [packages/core/src/actions/registry.ts:94](https://github.com/AAStar
 
 > **GTOKEN\_STAKING**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L58)
+Defined in: [packages/core/src/actions/registry.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L58)
 
 #### Returns
 
@@ -406,7 +406,7 @@ Defined in: [packages/core/src/actions/registry.ts:58](https://github.com/AAStar
 
 > **hasRole**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/registry.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L29)
+Defined in: [packages/core/src/actions/registry.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L29)
 
 #### Parameters
 
@@ -426,7 +426,7 @@ Defined in: [packages/core/src/actions/registry.ts:29](https://github.com/AAStar
 
 > **isReputationSource**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/registry.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L60)
+Defined in: [packages/core/src/actions/registry.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L60)
 
 #### Parameters
 
@@ -445,7 +445,7 @@ Defined in: [packages/core/src/actions/registry.ts:60](https://github.com/AAStar
 
 > **lastReputationEpoch**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L61)
+Defined in: [packages/core/src/actions/registry.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L61)
 
 #### Parameters
 
@@ -464,7 +464,7 @@ Defined in: [packages/core/src/actions/registry.ts:61](https://github.com/AAStar
 
 > **levelThresholds**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L72)
+Defined in: [packages/core/src/actions/registry.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L72)
 
 #### Parameters
 
@@ -483,7 +483,7 @@ Defined in: [packages/core/src/actions/registry.ts:72](https://github.com/AAStar
 
 > **MYSBT**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L56)
+Defined in: [packages/core/src/actions/registry.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L56)
 
 #### Returns
 
@@ -495,7 +495,7 @@ Defined in: [packages/core/src/actions/registry.ts:56](https://github.com/AAStar
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L89)
+Defined in: [packages/core/src/actions/registry.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L89)
 
 #### Returns
 
@@ -507,7 +507,7 @@ Defined in: [packages/core/src/actions/registry.ts:89](https://github.com/AAStar
 
 > **registerRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L26)
+Defined in: [packages/core/src/actions/registry.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L26)
 
 #### Parameters
 
@@ -529,7 +529,7 @@ Defined in: [packages/core/src/actions/registry.ts:26](https://github.com/AAStar
 
 > **registerRoleSelf**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L27)
+Defined in: [packages/core/src/actions/registry.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L27)
 
 #### Parameters
 
@@ -550,7 +550,7 @@ Defined in: [packages/core/src/actions/registry.ts:27](https://github.com/AAStar
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L91)
+Defined in: [packages/core/src/actions/registry.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L91)
 
 #### Parameters
 
@@ -569,7 +569,7 @@ Defined in: [packages/core/src/actions/registry.ts:91](https://github.com/AAStar
 
 > **reputationSource**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L59)
+Defined in: [packages/core/src/actions/registry.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L59)
 
 #### Returns
 
@@ -581,7 +581,7 @@ Defined in: [packages/core/src/actions/registry.ts:59](https://github.com/AAStar
 
 > **revokeRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L95)
+Defined in: [packages/core/src/actions/registry.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L95)
 
 #### Parameters
 
@@ -602,7 +602,7 @@ Defined in: [packages/core/src/actions/registry.ts:95](https://github.com/AAStar
 
 > **ROLE\_ANODE**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L86)
+Defined in: [packages/core/src/actions/registry.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L86)
 
 #### Returns
 
@@ -614,7 +614,7 @@ Defined in: [packages/core/src/actions/registry.ts:86](https://github.com/AAStar
 
 > **ROLE\_COMMUNITY**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L80)
+Defined in: [packages/core/src/actions/registry.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L80)
 
 #### Returns
 
@@ -626,7 +626,7 @@ Defined in: [packages/core/src/actions/registry.ts:80](https://github.com/AAStar
 
 > **ROLE\_DVT**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L84)
+Defined in: [packages/core/src/actions/registry.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L84)
 
 #### Returns
 
@@ -638,7 +638,7 @@ Defined in: [packages/core/src/actions/registry.ts:84](https://github.com/AAStar
 
 > **ROLE\_ENDUSER**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L81)
+Defined in: [packages/core/src/actions/registry.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L81)
 
 #### Returns
 
@@ -650,7 +650,7 @@ Defined in: [packages/core/src/actions/registry.ts:81](https://github.com/AAStar
 
 > **ROLE\_KMS**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L85)
+Defined in: [packages/core/src/actions/registry.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L85)
 
 #### Returns
 
@@ -662,7 +662,7 @@ Defined in: [packages/core/src/actions/registry.ts:85](https://github.com/AAStar
 
 > **ROLE\_PAYMASTER\_AOA**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L83)
+Defined in: [packages/core/src/actions/registry.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L83)
 
 #### Returns
 
@@ -674,7 +674,7 @@ Defined in: [packages/core/src/actions/registry.ts:83](https://github.com/AAStar
 
 > **ROLE\_PAYMASTER\_SUPER**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L82)
+Defined in: [packages/core/src/actions/registry.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L82)
 
 #### Returns
 
@@ -686,7 +686,7 @@ Defined in: [packages/core/src/actions/registry.ts:82](https://github.com/AAStar
 
 > **roleConfigs**: (`args`) => `Promise`\<[`RoleConfigDetailed`](RoleConfigDetailed.md)\>
 
-Defined in: [packages/core/src/actions/registry.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L64)
+Defined in: [packages/core/src/actions/registry.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L64)
 
 #### Parameters
 
@@ -705,7 +705,7 @@ Defined in: [packages/core/src/actions/registry.ts:64](https://github.com/AAStar
 
 > **roleLockDurations**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L77)
+Defined in: [packages/core/src/actions/registry.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L77)
 
 #### Parameters
 
@@ -724,7 +724,7 @@ Defined in: [packages/core/src/actions/registry.ts:77](https://github.com/AAStar
 
 > **roleMembers**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L68)
+Defined in: [packages/core/src/actions/registry.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L68)
 
 #### Parameters
 
@@ -744,7 +744,7 @@ Defined in: [packages/core/src/actions/registry.ts:68](https://github.com/AAStar
 
 > **roleMetadata**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L34)
+Defined in: [packages/core/src/actions/registry.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L34)
 
 #### Parameters
 
@@ -764,7 +764,7 @@ Defined in: [packages/core/src/actions/registry.ts:34](https://github.com/AAStar
 
 > **roleOwners**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L75)
+Defined in: [packages/core/src/actions/registry.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L75)
 
 #### Parameters
 
@@ -783,7 +783,7 @@ Defined in: [packages/core/src/actions/registry.ts:75](https://github.com/AAStar
 
 > **roleStakes**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L76)
+Defined in: [packages/core/src/actions/registry.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L76)
 
 #### Parameters
 
@@ -803,7 +803,7 @@ Defined in: [packages/core/src/actions/registry.ts:76](https://github.com/AAStar
 
 > **safeMintForRole**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L28)
+Defined in: [packages/core/src/actions/registry.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L28)
 
 #### Parameters
 
@@ -825,7 +825,7 @@ Defined in: [packages/core/src/actions/registry.ts:28](https://github.com/AAStar
 
 > **setBLSAggregator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L48)
+Defined in: [packages/core/src/actions/registry.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L48)
 
 #### Parameters
 
@@ -845,7 +845,7 @@ Defined in: [packages/core/src/actions/registry.ts:48](https://github.com/AAStar
 
 > **setBLSValidator**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L47)
+Defined in: [packages/core/src/actions/registry.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L47)
 
 #### Parameters
 
@@ -865,7 +865,7 @@ Defined in: [packages/core/src/actions/registry.ts:47](https://github.com/AAStar
 
 > **setMySBT**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L49)
+Defined in: [packages/core/src/actions/registry.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L49)
 
 #### Parameters
 
@@ -885,7 +885,7 @@ Defined in: [packages/core/src/actions/registry.ts:49](https://github.com/AAStar
 
 > **setReputationSource**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L52)
+Defined in: [packages/core/src/actions/registry.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L52)
 
 #### Parameters
 
@@ -905,7 +905,7 @@ Defined in: [packages/core/src/actions/registry.ts:52](https://github.com/AAStar
 
 > **setRoleLockDuration**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L31)
+Defined in: [packages/core/src/actions/registry.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L31)
 
 #### Parameters
 
@@ -926,7 +926,7 @@ Defined in: [packages/core/src/actions/registry.ts:31](https://github.com/AAStar
 
 > **setRoleOwner**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L32)
+Defined in: [packages/core/src/actions/registry.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L32)
 
 #### Parameters
 
@@ -947,7 +947,7 @@ Defined in: [packages/core/src/actions/registry.ts:32](https://github.com/AAStar
 
 > **setStaking**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L51)
+Defined in: [packages/core/src/actions/registry.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L51)
 
 #### Parameters
 
@@ -967,7 +967,7 @@ Defined in: [packages/core/src/actions/registry.ts:51](https://github.com/AAStar
 
 > **setSuperPaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L50)
+Defined in: [packages/core/src/actions/registry.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L50)
 
 #### Parameters
 
@@ -987,7 +987,7 @@ Defined in: [packages/core/src/actions/registry.ts:50](https://github.com/AAStar
 
 > **SUPER\_PAYMASTER**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/registry.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L57)
+Defined in: [packages/core/src/actions/registry.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L57)
 
 #### Returns
 
@@ -999,7 +999,7 @@ Defined in: [packages/core/src/actions/registry.ts:57](https://github.com/AAStar
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L90)
+Defined in: [packages/core/src/actions/registry.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L90)
 
 #### Parameters
 
@@ -1019,7 +1019,7 @@ Defined in: [packages/core/src/actions/registry.ts:90](https://github.com/AAStar
 
 > **userRoleCount**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/registry.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L70)
+Defined in: [packages/core/src/actions/registry.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L70)
 
 #### Parameters
 
@@ -1038,7 +1038,7 @@ Defined in: [packages/core/src/actions/registry.ts:70](https://github.com/AAStar
 
 > **userRoles**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/registry.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L69)
+Defined in: [packages/core/src/actions/registry.ts:69](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L69)
 
 #### Parameters
 
@@ -1058,7 +1058,7 @@ Defined in: [packages/core/src/actions/registry.ts:69](https://github.com/AAStar
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/registry.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/actions/registry.ts#L98)
+Defined in: [packages/core/src/actions/registry.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/registry.ts#L98)
 
 #### Returns
 

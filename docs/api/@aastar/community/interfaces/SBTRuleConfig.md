@@ -1,4 +1,4 @@
-Defined in: [index.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/community/src/index.ts#L25)
+Defined in: [index.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L25)
 
 SBT minting rules configuration
 
@@ -8,7 +8,7 @@ SBT minting rules configuration
 
 > **maxSupply**: `bigint`
 
-Defined in: [index.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/community/src/index.ts#L27)
+Defined in: [index.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L27)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [index.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/4ba
 
 > **minStake**: `bigint`
 
-Defined in: [index.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/community/src/index.ts#L26)
+Defined in: [index.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L26)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [index.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/4ba
 
 > **mintPrice**: `bigint`
 
-Defined in: [index.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/community/src/index.ts#L28)
+Defined in: [index.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L28)

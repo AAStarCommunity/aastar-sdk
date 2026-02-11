@@ -1,6 +1,6 @@
 > `const` **NETWORKS**: `object`
 
-Defined in: [packages/core/src/networks.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/4bacc9848314b5f1ceb630b367762bab288eaa90/packages/core/src/networks.ts#L5)
+Defined in: [packages/core/src/networks.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/networks.ts#L5)
 
 Blockchain Network Configuration
 

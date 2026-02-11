@@ -1,5 +1,3 @@
-AAStar Shared Configuration Package
-
 ## Enumerations
 
 - [EntryPointVersion](enumerations/EntryPointVersion.md)
@@ -177,6 +175,7 @@ AAStar Shared Configuration Package
 - [accountActions](functions/accountActions.md)
 - [accountFactoryActions](functions/accountFactoryActions.md)
 - [aggregatorActions](functions/aggregatorActions.md)
+- [applyConfig](functions/applyConfig.md)
 - [createAAStarPublicClient](functions/createAAStarPublicClient.md)
 - [dvtActions](functions/dvtActions.md)
 - [entryPointActions](functions/entryPointActions.md)
