@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.16.21] - 2026-02-11
-**SDK Code Integrity Hash**: `5cb46f6324e7f8a20b9541881fcc249dca5ab052ba72f23c96bf31184ebbaa2e`
+**SDK Code Integrity Hash**: `8d5b71dda17e2cb746e4a70a98020b9c7a4f2b390a82804f7e5924b0bf5a51d5`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 ### ⚡ Gasless Execution
