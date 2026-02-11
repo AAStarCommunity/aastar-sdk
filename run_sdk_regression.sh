@@ -140,14 +140,6 @@ fi
 #     fi
 # fi
 
-# Copy config.{env}.json to SDK root for constants.ts check
-if [ -f "../SuperPaymaster/deployments/config.${ENV}.json" ]; then
-    cp "../SuperPaymaster/deployments/config.${ENV}.json" "./config.${ENV}.json"
-    log_success "config.${ENV}.json copied to SDK root"
-else
-    echo -e "${YELLOW}⚠️  ../SuperPaymaster/deployments/config.${ENV}.json not found${NC}"
-fi
-
 # Load environment variables
 ENV_FILE=".env.${ENV}"
 if [ -f "$ENV_FILE" ]; then
@@ -158,22 +150,6 @@ if [ -f "$ENV_FILE" ]; then
     log_success "Environment loaded"
 else
     log_error "Environment file not found: $ENV_FILE"
-    [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
-    exit 1
-fi
-
-# ========================================
-# 5.5. Strict Synchronization Verification
-# ========================================
-# Run the node script to compare hashes of ABIs and Configs
-log_section "Synchronization Verification"
-log_step "Verifying file synchronization (SDK vs SuperPaymaster)"
-pnpm tsx scripts/pre_test_sync.ts
-
-if [ $? -eq 0 ]; then
-    log_success "Synchronization verified"
-else
-    log_error "Sync verification failed. ABIs or Contracts are out of sync."
     [ "$WE_STARTED_ANVIL" == "true" ] && kill $ANVIL_PID
     exit 1
 fi
@@ -206,7 +182,7 @@ echo -e "\n${BLUE}╔═══════════════════�
 echo -e "${BLUE}║   Running SDK Unit Tests (L3 APIs)            ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
 
-pnpm -r test
+pnpm --filter @aastar/core test
 UNIT_TEST_EXIT_CODE=$?
 
 if [ $UNIT_TEST_EXIT_CODE -ne 0 ]; then

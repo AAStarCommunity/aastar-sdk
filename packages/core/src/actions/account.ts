@@ -17,7 +17,7 @@ export type AccountActions = {
 
 // SimpleAccountFactory Actions
 export type AccountFactoryActions = {
-    createAccount: (args: { owner: Address, salt: bigint, account?: Account | Address }) => Promise<Hash>;
+    createAccount: (args: { owner: Address, salt: bigint, account?: Account | Address, gas?: bigint }) => Promise<Hash>;
     getAddress: (args: { owner: Address, salt: bigint }) => Promise<Address>;
 };
 
@@ -156,7 +156,7 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
 });
 
 export const accountFactoryActions = (address: Address, abi: any = SimpleAccountFactoryABI) => (client: PublicClient | WalletClient): AccountFactoryActions => ({
-    async createAccount({ owner, salt, account }) {
+    async createAccount({ owner, salt, account, gas }) {
         try {
             validateAddress(owner, 'owner');
             validateRequired(salt, 'salt');
@@ -166,6 +166,7 @@ export const accountFactoryActions = (address: Address, abi: any = SimpleAccount
                 functionName: 'createAccount',
                 args: [owner, salt],
                 account: account as any,
+                gas,
                 chain: (client as any).chain
             });
         } catch (error) {

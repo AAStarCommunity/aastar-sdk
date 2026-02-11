@@ -86,6 +86,31 @@ export class UserClient extends BaseClient {
             });
             return { accountAddress, hash };
         } catch (error: any) {
+            const messageParts = [
+                error?.shortMessage,
+                error?.message,
+                error?.details,
+                error?.cause?.shortMessage,
+                error?.cause?.message,
+                error?.cause?.details,
+                error?.cause?.cause?.shortMessage,
+                error?.cause?.cause?.message
+            ].filter(Boolean);
+            const message = messageParts.join(' ');
+            if (message.includes('gas required exceeds allowance') || message.includes('intrinsic gas too low')) {
+                const data = encodeFunctionData({
+                    abi,
+                    functionName: 'createAccount',
+                    args: [params.owner, salt]
+                });
+                const hash = await client.sendTransaction({
+                    to: factoryAddr,
+                    data,
+                    gas: 2_000_000n,
+                    account: client.account
+                });
+                return { accountAddress, hash };
+            }
             throw error;
         }
     }

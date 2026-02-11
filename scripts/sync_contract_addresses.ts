@@ -17,8 +17,106 @@ import * as path from 'path';
 const SUPERPAYMASTER_ROOT = path.resolve(process.cwd(), '../SuperPaymaster');
 const SDK_ROOT = process.cwd();
 
+function getArgValue(args: string[], name: string): string | undefined {
+    const idx = args.indexOf(name);
+    if (idx === -1) return undefined;
+    const value = args[idx + 1];
+    if (!value || value.startsWith('--')) return undefined;
+    return value;
+}
+
+function updateCanonicalAddressesFromConfig(network: string, configPath: string) {
+    const chainIds: Record<string, number> = {
+        sepolia: 11155111,
+        'op-sepolia': 11155420,
+        anvil: 31337,
+        mainnet: 1,
+        optimism: 10,
+        'op-mainnet': 10
+    };
+
+    const chainId = chainIds[network];
+    if (!chainId) {
+        throw new Error(`Unsupported network "${network}" (no chainId mapping)`);
+    }
+
+    if (!fs.existsSync(configPath)) {
+        throw new Error(`Config file not found: ${configPath}`);
+    }
+
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, string>;
+
+    const keyOrder = [
+        'registry',
+        'gToken',
+        'staking',
+        'sbt',
+        'reputationSystem',
+        'superPaymaster',
+        'paymasterFactory',
+        'paymasterV4Impl',
+        'xPNTsFactory',
+        'blsAggregator',
+        'blsValidator',
+        'dvtValidator',
+        'entryPoint',
+        'aPNTs',
+        'priceFeed',
+        'simpleAccountFactory'
+    ] as const;
+
+    const missing = keyOrder.filter(k => !raw[k]);
+    if (missing.length) {
+        throw new Error(`Config missing keys: ${missing.join(', ')}`);
+    }
+
+    const addressesTsPath = path.join(SDK_ROOT, 'packages/core/src/addresses.ts');
+    const fileContent = fs.readFileSync(addressesTsPath, 'utf8');
+
+    const blockRegex = new RegExp(
+        `(^\\s*${chainId}:\\s*\\{[\\s\\S]*?^\\s*\\}\\s*,?\\n)`,
+        'm'
+    );
+    const match = fileContent.match(blockRegex);
+    if (!match) {
+        throw new Error(`ChainId block not found in addresses.ts: ${chainId}`);
+    }
+
+    const oldBlock = match[1];
+    const trailingComma = oldBlock.trimEnd().endsWith('},') ? ',' : '';
+
+    const newBlockLines = [
+        `  ${chainId}: {`,
+        ...keyOrder.map((k, idx) => {
+            const value = raw[k];
+            const comma = idx === keyOrder.length - 1 ? '' : ',';
+            return `    ${k}: "${value}"${comma}`;
+        }),
+        `  }${trailingComma}`,
+        ''
+    ];
+
+    const newBlock = newBlockLines.join('\n');
+    const updated = fileContent.replace(blockRegex, newBlock);
+    fs.writeFileSync(addressesTsPath, updated, 'utf8');
+
+    console.log(`\n✅ 已更新 SDK 内嵌地址: ${addressesTsPath}`);
+    console.log(`   Network=${network} ChainId=${chainId}`);
+    console.log(`   Source=${configPath}\n`);
+}
+
 async function main() {
     console.log('\n🔄 同步 SuperPaymaster 配置到 SDK\n');
+
+    const args = process.argv.slice(2);
+    const network = getArgValue(args, '--network') || 'sepolia';
+    const configPath = getArgValue(args, '--config') || path.join(SDK_ROOT, `config.${network}.json`);
+    const promoteCanonical = args.includes('--promote-canonical');
+
+    if (promoteCanonical) {
+        updateCanonicalAddressesFromConfig(network, configPath);
+        return;
+    }
 
     // ========== 1. 同步 deployments/sepolia.json 合约地址 ==========
     console.log('📋 步骤 1: 同步合约地址 (deployments/sepolia.json)\n');

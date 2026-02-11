@@ -3,8 +3,8 @@ console.log('🔍 DATA SOURCE: tests/regression/config.ts (TS Source)');
 /**
  * Network Configuration Loader for Regression Tests
  * 
- * Contract addresses are loaded from SuperPaymaster deployments directory
- * to ensure consistency across all testing layers (L1/L2/L3/L4).
+ * Contract addresses are loaded from the SDK's config.<network>.json files
+ * so regression runs stay stable even if other repos are under active development.
  */
 
 import { type Address, type Hex, type Chain } from 'viem';
@@ -29,7 +29,7 @@ export const BLOCK_EXPLORERS: Record<NetworkName, string> = {
 
 /**
  * Load contract addresses from config files
- * Priority: SDK root config.{network}.json > SuperPaymaster deployments > .env
+ * Priority: SDK root config.{network}.json > .env
  */
 function loadDeployments(network: NetworkName): Record<string, Address> {
     // Priority 1: SDK root config.{network}.json
@@ -46,25 +46,9 @@ function loadDeployments(network: NetworkName): Record<string, Address> {
         }
     }
     
-    // Priority 2: SuperPaymaster deployments (fallback)
-    const SUPERPAYMASTER_ROOT = path.resolve(process.cwd(), '../SuperPaymaster');
-    const deploymentsPath = path.join(SUPERPAYMASTER_ROOT, `deployments/config.${network}.json`);
-    
-    if (fs.existsSync(deploymentsPath)) {
-        try {
-            const deployments = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
-            console.log(`✅ Loaded contract addresses from: ${deploymentsPath} (fallback)`);
-            console.log(`   Keys found: ${Object.keys(deployments).join(', ')}`);
-            return deployments as Record<string, Address>;
-        } catch (error) {
-            console.warn(`⚠️  Failed to parse SuperPaymaster deployments: ${error}`);
-        }
-    }
-    
-    // Priority 3: .env (final fallback)
+    // Priority 2: .env (final fallback)
     console.warn(`⚠️  No config files found for network: ${network}`);
     console.warn(`   Checked: ${sdkConfigPath}`);
-    console.warn(`   Checked: ${deploymentsPath}`);
     console.warn(`   Using addresses from .env`);
     return {};
 }

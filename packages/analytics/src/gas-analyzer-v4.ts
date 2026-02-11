@@ -36,22 +36,15 @@ async function main() {
 
   // Load Config
   let configPath = path.resolve(process.cwd(), `config.${networkArg}.json`);
-  if (!fs.existsSync(configPath)) {
-      // Try fallback to SuperPaymaster
-      const fallbackPath = path.resolve(process.cwd(), `../../projects/SuperPaymaster/deployments/config.${networkArg}.json`);
-      if (fs.existsSync(fallbackPath)) {
-          configPath = fallbackPath;
-          console.log(`ℹ️  Using config from SuperPaymaster: ${configPath}`);
-      } else {
-          console.warn(`⚠️  Config file not found for ${networkArg}. using defaults/hardcoded address.`);
-      }
-  }
-  
-  let spAddress = '0xe74304CC5860b950a45967e12321Dff8B5CdcaA0'; // Default Sepolia
+  process.env.NETWORK = networkArg;
+  const core = await import('@aastar/core');
+
   if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (config.superPaymaster) spAddress = config.superPaymaster;
+      core.applyConfig(config);
   }
+
+  const spAddress = core.SUPER_PAYMASTER_ADDRESS;
   console.log(`ℹ️  Target SuperPaymaster: ${spAddress}`);
 
   const chain = networkArg === 'op-sepolia' ? optimismSepolia : sepolia;
