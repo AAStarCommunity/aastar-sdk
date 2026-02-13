@@ -33,6 +33,7 @@ export let SBT_ADDRESS = resolveAddr('SBT', 'sbt');
 export let REPUTATION_SYSTEM_ADDRESS = resolveAddr('REPUTATION_SYSTEM', 'reputationSystem');
 export let SUPER_PAYMASTER_ADDRESS = resolveAddr('SUPER_PAYMASTER', 'superPaymaster');
 export let PAYMASTER_FACTORY_ADDRESS = resolveAddr('PAYMASTER_FACTORY', 'paymasterFactory');
+export let PAYMASTER_V4_ADDRESS = resolveAddr('PAYMASTER_V4', 'paymasterV4');
 export let PAYMASTER_V4_IMPL_ADDRESS = resolveAddr('PAYMASTER_V4_IMPL', 'paymasterV4Impl');
 export let XPNTS_FACTORY_ADDRESS = resolveAddr('XPNTS_FACTORY', 'xPNTsFactory');
 export let BLS_AGGREGATOR_ADDRESS = resolveAddr('BLS_AGGREGATOR', 'blsAggregator');
@@ -62,6 +63,7 @@ export function applyConfig(newConfig: any) {
     REPUTATION_SYSTEM_ADDRESS = resolveAddr('REPUTATION_SYSTEM', 'reputationSystem');
     SUPER_PAYMASTER_ADDRESS = resolveAddr('SUPER_PAYMASTER', 'superPaymaster');
     PAYMASTER_FACTORY_ADDRESS = resolveAddr('PAYMASTER_FACTORY', 'paymasterFactory');
+    PAYMASTER_V4_ADDRESS = resolveAddr('PAYMASTER_V4', 'paymasterV4');
     PAYMASTER_V4_IMPL_ADDRESS = resolveAddr('PAYMASTER_V4_IMPL', 'paymasterV4Impl');
     XPNTS_FACTORY_ADDRESS = resolveAddr('XPNTS_FACTORY', 'xPNTsFactory');
     BLS_AGGREGATOR_ADDRESS = resolveAddr('BLS_AGGREGATOR', 'blsAggregator');

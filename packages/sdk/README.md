@@ -48,6 +48,7 @@ npm install @aastar/sdk viem
 - **Configuration Sync**: https://docs.aastar.io/guide/docs/Configuration_Sync
 - **Regression Testing**: https://docs.aastar.io/guide/docs/Regression_Testing_Guide
 - **Gasless Tester Guide**: https://docs.aastar.io/guide/docs/TESTER_GUIDE_GASLESS
+- **Price Keeper Guide**: [docs/guide/keeper.md](../../docs/guide/keeper.md)
 
 ---
 

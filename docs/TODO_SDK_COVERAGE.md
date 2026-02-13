@@ -52,4 +52,9 @@ The test attempts to register the `ROLE_COMMUNITY` and `ROLE_PAYMASTER_SUPER` ro
     - [ ] **物理隔离**: 考虑在未来的重构中将管理员相关的 Actions 从公共 Client 中完全剥离，实行物理上的权限解耦。
 
 ---
+
+## 4. Keeper 无人值守运行的安全增强 (2026-02-11)
+
+- [ ] 如果你希望进一步提高安全性（比如完全不在 env 里放密码），比较“工程化”的做法是用 macOS Keychain / 进程启动时注入一次密码（launchd + Secure input / secret manager），但这就超出 keeper 脚本本身的范围了；脚本侧目前已经满足“启动一次输入，后续无人职守自动跑”的目标。
+*上次更新: 2025-12-26 (基于 SDK 源码深度审计结果)*
 *上次更新: 2025-12-26 (基于 SDK 源码深度审计结果)*

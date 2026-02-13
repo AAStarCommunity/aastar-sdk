@@ -9,6 +9,11 @@
   ],
   "scripts": {
     "build": "pnpm -r build",
+    "keeper": "tsx scripts/keeper.ts",
+    "keeper:sepolia": "tsx scripts/keeper.ts --network sepolia",
+    "keeper:op-sepolia": "tsx scripts/keeper.ts --network op-sepolia",
+    "keeper:op-mainnet": "tsx scripts/keeper.ts --network op-mainnet",
+    "gasless:collect": "tsx scripts/gasless-collect.ts",
     "test": "pnpm -r test",
     "test:coverage": "vitest run --coverage",
     "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
