@@ -62,6 +62,70 @@ async function runCheck(config: NetworkConfig) {
     info(`Jason ETH: ${formatEther(jasonETH)}`);
     info(`Anni  ETH: ${formatEther(anniETH)}`);
 
+    // ── 1.1 SuperPaymaster & Paymaster Deposits ────────────────
+    console.log('\n📋 1.1 SuperPaymaster & Paymaster Deposits');
+    
+    // Check SP Deposit in EntryPoint
+    try {
+        const spDeposit = await pub.readContract({
+            address: EP,
+            abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+            functionName: 'balanceOf',
+            args: [SP]
+        }) as bigint;
+        if (spDeposit < parseEther('0.05')) warn(`SuperPaymaster EP Deposit: ${formatEther(spDeposit)} ETH (Low)`);
+        else ok(`SuperPaymaster EP Deposit: ${formatEther(spDeposit)} ETH`);
+    } catch {}
+
+    // Check Jason's PaymasterV4 Deposit
+    let jasonPMV4 = zeroAddress as Address;
+    try {
+        jasonPMV4 = await pub.readContract({
+            address: PM_FACTORY,
+            abi: parseAbi(['function getPaymasterByOperator(address) view returns (address)']),
+            functionName: 'getPaymasterByOperator',
+            args: [JASON_EOA]
+        }) as Address;
+
+        if (jasonPMV4 !== zeroAddress) {
+             const pmDeposit = await pub.readContract({
+                address: EP,
+                abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+                functionName: 'balanceOf',
+                args: [jasonPMV4]
+            }) as bigint;
+            if (pmDeposit < parseEther('0.05')) warn(`Jason PMV4 (${jasonPMV4}) EP Deposit: ${formatEther(pmDeposit)} ETH (Low)`);
+            else ok(`Jason PMV4 (${jasonPMV4}) EP Deposit: ${formatEther(pmDeposit)} ETH`);
+
+            // Also check stake
+             const depositInfo = await pub.readContract({
+                address: EP,
+                abi: parseAbi(['function getDepositInfo(address) view returns (uint256, bool, uint112, uint32, uint48)']),
+                functionName: 'getDepositInfo',
+                args: [jasonPMV4]
+            }) as any;
+             const stake = depositInfo[2];
+             info(`Jason PMV4 Stake: ${formatEther(stake)} ETH`);
+
+        } else {
+            warn(`Jason has no PaymasterV4 deployed`);
+        }
+    } catch (e) { console.log(e); }
+
+    // ── 1.2 SuperPaymaster Operator Status ─────────────────────
+    console.log('\n📋 1.2 SuperPaymaster Operator Status');
+    const checkOp = async (label: string, addr: Address) => {
+        try {
+            const opData = await pub.readContract({ address: SP, abi: SuperPaymasterABI, functionName: 'operators', args: [addr] }) as any;
+            const isConfigured = Boolean(opData[2]);
+            const aPNTsBal = formatEther(BigInt(opData[5] || 0));
+            if (isConfigured) ok(`${label}: Configured | Balance: ${aPNTsBal} aPNTs`);
+            else warn(`${label}: Not Configured`);
+        } catch { warn(`${label}: Failed to read operator status`); }
+    };
+    await checkOp('Jason', JASON_EOA);
+    await checkOp('Anni ', ANNI_EOA);
+
     // ── 2. AA Addresses (derived from SimpleAccountFactory, no keys needed) ─
     console.log('\n📋 2. Smart Accounts (AA)');
     const saFactoryAbi = parseAbi(['function getAddress(address,uint256) view returns (address)']);
