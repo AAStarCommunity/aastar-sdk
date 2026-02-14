@@ -254,10 +254,17 @@ async function main() {
             return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
         };
 
-        const actualGasUsedStr = data.ActualGasUsed || '0';
+        const actualGasUsedStr = (data.ActualGasUsed && data.ActualGasUsed !== 'N/A') ? data.ActualGasUsed : '0';
         const actualGasUsedNum = parseInt(actualGasUsedStr.replace(/,/g, '')) || 0;
-        const actualGasCostNum = BigInt(data.ActualGasCost || '0');
-        const derivedGasPriceGwei = actualGasUsedNum > 0 
+        
+        let actualGasCostNum = BigInt(0);
+        try {
+             if (data.ActualGasCost && data.ActualGasCost !== 'N/A') {
+                 actualGasCostNum = BigInt(data.ActualGasCost);
+             }
+        } catch (e) {}
+
+        const derivedGasPriceGwei = (actualGasUsedNum > 0 && actualGasCostNum > 0n)
             ? (Number(actualGasCostNum) / actualGasUsedNum / 1e9).toFixed(4) 
             : '0';
 
@@ -269,7 +276,7 @@ async function main() {
             L1GasUsed: data.L1GasUsed || 'N/A',
             L1FeesPaid: data.L1FeesPaid || 'N/A',
             L2FeesPaid: data.L2FeesPaid || 'N/A',
-            ActualGasUsed: actualGasUsedStr,
+            ActualGasUsed: actualGasUsedStr !== '0' ? actualGasUsedStr : 'N/A',
             ActualGasCost: data.ActualGasCost || 'N/A',
             APNTS_Cost: formatWei(data.APNTS_Cost, 8),
             XPNTS_Cost: formatWei(data.XPNTS_Cost, 8),
