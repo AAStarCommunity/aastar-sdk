@@ -13,6 +13,7 @@ export const CANONICAL_ADDRESSES = {
     reputationSystem: "0xA9560898dC0eE4F9Ed3F1db17dbf74dE65e925c2",
     superPaymaster: "0xA2c9A6e95f19f5D2a364CBCbB5f0b32B1B4d140E",
     paymasterFactory: "0x58A7F6E44a57028A255794119F8b37124c9a7eB8",
+    paymasterV4: "0x67a70a578E142b950987081e7016906ae4F56Df4",  // AAStar Community PM (Jason)
     paymasterV4Impl: "0xc4dd13F7825409EEC13FBCBdD9D8f6d618207cca",
     xPNTsFactory: "0x864971a26384d9DCC7115f0bBC428e2623F28b6e",
     blsAggregator: "0x1C305372ecc5a36CBef1FA371392234bCD55eB19",

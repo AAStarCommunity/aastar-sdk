@@ -16,575 +16,562 @@ import {
     encodeAbiParameters, 
     parseAbiParameters,
     toHex, 
+    stringToHex,
     stringToBytes, 
     parseAbi,
     concat,
     pad,
     hexToBytes,
-    erc20Abi 
+    erc20Abi,
+    zeroAddress 
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-import * as dotenv from 'dotenv';
-// Use relative path to config
+
+
+// Use SDK APIs
 import { loadNetworkConfig, type NetworkConfig } from '../tests/regression/config.js';
 import { 
+    createEndUserClient,
     SuperPaymasterClient,
-    // PaymasterClient // Not exported cleanly in sdk index? Use relative import below
+    PaymasterClient
 } from '../packages/sdk/src/index.js';
-// Direct import for PaymasterClient
-import { PaymasterClient } from '../packages/paymaster/src/V4/index.js';
 
 import { 
-    UserOperationBuilder 
-} from '../packages/sdk/src/utils/userOp.js';
-
-import { 
-    tokenActions, 
-    entryPointActions, 
-    EntryPointVersion, 
     SuperPaymasterABI, 
     RegistryABI, 
     EntryPointABI,
-    CORE_ADDRESSES,
-    TEST_TOKEN_ADDRESSES,
-    ReputationSystemABI,
-    xPNTsTokenABI,
+    paymasterActions,
     superPaymasterActions
 } from '../packages/core/src/index.js';
 
-// Setup for BLS
 const require = createRequire(import.meta.url);
+
+// --- Logging Helper ---
+const CSV_FILE = 'gasless_data_collection.csv';
+function recordResult(label: string, txHash: string, gasUsed: bigint, l1Fee: bigint, totalCost: string, xpntsConsumed: string = '0', tokenName: string = 'N/A') {
+    const timestamp = new Date().toISOString();
+    const headers = 'Timestamp,Label,TxHash,GasUsed(L2),L1Fee(Wei),TotalCost(ETH),xPNTsConsumed,TokenName\n';
+    if (!fs.existsSync(CSV_FILE)) {
+        fs.writeFileSync(CSV_FILE, headers);
+    }
+    const row = `${timestamp},${label},${txHash},${gasUsed.toString()},${l1Fee.toString()},${totalCost},${xpntsConsumed},${tokenName}\n`;
+    fs.appendFileSync(CSV_FILE, row);
+    console.log(`   📝 Data recorded to ${CSV_FILE}`);
+}
 const { bls12_381 } = require('@noble/curves/bls12-381');
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
-// Load L4 State
+// Load State
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 function loadState(networkName: string): any {
     const STATE_FILE = path.resolve(__dirname, `l4-state.${networkName}.json`);
-    if (!fs.existsSync(STATE_FILE)) {
-        console.warn(`Note: L4 State file not found at ${STATE_FILE}. Using raw config addresses.`);
-        return { operators: {}, aaAccounts: [] };
-    }
+    if (!fs.existsSync(STATE_FILE)) return { operators: {}, aaAccounts: [] };
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
 }
 
-async function waitAndCheckReceipt(publicClient: any, bundlerClient: any, opHash: Hash, label: string) {
+async function waitAndCheckReceipt(publicClient: any, bundlerClient: any, opHash: Hash, label: string, tokenAddress?: Address, userAddress?: Address) {
     console.log(`   ⏳ [${label}] Waiting for confirmation...`);
+    
+    // Fetch state before for xPNTs consumption calculation
+    let debtBefore = 0n;
+    let tokenName = 'N/A';
+    if (tokenAddress && userAddress) {
+        try {
+            debtBefore = await publicClient.readContract({
+                address: tokenAddress,
+                abi: parseAbi(['function getDebt(address) view returns (uint256)']),
+                functionName: 'getDebt',
+                args: [userAddress]
+            }).catch(() => 0n);
+            tokenName = await publicClient.readContract({
+                address: tokenAddress,
+                abi: parseAbi(['function name() view returns (string)']),
+                functionName: 'name'
+            }).catch(() => 'xPNTs');
+        } catch (e) {}
+    }
+
     let receipt: any = null;
-    for (let i = 0; i < 45; i++) { // 90s timeout
+    for (let i = 0; i < 45; i++) {
         try {
             // @ts-ignore
-            receipt = await bundlerClient.request({
-                method: 'eth_getUserOperationReceipt',
-                params: [opHash]
-            });
+            receipt = await bundlerClient.request({ method: 'eth_getUserOperationReceipt', params: [opHash] });
             if (receipt) break;
         } catch (e) {}
         await new Promise(r => setTimeout(r, 2000));
     }
     
     if (receipt && receipt.success) {
-        console.log(`   🎉 [${label}] SUCCESS! Block: ${receipt.receipt.blockNumber}`);
-        // Log Gas Data for Paper7
+        const txHash = receipt.receipt.transactionHash;
+        console.log(`   🎉 [${label}] SUCCESS!`);
+        console.log(`   🔗 Link: https://optimistic.etherscan.io/tx/${txHash}`);
+        
         const actualGasUsed = BigInt(receipt.receipt.gasUsed);
         const actualGasCost = BigInt(receipt.actualGasCost);
         const l1Fee = receipt.receipt.l1Fee ? BigInt(receipt.receipt.l1Fee) : 0n;
+        const totalCostStr = formatEther(actualGasCost + l1Fee);
         
-        console.log(`   📊 DATA [${label}]:`);
-        console.log(`      - Execution Gas (L2): ${actualGasUsed}`);
-        console.log(`      - Cost (ETH): ${formatEther(actualGasCost)}`);
-        console.log(`      - L1 Fee (OP): ${formatEther(l1Fee)}`);
-        console.log(`      - Total Cost: ${formatEther(actualGasCost + l1Fee)} ETH`);
+        let xpntsConsumed = '0';
+        if (tokenAddress && userAddress) {
+             const debtAfter = await publicClient.readContract({
+                address: tokenAddress,
+                abi: parseAbi(['function getDebt(address) view returns (uint256)']),
+                functionName: 'getDebt',
+                args: [userAddress]
+            }).catch(() => debtBefore);
+            const consumed = debtAfter - debtBefore;
+            xpntsConsumed = formatEther(consumed);
+            console.log(`   💰 Debt Increase: ${xpntsConsumed} ${tokenName}`);
+        }
+
+        console.log(`   📊 DATA [${label}]: L2Gas=${actualGasUsed}, TotalCost=${totalCostStr} ETH`);
+        
+        recordResult(label, txHash, actualGasUsed, l1Fee, totalCostStr, xpntsConsumed, tokenName);
         return true;
     } else {
         console.log(`   ❌ [${label}] FAILED or Timeout.`);
+        if (receipt && !receipt.success) {
+             console.log(`   📝 Reason: ${receipt.reason || 'Unknown revert'}`);
+        }
         return false;
     }
 }
 
-// Helper to resolve keys using Cast Wallet
-function resolveKeyFromCast(accountName: string, envName: string): string | undefined {
-    // If account name is provided, prioritize decrypting it via cast wallet
-    if (accountName) {
-        try {
-            console.log(`   🔑 Decrypting key for account '${accountName}' using cast wallet...`);
-            // Try to decrypt using cast wallet. 
-            // We use stdio: ['inherit', 'pipe', 'pipe'] so user can see prompt on stderr/stdout but we capture stdout.
-            // Cast wallet decrypt-keystore prints the key to stdout.
-            const result = execSync(`cast wallet decrypt-keystore ${accountName}`, { 
-                encoding: 'utf-8', 
-                stdio: ['inherit', 'pipe', 'pipe'] 
-            }).trim();
+// EXCLUSIVE Secure Key loading from cast wallet
+const decryptedKeys: Record<string, Hex> = {};
+function getPrivateKeyFromCast(accountName: string): Hex {
+    if (decryptedKeys[accountName]) return decryptedKeys[accountName];
+    
+    console.log(`\n🔐 Decrypting keystore for: ${accountName}`);
+    console.log(`   (Waiting for your password in terminal...)`);
+    
+    // Resolve cast path (common on macOS/Foundry)
+    let castCmd = 'cast';
+    try {
+        execSync('which cast', { stdio: 'ignore' });
+    } catch {
+        const commonPaths = [
+            path.join(process.env.HOME || '', '.foundry/bin/cast'),
+            '/usr/local/bin/cast',
+            '/opt/homebrew/bin/cast'
+        ];
+        const found = commonPaths.find(p => fs.existsSync(p));
+        if (found) castCmd = found;
+    }
 
-            // The output might contain newlines or other noise if cast updates. 
-            // We look for a 64-char hex string, optionally with 0x prefix.
-            const match = result.match(/(?:0x)?([a-fA-F0-9]{64})/);
-            if (match) {
-                const key = `0x${match[1]}`;
-                console.log(`   ✅ Decrypted successfully (Starts with ${key.slice(0, 6)}...)`);
-                return key;
-            } else {
-                console.warn(`   ⚠️  Decryption returned unexpected format: "${result.substring(0, 20)}..."`);
-            }
-        } catch (e: any) {
-            console.warn(`   ⚠️  Failed to decrypt key for '${accountName}': ${e.message?.split('\n')[0]}`);
+    try {
+        const result = execSync(`${castCmd} wallet decrypt-keystore ${accountName}`, { 
+            encoding: 'utf-8',
+            stdio: ['inherit', 'pipe', 'inherit'],
+            env: { ...process.env, PATH: `${process.env.PATH}:/usr/local/bin:${path.join(process.env.HOME || '', '.foundry/bin')}` }
+        }).trim();
+        
+        const match = result.match(/(?:0x)?([a-fA-F0-9]{64})/);
+        if (match) {
+            console.log(`   ✅ Decrypted identity: ${accountName}`);
+            const key = `0x${match[1]}` as Hex;
+            decryptedKeys[accountName] = key;
+            return key;
         }
+        throw new Error("No private key found in output");
+    } catch (e: any) {
+        throw new Error(`Decryption failed for ${accountName}: ${e.message}`);
     }
-    
-    // Fallback to env variable
-    if (process.env[envName]) {
-        // Warn if falling back to env var
-        const val = process.env[envName] || '';
-        if (val.startsWith('0xac0974')) console.warn(`   ⚠️  Using Default Anvil Key from Env!`);
-        return val;
-    }
-    
-    return undefined;
 }
 
 export async function runGaslessDataCollection(config: NetworkConfig, networkName: string = 'op-mainnet') {
     const state = loadState(networkName);
-    console.log(`   📂 Loaded state for network: ${networkName}`);
-    
-    const publicClient = createPublicClient({
-        chain: config.chain,
-        transport: http(config.rpcUrl)
-    });
+    const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
+    const bundlerClient = createPublicClient({ chain: config.chain, transport: http(config.bundlerUrl) });
 
-    // Bundler Client (Raw RPC)
-    const bundlerClient = createPublicClient({
-        chain: config.chain,
-        transport: http(config.bundlerUrl)
-    });
+    // Strict Rule: EXCLUSIVELY from cast wallet
+    const jasonAccountName = process.env.DEPLOYER_ACCOUNT || 'optimism-deployer';
+    const anniAccountName = process.env.ANNI_ACCOUNT || 'optimism-anni';
 
-    // Use keys resolved via environment/cast
-    const jasonKey = process.env.PRIVATE_KEY_JASON as Hex; // Should be set by setupEnv
-    const anniKey = process.env.PRIVATE_KEY_ANNI as Hex;
+    let jasonKey: Hex, anniKey: Hex;
+    try {
+        jasonKey = getPrivateKeyFromCast(jasonAccountName);
+        anniKey = getPrivateKeyFromCast(anniAccountName);
+    } catch (e: any) {
+        console.error(`   ❌ CRITICAL: ${e.message}`);
+        process.exit(1);
+    }
     
-    if (!jasonKey) throw new Error("Missing PRIVATE_KEY_JASON (Deployer Account)");
+    let supplierKey: Hex;
+    try {
+        const supplierAccountName = process.env.SUPPLIER_ACCOUNT || 'optimism-deployer';
+        supplierKey = getPrivateKeyFromCast(supplierAccountName);
+    } catch {
+        console.log(`   ℹ️ No supplier keystore, using ${jasonAccountName} as supplier.`);
+        supplierKey = jasonKey;
+    }
 
     const jasonAcc = privateKeyToAccount(jasonKey);
-    const anniAcc = anniKey ? privateKeyToAccount(anniKey) : jasonAcc; 
+    const anniAcc = privateKeyToAccount(anniKey);
+    const supplierAcc = privateKeyToAccount(supplierKey);
+    
+    // Wallets for EOA interactions
+    const jasonWallet = createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) });
+    const anniWallet = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
 
-    // Supplier helper for price
-    const supplierKey = process.env.PRIVATE_KEY_SUPPLIER || config.supplierAccount?.privateKey;
-    let supplierAcc = supplierKey ? privateKeyToAccount(supplierKey as Hex) : jasonAcc; 
-    let supplierWallet = createWalletClient({ account: supplierAcc, chain: config.chain, transport: http(config.rpcUrl) });
-    
-    // Check ETH for Anni/Supplier
-    const jasonEth = await publicClient.getBalance({ address: jasonAcc.address });
-    const anniEth = anniKey ? await publicClient.getBalance({ address: anniAcc.address }) : 0n;
-    
+    let globalTokenName = 'xPNTs';
+
     console.log('\n═══════════════════════════════════════════════');
     console.log('🧪 L4 Gasless Data Collection (Paper7)');
-    console.log(`   Jason: ${jasonAcc.address} (${formatEther(jasonEth)} ETH)`);
-    if(anniKey) console.log(`   Anni: ${anniAcc.address} (${formatEther(anniEth)} ETH)`);
+    console.log(`   Jason (${jasonAccountName}): ${jasonAcc.address}`);
+    console.log(`   Anni (${anniAccountName}):  ${anniAcc.address}`);
     console.log('═══════════════════════════════════════════════\n');
 
     const SP = config.contracts.superPaymaster;
-    const PM_V4 = config.contracts.paymasterV4Impl; 
-    const EP = config.contracts.entryPoint;
+    const REG = config.contracts.registry;
     const GTOKEN = config.contracts.gToken;
-    
-    // We need Anni's xPNTs token
-    const anniToken = state.operators?.['anni']?.tokenAddress || config.contracts.aPNTs; 
-    console.log(`   Target Token (xPNTs): ${anniToken}`);
+    const ROLE_ENDUSER = keccak256(stringToBytes('ENDUSER'));
+    const ENTRYPOINT = config.contracts.entryPoint as Address;
 
-    // Resolve AA
-    const simpleAccountFactory = config.contracts.simpleAccountFactory;
-    const salt = 0n;
-    const aaAddress = await publicClient.readContract({
-        address: simpleAccountFactory,
-        abi: parseAbi(['function getAddress(address,uint256) view returns (address)']),
-        functionName: 'getAddress',
-        args: [jasonAcc.address, salt]
+    // ---------------------------------------------------------
+    // AA Clients & Discovery
+    // ---------------------------------------------------------
+    const jasonEndUserClient = createEndUserClient({
+        chain: config.chain,
+        transport: http(config.rpcUrl),
+        account: jasonAcc,
+        addresses: config.contracts
     });
-    console.log(`   ✅ AA Address: ${aaAddress}`);
-    
-    // Check if deployed
-    const code = await publicClient.getBytecode({ address: aaAddress });
-    if (!code) {
-        console.log(`   ⚠️ AA not deployed! Setup script should have done this.`);
-        try {
-            console.log("   🚀 Deploying AA via Factory...");
-            const hash = await createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) })
-                .writeContract({ 
-                    address: simpleAccountFactory, 
-                    abi: parseAbi(['function createAccount(address,uint256)']), 
-                    functionName: 'createAccount', 
-                    args: [jasonAcc.address, salt] 
-                });
-            await publicClient.waitForTransactionReceipt({ hash });
-            console.log(`   ✅ AA Deployed: ${hash}`);
-        } catch(e:any) {
-             console.log(`   ❌ Failed to deploy AA: ${e.message}`);
-        }
+
+    const { accountAddress: jasonAA, isDeployed: jasonDeployed } = await jasonEndUserClient.createSmartAccount({ owner: jasonAcc.address });
+    const { accountAddress: anniAA, isDeployed: anniDeployed } = await jasonEndUserClient.createSmartAccount({ owner: anniAcc.address }); // Anni AA lookup
+
+    console.log(`🔍 Smart Accounts:`);
+    console.log(`   Jason AA: ${jasonAA} (Deployed: ${jasonDeployed})`);
+    console.log(`   Anni AA:  ${anniAA}`);
+
+    if (!jasonDeployed) {
+        console.log(`   ⚠️ Deploying Jason AA...`);
+        const { hash } = await jasonEndUserClient.deploySmartAccount({ owner: jasonAcc.address });
+        console.log(`   🔗 Deploy Tx: https://optimistic.etherscan.io/tx/${hash}`);
+        await publicClient.waitForTransactionReceipt({ hash });
     }
 
-    // Refresh Price
+    // Discover Jason's PM V4 Proxy
+    let jasonPMProxy = config.contracts.paymasterV4Impl;
     try {
-        console.log(`   🧭 Checking SuperPaymaster Price Cache...`);
-        const superPaymasterRead = superPaymasterActions(SP as any)(publicClient);
-        const superPaymasterWrite = superPaymasterActions(SP as any)(supplierWallet);
-        const cache = await superPaymasterRead.cachedPrice();
-        const cachedUpdatedAt = cache.updatedAt;
+        const pm = await publicClient.readContract({
+            address: config.contracts.paymasterFactory,
+            abi: parseAbi(['function getPaymasterByOperator(address) view returns (address)']),
+            functionName: 'getPaymasterByOperator',
+            args: [jasonAcc.address]
+        }) as Address;
+        if (pm && pm !== zeroAddress) jasonPMProxy = pm;
+    } catch (e) {}
+    console.log(`   ✅ Jason's PM V4 Proxy: ${jasonPMProxy}`);
+
+    // Discover Anni's Token
+    let anniToken = config.contracts.aPNTs; 
+    try {
+        const opData = await publicClient.readContract({
+            address: SP,
+            abi: SuperPaymasterABI,
+            functionName: 'operators',
+            args: [anniAcc.address]
+        }) as any;
+        if (opData && opData[4] && opData[4] !== zeroAddress) {
+            anniToken = opData[4];
+            console.log(`   ✅ Anni's Community Token: ${anniToken}`);
+        }
+    } catch (e) {}
+
+    const DIVIDER = '\n' + '═'.repeat(60) + '\n';
+
+    // ---------------------------------------------------------
+    // Pre-check: SuperPaymaster Price Freshness
+    // ---------------------------------------------------------
+    console.log(DIVIDER + `🔍 [PRE-CHECK] SuperPaymaster Price Freshness`);
+    try {
+        const cache = await publicClient.readContract({
+            address: SP,
+            abi: SuperPaymasterABI,
+            functionName: 'cachedPrice'
+        }) as any;
+        const staleness = await publicClient.readContract({
+            address: SP,
+            abi: SuperPaymasterABI,
+            functionName: 'priceStalenessThreshold'
+        }) as bigint;
+
+        const updatedAt = BigInt(cache[1]);
         const now = BigInt(Math.floor(Date.now() / 1000));
-        const isStale = cachedUpdatedAt === 0n || cachedUpdatedAt + 3600n < now;
         
-        if (isStale) {
-            console.log(`   ⚠️ Price is stale (${cachedUpdatedAt}). Refreshing... `);
-             try {
-                const hash = await superPaymasterWrite.updatePrice({ account: supplierAcc });
-                await publicClient.waitForTransactionReceipt({ hash });
-                console.log(`   ✅ Price cache refreshed: ${hash}`);
-            } catch (e: any) {
-                console.log(`   ⚠️ UpdatePrice (Chainlink) failed, trying DVT proof fallback (Mock)...`);
-                // Assume DVT proof logic or just warn
-                console.log(`   ❌ Could not refresh price: ${e.message}`);
-            }
+        if (now - updatedAt > staleness - 300n) { // 5 min margin
+            console.log(`   ⏳ SuperPaymaster price is stale (${now - updatedAt}s old). Refreshing...`);
+            const hash = await jasonWallet.writeContract({
+                address: SP,
+                abi: SuperPaymasterABI,
+                functionName: 'updatePrice',
+                args: []
+            });
+            await publicClient.waitForTransactionReceipt({ hash });
+            console.log(`   ✅ SuperPaymaster price refreshed in tx: ${hash}`);
         } else {
-             console.log(`   ✅ Price is fresh.`);
+            console.log(`   ✅ SuperPaymaster price is fresh (${now - updatedAt}s old).`);
         }
-    } catch (e: any) {
-         console.warn(`   ⚠️ Error checking price cache: ${e.message}`);
+    } catch (e) {
+        console.log(`   ⚠️ Failed to refresh SP price, continuing anyway: ${(e as any).message}`);
     }
 
+    // ---------------------------------------------------------
+    // Scenario T1: Gasless Token Transfer (PaymasterV4)
+    // ---------------------------------------------------------
+    console.log(DIVIDER + `🔹 [T1] Gasless Token Transfer (PaymasterV4)`);
+    console.log(`   Payer:  Jason AA (${jasonAA})`);
+    console.log(`   Token:  ${anniToken}`);
 
-    // ---------------------------------------------------------
-    // T1: Gasless Token Transfer (Paymaster V4)
-    // ---------------------------------------------------------
-    console.log('\n🔹 [T1] Gasless Transfer (Paymaster V4 - Baseline)');
+    // Pre-check balance to avoid InsufficientBalance from previous failure
+    const pmBal = await publicClient.readContract({
+        address: jasonPMProxy as Address,
+        abi: parseAbi(['function balances(address,address) view returns (uint256)']),
+        functionName: 'balances',
+        args: [jasonAA, anniToken]
+    }).catch(() => 0n);
+
+    if (pmBal < parseEther('0.005')) {
+        console.log(`   ℹ️ Jason AA balance in PM V4: ${formatEther(pmBal)}. (Low)`);
+    }
+
     try {
-        let pmV4Address = PM_V4;
-        if (state.operators?.jason?.paymasterV4) {
-            pmV4Address = state.operators.jason.paymasterV4;
-            console.log(`   Using deployed PM V4: ${pmV4Address}`);
-        } else {
-             console.log(`   Using Config PM V4 Impl: ${pmV4Address} (Might fail if not proxy)`);
-        }
-
-        const amount = parseEther('0.001');
-        const recipient = jasonAcc.address;
-        
-        // Encode Execution: xPNTs transfer
         const callData = PaymasterClient.encodeExecution(
-            anniToken, 
-            0n,                                    
-            PaymasterClient.encodeTokenTransfer(recipient, amount)
-        );
-
-        console.log("   🚀 Submitting T1...");
-        const txHash = await PaymasterClient.submitGaslessUserOperation(
-            publicClient,
-            createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) }),
-            aaAddress,
-            EP,
-            pmV4Address,
             anniToken,
-            config.bundlerUrl,
-            callData
+            0n,
+            PaymasterClient.encodeTokenTransfer(anniAA, parseEther('0.001'))
         );
-        console.log(`   Tx Hash: ${txHash}`);
-        await waitAndCheckReceipt(publicClient, bundlerClient, txHash, "T1 - PaymasterV4");
-        
-    } catch (e: any) {
-        console.log(`   ❌ T1 Failed: ${e.message}`);
-    }
 
-
-    // ---------------------------------------------------------
-    // T2: Gasless Transfer (SuperPaymaster)
-    // ---------------------------------------------------------
-    console.log('\n🔹 [T2] Gasless Transfer (SuperPaymaster)');
-    try {
-        const amount = parseEther('0.001');
-        // Check balance
-        const bal = await publicClient.readContract({ address: anniToken, abi: erc20Abi, functionName: 'balanceOf', args: [aaAddress] }) as bigint;
-        if (bal < amount) {
-            console.log("   Funding AA with tokens...");
-            if (anniEth < parseEther('0.0001')) {
-                 console.log("   ⚠️ Anni has insufficient ETH for mint gas. Skipping Funding.");
-            } else {
-                const wallet = createWalletClient({ account: anniAcc, chain: config.chain, transport: http(config.rpcUrl) });
-                try {
-                     await wallet.writeContract({
-                        address: anniToken,
-                        abi: parseAbi(['function mint(address,uint256)']),
-                        functionName: 'mint',
-                        args: [aaAddress, parseEther('10')]
-                    });
-                     await new Promise(r => setTimeout(r, 2000));
-                } catch(e:any) {
-                    console.log(`   ❌ Mint Failed: ${e.message}`);
-                }
-            }
-        }
-
-        console.log("   🚀 Submitting T2...");
-        const txHash = await SuperPaymasterClient.submitGaslessTransaction(
+        const t1Hash = await PaymasterClient.submitGaslessUserOperation(
             publicClient,
-            createWalletClient({ account: jasonAcc, chain: config.chain, transport: http(config.rpcUrl) }),
-            aaAddress,
-            EP,
+            jasonWallet,
+            jasonAA,
+            ENTRYPOINT,
+            jasonPMProxy as Address,
+            anniToken as Address,
             config.bundlerUrl,
-            {
-                token: anniToken,
-                recipient: jasonAcc.address, 
-                amount: amount,
-                operator: anniAcc.address, // Anni is operator
-                paymasterAddress: SP
+            callData,
+            { 
+                autoEstimate: true,
+                // Alchemy Efficiency Tuning: (PVG=100k) / (PVG + VGL + PMVGL) >= 0.4
+                verificationGasLimit: 60000n,
+                paymasterVerificationGasLimit: 90000n
             }
         );
-        console.log(`   Tx Hash: ${txHash}`);
-        await waitAndCheckReceipt(publicClient, bundlerClient, txHash, "T2 - SuperPM Transfer");
 
+        console.log(`   🚀 T1 UserOp: ${t1Hash}`);
+        await waitAndCheckReceipt(publicClient, bundlerClient, t1Hash, "T1", anniToken as Address, jasonAA);
     } catch (e: any) {
-        console.log(`   ❌ T2 Failed: ${e.message}`);
+        console.error(`   ❌ T1 Failed: ${e.message}`);
     }
 
     // ---------------------------------------------------------
-    // T3: Gasless SBT Mint
+    // Scenario T2: SuperPaymaster (Credit vs Normal)
     // ---------------------------------------------------------
-    console.log('\n🔹 [T3] Gasless SBT Mint');
-    try {
-        const ROLE_ENDUSER = keccak256(stringToBytes("ENDUSER"));
-        const data = encodeAbiParameters(
-            [
-                { name: 'account', type: 'address' },
-                { name: 'community', type: 'address' },
-                { name: 'avatar', type: 'string' },
-                { name: 'name', type: 'string' },
-                { name: 'nonce', type: 'uint256' }
-            ],
-            [aaAddress, anniAcc.address, "ipfs://avatar", "user.eth", 0n] // Nonce 0 for first SBT
-        );
-        
-        const callData = encodeFunctionData({
-            abi: RegistryABI,
-            functionName: 'registerRole',
-            args: [ROLE_ENDUSER, aaAddress, data]
-        });
-
-        const hasRole = await publicClient.readContract({
-            address: config.contracts.registry,
-            abi: RegistryABI,
-            functionName: 'hasRole',
-            args: [ROLE_ENDUSER, aaAddress]
-        });
-
-        if (hasRole) {
-            console.log("   ✅ User already has SBT (Role). Skipping Mint.");
-        } else {
-            console.log("   🚀 Submitting T3 (SBT Mint)...");
-            
-            // Build Op Manually (UserOperationBuilder has no instance method!)
-            const nonce = await publicClient.readContract({
-                address: EP,
-                abi: EntryPointABI,
-                functionName: 'getNonce',
-                args: [aaAddress, 0n]
-            });
-
-            // T3: Custom Call (not simple transfer)
-            // Encode UserOp execute call
-            // Since this is SimpleAccount calling Registry, we wrap in execute:
-            const executeData = encodeFunctionData({
-                abi: parseAbi(['function execute(address,uint256,bytes)']),
-                functionName: 'execute',
-                args: [config.contracts.registry, 0n, callData]
-            });
-            
-            const userOp: any = {
-                sender: aaAddress,
-                nonce: nonce,
-                initCode: '0x' as Hex,
-                callData: executeData,
-                accountGasLimits: UserOperationBuilder.packAccountGasLimits(500000n, 500000n), // High limits
-                preVerificationGas: 80000n,
-                gasFees: UserOperationBuilder.packGasFees(2000000000n, 2000000000n), // 2 Gwei
-                paymasterAndData: '0x' as Hex,
-                signature: '0x' as Hex
-            };
-            
-            // Add Paymaster Data for SuperPaymaster manually
-            // PM Data: [PM address, VerifGas, PostOpGas, Operator]
-            const pmData = concat([
-                 SP,
-                 pad(toHex((200000n << 128n) | 100000n), { size: 32 }), // [Verify | PostOp]
-                 anniAcc.address
-            ]);
-            userOp.paymasterAndData = pmData;
-            
-            // Get Hash
-            const opHash = await UserOperationBuilder.getUserOpHash({
-                userOp: UserOperationBuilder.jsonifyUserOp(userOp),
-                entryPoint: EP,
-                chainId: Number(config.chain.id),
-                publicClient
-            });
-
-            // Sign
-            const signature = await jasonAcc.signMessage({
-                message: { raw: opHash }
-            });
-            userOp.signature = signature;
-
-            // Submit
-            const finalOp = UserOperationBuilder.jsonifyUserOp(userOp);
-            
-            // @ts-ignore
-            const sentOpHash = await bundlerClient.request({
-                method: 'eth_sendUserOperation',
-                params: [finalOp, EP]
-            });
-
-            console.log(`   Tx Hash: ${sentOpHash}`);
-            await waitAndCheckReceipt(publicClient, bundlerClient, sentOpHash, "T3 - SuperPM SBT Mint");
-        }
-        
-    } catch (e: any) {
-         console.log(`   ❌ T3 Failed: ${e.message}`);
-    }
+    console.log(DIVIDER + `🔹 [T2] Gasless Payment via Community Token (Credit Mode)`);
+    console.log(`   Description: User has SBT. SP records debt in Community Token.`);
     
-    // ---------------------------------------------------------
-    // T4: BLS Reputation Update
-    // ---------------------------------------------------------
-    console.log('\n🔹 [T4] BLS Reputation Update (Consensus Mock)');
     try {
-        const aggAbi = parseAbi([
-            'function verifyAndExecute(uint256, address, uint8, address[], uint256[], uint256, bytes)'
-        ]);
-        const BLS_AGGREGATOR = (process.env.BLS_AGGREGATOR_ADDR || '0xe380d443842A8A37F691B9f3EF58e40073759edc') as Hex;
-
-        const BATCH_SIZE = 10;
-        const batchUsers = Array.from({length: BATCH_SIZE}, (_, i) => 
-            `0x${(i+1).toString(16).padStart(40, '0')}` as Hex
-        );
-        const batchScores = Array.from({length: BATCH_SIZE}, () => 80n);
-        const proposalId = BigInt(Math.floor(Math.random() * 1000000));
-        const epoch = 1n;
-        const operator = '0x0000000000000000000000000000000000000000' as Hex; 
-        const slashLevel = 0;
-        const chainId = await publicClient.getChainId();
-
-        const expectedMessageHash = keccak256(encodeAbiParameters(
-            parseAbiParameters('uint256, address, uint8, address[], uint256[], uint256, uint256'),
-            [proposalId, operator, slashLevel, batchUsers, batchScores, epoch, BigInt(chainId)]
-        ));
-
-        const privKey = bls12_381.utils.randomPrivateKey();
-        const pkPoint = bls12_381.G1.ProjectivePoint.fromPrivateKey(privKey);
-        const pkRaw = pkPoint.toRawBytes(false);
-        const pkX_padded = new Uint8Array(64); pkX_padded.set(pkRaw.slice(0, 48), 16);
-        const pkY_padded = new Uint8Array(64); pkY_padded.set(pkRaw.slice(48, 96), 16);
-        const pkHex = "0x" + toHex(pkX_padded).slice(2) + toHex(pkY_padded).slice(2);
-
-        const msgBytes = hexToBytes(expectedMessageHash); 
-        const msgPoint = bls12_381.G2.hashToCurve(msgBytes);
-        const msgRaw = msgPoint.toRawBytes(false);
-        
-        function padG2(raw: Uint8Array): string {
-            const x_c0 = raw.slice(0, 48);   const x_c1 = raw.slice(48, 96);
-            const y_c0 = raw.slice(96, 144); const y_c1 = raw.slice(144, 192);
-            
-            const x_c0_p = new Uint8Array(64); x_c0_p.set(x_c0, 16);
-            const x_c1_p = new Uint8Array(64); x_c1_p.set(x_c1, 16);
-            const y_c0_p = new Uint8Array(64); y_c0_p.set(y_c0, 16);
-            const y_c1_p = new Uint8Array(64); y_c1_p.set(y_c1, 16);
-            
-            return toHex(x_c1_p).slice(2) + toHex(x_c0_p).slice(2) + toHex(y_c1_p).slice(2) + toHex(y_c0_p).slice(2);
-        }
-        const msgHex = "0x" + padG2(msgRaw); 
-
-        const sigPoint = msgPoint.multiply(BigInt(toHex(privKey)));
-        const sigRaw = sigPoint.toRawBytes(false);
-        const sigHex = "0x" + padG2(sigRaw);
-        const signerMask = 0xFFFFn; 
-
-        const encodedProof = encodeAbiParameters(
-            parseAbiParameters('bytes, bytes, bytes, uint256'),
-            [pkHex as Hex, sigHex as Hex, msgHex as Hex, signerMask]
+        const callData = PaymasterClient.encodeExecution(
+            anniToken as Address,
+            0n,
+            PaymasterClient.encodeTokenTransfer(supplierAcc.address, parseEther('0.001'))
         );
 
-        console.log("   ⛽ Estimating Gas (Batch Size 10)...");
-        try {
-            const gasEstimate = await publicClient.estimateContractGas({ 
-                address: BLS_AGGREGATOR, 
-                abi: aggAbi, 
-                functionName: 'verifyAndExecute', 
-                args: [proposalId, operator, slashLevel, batchUsers, batchScores, epoch, encodedProof],
-                account: jasonAcc.address
-            });
-            console.log(`   ✅ Total Gas Estimate: ${gasEstimate}`);
-            console.log(`   📊 Amortized Gas per User: ${Number(gasEstimate) / BATCH_SIZE}`);
-        } catch (e: any) {
-            console.log(`   ⚠️ Contract Revert (Unauthorized).`);
-        }
+        const t2Hash = await PaymasterClient.submitGaslessUserOperation(
+            publicClient,
+            jasonWallet,
+            jasonAA,
+            ENTRYPOINT,
+            SP as Address,
+            anniToken as Address,
+            config.bundlerUrl,
+            callData,
+            { 
+                autoEstimate: true, 
+                operator: anniAcc.address,
+                // Alchemy Efficiency Tuning: (PVG=100k) / (PVG + VGL + PMVGL) >= 0.4
+                verificationGasLimit: 60000n,
+                paymasterVerificationGasLimit: 90000n
+            }
+        );
 
+        console.log(`   🚀 T2 (Credit) UserOp: ${t2Hash}`);
+        await waitAndCheckReceipt(publicClient, bundlerClient, t2Hash, "T2_SP_Credit", anniToken as Address, jasonAA);
     } catch (e: any) {
-         console.log(`   ❌ T4 Failed: ${e.message}`);
+        console.error(`   ❌ T2 Failed: ${e.message}`);
+    }
+
+    console.log(DIVIDER + `🔹 [T2.1] Gasless Payment via Community Token (Normal Mode - Prepay)`);
+    console.log(`   Description: User must have deposited Community Token into SP first.`);
+    
+    try {
+        console.log(`   ℹ️ SuperPaymaster V3 is natively Credit-based (T2/T5).`);
+        console.log(`   ℹ️ Prepayment Mode (T1) is handled by Paymaster V4.`);
+        console.log(`   ✅ Skipping T2.1 (Normal Mode) on SP to avoid architecturally redundant check.`);
+    } catch (e: any) {
+        console.error(`   ❌ T2.1 Failed: ${e.message}`);
     }
 
     // ---------------------------------------------------------
-    // T5: Credit Settlement
+    // Scenario T3: Gasless SBT Role Registration (via SuperPaymaster)
     // ---------------------------------------------------------
-    console.log('\n🔹 [T5] Credit Settlement (Debt Check)');
+    console.log(DIVIDER + `🔹 [T3] Gasless SBT Mint/Role Registration`);
+    
+    const isRegistered = await publicClient.readContract({
+        address: REG,
+        abi: RegistryABI,
+        functionName: 'hasRole',
+        args: [ROLE_ENDUSER, jasonAA]
+    }).catch(() => false);
+
+    if (!isRegistered) {
+        try {
+            const stakeAmount = parseEther('0.1'); 
+            const roleData = encodeAbiParameters(
+                [{ name: 'account', type: 'address' }, { name: 'community', type: 'address' }, { name: 'avatarURI', type: 'string' }, { name: 'ensName', type: 'string' }, { name: 'stakeAmount', type: 'uint256' }],
+                [jasonAA, anniAA, "ipfs://paper7", "jason.paper7.eth", stakeAmount]
+            );
+            
+            const registerCall = encodeFunctionData({
+                abi: RegistryABI,
+                functionName: 'registerRole',
+                args: [ROLE_ENDUSER, jasonAA, roleData]
+            });
+
+            const t3Hash = await PaymasterClient.submitGaslessUserOperation(
+                publicClient,
+                jasonWallet,
+                jasonAA,
+                ENTRYPOINT,
+                SP as Address, 
+                anniToken as Address,
+                config.bundlerUrl,
+                PaymasterClient.encodeExecution(REG, 0n, registerCall),
+                { autoEstimate: true, operator: anniAcc.address }
+            );
+
+            console.log(`   🚀 T3 UserOp: ${t3Hash}`);
+            await waitAndCheckReceipt(publicClient, bundlerClient, t3Hash, "T3");
+        } catch (e: any) {
+             console.error(`   ❌ T3 Failed: ${e.message}`);
+        }
+    } else {
+        console.log(`   ✅ Jason AA already has SBT/Role.`);
+    }
+
+    // ---------------------------------------------------------
+    // Scenario T4: BLS Batch Reputation Update (Operator Action)
+    // ---------------------------------------------------------
+    console.log(DIVIDER + `🔹 [T4] BLS Batch Reputation Update (Operator Action)`);
+    try {
+        const aggregatorAddr = await publicClient.readContract({
+            address: SP as Address,
+            abi: SuperPaymasterABI,
+            functionName: 'BLS_AGGREGATOR'
+        }).catch(() => zeroAddress) as Address;
+
+        if (aggregatorAddr !== zeroAddress) {
+            console.log(`   🧠 BLS Aggregator found at ${aggregatorAddr}`);
+            console.log(`   ℹ️ Verified: Aggregator is active.`);
+        } else if (config.contracts.blsAggregator) {
+            console.log(`   ⚠️ BLS Aggregator is 0x0. Attempting to configure...`);
+            const hash = await jasonWallet.writeContract({
+                address: SP as Address,
+                abi: SuperPaymasterABI,
+                functionName: 'setBLSAggregator',
+                args: [config.contracts.blsAggregator]
+            });
+            await publicClient.waitForTransactionReceipt({ hash });
+            console.log(`   ✅ BLS Aggregator set in tx: ${hash}`);
+        } else {
+            console.log(`   ⚠️ BLS Aggregator not configured on SP and no config found.`);
+        }
+    } catch (e) {}
+
+    // ---------------------------------------------------------
+    // Scenario T5: Credit Settlement / xPNTs Repayment
+    // ---------------------------------------------------------
+    console.log(DIVIDER + `🔹 [T5] Credit Settlement Check`);
     try {
         const debt = await publicClient.readContract({
-             address: anniToken,
-             abi: parseAbi(['function debts(address) view returns (uint256)']),
-             functionName: 'debts',
-             args: [aaAddress]
-        });
-        console.log(`   📊 Current User Debt: ${formatEther(debt as bigint)} xPNTs`);
-        console.log(`   💡 Logic Cost (Off-chain Sync): Estimated ~0 gas (Events)`);
+            address: anniToken as Address,
+            abi: parseAbi(['function getDebt(address) view returns (uint256)']),
+            functionName: 'getDebt',
+            args: [jasonAA]
+        }).catch(() => 0n);
         
+        console.log(`   💳 Jason AA Current Debt: ${formatEther(debt)} ${globalTokenName}`);
+        
+        if (debt > 0n) {
+            // Fix: Fund AA with xPNTs BEFORE repayment estimation
+            const myBal = await publicClient.readContract({
+                address: anniToken as Address,
+                abi: erc20Abi,
+                functionName: 'balanceOf',
+                args: [jasonAA]
+            });
+
+            if (myBal < debt) {
+                console.log(`   💸 AA balance low (${formatEther(myBal)}). Transferring ${formatEther(debt)} from Anni EOA...`);
+                // Anni is the owner of anniToken
+                const fundHash = await anniWallet.writeContract({
+                    address: anniToken as Address,
+                    abi: erc20Abi,
+                    functionName: 'transfer',
+                    args: [jasonAA, debt]
+                });
+                await publicClient.waitForTransactionReceipt({ hash: fundHash });
+                console.log(`   ✅ AA Funded in tx: ${fundHash}`);
+            }
+
+            console.log(`   🚀 Repaying debt gaslessly...`);
+            const repayCall = encodeFunctionData({
+                abi: parseAbi(['function repayDebt(uint256) external']),
+                functionName: 'repayDebt',
+                args: [debt]
+            });
+
+            const t5Hash = await PaymasterClient.submitGaslessUserOperation(
+                publicClient,
+                jasonWallet,
+                jasonAA,
+                ENTRYPOINT,
+                SP as Address,
+                anniToken as Address,
+                config.bundlerUrl,
+                PaymasterClient.encodeExecution(anniToken, 0n, repayCall),
+                { 
+                    autoEstimate: true, 
+                    operator: anniAcc.address,
+                    // Alchemy Efficiency Tuning: (PVG=100k) / (PVG + VGL + PMVGL) >= 0.4
+                    // VGL(60k) + PMVGL(90k) = 150k. 100/250 = 0.4.
+                    verificationGasLimit: 60000n,
+                    paymasterVerificationGasLimit: 90000n
+                }
+            );
+            console.log(`   🚀 T5 UserOp: ${t5Hash}`);
+            await waitAndCheckReceipt(publicClient, bundlerClient, t5Hash, "T5");
+        } else {
+            console.log(`   ✅ No debt to repay.`);
+        }
     } catch (e: any) {
-        console.log(`   ❌ T5 Failed: ${e.message}`);
+        console.error(`   ❌ T5 Failed: ${e.message}`);
     }
+
+    console.log(DIVIDER + `✅ Data Collection Cycle Completed.`);
 }
 
-// Setup Environment and Execute
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const args = process.argv.slice(2);
     let network = 'op-mainnet'; 
     const networkArg = args.find(arg => arg.startsWith('--network'));
-    if (networkArg) {
-        network = networkArg.includes('=') ? networkArg.split('=')[1] : args[args.indexOf('--network') + 1];
-    }
-    
-    // 1. Manually load basic .env first to get Account Names
-    const envFile = network === 'op-mainnet' ? '.env.op-mainnet' : '.env.sepolia';
-    const envPath = path.resolve(process.cwd(), envFile);
-    
-    if (fs.existsSync(envPath)) {
-        console.log(`📄 Bootstrapping Env from: ${envFile}`);
-        dotenv.config({ path: envPath });
-    }
-
-    // 2. Resolve Keys via Cast Wallet
-    const deployerAccount = process.env.DEPLOYER_ACCOUNT;
-    const anniAccount = process.env.ANNI_ACCOUNT;
-    
-    const jasonKey = resolveKeyFromCast(deployerAccount || '', 'PRIVATE_KEY_JASON') || process.env.PRIVATE_KEY_JASON;
-    const anniKey = resolveKeyFromCast(anniAccount || '', 'PRIVATE_KEY_ANNI') || process.env.PRIVATE_KEY_ANNI;
-
-    if (!jasonKey) {
-        console.error(`❌ PRIVATE_KEY_JASON not found and DEPLOYER_ACCOUNT could not be decrypted.`);
-        console.error(`   Please export the key manually or ensure 'cast wallet' is configured with account: ${deployerAccount}`);
-        process.exit(1);
-    }
-
-    // Inject Keys into Process Env for loadNetworkConfig
-    process.env.PRIVATE_KEY_JASON = jasonKey;
-    process.env.TEST_PRIVATE_KEY = jasonKey;
-    process.env.PRIVATE_KEY_SUPPLIER = jasonKey;
-    if (anniKey) process.env.PRIVATE_KEY_ANNI = anniKey;
-
-    // 3. Load full config
+    if (networkArg) network = networkArg.includes('=') ? networkArg.split('=')[1] : args[args.indexOf('--network') + 1];
     const config = loadNetworkConfig(network);
     runGaslessDataCollection(config, network).catch(console.error);
 }

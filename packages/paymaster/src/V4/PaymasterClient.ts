@@ -89,8 +89,8 @@ export class PaymasterClient {
                     functionName: 'cachedPrice'
                 }) as any;
                 
-                const cachedPrice: bigint = (cache?.price ?? cache?.[0] ?? 0n) as bigint;
-                const cachedUpdatedAt: bigint = (cache?.updatedAt ?? cache?.[1] ?? 0n) as bigint;
+                const cachedPrice: bigint = BigInt(cache?.price ?? cache?.[0] ?? 0);
+                const cachedUpdatedAt: bigint = BigInt(cache?.updatedAt ?? cache?.[1] ?? 0);
                 const now = BigInt(Math.floor(Date.now() / 1000));
                 let stalenessThreshold = 0n;
 
@@ -362,8 +362,8 @@ export class PaymasterClient {
                 : '0x' as Hex,
             callData,
             accountGasLimits: concat([
-                pad(toHex(75000n), { size: 16 }), // Verification (Tuned for 0.4 efficiency)
-                pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })        // Call
+                pad(toHex(gasLimits.verificationGasLimit ?? 75000n), { size: 16 }),
+                pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })
             ]),
             preVerificationGas: gasLimits.preVerificationGas ?? 50000n,
             gasFees: concat([

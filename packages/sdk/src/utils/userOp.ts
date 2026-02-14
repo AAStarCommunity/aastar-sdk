@@ -186,9 +186,17 @@ export class UserOperationBuilder {
         paymasterVerificationGasLimit?: bigint;
         paymasterPostOpGasLimit?: bigint;
     }): any {
+        const toHexStr = (val: any) => {
+            if (val === undefined || val === null) return undefined;
+            if (typeof val === 'bigint') return `0x${val.toString(16)}`;
+            if (typeof val === 'number') return `0x${val.toString(16)}`;
+            if (typeof val === 'string' && !val.startsWith('0x')) return `0x${val}`;
+            return val;
+        };
+
         const result: any = {
             sender: userOp.sender,
-            nonce: userOp.nonce,
+            nonce: toHexStr(userOp.nonce),
             callData: userOp.callData,
             signature: userOp.signature
         };

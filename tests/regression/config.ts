@@ -68,6 +68,7 @@ export interface ContractAddresses {
     blsValidator?: Address;
     entryPoint: Address;
     paymasterV4Impl?: Address;
+    paymasterV4?: Address;  // AAStar Community default PM proxy
     simpleAccountFactory: Address;
     priceFeed: Address;
 }
@@ -116,11 +117,9 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
 
     const chain = chains[network];
 
-    // Validate required ENV vars (with fallbacks for SuperPaymaster naming)
-    const required = [
-        'RPC_URL',
-        'TEST_PRIVATE_KEY'
-    ];
+    // Validate required ENV vars
+    // NOTE: TEST_PRIVATE_KEY is optional if using cast wallet or other external signers
+    const required = ['RPC_URL'];
 
     for (const key of required) {
         if (!process.env[key]) {
@@ -195,12 +194,13 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             dvtValidator: getContractAddress('dvtValidator', 'DVT_VALIDATOR_ADDRESS', 'DVT_VALIDATOR'),
             entryPoint: getContractAddress('entryPoint', 'ENTRY_POINT_ADDRESS'),
             paymasterV4Impl: getContractAddress('paymasterV4Impl', 'PAYMASTER_V4_IMPL', 'PAYMASTER_ADDRESS'),
+            paymasterV4: deployments['paymasterV4'] as Address || process.env.PAYMASTER_V4_PROXY as Address || undefined,
             priceFeed: getContractAddress('priceFeed', 'PRICE_FEED_ADDRESS'),
             simpleAccountFactory: getContractAddress('simpleAccountFactory', 'SIMPLE_ACCOUNT_FACTORY_ADDRESS'),
         },
         testAccount: {
-            privateKey: process.env.TEST_PRIVATE_KEY as `0x${string}`,
-            address: (process.env.TEST_ACCOUNT_ADDRESS as Address) || privateKeyToAccount(process.env.TEST_PRIVATE_KEY as Hex).address
+            privateKey: (process.env.TEST_PRIVATE_KEY || '0x0000000000000000000000000000000000000000000000000000000000000000') as `0x${string}`,
+            address: (process.env.TEST_ACCOUNT_ADDRESS as Address) || (process.env.TEST_PRIVATE_KEY ? privateKeyToAccount(process.env.TEST_PRIVATE_KEY as Hex).address : '0x0000000000000000000000000000000000000000')
         },
         supplierAccount: supplierPrivateKey ? { privateKey: supplierPrivateKey } : undefined,
         explorerUrl: BLOCK_EXPLORERS[network] || ''

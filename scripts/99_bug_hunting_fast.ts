@@ -78,7 +78,7 @@ async function runBugHuntingTests() {
              console.log(`   ⚠️ Contract not deployed at ${REGISTRY_ADDRESS}. Skipping test.`);
              return;
         }
-        const owner = await publicClient.readContract({ address: REGISTRY_ADDRESS, abi: RegistryABI, functionName: 'owner' });
+        const owner = await publicClient.readContract({ address: REGISTRY_ADDRESS, abi: RegistryABI, functionName: 'owner' }) as string;
         if (owner.toLowerCase() !== admin.address.toLowerCase()) throw new Error(`🐛 BUG: Owner mismatch!`);
     });
 
