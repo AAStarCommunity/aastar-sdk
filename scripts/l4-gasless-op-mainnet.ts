@@ -49,7 +49,7 @@ import {
 const require = createRequire(import.meta.url);
 
 // --- Logging Helper ---
-const CSV_FILE = 'gasless_data_collection.csv';
+const CSV_FILE = path.resolve(__dirname, '../packages/analytics/data/gasless_data_collection.csv');
 function recordResult(label: string, txHash: string, gasUsed: bigint, l1Fee: bigint, totalCost: string, xpntsConsumed: string = '0', tokenName: string = 'N/A') {
     const timestamp = new Date().toISOString();
     const headers = 'Timestamp,Label,TxHash,GasUsed(L2),L1Fee(Wei),TotalCost(ETH),xPNTsConsumed,TokenName\n';

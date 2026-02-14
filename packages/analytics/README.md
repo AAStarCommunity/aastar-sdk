@@ -126,3 +126,27 @@ packages/analytics/
 ├── data/                 # Raw JSON Data Store
 └── reports/              # HTML/Markdown Reports
 ```
+
+---
+
+## 🕷️ Transaction Scraper
+
+A Puppeteer-based scraper to extract detailed gas and fee metrics from Optimism Etherscan.
+
+### Prerequisites
+
+- Node.js & pnpm
+- Chrome browser (Puppeteer will attempt to install this automatically, but you can run `npx puppeteer browsers install chrome` if needed)
+
+### Running the Scraper
+
+The scraper reads transaction hashes from `data/gasless_data_collection.csv` and outputs enriched metrics to `data/gasless_metrics_detailed.csv`.
+
+```bash
+pnpm tsx scripts/scrape-tx.ts
+```
+
+## 📂 Data Directory (Paper7 Ground Truth)
+
+- `data/gasless_data_collection.csv`: Input file containing `Timestamp,Label,TxHash`.
+- `data/gasless_metrics_detailed.csv`: Output file containing scraped gas metrics (L1 Fee, L2 Fee, Gas Used, etc.).

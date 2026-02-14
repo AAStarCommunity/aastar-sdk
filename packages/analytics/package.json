@@ -29,6 +29,8 @@
     "@aastar/paymaster": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "puppeteer": "24.37.3",
+    "csv-writer": "1.6.0"
   }
 }
