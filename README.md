@@ -25,6 +25,14 @@
     - [SDK Regression (Using SDK Clients)](#sdk-regression-using-sdk-clients)
     - [Full Protocol Regression (Anvil Dedicated)](#full-protocol-regression-anvil-dedicated)
     - [EIP-2537 Precompile Verification](#eip-2537-precompile-verification)
+  - [🧰 Keeper (Price Updater)](#-keeper-price-updater)
+    - [使用场景](#使用场景)
+    - [前置条件](#前置条件)
+    - [环境变量与网络选择](#环境变量与网络选择)
+    - [发送交易的三种模式](#发送交易的三种模式)
+    - [常用命令](#常用命令)
+    - [Telegram 通知（可选）](#telegram-通知可选)
+    - [注意事项](#注意事项)
   - [Development Guides](#development-guides)
     - [ABI Maintenance](#abi-maintenance)
   - [Development Workflow](#development-workflow)
@@ -138,6 +146,92 @@ The full regression pipeline (`./scripts/run_full_regression.sh --env sepolia|op
 - [packages/analytics/data/historical/eip2537_checks.jsonl](./packages/analytics/data/historical/eip2537_checks.jsonl)
 
 ---
+
+## 🧰 Keeper (Price Updater)
+
+`scripts/keeper.ts` 是一个面向生产/准生产环境的 price keeper，用于在价格缓存临近过期时，自动触发合约的 `updatePrice()`，避免 paymaster 因价格过期导致验证失败或服务降级。
+
+它支持两类目标：
+
+- **SuperPaymaster**（`cachedPrice()` + `priceStalenessThreshold()` + `updatePrice()`）
+- **PaymasterV4**（同名接口，且可从合约读取 `ethUsdPriceFeed()`）
+
+### 使用场景
+
+- **定时巡检**：每隔 N 秒检查缓存与 Chainlink 最新轮次时间戳，必要时更新
+- **只跑一次**：用于手动验证配置是否正确
+- **后台守护**：支持 `--background` 把进程放到后台并写日志
+- **通知**：可选 Telegram 心跳/异常通知（不配置则静默跳过）
+
+### 前置条件
+
+- Node.js + pnpm
+- 可用 RPC（`tests/regression/config.ts` 支持的网络，或至少提供 `RPC_URL`）
+- 如果使用 cast 相关模式：本机需要安装 Foundry（`cast`）
+
+### 环境变量与网络选择
+
+- `--network <name>`：例如 `op-sepolia` / `op-mainnet` / `sepolia` / `mainnet` / `anvil`
+- keeper 会尝试自动加载 `.env.<network>`；当 `--network op-mainnet` 时额外尝试加载 `.env.optimism` 与 `.env.op-mainnet`
+- 如果无法加载网络配置，但提供了 `RPC_URL`，会使用 canonical addresses 做降级回退（仅用于最小可运行）
+
+### 发送交易的三种模式
+
+- **privateKey（默认）**：使用 `KEEPER_PRIVATE_KEY` 或 `PRIVATE_KEY_SUPPLIER` 直接签名并调用 `updatePrice()`
+- **cast**：用 `cast send` 发送交易（支持 `--keystore <path>` 或 `--cast-account <name>`）
+- **castWallet**：通过 `cast wallet decrypt-keystore <name>` 解出私钥后走 viem 发送交易
+
+### 常用命令
+
+只跑一次（不发交易，只打印状态）：
+
+```bash
+pnpm exec tsx scripts/keeper.ts --network op-sepolia --once --dry-run
+```
+
+持续运行（每 30 秒轮询一次；接近过期前 10 分钟触发更新；每天最多更新 24 次）：
+
+```bash
+pnpm exec tsx scripts/keeper.ts --network op-sepolia --poll-interval 30 --safety-margin 600 --max-updates-per-day 24
+```
+
+只更新其中一种 paymaster：
+
+```bash
+pnpm exec tsx scripts/keeper.ts --network op-sepolia --no-paymaster
+pnpm exec tsx scripts/keeper.ts --network op-sepolia --no-superpaymaster
+```
+
+后台运行并写日志（推荐显式指定 log file）：
+
+```bash
+pnpm exec tsx scripts/keeper.ts --network op-sepolia --background --log-file ./keeper.op-sepolia.log
+```
+
+用 cast keystore 发送交易（交互式输入密码；也可用 `CAST_KEYSTORE_PASSWORD` 免交互）：
+
+```bash
+pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --cast-account <your-cast-account-name>
+```
+
+castWallet 后台模式（需要 `CAST_UNSAFE_PASSWORD`，否则会因交互被拒绝）：
+
+```bash
+CAST_UNSAFE_PASSWORD='...' pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast-wallet --cast-account <your-cast-account-name> --background
+```
+
+### Telegram 通知（可选）
+
+如果同时设置以下两项，会开启启动/心跳/失败通知；否则自动关闭通知：
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`（数值 chat id，或 `@ChannelName`）
+
+### 注意事项
+
+- `--dry-run` 不会发送任何交易，适合先验证网络、地址、阈值逻辑是否符合预期
+- `--max-base-fee-gwei <n>` 可在高 base fee 时推迟更新（只要在安全窗口内仍有效）
+- 该脚本会尝试从 `paymasterFactory` 通过 operator 推导 PaymasterV4 地址；也可用 `--paymaster <addr>` 强制指定
 
 ## Development Guides
 
