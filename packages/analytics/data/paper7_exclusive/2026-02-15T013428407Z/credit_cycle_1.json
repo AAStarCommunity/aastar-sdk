@@ -1,0 +1,19 @@
+{
+  "network": "anvil",
+  "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "user": "0x80C241164D8De268B91D53Eb1973DF3CfDA70325",
+  "xpnts": "0xBA12646CC07ADBe43F8bD25D83FB628D29C8A762",
+  "superPaymaster": "0x9A676e781A523b5d0C0e43731313A708CB607508",
+  "registry": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+  "creditLimitWei": "100000000000000000000",
+  "creditLimitEth": "100",
+  "debtBeforeWei": "0",
+  "debtAfterRecordWei": "10000000000000000000",
+  "debtAfterRepayWei": "0",
+  "tx": {
+    "approve": "0x5bf317d1aa9aca1ae66b6963b032c6890db45f8d7ae7d28a4d4732fd277661f4",
+    "setTier": "0x20ea84f97cd17b65e073082b758d6a4b74ba76efabd47828ee87ae1b2c024f69",
+    "recordDebt": "0x98ca4f2fd7362279d7e3c7b0969099b294b0f1edb572417d84ea2aa8086853e6",
+    "mint": "0x9fe3f855c12667f3dfe3c781be84ea20c43fd3f741611f25e8e35dc258653951"
+  }
+}

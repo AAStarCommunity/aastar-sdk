@@ -1,0 +1,25 @@
+{
+  "network": "anvil",
+  "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "user": "0x539F8B003B1068dA8840ACc1d15f612FA8f07B3a",
+  "xpnts": "0xBA12646CC07ADBe43F8bD25D83FB628D29C8A762",
+  "superPaymaster": "0x9A676e781A523b5d0C0e43731313A708CB607508",
+  "registry": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+  "creditLimitWei": "100000000000000000000",
+  "creditLimitEth": "100",
+  "debtBeforeWei": "0",
+  "debtAfterRecordWei": "10000000000000000000",
+  "debtAfterRepayWei": "0",
+  "gasUsed": {
+    "approve": "45945",
+    "setCreditTier": "27468",
+    "recordDebt": "51263",
+    "mint": "63668"
+  },
+  "tx": {
+    "approve": "0xe8225e490d2fce372c4be629ea91513ee6bb1a9cd0277f894fc636460264e794",
+    "setTier": "0x5d533c8c8490ebdb4a7bd05bf826f4077db299c25c71167f5fcc42914df1848a",
+    "recordDebt": "0x7f4e7b1f95e4e46df1db2a565eab40d3eb3f0e4eb28bdc7e6a8fedac3e0287ca",
+    "mint": "0xa93b7be4d960d71cf2079d7af42ee653cf6ac25dc3d031e3273c32d04f19beb4"
+  }
+}

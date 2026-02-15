@@ -1,0 +1,16 @@
+{
+  "network": "anvil",
+  "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "accountC": "0x128d1084CcF71aac65133B3e3125b1BD8dddcEC0",
+  "score": "80",
+  "globalReputation": "80",
+  "creditLimitWei": "300000000000000000000",
+  "creditLimitEth": "300",
+  "operatorReputation": "0",
+  "tx": {
+    "setRule": "0x2bda4a2c245bf11ef7fbc09087d7384b19960b7e9e9e05a1f402c46d5f2cbf90",
+    "setReputationSource": "0xbe8f04b63d4f7af449d821cabeca82827391d1152aa3228d258e53cb96f8aad6",
+    "setEntropy": "0x9436eb1832ac6bdcf00a370cae6794a6eba81a1999f183f69d7f8b299234ff69",
+    "syncToRegistry": "0x4a1e2e6e8eb62ac015b496bb5a1c6a1fa7c976d0b9ce75237da4224f57daa23a"
+  }
+}
