@@ -227,11 +227,28 @@ CAST_UNSAFE_PASSWORD='...' pnpm exec tsx scripts/keeper.ts --network op-mainnet 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`（数值 chat id，或 `@ChannelName`）
 
+Telegram 前置条件：
+
+- 私聊：需要先对 bot 发送 `/start`
+- 群/频道：需要把 bot 拉进去，并允许它发消息
+
+健康通知（可选）：
+
+- `--health-interval <sec>`：每隔 N 秒发送一次 “health ok” 通知（仅在 super + paymaster 都正常时才发送，默认 1800）
+
+异常检测（可选，不会自动发交易）：
+
+- `--chainlink-stale-sec <sec>`：当 Chainlink `updatedAt` 超过该阈值未更新时，发送告警（默认 600）
+- `--external-ethusd-url <url>`（或 `EXTERNAL_ETHUSD_URL`）：链下 ETH/USD 价格源（返回 JSON，脚本会尝试读取 `price/last/amount/data.amount` 字段）
+- `--volatility-threshold-bps <n>`：当链下价格“短时波动”或“与 Chainlink 偏离”超过阈值时告警（bps=万分比，150=1.50%，默认 0=关闭）
+- `--volatility-cooldown <sec>`：同类告警冷却时间（默认 600）
+
 ### 注意事项
 
 - `--dry-run` 不会发送任何交易，适合先验证网络、地址、阈值逻辑是否符合预期
 - `--max-base-fee-gwei <n>` 可在高 base fee 时推迟更新（只要在安全窗口内仍有效）
 - 该脚本会尝试从 `paymasterFactory` 通过 operator 推导 PaymasterV4 地址；也可用 `--paymaster <addr>` 强制指定
+- 地址来源：默认从 Astar SDK 内置配置读取（[addresses.js](./packages/core/src/addresses.js) 与 [config.ts](./tests/regression/config.ts)），并允许用 CLI 参数覆盖
 
 ## Development Guides
 
