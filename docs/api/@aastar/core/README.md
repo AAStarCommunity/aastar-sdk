@@ -127,6 +127,7 @@
 - [OFFICIAL\_ADDRESSES](variables/OFFICIAL_ADDRESSES.md)
 - [PAYMASTER\_ADDRESSES](variables/PAYMASTER_ADDRESSES.md)
 - [PAYMASTER\_FACTORY\_ADDRESS](variables/PAYMASTER_FACTORY_ADDRESS.md)
+- [PAYMASTER\_V4\_ADDRESS](variables/PAYMASTER_V4_ADDRESS.md)
 - [PAYMASTER\_V4\_IMPL\_ADDRESS](variables/PAYMASTER_V4_IMPL_ADDRESS.md)
 - [PaymasterABI](variables/PaymasterABI.md)
 - [PaymasterArtifact](variables/PaymasterArtifact.md)

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/doc-types.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/clients/doc-types.ts#L7)
+Defined in: [packages/core/src/clients/doc-types.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/core/src/clients/doc-types.ts#L7)
 
 Public Client Interface
 Standardized interface for reading from the blockchain.
@@ -13,7 +13,7 @@ Standardized interface for reading from the blockchain.
 
 > **account**: `undefined`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:73
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:73
 
 The Account of the Client.
 
@@ -27,7 +27,7 @@ The Account of the Client.
 
 > `optional` **batch**: `object`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:75
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:75
 
 Flags for batch settings.
 
@@ -53,7 +53,7 @@ Toggle to enable `eth_call` multicall aggregation.
 
 > **cacheTime**: `number`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:77
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:77
 
 Time (in ms) that cached data will remain in memory.
 
@@ -67,7 +67,7 @@ Time (in ms) that cached data will remain in memory.
 
 > **call**: (`parameters`) => `Promise`\<[`CallReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:89
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:89
 
 Executes a new message call immediately without submitting a transaction to the network.
 
@@ -113,7 +113,7 @@ const data = await client.call({
 
 > `optional` **ccipRead**: `false` \| \{ `request?`: (`parameters`) => `Promise`\<`` `0x${string}` ``\>; \}
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:79
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:79
 
 [CCIP Read](https://eips.ethereum.org/EIPS/eip-3668) configuration.
 
@@ -153,7 +153,7 @@ https://eips.ethereum.org/EIPS/eip-3668#client-lookup-protocol
 
 > **chain**: [`Chain`](https://viem.sh/docs/index.html) \| `undefined`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:81
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:81
 
 Chain for the client.
 
@@ -167,7 +167,7 @@ Chain for the client.
 
 > **createAccessList**: (`parameters`) => `Promise`\<\{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `gasUsed`: `bigint`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:113
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:113
 
 Creates an EIP-2930 access list that you can include in a transaction.
 
@@ -213,7 +213,7 @@ const data = await client.createAccessList({
 
 > **createBlockFilter**: () => `Promise`\<\{ `id`: `` `0x${string}` ``; `request`: [`EIP1193RequestFn`](https://viem.sh/docs/index.html)\<readonly \[\{ `Method`: `"eth_getFilterChanges"`; `Parameters`: \[`` `0x${string}` ``\]; `ReturnType`: `` `0x${string}` ``[] \| [`RpcLog`](https://viem.sh/docs/index.html)[]; \}, \{ `Method`: `"eth_getFilterLogs"`; `Parameters`: \[`` `0x${string}` ``\]; `ReturnType`: [`RpcLog`](https://viem.sh/docs/index.html)[]; \}, \{ `Method`: `"eth_uninstallFilter"`; `Parameters`: \[`` `0x${string}` ``\]; `ReturnType`: `boolean`; \}\]\>; `type`: `"block"`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:133
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:133
 
 Creates a Filter to listen for new block hashes that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges).
 
@@ -250,7 +250,7 @@ const filter = await createBlockFilter(client)
 
 > **createContractEventFilter**: \<`abi`, `eventName`, `args`, `strict`, `fromBlock`, `toBlock`\>(`args`) => `Promise`\<[`CreateContractEventFilterReturnType`](https://viem.sh/docs/index.html)\<`abi`, `eventName`, `args`, `strict`, `fromBlock`, `toBlock`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:154
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:154
 
 Creates a Filter to retrieve event logs that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges) or [`getFilterLogs`](https://viem.sh/docs/actions/public/getFilterLogs).
 
@@ -304,7 +304,7 @@ const filter = await client.createContractEventFilter({
 
 > **createEventFilter**: \<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`, `_EventName`, `_Args`\>(`args?`) => `Promise`\<\{ \[K in string \| number \| symbol\]: Filter\<"event", abiEvents, \_EventName, \_Args, strict, fromBlock, toBlock\>\[K\] \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:176
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:176
 
 Creates a [`Filter`](https://viem.sh/docs/glossary/types#filter) to listen for new events that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges).
 
@@ -360,7 +360,7 @@ const filter = await client.createEventFilter({
 
 > **createPendingTransactionFilter**: () => `Promise`\<\{ `id`: `` `0x${string}` ``; `request`: [`EIP1193RequestFn`](https://viem.sh/docs/index.html)\<readonly \[\{ `Method`: `"eth_getFilterChanges"`; `Parameters`: \[`` `0x${string}` ``\]; `ReturnType`: `` `0x${string}` ``[] \| [`RpcLog`](https://viem.sh/docs/index.html)[]; \}, \{ `Method`: `"eth_getFilterLogs"`; `Parameters`: \[`` `0x${string}` ``\]; `ReturnType`: [`RpcLog`](https://viem.sh/docs/index.html)[]; \}, \{ `Method`: `"eth_uninstallFilter"`; `Parameters`: \[`` `0x${string}` ``\]; `ReturnType`: `boolean`; \}\]\>; `type`: `"transaction"`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:196
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:196
 
 Creates a Filter to listen for new pending transaction hashes that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges).
 
@@ -397,7 +397,7 @@ const filter = await client.createPendingTransactionFilter()
 
 > **estimateContractGas**: \<`chain`, `abi`, `functionName`, `args`\>(`args`) => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:223
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:223
 
 Estimates the gas required to successfully execute a contract write function call.
 
@@ -456,7 +456,7 @@ const gas = await client.estimateContractGas({
 
 > **estimateFeesPerGas**: \<`chainOverride`, `type`\>(`args?`) => `Promise`\<[`EstimateFeesPerGasReturnType`](https://viem.sh/docs/index.html)\<`type`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:685
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:685
 
 Returns an estimate for the fees per gas for a transaction to be included
 in the next block.
@@ -506,7 +506,7 @@ const maxPriorityFeePerGas = await client.estimateFeesPerGas()
 
 > **estimateGas**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:247
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:247
 
 Estimates the gas necessary to complete a transaction without submitting it to the network.
 
@@ -552,7 +552,7 @@ const gasEstimate = await client.estimateGas({
 
 > **estimateMaxPriorityFeePerGas**: \<`chainOverride`\>(`args?`) => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:877
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:877
 
 Returns an estimate for the max priority fee per gas (in wei) for a transaction
 to be included in the next block.
@@ -602,7 +602,7 @@ const maxPriorityFeePerGas = await client.estimateMaxPriorityFeePerGas()
 
 > `optional` **experimental\_blockTag**: [`BlockTag`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:83
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:83
 
 Default block tag to use for RPC requests.
 
@@ -616,7 +616,7 @@ Default block tag to use for RPC requests.
 
 > **extend**: \<`client`\>(`fn`) => [`Client`](https://viem.sh/docs/index.html)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, `undefined`, [`PublicRpcSchema`](https://viem.sh/docs/index.html), \{ \[K in string \| number \| symbol\]: client\[K\] \} & [`PublicActions`](https://viem.sh/docs/index.html)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:69
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:69
 
 #### Type Parameters
 
@@ -644,7 +644,7 @@ Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem
 
 > **fillTransaction**: \<`chainOverride`, `accountOverride`\>(`args`) => `Promise`\<[`FillTransactionReturnType`](https://viem.sh/docs/index.html)\<[`Chain`](https://viem.sh/docs/index.html) \| `undefined`, `chainOverride`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:271
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:271
 
 Fills a transaction request with the necessary fields to be signed over.
 
@@ -696,7 +696,7 @@ const result = await client.fillTransaction({
 
 > **getBalance**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:306
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:306
 
 Returns the balance of an address in wei.
 
@@ -754,7 +754,7 @@ const balance = await client.getBalance({
 
 > **getBlobBaseFee**: () => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:327
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:327
 
 Returns the base fee per blob gas in wei.
 
@@ -791,7 +791,7 @@ const blobBaseFee = await client.getBlobBaseFee()
 
 > **getBlock**: \<`includeTransactions`, `blockTag`\>(`args?`) => `Promise`\<\{ `baseFeePerGas`: `bigint` \| `null`; `blobGasUsed`: `bigint`; `difficulty`: `bigint`; `excessBlobGas`: `bigint`; `extraData`: `` `0x${string}` ``; `gasLimit`: `bigint`; `gasUsed`: `bigint`; `hash`: `blockTag` *extends* `"pending"` ? `null` : `` `0x${string}` ``; `logsBloom`: `blockTag` *extends* `"pending"` ? `null` : `` `0x${string}` ``; `miner`: `` `0x${string}` ``; `mixHash`: `` `0x${string}` ``; `nonce`: `blockTag` *extends* `"pending"` ? `null` : `` `0x${string}` ``; `number`: `blockTag` *extends* `"pending"` ? `null` : `bigint`; `parentBeaconBlockRoot?`: `` `0x${string}` ``; `parentHash`: `` `0x${string}` ``; `receiptsRoot`: `` `0x${string}` ``; `sealFields`: `` `0x${string}` ``[]; `sha3Uncles`: `` `0x${string}` ``; `size`: `bigint`; `stateRoot`: `` `0x${string}` ``; `timestamp`: `bigint`; `totalDifficulty`: `bigint` \| `null`; `transactions`: `includeTransactions` *extends* `true` ? (\{ `accessList?`: `undefined`; `authorizationList?`: `undefined`; `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId?`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice`: `bigint`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"legacy"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity?`: `undefined`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList?`: `undefined`; `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice`: `bigint`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip2930"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList?`: `undefined`; `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice?`: `undefined`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas`: `bigint`; `maxPriorityFeePerGas`: `bigint`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip1559"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList?`: `undefined`; `blobVersionedHashes`: readonly `` `0x${string}` ``[]; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice?`: `undefined`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas`: `bigint`; `maxFeePerGas`: `bigint`; `maxPriorityFeePerGas`: `bigint`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip4844"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList`: [`SignedAuthorizationList`](https://viem.sh/docs/index.html); `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice?`: `undefined`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas`: `bigint`; `maxPriorityFeePerGas`: `bigint`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip7702"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \})[] : `` `0x${string}` ``[]; `transactionsRoot`: `` `0x${string}` ``; `uncles`: `` `0x${string}` ``[]; `withdrawals?`: [`Withdrawal`](https://viem.sh/docs/index.html)[]; `withdrawalsRoot?`: `` `0x${string}` ``; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:350
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:350
 
 Returns information about a block at a block number, hash, or tag.
 
@@ -843,7 +843,7 @@ const block = await client.getBlock()
 
 > **getBlockNumber**: (`args?`) => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:372
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:372
 
 Returns the number of the most recent block seen.
 
@@ -887,7 +887,7 @@ const blockNumber = await client.getBlockNumber()
 
 > **getBlockTransactionCount**: (`args?`) => `Promise`\<`number`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:394
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:394
 
 Returns the number of Transactions at a block number, hash, or tag.
 
@@ -931,7 +931,7 @@ const count = await client.getBlockTransactionCount()
 
 > **getBytecode**: (`args`) => `Promise`\<[`GetCodeReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:396
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:396
 
 #### Parameters
 
@@ -957,7 +957,7 @@ Use `getCode` instead.
 
 > **getChainId**: () => `Promise`\<`number`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:416
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:416
 
 Returns the chain ID associated with the current network.
 
@@ -994,7 +994,7 @@ const chainId = await client.getChainId()
 
 > **getCode**: (`args`) => `Promise`\<[`GetCodeReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:438
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:438
 
 Retrieves the bytecode at an address.
 
@@ -1038,7 +1038,7 @@ const code = await client.getCode({
 
 > **getContractEvents**: \<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>(`args`) => `Promise`\<[`GetContractEventsReturnType`](https://viem.sh/docs/index.html)\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:464
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:464
 
 Returns a list of event logs emitted by a contract.
 
@@ -1095,7 +1095,7 @@ const logs = await client.getContractEvents(client, {
 
 > **getEip712Domain**: (`args`) => `Promise`\<[`GetEip712DomainReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:497
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:497
 
 Reads the EIP-712 domain from a contract, based on the ERC-5267 specification.
 
@@ -1147,7 +1147,7 @@ const domain = await client.getEip712Domain({
 
 > **getEnsAddress**: (`args`) => `Promise`\<[`GetEnsAddressReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:526
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:526
 
 Gets address for ENS name.
 
@@ -1206,7 +1206,7 @@ const ensAddress = await client.getEnsAddress({
 
 > **getEnsAvatar**: (`args`) => `Promise`\<[`GetEnsAvatarReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:555
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:555
 
 Gets the avatar of an ENS name.
 
@@ -1265,7 +1265,7 @@ const ensAvatar = await client.getEnsAvatar({
 
 > **getEnsName**: (`args`) => `Promise`\<[`GetEnsNameReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:581
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:581
 
 Gets primary name for specified address.
 
@@ -1321,7 +1321,7 @@ const ensName = await client.getEnsName({
 
 > **getEnsResolver**: (`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:610
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:610
 
 Gets resolver for ENS name.
 
@@ -1377,7 +1377,7 @@ const resolverAddress = await client.getEnsResolver({
 
 > **getEnsText**: (`args`) => `Promise`\<[`GetEnsTextReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:640
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:640
 
 Gets a text record for specified ENS name.
 
@@ -1437,7 +1437,7 @@ const twitterRecord = await client.getEnsText({
 
 > **getFeeHistory**: (`args`) => `Promise`\<[`GetFeeHistoryReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:663
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:663
 
 Returns a collection of historical gas information.
 
@@ -1482,7 +1482,7 @@ const feeHistory = await client.getFeeHistory({
 
 > **getFilterChanges**: \<`filterType`, `abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>(`args`) => `Promise`\<[`GetFilterChangesReturnType`](https://viem.sh/docs/index.html)\<`filterType`, `abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:764
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:764
 
 Returns a list of logs or hashes based on a [Filter](/docs/glossary/terms#filter) since the last time it was called.
 
@@ -1598,7 +1598,7 @@ const hashes = await client.getFilterChanges({ filter })
 
 > **getFilterLogs**: \<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>(`args`) => `Promise`\<[`GetFilterLogsReturnType`](https://viem.sh/docs/index.html)\<`abi`, `eventName`, `strict`, `fromBlock`, `toBlock`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:791
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:791
 
 Returns a list of event logs since the filter was created.
 
@@ -1658,7 +1658,7 @@ const logs = await client.getFilterLogs({ filter })
 
 > **getGasPrice**: () => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:810
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:810
 
 Returns the current price of gas (in wei).
 
@@ -1694,7 +1694,7 @@ const gasPrice = await client.getGasPrice()
 
 > **getLogs**: \<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`\>(`args?`) => `Promise`\<[`GetLogsReturnType`](https://viem.sh/docs/index.html)\<`abiEvent`, `abiEvents`, `strict`, `fromBlock`, `toBlock`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:831
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:831
 
 Returns a list of event logs matching the provided parameters.
 
@@ -1747,7 +1747,7 @@ const logs = await client.getLogs()
 
 > **getProof**: (`args`) => `Promise`\<[`GetProofReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:856
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:856
 
 Returns the account and storage values of the specified account including the Merkle-proof.
 
@@ -1793,7 +1793,7 @@ const block = await client.getProof({
 
 > **getStorageAt**: (`args`) => `Promise`\<[`GetStorageAtReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:901
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:901
 
 Returns the value from a storage slot at a given address.
 
@@ -1839,7 +1839,7 @@ const code = await client.getStorageAt({
 
 > **getTransaction**: \<`blockTag`\>(`args`) => `Promise`\<\{ `accessList?`: `undefined`; `authorizationList?`: `undefined`; `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId?`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice`: `bigint`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"legacy"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity?`: `undefined`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList?`: `undefined`; `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice`: `bigint`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas?`: `undefined`; `maxPriorityFeePerGas?`: `undefined`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip2930"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList?`: `undefined`; `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice?`: `undefined`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas`: `bigint`; `maxPriorityFeePerGas`: `bigint`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip1559"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList?`: `undefined`; `blobVersionedHashes`: readonly `` `0x${string}` ``[]; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice?`: `undefined`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas`: `bigint`; `maxFeePerGas`: `bigint`; `maxPriorityFeePerGas`: `bigint`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip4844"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \} \| \{ `accessList`: [`AccessList`](https://viem.sh/docs/index.html); `authorizationList`: [`SignedAuthorizationList`](https://viem.sh/docs/index.html); `blobVersionedHashes?`: `undefined`; `blockHash`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `` `0x${string}` ``; `blockNumber`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `bigint`; `chainId`: `number`; `from`: `` `0x${string}` ``; `gas`: `bigint`; `gasPrice?`: `undefined`; `hash`: `` `0x${string}` ``; `input`: `` `0x${string}` ``; `maxFeePerBlobGas?`: `undefined`; `maxFeePerGas`: `bigint`; `maxPriorityFeePerGas`: `bigint`; `nonce`: `number`; `r`: `` `0x${string}` ``; `s`: `` `0x${string}` ``; `to`: `` `0x${string}` `` \| `null`; `transactionIndex`: `blockTag` *extends* `"pending"` ? `true` : `false` *extends* `true` ? `null` : `number`; `type`: `"eip7702"`; `typeHex`: `` `0x${string}` `` \| `null`; `v`: `bigint`; `value`: `bigint`; `yParity`: `number`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:924
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:924
 
 Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#transaction) given a hash or block identifier.
 
@@ -1890,7 +1890,7 @@ const transaction = await client.getTransaction({
 
 > **getTransactionConfirmations**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:947
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:947
 
 Returns the number of blocks passed (confirmations) since the transaction was processed on a block.
 
@@ -1935,7 +1935,7 @@ const confirmations = await client.getTransactionConfirmations({
 
 > **getTransactionCount**: (`args`) => `Promise`\<`number`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:969
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:969
 
 Returns the number of [Transactions](https://viem.sh/docs/glossary/terms#transaction) an Account has broadcast / sent.
 
@@ -1979,7 +1979,7 @@ const transactionCount = await client.getTransactionCount({
 
 > **getTransactionReceipt**: (`args`) => `Promise`\<[`TransactionReceipt`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:992
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:992
 
 Returns the [Transaction Receipt](https://viem.sh/docs/glossary/terms#transaction-receipt) given a [Transaction](https://viem.sh/docs/glossary/terms#transaction) hash.
 
@@ -2024,7 +2024,7 @@ const transactionReceipt = await client.getTransactionReceipt({
 
 > **key**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:85
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:85
 
 A key for the client.
 
@@ -2038,7 +2038,7 @@ A key for the client.
 
 > **multicall**: \<`contracts`, `allowFailure`\>(`args`) => `Promise`\<[`MulticallReturnType`](https://viem.sh/docs/index.html)\<`contracts`, `allowFailure`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1030
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1030
 
 Similar to [`readContract`](https://viem.sh/docs/contract/readContract), but batches up multiple functions on a contract in a single RPC call via the [`multicall3` contract](https://github.com/mds1/multicall).
 
@@ -2105,7 +2105,7 @@ const result = await client.multicall({
 
 > **name**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:87
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:87
 
 A name for the client.
 
@@ -2119,7 +2119,7 @@ A name for the client.
 
 > **pollingInterval**: `number`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:89
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:89
 
 Frequency (in ms) for polling enabled actions & events. Defaults to 4_000 milliseconds.
 
@@ -2133,7 +2133,7 @@ Frequency (in ms) for polling enabled actions & events. Defaults to 4_000 millis
 
 > **prepareTransactionRequest**: \<`request`, `chainOverride`, `accountOverride`\>(`args`) => `Promise`\<\{ \[K in string \| number \| symbol\]: (UnionRequiredBy\<Extract\<UnionOmit\<ExtractChainFormatterParameters\<(...), (...), (...)\>, "from"\> & (DeriveChain\<(...), (...)\> extends Chain ? \{ chain: ... \} : \{ chain?: ... \}) & (DeriveAccount\<(...), (...)\> extends Account ? \{ account: ...; from: ... \} : \{ account?: ...; from?: ... \}), IsNever\<(...) \| (...) \| (...) \| (...) \| (...)\> extends true ? unknown : ExactPartial\<(...) \| (...) \| (...) \| (...) \| (...)\>\> & \{ chainId?: number \}, ParameterTypeToParameters\<request\["parameters"\] extends readonly PrepareTransactionRequestParameterType\[\] ? any\[any\]\[number\] : "type" \| "gas" \| "nonce" \| "blobVersionedHashes" \| "fees" \| "chainId"\>\> & (unknown extends request\["kzg"\] ? \{\} : Pick\<request, "kzg"\>))\[K\] \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1069
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1069
 
 Prepares a transaction request for signing.
 
@@ -2203,7 +2203,7 @@ const request = await client.prepareTransactionRequest({
 
 > **readContract**: \<`abi`, `functionName`, `args`\>(`args`) => `Promise`\<[`ReadContractReturnType`](https://viem.sh/docs/index.html)\<`abi`, `functionName`, `args`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1101
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1101
 
 Calls a read-only function on a contract, and returns the response.
 
@@ -2266,7 +2266,7 @@ const result = await client.readContract({
 
 > **request**: [`EIP1193RequestFn`](https://viem.sh/docs/index.html)\<[`PublicRpcSchema`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:91
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:91
 
 Request function wrapped with friendly error handling
 
@@ -2280,7 +2280,7 @@ Request function wrapped with friendly error handling
 
 > **sendRawTransaction**: (`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1126
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1126
 
 Sends a **signed** transaction to the network
 
@@ -2326,7 +2326,7 @@ const hash = await client.sendRawTransaction({
 
 > **sendRawTransactionSync**: (`args`) => `Promise`\<[`TransactionReceipt`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1151
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1151
 
 Sends a **signed** transaction to the network
 
@@ -2372,7 +2372,7 @@ const receipt = await client.sendRawTransactionSync({
 
 > **simulate**: \<`calls`\>(`args`) => `Promise`\<[`SimulateBlocksReturnType`](https://viem.sh/docs/index.html)\<`calls`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1155
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1155
 
 #### Type Parameters
 
@@ -2404,7 +2404,7 @@ Use `simulateBlocks` instead.
 
 > **simulateBlocks**: \<`calls`\>(`args`) => `Promise`\<[`SimulateBlocksReturnType`](https://viem.sh/docs/index.html)\<`calls`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1198
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1198
 
 Simulates a set of calls on block(s) with optional block and state overrides.
 
@@ -2472,7 +2472,7 @@ const result = await client.simulateBlocks({
 
 > **simulateCalls**: \<`calls`\>(`args`) => `Promise`\<[`SimulateCallsReturnType`](https://viem.sh/docs/index.html)\<`calls`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1231
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1231
 
 Simulates a set of calls.
 
@@ -2530,7 +2530,7 @@ const result = await client.simulateCalls({
 
 > **simulateContract**: \<`abi`, `functionName`, `args`, `chainOverride`, `accountOverride`\>(`args`) => `Promise`\<[`SimulateContractReturnType`](https://viem.sh/docs/index.html)\<`abi`, `functionName`, `args`, [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`, `chainOverride`, `accountOverride`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1262
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1262
 
 Simulates/validates a contract interaction. This is useful for retrieving **return data** and **revert reasons** of contract write functions.
 
@@ -2594,7 +2594,7 @@ const result = await client.simulateContract({
 
 > **transport**: [`TransportConfig`](https://viem.sh/docs/index.html)\<`string`, [`EIP1193RequestFn`](https://viem.sh/docs/index.html)\> & `Record`\<`string`, `any`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:93
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:93
 
 The RPC transport
 
@@ -2608,7 +2608,7 @@ The RPC transport
 
 > **type**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:95
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:95
 
 The type of client.
 
@@ -2622,7 +2622,7 @@ The type of client.
 
 > **uid**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:97
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:97
 
 A unique ID for the client.
 
@@ -2636,7 +2636,7 @@ A unique ID for the client.
 
 > **uninstallFilter**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1325
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1325
 
 Destroys a Filter that was created from one of the following Actions:
 
@@ -2681,7 +2681,7 @@ const uninstalled = await client.uninstallFilter({ filter })
 
 > **verifyHash**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1271
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1271
 
 Verify that a hash was signed by the provided address.
 
@@ -2709,7 +2709,7 @@ Whether or not the signature is valid. [VerifyHashReturnType](https://viem.sh/do
 
 > **verifyMessage**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1282
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1282
 
 Verify that a message was signed by the provided address.
 
@@ -2750,7 +2750,7 @@ Whether or not the signature is valid. [VerifyMessageReturnType](https://viem.sh
 
 > **verifySiweMessage**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1293
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1293
 
 Verifies [EIP-4361](https://eips.ethereum.org/EIPS/eip-4361) formatted message was signed.
 
@@ -2789,7 +2789,7 @@ Whether or not the signature is valid. [VerifySiweMessageReturnType](https://vie
 
 > **verifyTypedData**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1302
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1302
 
 Verify that typed data was signed by the provided address.
 
@@ -2817,7 +2817,7 @@ Whether or not the signature is valid. [VerifyTypedDataReturnType](https://viem.
 
 > **waitForTransactionReceipt**: (`args`) => `Promise`\<[`TransactionReceipt`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1364
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1364
 
 Waits for the [Transaction](https://viem.sh/docs/glossary/terms#transaction) to be included on a [Block](https://viem.sh/docs/glossary/terms#block) (one confirmation), and then returns the [Transaction Receipt](https://viem.sh/docs/glossary/terms#transaction-receipt). If the Transaction reverts, then the action will throw an error.
 
@@ -2879,7 +2879,7 @@ const transactionReceipt = await client.waitForTransactionReceipt({
 
 > **watchBlockNumber**: (`args`) => [`WatchBlockNumberReturnType`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1389
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1389
 
 Watches and returns incoming block numbers.
 
@@ -2926,7 +2926,7 @@ const unwatch = await client.watchBlockNumber({
 
 > **watchBlocks**: \<`includeTransactions`, `blockTag`\>(`args`) => [`WatchBlocksReturnType`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1414
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1414
 
 Watches and returns information for incoming blocks.
 
@@ -2980,7 +2980,7 @@ const unwatch = await client.watchBlocks({
 
 > **watchContractEvent**: \<`abi`, `eventName`, `strict`\>(`args`) => [`WatchContractEventReturnType`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1444
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1444
 
 Watches and returns emitted contract event logs.
 
@@ -3041,7 +3041,7 @@ const unwatch = client.watchContractEvent({
 
 > **watchEvent**: \<`abiEvent`, `abiEvents`, `strict`\>(`args`) => [`WatchEventReturnType`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1476
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1476
 
 Watches and returns emitted [Event Logs](https://viem.sh/docs/glossary/terms#event-log).
 
@@ -3104,7 +3104,7 @@ const unwatch = client.watchEvent({
 
 > **watchPendingTransactions**: (`args`) => [`WatchPendingTransactionsReturnType`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/public.d.ts:1505
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/public.d.ts:1505
 
 Watches and returns pending transaction hashes.
 

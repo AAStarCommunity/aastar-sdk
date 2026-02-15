@@ -1,6 +1,6 @@
 > **useSuperPaymaster**(`config`): `UseSuperPaymasterResult`
 
-Defined in: [packages/dapp/src/ui/hooks/useSuperPaymaster.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/dapp/src/ui/hooks/useSuperPaymaster.ts#L11)
+Defined in: [packages/dapp/src/ui/hooks/useSuperPaymaster.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/dapp/src/ui/hooks/useSuperPaymaster.ts#L11)
 
 ## Parameters
 

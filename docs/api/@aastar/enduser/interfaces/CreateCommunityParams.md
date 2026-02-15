@@ -1,4 +1,4 @@
-Defined in: [enduser/src/CommunityClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/CommunityClient.ts#L11)
+Defined in: [enduser/src/CommunityClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L11)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [enduser/src/CommunityClient.ts:11](https://github.com/AAStarCommuni
 
 > `optional` **description**: `string`
 
-Defined in: [enduser/src/CommunityClient.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/CommunityClient.ts#L15)
+Defined in: [enduser/src/CommunityClient.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L15)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [enduser/src/CommunityClient.ts:15](https://github.com/AAStarCommuni
 
 > `optional` **ensName**: `string`
 
-Defined in: [enduser/src/CommunityClient.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/CommunityClient.ts#L14)
+Defined in: [enduser/src/CommunityClient.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L14)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [enduser/src/CommunityClient.ts:14](https://github.com/AAStarCommuni
 
 > **name**: `string`
 
-Defined in: [enduser/src/CommunityClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/CommunityClient.ts#L12)
+Defined in: [enduser/src/CommunityClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L12)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [enduser/src/CommunityClient.ts:12](https://github.com/AAStarCommuni
 
 > **tokenSymbol**: `string`
 
-Defined in: [enduser/src/CommunityClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/enduser/src/CommunityClient.ts#L13)
+Defined in: [enduser/src/CommunityClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L13)

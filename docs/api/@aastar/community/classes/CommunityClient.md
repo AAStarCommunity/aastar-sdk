@@ -1,4 +1,4 @@
-Defined in: [index.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L66)
+Defined in: [index.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L66)
 
 Community management client
 
@@ -26,7 +26,7 @@ Provides high-level APIs for community lifecycle operations
 
 > **new CommunityClient**(`publicClient`, `walletClient`, `addresses?`): `CommunityClient`
 
-Defined in: [index.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L86)
+Defined in: [index.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L86)
 
 Initialize CommunityClient
 
@@ -51,7 +51,7 @@ Initialize CommunityClient
 
 > **checkLaunchRequirements**(`address?`, `requiredAmount?`): `Promise`\<[`RoleRequirement`](../../core/interfaces/RoleRequirement.md)\>
 
-Defined in: [index.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L124)
+Defined in: [index.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L124)
 
 Check if user meets requirements to launch a community
 
@@ -91,7 +91,7 @@ if (!check.hasEnoughGToken) {
 
 > **configureSBTRules**(`rules`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [index.ts:307](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L307)
+Defined in: [index.ts:307](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L307)
 
 Configure SBT minting rules for the community
 
@@ -121,7 +121,7 @@ Must be registered community admin + community ownership
 
 > **getCommunityStats**(`communityId`): `Promise`\<[`CommunityStats`](../interfaces/CommunityStats.md)\>
 
-Defined in: [index.ts:334](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L334)
+Defined in: [index.ts:334](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L334)
 
 Get community statistics
 
@@ -147,7 +147,7 @@ None (public query)
 
 > **issueXPNTs**(`params`): `Promise`\<\{ `txHash`: `` `0x${string}` ``; `xpntsAddress`: `` `0x${string}` ``; \}\>
 
-Defined in: [index.ts:255](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L255)
+Defined in: [index.ts:255](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L255)
 
 Issue community-specific xPNTs token
 
@@ -177,7 +177,7 @@ Must be registered community admin
 
 > **launchCommunity**(`config`): `Promise`\<\{ `communityId`: `` `0x${string}` ``; `txHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [index.ts:174](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L174)
+Defined in: [index.ts:174](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L174)
 
 Launch a community with one-click operation
 

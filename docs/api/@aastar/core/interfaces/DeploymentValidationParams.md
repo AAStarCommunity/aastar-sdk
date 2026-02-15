@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/StateValidator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/StateValidator.ts#L26)
+Defined in: [packages/core/src/actions/StateValidator.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/core/src/actions/StateValidator.ts#L26)
 
 Interface definitions
 
@@ -12,7 +12,7 @@ Interface definitions
 
 > **chain**: [`Chain`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/StateValidator.ts#L8)
+Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/core/src/actions/StateValidator.ts#L8)
 
 #### Inherited from
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:8](https://github.com/A
 
 > **contractAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/StateValidator.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/StateValidator.ts#L27)
+Defined in: [packages/core/src/actions/StateValidator.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/core/src/actions/StateValidator.ts#L27)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/StateValidator.ts:27](https://github.com/
 
 > **rpcUrl**: `string`
 
-Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/actions/StateValidator.ts#L7)
+Defined in: [packages/core/src/actions/StateValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/core/src/actions/StateValidator.ts#L7)
 
 #### Inherited from
 

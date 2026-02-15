@@ -1,4 +1,4 @@
-Defined in: [index.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L11)
+Defined in: [index.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L11)
 
 Community configuration for launch
 
@@ -8,7 +8,7 @@ Community configuration for launch
 
 > `optional` **description**: `string`
 
-Defined in: [index.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L15)
+Defined in: [index.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L15)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [index.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > `optional` **ensName**: `string`
 
-Defined in: [index.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L13)
+Defined in: [index.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L13)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [index.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > `optional` **entryBurn**: `bigint`
 
-Defined in: [index.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L18)
+Defined in: [index.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L18)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [index.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > `optional` **logoURI**: `string`
 
-Defined in: [index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L16)
+Defined in: [index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L16)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > **name**: `string`
 
-Defined in: [index.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L12)
+Defined in: [index.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L12)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [index.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > `optional` **sbtRules**: [`SBTRuleConfig`](SBTRuleConfig.md)
 
-Defined in: [index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L19)
+Defined in: [index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L19)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > **stakeAmount**: `bigint`
 
-Defined in: [index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L17)
+Defined in: [index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L17)
 
 ***
 
@@ -64,4 +64,4 @@ Defined in: [index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/d8c
 
 > `optional` **website**: `string`
 
-Defined in: [index.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/community/src/index.ts#L14)
+Defined in: [index.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/community/src/index.ts#L14)

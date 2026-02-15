@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/doc-types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/d8cd895cb4a9df5d4a11f5b902321a50bc6200f9/packages/core/src/clients/doc-types.ts#L13)
+Defined in: [packages/core/src/clients/doc-types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/core/src/clients/doc-types.ts#L13)
 
 Wallet Client Interface
 Standardized interface for interacting with Ethereum wallets and accounts.
@@ -21,7 +21,7 @@ Standardized interface for interacting with Ethereum wallets and accounts.
 
 > **account**: `TAccount`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:73
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:73
 
 The Account of the Client.
 
@@ -35,7 +35,7 @@ The Account of the Client.
 
 > **addChain**: (`args`) => `Promise`\<`void`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:53
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:53
 
 Adds an EVM chain to the wallet.
 
@@ -74,7 +74,7 @@ await client.addChain({ chain: optimism })
 
 > `optional` **batch**: `object`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:75
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:75
 
 Flags for batch settings.
 
@@ -100,7 +100,7 @@ Toggle to enable `eth_call` multicall aggregation.
 
 > **cacheTime**: `number`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:77
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:77
 
 Time (in ms) that cached data will remain in memory.
 
@@ -114,7 +114,7 @@ Time (in ms) that cached data will remain in memory.
 
 > `optional` **ccipRead**: `false` \| \{ `request?`: (`parameters`) => `Promise`\<`` `0x${string}` ``\>; \}
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:79
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:79
 
 [CCIP Read](https://eips.ethereum.org/EIPS/eip-3668) configuration.
 
@@ -154,7 +154,7 @@ https://eips.ethereum.org/EIPS/eip-3668#client-lookup-protocol
 
 > **chain**: `TChain`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:81
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:81
 
 Chain for the client.
 
@@ -168,7 +168,7 @@ Chain for the client.
 
 > **deployContract**: \<`abi`, `chainOverride`\>(`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:79
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:79
 
 Deploys a contract to the network, given bytecode and constructor arguments.
 
@@ -223,7 +223,7 @@ const hash = await client.deployContract({
 
 > `optional` **experimental\_blockTag**: [`BlockTag`](https://viem.sh/docs/index.html)
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:83
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:83
 
 Default block tag to use for RPC requests.
 
@@ -237,7 +237,7 @@ Default block tag to use for RPC requests.
 
 > **extend**: \<`client`\>(`fn`) => [`Client`](https://viem.sh/docs/index.html)\<`TTransport`, `TChain`, `TAccount`, [`WalletRpcSchema`](https://viem.sh/docs/index.html), \{ \[K in string \| number \| symbol\]: client\[K\] \} & [`WalletActions`](https://viem.sh/docs/index.html)\<`TChain`, `TAccount`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:69
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:69
 
 #### Type Parameters
 
@@ -265,7 +265,7 @@ Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem
 
 > **fillTransaction**: \<`chainOverride`, `accountOverride`\>(`args`) => `Promise`\<[`FillTransactionReturnType`](https://viem.sh/docs/index.html)\<`TChain`, `chainOverride`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:103
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:103
 
 Fills a transaction request with the necessary fields to be signed over.
 
@@ -317,7 +317,7 @@ const result = await client.fillTransaction({
 
 > **getAddresses**: () => `Promise`\<[`GetAddressesReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:122
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:122
 
 Returns a list of account addresses owned by the wallet or client.
 
@@ -353,7 +353,7 @@ const accounts = await client.getAddresses()
 
 > **getCallsStatus**: (`parameters`) => `Promise`\<\{ `atomic`: `boolean`; `capabilities?`: \{\[`key`: `string`\]: `any`; \} \| \{\[`key`: `string`\]: `any`; \}; `chainId`: `number`; `id`: `string`; `receipts?`: [`WalletCallReceipt`](https://viem.sh/docs/index.html)\<`bigint`, `"success"` \| `"reverted"`\>[]; `status`: `"pending"` \| `"success"` \| `"failure"` \| `undefined`; `statusCode`: `number`; `version`: `string`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:143
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:143
 
 Returns the status of a call batch that was sent via `sendCalls`.
 
@@ -396,7 +396,7 @@ const { receipts, status } = await client.getCallsStatus({ id: '0xdeadbeef' })
 
 > **getCapabilities**: \<`chainId`\>(`parameters?`) => `Promise`\<\{ \[K in string \| number \| symbol\]: (chainId extends number ? \{ atomic?: \{ status: "supported" \| "ready" \| "unsupported" \}; paymasterService?: \{ supported: boolean \}; unstable\_addSubAccount?: \{ keyTypes: ("address" \| "p256" \| "webcrypto-p256" \| "webauthn-p256")\[\]; supported: boolean \}; \[key: string\]: any \} : ChainIdToCapabilities\<Capabilities\<\{ atomic?: \{ status: (...) \| (...) \| (...) \}; paymasterService?: \{ supported: boolean \}; unstable\_addSubAccount?: \{ keyTypes: (...)\[\]; supported: boolean \}; \[key: string\]: any \}\>, number\>)\[K\] \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:166
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:166
 
 Extract capabilities that a connected wallet supports (e.g. paymasters, session keys, etc).
 
@@ -447,7 +447,7 @@ const capabilities = await client.getCapabilities({
 
 > **getChainId**: () => `Promise`\<`number`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:186
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:186
 
 Returns the chain ID associated with the current network.
 
@@ -484,7 +484,7 @@ const chainId = await client.getChainId()
 
 > **getPermissions**: () => `Promise`\<[`GetPermissionsReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:205
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:205
 
 Gets the wallets current permissions.
 
@@ -520,7 +520,7 @@ const permissions = await client.getPermissions()
 
 > **key**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:85
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:85
 
 A key for the client.
 
@@ -534,7 +534,7 @@ A key for the client.
 
 > **name**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:87
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:87
 
 A name for the client.
 
@@ -548,7 +548,7 @@ A name for the client.
 
 > **pollingInterval**: `number`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:89
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:89
 
 Frequency (in ms) for polling enabled actions & events. Defaults to 4_000 milliseconds.
 
@@ -562,7 +562,7 @@ Frequency (in ms) for polling enabled actions & events. Defaults to 4_000 millis
 
 > **prepareAuthorization**: (`parameters`) => `Promise`\<[`PrepareAuthorizationReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:247
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:247
 
 Prepares an [EIP-7702 Authorization](https://eips.ethereum.org/EIPS/eip-7702) object for signing.
 This Action will fill the required fields of the Authorization object if they are not provided (e.g. `nonce` and `chainId`).
@@ -626,7 +626,7 @@ const authorization = await client.prepareAuthorization({
 
 > **prepareTransactionRequest**: \<`request`, `chainOverride`, `accountOverride`\>(`args`) => `Promise`\<\{ \[K in string \| number \| symbol\]: (UnionRequiredBy\<Extract\<UnionOmit\<ExtractChainFormatterParameters\<(...), (...), (...)\>, "from"\> & (DeriveChain\<(...), (...)\> extends Chain ? \{ chain: ... \} : \{ chain?: ... \}) & (DeriveAccount\<(...), (...)\> extends Account ? \{ account: ...; from: ... \} : \{ account?: ...; from?: ... \}), IsNever\<(...) \| (...) \| (...) \| (...) \| (...)\> extends true ? unknown : ExactPartial\<(...) \| (...) \| (...) \| (...) \| (...)\>\> & \{ chainId?: number \}, ParameterTypeToParameters\<request\["parameters"\] extends readonly PrepareTransactionRequestParameterType\[\] ? any\[any\]\[number\] : "type" \| "gas" \| "nonce" \| "blobVersionedHashes" \| "fees" \| "chainId"\>\> & (unknown extends request\["kzg"\] ? \{\} : Pick\<request, "kzg"\>))\[K\] \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:286
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:286
 
 Prepares a transaction request for signing.
 
@@ -696,7 +696,7 @@ const request = await client.prepareTransactionRequest({
 
 > **request**: [`EIP1193RequestFn`](https://viem.sh/docs/index.html)\<[`WalletRpcSchema`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:91
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:91
 
 Request function wrapped with friendly error handling
 
@@ -710,7 +710,7 @@ Request function wrapped with friendly error handling
 
 > **requestAddresses**: () => `Promise`\<[`RequestAddressesReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:309
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:309
 
 Requests a list of accounts managed by a wallet.
 
@@ -750,7 +750,7 @@ const accounts = await client.requestAddresses()
 
 > **requestPermissions**: (`args`) => `Promise`\<[`RequestPermissionsReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:331
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:331
 
 Requests permissions for a wallet.
 
@@ -795,7 +795,7 @@ const permissions = await client.requestPermissions({
 
 > **sendCalls**: \<`calls`, `chainOverride`\>(`parameters`) => `Promise`\<\{ `capabilities?`: \{\[`key`: `string`\]: `any`; \}; `id`: `string`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:364
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:364
 
 Requests the connected wallet to send a batch of calls.
 
@@ -857,7 +857,7 @@ const id = await client.sendCalls({
 
 > **sendCallsSync**: \<`calls`, `chainOverride`\>(`parameters`) => `Promise`\<\{ `atomic`: `boolean`; `capabilities?`: \{\[`key`: `string`\]: `any`; \} \| \{\[`key`: `string`\]: `any`; \}; `chainId`: `number`; `id`: `string`; `receipts?`: [`WalletCallReceipt`](https://viem.sh/docs/index.html)\<`bigint`, `"success"` \| `"reverted"`\>[]; `status`: `"pending"` \| `"success"` \| `"failure"` \| `undefined`; `statusCode`: `number`; `version`: `string`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:397
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:397
 
 Requests the connected wallet to send a batch of calls, and waits for the calls to be included in a block.
 
@@ -919,7 +919,7 @@ const status = await client.sendCallsSync({
 
 > **sendRawTransaction**: (`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:422
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:422
 
 Sends a **signed** transaction to the network
 
@@ -965,7 +965,7 @@ const hash = await client.sendRawTransaction({
 
 > **sendRawTransactionSync**: (`args`) => `Promise`\<[`ExtractChainFormatterReturnType`](https://viem.sh/docs/index.html)\<`TChain`, `"transactionReceipt"`, [`TransactionReceipt`](https://viem.sh/docs/index.html)\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:448
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:448
 
 Sends a **signed** transaction to the network synchronously,
 and waits for the transaction to be included in a block.
@@ -1012,7 +1012,7 @@ const receipt = await client.sendRawTransactionSync({
 
 > **sendTransaction**: \<`request`, `chainOverride`\>(`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:491
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:491
 
 Creates, signs, and sends a new transaction to the network.
 
@@ -1085,7 +1085,7 @@ const hash = await client.sendTransaction({
 
 > **sendTransactionSync**: \<`request`, `chainOverride`\>(`args`) => `Promise`\<[`ExtractChainFormatterReturnType`](https://viem.sh/docs/index.html)\<`TChain`, `"transactionReceipt"`, [`TransactionReceipt`](https://viem.sh/docs/index.html)\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:535
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:535
 
 Creates, signs, and sends a new transaction to the network synchronously.
 Returns the transaction receipt.
@@ -1159,7 +1159,7 @@ const receipt = await client.sendTransactionSync({
 
 > **showCallsStatus**: (`parameters`) => `Promise`\<`void`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:557
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:557
 
 Requests for the wallet to show information about a call batch
 that was sent via `sendCalls`.
@@ -1203,7 +1203,7 @@ await client.showCallsStatus({ id: '0xdeadbeef' })
 
 > **signAuthorization**: (`parameters`) => `Promise`\<[`SignAuthorizationReturnType`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:600
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:600
 
 Signs an [EIP-7702 Authorization](https://eips.ethereum.org/EIPS/eip-7702) object.
 
@@ -1268,7 +1268,7 @@ const signature = await client.signAuthorization({
 
 > **signMessage**: (`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:644
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:644
 
 Calculates an Ethereum-specific signature in [EIP-191 format](https://eips.ethereum.org/EIPS/eip-191): `keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))`.
 
@@ -1335,7 +1335,7 @@ const signature = await client.signMessage({
 
 > **signTransaction**: \<`chainOverride`, `request`\>(`args`) => `Promise`\<[`TransactionSerialized`](https://viem.sh/docs/index.html)\<[`GetTransactionType`](https://viem.sh/docs/index.html)\<`request`, `request` *extends* [`LegacyProperties`](https://viem.sh/docs/index.html) ? `"legacy"` : `never` \| `request` *extends* [`EIP1559Properties`](https://viem.sh/docs/index.html) ? `"eip1559"` : `never` \| `request` *extends* [`EIP2930Properties`](https://viem.sh/docs/index.html) ? `"eip2930"` : `never` \| `request` *extends* [`EIP4844Properties`](https://viem.sh/docs/index.html) ? `"eip4844"` : `never` \| `request` *extends* [`EIP7702Properties`](https://viem.sh/docs/index.html) ? `"eip7702"` : `never` \| `request`\[`"type"`\] *extends* `string` \| `undefined` ? `Extract`\<`any`\[`any`\], `string`\> : `never`\>, [`GetTransactionType`](https://viem.sh/docs/index.html)\<`request`, `request` *extends* [`LegacyProperties`](https://viem.sh/docs/index.html) ? `"legacy"` : `never` \| `request` *extends* [`EIP1559Properties`](https://viem.sh/docs/index.html) ? `"eip1559"` : `never` \| `request` *extends* [`EIP2930Properties`](https://viem.sh/docs/index.html) ? `"eip2930"` : `never` \| `request` *extends* [`EIP4844Properties`](https://viem.sh/docs/index.html) ? `"eip4844"` : `never` \| `request` *extends* [`EIP7702Properties`](https://viem.sh/docs/index.html) ? `"eip7702"` : `never` \| `request`\[`"type"`\] *extends* `string` \| `undefined` ? `Extract`\<`any`\[`any`\], `string`\> : `never`\> *extends* `"eip1559"` ? `` `0x02${string}` `` : `never` \| [`GetTransactionType`](https://viem.sh/docs/index.html)\<`request`, `request` *extends* [`LegacyProperties`](https://viem.sh/docs/index.html) ? `"legacy"` : `never` \| `request` *extends* [`EIP1559Properties`](https://viem.sh/docs/index.html) ? `"eip1559"` : `never` \| `request` *extends* [`EIP2930Properties`](https://viem.sh/docs/index.html) ? `"eip2930"` : `never` \| `request` *extends* [`EIP4844Properties`](https://viem.sh/docs/index.html) ? `"eip4844"` : `never` \| `request` *extends* [`EIP7702Properties`](https://viem.sh/docs/index.html) ? `"eip7702"` : `never` \| `request`\[`"type"`\] *extends* `string` \| `undefined` ? `Extract`\<`any`\[`any`\], `string`\> : `never`\> *extends* `"eip2930"` ? `` `0x01${string}` `` : `never` \| [`GetTransactionType`](https://viem.sh/docs/index.html)\<`request`, `request` *extends* [`LegacyProperties`](https://viem.sh/docs/index.html) ? `"legacy"` : `never` \| `request` *extends* [`EIP1559Properties`](https://viem.sh/docs/index.html) ? `"eip1559"` : `never` \| `request` *extends* [`EIP2930Properties`](https://viem.sh/docs/index.html) ? `"eip2930"` : `never` \| `request` *extends* [`EIP4844Properties`](https://viem.sh/docs/index.html) ? `"eip4844"` : `never` \| `request` *extends* [`EIP7702Properties`](https://viem.sh/docs/index.html) ? `"eip7702"` : `never` \| `request`\[`"type"`\] *extends* `string` \| `undefined` ? `Extract`\<`any`\[`any`\], `string`\> : `never`\> *extends* `"eip4844"` ? `` `0x03${string}` `` : `never` \| [`GetTransactionType`](https://viem.sh/docs/index.html)\<`request`, `request` *extends* [`LegacyProperties`](https://viem.sh/docs/index.html) ? `"legacy"` : `never` \| `request` *extends* [`EIP1559Properties`](https://viem.sh/docs/index.html) ? `"eip1559"` : `never` \| `request` *extends* [`EIP2930Properties`](https://viem.sh/docs/index.html) ? `"eip2930"` : `never` \| `request` *extends* [`EIP4844Properties`](https://viem.sh/docs/index.html) ? `"eip4844"` : `never` \| `request` *extends* [`EIP7702Properties`](https://viem.sh/docs/index.html) ? `"eip7702"` : `never` \| `request`\[`"type"`\] *extends* `string` \| `undefined` ? `Extract`\<`any`\[`any`\], `string`\> : `never`\> *extends* `"eip7702"` ? `` `0x04${string}` `` : `never` \| [`GetTransactionType`](https://viem.sh/docs/index.html)\<`request`, `request` *extends* [`LegacyProperties`](https://viem.sh/docs/index.html) ? `"legacy"` : `never` \| `request` *extends* [`EIP1559Properties`](https://viem.sh/docs/index.html) ? `"eip1559"` : `never` \| `request` *extends* [`EIP2930Properties`](https://viem.sh/docs/index.html) ? `"eip2930"` : `never` \| `request` *extends* [`EIP4844Properties`](https://viem.sh/docs/index.html) ? `"eip4844"` : `never` \| `request` *extends* [`EIP7702Properties`](https://viem.sh/docs/index.html) ? `"eip7702"` : `never` \| `request`\[`"type"`\] *extends* `string` \| `undefined` ? `Extract`\<`any`\[`any`\], `string`\> : `never`\> *extends* `"legacy"` ? [`TransactionSerializedLegacy`](https://viem.sh/docs/index.html) : `never`\>\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:688
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:688
 
 Signs a transaction.
 
@@ -1409,7 +1409,7 @@ const signature = await client.signTransaction(request)
 
 > **signTypedData**: \<`typedData`, `primaryType`\>(`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:785
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:785
 
 Signs typed data and calculates an Ethereum-specific signature in [EIP-191 format](https://eips.ethereum.org/EIPS/eip-191): `keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))`.
 
@@ -1422,7 +1422,7 @@ Signs typed data and calculates an Ethereum-specific signature in [EIP-191 forma
 
 | Type Parameter |
 | ------ |
-| `typedData` *extends* \{\[`key`: `string`\]: readonly `TypedDataParameter`[]; \[`key`: `` `string[${string}]` ``\]: `undefined`; \[`key`: `` `function[${string}]` ``\]: `undefined`; \[`key`: `` `address[${string}]` ``\]: `undefined`; \[`key`: `` `bool[${string}]` ``\]: `undefined`; \[`key`: `` `bytes[${string}]` ``\]: `undefined`; \[`key`: `` `bytes1[${string}]` ``\]: `undefined`; \[`key`: `` `bytes2[${string}]` ``\]: `undefined`; \[`key`: `` `bytes3[${string}]` ``\]: `undefined`; \[`key`: `` `bytes4[${string}]` ``\]: `undefined`; \[`key`: `` `bytes5[${string}]` ``\]: `undefined`; \[`key`: `` `bytes6[${string}]` ``\]: `undefined`; \[`key`: `` `bytes7[${string}]` ``\]: `undefined`; \[`key`: `` `bytes8[${string}]` ``\]: `undefined`; \[`key`: `` `bytes9[${string}]` ``\]: `undefined`; \[`key`: `` `bytes10[${string}]` ``\]: `undefined`; \[`key`: `` `bytes11[${string}]` ``\]: `undefined`; \[`key`: `` `bytes12[${string}]` ``\]: `undefined`; \[`key`: `` `bytes13[${string}]` ``\]: `undefined`; \[`key`: `` `bytes14[${string}]` ``\]: `undefined`; \[`key`: `` `bytes15[${string}]` ``\]: `undefined`; \[`key`: `` `bytes16[${string}]` ``\]: `undefined`; \[`key`: `` `bytes17[${string}]` ``\]: `undefined`; \[`key`: `` `bytes18[${string}]` ``\]: `undefined`; \[`key`: `` `bytes19[${string}]` ``\]: `undefined`; \[`key`: `` `bytes20[${string}]` ``\]: `undefined`; \[`key`: `` `bytes21[${string}]` ``\]: `undefined`; \[`key`: `` `bytes22[${string}]` ``\]: `undefined`; \[`key`: `` `bytes23[${string}]` ``\]: `undefined`; \[`key`: `` `bytes24[${string}]` ``\]: `undefined`; \[`key`: `` `bytes25[${string}]` ``\]: `undefined`; \[`key`: `` `bytes26[${string}]` ``\]: `undefined`; \[`key`: `` `bytes27[${string}]` ``\]: `undefined`; \[`key`: `` `bytes28[${string}]` ``\]: `undefined`; \[`key`: `` `bytes29[${string}]` ``\]: `undefined`; \[`key`: `` `bytes30[${string}]` ``\]: `undefined`; \[`key`: `` `bytes31[${string}]` ``\]: `undefined`; \[`key`: `` `bytes32[${string}]` ``\]: `undefined`; \[`key`: `` `int[${string}]` ``\]: `undefined`; \[`key`: `` `int8[${string}]` ``\]: `undefined`; \[`key`: `` `int16[${string}]` ``\]: `undefined`; \[`key`: `` `int24[${string}]` ``\]: `undefined`; \[`key`: `` `int32[${string}]` ``\]: `undefined`; \[`key`: `` `int40[${string}]` ``\]: `undefined`; \[`key`: `` `int48[${string}]` ``\]: `undefined`; \[`key`: `` `int56[${string}]` ``\]: `undefined`; \[`key`: `` `int64[${string}]` ``\]: `undefined`; \[`key`: `` `int72[${string}]` ``\]: `undefined`; \[`key`: `` `int80[${string}]` ``\]: `undefined`; \[`key`: `` `int88[${string}]` ``\]: `undefined`; \[`key`: `` `int96[${string}]` ``\]: `undefined`; \[`key`: `` `int104[${string}]` ``\]: `undefined`; \[`key`: `` `int112[${string}]` ``\]: `undefined`; \[`key`: `` `int120[${string}]` ``\]: `undefined`; \[`key`: `` `int128[${string}]` ``\]: `undefined`; \[`key`: `` `int136[${string}]` ``\]: `undefined`; \[`key`: `` `int144[${string}]` ``\]: `undefined`; \[`key`: `` `int152[${string}]` ``\]: `undefined`; \[`key`: `` `int160[${string}]` ``\]: `undefined`; \[`key`: `` `int168[${string}]` ``\]: `undefined`; \[`key`: `` `int176[${string}]` ``\]: `undefined`; \[`key`: `` `int184[${string}]` ``\]: `undefined`; \[`key`: `` `int192[${string}]` ``\]: `undefined`; \[`key`: `` `int200[${string}]` ``\]: `undefined`; \[`key`: `` `int208[${string}]` ``\]: `undefined`; \[`key`: `` `int216[${string}]` ``\]: `undefined`; \[`key`: `` `int224[${string}]` ``\]: `undefined`; \[`key`: `` `int232[${string}]` ``\]: `undefined`; \[`key`: `` `int240[${string}]` ``\]: `undefined`; \[`key`: `` `int248[${string}]` ``\]: `undefined`; \[`key`: `` `int256[${string}]` ``\]: `undefined`; \[`key`: `` `uint[${string}]` ``\]: `undefined`; \[`key`: `` `uint8[${string}]` ``\]: `undefined`; \[`key`: `` `uint16[${string}]` ``\]: `undefined`; \[`key`: `` `uint24[${string}]` ``\]: `undefined`; \[`key`: `` `uint32[${string}]` ``\]: `undefined`; \[`key`: `` `uint40[${string}]` ``\]: `undefined`; \[`key`: `` `uint48[${string}]` ``\]: `undefined`; \[`key`: `` `uint56[${string}]` ``\]: `undefined`; \[`key`: `` `uint64[${string}]` ``\]: `undefined`; \[`key`: `` `uint72[${string}]` ``\]: `undefined`; \[`key`: `` `uint80[${string}]` ``\]: `undefined`; \[`key`: `` `uint88[${string}]` ``\]: `undefined`; \[`key`: `` `uint96[${string}]` ``\]: `undefined`; \[`key`: `` `uint104[${string}]` ``\]: `undefined`; \[`key`: `` `uint112[${string}]` ``\]: `undefined`; \[`key`: `` `uint120[${string}]` ``\]: `undefined`; \[`key`: `` `uint128[${string}]` ``\]: `undefined`; \[`key`: `` `uint136[${string}]` ``\]: `undefined`; \[`key`: `` `uint144[${string}]` ``\]: `undefined`; \[`key`: `` `uint152[${string}]` ``\]: `undefined`; \[`key`: `` `uint160[${string}]` ``\]: `undefined`; \[`key`: `` `uint168[${string}]` ``\]: `undefined`; \[`key`: `` `uint176[${string}]` ``\]: `undefined`; \[`key`: `` `uint184[${string}]` ``\]: `undefined`; \[`key`: `` `uint192[${string}]` ``\]: `undefined`; \[`key`: `` `uint200[${string}]` ``\]: `undefined`; \[`key`: `` `uint208[${string}]` ``\]: `undefined`; \[`key`: `` `uint216[${string}]` ``\]: `undefined`; \[`key`: `` `uint224[${string}]` ``\]: `undefined`; \[`key`: `` `uint232[${string}]` ``\]: `undefined`; \[`key`: `` `uint240[${string}]` ``\]: `undefined`; \[`key`: `` `uint248[${string}]` ``\]: `undefined`; \[`key`: `` `uint256[${string}]` ``\]: `undefined`; `address?`: `undefined`; `bool?`: `undefined`; `bytes?`: `undefined`; `bytes1?`: `undefined`; `bytes10?`: `undefined`; `bytes11?`: `undefined`; `bytes12?`: `undefined`; `bytes13?`: `undefined`; `bytes14?`: `undefined`; `bytes15?`: `undefined`; `bytes16?`: `undefined`; `bytes17?`: `undefined`; `bytes18?`: `undefined`; `bytes19?`: `undefined`; `bytes2?`: `undefined`; `bytes20?`: `undefined`; `bytes21?`: `undefined`; `bytes22?`: `undefined`; `bytes23?`: `undefined`; `bytes24?`: `undefined`; `bytes25?`: `undefined`; `bytes26?`: `undefined`; `bytes27?`: `undefined`; `bytes28?`: `undefined`; `bytes29?`: `undefined`; `bytes3?`: `undefined`; `bytes30?`: `undefined`; `bytes31?`: `undefined`; `bytes32?`: `undefined`; `bytes4?`: `undefined`; `bytes5?`: `undefined`; `bytes6?`: `undefined`; `bytes7?`: `undefined`; `bytes8?`: `undefined`; `bytes9?`: `undefined`; `int104?`: `undefined`; `int112?`: `undefined`; `int120?`: `undefined`; `int128?`: `undefined`; `int136?`: `undefined`; `int144?`: `undefined`; `int152?`: `undefined`; `int16?`: `undefined`; `int160?`: `undefined`; `int168?`: `undefined`; `int176?`: `undefined`; `int184?`: `undefined`; `int192?`: `undefined`; `int200?`: `undefined`; `int208?`: `undefined`; `int216?`: `undefined`; `int224?`: `undefined`; `int232?`: `undefined`; `int24?`: `undefined`; `int240?`: `undefined`; `int248?`: `undefined`; `int256?`: `undefined`; `int32?`: `undefined`; `int40?`: `undefined`; `int48?`: `undefined`; `int56?`: `undefined`; `int64?`: `undefined`; `int72?`: `undefined`; `int8?`: `undefined`; `int80?`: `undefined`; `int88?`: `undefined`; `int96?`: `undefined`; `string?`: `undefined`; `uint104?`: `undefined`; `uint112?`: `undefined`; `uint120?`: `undefined`; `uint128?`: `undefined`; `uint136?`: `undefined`; `uint144?`: `undefined`; `uint152?`: `undefined`; `uint16?`: `undefined`; `uint160?`: `undefined`; `uint168?`: `undefined`; `uint176?`: `undefined`; `uint184?`: `undefined`; `uint192?`: `undefined`; `uint200?`: `undefined`; `uint208?`: `undefined`; `uint216?`: `undefined`; `uint224?`: `undefined`; `uint232?`: `undefined`; `uint24?`: `undefined`; `uint240?`: `undefined`; `uint248?`: `undefined`; `uint256?`: `undefined`; `uint32?`: `undefined`; `uint40?`: `undefined`; `uint48?`: `undefined`; `uint56?`: `undefined`; `uint64?`: `undefined`; `uint72?`: `undefined`; `uint8?`: `undefined`; `uint80?`: `undefined`; `uint88?`: `undefined`; `uint96?`: `undefined`; \} \| \{\[`key`: `string`\]: `unknown`; \} |
+| `typedData` *extends* \{\[`key`: `string`\]: readonly `TypedDataParameter`[]; \[`key`: `` `string[${string}]` ``\]: `undefined`; \[`key`: `` `function[${string}]` ``\]: `undefined`; \[`key`: `` `address[${string}]` ``\]: `undefined`; \[`key`: `` `bool[${string}]` ``\]: `undefined`; \[`key`: `` `bytes[${string}]` ``\]: `undefined`; \[`key`: `` `bytes10[${string}]` ``\]: `undefined`; \[`key`: `` `bytes1[${string}]` ``\]: `undefined`; \[`key`: `` `bytes2[${string}]` ``\]: `undefined`; \[`key`: `` `bytes3[${string}]` ``\]: `undefined`; \[`key`: `` `bytes4[${string}]` ``\]: `undefined`; \[`key`: `` `bytes5[${string}]` ``\]: `undefined`; \[`key`: `` `bytes6[${string}]` ``\]: `undefined`; \[`key`: `` `bytes7[${string}]` ``\]: `undefined`; \[`key`: `` `bytes8[${string}]` ``\]: `undefined`; \[`key`: `` `bytes9[${string}]` ``\]: `undefined`; \[`key`: `` `bytes11[${string}]` ``\]: `undefined`; \[`key`: `` `bytes12[${string}]` ``\]: `undefined`; \[`key`: `` `bytes13[${string}]` ``\]: `undefined`; \[`key`: `` `bytes14[${string}]` ``\]: `undefined`; \[`key`: `` `bytes15[${string}]` ``\]: `undefined`; \[`key`: `` `bytes16[${string}]` ``\]: `undefined`; \[`key`: `` `bytes17[${string}]` ``\]: `undefined`; \[`key`: `` `bytes18[${string}]` ``\]: `undefined`; \[`key`: `` `bytes19[${string}]` ``\]: `undefined`; \[`key`: `` `bytes20[${string}]` ``\]: `undefined`; \[`key`: `` `bytes21[${string}]` ``\]: `undefined`; \[`key`: `` `bytes22[${string}]` ``\]: `undefined`; \[`key`: `` `bytes23[${string}]` ``\]: `undefined`; \[`key`: `` `bytes24[${string}]` ``\]: `undefined`; \[`key`: `` `bytes25[${string}]` ``\]: `undefined`; \[`key`: `` `bytes26[${string}]` ``\]: `undefined`; \[`key`: `` `bytes27[${string}]` ``\]: `undefined`; \[`key`: `` `bytes28[${string}]` ``\]: `undefined`; \[`key`: `` `bytes29[${string}]` ``\]: `undefined`; \[`key`: `` `bytes30[${string}]` ``\]: `undefined`; \[`key`: `` `bytes31[${string}]` ``\]: `undefined`; \[`key`: `` `bytes32[${string}]` ``\]: `undefined`; \[`key`: `` `int[${string}]` ``\]: `undefined`; \[`key`: `` `int8[${string}]` ``\]: `undefined`; \[`key`: `` `int16[${string}]` ``\]: `undefined`; \[`key`: `` `int24[${string}]` ``\]: `undefined`; \[`key`: `` `int32[${string}]` ``\]: `undefined`; \[`key`: `` `int40[${string}]` ``\]: `undefined`; \[`key`: `` `int48[${string}]` ``\]: `undefined`; \[`key`: `` `int56[${string}]` ``\]: `undefined`; \[`key`: `` `int64[${string}]` ``\]: `undefined`; \[`key`: `` `int72[${string}]` ``\]: `undefined`; \[`key`: `` `int80[${string}]` ``\]: `undefined`; \[`key`: `` `int88[${string}]` ``\]: `undefined`; \[`key`: `` `int96[${string}]` ``\]: `undefined`; \[`key`: `` `int104[${string}]` ``\]: `undefined`; \[`key`: `` `int112[${string}]` ``\]: `undefined`; \[`key`: `` `int120[${string}]` ``\]: `undefined`; \[`key`: `` `int128[${string}]` ``\]: `undefined`; \[`key`: `` `int136[${string}]` ``\]: `undefined`; \[`key`: `` `int144[${string}]` ``\]: `undefined`; \[`key`: `` `int152[${string}]` ``\]: `undefined`; \[`key`: `` `int160[${string}]` ``\]: `undefined`; \[`key`: `` `int168[${string}]` ``\]: `undefined`; \[`key`: `` `int176[${string}]` ``\]: `undefined`; \[`key`: `` `int184[${string}]` ``\]: `undefined`; \[`key`: `` `int192[${string}]` ``\]: `undefined`; \[`key`: `` `int200[${string}]` ``\]: `undefined`; \[`key`: `` `int208[${string}]` ``\]: `undefined`; \[`key`: `` `int216[${string}]` ``\]: `undefined`; \[`key`: `` `int224[${string}]` ``\]: `undefined`; \[`key`: `` `int232[${string}]` ``\]: `undefined`; \[`key`: `` `int240[${string}]` ``\]: `undefined`; \[`key`: `` `int248[${string}]` ``\]: `undefined`; \[`key`: `` `int256[${string}]` ``\]: `undefined`; \[`key`: `` `uint[${string}]` ``\]: `undefined`; \[`key`: `` `uint8[${string}]` ``\]: `undefined`; \[`key`: `` `uint16[${string}]` ``\]: `undefined`; \[`key`: `` `uint24[${string}]` ``\]: `undefined`; \[`key`: `` `uint32[${string}]` ``\]: `undefined`; \[`key`: `` `uint40[${string}]` ``\]: `undefined`; \[`key`: `` `uint48[${string}]` ``\]: `undefined`; \[`key`: `` `uint56[${string}]` ``\]: `undefined`; \[`key`: `` `uint64[${string}]` ``\]: `undefined`; \[`key`: `` `uint72[${string}]` ``\]: `undefined`; \[`key`: `` `uint80[${string}]` ``\]: `undefined`; \[`key`: `` `uint88[${string}]` ``\]: `undefined`; \[`key`: `` `uint96[${string}]` ``\]: `undefined`; \[`key`: `` `uint104[${string}]` ``\]: `undefined`; \[`key`: `` `uint112[${string}]` ``\]: `undefined`; \[`key`: `` `uint120[${string}]` ``\]: `undefined`; \[`key`: `` `uint128[${string}]` ``\]: `undefined`; \[`key`: `` `uint136[${string}]` ``\]: `undefined`; \[`key`: `` `uint144[${string}]` ``\]: `undefined`; \[`key`: `` `uint152[${string}]` ``\]: `undefined`; \[`key`: `` `uint160[${string}]` ``\]: `undefined`; \[`key`: `` `uint168[${string}]` ``\]: `undefined`; \[`key`: `` `uint176[${string}]` ``\]: `undefined`; \[`key`: `` `uint184[${string}]` ``\]: `undefined`; \[`key`: `` `uint192[${string}]` ``\]: `undefined`; \[`key`: `` `uint200[${string}]` ``\]: `undefined`; \[`key`: `` `uint208[${string}]` ``\]: `undefined`; \[`key`: `` `uint216[${string}]` ``\]: `undefined`; \[`key`: `` `uint224[${string}]` ``\]: `undefined`; \[`key`: `` `uint232[${string}]` ``\]: `undefined`; \[`key`: `` `uint240[${string}]` ``\]: `undefined`; \[`key`: `` `uint248[${string}]` ``\]: `undefined`; \[`key`: `` `uint256[${string}]` ``\]: `undefined`; `address?`: `undefined`; `bool?`: `undefined`; `bytes?`: `undefined`; `bytes1?`: `undefined`; `bytes10?`: `undefined`; `bytes11?`: `undefined`; `bytes12?`: `undefined`; `bytes13?`: `undefined`; `bytes14?`: `undefined`; `bytes15?`: `undefined`; `bytes16?`: `undefined`; `bytes17?`: `undefined`; `bytes18?`: `undefined`; `bytes19?`: `undefined`; `bytes2?`: `undefined`; `bytes20?`: `undefined`; `bytes21?`: `undefined`; `bytes22?`: `undefined`; `bytes23?`: `undefined`; `bytes24?`: `undefined`; `bytes25?`: `undefined`; `bytes26?`: `undefined`; `bytes27?`: `undefined`; `bytes28?`: `undefined`; `bytes29?`: `undefined`; `bytes3?`: `undefined`; `bytes30?`: `undefined`; `bytes31?`: `undefined`; `bytes32?`: `undefined`; `bytes4?`: `undefined`; `bytes5?`: `undefined`; `bytes6?`: `undefined`; `bytes7?`: `undefined`; `bytes8?`: `undefined`; `bytes9?`: `undefined`; `int104?`: `undefined`; `int112?`: `undefined`; `int120?`: `undefined`; `int128?`: `undefined`; `int136?`: `undefined`; `int144?`: `undefined`; `int152?`: `undefined`; `int16?`: `undefined`; `int160?`: `undefined`; `int168?`: `undefined`; `int176?`: `undefined`; `int184?`: `undefined`; `int192?`: `undefined`; `int200?`: `undefined`; `int208?`: `undefined`; `int216?`: `undefined`; `int224?`: `undefined`; `int232?`: `undefined`; `int24?`: `undefined`; `int240?`: `undefined`; `int248?`: `undefined`; `int256?`: `undefined`; `int32?`: `undefined`; `int40?`: `undefined`; `int48?`: `undefined`; `int56?`: `undefined`; `int64?`: `undefined`; `int72?`: `undefined`; `int8?`: `undefined`; `int80?`: `undefined`; `int88?`: `undefined`; `int96?`: `undefined`; `string?`: `undefined`; `uint104?`: `undefined`; `uint112?`: `undefined`; `uint120?`: `undefined`; `uint128?`: `undefined`; `uint136?`: `undefined`; `uint144?`: `undefined`; `uint152?`: `undefined`; `uint16?`: `undefined`; `uint160?`: `undefined`; `uint168?`: `undefined`; `uint176?`: `undefined`; `uint184?`: `undefined`; `uint192?`: `undefined`; `uint200?`: `undefined`; `uint208?`: `undefined`; `uint216?`: `undefined`; `uint224?`: `undefined`; `uint232?`: `undefined`; `uint24?`: `undefined`; `uint240?`: `undefined`; `uint248?`: `undefined`; `uint256?`: `undefined`; `uint32?`: `undefined`; `uint40?`: `undefined`; `uint48?`: `undefined`; `uint56?`: `undefined`; `uint64?`: `undefined`; `uint72?`: `undefined`; `uint8?`: `undefined`; `uint80?`: `undefined`; `uint88?`: `undefined`; `uint96?`: `undefined`; \} \| \{\[`key`: `string`\]: `unknown`; \} |
 | `primaryType` *extends* `string` |
 
 #### Parameters
@@ -1535,7 +1535,7 @@ const signature = await client.signTypedData({
 
 > **switchChain**: (`args`) => `Promise`\<`void`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:806
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:806
 
 Switch the target chain in a wallet.
 
@@ -1575,7 +1575,7 @@ await client.switchChain({ id: optimism.id })
 
 > **transport**: `ReturnType`\<`TTransport`\>\[`"config"`\] & `ReturnType`\<`TTransport`\>\[`"value"`\]
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:93
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:93
 
 The RPC transport
 
@@ -1589,7 +1589,7 @@ The RPC transport
 
 > **type**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:95
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:95
 
 The type of client.
 
@@ -1603,7 +1603,7 @@ The type of client.
 
 > **uid**: `string`
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/createClient.d.ts:97
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/createClient.d.ts:97
 
 A unique ID for the client.
 
@@ -1617,7 +1617,7 @@ A unique ID for the client.
 
 > **waitForCallsStatus**: (`parameters`) => `Promise`\<\{ `atomic`: `boolean`; `capabilities?`: \{\[`key`: `string`\]: `any`; \} \| \{\[`key`: `string`\]: `any`; \}; `chainId`: `number`; `id`: `string`; `receipts?`: [`WalletCallReceipt`](https://viem.sh/docs/index.html)\<`bigint`, `"success"` \| `"reverted"`\>[]; `status`: `"pending"` \| `"success"` \| `"failure"` \| `undefined`; `statusCode`: `number`; `version`: `string`; \}\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:828
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:828
 
 Waits for the status & receipts of a call bundle that was sent via `sendCalls`.
 
@@ -1660,7 +1660,7 @@ const { receipts, status } = await waitForCallsStatus(client, { id: '0xdeadbeef'
 
 > **watchAsset**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:855
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:855
 
 Adds an EVM chain to the wallet.
 
@@ -1709,7 +1709,7 @@ const success = await client.watchAsset({
 
 > **writeContract**: \<`abi`, `functionName`, `args`, `chainOverride`\>(`args`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:903
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:903
 
 Executes a write function on a contract.
 
@@ -1789,7 +1789,7 @@ const hash = await client.writeContract(request)
 
 > **writeContractSync**: \<`abi`, `functionName`, `args`, `chainOverride`\>(`args`) => `Promise`\<[`TransactionReceipt`](https://viem.sh/docs/index.html)\>
 
-Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:934
+Defined in: node\_modules/.pnpm/viem@2.43.3\_typescript@5.7.2\_zod@3.25.76/node\_modules/viem/\_types/clients/decorators/wallet.d.ts:934
 
 Executes a write function on a contract synchronously.
 Returns the transaction receipt.
