@@ -243,9 +243,16 @@ Telegram 前置条件：
 - `--volatility-threshold-bps <n>`：当链下价格“短时波动”或“与 Chainlink 偏离”超过阈值时告警（bps=万分比，150=1.50%，默认 0=关闭）
 - `--volatility-cooldown <sec>`：同类告警冷却时间（默认 600）
 
+告警触发逻辑（满足任一即告警）：
+
+- **Chainlink stale**：`now - chainlink.updatedAt >= chainlinkStaleSec`
+- **链下 vs Chainlink 偏离**：`abs(external - chainlink) / chainlink >= volatilityThresholdBps`
+- **链下短时波动**：`abs(external_now - external_prev) / external_prev >= volatilityThresholdBps`
+
 ### 注意事项
 
 - `--dry-run` 不会发送任何交易，适合先验证网络、地址、阈值逻辑是否符合预期
+- keeper 启动时会在 `INIT` 里链上读取并打印 `super.thresholdSec` / `paymaster.thresholdSec`，用于确认 4200s/86400s 等阈值是否生效
 - `--max-base-fee-gwei <n>` 可在高 base fee 时推迟更新（只要在安全窗口内仍有效）
 - 该脚本会尝试从 `paymasterFactory` 通过 operator 推导 PaymasterV4 地址；也可用 `--paymaster <addr>` 强制指定
 - 地址来源：默认从 Astar SDK 内置配置读取（[addresses.js](./packages/core/src/addresses.js) 与 [config.ts](./tests/regression/config.ts)），并允许用 CLI 参数覆盖

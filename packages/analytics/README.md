@@ -173,7 +173,7 @@ pnpm exec tsx scripts/paper7-exclusive-data.ts --network anvil --cycles 5
 等价的 shell 包装（更适合 CI/重复跑批）：
 
 ```bash
-./scripts/run_paper7_exclusive_data.sh --network anvil --cycles 5
+./packages/analytics/run_paper7_exclusive_data.sh --network anvil --cycles 5
 ```
 
 ### 2) 脚本目标与流程定位

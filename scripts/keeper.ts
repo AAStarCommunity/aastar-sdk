@@ -379,6 +379,33 @@ async function main() {
     console.log(`externalEthUsdUrl=${externalEthUsdUrl ? 'set' : 'not-set'}`);
     console.log(`maxUpdatesPerDay=${maxUpdatesPerDay}`);
     console.log(`dryRun=${dryRun}`);
+
+    if (!disableSuperPaymaster) {
+        try {
+            const superThreshold = (await publicClient.readContract({
+                address: superPaymaster,
+                abi: SUPERPAYMASTER_ABI,
+                functionName: 'priceStalenessThreshold'
+            })) as bigint;
+            console.log(`super.thresholdSec=${superThreshold.toString()}`);
+        } catch {
+            console.log('super.thresholdSec=unknown');
+        }
+    }
+
+    if (!disablePaymaster && paymaster) {
+        try {
+            const pmThreshold = (await publicClient.readContract({
+                address: paymaster,
+                abi: PAYMASTER_V4_ABI,
+                functionName: 'priceStalenessThreshold'
+            })) as bigint;
+            console.log(`paymaster.thresholdSec=${pmThreshold.toString()}`);
+        } catch {
+            console.log('paymaster.thresholdSec=unknown');
+        }
+    }
+
     console.log(section('TELEGRAM'));
     console.log(`telegram=${telegramEnabled ? 'enabled' : 'disabled'}`);
     console.log(`bot=${TELEGRAM_BOT_USERNAME}`);
