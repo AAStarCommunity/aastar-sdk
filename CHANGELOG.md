@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 🧰 Keeper (Price Updater)
+- **[ADDED]** Print on-chain `priceStalenessThreshold()` in `INIT` for SuperPaymaster/PaymasterV4.
+- **[IMPROVED]** Keeper anomaly docs: Chainlink stale + external/Chainlink deviation + external short-term volatility.
+
+### 📊 Analytics (Paper7)
+- **[ADDED]** `packages/analytics/run_paper7_exclusive_data.sh` wrapper for Paper7 exclusive data pipeline.
+- **[CHANGED]** Updated Analytics README to reference the new wrapper path.
+
+### 📚 Docs
+- **[CHANGED]** Regenerated API markdown output under `docs/api/`.
+
 ## [0.16.22] - 2026-02-11
 **SDK Code Integrity Hash**: `89da8c80ebe6ad8b06adbd4946a00817b18ae79296550709b20bd9ca3af424f9`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
