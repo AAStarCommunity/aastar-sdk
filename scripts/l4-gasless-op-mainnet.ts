@@ -48,6 +48,9 @@ import {
 
 const require = createRequire(import.meta.url);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // --- Logging Helper ---
 const CSV_FILE = path.resolve(__dirname, '../packages/analytics/data/gasless_data_collection.csv');
 function recordResult(label: string, txHash: string, gasUsed: bigint, l1Fee: bigint, totalCost: string, xpntsConsumed: string = '0', tokenName: string = 'N/A') {
@@ -58,14 +61,12 @@ function recordResult(label: string, txHash: string, gasUsed: bigint, l1Fee: big
     }
     const row = `${timestamp},${label},${txHash},${gasUsed.toString()},${l1Fee.toString()},${totalCost},${xpntsConsumed},${tokenName}\n`;
     fs.appendFileSync(CSV_FILE, row);
-    console.log(`   📝 Data recorded to ${CSV_FILE}`);
+    console.log(`   📝 Data recorded to ${path.relative(process.cwd(), CSV_FILE)}`);
 }
 const { bls12_381 } = require('@noble/curves/bls12-381');
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
 // Load State
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 function loadState(networkName: string): any {
     const STATE_FILE = path.resolve(__dirname, `l4-state.${networkName}.json`);
     if (!fs.existsSync(STATE_FILE)) return { operators: {}, aaAccounts: [] };
@@ -77,6 +78,7 @@ async function waitAndCheckReceipt(publicClient: any, bundlerClient: any, opHash
     
     // Fetch state before for xPNTs consumption calculation
     let debtBefore = 0n;
+    let balanceBefore = 0n;
     let tokenName = 'N/A';
     if (tokenAddress && userAddress) {
         try {
@@ -84,6 +86,12 @@ async function waitAndCheckReceipt(publicClient: any, bundlerClient: any, opHash
                 address: tokenAddress,
                 abi: parseAbi(['function getDebt(address) view returns (uint256)']),
                 functionName: 'getDebt',
+                args: [userAddress]
+            }).catch(() => 0n);
+            balanceBefore = await publicClient.readContract({
+                address: tokenAddress,
+                abi: erc20Abi,
+                functionName: 'balanceOf',
                 args: [userAddress]
             }).catch(() => 0n);
             tokenName = await publicClient.readContract({
@@ -122,9 +130,28 @@ async function waitAndCheckReceipt(publicClient: any, bundlerClient: any, opHash
                 functionName: 'getDebt',
                 args: [userAddress]
             }).catch(() => debtBefore);
-            const consumed = debtAfter - debtBefore;
-            xpntsConsumed = formatEther(consumed);
-            console.log(`   💰 Debt Increase: ${xpntsConsumed} ${tokenName}`);
+            const balanceAfter = await publicClient.readContract({
+                address: tokenAddress,
+                abi: erc20Abi,
+                functionName: 'balanceOf',
+                args: [userAddress]
+            }).catch(() => balanceBefore);
+
+            const debtDelta = debtAfter - debtBefore;
+            const balanceDelta = balanceAfter - balanceBefore;
+
+            if (debtDelta !== 0n) {
+                if (debtDelta > 0n) {
+                    xpntsConsumed = formatEther(debtDelta);
+                    console.log(`   💰 Debt Increase: ${xpntsConsumed} ${tokenName}`);
+                } else {
+                    xpntsConsumed = formatEther(-debtDelta);
+                    console.log(`   💰 Debt Decrease: ${xpntsConsumed} ${tokenName}`);
+                }
+            } else if (balanceDelta < 0n) {
+                xpntsConsumed = formatEther(-balanceDelta);
+                console.log(`   💰 Token Burned: ${xpntsConsumed} ${tokenName}`);
+            }
         }
 
         console.log(`   📊 DATA [${label}]: L2Gas=${actualGasUsed}, TotalCost=${totalCostStr} ETH`);
@@ -220,7 +247,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
     let globalTokenName = 'xPNTs';
 
     console.log('\n═══════════════════════════════════════════════');
-    console.log('🧪 L4 Gasless Data Collection (Paper7)');
+    console.log('🧪 L4 Gasless Data Collection (Paper3)');
     console.log(`   Jason (${jasonAccountName}): ${jasonAcc.address}`);
     console.log(`   Anni (${anniAccountName}):  ${anniAcc.address}`);
     console.log('═══════════════════════════════════════════════\n');
@@ -407,13 +434,65 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
         console.error(`   ❌ T2 Failed: ${e.message}`);
     }
 
-    console.log(DIVIDER + `🔹 [T2.1] Gasless Payment via Community Token (Normal Mode - Prepay)`);
-    console.log(`   Description: User must have deposited Community Token into SP first.`);
+    console.log(DIVIDER + `🔹 [T2.1] Gasless Payment via Community Token (Normal Mode - Burn)`);
+    console.log(`   Description: If supported, SP burns user's Community Token (no debt).`);
     
     try {
-        console.log(`   ℹ️ SuperPaymaster V3 is natively Credit-based (T2/T5).`);
-        console.log(`   ℹ️ Prepayment Mode (T1) is handled by Paymaster V4.`);
-        console.log(`   ✅ Skipping T2.1 (Normal Mode) on SP to avoid architecturally redundant check.`);
+        const minUserTokenBalance = parseEther('2');
+        const userTokenBalance = await publicClient.readContract({
+            address: anniToken as Address,
+            abi: erc20Abi,
+            functionName: 'balanceOf',
+            args: [jasonAA]
+        }).catch(() => 0n);
+
+        if (userTokenBalance < minUserTokenBalance) {
+            const topUpAmount = parseEther('10');
+            const anniBalance = await publicClient.readContract({
+                address: anniToken as Address,
+                abi: erc20Abi,
+                functionName: 'balanceOf',
+                args: [anniAcc.address]
+            }).catch(() => 0n);
+
+            if (anniBalance >= topUpAmount) {
+                const transferHash = await anniWallet.writeContract({
+                    address: anniToken as Address,
+                    abi: erc20Abi,
+                    functionName: 'transfer',
+                    args: [jasonAA, topUpAmount]
+                });
+                await publicClient.waitForTransactionReceipt({ hash: transferHash });
+            } else {
+                console.log(`   ⚠️ Insufficient token balance to top up user: have=${formatEther(anniBalance)}`);
+            }
+        }
+
+        const callData = PaymasterClient.encodeExecution(
+            anniToken as Address,
+            0n,
+            PaymasterClient.encodeTokenTransfer(supplierAcc.address, parseEther('0.001'))
+        );
+
+        const t21Hash = await PaymasterClient.submitGaslessUserOperation(
+            publicClient,
+            jasonWallet,
+            jasonAA,
+            ENTRYPOINT,
+            SP as Address,
+            anniToken as Address,
+            config.bundlerUrl,
+            callData,
+            {
+                autoEstimate: true,
+                operator: anniAcc.address,
+                verificationGasLimit: 60000n,
+                paymasterVerificationGasLimit: 90000n
+            }
+        );
+
+        console.log(`   🚀 T2.1 (Normal) UserOp: ${t21Hash}`);
+        await waitAndCheckReceipt(publicClient, bundlerClient, t21Hash, "T2.1_SP_Normal", anniToken as Address, jasonAA);
     } catch (e: any) {
         console.error(`   ❌ T2.1 Failed: ${e.message}`);
     }
@@ -556,7 +635,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                 }
             );
             console.log(`   🚀 T5 UserOp: ${t5Hash}`);
-            await waitAndCheckReceipt(publicClient, bundlerClient, t5Hash, "T5");
+            await waitAndCheckReceipt(publicClient, bundlerClient, t5Hash, "T5", anniToken as Address, jasonAA);
         } else {
             console.log(`   ✅ No debt to repay.`);
         }

@@ -197,7 +197,7 @@ async function runCastSend(params: {
     passwordFilePath: string;
 }): Promise<string> {
     const cmd = 'cast';
-    const castArgs = ['send', '--rpc-url', params.rpcUrl];
+    const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
 
     if (params.keystorePath) {
         castArgs.push('--keystore', params.keystorePath);
