@@ -19,9 +19,8 @@ type EoaRow = {
 
 type GaslessRow = {
     Label: string;
+    TxHash: string;
     GasUsed: string;
-    L1FeeWei: string;
-    TotalFeeEth: string;
 };
 
 function getArgValue(args: string[], key: string): string | undefined {
@@ -67,6 +66,12 @@ function formatEth(wei: bigint): string {
     const i = v / 10n ** 18n;
     const f = (v % 10n ** 18n).toString().padStart(18, '0').slice(0, 9);
     return `${sign}${i.toString()}.${f}`;
+}
+
+function protocolFeeWei(label: string, totalWei: bigint): bigint {
+    const labelsWithProtocolFee = new Set(['T1', 'T2_SP_Credit', 'T2.1_SP_Normal', 'T5']);
+    if (!labelsWithProtocolFee.has(label)) return 0n;
+    return (totalWei * 10n) / 100n;
 }
 
 async function main() {
@@ -189,9 +194,8 @@ async function main() {
         gaslessHeader.forEach((k, i) => (map[k] = cols[i]));
         return {
             Label: map.Label,
+            TxHash: map.TxHash,
             GasUsed: map['GasUsed(L2)'],
-            L1FeeWei: map['L1Fee(Wei)'],
-            TotalFeeEth: map['TotalCost(ETH)']
         };
     });
 
@@ -213,9 +217,18 @@ async function main() {
         const total: bigint[] = [];
 
         for (const row of rows) {
-            const l1FeeWei = BigInt(row.L1FeeWei || '0');
-            const totalWei = toWeiFromEthString(row.TotalFeeEth || '0');
-            const l2FeeWei = totalWei - l1FeeWei;
+            const receipt: any = await client.request({
+                method: 'eth_getTransactionReceipt',
+                params: [row.TxHash as `0x${string}`]
+            } as any);
+            const gasUsed = BigInt(receipt.gasUsed || '0x0');
+            const effectiveGasPrice = BigInt(receipt.effectiveGasPrice || '0x0');
+            const l2FeeWei = gasUsed * effectiveGasPrice;
+            const l1FeeWei = receipt.l1Fee ? BigInt(receipt.l1Fee) : 0n;
+            const blobFeeWei =
+                receipt.blobGasUsed && receipt.blobGasPrice ? BigInt(receipt.blobGasUsed) * BigInt(receipt.blobGasPrice) : 0n;
+            const totalWei = l2FeeWei + l1FeeWei + blobFeeWei;
+
             l2Gas.push(Number(row.GasUsed));
             l2Fee.push(l2FeeWei);
             l1Fee.push(l1FeeWei);
@@ -233,7 +246,17 @@ async function main() {
     }
 
     const rowsOut = [
-        ['Operation', 'Label', 'n', 'L2 Gas Used (mean ± 95% CI)', 'L2 Fee (ETH)', 'L1 Fee (ETH)', 'Total Fee (ETH)'],
+        [
+            'Operation',
+            'Label',
+            'n',
+            'L2 Gas Used (mean ± 95% CI)',
+            'L2 Fee (ETH)',
+            'L1 Fee (ETH)',
+            'Total Fee (ETH)',
+            'Protocol Fee 10% (ETH)',
+            'Total + Protocol (ETH)'
+        ],
         [
             'EOA ERC20 Transfer',
             'A_EOA',
@@ -241,7 +264,9 @@ async function main() {
             `${Math.round(eoaStats.A_EOA?.l2Gas || 0)} ± ${Math.round(eoaStats.A_EOA?.l2GasCi || 0)}`,
             `${formatEth(eoaStats.A_EOA?.l2FeeWei || 0n)}`,
             `${formatEth(eoaStats.A_EOA?.l1FeeWei || 0n)}`,
-            `${formatEth(eoaStats.A_EOA?.totalWei || 0n)}`
+            `${formatEth(eoaStats.A_EOA?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('A_EOA', eoaStats.A_EOA?.totalWei || 0n))}`,
+            `${formatEth((eoaStats.A_EOA?.totalWei || 0n) + protocolFeeWei('A_EOA', eoaStats.A_EOA?.totalWei || 0n))}`
         ],
         [
             'Commercial Paymaster (Alchemy, ERC20 transfer)',
@@ -250,7 +275,9 @@ async function main() {
             `${Math.round(industryStats.B1_Alchemy?.l2Gas || 0)} ± ${Math.round(industryStats.B1_Alchemy?.l2GasCi || 0)}`,
             `${formatEth(industryStats.B1_Alchemy?.l2FeeWei || 0n)}`,
             `${formatEth(industryStats.B1_Alchemy?.l1FeeWei || 0n)}`,
-            `${formatEth(industryStats.B1_Alchemy?.totalWei || 0n)}`
+            `${formatEth(industryStats.B1_Alchemy?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('B1_Alchemy', industryStats.B1_Alchemy?.totalWei || 0n))}`,
+            `${formatEth((industryStats.B1_Alchemy?.totalWei || 0n) + protocolFeeWei('B1_Alchemy', industryStats.B1_Alchemy?.totalWei || 0n))}`
         ],
         [
             'Commercial Paymaster (Pimlico ERC-20 Paymaster)',
@@ -259,7 +286,9 @@ async function main() {
             `${Math.round(industryStats.B2_Pimlico?.l2Gas || 0)} ± ${Math.round(industryStats.B2_Pimlico?.l2GasCi || 0)}`,
             `${formatEth(industryStats.B2_Pimlico?.l2FeeWei || 0n)}`,
             `${formatEth(industryStats.B2_Pimlico?.l1FeeWei || 0n)}`,
-            `${formatEth(industryStats.B2_Pimlico?.totalWei || 0n)}`
+            `${formatEth(industryStats.B2_Pimlico?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('B2_Pimlico', industryStats.B2_Pimlico?.totalWei || 0n))}`,
+            `${formatEth((industryStats.B2_Pimlico?.totalWei || 0n) + protocolFeeWei('B2_Pimlico', industryStats.B2_Pimlico?.totalWei || 0n))}`
         ],
         [
             'Gasless Token Transfer (PaymasterV4)',
@@ -268,7 +297,9 @@ async function main() {
             `${Math.round(gaslessStats.T1?.l2Gas || 0)} ± ${Math.round(gaslessStats.T1?.l2GasCi || 0)}`,
             `${formatEth(gaslessStats.T1?.l2FeeWei || 0n)}`,
             `${formatEth(gaslessStats.T1?.l1FeeWei || 0n)}`,
-            `${formatEth(gaslessStats.T1?.totalWei || 0n)}`
+            `${formatEth(gaslessStats.T1?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('T1', gaslessStats.T1?.totalWei || 0n))}`,
+            `${formatEth((gaslessStats.T1?.totalWei || 0n) + protocolFeeWei('T1', gaslessStats.T1?.totalWei || 0n))}`
         ],
         [
             'Gasless Payment (SuperPaymaster, Credit)',
@@ -277,7 +308,11 @@ async function main() {
             `${Math.round(gaslessStats.T2_SP_Credit?.l2Gas || 0)} ± ${Math.round(gaslessStats.T2_SP_Credit?.l2GasCi || 0)}`,
             `${formatEth(gaslessStats.T2_SP_Credit?.l2FeeWei || 0n)}`,
             `${formatEth(gaslessStats.T2_SP_Credit?.l1FeeWei || 0n)}`,
-            `${formatEth(gaslessStats.T2_SP_Credit?.totalWei || 0n)}`
+            `${formatEth(gaslessStats.T2_SP_Credit?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('T2_SP_Credit', gaslessStats.T2_SP_Credit?.totalWei || 0n))}`,
+            `${formatEth(
+                (gaslessStats.T2_SP_Credit?.totalWei || 0n) + protocolFeeWei('T2_SP_Credit', gaslessStats.T2_SP_Credit?.totalWei || 0n)
+            )}`
         ],
         [
             'Gasless Payment (SuperPaymaster, Normal)',
@@ -286,7 +321,12 @@ async function main() {
             `${Math.round(gaslessStats['T2.1_SP_Normal']?.l2Gas || 0)} ± ${Math.round(gaslessStats['T2.1_SP_Normal']?.l2GasCi || 0)}`,
             `${formatEth(gaslessStats['T2.1_SP_Normal']?.l2FeeWei || 0n)}`,
             `${formatEth(gaslessStats['T2.1_SP_Normal']?.l1FeeWei || 0n)}`,
-            `${formatEth(gaslessStats['T2.1_SP_Normal']?.totalWei || 0n)}`
+            `${formatEth(gaslessStats['T2.1_SP_Normal']?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('T2.1_SP_Normal', gaslessStats['T2.1_SP_Normal']?.totalWei || 0n))}`,
+            `${formatEth(
+                (gaslessStats['T2.1_SP_Normal']?.totalWei || 0n) +
+                    protocolFeeWei('T2.1_SP_Normal', gaslessStats['T2.1_SP_Normal']?.totalWei || 0n)
+            )}`
         ],
         [
             'Debt Settlement (SuperPaymaster)',
@@ -295,7 +335,9 @@ async function main() {
             `${Math.round(gaslessStats.T5?.l2Gas || 0)} ± ${Math.round(gaslessStats.T5?.l2GasCi || 0)}`,
             `${formatEth(gaslessStats.T5?.l2FeeWei || 0n)}`,
             `${formatEth(gaslessStats.T5?.l1FeeWei || 0n)}`,
-            `${formatEth(gaslessStats.T5?.totalWei || 0n)}`
+            `${formatEth(gaslessStats.T5?.totalWei || 0n)}`,
+            `${formatEth(protocolFeeWei('T5', gaslessStats.T5?.totalWei || 0n))}`,
+            `${formatEth((gaslessStats.T5?.totalWei || 0n) + protocolFeeWei('T5', gaslessStats.T5?.totalWei || 0n))}`
         ]
     ];
 
