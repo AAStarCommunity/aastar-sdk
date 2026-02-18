@@ -6,44 +6,77 @@ import { HistoricalFetcher } from './libs/HistoricalFetcher.js';
 import { EventFetcher } from './libs/EventFetcher.js';
 // import { TrafficGenerator } from '../packages/analytics/src/generators/TrafficGenerator.js'; 
 
-const NETWORK = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
+function getArgValue(key: string): string | undefined {
+    const eqArg = process.argv.find((a) => a.startsWith(`${key}=`));
+    if (eqArg) return eqArg.slice(`${key}=`.length);
+
+    const idx = process.argv.findIndex((a) => a === key);
+    if (idx < 0) return undefined;
+    const next = process.argv[idx + 1];
+    if (!next || next.startsWith('--')) return undefined;
+    return next;
+}
+
+function splitCsv(v: string | undefined): string[] {
+    if (!v) return [];
+    return v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+const NETWORK = getArgValue('--network') || 'sepolia';
 const ENV_FILE = path.resolve(process.cwd(), `.env.${NETWORK}`);
 console.log(`Loading Env: ${ENV_FILE}`);
 dotenv.config({ path: ENV_FILE });
 
-function validateEnv(network: string) {
-    const required = ['PRIVATE_KEY', 'ETHERSCAN_API_KEY'];
+function validateEnv(required: string[], network: string) {
     if (network === 'sepolia') required.push('SEPOLIA_RPC_URL');
     if (network === 'op-sepolia') required.push('OP_SEPOLIA_RPC_URL');
 
-    const missing = required.filter(k => !process.env[k]);
+    const missing = required.filter((k) => !process.env[k]);
     if (missing.length > 0) {
         console.error(`❌ Error: Missing required environment variables for ${network}:`);
-        missing.forEach(m => console.error(`   - ${m}`));
+        missing.forEach((m) => console.error(`   - ${m}`));
         process.exit(1);
     }
 }
 
-validateEnv(NETWORK);
+const addressesArg = getArgValue('--addresses');
+const labelsArg = getArgValue('--labels');
+const hasGenTraffic = process.argv.includes('--gen-traffic');
+
+validateEnv(hasGenTraffic ? ['PRIVATE_KEY', 'ETHERSCAN_API_KEY'] : ['ETHERSCAN_API_KEY'], NETWORK);
 
 async function main() {
     console.log(`\n🎼 Analytics Coordinator - Network: ${NETWORK}`);
     
-    // 1. Load State
-    const stateFile = path.resolve(process.cwd(), `scripts/l4-state.${NETWORK}.json`);
-    if (!fs.existsSync(stateFile)) {
-        console.error(`❌ State file not found: ${stateFile}`);
-        process.exit(1);
+    const targetsFromArgs = splitCsv(addressesArg).map((address, idx) => ({
+        address,
+        label: splitCsv(labelsArg)[idx] || `Target_${address.substring(0, 8)}`
+    }));
+
+    let state: any | undefined = undefined;
+    if (targetsFromArgs.length === 0) {
+        const stateFile = path.resolve(process.cwd(), `scripts/l4-state.${NETWORK}.json`);
+        if (!fs.existsSync(stateFile)) {
+            console.error(`❌ State file not found: ${stateFile}`);
+            process.exit(1);
+        }
+        state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        console.log(`✅ Loaded State: ${Object.keys(state.accounts || {}).length} accounts`);
     }
-    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-    console.log(`✅ Loaded State: ${Object.keys(state.accounts || {}).length} accounts`);
 
     // 2. Fetch History
     const fetcher = new HistoricalFetcher(NETWORK);
     
-    // Fetch for AA Accounts
-    // Fetch for AA Accounts
-    if (Array.isArray(state.aaAccounts)) {
+    if (targetsFromArgs.length > 0) {
+        console.log(`\n🔍 Targets (CLI): ${targetsFromArgs.length}`);
+        for (const t of targetsFromArgs) {
+            const txs = await fetcher.fetchTransactions(t.address);
+            await fetcher.saveHistory(t.address, txs, t.label);
+        }
+    } else if (Array.isArray(state?.aaAccounts)) {
         console.log(`\n🔍 Found ${state.aaAccounts.length} AA Accounts`);
         for (const acct of state.aaAccounts) {
             const addr = acct.address;
@@ -56,7 +89,7 @@ async function main() {
     }
 
     // Fetch for Operators/Paymasters
-    if (state.operators) {
+    if (state?.operators) {
         console.log(`\n🔍 Found ${Object.keys(state.operators).length} Operators`);
         for (const [name, data] of Object.entries(state.operators)) {
             const opData = data as any;
@@ -83,18 +116,41 @@ async function main() {
         console.log("\n📡 Event Fetching Requested (--fetch-events)");
         const eventFetcher = new EventFetcher(NETWORK);
 
-        // Fetch for AA Accounts (as SENDER)
-        if (Array.isArray(state.aaAccounts)) {
+        const exportCsvPath = getArgValue('--export-txhashes-csv');
+        const txHashRows: Array<{ Label: string; TxHash: string; BlockNumber: string; TimeStamp: string }> = [];
+
+        if (targetsFromArgs.length > 0) {
+            for (const t of targetsFromArgs) {
+                const logs = await eventFetcher.fetchUserOps(t.address, 'sender');
+                await eventFetcher.saveEvents(t.address, logs, t.label);
+                for (const e of logs) {
+                    txHashRows.push({
+                        Label: t.label,
+                        TxHash: e.transactionHash,
+                        BlockNumber: e.blockNumber,
+                        TimeStamp: e.timeStamp
+                    });
+                }
+            }
+        } else if (Array.isArray(state?.aaAccounts)) {
             for (const acct of state.aaAccounts) {
                 if (acct.address) {
                     const logs = await eventFetcher.fetchUserOps(acct.address, 'sender');
                     await eventFetcher.saveEvents(acct.address, logs, acct.label || 'Unknown_AA');
+                    for (const e of logs) {
+                        txHashRows.push({
+                            Label: acct.label || 'Unknown_AA',
+                            TxHash: e.transactionHash,
+                            BlockNumber: e.blockNumber,
+                            TimeStamp: e.timeStamp
+                        });
+                    }
                 }
             }
         }
 
         // Fetch for Paymasters (as PAYMASTER)
-        if (state.operators) {
+        if (state?.operators) {
             for (const [name, data] of Object.entries(state.operators)) {
                 const opData = data as any;
                  if (opData.paymasterV4) {
@@ -106,6 +162,20 @@ async function main() {
                     await eventFetcher.saveEvents(opData.superPaymaster, logs, `${name}_SuperPaymaster`);
                 }
             }
+        }
+
+        if (exportCsvPath && txHashRows.length > 0) {
+            const byTxHash = new Map<string, { Label: string; TxHash: string; BlockNumber: string; TimeStamp: string }>();
+            for (const r of txHashRows) {
+                if (!byTxHash.has(r.TxHash)) byTxHash.set(r.TxHash, r);
+            }
+            const unique = [...byTxHash.values()].sort((a, b) => Number(b.BlockNumber) - Number(a.BlockNumber));
+            const header = 'Label,TxHash,BlockNumber,TimeStamp';
+            const lines = unique.map((r) => `${r.Label},${r.TxHash},${r.BlockNumber},${r.TimeStamp}`);
+            const outAbs = path.isAbsolute(exportCsvPath) ? exportCsvPath : path.resolve(process.cwd(), exportCsvPath);
+            fs.mkdirSync(path.dirname(outAbs), { recursive: true });
+            fs.writeFileSync(outAbs, [header, ...lines].join('\n') + '\n');
+            console.log(`   💾 Exported tx hashes: ${outAbs} (${unique.length})`);
         }
     }
 
