@@ -151,18 +151,22 @@ export class PaymasterClient {
             });
         }
 
-        // 1.5. Get dynamic gas prices from network
-        let maxFeePerGas = 30000000000n; // 30 Gwei default
-        let maxPriorityFeePerGas = 1000000000n; // 1 Gwei default
-        
+        // 1.5. Get gas fees from network (prefer chain defaults)
+        let maxFeePerGas = 0n;
+        let maxPriorityFeePerGas = 0n;
         try {
             const feeData = await client.estimateFeesPerGas();
-            maxFeePerGas = (feeData.maxFeePerGas ?? 30000000000n) * 150n / 100n; // 1.5x buffer
-            maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n / 100n;
-            if (maxPriorityFeePerGas < 500000000n) maxPriorityFeePerGas = 500000000n; // Min 0.5 Gwei
-        } catch (e) {
-            // Use defaults if estimation fails
+            maxFeePerGas = feeData.maxFeePerGas ?? maxFeePerGas;
+            maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? maxPriorityFeePerGas;
+        } catch {}
+        if (!maxFeePerGas) {
+            try {
+                const gasPrice = await client.getGasPrice();
+                maxFeePerGas = gasPrice;
+            } catch {}
         }
+        if (!maxFeePerGas) maxFeePerGas = 1n;
+        if (maxFeePerGas < maxPriorityFeePerGas) maxFeePerGas = maxPriorityFeePerGas + 1n;
 
         const partialUserOp = {
             sender: aaAddress,
@@ -310,28 +314,21 @@ export class PaymasterClient {
         if (!maxFeePerGas || !maxPriorityFeePerGas) {
             try {
                 const feeData = await client.estimateFeesPerGas();
-                // Apply 1.5x buffer for network volatility
-                maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 30000000000n) * 150n) / 100n;
-                maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 1000000000n) * 150n) / 100n;
-                if (maxPriorityFeePerGas < 500000000n) {
-                    console.log(`[PaymasterClient] Priority Fee ${maxPriorityFeePerGas} too low, clamping to 0.5 Gwei`);
-                    maxPriorityFeePerGas = 500000000n; // Min 0.5 Gwei
-                }
-                
-                // Ensure MaxFee >= Priority
-                if (maxFeePerGas < maxPriorityFeePerGas) {
-                     maxFeePerGas = maxPriorityFeePerGas + 1000000n; // Add small buffer
-                     console.log(`[PaymasterClient] MaxFee bumped to accommodate Priority Fee`);
-                }
-
-                console.log(`[PaymasterClient] Fees Set: MaxFee=${maxFeePerGas}, Priority=${maxPriorityFeePerGas}`);
+                maxFeePerGas = maxFeePerGas ?? feeData.maxFeePerGas;
+                maxPriorityFeePerGas = maxPriorityFeePerGas ?? feeData.maxPriorityFeePerGas;
             } catch (e) {
-                console.log('[PaymasterClient] Fee Estimation Failed:', e);
-                // Fallback to safer defaults if estimation fails
-                maxFeePerGas = maxFeePerGas ?? 50000000000n; // 50 Gwei
-                maxPriorityFeePerGas = maxPriorityFeePerGas ?? 2000000000n; // 2 Gwei
+                maxFeePerGas = maxFeePerGas ?? undefined;
+                maxPriorityFeePerGas = maxPriorityFeePerGas ?? undefined;
             }
         }
+        if (!maxFeePerGas) {
+            try {
+                maxFeePerGas = await client.getGasPrice();
+            } catch {}
+        }
+        maxFeePerGas = maxFeePerGas ?? 1n;
+        maxPriorityFeePerGas = maxPriorityFeePerGas ?? 0n;
+        if (maxFeePerGas < maxPriorityFeePerGas) maxFeePerGas = maxPriorityFeePerGas + 1n;
 
         // 2. Build paymasterAndData
         let paymasterAndData: Hex;
