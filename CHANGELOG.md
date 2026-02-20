@@ -4,16 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### 🧰 Keeper (Price Updater)
-- **[ADDED]** Print on-chain `priceStalenessThreshold()` in `INIT` for SuperPaymaster/PaymasterV4.
-- **[IMPROVED]** Keeper anomaly docs: Chainlink stale + external/Chainlink deviation + external short-term volatility.
+## [0.16.24] - 2026-02-20
 
-### 📊 Analytics (Paper7)
-- **[ADDED]** `packages/analytics/run_paper7_exclusive_data.sh` wrapper for Paper7 exclusive data pipeline.
-- **[CHANGED]** Updated Analytics README to reference the new wrapper path.
+### ⛽ Gas Fee Strategy (PaymasterClient)
+- **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
+  - Testnets (Sepolia, OP-Sepolia, Anvil, chainId 11155111/11155420/31337): apply `0.5 Gwei` floor on `maxPriorityFeePerGas` / `1.0 Gwei` floor on `maxFeePerGas`. Fixes `WaitForUserOperationReceiptTimeoutError` caused by Alchemy bundler's minimum fee requirement being higher than OP Sepolia's near-zero network fee.
+  - Mainnet: pure dynamic `estimateFeesPerGas() × 1.2` (reduced from 1.5× — saves ~20% on reported maxFee while maintaining sufficient overhead for OP FIFO sequencer).
+  - Strategy applied in both `estimateUserOperationGas` and `submitGaslessUserOperation`.
+  - Added diagnostic log: `[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=... maxFee=...`
+- **[FIX]** **Retry Loop Extended**: max attempts 3→5 (`attempt < 4` guard), handles compound PVG + fee bump errors within a single retry pass.
+
+### 🧰 Keeper (Price Updater)
+- **[FIX]** **`cast send` Hang Prevention**: `runCastSend()` now applies a hard 90-second `SIGKILL` timeout. Previously `--timeout 60` only controlled receipt polling, not the subprocess itself—causing the keeper to block indefinitely when Alchemy rate-limited `eth_estimateGas`.
+- **[FIX]** **Explicit Gas Price**: before each `sendUpdate`, keeper fetches `getGasPrice()` and passes it via `--gas-price` to `cast send`, eliminating cast's own `eth_estimateGas` call (which was the source of the hang).
+- **[IMPROVED]** Print on-chain `priceStalenessThreshold()` for both SuperPaymaster and PaymasterV4 during INIT.
+- **[IMPROVED]** Keeper anomaly docs: Chainlink stale + external/Chainlink deviation + external short-term volatility alerts documented.
+
+### 🌐 Network Config
+- **[FIX]** OP Sepolia `blockExplorer` URL changed from `optimism-sepolia.blockscout.com` → `sepolia-optimism.etherscan.io`. Affects all scripts/tests that use `getTxUrl('op-sepolia', ...)`.
+
+### 📊 Analytics (Paper3 / Paper7)
+- **[ADDED]** `packages/analytics/data/paper_gas_op_mainnet/2026-02-17/`: PaymasterV4 (n=36) and SuperPaymaster (n=43) baseline CSVs with strict single-UserOp + ERC20-transfer filter.
+- **[ADDED]** `packages/analytics/data/paper_gas_op_mainnet/2026-02-18/`: Relaxed-filter datasets with sender field; `super_t2_sender.csv` (n=50) satisfies Paper3 SuperPaymaster sample target.
+- **[ADDED]** `packages/analytics/data/industry_paymaster_baselines.csv`: Alchemy Gas Manager (n=50, mean=257k gas) and Pimlico ERC-20 PM (n=50, mean=387k gas) on-chain baselines for industry comparison.
+- **[ADDED]** `packages/analytics/data/gasless_metrics_detailed.csv`: 21 records with full L1/L2 fee decomposition (L2GasUsed, L1GasUsed, L1FeesPaid, L2FeesPaid, ActualGasUsed).
+- **[ADDED]** Paper7 exclusive datasets: credit cycle JSON records and liquidity velocity simulation CSVs under `data/paper7_exclusive/`.
+- **[ADDED]** `packages/analytics/run_paper7_exclusive_data.sh` for Paper7 data pipeline.
+- **[CHANGED]** `gasless_data_collection.csv` (v1): +31 rows; `gasless_data_collection_v2.csv`: +28 rows including T1=22, T2_SP_Credit=22, T5=20.
+- **[ADDED]** `scripts/collect_paymaster_baselines.ts`: reproducible on-chain event collection with `--strict-transfer`, `--single-userop`, `--n`, `--append`, `--dedupe` flags.
+- **[ADDED]** `scripts/collect_eoa_erc20_baseline.ts`: raw EOA ERC20 transfer baseline for comparison.
+- **[ADDED]** `scripts/compute_cost_summary.ts`: aggregation script for cost breakdown tables.
 
 ### 📚 Docs
 - **[CHANGED]** Regenerated API markdown output under `docs/api/`.
+- **[ADDED]** `docs/guide/keeper.md`: keeper quickstart, anomaly detection, Telegram setup.
+
+### 🔒 SDK Integrity
+**SDK Code Integrity Hash**: `cebb1de2edab0fb63cd47684ab977488410262fa50e485045abc5901894a3f6f`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 ## [0.16.22] - 2026-02-11
 **SDK Code Integrity Hash**: `89da8c80ebe6ad8b06adbd4946a00817b18ae79296550709b20bd9ca3af424f9`
