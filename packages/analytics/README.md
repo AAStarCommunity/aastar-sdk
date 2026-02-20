@@ -1,4 +1,207 @@
-# 📊 AAStar Gas Analytics & Experimentation
+# Analytics Package (AAStar Gas Analytics & Experimentation)
+
+> **Status**: Active | **Version**: 3.0 (PhD Research Edition)
+
+This module is the core data intelligence engine for the AAStar ecosystem. It supports **Scientific Data Collection** for the "Asset-Oriented Abstraction" thesis with rigorous, on-chain ground truth verification.
+
+```bash
+# 快速入口（从 aastar-sdk 根目录运行）
+
+# 收集 OP Mainnet paymaster 基线
+pnpm tsx packages/analytics/scripts/collect_paymaster_baselines.ts --network op-mainnet --n 50
+
+# 收集 Paper7 专属数据
+bash packages/analytics/scripts/run_paper7_exclusive_data.sh --network anvil --cycles 5
+
+# 全流程协调器
+pnpm tsx packages/analytics/scripts/run_analytics_coordinator.ts --network sepolia
+
+# Gas 分析报告文档
+packages/analytics/docs/OP_Mainnet_Gas_Analysis_Report.md
+```
+
+---
+
+## System Architecture
+
+The Analytics module operates on a **Pipeline Architecture** composed of three distinct stages: **Generation**, **Collection**, and **Analysis**.
+
+```mermaid
+graph TD
+    subgraph "Phase 1: Traffic Generation"
+        TG[Traffic Coordinator] -->|Trigger| G1[EOA Generator]
+        TG -->|Trigger| G2[Standard AA Generator]
+        TG -->|Trigger| G3[SuperPaymaster Generator]
+        TG -->|Trigger| G4[Paymaster V4 Generator]
+        G1 & G2 & G3 & G4 -->|Execute Tx| BLOCKCHAIN((Blockchain))
+    end
+
+    subgraph "Phase 2: Data Collection"
+        BLOCKCHAIN -->|Receipts| HF[Historical Fetcher]
+        HF -->|Raw Data| CACHE[(Data Store / JSON)]
+        style HF fill:#f9f,stroke:#333
+    end
+
+    subgraph "Phase 3: Analysis Engine"
+        CACHE -->|Load| DC[DataCollector]
+        DC -->|Enrich| CC[CostCalculator]
+        CC --> AA[Attribution Analyzer]
+        CC --> CA[Comparison Analyzer]
+        CC --> TA[Trend Analyzer]
+        AA & CA & TA --> REPORT[Final Academic Report]
+    end
+```
+
+---
+
+## Directory Structure
+
+```text
+packages/analytics/
+├── src/
+│   ├── generators/           # Traffic Generation Logic
+│   ├── collectors/           # Etherscan/RPC Fetchers
+│   │   └── EventFetcher.ts   # On-chain UserOperationEvent collector
+│   ├── core/                 # Core Analysis Engines
+│   ├── analyzers/            # Specific Analysis Strategies
+│   └── gas-analyzer.ts       # Main Entry Point
+├── scripts/                  # ← All data collection scripts (consolidated)
+│   ├── collect_paymaster_baselines.ts   # OP mainnet V4/SuperPM baselines
+│   ├── collect_eoa_erc20_baseline.ts    # EOA ERC20 transfer baseline
+│   ├── collect_industry_baseline.ts     # Alchemy/Pimlico baselines
+│   ├── compute_cost_summary.ts          # Aggregated cost breakdown table
+│   ├── gasless-collect.ts               # Gasless data collector (OP mainnet)
+│   ├── paper7-exclusive-data.ts         # Paper7 closed-loop data (anvil)
+│   ├── paper7_credit_loop.ts            # Credit→Debt→Repay cycle runner
+│   ├── paper7_reputation_credit.ts      # Reputation→Credit mapping runner
+│   ├── run_analytics_coordinator.ts     # Full pipeline coordinator
+│   ├── run_paper7_exclusive_data.sh     # Paper7 shell wrapper (CI-friendly)
+│   ├── fetch-tx-hashes.ts               # TX hash fetcher utility
+│   └── scrape-tx.ts                     # Puppeteer Etherscan scraper
+├── docs/                     # ← Research reports and analysis documents
+│   └── OP_Mainnet_Gas_Analysis_Report.md  # Paper3/Paper7 gas cost evidence
+├── data/                     # Raw data store
+│   ├── gasless_data_collection.csv      # T1/T2/T2.1/T5 baseline (v1)
+│   ├── gasless_data_collection_v2.csv   # Controlled single-UserOp (v2)
+│   ├── gasless_metrics_detailed.csv     # Full L1/L2 fee decomposition
+│   ├── industry_paymaster_baselines.csv # Alchemy, Pimlico on-chain baselines
+│   ├── eoa_erc20_baseline.csv           # Raw EOA transfer baseline
+│   ├── paper7_exclusive/               # Paper7 credit/reputation/liquidity
+│   └── paper_gas_op_mainnet/           # Paper3 per-date controlled datasets
+│       ├── 2026-02-17/                 # V4 n=36, SuperPM n=43
+│       └── 2026-02-18/                 # V4/SuperPM with sender (n=50)
+└── reports/                  # HTML/Markdown summaries
+```
+
+---
+
+## Workflows
+
+### A. Collect OP Mainnet Paymaster Baselines (Paper3)
+```bash
+# V4 baseline: strict single UserOp + ERC20 transfer filter
+pnpm tsx packages/analytics/scripts/collect_paymaster_baselines.ts \
+  --network op-mainnet --type v4 --n 50 --strict-transfer --single-userop
+
+# SuperPaymaster baseline
+pnpm tsx packages/analytics/scripts/collect_paymaster_baselines.ts \
+  --network op-mainnet --type super --n 50
+```
+
+### B. Run Full Experiment (Coordinator)
+```bash
+# 1. Fetch History -> 2. Generate Missing Traffic -> 3. Analyze
+pnpm tsx packages/analytics/scripts/run_analytics_coordinator.ts --network sepolia
+```
+
+### C. Fetch Historical Data Only
+```bash
+pnpm tsx packages/analytics/scripts/run_analytics_coordinator.ts --fetch-only --network op-sepolia
+```
+
+### D. Transaction Scraper (Etherscan)
+Reads from `data/gasless_data_collection.csv`, outputs to `data/gasless_metrics_detailed.csv`.
+```bash
+pnpm tsx packages/analytics/scripts/scrape-tx.ts
+```
+
+---
+
+## Data Directory
+
+| File | Description |
+|------|-------------|
+| `data/gasless_data_collection.csv` | T1/T2/T2.1/T5 records with TxHash + Label |
+| `data/gasless_data_collection_v2.csv` | High-fidelity controlled dataset (single-UserOp, ERC20) |
+| `data/gasless_metrics_detailed.csv` | L1 Fee, L2 Fee, Gas Used (Puppeteer scraped) |
+| `data/industry_paymaster_baselines.csv` | Alchemy (mean=257k) + Pimlico (mean=387k) on-chain baselines |
+| `data/eoa_erc20_baseline.csv` | Raw EOA ERC20 transfer baseline |
+| `data/paper7_exclusive/` | Credit cycle + reputation + liquidity simulation (Anvil) |
+| `data/paper_gas_op_mainnet/2026-02-17/` | V4 n=36, SuperPM n=43 (strict filter) |
+| `data/paper_gas_op_mainnet/2026-02-18/` | V4/SuperPM with sender field (n=50) |
+
+---
+
+## Paper7 Exclusive Data (Credit / Reputation / Liquidity)
+
+Paper7 requires a distinct set of evidence to prove **CommunityFi closed-loop semantics**:
+
+- **Reputation → Credit**: contribution/reputation synced into Registry, credit limit observed to change
+- **Credit → Debt → Repay**: debt recorded in Paymaster/Registry, cleared via xPNTs
+- **Liquidity (Baseline)**: simulation curve showing gas-redeemable vs non-redeemable points over time
+
+### Running
+
+```bash
+# Unified entry (Anvil auto-start, deploy, sync, run all subtasks)
+pnpm exec tsx packages/analytics/scripts/paper7-exclusive-data.ts --network anvil --cycles 5
+
+# Shell wrapper (CI-friendly)
+bash packages/analytics/scripts/run_paper7_exclusive_data.sh --network anvil --cycles 5
+```
+
+### Output Structure
+
+```text
+data/paper7_exclusive/<timestamp>/
+  credit_cycle_1.json    # credit→debt→repay per account
+  ...
+  reputation_credit.json # reputation sync → credit limit mapping
+  liquidity_velocity_simulation.csv
+  synced_config.anvil.json
+```
+
+#### `credit_cycle_*.json` fields
+- `creditLimitWei / creditLimitEth`: credit limit in Registry
+- `debtBeforeWei / debtAfterRecordWei / debtAfterRepayWei`: debt lifecycle
+- `gasUsed.*`: per-step gas units (approve, setCreditTier, recordDebt, mint)
+
+#### `reputation_credit.json` fields
+- `score` / `globalReputation` / `creditLimitWei`: reputation → credit mapping
+- `gasUsed.*`: setRule, syncToRegistry, etc.
+
+#### `liquidity_velocity_simulation.csv` columns
+- `day`: simulation step
+- `points_gas_redeemable`: points stock when gas-redeemable
+- `points_baseline`: points stock without gas redemption
+
+---
+
+## Key Modules
+
+### 1. Traffic Generators (`src/generators/`)
+- **EOAGenerator**: Baseline ETH transfers for network cost measurement.
+- **SuperPaymasterGenerator**: Treatment group — credit/asset-oriented gasless model.
+- **PaymasterV4Generator**: Treatment group B — deposit model for comparison.
+
+### 2. Data Collectors (`src/collectors/`)
+- **HistoricalFetcher**: Etherscan/OptimismScan API for full transaction histories.
+- **EventFetcher**: On-chain `UserOperationEvent` log collector with strict filtering.
+
+### 3. Analysis Engine (`src/core/` & `src/analyzers/`)
+- **Attribution**: L1 Security | L2 Execution | Protocol Overhead breakdown.
+- **Comparison**: T1 vs T2 vs T2.1 vs T5 vs industry baselines.
+
 
 > **Status**: Active | **Version**: 3.0 (PhD Research Edition)
 
