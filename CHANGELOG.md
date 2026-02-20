@@ -39,9 +39,17 @@ All notable changes to this project will be documented in this file.
 - **[CHANGED]** Regenerated API markdown output under `docs/api/`.
 - **[ADDED]** `docs/guide/keeper.md`: keeper quickstart, anomaly detection, Telegram setup.
 
+### 🗂️ Analytics Consolidation
+- **[REFACTOR]** Moved all data collection scripts from `scripts/` root into `packages/analytics/scripts/` (git mv, history preserved):
+  `collect_paymaster_baselines`, `collect_eoa_erc20_baseline`, `collect_industry_baseline`, `compute_cost_summary`, `gasless-collect`, `paper7-exclusive-data`, `paper7_credit_loop`, `paper7_reputation_credit`, `run_analytics_coordinator`, `run_paper7_exclusive_data.sh`, `fetch-tx-hashes`
+- **[ADDED]** `packages/analytics/docs/OP_Mainnet_Gas_Analysis_Report.md`: gas cost evidence for Paper3/Paper7 (L1/L2 breakdown, PVG analysis, industry comparison, Mermaid pie charts).
+- **[UPDATED]** `packages/analytics/README.md`: new directory tree, updated all command paths to `packages/analytics/scripts/...`.
+- **Note**: Root shell scripts (`run-keeper-main.sh`, `run-optimism-tx-data.sh`, etc.) are unaffected — they only call `scripts/l4-*.ts` and `scripts/keeper.ts` which remain in place.
+
 ### 🔒 SDK Integrity
 **SDK Code Integrity Hash**: `cebb1de2edab0fb63cd47684ab977488410262fa50e485045abc5901894a3f6f`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
 
 ## [0.16.22] - 2026-02-11
 **SDK Code Integrity Hash**: `89da8c80ebe6ad8b06adbd4946a00817b18ae79296550709b20bd9ca3af424f9`
