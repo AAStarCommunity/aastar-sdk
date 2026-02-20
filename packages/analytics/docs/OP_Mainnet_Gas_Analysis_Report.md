@@ -641,34 +641,78 @@ pie title T5 Credit Settlement — 实际 ETH 支出结构
 
 4. **T2 Credit 与 T2.1 Normal 的 actualGasUsed 完全相同（244,101）**：说明 SuperPaymaster 在 credit 路径和 normal 路径下，链上执行开销一致（credit 逻辑已被链下预处理消化，链上只做 debt 记录）。
 
-### 10.5 PVG 是动态计算的吗？
+### 10.5 PVG 是动态计算的吗？（修正版）
 
 **当前 SDK 的 PVG 计算流程（三段式）**：
 
 ```
 阶段1: 本地估算
   estimatePreVerificationGasV07(userOp)
-  = Σ(calldata 字节成本) + 26,000 固定开销 + margin
-  ≈ 57,000 ~ 60,000 (不含 L1 data cost)
+  = Σ(calldata 字节成本) + 26,000 固定开销
+  ≈ 57,000 ~ 60,000 (不含 L1 data cost 分摊)
 
-阶段2: 使用 bundler 的估算
+阶段2: bundler 动态估算
   eth_estimateUserOperationGas → bundler.preVerificationGas
-  ≈ 57,000 ~ 60,000 (Alchemy 的 estimation 端点同样不含 L1)
-  SDK 取 bundler 值 × 1.2 + 5000
+  ≈ 57,000 ~ 60,000 (Alchemy estimation 端点同样不含完整 L1)
+  SDK 取 bundler 值 × 1.2 + 5000 ≈ 74,000
 
-阶段3: retry 修正（submission 时）
-  eth_sendUserOperation → 错误: "preVerificationGas must be >= 157,623"
-  SDK 取 bundler 要求值 × 1.05 → 实际用 ~165,000
+阶段3: submission 错误修正
+  eth_sendUserOperation → 拒绝: "preVerificationGas must be >= 157,623"
+  SDK 取 bundler 要求值 × 1.05 → 实际填入 ~165,000
 ```
 
-**问题根因**：Alchemy 的 `eth_estimateUserOperationGas` 端点对 PVG 使用较宽松的估算（约 57k），而 `eth_sendUserOperation` 端点使用严格估算（包含完整 L1 data cost 分摊，约 157k）。两个端点的 PVG 一致性问题是 Alchemy bundler 的特性，不是我们的错误。
+**"76k PVG proxy" 的正确解读**：
 
-**实际 PVG proxy（~76k）与链上 actualGasUsed 的差异**：
+本节 10.1 表格中的"PVG overhead proxy = actualGasUsed - txGasUsed ≈ 76k"是一个**数学差值**，不是最优 PVG：
 
-- actualGasUsed（~244k）- txGasUsed（~168k）= PVG proxy（~76k）
-- 但 SDK 最终填入的 PVG 是 ~165k（bundler 要求值 × 1.05）
-- 差异 = 165k - 76k ≈ 89k 为 **unused gas penalty**（ERC-4337 EntryPoint 对"预留但未用满的 gas"的惩罚性收费）
+```
+数据采集脚本（非 SDK）使用了固定 PVG = 100,000
+actualGasUsed = execution_phases + PVG_set
+             = (txGasUsed - EP_overhead) + PVG_set
+             = (168k - 24k) + 100k = 244k  ✓
 
-这意味着 actualGasCost 中有 ~89k × effectiveGasPrice 是被浪费的。未来优化方向：让 bundler 的 estimation 和 submission 端点对 PVG 保持一致，从而消除 penalty；或使用 Pimlico / Stackup 等与 estimation 一致性更好的 bundler。
+PVG proxy = actualGasUsed - txGasUsed
+          = (144k + 100k) - 168k
+          = PVG_set - EP_overhead
+          = 100,000 - 24,079 ≈ 76k
 
+因此：76k ≠ "最小可用PVG"，而是 "PVG_set(100k) 减去 EP 自身开销(24k)"
+```
+
+**为什么不能用 76k × 1.05 作为 PVG？**
+
+Bundler 要求 PVG ≥ 157,623，不是 76k。Bundler 的最低要求包含：
+1. UserOp calldata 编码成本（L1 data fee 分摊到每字节 calldata）
+2. Bundler 提交 handleOps 交易的 L2 gas 成本（EP overhead + 21k base）
+3. Bundler 内部运营成本 / profit margin
+
+EP 的"execution_phases overhead"（约 24k）只是 EntryPoint 函数本身用掉的 gas，而 Bundler 的真实成本远不止于此。
+
+**我们实际多付了多少？**
+
+| PVG 设置 | actualGasUsed | 相比数据脚本(PVG=100k) 多付 |
+|----------|--------------|-------------------------|
+| 数据脚本: 100,000 | 244,101 | 基准 |
+| **SDK retry: 165,000** | ~309,000 | **(165k-100k)×price = 65k×0.000152 Gwei ≈ $0.00002** |
+| 理论最优: 157,623 | ~302,000 | (157k-100k)×price ≈ $0.000018 |
+
+**实际多付金额约 $0.00002/tx（约 2 美分/千笔），可忽略不计。**
+
+> SDK 设计的正确选择是：使用 bundler submission 错误反馈的精确值（157,623）× 1.05 = 165,504。这是在**确保交易被接受**的前提下最节约的做法，不存在能绕开的办法，除非 bundler 的 estimation 端点与 submission 端点对 PVG 的计算保持一致（目前 Alchemy 的两个端点不一致，这是他们的特性）。
+
+**`eth_maxPriorityFeePerGas` / `eth_estimateGas` / `eth_gasPrice` 对 PVG 有帮助吗？**
+
+**没有帮助**。这三个 API 都是关于 **gas price（Gwei/gas，即每单位 gas 的报价）**，而 PVG 是 **gas limit（gas 单位数，即预留多少 gas）**，是两个完全不同的维度：
+
+| API | 返回内容 | 与 PVG 的关系 |
+|-----|---------|-------------|
+| `eth_maxPriorityFeePerGas` | 当前建议的 tip（priority fee，单位 Gwei）| 无关 |
+| `eth_gasPrice` | 当前 baseFee + tip 合计（单位 Gwei）| 无关 |
+| `eth_estimateGas` | 某笔 ETH 调用的 gas limit 估算 | 无关（不是 UserOp 接口）|
+| `eth_estimateUserOperationGas` | **UserOp 的 gas limits 估算**（含 PVG）| **有关，但 Alchemy 此端点给的 PVG 偏低** |
+
+真正有帮助的方式：
+- **方案 A（已实现）**：从 `eth_sendUserOperation` 错误消息中提取 bundler 要求的精确 PVG → 使用 × 1.05
+- **方案 B（可尝试）**：Pimlico 的 `pm_getUserOperationGasPrice` 提供比 Alchemy 更准确的 UserOp gas 估算（两端点一致性更好）
+- **方案 C（长期）**：换用 estimation 和 submission 一致的 bundler（Stackup、Pimlico）
 
