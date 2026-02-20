@@ -166,6 +166,8 @@ type Row = {
     UserOpHash: string;
     Sender: string;
     ActualGasUsed: string;
+    TxGasUsed: string;
+    PreVerificationGas: string;
     APNTS_Cost: string;
     XPNTS_Cost: string;
     CreditType: string;
@@ -380,8 +382,8 @@ async function userOpCallDataByHash(
     client: ReturnType<typeof createPublicClient>,
     entryPoint: `0x${string}`,
     decoded: DecodedHandleOps
-): Promise<Map<string, string>> {
-    const m = new Map<string, string>();
+): Promise<Map<string, { callData: string; preVerificationGas: bigint }>> {
+    const m = new Map<string, { callData: string; preVerificationGas: bigint }>();
     for (const op of decoded.ops) {
         const userOpHash = (await client.readContract({
             address: entryPoint,
@@ -391,7 +393,9 @@ async function userOpCallDataByHash(
         })) as `0x${string}`;
         const callData = String(op?.callData || '');
         if (!callData) continue;
-        m.set(userOpHash.toLowerCase(), callData.toLowerCase());
+        const preVerificationGas = op?.preVerificationGas as bigint | undefined;
+        if (typeof preVerificationGas !== 'bigint') continue;
+        m.set(userOpHash.toLowerCase(), { callData: callData.toLowerCase(), preVerificationGas });
     }
     return m;
 }
@@ -581,6 +585,7 @@ async function main() {
     const processTx = async (tx: `0x${string}`) => {
         const receipt: any = await client.request({ method: 'eth_getTransactionReceipt', params: [tx] } as any);
         const allLogs: any[] = Array.isArray(receipt?.logs) ? receipt.logs : [];
+        const txGasUsed = BigInt(receipt?.gasUsed || 0n);
         const sponsoredCostsByUser = transactionSponsoredCostsByUser(paymaster, allLogs);
         const debtByUser = debtRecordedAmountByUser(allLogs);
         const txLogs = allLogs.filter(
@@ -608,10 +613,10 @@ async function main() {
             const gasUsed = parseActualGasUsed(log.data);
             if (gasUsed === null) continue;
             const userOpHash = String(log.topics?.[1] || '').toLowerCase();
-            const callData = callDataMap.get(userOpHash) || '';
-            if (!callData) continue;
-            const strictResult = strictTransfer ? isSimpleTransferCallData(callData) : { ok: true, reason: 'strict disabled' };
-            if (!strictTransfer && !callData.includes(selector)) continue;
+            const userOpInfo = callDataMap.get(userOpHash);
+            if (!userOpInfo) continue;
+            const strictResult = strictTransfer ? isSimpleTransferCallData(userOpInfo.callData) : { ok: true, reason: 'strict disabled' };
+            if (!strictTransfer && !userOpInfo.callData.includes(selector)) continue;
             if (!strictResult.ok) continue;
             const sender = topicToAddress(log.topics?.[2]).toLowerCase();
             const sponsored = sponsoredCostsByUser.get(sender);
@@ -639,6 +644,8 @@ async function main() {
                 UserOpHash: String(log.topics?.[1] || ''),
                 Sender: sender as `0x${string}`,
                 ActualGasUsed: gasUsed.toString(),
+                TxGasUsed: txGasUsed.toString(),
+                PreVerificationGas: userOpInfo.preVerificationGas.toString(),
                 APNTS_Cost: sponsored ? sponsored.aPNTsCost.toString() : '',
                 XPNTS_Cost: sponsored ? sponsored.xPNTsCost.toString() : '',
                 CreditType: creditType,
@@ -781,6 +788,8 @@ async function main() {
             { id: 'UserOpHash', title: 'UserOpHash' },
             ...(includeSender ? [{ id: 'Sender', title: 'Sender' } as const] : []),
             { id: 'ActualGasUsed', title: 'ActualGasUsed' },
+            { id: 'TxGasUsed', title: 'TxGasUsed' },
+            { id: 'PreVerificationGas', title: 'PreVerificationGas' },
             { id: 'APNTS_Cost', title: 'APNTS_Cost' },
             { id: 'XPNTS_Cost', title: 'XPNTS_Cost' },
             { id: 'CreditType', title: 'CreditType' },

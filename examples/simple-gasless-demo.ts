@@ -75,12 +75,17 @@ async function main() {
     }).extend(bundlerActions);
 
     try {
-        const receipt = await bundlerClient.waitForUserOperationReceipt({ 
-            hash: txHash,
-            timeout: 60000 // Increase timeout to 60s
-        });
+        const receipt = await PaymasterClient.waitForUserOperation(bundlerClient, txHash);
 
-        const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';
+        if (receipt.timeout) {
+            console.log(`\n⚠️  Polling Timeout: Receipt not available yet.`);
+            console.log(`ℹ️  UserOp Hash: ${txHash}`);
+            const explorerUrl = config.explorerUrl || config.chain.blockExplorers?.default.url || 'https://etherscan.io';
+            console.log(`🔗 Check status: ${explorerUrl}/tx/${txHash}`);
+            return;
+        }
+
+        const explorerUrl = config.explorerUrl || config.chain.blockExplorers?.default.url || 'https://etherscan.io';
         console.log(`\n🎉 Done! Transaction Hash: ${receipt.receipt.transactionHash}`);
         console.log(`🔗 Tracking: ${explorerUrl}/tx/${receipt.receipt.transactionHash}`);
 

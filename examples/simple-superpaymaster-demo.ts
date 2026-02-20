@@ -103,9 +103,7 @@ async function main() {
         transport: http(APP_CONFIG.bundlerUrl)
     }).extend(bundlerActions);
 
-    const receipt = await bundlerClient.waitForUserOperationReceipt({ 
-        hash: userOpHash 
-    });
+    const receipt = await PaymasterClient.waitForUserOperation(bundlerClient, userOpHash);
 
     console.log(`\n🎉 Transaction Mined!`);
     const explorerUrl = config.chain.blockExplorers?.default.url || 'https://etherscan.io';

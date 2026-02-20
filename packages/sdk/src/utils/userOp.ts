@@ -1,4 +1,4 @@
-import { type Address, type Hex, concat, pad, keccak256, encodeAbiParameters, parseAbiParameters, type PublicClient } from 'viem';
+import { type Address, type Hex, concat, pad, keccak256, encodeAbiParameters, parseAbiParameters, toBytes, type PublicClient } from 'viem';
 
 /**
  * ERC-4337 v0.7 Packed UserOperation structure.
@@ -47,6 +47,55 @@ export class UserOperationBuilder {
             pad(`0x${maxPriorityFeePerGas.toString(16)}`, { dir: 'left', size: 16 }),
             pad(`0x${maxFeePerGas.toString(16)}`, { dir: 'left', size: 16 })
         ]) as Hex;
+    }
+
+    static estimatePreVerificationGasV07(userOp: {
+        sender: Address;
+        nonce: bigint | Hex | number | string;
+        initCode: Hex;
+        callData: Hex;
+        accountGasLimits: Hex;
+        preVerificationGas: bigint | Hex | number | string;
+        gasFees: Hex;
+        paymasterAndData: Hex;
+        signature: Hex;
+    }): bigint {
+        const nonce =
+            typeof userOp.nonce === 'bigint'
+                ? userOp.nonce
+                : typeof userOp.nonce === 'number'
+                    ? BigInt(userOp.nonce)
+                    : BigInt(userOp.nonce);
+
+        const preVerificationGas =
+            typeof userOp.preVerificationGas === 'bigint'
+                ? userOp.preVerificationGas
+                : typeof userOp.preVerificationGas === 'number'
+                    ? BigInt(userOp.preVerificationGas)
+                    : BigInt(userOp.preVerificationGas);
+
+        const encoded = encodeAbiParameters(
+            parseAbiParameters('(address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)'),
+            [
+                [
+                    userOp.sender,
+                    nonce,
+                    userOp.initCode,
+                    userOp.callData,
+                    userOp.accountGasLimits,
+                    preVerificationGas,
+                    userOp.gasFees,
+                    userOp.paymasterAndData,
+                    userOp.signature
+                ]
+            ]
+        );
+
+        const bytes = toBytes(encoded);
+        let calldataCost = 0n;
+        for (const b of bytes) calldataCost += b === 0 ? 4n : 16n;
+
+        return calldataCost + 26000n;
     }
 
     /**
