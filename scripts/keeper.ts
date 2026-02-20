@@ -195,6 +195,8 @@ async function runCastSend(params: {
     keystorePath?: string;
     accountName?: string;
     passwordFilePath: string;
+    gasPriceWei?: bigint;   // explicit gas-price to avoid cast hanging on estimation
+    processTimeoutMs?: number; // hard kill timeout (default 90s)
 }): Promise<string> {
     const cmd = 'cast';
     const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
@@ -207,20 +209,41 @@ async function runCastSend(params: {
         throw new Error('cast mode requires --keystore or --cast-account/DEPLOYER_ACCOUNT');
     }
 
+    // Explicit gas price prevents cast from calling eth_estimateGas (which can hang)
+    if (params.gasPriceWei && params.gasPriceWei > 0n) {
+        castArgs.push('--gas-price', params.gasPriceWei.toString());
+    }
+
     castArgs.push('--password-file', params.passwordFilePath, params.target, 'updatePrice()');
+
+    const killTimeoutMs = params.processTimeoutMs ?? 90_000;
 
     return await new Promise((resolve, reject) => {
         const child = spawn(cmd, castArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
         let out = '';
         let err = '';
-        child.stdout.on('data', (d) => {
-            out += d.toString();
+        let settled = false;
+
+        // Hard kill timeout — cast --timeout only controls receipt polling, not the process
+        const killTimer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            child.kill('SIGKILL');
+            reject(new Error(`cast send timed out after ${killTimeoutMs}ms (process killed)`));
+        }, killTimeoutMs);
+
+        child.stdout.on('data', (d) => { out += d.toString(); });
+        child.stderr.on('data', (d) => { err += d.toString(); });
+        child.on('error', (e) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(killTimer);
+            reject(e);
         });
-        child.stderr.on('data', (d) => {
-            err += d.toString();
-        });
-        child.on('error', reject);
         child.on('close', (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(killTimer);
             const merged = `${out}\n${err}`.trim();
             if (code !== 0) return reject(new Error(merged || `cast exited with code ${code}`));
             const txMatch = merged.match(/transactionHash\s+([0x][0-9a-fA-F]{64})/);
@@ -693,7 +716,7 @@ async function main() {
             }
         }
 
-        const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster'): Promise<string> => {
+        const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster', gasPriceWei?: bigint): Promise<string> => {
             if (mode === 'cast') {
                 if (!passwordFilePath) throw new Error('cast mode requires password file (should have been created at startup)');
                 return await runCastSend({
@@ -701,7 +724,9 @@ async function main() {
                     target,
                     keystorePath: keystorePath || undefined,
                     accountName: !keystorePath ? castAccount || undefined : undefined,
-                    passwordFilePath
+                    passwordFilePath,
+                    gasPriceWei,
+                    processTimeoutMs: 90_000
                 });
             }
             if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY or PRIVATE_KEY_SUPPLIER');
@@ -752,7 +777,9 @@ async function main() {
             }
 
             console.log(`action=sendTx kind=super method=updatePrice() target=${superPaymaster}`);
-            const txHash = await sendUpdate(superPaymaster, 'super');
+            let sendGasPrice: bigint | undefined;
+            try { sendGasPrice = await publicClient.getGasPrice(); } catch {}
+            const txHash = await sendUpdate(superPaymaster, 'super', sendGasPrice);
             updatesTodayByPaymaster.set(superPaymaster, updatesToday + 1);
 
             if (txHash) {
@@ -875,7 +902,9 @@ async function main() {
             }
 
             console.log(`action=sendTx kind=paymaster method=updatePrice() target=${paymaster}`);
-            const txHash = await sendUpdate(paymaster, 'paymaster');
+            let sendGasPrice: bigint | undefined;
+            try { sendGasPrice = await publicClient.getGasPrice(); } catch {}
+            const txHash = await sendUpdate(paymaster, 'paymaster', sendGasPrice);
             updatesTodayByPaymaster.set(paymaster, updatesToday + 1);
 
             if (txHash) {

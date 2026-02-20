@@ -116,11 +116,14 @@ async function main() {
             args: [dPNTs, 0n, transferCalldata]
         }),
         accountGasLimits: UserOperationBuilder.packAccountGasLimits(200000n, 200000n),
-        preVerificationGas: 100000n,
+        preVerificationGas: 0n,
         gasFees: UserOperationBuilder.packGasFees(1n, 1n),
         paymasterAndData,
-        signature: '0x' as `0x${string}` // Placeholder, will be replaced after signing
+        signature: (`0x${'11'.repeat(65)}`) as `0x${string}`
     };
+
+    const pvg1 = (UserOperationBuilder.estimatePreVerificationGasV07({ ...userOp, preVerificationGas: 0n }) * 120n) / 100n + 5000n;
+    userOp.preVerificationGas = (UserOperationBuilder.estimatePreVerificationGasV07({ ...userOp, preVerificationGas: pvg1 }) * 120n) / 100n + 5000n;
     
     console.log(`   UserOp constructed`);
     console.log(`   - Sender: ${userOp.sender}`);

@@ -40,7 +40,7 @@ export const NETWORKS = {
     chainId: 11155420,
     name: 'Optimism Sepolia',
     rpcUrl: 'https://sepolia.optimism.io',
-    blockExplorer: 'https://optimism-sepolia.blockscout.com',
+    blockExplorer: 'https://sepolia-optimism.etherscan.io',
     nativeCurrency: {
       name: 'Sepolia Ether',
       symbol: 'ETH',

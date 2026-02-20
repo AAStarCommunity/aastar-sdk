@@ -90,25 +90,28 @@ export class SuperPaymasterClient {
         // SuperPaymaster Logic Cost: ~80,000 to 120,000 gas depending on cold storage
         // Bundler Estimate usually returns the *actual execution path* gas.
         
-        let vgl = est.verificationGasLimit;
-        
-        // Safety Floor: If estimate is suspiciously low (e.g. < 50k), bump it for PM logic
-        // But if we bump it too high, we hit "Efficiency too low".
-        // Let's trust the bundler's estimate but add a fixed safety pad for dynamic storage
-        const SAFETY_PAD = 80000n; 
-        const tunedVGL = vgl + SAFETY_PAD;
+
 
         // CRITICAL FIX: Set paymasterVerificationGasLimit for optimal efficiency
         // Bundler requires efficiency ratio >= 0.4 (actual_gas_used / gas_limit >= 0.4)
         // SuperPaymaster validatePaymasterUserOp uses ~110-120k gas (measured)
-        // Test results:
         // Analysis (Jan 19 Update-Final-Final):
         //   Instead of fixed percentage, use "Dynamic Nominal Gas Tuning".
         //   SuperPaymaster validation common case is ~58k-66k. Worst case (refresh) 115k.
         //   Setting nominal benchmark to 60k gives Ceiling = 60k / 0.45 = 133,333.
         //   This satisfies 0.4 efficiency (58/133=0.43) AND execution (115 < 133).
-        const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
-        const tunedPMVerificationGas = tuneGasLimit(bundlerEstimate, 60_000n, 0.45);
+        
+        // 1. Tune Account Verification Gas Limit (VGL)
+        // Bundler might return huge VGL (e.g. 250k) which kills efficiency if usage is low.
+        // We need to clamp VGL down closer to actual usage.
+        // Let's assume standard account validation + execution is ~35k.
+        // Target: 35k / 0.45 = 77k Limit.
+        const tunedVGL = tuneGasLimit(est.verificationGasLimit, 35_000n, 0.45);
+
+        // 2. Tune Paymaster Verification Gas Limit (PMVGL)
+        // Ensure bundler estimate is respected as floor for PMVGL
+        const bundlerEstimateVGL = est.paymasterVerificationGasLimit || 100000n;
+        const tunedPMVerificationGas = tuneGasLimit(bundlerEstimateVGL, 60_000n, 0.45);
 
         // Same for PostOp
         const tunedPostOp = est.paymasterPostOpGasLimit + 10000n;

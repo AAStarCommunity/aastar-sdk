@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, keccak256 } from 'viem';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, toHex, encodeFunctionData, parseAbi, concat, encodeAbiParameters, parseAbiParameters, toBytes, keccak256 } from 'viem';
 import type { Hex, Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
@@ -26,6 +26,41 @@ if (!SUPER_PAYMASTER || !APNTS || !REGISTRY_ADDR) throw new Error("Missing Confi
 // Helper: Pack 128-bit values
 function packUint(high128: bigint, low128: bigint): Hex {
     return `0x${((high128 << 128n) | low128).toString(16).padStart(64, '0')}`;
+}
+
+function estimatePreVerificationGasV07(userOp: {
+    sender: Address;
+    nonce: bigint;
+    initCode: Hex;
+    callData: Hex;
+    accountGasLimits: Hex;
+    preVerificationGas: bigint;
+    gasFees: Hex;
+    paymasterAndData: Hex;
+    signature: Hex;
+}): bigint {
+    const encoded = encodeAbiParameters(
+        parseAbiParameters('(address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)'),
+        [
+            [
+                userOp.sender,
+                userOp.nonce,
+                userOp.initCode,
+                userOp.callData,
+                userOp.accountGasLimits,
+                userOp.preVerificationGas,
+                userOp.gasFees,
+                userOp.paymasterAndData,
+                userOp.signature
+            ]
+        ]
+    );
+
+    const bytes = toBytes(encoded);
+    let calldataCost = 0n;
+    for (const b of bytes) calldataCost += b === 0 ? 4n : 16n;
+
+    return calldataCost + 26000n;
 }
 
 async function runFullV3Test() {
@@ -409,14 +444,42 @@ async function sendUserOp(client: any, bundler: any, signer: any, sender: Hex, t
         estRes = {
             verificationGasLimit: 500000n,
             callGasLimit: 300000n,
-            preVerificationGas: 100000n
+            preVerificationGas: 0n
         };
     }
     
     const verificationGasLimit = BigInt(estRes.verificationGasLimit ?? 500000n) + 50000n;
     const callGasLimit = BigInt(estRes.callGasLimit ?? 100000n) + 20000n;
-    const preVerificationGas = BigInt(estRes.preVerificationGas ?? 50000n);
+    let preVerificationGas = BigInt(estRes.preVerificationGas ?? 0n);
     const maxFee = (await client.getBlock()).baseFeePerGas! * 2n + parseEther("5", "gwei");
+    if (preVerificationGas === 0n) {
+        const placeholderSig = "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c" as Hex;
+        const accountGasLimits = packUint(verificationGasLimit, callGasLimit);
+        const gasFees = packUint(parseEther("5", "gwei"), maxFee);
+        const paymasterAndData = concat([pmStruct.paymaster, packUint(350000n, 20000n), pmStruct.paymasterData]);
+        const pvg1 = (estimatePreVerificationGasV07({
+            sender,
+            nonce: BigInt(nonce),
+            initCode: "0x" as Hex,
+            callData,
+            accountGasLimits,
+            preVerificationGas: 0n,
+            gasFees,
+            paymasterAndData,
+            signature: placeholderSig
+        }) * 120n) / 100n + 5000n;
+        preVerificationGas = (estimatePreVerificationGasV07({
+            sender,
+            nonce: BigInt(nonce),
+            initCode: "0x" as Hex,
+            callData,
+            accountGasLimits,
+            preVerificationGas: pvg1,
+            gasFees,
+            paymasterAndData,
+            signature: placeholderSig
+        }) * 120n) / 100n + 5000n;
+    }
 
     const packedOp = {
         sender, nonce, initCode: "0x" as Hex, callData,
