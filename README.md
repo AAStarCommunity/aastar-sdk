@@ -149,23 +149,32 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 🌐 **Online Documentation Site:** For a fully structured and searchable reading experience, you can also visit: [docs.aastar.io](https://docs.aastar.io)
 
 ### 🏛 Architecture & APIs
-- **[SDK API Reference & Architecture](./docs/API_REFERENCE.md)**
+- **[SDK API Reference & Architecture (L1-L4)](./docs/API_REFERENCE.md)**
+- [L2 Business Clients Plan](./docs/L2_BUSINESS_CLIENTS_PLAN.md)
 - [L3 Lifecycle Patterns Design](./docs/L3_Lifecycle_Patterns_Design.md)
 - [L3 Lifecycle Developer Guide](./docs/L3_Lifecycle_Developer_Guide.md)
 - [L3 Complete Walkthrough](./docs/L3_Complete_Demo_Walkthrough.md)
 - [L3 Use Case Analysis](./docs/L3_Use_Case_Analysis.md)
 - [Account Initialization Guide](./docs/Account_Initialization_Guide_CN.md)
+- [Demo Refactor Plan](./docs/DEMO_REFACTOR_PLAN.md)
+- [Technical Architecture Plan](./docs/technical_plan.md)
+- [Documentation Plan](./docs/DOCUMENTATION_PLAN.md)
 
 ### 🧪 Configuration & Testing
 - **[Configuration Sync Guide](./docs/Configuration_Sync.md)** *(Explains Integrity Hash generation)*
 - **[Full L4 Test Regression Plan](./docs/Verifier_L4_Gasless_Plan.md)** *(Gasless Verifier workflow)*
+- [SDK Regression & API Plan](./docs/SDK_REGRESSION_AND_API_PLAN.md)
+- [SDK Coverage Strategy](./docs/SDK_COVERAGE_STRATEGY.md)
+- [TODO: SDK Coverage](./docs/TODO_SDK_COVERAGE.md)
 - [Manual Test CheatSheet](./docs/L4_Manual_Test_CheatSheet.md)
+- [Environment Update Guide (Sepolia)](./docs/ENV_SEPOLIA_UPDATE.md)
 - [ABI Maintenance Plan](./docs/ABI_MAINTENANCE_PLAN.md)
 - [Sepolia Verified Contracts](./docs/verify.sepolia.contracts.md) / [OP-Sepolia Verified Contracts](./docs/verify.op-sepolia.contracts.md)
 
 ### 📊 Gas Analytics & Research
-- **[Gas Analytics Module Documentation](./packages/analytics/README.md)**
+- **[🚀 OP Mainnet Gas Analytics & Reporting](./packages/analytics/README.md)**
 - **[Reputation-to-Credit Mapping Whitepaper](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)**
+- [DAO Mining Distribution Plan](./docs/DAO_Mining_Distribution_Plan.md)
 - [Academic Application: Paper Data Collection](./docs/paper-data-collection.md)
 - [Stage 3 Scenario Experiment Plan](./docs/SDK_STAGE3_PLAN.md) / [Stage 3 Analysis](./docs/SDK_STAGE3_ANALYSIS.md)
 
@@ -319,22 +328,31 @@ forge script script/DeployV3FullSepolia.s.sol --rpc-url $SEPOLIA_RPC_URL --broad
 
 #### 🏛 架构与 API
 - **[SDK 架构基准与 API 参考 (L1-L4)](./docs/API_REFERENCE.md)**
+- [L2 业务客户端演进计划](./docs/L2_BUSINESS_CLIENTS_PLAN.md)
 - [L3 全生命周期模式设计](./docs/L3_Lifecycle_Patterns_Design.md)
 - [L3 开发者指南](./docs/L3_Lifecycle_Developer_Guide.md)
 - [L3 完整演练指南](./docs/L3_Complete_Demo_Walkthrough.md)
 - [L3 业务场景与缺口分析](./docs/L3_Use_Case_Analysis.md)
 - [首发账户初始化指南](./docs/Account_Initialization_Guide_CN.md)
+- [Demo 重构计划](./docs/DEMO_REFACTOR_PLAN.md)
+- [技术架构演进方案](./docs/technical_plan.md)
+- [文档建设体系计划](./docs/DOCUMENTATION_PLAN.md)
 
 #### 🧪 配置与测试
 - **[环境配置与哈希同步机制 (Configuration Sync)](./docs/Configuration_Sync.md)** *(含版本哈希防篡改机制说明)*
 - **[L4 级别回归测试方案 (免 Gas 验证器)](./docs/Verifier_L4_Gasless_Plan.md)** *(项目最重要的测试准则)*
+- [SDK 回归测试与 API 计划](./docs/SDK_REGRESSION_AND_API_PLAN.md)
+- [SDK 测试覆盖率策略](./docs/SDK_COVERAGE_STRATEGY.md)
+- [待办：SDK 测试覆盖](./docs/TODO_SDK_COVERAGE.md)
 - [手动调试速查表](./docs/L4_Manual_Test_CheatSheet.md)
+- [环境配置更新指南 (Sepolia)](./docs/ENV_SEPOLIA_UPDATE.md)
 - [合约 ABI 维护计划](./docs/ABI_MAINTENANCE_PLAN.md)
 - [Sepolia 已验证合约地址](./docs/verify.sepolia.contracts.md) / [OP-Sepolia 已验证合约地址](./docs/verify.op-sepolia.contracts.md)
 
 #### 📊 Gas 数据与学术研究
-- **[Gas 数据分析器文档](./packages/analytics/README.md)**
+- **[🚀 OP 主网 Gas 数据分析与报告](./packages/analytics/README.md)**
 - **[名誉到信用映射白皮书](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)**
+- [DAO 挖矿与分发机制设计](./docs/DAO_Mining_Distribution_Plan.md)
 - [学术研究：论文数据采集](./docs/paper-data-collection.md)
 - [Stage 3 场景实验计划](./docs/SDK_STAGE3_PLAN.md) / [Stage 3 结论分析](./docs/SDK_STAGE3_ANALYSIS.md)
 
