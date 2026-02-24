@@ -4,23 +4,38 @@
 
 AAStar SDK is a comprehensive TypeScript SDK for interacting with the AAStar Public Goods Infrastructure and create Your Own Protocol (YOP), providing Account Abstraction (ERC-4337) capabilities with advanced features like gasless SuperPaymaster(AOA+), EOA RainBow Bridge and community management, and reputation systems.
 
-**Version**: 0.14.0  
+**Version**: 0.16.23  
 **License**: MIT  
 **Repository**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)
+
+---
+
+## SDK Architecture (L1-L4 Tiers)
+
+The SDK follows a layered abstraction model to balance control and ease of use:
+
+| Tier | Name | Target | Description |
+| :--- | :--- | :--- | :--- |
+| **L1** | **Base API** | Protocol Engineers | Raw contract wrappers (Registry, Paymaster, SBT). |
+| **L2** | **Workflows** | Integrators | Atomic tasks (e.g., `onboardOperator`, `deployXPNTs`). |
+| **L3** | **Scenarios** | dApp Developers | End-to-end journeys (e.g., `submitGaslessUserOperation`). |
+| **L4** | **Regression** | QA / Researchers | Full system lifecycle verification. |
 
 ---
 
 ## Table of Contents
 
 1. [Installation](#installation)
-2. [Quick Start](#quick-start)
-3. [Core Module](#core-module)
-4. [Account Module](#account-module)
-5. [Paymaster Module](#paymaster-module)
-6. [Tokens Module](#tokens-module)
-7. [Identity Module](#identity-module)
-8. [DApp Module](#dapp-module)
-9. [Complete Examples](#complete-examples)
+2. [SDK Architecture](#sdk-architecture-l1-l4-tiers)
+3. [Quick Start](#quick-start)
+4. [Core Module](#core-module)
+5. [Account Module](#account-module)
+6. [Paymaster Module](#paymaster-module)
+7. [Tokens Module](#tokens-module)
+8. [Identity Module](#identity-module)
+9. [DApp Module](#dapp-module)
+10. [Complete Examples](#complete-examples)
+11. [Gas Strategy & Keeper](#gas-strategy--keeper)
 
 ---
 
@@ -788,6 +803,21 @@ import type {
 - **Documentation**: [docs.aastar.io](https://docs.aastar.io)
 - **GitHub**: [AAStarCommunity/aastar-sdk](https://github.com/AAStarCommunity/aastar-sdk)
 - **Discord**: [Join our community](https://discord.gg/aastar)
+
+---
+
+## Gas Strategy & Keeper
+
+### Gas Pricing Strategy
+The SDK implements a dynamic gas pricing strategy to balance cost and reliability:
+- **Mainnet**: Uses a **1.2x boost** on base fees to ensure inclusion during volatility.
+- **Testnets**: Enforces a minimum **0.5 Gwei** priority fee to prevent transaction hangs.
+
+### Service Maintenance (Keeper)
+The `scripts/keeper.ts` utility maintains paymaster price freshness:
+- **Hot Path**: Reads from local `cachedPrice` to minimize gas.
+- **Auto-Refresh**: Triggers `updatePrice()` when staleness exceeds the threshold.
+- **Resilience**: Features 90s internal timeouts and Telegram alerting.
 
 ---
 
