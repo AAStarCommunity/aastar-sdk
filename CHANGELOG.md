@@ -4,8 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [0.16.24] - 2026-02-20
-
+## [0.16.23] - 2026-02-24
+**SDK Code Integrity Hash**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
   - Testnets (Sepolia, OP-Sepolia, Anvil, chainId 11155111/11155420/31337): apply `0.5 Gwei` floor on `maxPriorityFeePerGas` / `1.0 Gwei` floor on `maxFeePerGas`. Fixes `WaitForUserOperationReceiptTimeoutError` caused by Alchemy bundler's minimum fee requirement being higher than OP Sepolia's near-zero network fee.
