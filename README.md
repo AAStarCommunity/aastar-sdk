@@ -24,8 +24,7 @@
 - [Quick Start](#quick-start)
 - [🧰 Keeper (Service Maintenance)](#-keeper-service-maintenance)
 - [Development Workflow](#development-workflow)
-- [📊 Gas Analytics & Reporting](#-gas-analytics--reporting)
-- [Academic Research](#academic-research)
+- [📂 Core Documentation Index](#-core-documentation-index)
 - [🛡️ Integrity Verification](#️-integrity-verification)
 - [📝 中文版本 / Chinese Version](#-中文版本--chinese-version)
 
@@ -143,25 +142,32 @@ forge script script/DeployV3FullSepolia.s.sol --rpc-url $SEPOLIA_RPC_URL --broad
 
 ---
 
-## 📊 Gas Analytics & Reporting
+## 📂 Core Documentation Index
 
-The SDK includes a powerful **Gas Analytics Module** for tracking costs and generating comparison reports.
+To ensure seamless navigation and rapid reference, **all critical documentation** is stored locally in the `docs/` folder instead of requiring external web access.
 
-### Quick Start
-```bash
-npx tsx packages/analytics/src/gas-analyzer-v4.ts
-```
-👉 **[View Full Analytics Documentation](./packages/analytics/README.md)**
+🌐 **Online Documentation Site:** For a fully structured and searchable reading experience, you can also visit: [docs.aastar.io](https://docs.aastar.io)
 
----
+### 🏛 Architecture & APIs
+- **[SDK API Reference & Architecture](./docs/API_REFERENCE.md)**
+- [L3 Lifecycle Patterns Design](./docs/L3_Lifecycle_Patterns_Design.md)
+- [L3 Lifecycle Developer Guide](./docs/L3_Lifecycle_Developer_Guide.md)
+- [L3 Complete Walkthrough](./docs/L3_Complete_Demo_Walkthrough.md)
+- [L3 Use Case Analysis](./docs/L3_Use_Case_Analysis.md)
+- [Account Initialization Guide](./docs/Account_Initialization_Guide_CN.md)
 
-## Academic Research
+### 🧪 Configuration & Testing
+- **[Configuration Sync Guide](./docs/Configuration_Sync.md)** *(Explains Integrity Hash generation)*
+- **[Full L4 Test Regression Plan](./docs/Verifier_L4_Gasless_Plan.md)** *(Gasless Verifier workflow)*
+- [Manual Test CheatSheet](./docs/L4_Manual_Test_CheatSheet.md)
+- [ABI Maintenance Plan](./docs/ABI_MAINTENANCE_PLAN.md)
+- [Sepolia Verified Contracts](./docs/verify.sepolia.contracts.md) / [OP-Sepolia Verified Contracts](./docs/verify.op-sepolia.contracts.md)
 
-The SDK supports doctoral data collection for the CommunityFi/SuperPaymaster papers.
-
-- [Stage 3 Scenario Experiment Plan](https://docs.aastar.io/guide/STAGE_3_SCENARIO_EXP_PLAN)
-- [Reputation-to-Credit Mapping Whitepaper](https://docs.aastar.io/guide/Reputation-to-Credit_Mapping_Whitepaper)
-- **[L3 Complete Walkthrough](../aastar-docs/guide/docs/L3_Complete_Demo_Walkthrough.md)**
+### 📊 Gas Analytics & Research
+- **[Gas Analytics Module Documentation](./packages/analytics/README.md)**
+- **[Reputation-to-Credit Mapping Whitepaper](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)**
+- [Academic Application: Paper Data Collection](./docs/paper-data-collection.md)
+- [Stage 3 Scenario Experiment Plan](./docs/SDK_STAGE3_PLAN.md) / [Stage 3 Analysis](./docs/SDK_STAGE3_ANALYSIS.md)
 
 ---
 
@@ -193,8 +199,7 @@ git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 - [快速开始](#快速开始-1)
 - [🧰 Keeper (服务维护)](#-keeper-服务维护)
 - [开发工作流](#开发工作流)
-- [📊 Gas 数据分析与报告](#-gas-数据分析与报告)
-- [学术研究](#学术研究-1)
+- [📂 核心文档索引](#-核心文档索引)
 - [🛡️ 源码完整性校验](#️-源码完整性校验)
 
 ---
@@ -306,25 +311,32 @@ forge script script/DeployV3FullSepolia.s.sol --rpc-url $SEPOLIA_RPC_URL --broad
 
 ---
 
-### 📊 Gas 数据分析与报告
+### 📂 核心文档索引
 
-SDK 包含强大的 **Gas 分析模块**，用于追踪成本并生成行业对比报告。
+为了确保您可以快速查阅与定位问题，**所有核心文档**均直接保存在项目本地的 `docs/` 文件夹中。您无需跳转外部链接即可深入了解 SDK 的底层机制。
 
-#### 快速开始
-```bash
-npx tsx packages/analytics/src/gas-analyzer-v4.ts
-```
-👉 **[查看完整分析文档](./packages/analytics/README.md)**
+🌐 **在线文档站点：** 若需更完善的侧边栏索引与搜索体验，您也可以访问官方站点：[docs.aastar.io](https://docs.aastar.io)
 
----
+#### 🏛 架构与 API
+- **[SDK 架构基准与 API 参考 (L1-L4)](./docs/API_REFERENCE.md)**
+- [L3 全生命周期模式设计](./docs/L3_Lifecycle_Patterns_Design.md)
+- [L3 开发者指南](./docs/L3_Lifecycle_Developer_Guide.md)
+- [L3 完整演练指南](./docs/L3_Complete_Demo_Walkthrough.md)
+- [L3 业务场景与缺口分析](./docs/L3_Use_Case_Analysis.md)
+- [首发账户初始化指南](./docs/Account_Initialization_Guide_CN.md)
 
-### 学术研究
+#### 🧪 配置与测试
+- **[环境配置与哈希同步机制 (Configuration Sync)](./docs/Configuration_Sync.md)** *(含版本哈希防篡改机制说明)*
+- **[L4 级别回归测试方案 (免 Gas 验证器)](./docs/Verifier_L4_Gasless_Plan.md)** *(项目最重要的测试准则)*
+- [手动调试速查表](./docs/L4_Manual_Test_CheatSheet.md)
+- [合约 ABI 维护计划](./docs/ABI_MAINTENANCE_PLAN.md)
+- [Sepolia 已验证合约地址](./docs/verify.sepolia.contracts.md) / [OP-Sepolia 已验证合约地址](./docs/verify.op-sepolia.contracts.md)
 
-本 SDK 支持面向 CommunityFi/SuperPaymaster 论文的博士实验数据采集。
-
-- [Stage 3 场景实验计划](https://docs.aastar.io/guide/STAGE_3_SCENARIO_EXP_PLAN)
-- [名誉到信用映射白皮书](https://docs.aastar.io/guide/Reputation-to-Credit_Mapping_Whitepaper)
-- **[L3 完整演示手册](../aastar-docs/guide/docs/L3_Complete_Demo_Walkthrough.md)**
+#### 📊 Gas 数据与学术研究
+- **[Gas 数据分析器文档](./packages/analytics/README.md)**
+- **[名誉到信用映射白皮书](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)**
+- [学术研究：论文数据采集](./docs/paper-data-collection.md)
+- [Stage 3 场景实验计划](./docs/SDK_STAGE3_PLAN.md) / [Stage 3 结论分析](./docs/SDK_STAGE3_ANALYSIS.md)
 
 ---
 
