@@ -172,7 +172,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 - [Sepolia Verified Contracts](./docs/verify.sepolia.contracts.md) / [OP-Sepolia Verified Contracts](./docs/verify.op-sepolia.contracts.md)
 
 ### 📊 Gas Analytics & Research
-- **[🚀 OP Mainnet Gas Analytics & Reporting](./packages/analytics/README.md)**
+- **[🚀 OP Mainnet Gas Analysis Report](./packages/analytics/docs/OP_Mainnet_Gas_Analysis_Report.md)**
 - **[Reputation-to-Credit Mapping Whitepaper](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)**
 - [DAO Mining Distribution Plan](./docs/DAO_Mining_Distribution_Plan.md)
 - [Academic Application: Paper Data Collection](./docs/paper-data-collection.md)
@@ -350,7 +350,7 @@ forge script script/DeployV3FullSepolia.s.sol --rpc-url $SEPOLIA_RPC_URL --broad
 - [Sepolia 已验证合约地址](./docs/verify.sepolia.contracts.md) / [OP-Sepolia 已验证合约地址](./docs/verify.op-sepolia.contracts.md)
 
 #### 📊 Gas 数据与学术研究
-- **[🚀 OP 主网 Gas 数据分析与报告](./packages/analytics/README.md)**
+- **[🚀 OP 主网 Gas 数据分析报告](./packages/analytics/docs/OP_Mainnet_Gas_Analysis_Report.md)**
 - **[名誉到信用映射白皮书](./docs/Reputation-to-Credit_Mapping_Whitepaper.md)**
 - [DAO 挖矿与分发机制设计](./docs/DAO_Mining_Distribution_Plan.md)
 - [学术研究：论文数据采集](./docs/paper-data-collection.md)
