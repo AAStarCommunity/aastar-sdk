@@ -545,6 +545,54 @@ async function main() {
     const txLabelColumn = getArgValue(args, '--tx-label-column') || 'Label';
     const txLabelFilter = getArgValue(args, '--tx-label-filter');
     const txHashesInline = getArgValue(args, '--tx-hashes');
+    const enrichReceiptGas = toBool(getArgValue(args, '--enrich-receipt-gas'), false);
+
+    if (enrichReceiptGas && txHashesCsv) {
+        if (!rpcUrl) throw new Error('Missing rpc url');
+        console.log(`Starting enrichment of ${txHashesCsv}...`);
+        const client = createPublicClient({ chain: network === 'op-mainnet' ? optimism : undefined, transport: http(rpcUrl) });
+        const raw = await fs.promises.readFile(txHashesCsv, 'utf-8');
+        const lines = raw.split('\n').filter(l => l.trim().length > 0);
+        if (lines.length < 2) throw new Error('Empty CSV');
+        const header = safeSplitCsvLine(lines[0]);
+        const idxTx = header.findIndex((h) => h === txHashColumn);
+        if (idxTx < 0) throw new Error('Missing TxHash column');
+        
+        let hasTxGasUsedCol = false;
+        if (!header.includes('TxGasUsed')) {
+            header.push('TxGasUsed');
+        } else {
+            hasTxGasUsedCol = true;
+        }
+
+        const outLines = [header.join(',')];
+        const idxTxGasUsed = header.indexOf('TxGasUsed');
+
+        let count = 0;
+        for (let i = 1; i < lines.length; i++) {
+            const cols = safeSplitCsvLine(lines[i]);
+            const tx = String(cols[idxTx] || '').toLowerCase() as `0x${string}`;
+            if (!tx.startsWith('0x') || tx.length !== 66) {
+                outLines.push(cols.map(c => c.includes(',') ? `"${c}"` : c).join(','));
+                continue;
+            }
+            const receipt: any = await client.request({ method: 'eth_getTransactionReceipt', params: [tx] } as any);
+            const txGasUsed = BigInt(receipt?.gasUsed || 0n).toString();
+            
+            if (!hasTxGasUsedCol && cols.length === header.length - 1) {
+                cols.push(txGasUsed);
+            } else {
+                cols[idxTxGasUsed] = txGasUsed;
+            }
+            outLines.push(cols.map(c => c.includes(',') ? `"${c}"` : c).join(','));
+            count++;
+            if (count % 20 === 0) console.log(`Enriched ${count} txs`);
+        }
+        await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
+        await fs.promises.writeFile(outPath, outLines.join('\n'));
+        console.log(`Enriched CSV saved to ${outPath}`);
+        return;
+    }
 
     if (!rpcUrl) throw new Error('Missing rpc url');
     if (creditMode !== 'any' && creditMode !== 'credit' && creditMode !== 'non-credit') {

@@ -202,13 +202,13 @@ export class PaymasterClient {
         let maxPriorityFeePerGas = 0n;
         try {
             const feeData = await client.estimateFeesPerGas();
-            maxFeePerGas = ((feeData.maxFeePerGas ?? 0n) * 120n) / 100n;
-            maxPriorityFeePerGas = ((feeData.maxPriorityFeePerGas ?? 0n) * 120n) / 100n;
+            maxFeePerGas = ((feeData.maxFeePerGas ?? 0n) * 115n) / 100n;
+            maxPriorityFeePerGas = ((feeData.maxPriorityFeePerGas ?? 0n) * 115n) / 100n;
         } catch {}
         if (!maxFeePerGas) {
             try {
                 const gasPrice = await client.getGasPrice();
-                maxFeePerGas = (gasPrice * 150n) / 100n;
+                maxFeePerGas = (gasPrice * 120n) / 100n;
             } catch {}
         }
         // Testnet floor: bundlers like Alchemy require higher priority than network reports
@@ -375,8 +375,8 @@ export class PaymasterClient {
         if (!maxFeePerGas || !maxPriorityFeePerGas) {
             try {
                 const feeData = await client.estimateFeesPerGas();
-                maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 0n) * 120n) / 100n;
-                maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 0n) * 120n) / 100n;
+                maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 0n) * 115n) / 100n;
+                maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 0n) * 115n) / 100n;
             } catch (e) {
                 maxFeePerGas = maxFeePerGas ?? undefined;
                 maxPriorityFeePerGas = maxPriorityFeePerGas ?? undefined;

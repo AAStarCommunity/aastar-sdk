@@ -258,6 +258,51 @@ function getPrivateKeyFromCast(accountName: string): Hex {
     }
 }
 
+// --- Gas Price Guard ---
+// OP Mainnet baseFeePerGas is typically ~0.000026 Gwei (26,000 wei).
+// eth_gasPrice returns higher (~0.001 Gwei) because it adds priority fee buffer.
+// We use baseFeePerGas from the latest block to match Etherscan Gas Tracker.
+// Threshold: < 0.00003 Gwei = 30,000 wei. Above this = too expensive, wait.
+async function waitForAcceptableGasPrice(publicClient: any, maxBaseFeeWei: bigint = 30_000n, ignoreGasPrice: boolean = false): Promise<void> {
+    const maxGwei = Number(maxBaseFeeWei) / 1e9;
+    console.log(`\n⛽ [GAS PRICE GUARD] Max acceptable baseFee: ${maxGwei.toFixed(9)} Gwei (${maxBaseFeeWei} wei) ${ignoreGasPrice ? '(IGNORE FLAG SET)' : ''}`);
+    while (true) {
+        try {
+            const block = await publicClient.getBlock({ blockTag: 'latest' });
+            const baseFee = block.baseFeePerGas ?? 0n;
+            const baseFeeGwei = Number(baseFee) / 1e9;
+            
+            // Also show eth_gasPrice for reference
+            const suggestedGasPrice = await publicClient.getGasPrice().catch(() => 0n);
+            const suggestedGwei = Number(suggestedGasPrice) / 1e9;
+            
+            const estimatedTxCost = baseFee * 170_000n;
+            console.log(`   ⛽ Block #${block.number} baseFee: ${baseFeeGwei.toFixed(9)} Gwei (${baseFee} wei) | eth_gasPrice: ${suggestedGwei.toFixed(6)} Gwei | Est. tx cost: ${formatEther(estimatedTxCost)} ETH`);
+            
+            if (baseFee <= maxBaseFeeWei) {
+                console.log(`   ✅ baseFee acceptable (${baseFeeGwei.toFixed(9)} <= ${maxGwei.toFixed(9)} Gwei). Proceeding.`);
+                return;
+            }
+            if (ignoreGasPrice) {
+                console.log(`   🚨 baseFee too high (${baseFeeGwei.toFixed(9)} Gwei), but --ignore-gas-price is true. Proceeding anyway!`);
+                return;
+            }
+            console.log(`   ⚠️ baseFee too high (${baseFeeGwei.toFixed(9)} > ${maxGwei.toFixed(9)} Gwei)! Waiting 30s before retry...`);
+            await new Promise(r => setTimeout(r, 30_000));
+        } catch (e: any) {
+            console.log(`   ⚠️ Failed to fetch gas price: ${e.message}. Retrying in 30s...`);
+            await new Promise(r => setTimeout(r, 30_000));
+        }
+    }
+}
+
+// --- Random Delay Helper ---
+async function randomDelay(minMs: number = 20_000, maxMs: number = 30_000): Promise<void> {
+    const delay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+    console.log(`   ⏳ Random delay: ${(delay / 1000).toFixed(1)}s...`);
+    await new Promise(r => setTimeout(r, delay));
+}
+
 export async function runGaslessDataCollection(config: NetworkConfig, networkName: string = 'op-mainnet') {
     const args = process.argv.slice(2);
     const getArg = (key: string) => {
@@ -280,9 +325,14 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
 
     const v4Count = toInt(getArg('--v4-count'));
     const superCreditCount = toInt(getArg('--super-credit-count'));
-    const controlledMode = (v4Count !== undefined && v4Count > 0) || (superCreditCount !== undefined && superCreditCount > 0);
+    const t21Count = toInt(getArg('--t21-count'));
+    const t5Count = toInt(getArg('--t5-count'));
+    const controlledMode = (v4Count !== undefined && v4Count > 0) || (superCreditCount !== undefined && superCreditCount > 0) || (t21Count !== undefined && t21Count > 0) || (t5Count !== undefined && t5Count > 0);
     const skipPriceRefresh = toBool(getArg('--skip-price-refresh')) ?? false;
+    const ignoreGasPrice = toBool(getArg('--ignore-gas-price')) ?? false;
     const noDeployAa = toBool(getArg('--no-deploy-aa')) ?? false;
+    // Max gas price: 0.00003 Gwei = 30,000 wei. OP Mainnet typically ~0.000026 Gwei.
+    const maxGasPriceWei = 30_000n; // 0.00003 Gwei
 
     const defaultOut = path.resolve(__dirname, '../packages/analytics/data/gasless_data_collection.csv');
     const outCsv = getArg('--out-csv') || defaultOut;
@@ -293,6 +343,9 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
     const state = loadState(networkName);
     const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
     const bundlerClient = createPublicClient({ chain: config.chain, transport: http(config.bundlerUrl) });
+
+    // --- Gas Price Guard: check before starting ---
+    await waitForAcceptableGasPrice(publicClient, maxGasPriceWei, ignoreGasPrice);
 
     // Strict Rule: EXCLUSIVELY from cast wallet
     const jasonAccountName = process.env.DEPLOYER_ACCOUNT || 'optimism-deployer';
@@ -520,12 +573,205 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
         }
     };
 
+    // Helper: run T2.1 once (extracted from default flow for controlled mode reuse)
+    const runT21Once = async () => {
+        console.log(DIVIDER + `🔹 [T2.1] Gasless Payment via Community Token (Normal Mode - Burn)`);
+        console.log(`   Description: If supported, SP burns user's Community Token (no debt).`);
+        
+        try {
+            const minUserTokenBalance = parseEther('2');
+            const userTokenBalance = await publicClient.readContract({
+                address: anniToken as Address,
+                abi: erc20Abi,
+                functionName: 'balanceOf',
+                args: [jasonAA]
+            }).catch(() => 0n);
+
+            if (userTokenBalance < minUserTokenBalance) {
+                const topUpAmount = parseEther('10');
+                const anniBalance = await publicClient.readContract({
+                    address: anniToken as Address,
+                    abi: erc20Abi,
+                    functionName: 'balanceOf',
+                    args: [anniAcc.address]
+                }).catch(() => 0n);
+
+                if (anniBalance >= topUpAmount) {
+                    const transferHash = await anniWallet.writeContract({
+                        address: anniToken as Address,
+                        abi: erc20Abi,
+                        functionName: 'transfer',
+                        args: [jasonAA, topUpAmount]
+                    });
+                    await publicClient.waitForTransactionReceipt({ hash: transferHash });
+                } else {
+                    console.log(`   ⚠️ Insufficient token balance to top up user: have=${formatEther(anniBalance)}`);
+                }
+            }
+
+            const callData = PaymasterClient.encodeExecution(
+                anniToken as Address,
+                0n,
+                PaymasterClient.encodeTokenTransfer(supplierAcc.address, parseEther('0.001'))
+            );
+
+            const t21Hash = await PaymasterClient.submitGaslessUserOperation(
+                publicClient,
+                jasonWallet,
+                jasonAA,
+                ENTRYPOINT,
+                SP as Address,
+                anniToken as Address,
+                config.bundlerUrl,
+                callData,
+                {
+                    autoEstimate: true,
+                    operator: anniAcc.address,
+                    verificationGasLimit: 60000n,
+                    paymasterVerificationGasLimit: 90000n
+                }
+            );
+
+            console.log(`   🚀 T2.1 (Normal) UserOp: ${t21Hash}`);
+            await waitAndCheckReceipt(publicClient, bundlerClient, t21Hash, "T2.1_SP_Normal", record, anniToken as Address, jasonAA);
+        } catch (e: any) {
+            console.error(`   ❌ T2.1 Failed: ${e.message}`);
+        }
+    };
+
+    // Helper: run T5 once (extracted from default flow for controlled mode reuse)
+    const runT5Once = async () => {
+        console.log(DIVIDER + `🔹 [T5] Credit Settlement Check`);
+        try {
+            const debt = await publicClient.readContract({
+                address: anniToken as Address,
+                abi: parseAbi(['function getDebt(address) view returns (uint256)']),
+                functionName: 'getDebt',
+                args: [jasonAA]
+            }).catch(() => 0n);
+            
+            console.log(`   💳 Jason AA Current Debt: ${formatEther(debt)} ${globalTokenName}`);
+            
+            if (debt > 0n) {
+                const myBal = await publicClient.readContract({
+                    address: anniToken as Address,
+                    abi: erc20Abi,
+                    functionName: 'balanceOf',
+                    args: [jasonAA]
+                });
+
+                if (myBal < debt) {
+                    console.log(`   💸 AA balance low (${formatEther(myBal)}). Transferring ${formatEther(debt)} from Anni EOA...`);
+                    const fundHash = await anniWallet.writeContract({
+                        address: anniToken as Address,
+                        abi: erc20Abi,
+                        functionName: 'transfer',
+                        args: [jasonAA, debt]
+                    });
+                    await publicClient.waitForTransactionReceipt({ hash: fundHash });
+                    console.log(`   ✅ AA Funded in tx: ${fundHash}`);
+                }
+
+                console.log(`   🚀 Repaying debt gaslessly...`);
+                const repayCall = encodeFunctionData({
+                    abi: parseAbi(['function repayDebt(uint256) external']),
+                    functionName: 'repayDebt',
+                    args: [debt]
+                });
+
+                const t5Hash = await PaymasterClient.submitGaslessUserOperation(
+                    publicClient,
+                    jasonWallet,
+                    jasonAA,
+                    ENTRYPOINT,
+                    SP as Address,
+                    anniToken as Address,
+                    config.bundlerUrl,
+                    PaymasterClient.encodeExecution(anniToken, 0n, repayCall),
+                    { 
+                        autoEstimate: true, 
+                        operator: anniAcc.address,
+                        verificationGasLimit: 60000n,
+                        paymasterVerificationGasLimit: 90000n
+                    }
+                );
+                console.log(`   🚀 T5 UserOp: ${t5Hash}`);
+                await waitAndCheckReceipt(publicClient, bundlerClient, t5Hash, "T5", record, anniToken as Address, jasonAA);
+            } else {
+                console.log(`   ✅ No debt to repay. Running T2 credit first to create debt...`);
+                await runT2CreditOnce();
+                await randomDelay();
+                // Now retry T5
+                const debt2 = await publicClient.readContract({
+                    address: anniToken as Address,
+                    abi: parseAbi(['function getDebt(address) view returns (uint256)']),
+                    functionName: 'getDebt',
+                    args: [jasonAA]
+                }).catch(() => 0n);
+                if (debt2 > 0n) {
+                    const myBal2 = await publicClient.readContract({
+                        address: anniToken as Address,
+                        abi: erc20Abi,
+                        functionName: 'balanceOf',
+                        args: [jasonAA]
+                    });
+                    if (myBal2 < debt2) {
+                        const fundHash2 = await anniWallet.writeContract({
+                            address: anniToken as Address,
+                            abi: erc20Abi,
+                            functionName: 'transfer',
+                            args: [jasonAA, debt2]
+                        });
+                        await publicClient.waitForTransactionReceipt({ hash: fundHash2 });
+                    }
+                    const repayCall2 = encodeFunctionData({
+                        abi: parseAbi(['function repayDebt(uint256) external']),
+                        functionName: 'repayDebt',
+                        args: [debt2]
+                    });
+                    const t5Hash2 = await PaymasterClient.submitGaslessUserOperation(
+                        publicClient, jasonWallet, jasonAA, ENTRYPOINT,
+                        SP as Address, anniToken as Address, config.bundlerUrl,
+                        PaymasterClient.encodeExecution(anniToken, 0n, repayCall2),
+                        { autoEstimate: true, operator: anniAcc.address, verificationGasLimit: 60000n, paymasterVerificationGasLimit: 90000n }
+                    );
+                    console.log(`   🚀 T5 UserOp: ${t5Hash2}`);
+                    await waitAndCheckReceipt(publicClient, bundlerClient, t5Hash2, "T5", record, anniToken as Address, jasonAA);
+                }
+            }
+        } catch (e: any) {
+            console.error(`   ❌ T5 Failed: ${e.message}`);
+        }
+    };
+
     if (controlledMode) {
         const v4N = v4Count ?? 0;
         const superN = superCreditCount ?? 0;
-        for (let i = 0; i < v4N; i++) await runT1Once();
-        for (let i = 0; i < superN; i++) await runT2CreditOnce();
-        console.log(DIVIDER + `✅ Controlled Data Collection Completed.`);
+        const t21N = t21Count ?? 0;
+        const t5N = t5Count ?? 0;
+        const totalOps = v4N + superN + t21N + t5N;
+        console.log(DIVIDER + `🎯 Controlled Mode: T1=${v4N}, T2=${superN}, T2.1=${t21N}, T5=${t5N} (total=${totalOps})`);
+        for (let i = 0; i < v4N; i++) {
+            console.log(`\n--- T1 iteration ${i + 1}/${v4N} ---`);
+            await runT1Once();
+            if (i < v4N - 1) await randomDelay();
+        }
+        for (let i = 0; i < superN; i++) {
+            console.log(`\n--- T2 iteration ${i + 1}/${superN} ---`);
+            await runT2CreditOnce();
+            if (i < superN - 1) await randomDelay();
+        }
+        for (let i = 0; i < t21N; i++) {
+            console.log(`\n--- T2.1 iteration ${i + 1}/${t21N} ---`);
+            await runT21Once();
+            if (i < t21N - 1) await randomDelay();
+        }
+        for (let i = 0; i < t5N; i++) {
+            console.log(`\n--- T5 iteration ${i + 1}/${t5N} ---`);
+            await runT5Once();
+            if (i < t5N - 1) await randomDelay();
+        }
+        console.log(DIVIDER + `✅ Controlled Data Collection Completed (${totalOps} operations).`);
         return;
     }
 
