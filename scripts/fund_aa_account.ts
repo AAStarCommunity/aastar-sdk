@@ -18,7 +18,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as readline from 'readline';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import {
@@ -87,18 +86,29 @@ const REGISTRY_ABI = parseAbi([
 // Password prompt (hidden input, mirrors keeper.ts promptHidden)
 // ─────────────────────────────────────────────────────────────────────────────
 async function promptHidden(prompt: string): Promise<string> {
+    process.stdout.write(prompt);
     return new Promise((resolve) => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-        // Suppress echo: only let newlines through, swallow all typed characters
-        (rl as any)._writeToOutput = (s: string) => {
-            if (s === '\r\n' || s === '\n' || s === '\r') process.stdout.write('\n');
+        let input = '';
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.setEncoding('utf8');
+        const handler = (key: string) => {
+            if (key === '\r' || key === '\n' || key === '\u0004') {
+                process.stdin.removeListener('data', handler);
+                process.stdin.setRawMode(false);
+                process.stdin.pause();
+                process.stdout.write('\n');
+                resolve(input);
+            } else if (key === '\u0003') {  // Ctrl-C
+                process.stdout.write('\n');
+                process.exit(1);
+            } else if (key === '\u007f') {  // Backspace
+                input = input.slice(0, -1);
+            } else {
+                input += key;
+            }
         };
-        // Print prompt manually (bypasses the muted _writeToOutput)
-        process.stdout.write(prompt);
-        rl.question('', (value) => {
-            rl.close();
-            resolve(value);
-        });
+        process.stdin.on('data', handler);
     });
 }
 
@@ -164,16 +174,20 @@ async function main() {
         const gBefore = await publicClient.readContract({ address: CONTRACTS.GTOKEN, abi: ERC20_ABI, functionName: 'balanceOf', args: [TARGET_ADDRESS] });
         console.log(`   Current balance: ${formatEther(gBefore)} GToken`);
 
-        let gHash: Hex;
-        try {
-            gHash = send(CONTRACTS.GTOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'mint', args: [TARGET_ADDRESS, GTOKEN_AMOUNT] }));
-        } catch {
-            console.log(`   ℹ️  mint() unavailable, trying transfer()`);
-            gHash = send(CONTRACTS.GTOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [TARGET_ADDRESS, GTOKEN_AMOUNT] }));
+        if (gBefore >= parseEther('150')) {
+            console.log(`   ✅ Balance ≥ 150, skipping.`);
+        } else {
+            let gHash: Hex;
+            try {
+                gHash = send(CONTRACTS.GTOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'mint', args: [TARGET_ADDRESS, GTOKEN_AMOUNT] }));
+            } catch {
+                console.log(`   ℹ️  mint() unavailable, trying transfer()`);
+                gHash = send(CONTRACTS.GTOKEN, encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [TARGET_ADDRESS, GTOKEN_AMOUNT] }));
+            }
+            await publicClient.waitForTransactionReceipt({ hash: gHash });
+            const gAfter = await publicClient.readContract({ address: CONTRACTS.GTOKEN, abi: ERC20_ABI, functionName: 'balanceOf', args: [TARGET_ADDRESS] });
+            console.log(`   ✅ tx: ${gHash}  new balance: ${formatEther(gAfter)} GToken`);
         }
-        await publicClient.waitForTransactionReceipt({ hash: gHash });
-        const gAfter = await publicClient.readContract({ address: CONTRACTS.GTOKEN, abi: ERC20_ABI, functionName: 'balanceOf', args: [TARGET_ADDRESS] });
-        console.log(`   ✅ tx: ${gHash}  new balance: ${formatEther(gAfter)} GToken`);
 
         // ── Step 2: SBT ──────────────────────────────────────────────────────
         console.log(`\n📋 Step 2: SBT (role registration)`);
@@ -232,16 +246,20 @@ async function main() {
         const aBefore = await publicClient.readContract({ address: CONTRACTS.APNTS, abi: ERC20_ABI, functionName: 'balanceOf', args: [TARGET_ADDRESS] });
         console.log(`   Current balance: ${formatEther(aBefore)} aPNTs`);
 
-        let aHash: Hex;
-        try {
-            aHash = send(CONTRACTS.APNTS, encodeFunctionData({ abi: ERC20_ABI, functionName: 'mint', args: [TARGET_ADDRESS, APNTS_AMOUNT] }));
-        } catch {
-            console.log(`   ℹ️  mint() unavailable, trying transfer()`);
-            aHash = send(CONTRACTS.APNTS, encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [TARGET_ADDRESS, APNTS_AMOUNT] }));
+        if (aBefore >= parseEther('10000')) {
+            console.log(`   ✅ Balance ≥ 10000, skipping.`);
+        } else {
+            let aHash: Hex;
+            try {
+                aHash = send(CONTRACTS.APNTS, encodeFunctionData({ abi: ERC20_ABI, functionName: 'mint', args: [TARGET_ADDRESS, APNTS_AMOUNT] }));
+            } catch {
+                console.log(`   ℹ️  mint() unavailable, trying transfer()`);
+                aHash = send(CONTRACTS.APNTS, encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [TARGET_ADDRESS, APNTS_AMOUNT] }));
+            }
+            await publicClient.waitForTransactionReceipt({ hash: aHash });
+            const aAfter = await publicClient.readContract({ address: CONTRACTS.APNTS, abi: ERC20_ABI, functionName: 'balanceOf', args: [TARGET_ADDRESS] });
+            console.log(`   ✅ tx: ${aHash}  new balance: ${formatEther(aAfter)} aPNTs`);
         }
-        await publicClient.waitForTransactionReceipt({ hash: aHash });
-        const aAfter = await publicClient.readContract({ address: CONTRACTS.APNTS, abi: ERC20_ABI, functionName: 'balanceOf', args: [TARGET_ADDRESS] });
-        console.log(`   ✅ tx: ${aHash}  new balance: ${formatEther(aAfter)} aPNTs`);
 
         // ── Final summary ─────────────────────────────────────────────────────
         console.log(`\n✅ Complete. Final balances for ${TARGET_ADDRESS}:`);
