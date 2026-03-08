@@ -41,6 +41,13 @@ pnpm run test:regression              # Sequential: 00 through 05 + BLS
 # Run a single script
 pnpm exec tsx scripts/06_local_test_v3_full.ts
 
+# Run a single unit test file (vitest)
+pnpm exec vitest run packages/core/src/actions/account.test.ts
+
+# ABI / contract address sync (after SuperPaymaster contract changes)
+pnpm run audit:abi                    # Validate ABI consistency
+pnpm exec tsx scripts/sync_contract_addresses.ts
+
 # Generate API docs (typedoc → docs/api/)
 pnpm run docs:generate
 
@@ -112,14 +119,16 @@ Environment variables (RPC URLs, private keys) go in `.env.{network}` files. See
 - **ABIs must come from `@aastar/core`** — the ESLint config forbids `parseAbi` from viem directly. All contract ABIs are centralized in `packages/core/src/abis/`.
 - **TypeScript path alias**: `@aastar/*` maps to `packages/*/src/index.ts` in development (see `tsconfig.json` paths).
 - **ESM throughout**: All packages use `"type": "module"`. Scripts run via `tsx` or `ts-node`.
-- **Pre-commit hook** (`.githooks/pre-commit`): runs `scripts/security-scan.ts` to detect leaked keys/metadata.
+- **Pre-commit hook** (`.githooks/pre-commit`): runs `scripts/security-scan.ts` to detect leaked keys/metadata. Requires manual activation: `git config core.hooksPath .githooks`.
 - **SuperPaymaster contract source** lives in a sibling repo `../SuperPaymaster`. The `run_sdk_regression.sh` script expects it there for Anvil deployments and ABI sync.
+- **Paymaster versions**: `@aastar/paymaster` contains both V3 (`src/SuperPaymaster/`) and V4 (`src/V4/`) implementations. V4 is the active protocol; V3 is maintained for compatibility.
 
 ## Testing Strategy
 
 - **Unit tests**: vitest, located as `*.test.ts` alongside source in each package. Configured in `vitest.config.ts` (excludes `tests/` dir and `ext/`).
-- **Regression tests**: TypeScript scripts in `tests/regression/` (L1-L4 tiered) and `scripts/` (numbered `00_`–`16_` test suites).
-- **L4 gasless tests**: `tests/l4-test-*.ts` — end-to-end gasless transaction verification against live testnets.
+- **Regression tests**: TypeScript scripts in `tests/regression/` (L1-L4 tiered) and `scripts/` (numbered `00_`–`23_` suites, plus `98_`/`99_` edge cases). `scripts/v2_regression/` has a self-contained 00–05 walkthrough.
+- **L4 gasless tests**: `tests/l4-test-*.ts` and `tests/regression/l4-gasless.ts` — end-to-end gasless verification against live testnets. `l4-gasless.ts` is the most comprehensive (~51 KB).
+- **Network detection**: `tests/regression/config.ts` centralizes all network-specific config; pass `--network=anvil|sepolia|op-sepolia|op-mainnet` to the runner.
 - Networks for testing: `anvil`, `sepolia`, `op-sepolia`, `op-mainnet`.
 
 ## Rules
