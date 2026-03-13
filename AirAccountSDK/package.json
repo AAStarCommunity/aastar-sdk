@@ -1,0 +1,99 @@
+{
+  "name": "@yaaa/sdk",
+  "version": "0.1.0",
+  "description": "Yet Another Account Abstraction SDK - ERC-4337 + BLS + Passkey",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./core/bls": {
+      "types": "./dist/core/bls/index.d.ts",
+      "import": "./dist/core/bls/index.mjs",
+      "require": "./dist/core/bls/index.js"
+    },
+    "./core/erc4337": {
+      "types": "./dist/core/erc4337/index.d.ts",
+      "import": "./dist/core/erc4337/index.mjs",
+      "require": "./dist/core/erc4337/index.js"
+    },
+    "./auth/passkey": {
+      "types": "./dist/auth/passkey/index.d.ts",
+      "import": "./dist/auth/passkey/index.mjs",
+      "require": "./dist/auth/passkey/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.mjs",
+      "require": "./dist/server/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "server": [
+        "dist/server/index.d.ts"
+      ],
+      "core/bls": [
+        "dist/core/bls/index.d.ts"
+      ],
+      "core/erc4337": [
+        "dist/core/erc4337/index.d.ts"
+      ],
+      "auth/passkey": [
+        "dist/auth/passkey/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest",
+    "lint": "eslint src --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "erc4337",
+    "account-abstraction",
+    "bls",
+    "passkey",
+    "webauthn",
+    "ethereum",
+    "web3"
+  ],
+  "author": "YAAA Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "ethers": "^6.0.0"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "@simplewebauthn/browser": "^13.2.2",
+    "axios": "^1.12.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.17",
+    "eslint": "^9.17.0",
+    "ethers": "^6.11.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.18.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
