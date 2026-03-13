@@ -6,7 +6,7 @@
  * KMS-based wallet operations with ERC-4337 account abstraction.
  */
 
-import { YAAAClient } from "@yaaa/sdk";
+import { YAAAClient } from "@aastar/airaccount";
 
 // ============================================
 // 1. Initialize the SDK Client
@@ -181,7 +181,7 @@ async function demonstrateBLS() {
 // ============================================
 
 /*
-import { YAAAClient } from '@yaaa/sdk';
+import { YAAAClient } from '@aastar/airaccount';
 import { useState } from 'react';
 
 // Create client instance (can be shared across components)

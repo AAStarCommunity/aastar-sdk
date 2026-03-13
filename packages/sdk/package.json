@@ -22,6 +22,7 @@
     "@aastar/tokens": "workspace:*",
     "@aastar/operator": "workspace:*",
     "@aastar/admin": "workspace:*",
+    "@aastar/airaccount": "workspace:*",
     "viem": "2.43.3"
   },
   "devDependencies": {

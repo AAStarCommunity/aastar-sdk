@@ -14,7 +14,7 @@ import { WalletManager } from "./services/wallet-manager";
  *
  * @example
  * ```ts
- * import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@yaaa/sdk/server';
+ * import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
  *
  * const client = new YAAAServerClient({
  *   rpcUrl: 'https://sepolia.infura.io/v3/...',

@@ -21,6 +21,9 @@ export * from '@aastar/enduser';
 export * from '@aastar/operator';
 export * from '@aastar/admin';
 
+// Export AirAccount SDK (ERC-4337 + KMS + BLS)
+export * as AirAccount from '@aastar/airaccount';
+
 // Export Utils & Errors
 export * from './utils/roleData.js';
 export * from './utils/keys.js';

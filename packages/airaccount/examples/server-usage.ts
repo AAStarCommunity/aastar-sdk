@@ -5,8 +5,8 @@
  * into your own Node.js backend (Express, Fastify, Koa, NestJS, etc.)
  * without any framework coupling.
  *
- * Install: npm install @yaaa/sdk
- * Import:  import { ... } from '@yaaa/sdk/server';
+ * Install: npm install @aastar/airaccount
+ * Import:  import { ... } from '@aastar/airaccount/server';
  */
 
 import {
@@ -16,7 +16,7 @@ import {
   ConsoleLogger,
   EntryPointVersion,
   KmsManager,
-} from "@yaaa/sdk/server";
+} from "@aastar/airaccount/server";
 
 import type {
   ServerConfig,
@@ -29,7 +29,7 @@ import type {
   TokenInfo,
   PasskeyAssertionContext,
   LegacyPasskeyAssertion,
-} from "@yaaa/sdk/server";
+} from "@aastar/airaccount/server";
 
 import { ethers } from "ethers";
 
@@ -645,7 +645,7 @@ async function multiVersion() {
 
 /*
 import express from 'express';
-import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@yaaa/sdk/server';
+import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
 
 const app = express();
 app.use(express.json());

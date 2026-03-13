@@ -1,20 +1,20 @@
 # AirAccount SDK Examples
 
 This directory contains example code demonstrating how to use the AirAccount SDK
-(`@yaaa/sdk`) in your applications.
+(`@aastar/airaccount`) in your applications.
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-npm install @yaaa/sdk
+npm install @aastar/airaccount
 ```
 
 ### Browser Client Setup
 
 ```typescript
-import { YAAAClient } from "@yaaa/sdk";
+import { YAAAClient } from "@aastar/airaccount";
 
 const yaaa = new YAAAClient({
   apiURL: "https://api.your-backend.com/v1",
@@ -32,7 +32,7 @@ import {
   YAAAServerClient,
   MemoryStorage,
   LocalWalletSigner,
-} from "@yaaa/sdk/server";
+} from "@aastar/airaccount/server";
 
 const client = new YAAAServerClient({
   rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
@@ -87,13 +87,13 @@ Demonstrates the server-side SDK:
 
 ```
 ┌─────────────┐
-│   Browser    │  @yaaa/sdk (YAAAClient)
+│   Browser    │  @aastar/airaccount (YAAAClient)
 │   (SDK)      │  - PasskeyManager (WebAuthn)
 └──────┬───────┘  - BLSManager
        │ HTTPS
        ▼
 ┌─────────────┐
-│  Your API   │  @yaaa/sdk/server (YAAAServerClient)
+│  Your API   │  @aastar/airaccount/server (YAAAServerClient)
 │  (Backend)  │  - AccountManager
 └──────┬───────┘  - TransferManager
        │          - BLSSignatureService
@@ -147,7 +147,7 @@ npx ts-node examples/server-usage.ts
 
 ## Integration Checklist
 
-- [ ] Backend API running with `@yaaa/sdk/server`
+- [ ] Backend API running with `@aastar/airaccount/server`
 - [ ] KMS endpoint configured (`kms1.aastar.io`)
 - [ ] Bundler RPC endpoint configured (Pimlico/Alchemy)
 - [ ] (Optional) BLS validator nodes configured

@@ -1,4 +1,4 @@
-# @yaaa/sdk — AirAccount SDK
+# @aastar/airaccount — AirAccount SDK
 
 > ERC-4337 Account Abstraction SDK with KMS WebAuthn, BLS Aggregate Signatures, and Tiered Signature Routing
 
@@ -19,13 +19,13 @@ hardware-backed passkey authentication and ERC-4337 smart accounts.
 ## Installation
 
 ```bash
-npm install @yaaa/sdk
+npm install @aastar/airaccount
 ```
 
 ## Quick Start — Browser Client
 
 ```typescript
-import { YAAAClient } from "@yaaa/sdk";
+import { YAAAClient } from "@aastar/airaccount";
 
 const yaaa = new YAAAClient({
   apiURL: "https://api.your-backend.com/v1",
@@ -58,7 +58,7 @@ import {
   YAAAServerClient,
   MemoryStorage,
   LocalWalletSigner,
-} from "@yaaa/sdk/server";
+} from "@aastar/airaccount/server";
 
 const client = new YAAAServerClient({
   rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
@@ -87,7 +87,7 @@ const result = await client.transfers.executeTransfer("user-123", {
 
 ## API Reference
 
-### Browser SDK (`@yaaa/sdk`)
+### Browser SDK (`@aastar/airaccount`)
 
 #### YAAAClient
 
@@ -113,7 +113,7 @@ interface YAAAConfig {
 }
 ```
 
-### Server SDK (`@yaaa/sdk/server`)
+### Server SDK (`@aastar/airaccount/server`)
 
 #### YAAAServerClient
 
@@ -205,7 +205,7 @@ interface ILogger {
 ### KMS Integration
 
 ```typescript
-import { KmsManager } from "@yaaa/sdk/server";
+import { KmsManager } from "@aastar/airaccount/server";
 
 const kms = new KmsManager({
   kmsEndpoint: "https://kms1.aastar.io",
@@ -260,7 +260,7 @@ interface ExecuteTransferParams {
 ### ERC-4337 Utilities
 
 ```typescript
-import { ERC4337Utils } from "@yaaa/sdk";
+import { ERC4337Utils } from "@aastar/airaccount";
 
 ERC4337Utils.packAccountGasLimits(verGasLimit, callGasLimit);
 ERC4337Utils.unpackAccountGasLimits(packed);
@@ -291,13 +291,13 @@ See the [examples](./examples) directory for complete usage:
 
 ```
 ┌─────────────┐
-│   Browser    │  @yaaa/sdk (YAAAClient)
+│   Browser    │  @aastar/airaccount (YAAAClient)
 │   (SDK)      │  - PasskeyManager (WebAuthn)
 └──────┬───────┘  - BLSManager
        │ HTTPS
        ▼
 ┌─────────────┐
-│  Your API   │  @yaaa/sdk/server (YAAAServerClient)
+│  Your API   │  @aastar/airaccount/server (YAAAServerClient)
 │  (Backend)  │  - AccountManager, TransferManager
 └──────┬───────┘  - BLSSignatureService, GuardChecker
        │          - KmsManager, PaymasterManager
