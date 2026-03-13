@@ -1,9 +1,6 @@
 [submodule "ext/aastar-shared-config"]
 	path = ext/aastar-shared-config
 	url = https://github.com/AAStarCommunity/aastar-shared-config
-[submodule "ext/permissionless.js"]
-	path = ext/permissionless.js
-	url = https://github.com/pimlicolabs/permissionless.js
 [submodule "lib/shared-config"]
 	path = lib/shared-config
 	url = https://github.com/AAStarCommunity/aastar-shared-config.git
