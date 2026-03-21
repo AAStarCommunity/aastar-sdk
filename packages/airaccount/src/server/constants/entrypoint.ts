@@ -62,13 +62,17 @@ export const VALIDATOR_ABI = [
   "function getGasEstimate(uint256 nodeCount) external pure returns (uint256 gasEstimate)",
 ];
 
-// ── AirAccount M4 Contract Addresses (Sepolia) ──────────────────
+// ── AirAccount Contract Addresses (Sepolia) ──────────────────────
 
 export const AIRACCOUNT_ADDRESSES = {
   sepolia: {
-    factory: "0x914db0a849f55e68a726c72fd02b7114b1176d88",
+    // M4 factory (legacy — 3-field InitConfig)
+    factoryM4: "0x914db0a849f55e68a726c72fd02b7114b1176d88",
+    // M5 factory r5 — 6-field InitConfig, guardian acceptance sigs required
+    factory: "0xd72a236d84be6c388a8bc7deb64afd54704ae385",
     validatorRouter: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
     blsAlgorithm: "0xc2096E8D04beb3C337bb388F5352710d62De0287",
+    blsAggregator: "0x7700aec8a15a94db5697c581de8c88ecf83b59ff",
     superPaymaster: "0x16cE0c7d846f9446bbBeb9C5a84A4D140fAeD94A",
   },
 };
@@ -91,10 +95,12 @@ export const AIRACCOUNT_ABI = [
   "function getConfigDescription() external view returns (tuple(address accountOwner, address guardAddress, uint256 dailyLimit, uint256 dailyRemaining, uint256 tier1Limit, uint256 tier2Limit, address[3] guardianAddresses, uint8 guardianCount, bool hasP256Key, bool hasValidator))",
 ];
 
+// M5 factory ABI — 6-field InitConfig (guardians, dailyLimit, approvedAlgIds, minDailyLimit, initialTokens, initialTokenConfigs)
+// createAccountWithDefaults now requires guardian acceptance signatures (M5.3)
 export const AIRACCOUNT_FACTORY_ABI = [
-  "function createAccount(address owner, uint256 salt, tuple(address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds) config) external returns (address)",
-  "function getAddress(address owner, uint256 salt, tuple(address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds) config) external view returns (address)",
-  "function createAccountWithDefaults(address owner, uint256 salt, address guardian1, address guardian2, uint256 dailyLimit) external returns (address)",
+  "function createAccount(address owner, uint256 salt, (address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external returns (address)",
+  "function getAddress(address owner, uint256 salt, (address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external view returns (address)",
+  "function createAccountWithDefaults(address owner, uint256 salt, address guardian1, bytes guardian1Sig, address guardian2, bytes guardian2Sig, uint256 dailyLimit) external returns (address)",
   "function getAddressWithDefaults(address owner, uint256 salt, address guardian1, address guardian2, uint256 dailyLimit) external view returns (address)",
 ];
 

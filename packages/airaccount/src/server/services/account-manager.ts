@@ -47,16 +47,17 @@ export class AccountManager {
     const { address: signerAddress } = await this.signer.ensureSigner(userId);
     const salt = options?.salt ?? Math.floor(Math.random() * 1000000);
 
-    // Predict account address using new M4 factory (createAccountWithDefaults)
-    const zeroAddr = ethers.ZeroAddress;
-    const defaultDailyLimit = ethers.parseEther("1000"); // 1000 ETH daily limit
-    const accountAddress = await factory.getAddressWithDefaults(
-      signerAddress,
-      salt,
-      zeroAddr,
-      zeroAddr,
-      defaultDailyLimit
-    );
+    // Predict account address using M5 factory (createAccount with minimal config)
+    // Minimal config: no guardians, no guard — gives a simple ECDSA account
+    const minimalConfig = [
+      [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
+      0n, // dailyLimit (0 = no guard)
+      [], // approvedAlgIds
+      0n, // minDailyLimit
+      [], // initialTokens
+      [], // initialTokenConfigs
+    ];
+    const accountAddress = await factory.getFunction("getAddress")(signerAddress, salt, minimalConfig);
 
     // Check deployment status
     let deployed = false;

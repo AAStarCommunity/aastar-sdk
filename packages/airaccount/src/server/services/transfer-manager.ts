@@ -149,11 +149,17 @@ export class TransferManager {
         if (accountCode === "0x") {
           useECDSA = true;
         } else {
-          const acc = new ethers.Contract(account.address, ["function validator() view returns (address)"], provider);
+          const acc = new ethers.Contract(
+            account.address,
+            ["function validator() view returns (address)"],
+            provider
+          );
           const v = await acc.validator();
           if (v === ethers.ZeroAddress) useECDSA = true;
         }
-      } catch { useECDSA = true; }
+      } catch {
+        useECDSA = true;
+      }
     }
 
     if (useECDSA) {
@@ -400,22 +406,31 @@ export class TransferManager {
 
         let deployCalldata: string;
         if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-          // New M4 factory: createAccountWithDefaults(owner, salt, guardian1, guardian2, dailyLimit)
-          deployCalldata = factory.interface.encodeFunctionData("createAccountWithDefaults", [
+          // M5 factory: createAccount with minimal config (no guardians, no guard — simple ECDSA account)
+          const minimalConfig = [
+            [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
+            0n, // dailyLimit (0 = no guard)
+            [], // approvedAlgIds
+            0n, // minDailyLimit
+            [], // initialTokens
+            [], // initialTokenConfigs
+          ];
+          deployCalldata = factory.interface.encodeFunctionData("createAccount", [
             account.signerAddress,
             account.salt,
-            ethers.ZeroAddress,
-            ethers.ZeroAddress,
-            ethers.parseEther("1000"),
+            minimalConfig,
           ]);
         } else {
-          deployCalldata = factory.interface.encodeFunctionData("createAccountWithAAStarValidator", [
-            account.signerAddress,
-            account.signerAddress,
-            account.validatorAddress,
-            true,
-            account.salt,
-          ]);
+          deployCalldata = factory.interface.encodeFunctionData(
+            "createAccountWithAAStarValidator",
+            [
+              account.signerAddress,
+              account.signerAddress,
+              account.validatorAddress,
+              true,
+              account.salt,
+            ]
+          );
         }
 
         initCode = ethers.concat([factoryAddress, deployCalldata]);
