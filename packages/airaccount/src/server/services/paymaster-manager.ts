@@ -81,10 +81,14 @@ export class PaymasterManager {
         let isSuperPaymaster = false;
         let operatorAddress = "0x";
         try {
-          const spContract = new ethers.Contract(formattedAddress, [
-            "function owner() view returns (address)",
-            "function operators(address) view returns (bool,uint256,address,uint256)",
-          ], provider);
+          const spContract = new ethers.Contract(
+            formattedAddress,
+            [
+              "function owner() view returns (address)",
+              "function operators(address) view returns (bool,uint256,address,uint256)",
+            ],
+            provider
+          );
           const owner = await spContract.owner();
           const opInfo = await spContract.operators(owner);
           if (opInfo && opInfo[0] === true) {
@@ -92,7 +96,9 @@ export class PaymasterManager {
             operatorAddress = owner;
             this.logger.log(`SuperPaymaster detected, operator: ${operatorAddress}`);
           }
-        } catch { /* not SuperPaymaster */ }
+        } catch {
+          /* not SuperPaymaster */
+        }
 
         if (isSuperPaymaster) {
           const verGas = BigInt(80000);
@@ -107,47 +113,17 @@ export class PaymasterManager {
           ]);
         }
 
-        // PaymasterV4 path
+        // PaymasterV4 deposit model: paymasterData is empty (0x).
+        // The PMv4 uses internal token balances (depositFor) — no token address in paymasterData.
         const paymasterVerificationGasLimit = BigInt(0x30000);
         const paymasterPostOpGasLimit = BigInt(0x30000);
 
-        let gasTokenData = "0x";
-        try {
-          const pmContract = new ethers.Contract(formattedAddress, [
-            "function getSupportedGasTokens() view returns (address[])",
-            "function tokenPrices(address) view returns (uint256)",
-          ], provider);
-
-          try {
-            const gasTokens: string[] = await pmContract.getSupportedGasTokens();
-            if (gasTokens && gasTokens.length > 0) {
-              gasTokenData = gasTokens[0];
-              this.logger.log(`PaymasterV4 gas token (from list): ${gasTokenData}`);
-            }
-          } catch {
-            const knownGasTokens = [
-              "0xDf669834F04988BcEE0E3B6013B6b867Bd38778d", // aPNTs (Sepolia)
-            ];
-            for (const token of knownGasTokens) {
-              try {
-                const price = await pmContract.tokenPrices(token);
-                if (price > 0n) {
-                  gasTokenData = token;
-                  this.logger.log(`PaymasterV4 gas token (from price check): ${gasTokenData}`);
-                  break;
-                }
-              } catch { /* skip */ }
-            }
-          }
-        } catch {
-          this.logger.log("Could not query gas tokens from paymaster, proceeding without");
-        }
+        this.logger.log(`PaymasterV4 deposit model detected, using empty paymasterData`);
 
         return ethers.concat([
           formattedAddress,
           ethers.zeroPadValue(ethers.toBeHex(paymasterVerificationGasLimit), 16),
           ethers.zeroPadValue(ethers.toBeHex(paymasterPostOpGasLimit), 16),
-          gasTokenData,
         ]);
       }
 
