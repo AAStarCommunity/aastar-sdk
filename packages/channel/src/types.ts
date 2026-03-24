@@ -1,15 +1,7 @@
-import type { Address, Hex } from 'viem';
+import type { Hex } from 'viem';
 
-export type ChannelState = {
-    payer: Address;
-    payee: Address;
-    token: Address;
-    authorizedSigner: Address;
-    deposit: bigint;
-    settled: bigint;
-    closeRequestedAt: bigint;
-    finalized: boolean;
-};
+// Re-export ChannelState from core to avoid duplication
+export type { ChannelState } from '@aastar/core';
 
 export type VoucherParams = {
     channelId: Hex;
@@ -21,9 +13,9 @@ export type SignedVoucher = VoucherParams & {
 };
 
 export type ChannelConfig = {
-    payee: Address;
-    token: Address;
+    payee: `0x${string}`;
+    token: `0x${string}`;
     deposit: bigint;
     salt: Hex;
-    authorizedSigner: Address;
+    authorizedSigner: `0x${string}`;
 };
