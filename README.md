@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/Status-v0.17.0-green" alt="Status" style="display:inline-block;" />
+  <img src="https://img.shields.io/badge/Status-v0.17.1-green" alt="Status" style="display:inline-block;" />
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
@@ -249,7 +249,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.17.0)**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+**Current Code Integrity Hash (v0.17.1)**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
@@ -491,7 +491,7 @@ forge script script/DeployV3FullSepolia.s.sol --rpc-url $SEPOLIA_RPC_URL --broad
 > [!IMPORTANT]
 > **安全第一**：为确保您使用的是官方发布版本并保护您的私钥，请务必验证 SDK 源码的完整性。
 
-**当前代码哈希 (v0.17.0)**：`9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+**当前代码哈希 (v0.17.1)**：`9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
