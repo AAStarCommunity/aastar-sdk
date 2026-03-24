@@ -11,7 +11,7 @@ export class CryptoUtil {
       const key = crypto.scryptSync(secretKey, "salt", CryptoUtil.KEY_LENGTH);
       const iv = crypto.randomBytes(CryptoUtil.IV_LENGTH);
 
-      const cipher = crypto.createCipheriv(CryptoUtil.ALGORITHM, key, iv);
+      const cipher = crypto.createCipheriv(CryptoUtil.ALGORITHM, key as unknown as crypto.CipherKey, new Uint8Array(iv));
 
       let encrypted = cipher.update(text, "utf8", "hex");
       encrypted += cipher.final("hex");
@@ -38,8 +38,8 @@ export class CryptoUtil {
       const authTag = Buffer.from(parts[1], "hex");
       const encrypted = parts[2];
 
-      const decipher = crypto.createDecipheriv(CryptoUtil.ALGORITHM, key, iv);
-      decipher.setAuthTag(authTag);
+      const decipher = crypto.createDecipheriv(CryptoUtil.ALGORITHM, key as unknown as crypto.CipherKey, new Uint8Array(iv));
+      decipher.setAuthTag(authTag as unknown as NodeJS.ArrayBufferView);
 
       let decrypted = decipher.update(encrypted, "hex", "utf8");
       decrypted += decipher.final("utf8");

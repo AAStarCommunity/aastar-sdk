@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/Status-v0.16.23-green" alt="Status" style="display:inline-block;" />
+  <img src="https://img.shields.io/badge/Status-v0.17.0-green" alt="Status" style="display:inline-block;" />
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
@@ -52,6 +52,7 @@ The SDK follows a layered abstraction model to balance control and ease of use:
 *   **`CommunityClient`**: Auto-onboarding, xPNTs deployment, SBT & Reputation management.
 *   **`OperatorClient`**: SuperPaymaster registration, Staking, Pool management.
 *   **`AdminClient`**: DVT aggregations, Slashing, Global protocol parameters.
+*   **`AirAccount (YAAAClient / YAAAServerClient)`**: ERC-4337 smart accounts with KMS WebAuthn passkeys, BLS aggregate signatures, and tiered signature routing for AI agents and dApps.
 
 ---
 
@@ -59,6 +60,9 @@ The SDK follows a layered abstraction model to balance control and ease of use:
 
 ```bash
 pnpm install @aastar/sdk @aastar/core viem
+
+# For AI Agent / AirAccount features (browser or server)
+pnpm install @aastar/airaccount
 ```
 
 ---
@@ -92,6 +96,66 @@ await operator.onboardOperator({
   roleId: 'PAYMASTER_SUPER_ROLE_ID'
 });
 ```
+
+### 3. AirAccount: Smart Account with Passkey (Browser)
+```typescript
+import { YAAAClient } from '@aastar/airaccount';
+
+const yaaa = new YAAAClient({
+  apiURL: 'https://api.your-backend.com/v1',
+  tokenProvider: () => localStorage.getItem('token'),
+  bls: { seedNodes: ['https://signer1.aastar.io'] },
+});
+
+// Register with KMS-backed passkey (biometric)
+const { user, token } = await yaaa.passkey.register({
+  email: 'user@example.com',
+  username: 'JohnDoe',
+});
+
+// Verify a transaction with passkey
+const verification = await yaaa.passkey.verifyTransaction({
+  to: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+  value: '0.01',
+});
+```
+
+### 4. AirAccount: Smart Account with Tiered Signatures (Server / AI Agent)
+```typescript
+import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+
+const client = new YAAAServerClient({
+  rpcUrl: 'https://optimism.rpc-url',
+  bundlerRpcUrl: 'https://bundler-url',
+  chainId: 10,
+  entryPoints: {
+    v07: {
+      entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+      factoryAddress: '0x914db0a849f55e68a726c72fd02b7114b1176d88',
+    },
+  },
+  defaultVersion: '0.7',
+  storage: new MemoryStorage(),
+  signer: new LocalWalletSigner('0xYOUR_PRIVATE_KEY'),
+});
+
+// Create a smart account for an AI agent
+const account = await client.accounts.createAccount('agent-001');
+
+// Execute a gasless transfer (Tier 1: ECDSA for small amounts)
+const result = await client.transfers.executeTransfer('agent-001', {
+  to: '0xRecipient',
+  amount: '0.01',
+  usePaymaster: true,
+});
+```
+
+> **Signature Tiers (M4 AirAccount)**
+> | Tier | Components | Use Case |
+> | --- | --- | --- |
+> | 1 | Raw ECDSA | Small transactions |
+> | 2 | P256 + BLS aggregate | Medium transactions |
+> | 3 | P256 + BLS + Guardian | Large / high-value |
 
 ---
 
@@ -185,7 +249,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.16.23)**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+**Current Code Integrity Hash (v0.17.0)**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
@@ -233,12 +297,16 @@ SDK 采用分层抽象模型，平衡了控制灵活性与易用性：
 - **`CommunityClient`**: 面向社区/DAO 管理员，支持自动入驻、xPNTs 部署与身份名誉管理。
 - **`OperatorClient`**: 面向节点运营方，支持 SuperPaymaster 注册、质押与资金池管理。
 - **`AdminClient`**: 面向协议管理方，支持 DVT 聚合、罚没机制与全局参数调整。
+- **`AirAccount (YAAAClient / YAAAServerClient)`**: 面向 AI Agent 与 Web3 应用，提供 KMS WebAuthn Passkey 认证、BLS 聚合签名、分层签名路由与 ERC-4337 智能账户。
 
 ---
 
 ### 安装
 ```bash
 pnpm install @aastar/sdk @aastar/core viem
+
+# AI Agent / AirAccount 功能（浏览器或服务端）
+pnpm install @aastar/airaccount
 ```
 
 ---
@@ -270,6 +338,66 @@ await operator.onboardOperator({
   roleId: 'PAYMASTER_SUPER_ROLE_ID'
 });
 ```
+
+#### 3. AirAccount: Passkey 智能账户（浏览器）
+```typescript
+import { YAAAClient } from '@aastar/airaccount';
+
+const yaaa = new YAAAClient({
+  apiURL: 'https://api.your-backend.com/v1',
+  tokenProvider: () => localStorage.getItem('token'),
+  bls: { seedNodes: ['https://signer1.aastar.io'] },
+});
+
+// 使用 KMS Passkey（生物识别）注册
+const { user, token } = await yaaa.passkey.register({
+  email: 'user@example.com',
+  username: 'JohnDoe',
+});
+
+// 使用 Passkey 验证交易
+const verification = await yaaa.passkey.verifyTransaction({
+  to: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+  value: '0.01',
+});
+```
+
+#### 4. AirAccount: 分层签名智能账户（服务端 / AI Agent）
+```typescript
+import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+
+const client = new YAAAServerClient({
+  rpcUrl: 'https://optimism.rpc-url',
+  bundlerRpcUrl: 'https://bundler-url',
+  chainId: 10,
+  entryPoints: {
+    v07: {
+      entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+      factoryAddress: '0x914db0a849f55e68a726c72fd02b7114b1176d88',
+    },
+  },
+  defaultVersion: '0.7',
+  storage: new MemoryStorage(),
+  signer: new LocalWalletSigner('0xYOUR_PRIVATE_KEY'),
+});
+
+// 为 AI Agent 创建智能账户
+const account = await client.accounts.createAccount('agent-001');
+
+// 执行免 Gas 转账（Tier 1：小额 ECDSA）
+const result = await client.transfers.executeTransfer('agent-001', {
+  to: '0xRecipient',
+  amount: '0.01',
+  usePaymaster: true,
+});
+```
+
+> **M4 AirAccount 分层签名说明**
+> | 层级 | 签名组合 | 适用场景 |
+> | --- | --- | --- |
+> | Tier 1 | 原始 ECDSA | 小额交易 |
+> | Tier 2 | P256 + BLS 聚合 | 中等金额 |
+> | Tier 3 | P256 + BLS + Guardian | 大额 / 高价值 |
 
 ---
 
@@ -363,7 +491,7 @@ forge script script/DeployV3FullSepolia.s.sol --rpc-url $SEPOLIA_RPC_URL --broad
 > [!IMPORTANT]
 > **安全第一**：为确保您使用的是官方发布版本并保护您的私钥，请务必验证 SDK 源码的完整性。
 
-**当前代码哈希 (v0.16.23)**：`9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+**当前代码哈希 (v0.17.0)**：`9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
