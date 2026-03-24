@@ -4,6 +4,8 @@ export * from '@aastar/paymaster';
 export * from '@aastar/identity';
 export * from '@aastar/tokens';
 export * from '@aastar/dapp';
+export * from '@aastar/x402';
+export * from '@aastar/channel';
 // export * from '@aastar/enduser'; // Commented to avoid CommunityClient conflict with clients/community.js
 
 // Export Role-Based Clients

@@ -23,6 +23,8 @@
     "@aastar/operator": "workspace:*",
     "@aastar/admin": "workspace:*",
     "@aastar/airaccount": "workspace:*",
+    "@aastar/x402": "workspace:*",
+    "@aastar/channel": "workspace:*",
     "viem": "2.43.3"
   },
   "devDependencies": {
