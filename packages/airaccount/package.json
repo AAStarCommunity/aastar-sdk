@@ -1,40 +1,40 @@
 {
   "name": "@aastar/airaccount",
-  "version": "0.17.5",
+  "version": "0.17.6",
   "description": "AirAccount SDK - ERC-4337 Account Abstraction with KMS WebAuthn, BLS Aggregate Signatures, and Tiered Signature Routing",
   "publishConfig": {
     "access": "public"
   },
   "license": "MIT",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.mjs",
-      "require": "./dist/server/index.js"
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs"
     },
     "./core/bls": {
       "types": "./dist/core/bls/index.d.ts",
-      "import": "./dist/core/bls/index.mjs",
-      "require": "./dist/core/bls/index.js"
+      "import": "./dist/core/bls/index.js",
+      "require": "./dist/core/bls/index.cjs"
     },
     "./core/erc4337": {
       "types": "./dist/core/erc4337/index.d.ts",
-      "import": "./dist/core/erc4337/index.mjs",
-      "require": "./dist/core/erc4337/index.js"
+      "import": "./dist/core/erc4337/index.js",
+      "require": "./dist/core/erc4337/index.cjs"
     },
     "./auth/passkey": {
       "types": "./dist/auth/passkey/index.d.ts",
-      "import": "./dist/auth/passkey/index.mjs",
-      "require": "./dist/auth/passkey/index.js"
+      "import": "./dist/auth/passkey/index.js",
+      "require": "./dist/auth/passkey/index.cjs"
     }
   },
   "typesVersions": {
