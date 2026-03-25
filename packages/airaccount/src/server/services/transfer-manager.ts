@@ -10,6 +10,7 @@ import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-ad
 import { LegacyPasskeyAssertion } from "./kms-signer";
 import { EntryPointVersion } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
+import { PaymasterPriceStalenessError } from "./paymaster-manager";
 import { UserOperation, PackedUserOperation } from "../../core/types";
 import { ERC4337Utils } from "../../core/erc4337";
 import { TierLevel } from "../../core/tier";
@@ -275,7 +276,32 @@ export class TransferManager {
         }
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
+      let message = error instanceof Error ? error.message : String(error);
+
+      // Translate bundler "expires too soon" into a structured PaymasterPriceStalenessError
+      // so callers can detect and handle stale paymaster price without string-matching.
+      if (
+        message.includes("expires too soon") ||
+        message.includes("AA32") ||
+        message.includes("paymaster deposit not locked")
+      ) {
+        const validUntilMatch = message.match(/validUntil=(\d+)/);
+        const hint = validUntilMatch
+          ? ` (validUntil=${validUntilMatch[1]}, expired ${Math.floor(Date.now() / 1000) - Number(validUntilMatch[1])}s ago)`
+          : "";
+        message =
+          `Paymaster price is stale${hint}. ` +
+          `Call paymasterManager.checkPriceFreshness(paymasterAddress) to diagnose, ` +
+          `then paymasterManager.updatePrice(paymasterAddress, signer) to refresh. ` +
+          `Original error: ${message}`;
+        error = new PaymasterPriceStalenessError(
+          "unknown" /* paymasterAddress not available here */,
+          0,
+          0
+        );
+        (error as PaymasterPriceStalenessError & { message: string }).message = message;
+      }
+
       await this.storage.updateTransfer(transferId, {
         status: "failed",
         error: message,

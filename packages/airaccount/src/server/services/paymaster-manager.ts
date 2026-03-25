@@ -4,6 +4,32 @@ import { IStorageAdapter, PaymasterRecord } from "../interfaces/storage-adapter"
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 
 /**
+ * Thrown when a paymaster's on-chain price cache is stale.
+ * Caller should invoke `paymasterManager.updatePrice(paymasterAddress)` before retrying.
+ */
+export class PaymasterPriceStalenessError extends Error {
+  constructor(
+    public readonly paymasterAddress: string,
+    public readonly ageSeconds: number,
+    public readonly thresholdSeconds: number
+  ) {
+    super(
+      `Paymaster ${paymasterAddress} price is stale ` +
+        `(age: ${Math.floor(ageSeconds / 60)}min, threshold: ${Math.floor(thresholdSeconds / 60)}min). ` +
+        `Call updatePrice() on the paymaster contract before retrying.`
+    );
+    this.name = "PaymasterPriceStalenessError";
+  }
+}
+
+const PAYMASTER_PRICE_ABI = [
+  "function token() view returns (address)",
+  "function cachedPriceTimestamp() view returns (uint256)",
+  "function priceStalenessThreshold() view returns (uint256)",
+  "function updatePrice() external",
+];
+
+/**
  * Paymaster manager — extracted from NestJS PaymasterService.
  * Storage via IStorageAdapter instead of filesystem JSON files.
  */
@@ -51,6 +77,46 @@ export class PaymasterManager {
 
   async removeCustomPaymaster(userId: string, name: string): Promise<boolean> {
     return this.storage.removePaymaster(userId, name);
+  }
+
+  /**
+   * Check whether a paymaster's on-chain price cache is still fresh.
+   * Returns `{ fresh, ageSeconds, thresholdSeconds }`.
+   * Throws if the contract does not implement `cachedPriceTimestamp()` / `priceStalenessThreshold()`.
+   */
+  async checkPriceFreshness(paymasterAddress: string): Promise<{
+    fresh: boolean;
+    ageSeconds: number;
+    thresholdSeconds: number;
+  }> {
+    const provider = this.ethereum.getProvider();
+    const contract = new ethers.Contract(paymasterAddress, PAYMASTER_PRICE_ABI, provider);
+    const [timestamp, threshold] = await Promise.all([
+      contract.cachedPriceTimestamp() as Promise<bigint>,
+      contract.priceStalenessThreshold() as Promise<bigint>,
+    ]);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const ageSeconds = nowSeconds - Number(timestamp);
+    const thresholdSeconds = Number(threshold);
+    return {
+      fresh: ageSeconds <= thresholdSeconds,
+      ageSeconds,
+      thresholdSeconds,
+    };
+  }
+
+  /**
+   * Call `updatePrice()` on a paymaster contract (permissionless).
+   * Useful when `checkPriceFreshness()` reports stale price.
+   *
+   * @param signer - An ethers Signer that will send the transaction (must have gas).
+   */
+  async updatePrice(paymasterAddress: string, signer: ethers.Signer): Promise<string> {
+    const contract = new ethers.Contract(paymasterAddress, PAYMASTER_PRICE_ABI, signer);
+    const tx = await contract.updatePrice({ gasLimit: 300000 });
+    await tx.wait();
+    this.logger.log(`Paymaster ${paymasterAddress} price updated, tx: ${tx.hash}`);
+    return tx.hash as string;
   }
 
   async getPaymasterData(
@@ -113,18 +179,37 @@ export class PaymasterManager {
           ]);
         }
 
-        // PaymasterV4 deposit model: paymasterData is empty (0x).
-        // The PMv4 uses internal token balances (depositFor) — no token address in paymasterData.
+        // PaymasterV4 deposit model: paymasterData contains the ERC-20 token address
+        // that the user pays gas with (20 bytes appended after the gas limits).
+        // Auto-detect via token() on the contract; fall back to empty if not available.
         const paymasterVerificationGasLimit = BigInt(0x30000);
         const paymasterPostOpGasLimit = BigInt(0x30000);
 
-        this.logger.log(`PaymasterV4 deposit model detected, using empty paymasterData`);
+        let tokenAddress: string | null = null;
+        try {
+          const pmContract = new ethers.Contract(
+            formattedAddress,
+            PAYMASTER_PRICE_ABI,
+            provider
+          );
+          tokenAddress = await pmContract.token();
+          if (tokenAddress === ethers.ZeroAddress) tokenAddress = null;
+          if (tokenAddress) {
+            this.logger.log(`PaymasterV4 token auto-detected: ${tokenAddress}`);
+          }
+        } catch {
+          this.logger.log(`PaymasterV4 token() not available, using empty paymasterData`);
+        }
 
-        return ethers.concat([
+        const parts: string[] = [
           formattedAddress,
           ethers.zeroPadValue(ethers.toBeHex(paymasterVerificationGasLimit), 16),
           ethers.zeroPadValue(ethers.toBeHex(paymasterPostOpGasLimit), 16),
-        ]);
+        ];
+        if (tokenAddress) {
+          parts.push(tokenAddress);
+        }
+        return ethers.concat(parts);
       }
 
       return formattedAddress;

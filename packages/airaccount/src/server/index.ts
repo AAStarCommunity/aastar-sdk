@@ -30,7 +30,7 @@ export type {
 } from "./services/transfer-manager";
 export { BLSSignatureService } from "./services/bls-signature-service";
 export { GuardChecker } from "./services/guard-checker";
-export { PaymasterManager } from "./services/paymaster-manager";
+export { PaymasterManager, PaymasterPriceStalenessError } from "./services/paymaster-manager";
 export { TokenService } from "./services/token-service";
 export type { TokenInfo, TokenBalance } from "./services/token-service";
 export { WalletManager } from "./services/wallet-manager";
