@@ -1,6 +1,6 @@
 {
   "name": "@aastar/airaccount",
-  "version": "0.17.6",
+  "version": "0.17.7",
   "description": "AirAccount SDK - ERC-4337 Account Abstraction with KMS WebAuthn, BLS Aggregate Signatures, and Tiered Signature Routing",
   "publishConfig": {
     "access": "public"

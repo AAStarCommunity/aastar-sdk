@@ -124,7 +124,8 @@ export class PaymasterManager {
     paymasterName: string,
     userOp: unknown,
     entryPoint: string,
-    customAddress?: string
+    customAddress?: string,
+    options?: { tokenAddress?: string }
   ): Promise<string> {
     // Handle custom user-provided paymaster addresses
     if (paymasterName === "custom-user-provided" && customAddress) {
@@ -185,20 +186,24 @@ export class PaymasterManager {
         const paymasterVerificationGasLimit = BigInt(0x30000);
         const paymasterPostOpGasLimit = BigInt(0x30000);
 
-        let tokenAddress: string | null = null;
-        try {
-          const pmContract = new ethers.Contract(
-            formattedAddress,
-            PAYMASTER_PRICE_ABI,
-            provider
-          );
-          tokenAddress = await pmContract.token();
-          if (tokenAddress === ethers.ZeroAddress) tokenAddress = null;
-          if (tokenAddress) {
-            this.logger.log(`PaymasterV4 token auto-detected: ${tokenAddress}`);
+        let tokenAddress: string | null = options?.tokenAddress ?? null;
+        if (tokenAddress) {
+          this.logger.log(`PaymasterV4 token from options: ${tokenAddress}`);
+        } else {
+          try {
+            const pmContract = new ethers.Contract(
+              formattedAddress,
+              PAYMASTER_PRICE_ABI,
+              provider
+            );
+            tokenAddress = await pmContract.token();
+            if (tokenAddress === ethers.ZeroAddress) tokenAddress = null;
+            if (tokenAddress) {
+              this.logger.log(`PaymasterV4 token auto-detected: ${tokenAddress}`);
+            }
+          } catch {
+            this.logger.log(`PaymasterV4 token() not available, paymasterData will have no token`);
           }
-        } catch {
-          this.logger.log(`PaymasterV4 token() not available, using empty paymasterData`);
         }
 
         const parts: string[] = [

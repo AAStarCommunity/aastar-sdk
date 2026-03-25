@@ -25,6 +25,10 @@ export interface ExecuteTransferParams {
   usePaymaster?: boolean;
   paymasterAddress?: string;
   paymasterData?: string;
+  /** ERC-20 token address for deposit-pull paymasters (e.g. PMv4) that require
+   *  the gas token address appended to paymasterData. Used when the paymaster
+   *  contract does not expose a public token() getter for auto-detection. */
+  paymasterTokenAddress?: string;
   passkeyAssertion?: LegacyPasskeyAssertion;
   /** P256 passkey signature (64 bytes hex). Required for AirAccount Tier 2/3. */
   p256Signature?: string;
@@ -127,7 +131,8 @@ export class TransferManager {
       params.paymasterAddress,
       params.paymasterData,
       params.tokenAddress,
-      version
+      version,
+      params.paymasterTokenAddress
     );
 
     // Get hash
@@ -412,7 +417,8 @@ export class TransferManager {
     paymasterAddress?: string,
     _paymasterData?: string,
     tokenAddress?: string,
-    version: EntryPointVersion = EntryPointVersion.V0_6
+    version: EntryPointVersion = EntryPointVersion.V0_6,
+    paymasterTokenAddress?: string
   ): Promise<UserOperation | PackedUserOperation> {
     const accountContract = this.ethereum.getAccountContract(sender);
     const nonce = await this.ethereum.getNonce(sender, 0, version);
@@ -537,7 +543,8 @@ export class TransferManager {
           "custom-user-provided",
           baseUserOp,
           entryPoint,
-          paymasterAddress
+          paymasterAddress,
+          paymasterTokenAddress ? { tokenAddress: paymasterTokenAddress } : undefined
         );
       } else {
         const available = await this.paymasterManager.getAvailablePaymasters(userId);
