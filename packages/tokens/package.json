@@ -1,6 +1,6 @@
 {
   "name": "@aastar/tokens",
-  "version": "0.17.2",
+  "version": "0.17.6",
   "publishConfig": {
     "access": "public"
   },
