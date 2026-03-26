@@ -1,29 +1,50 @@
+import { vi } from "vitest";
+
+// vi.hoisted ensures these variables are available inside the vi.mock factory
+// (which is hoisted to the top of the file by Vitest's transform)
+const { mockAxiosGet, mockAxiosPost } = vi.hoisted(() => ({
+  mockAxiosGet: vi.fn(),
+  mockAxiosPost: vi.fn(),
+}));
+
 // Mock @noble/curves before any imports so BLSManager doesn't fail to load
-jest.mock("@noble/curves/bls12-381.js", () => ({
+vi.mock("@noble/curves/bls12-381.js", () => ({
   bls12_381: {
     G2: {
-      hashToCurve: jest.fn().mockResolvedValue({
+      hashToCurve: vi.fn().mockResolvedValue({
         toAffine: () => ({
           x: { c0: 0n, c1: 0n },
           y: { c0: 0n, c1: 0n },
         }),
       }),
-      ProjectivePoint: { fromHex: jest.fn() },
+      ProjectivePoint: { fromHex: vi.fn() },
     },
-    getPublicKey: jest.fn(),
-    sign: jest.fn(),
-    verify: jest.fn(),
-    aggregateSignatures: jest.fn(),
-    aggregatePublicKeys: jest.fn(),
+    getPublicKey: vi.fn(),
+    sign: vi.fn(),
+    verify: vi.fn(),
+    aggregateSignatures: vi.fn(),
+    aggregatePublicKeys: vi.fn(),
   },
+}));
+
+// Mock axios with explicit factory so get/post are proper vi.fn() instances
+vi.mock("axios", () => ({
+  default: {
+    get: mockAxiosGet,
+    post: mockAxiosPost,
+  },
+  get: mockAxiosGet,
+  post: mockAxiosPost,
 }));
 
 import axios from "axios";
 import { BLSManager } from "../../core/bls/bls.manager";
 import type { BLSNode } from "../../core/bls/types";
 
-jest.mock("axios");
-const mockAxios = axios as jest.Mocked<typeof axios>;
+const mockAxios = {
+  get: mockAxiosGet,
+  post: mockAxiosPost,
+};
 
 const makeNode = (overrides: Partial<BLSNode> = {}): BLSNode => ({
   nodeId: "node-1",
