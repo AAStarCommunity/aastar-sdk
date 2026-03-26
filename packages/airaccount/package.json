@@ -99,6 +99,7 @@
   "devDependencies": {
     "ethers": "^6.11.1",
     "tsup": "^8.0.2",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "vitest": "4.0.17"
   }
 }

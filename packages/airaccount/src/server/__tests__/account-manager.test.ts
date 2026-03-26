@@ -13,10 +13,10 @@ const FACTORY_ADDRESS = "0xFactoryAddress00000000000000000000000001";
 
 /** Build a minimal EthereumProvider mock. */
 function makeEthereumMock(overrides: Record<string, jest.Mock> = {}) {
+  // The production code calls factory.getFunction("getAddress")(...args)
+  const getAddressFn = vi.fn().mockResolvedValue(ACCOUNT_ADDRESS);
   const mockFactory = {
-    "getAddress(address,address,address,bool,uint256)": jest
-      .fn()
-      .mockResolvedValue(ACCOUNT_ADDRESS),
+    getFunction: vi.fn().mockReturnValue(getAddressFn),
     target: FACTORY_ADDRESS,
   };
 
@@ -123,12 +123,13 @@ describe("AccountManager", () => {
       await manager.createAccount("user-1", { salt: 99 });
 
       const mockFactory = ethereum.getFactoryContract.mock.results[0].value;
-      expect(mockFactory["getAddress(address,address,address,bool,uint256)"]).toHaveBeenCalledWith(
-        SIGNER_ADDRESS, // creator
-        SIGNER_ADDRESS, // signer
-        VALIDATOR_ADDRESS,
-        true,
-        99
+      // Production code: factory.getFunction("getAddress")(signerAddress, salt, minimalConfig)
+      expect(mockFactory.getFunction).toHaveBeenCalledWith("getAddress");
+      const getAddressFn = mockFactory.getFunction.mock.results[0].value;
+      expect(getAddressFn).toHaveBeenCalledWith(
+        SIGNER_ADDRESS, // signerAddress
+        99,             // salt
+        expect.any(Array) // minimalConfig
       );
     });
   });

@@ -1,18 +1,29 @@
+import { vi } from "vitest";
+
+// vi.hoisted ensures these variables are available inside the vi.mock factory
+// (which is hoisted to the top of the file by Vitest's transform)
+const { mockPost, mockGet, mockAxiosCreate } = vi.hoisted(() => {
+  const mockPost = vi.fn();
+  const mockGet = vi.fn();
+  const mockAxiosCreate = vi.fn(() => ({
+    post: mockPost,
+    get: mockGet,
+  }));
+  return { mockPost, mockGet, mockAxiosCreate };
+});
+
+// Mock axios.create to return an object with mock post/get methods
+vi.mock("axios", () => ({
+  default: {
+    create: mockAxiosCreate,
+  },
+  create: mockAxiosCreate,
+}));
+
 import axios from "axios";
 import { ethers } from "ethers";
 import { KmsManager, KmsSigner, LegacyPasskeyAssertion } from "../services/kms-signer";
 import { SilentLogger } from "../interfaces/logger";
-
-// Mock axios.create to return an object with mock post/get methods
-const mockPost = jest.fn();
-const mockGet = jest.fn();
-jest.mock("axios", () => ({
-  ...jest.requireActual("axios"),
-  create: jest.fn(() => ({
-    post: mockPost,
-    get: mockGet,
-  })),
-}));
 
 const ENDPOINT = "https://kms.test.example";
 const ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -33,7 +44,7 @@ const MOCK_ASSERTION: LegacyPasskeyAssertion = {
 
 describe("KmsManager", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("isKmsEnabled", () => {
@@ -59,7 +70,7 @@ describe("KmsManager", () => {
         logger: new SilentLogger(),
       });
 
-      expect(axios.create).toHaveBeenCalledWith(
+      expect(mockAxiosCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           baseURL: ENDPOINT,
           headers: expect.objectContaining({
@@ -76,7 +87,7 @@ describe("KmsManager", () => {
         logger: new SilentLogger(),
       });
 
-      const callArgs = (axios.create as jest.Mock).mock.calls[0][0];
+      const callArgs = mockAxiosCreate.mock.calls[0][0];
       expect(callArgs.headers).not.toHaveProperty("x-api-key");
     });
   });
