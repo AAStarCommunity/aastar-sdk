@@ -16,7 +16,7 @@ export function registerChannelCommands(program: Command) {
         .command('status')
         .description('Get channel state')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--contract <address>', 'MicroPaymentChannel address')
         .requiredOption('--id <hex>', 'Channel ID (bytes32)')
         .action(async (opts) => {
@@ -38,7 +38,7 @@ export function registerChannelCommands(program: Command) {
         .command('timeout')
         .description('Get close timeout duration')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--contract <address>', 'MicroPaymentChannel address')
         .action(async (opts) => {
             const client = getPublicClient(opts.rpc, Number(opts.chainId));

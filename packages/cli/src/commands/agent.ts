@@ -16,7 +16,7 @@ export function registerAgentCommands(program: Command) {
         .command('status')
         .description('Check agent registration and sponsorship eligibility')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--paymaster <address>', 'SuperPaymaster address')
         .requiredOption('--address <address>', 'Agent address to check')
         .action(async (opts) => {
@@ -33,7 +33,7 @@ export function registerAgentCommands(program: Command) {
         .command('rate')
         .description('Get agent sponsorship rate for an operator')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--paymaster <address>', 'SuperPaymaster address')
         .requiredOption('--agent <address>', 'Agent address')
         .requiredOption('--operator <address>', 'Operator address')
@@ -51,7 +51,7 @@ export function registerAgentCommands(program: Command) {
         .command('registries')
         .description('Show agent registry addresses')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--paymaster <address>', 'SuperPaymaster address')
         .action(async (opts) => {
             const client = getPublicClient(opts.rpc, Number(opts.chainId));

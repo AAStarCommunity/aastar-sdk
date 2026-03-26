@@ -16,7 +16,7 @@ export function registerX402Commands(program: Command) {
         .command('quote')
         .description('Get facilitator fee quote')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--paymaster <address>', 'SuperPaymaster address')
         .action(async (opts) => {
             const client = getPublicClient(opts.rpc, Number(opts.chainId));
@@ -29,7 +29,7 @@ export function registerX402Commands(program: Command) {
         .command('nonce')
         .description('Check if a nonce has been used')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--paymaster <address>', 'SuperPaymaster address')
         .requiredOption('--nonce <hex>', 'Nonce to check')
         .action(async (opts) => {
@@ -43,7 +43,7 @@ export function registerX402Commands(program: Command) {
         .command('earnings')
         .description('Check facilitator earnings for an operator')
         .requiredOption('--rpc <url>', 'RPC URL')
-        .requiredOption('--chain-id <number>', 'Chain ID', '11155111')
+        .option('--chain-id <number>', 'Chain ID', '11155111')
         .requiredOption('--paymaster <address>', 'SuperPaymaster address')
         .requiredOption('--operator <address>', 'Operator address')
         .requiredOption('--asset <address>', 'Asset address')
