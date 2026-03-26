@@ -32,5 +32,6 @@ export * from './utils/keys.js';
 export * from './utils/funding.js';
 export * from './utils/userOp.js';
 export * from './utils/testScenarios.js';
+export * from './utils/email.js';
 export * from './errors/decoder.js';
 
