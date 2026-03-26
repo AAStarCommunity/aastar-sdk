@@ -1,20 +1,21 @@
 /**
  * Tests for TokenService on-chain query methods.
  *
- * ethers.Contract is replaced via jest.mock so we avoid real RPC calls.
+ * ethers.Contract is replaced via vi.mock so we avoid real RPC calls.
  * The mock instance is exposed via ethers.__mockContract for per-test configuration.
  */
 
-// jest.mock is hoisted to the top — factory runs before imports.
-// We use class fields to share jest.fn() references across instances.
-jest.mock("ethers", () => {
-  const actual = jest.requireActual("ethers") as any;
+import { vi } from "vitest";
 
-  // Singleton fn references — all MockContract instances share these.
-  const _name = jest.fn().mockResolvedValue("USD Coin");
-  const _symbol = jest.fn().mockResolvedValue("USDC");
-  const _decimals = jest.fn().mockResolvedValue(6n);
-  const _balanceOf = jest.fn().mockResolvedValue(5_000_000n);
+// Singleton fn references — all MockContract instances share these.
+const _name = vi.fn().mockResolvedValue("USD Coin");
+const _symbol = vi.fn().mockResolvedValue("USDC");
+const _decimals = vi.fn().mockResolvedValue(6n);
+const _balanceOf = vi.fn().mockResolvedValue(5_000_000n);
+
+// vi.mock is hoisted to the top — factory runs before imports.
+vi.mock("ethers", async () => {
+  const actual = await vi.importActual<typeof import("ethers")>("ethers");
 
   class MockContract {
     interface: any;
@@ -28,21 +29,11 @@ jest.mock("ethers", () => {
     }
   }
 
-  // token-service.ts accesses `ethers.Contract` (the `ethers` namespace property),
-  // so we must replace Contract inside the `ethers` object as well.
-  const result = {
+  return {
     ...actual,
     Contract: MockContract,
-    ethers: { ...actual.ethers, Contract: MockContract },
+    ethers: { ...(actual as any).ethers, Contract: MockContract },
   };
-  // Expose fn references so tests can configure return values
-  (result as any).__mockContract = {
-    name: _name,
-    symbol: _symbol,
-    decimals: _decimals,
-    balanceOf: _balanceOf,
-  };
-  return result;
 });
 
 import * as ethersModule from "ethers";
@@ -52,17 +43,15 @@ import { TokenService } from "../services/token-service";
 const TOKEN_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const WALLET_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-// __mockContract is on the module root (factory return value), not on the `ethers` named export.
-// Use the module namespace to access it.
-const mockFns: {
-  name: jest.Mock;
-  symbol: jest.Mock;
-  decimals: jest.Mock;
-  balanceOf: jest.Mock;
-} = (ethersModule as any).__mockContract;
+const mockFns = {
+  name: _name,
+  symbol: _symbol,
+  decimals: _decimals,
+  balanceOf: _balanceOf,
+};
 
 function makeEthereumStub() {
-  return { getProvider: jest.fn().mockReturnValue({}) };
+  return { getProvider: vi.fn().mockReturnValue({}) };
 }
 
 describe("TokenService — on-chain queries", () => {

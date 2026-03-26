@@ -200,7 +200,7 @@ describe("EthereumProvider — RPC methods", () => {
 
       const result = await ep.estimateUserOperationGas({});
       expect(result.callGasLimit).toBe("0x249f0");
-      expect(result.verificationGasLimit).toBe("0xf4240");
+      expect(result.verificationGasLimit).toBe("0x3d0900"); // 4M — enough for M4 factory deployment + BLS verification
       expect(result.preVerificationGas).toBe("0x11170");
     });
   });
