@@ -39,12 +39,14 @@ function toNetworkId(chainId: number): `eip155:${number}` {
 
 export class X402Client {
     private readonly actions;
+    private readonly writeActions;
     private readonly config: X402ClientConfig;
     private readonly facilitatorClient?: FacilitatorClient;
 
     constructor(config: X402ClientConfig) {
         this.config = config;
         this.actions = x402Actions(config.superPaymasterAddress)(config.publicClient);
+        this.writeActions = x402Actions(config.superPaymasterAddress)(config.walletClient);
         if (config.facilitator) {
             this.facilitatorClient = new FacilitatorClient(config.facilitator);
         }
@@ -118,8 +120,7 @@ export class X402Client {
         from: Address; to: Address; asset: Address; amount: bigint;
         validAfter: bigint; validBefore: bigint; nonce: Hex; signature: Hex;
     }): Promise<Hex> {
-        const writeActions = x402Actions(this.config.superPaymasterAddress)(this.config.walletClient);
-        return writeActions.settleX402Payment({
+        return this.writeActions.settleX402Payment({
             ...params,
             account: this.config.walletClient.account!,
         });
@@ -131,8 +132,7 @@ export class X402Client {
     async settleDirectOnChain(params: {
         from: Address; to: Address; asset: Address; amount: bigint; nonce: Hex;
     }): Promise<Hex> {
-        const writeActions = x402Actions(this.config.superPaymasterAddress)(this.config.walletClient);
-        return writeActions.settleX402PaymentDirect({
+        return this.writeActions.settleX402PaymentDirect({
             ...params,
             account: this.config.walletClient.account!,
         });
@@ -185,6 +185,7 @@ export class X402Client {
         }
 
         // Step 2: Extract payment requirements
+        // TODO: some server implementations put PaymentRequired in the response body instead of headers
         const paymentRequired = extractPaymentRequired(firstResponse);
         if (!paymentRequired || !paymentRequired.accepts?.length) {
             throw new Error('402 response missing PAYMENT-REQUIRED header or empty accepts');

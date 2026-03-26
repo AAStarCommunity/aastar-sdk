@@ -22,13 +22,7 @@ export function getEIP3009Domain(tokenName: string, tokenVersion: string, chainI
 
 export function generateNonce(): Hex {
     const bytes = new Uint8Array(32);
-    if (typeof globalThis.crypto !== 'undefined') {
-        globalThis.crypto.getRandomValues(bytes);
-    } else {
-        for (let i = 0; i < 32; i++) {
-            bytes[i] = Math.floor(Math.random() * 256);
-        }
-    }
+    globalThis.crypto.getRandomValues(bytes);
     return toHex(bytes);
 }
 

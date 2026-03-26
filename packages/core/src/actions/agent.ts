@@ -23,7 +23,13 @@ export type AgentActions = {
     setAgentRegistries: (args: { identity: Address, reputation: Address, account?: Account | Address }) => Promise<Hash>;
 };
 
-export const agentActions = (address: Address) => (client: PublicClient | WalletClient): AgentActions => ({
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export const agentActions = (address: Address) => (client: PublicClient | WalletClient): AgentActions => {
+    if (address === ZERO_ADDRESS) {
+        throw new Error('Agent contracts are not deployed on this network');
+    }
+    return ({
     // --- View ---
     async isRegisteredAgent({ account: agentAddr }) {
         try {
@@ -139,3 +145,4 @@ export const agentActions = (address: Address) => (client: PublicClient | Wallet
         }
     },
 });
+};

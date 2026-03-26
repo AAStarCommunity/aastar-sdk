@@ -45,7 +45,13 @@ export type ChannelActions = {
     version: () => Promise<string>;
 };
 
-export const channelActions = (address: Address) => (client: PublicClient | WalletClient): ChannelActions => ({
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export const channelActions = (address: Address) => (client: PublicClient | WalletClient): ChannelActions => {
+    if (address === ZERO_ADDRESS) {
+        throw new Error('MicroPaymentChannel contract is not deployed on this network');
+    }
+    return ({
     // --- Write ---
     async openChannel({ payee, token, deposit, salt, authorizedSigner, account }) {
         try {
@@ -193,3 +199,4 @@ export const channelActions = (address: Address) => (client: PublicClient | Wall
         }
     },
 });
+};
