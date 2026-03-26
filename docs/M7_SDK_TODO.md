@@ -99,8 +99,13 @@ packages/core/src/transports/helios.ts  # @a16z/helios → viem custom transport
 packages/core/src/utils/ens.ts  # viem/ens 正反向解析封装
 ```
 
-### F5：x402 + M7 Session Key（用户决定暂不做）
-扩展 `packages/x402/` 的 `X402ClientConfig.signer` 接受 `SessionKeyAccount`。
+### F5：x402 + M7 Session Key（已由同事在 feature/v5-x402-sdk 分支实现）
+
+`@aastar/x402` 包已实现（`X402Client`、`x402Fetch`、EIP-3009 签名、payment-header 编解码）。
+`X402ClientConfig.walletClient` 接受 viem `WalletClient`，Session Key Account 可直接通过
+`createWalletClient({ account: sessionKeyAccount })` 传入，满足 F5 要求。
+
+**待办**：将 `feature/v5-x402-sdk` 分支合入当前 PR（feat/m7-sdk-upgrade）。
 
 ---
 
