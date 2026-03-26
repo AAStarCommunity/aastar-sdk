@@ -124,16 +124,18 @@ function decodeDerSignature(der: Uint8Array): { r: Uint8Array; s: Uint8Array } {
   if (der[offset] !== 0x02) throw new Error("Invalid DER signature: expected INTEGER tag 0x02");
   offset++;
   const rLen = der[offset++];
-  // DER may prefix with 0x00 for positive integers — strip it
+  // DER may prefix 0x00 for positive integers (rLen=33); or omit leading zeros (rLen<32)
   const rStart = rLen > 32 ? offset + 1 : offset;
-  const r = der.slice(rStart, rStart + 32);
+  const rActualLen = rLen > 32 ? rLen - 1 : rLen;
+  const r = der.slice(rStart, rStart + rActualLen);
   offset += rLen;
 
   if (der[offset] !== 0x02) throw new Error("Invalid DER signature: expected INTEGER tag 0x02");
   offset++;
   const sLen = der[offset++];
   const sStart = sLen > 32 ? offset + 1 : offset;
-  const s = der.slice(sStart, sStart + 32);
+  const sActualLen = sLen > 32 ? sLen - 1 : sLen;
+  const s = der.slice(sStart, sStart + sActualLen);
 
   return { r: padTo32(r), s: padTo32(s) };
 }

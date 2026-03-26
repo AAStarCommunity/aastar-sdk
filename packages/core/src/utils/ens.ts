@@ -20,7 +20,7 @@
  */
 
 import { createPublicClient, http, type Chain, type PublicClient } from "viem";
-import { getEnsAddress, getEnsName } from "viem/ens";
+import { getEnsAddress, getEnsName, normalize } from "viem/ens";
 import { mainnet } from "viem/chains";
 
 /** Options accepted by resolveEns and lookupAddress. */
@@ -51,7 +51,7 @@ export async function resolveEns(
   options: EnsOptions = {},
 ): Promise<`0x${string}` | null> {
   const client = options.client ?? makeMainnetClient(options.rpcUrl);
-  return getEnsAddress(client, { name });
+  return getEnsAddress(client, { name: normalize(name) });
 }
 
 /**
@@ -82,7 +82,7 @@ export async function resolveEnsVerified(
 ): Promise<{ address: `0x${string}` | null; name: string; verified: boolean }> {
   const client = options.client ?? makeMainnetClient(options.rpcUrl);
 
-  const address = await getEnsAddress(client, { name });
+  const address = await getEnsAddress(client, { name: normalize(name) });
   if (!address) return { address: null, name, verified: false };
 
   const reverseName = await getEnsName(client, { address });

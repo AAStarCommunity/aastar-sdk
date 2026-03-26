@@ -85,13 +85,7 @@
     "web3"
   ],
   "peerDependencies": {
-    "ethers": "^6.0.0",
-    "@ledgerhq/hw-app-eth": "^7.0.0",
-    "@ledgerhq/hw-transport-webhid": "^6.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@ledgerhq/hw-app-eth": { "optional": true },
-    "@ledgerhq/hw-transport-webhid": { "optional": true }
+    "ethers": "^6.0.0"
   },
   "dependencies": {
     "@noble/curves": "^2.0.1",
