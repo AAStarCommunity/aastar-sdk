@@ -9,6 +9,9 @@
 import {
   createPublicClient,
   encodeFunctionData,
+  hashMessage,
+  hashTypedData,
+  hexToBytes,
   http,
   type Address,
   type Hex,
@@ -111,10 +114,12 @@ type EthSendTransactionParams = {
  */
 export class AirAccountEIP1193Provider {
   private readonly config: AirAccountProviderConfig;
+  private readonly client: ReturnType<typeof createPublicClient>;
   private readonly listeners = new Map<string, Set<(...args: unknown[]) => void>>();
 
   constructor(config: AirAccountProviderConfig) {
     this.config = config;
+    this.client = createPublicClient({ transport: http(config.rpcUrl) });
   }
 
   async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
@@ -129,6 +134,31 @@ export class AirAccountEIP1193Provider {
       case "eth_sendTransaction": {
         const tx = (params as [EthSendTransactionParams])[0];
         return this._sendTransaction(tx);
+      }
+
+      case "personal_sign": {
+        // params: [hexData, address] — sign raw bytes with EIP-191 prefix
+        const [data] = params as [Hex, Address];
+        const hash = hashMessage({ raw: hexToBytes(data) });
+        return this.config.signer(hash);
+      }
+
+      case "eth_signTypedData_v4": {
+        // params: [address, typedDataJson] — sign EIP-712 typed data
+        const [, typedDataJson] = params as [Address, string];
+        const typedData = JSON.parse(typedDataJson) as {
+          domain: Parameters<typeof hashTypedData>[0]["domain"];
+          types: Parameters<typeof hashTypedData>[0]["types"];
+          primaryType: string;
+          message: Record<string, unknown>;
+        };
+        const hash = hashTypedData({
+          domain: typedData.domain,
+          types: typedData.types,
+          primaryType: typedData.primaryType,
+          message: typedData.message,
+        });
+        return this.config.signer(hash);
       }
 
       default:
@@ -159,17 +189,15 @@ export class AirAccountEIP1193Provider {
       args: [tx.to, BigInt(tx.value ?? "0x0"), tx.data ?? "0x"],
     });
 
-    const client = createPublicClient({ transport: http(this.config.rpcUrl) });
-
     // Fetch nonce and gas fees in parallel
     const [nonce, feeData] = await Promise.all([
-      client.readContract({
+      this.client.readContract({
         address: entryPoint,
         abi: ENTRYPOINT_ABI,
         functionName: "getNonce",
         args: [this.config.accountAddress, 0n],
       }) as Promise<bigint>,
-      client.estimateFeesPerGas(),
+      this.client.estimateFeesPerGas(),
     ]);
 
     const maxFeePerGas = feeData.maxFeePerGas ?? 1_000_000_000n;
@@ -194,7 +222,7 @@ export class AirAccountEIP1193Provider {
     };
 
     // Get UserOp hash from EntryPoint
-    const userOpHash = await client.readContract({
+    const userOpHash = await this.client.readContract({
       address: entryPoint,
       abi: ENTRYPOINT_ABI,
       functionName: "getUserOpHash",

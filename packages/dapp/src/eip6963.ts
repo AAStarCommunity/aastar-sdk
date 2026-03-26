@@ -30,7 +30,7 @@ const DEFAULT_ICON =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iMjQiIGZpbGw9IiMxQTFBMkUiLz48dGV4dCB4PSIxMiIgeT0iMzIiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiNGRkYiPkFBPC90ZXh0Pjwvc3ZnPg==";
 
 // Stable UUID for AirAccount — must not change between sessions per EIP-6963 spec
-const AIRACCOUNT_UUID = "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f80";
+const AIRACCOUNT_UUID = "d4e5f6a7-b8c9-4d0e-8f2a-3b4c5d6e7f80";
 
 /**
  * Announce AirAccount as an EIP-6963 wallet so DApps can auto-discover it.

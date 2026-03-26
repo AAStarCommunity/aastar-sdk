@@ -65,15 +65,22 @@ export interface YubiKeySignerConfig {
 /**
  * Create a YubiKey / FIDO2 P256 signer using WebAuthn.
  *
- * @example
+ * @example Tier 2/3 server-composite signing (server verifies the WebAuthn assertion)
  * ```ts
  * const signer = createYubiKeySigner({
  *   credentialIds: [base64UrlToBuffer(storedCredentialId)],
  * });
- * const provider = new AirAccountEIP1193Provider({
- *   ...,
- *   signer: (hash) => signer.sign(hash),
- * });
+ * // signer.sign() returns the raw WebAuthn P256 signature bytes.
+ * // ⚠ This is NOT directly valid for standalone algId=0x03 on-chain verification
+ * //   because the contract expects a signature over userOpHash directly, but
+ * //   WebAuthn signs authData || SHA256(clientDataJSON) instead.
+ * // For standalone algId=0x03 you need an EIP-7212-compatible Ethereum app on
+ * //   the security key (e.g. Keystone firmware), NOT standard WebAuthn CTAP2.
+ * //
+ * // Correct Tier 2/3 flow:
+ * const webAuthnAssertion = await signer.sign(userOpHash);
+ * // Send webAuthnAssertion to your Tier 2/3 server, which verifies the WebAuthn
+ * // assertion off-chain and returns a composite signature for the UserOp.
  * ```
  */
 export function createYubiKeySigner(config: YubiKeySignerConfig = {}): YubiKeySigner {

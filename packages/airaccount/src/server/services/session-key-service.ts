@@ -2,7 +2,6 @@ import { ethers } from "ethers";
 import {
   SESSION_KEY_VALIDATOR_ABI,
   AGENT_SESSION_KEY_VALIDATOR_ABI,
-  AIRACCOUNT_ADDRESSES,
 } from "../constants/entrypoint";
 
 // ─── M6 SessionKeyValidator ──────────────────────────────────────
@@ -67,8 +66,8 @@ export class SessionKeyService {
 
   constructor(
     provider: ethers.JsonRpcProvider,
-    sessionKeyValidatorAddress: string = AIRACCOUNT_ADDRESSES.sepolia.sessionKeyValidator,
-    agentSessionKeyValidatorAddress: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidator,
+    sessionKeyValidatorAddress: string,
+    agentSessionKeyValidatorAddress: string,
   ) {
     this.provider = provider;
     this.skValidator = new ethers.Contract(
@@ -154,8 +153,9 @@ export class SessionKeyService {
   /**
    * Encode calldata for grantAgentSession().
    * Must be called from the account (via UserOp or direct execute).
+   * The contract uses msg.sender as the account — no account param needed.
    */
-  encodeGrantAgentSession(account: string, sessionKey: string, cfg: AgentSessionConfig): string {
+  encodeGrantAgentSession(sessionKey: string, cfg: AgentSessionConfig): string {
     const iface = new ethers.Interface(AGENT_SESSION_KEY_VALIDATOR_ABI);
     return iface.encodeFunctionData("grantAgentSession", [
       sessionKey,

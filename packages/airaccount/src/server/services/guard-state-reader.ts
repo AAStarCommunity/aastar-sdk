@@ -103,18 +103,16 @@ export class GuardStateReader {
 
     const guard = new ethers.Contract(guardAddress, EXTENDED_GUARD_ABI, this.provider);
     try {
-      const [todaySpent] = await Promise.all([guard.tokenTodaySpent(token)]);
-      // TokenConfig is not directly readable; use getConfigDescription for tier limits
-      const configDesc = await account.getConfigDescription();
+      const todaySpent = await guard.tokenTodaySpent(token);
+      // TokenConfig is not directly readable on-chain per token; limits are not fully implemented.
       return {
         token,
         todaySpent: BigInt(todaySpent),
-        dailyLimit: 0n, // token daily limit not directly exposed — use getConfigDescription
+        dailyLimit: 0n, // token daily limit not directly exposed
         remaining: 0n,
-        currentTier: 1,
+        currentTier: 1 as TierLevel,
         tier1Limit: 0n,
         tier2Limit: 0n,
-        ...configDesc,
       };
     } catch {
       return null;

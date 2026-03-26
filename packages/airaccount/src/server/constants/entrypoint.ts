@@ -71,7 +71,12 @@ export const AIRACCOUNT_ADDRESSES = {
     // M5 factory r5 — 6-field InitConfig, guardian acceptance sigs required
     factoryM5: "0xd72a236d84be6c388a8bc7deb64afd54704ae385",
     // M7 factory r5 — recordSpend auth fix, hook overwrite fix, sig binds moduleInitData
+    // BREAKING CHANGE: `.factory` now points to M7 r5. Former M5 address is at `.factoryM5`.
+    // Callers using `.factory` will now create M7 accounts with a different CREATE2 address.
+    // Migration: replace `.factory` usages with `.factoryM7` (explicit) or `.factoryM5` (legacy).
     factory: "0xa0007c5db27548d8c1582773856db1d123107383",
+    // M7 factory alias — use this to be explicit about targeting M7
+    factoryM7: "0xa0007c5db27548d8c1582773856db1d123107383",
     // M7 account implementation r5 (shared by all clone proxies)
     accountImpl: "0xf58900fE20C9d8C4d86259D383b9d810CFd138DB",
     validatorRouter: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
