@@ -186,6 +186,9 @@ importers:
         specifier: 2.43.3
         version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
     devDependencies:
+      '@a16z/helios':
+        specifier: 0.11.1
+        version: 0.11.1
       '@vitest/coverage-v8':
         specifier: 4.0.17
         version: 4.0.17(vitest@4.0.17(@types/node@20.11.5)(tsx@4.21.0)(yaml@2.8.2))
@@ -336,6 +339,9 @@ importers:
         version: 5.7.2
 
 packages:
+
+  '@a16z/helios@0.11.1':
+    resolution: {integrity: sha512-rd+RNnhKcDDRJsEOeHQ7I5FcSG2sZ1dKblCA7tI+tFdhQ5Fdox6ZwIQYdyn7s2YKVx+bnyrLociWxNvmAuaK/Q==}
 
   '@adraffy/ens-normalize@1.10.1':
     resolution: {integrity: sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw==}
@@ -3345,6 +3351,10 @@ packages:
     resolution: {integrity: sha512-6Z7Ma2aVEWisaL6TvBCy7P8rm2LQoPv6dJ7ecIaIixHcwfbJ0x7mWdbcwlIM5IGQxPZSFYeqRCqlOOeKoJYMkw==}
     engines: {node: '>= 4'}
 
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
+
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
@@ -3562,6 +3572,11 @@ packages:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
+
+  '@a16z/helios@0.11.1':
+    dependencies:
+      eventemitter3: 5.0.1
+      uuid: 11.1.0
 
   '@adraffy/ens-normalize@1.10.1': {}
 
@@ -6995,6 +7010,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utility-types@3.11.0: {}
+
+  uuid@11.1.0: {}
 
   uuid@9.0.1: {}
 

@@ -28,7 +28,11 @@
     "@noble/curves": "^1.6.0",
     "viem": "2.43.3"
   },
+  "optionalDependencies": {
+    "@a16z/helios": "^0.11.0"
+  },
   "devDependencies": {
+    "@a16z/helios": "0.11.1",
     "@vitest/coverage-v8": "4.0.17",
     "abitype": "1.2.3",
     "typescript": "5.7.2"
