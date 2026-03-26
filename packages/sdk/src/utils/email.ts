@@ -21,6 +21,8 @@ export interface MailOptions {
   headers?: Record<string, string>;
   tags?: Array<{ name: string; value: string }>;
   scheduledAt?: string;
+  /** agent 重试场景：设置后相同 key 的重复请求不会重复发送 */
+  idempotencyKey?: string;
 }
 
 /**
@@ -90,6 +92,39 @@ export interface MailOptions {
  * // 设置环境变量 RESEND_API_KEY=re_xxx
  * const mailer = ResendMailer.fromEnv();
  * ```
+ *
+ * ---
+ *
+ * ## 作为 AI Agent Tool 使用
+ *
+ * `ResendMailer` 已随 `@aastar/sdk` 导出，agent 无需额外安装依赖。
+ * 设置 `RESEND_API_KEY` 环境变量后直接调用即可。
+ *
+ * **Claude / LangChain 等框架包成 tool 的最简写法：**
+ *
+ * ```ts
+ * import { ResendMailer } from '@aastar/sdk';
+ *
+ * const sendEmailTool = {
+ *   name: 'send_email',
+ *   description: 'Send an email via Resend',
+ *   parameters: { from, to, subject, html },
+ *   execute: (params) => ResendMailer.fromEnv().send(params),
+ * };
+ * ```
+ *
+ * **幂等 Key（agent 重试场景必备）：**
+ * 设置 `idempotencyKey` 后，agent 重试时不会重复发送同一封邮件。
+ *
+ * ```ts
+ * await mailer.send({
+ *   from: 'hi@aastar.io',
+ *   to: 'user@example.com',
+ *   subject: 'Your transaction receipt',
+ *   html: '...',
+ *   idempotencyKey: `tx-receipt-${txHash}`, // 用 txHash 或任意唯一 ID
+ * });
+ * ```
  */
 export class ResendMailer {
   private client: Resend;
@@ -111,8 +146,10 @@ export class ResendMailer {
    * @returns `{ id }` — Resend 返回的邮件 ID，可用于查询发送状态
    */
   async send(options: MailOptions): Promise<{ id: string }> {
+    const { idempotencyKey, ...emailOptions } = options;
     const { data, error } = await this.client.emails.send(
-      options as CreateEmailOptions,
+      emailOptions as CreateEmailOptions,
+      idempotencyKey ? { idempotencyKey } : undefined,
     );
     if (error) {
       throw new Error(`Failed to send email: ${error.message}`);
