@@ -1,0 +1,34 @@
+{
+  "name": "@aastar/cli",
+  "version": "0.17.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "aastar": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@aastar/core": "workspace:*",
+    "@aastar/x402": "workspace:*",
+    "@aastar/channel": "workspace:*",
+    "commander": "^13.0.0",
+    "viem": "2.43.3"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2",
+    "@types/node": "^20.11.5"
+  },
+  "scripts": {
+    "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
+    "prebuild": "pnpm clean",
+    "build": "tsc",
+    "test": "vitest run"
+  }
+}

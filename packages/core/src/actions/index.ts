@@ -12,4 +12,7 @@ export * from './factory.js';
 export * from './aggregator.js';
 export * from './account.js';
 export * from './faucet.js';
+export * from './x402.js';
+export * from './agent.js';
+export * from './channel.js';
 // validators.ts legacy removed

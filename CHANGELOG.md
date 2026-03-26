@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-03-24
+
+### V5.3 Agent Economy SDK
+- **[FEATURE]** **@aastar/x402**: x402 payment client — EIP-3009 signing, payment header encode/decode, x402Fetch auto-retry
+- **[FEATURE]** **@aastar/channel**: MicroPaymentChannel client — EIP-712 voucher signing, channel lifecycle management
+- **[FEATURE]** **@aastar/cli**: CLI tool — `aastar x402/channel/agent` commands
+- **[FEATURE]** **Core L1 Actions**: `x402Actions`, `agentActions`, `channelActions` — three new action factories
+- **[SYNC]** SuperPaymaster ABI synced to V5.3.0 (x402 settlement, agent sponsorship, facilitator fees)
+- **[ADDED]** MicroPaymentChannel ABI
+- **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
+
 ## [0.16.23] - 2026-02-24
 **SDK Code Integrity Hash**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

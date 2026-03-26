@@ -41,6 +41,9 @@ export let BLS_VALIDATOR_ADDRESS = resolveAddr('BLS_VALIDATOR', 'blsValidator');
 export let DVT_VALIDATOR_ADDRESS = resolveAddr('DVT_VALIDATOR', 'dvtValidator');
 export let ENTRY_POINT_ADDRESS = resolveAddr('ENTRY_POINT', 'entryPoint');
 export let APNTS_ADDRESS = resolveAddr('APNTS', 'aPNTs');
+export let MICRO_PAYMENT_CHANNEL_ADDRESS = resolveAddr('MICRO_PAYMENT_CHANNEL', 'microPaymentChannel');
+export let AGENT_IDENTITY_REGISTRY_ADDRESS = resolveAddr('AGENT_IDENTITY_REGISTRY', 'agentIdentityRegistry');
+export let AGENT_REPUTATION_REGISTRY_ADDRESS = resolveAddr('AGENT_REPUTATION_REGISTRY', 'agentReputationRegistry');
 
 /**
  * Apply external configuration (for Node.js environment)
@@ -71,6 +74,9 @@ export function applyConfig(newConfig: any) {
     DVT_VALIDATOR_ADDRESS = resolveAddr('DVT_VALIDATOR', 'dvtValidator');
     ENTRY_POINT_ADDRESS = resolveAddr('ENTRY_POINT', 'entryPoint');
     APNTS_ADDRESS = resolveAddr('APNTS', 'aPNTs');
+    MICRO_PAYMENT_CHANNEL_ADDRESS = resolveAddr('MICRO_PAYMENT_CHANNEL', 'microPaymentChannel');
+    AGENT_IDENTITY_REGISTRY_ADDRESS = resolveAddr('AGENT_IDENTITY_REGISTRY', 'agentIdentityRegistry');
+    AGENT_REPUTATION_REGISTRY_ADDRESS = resolveAddr('AGENT_REPUTATION_REGISTRY', 'agentReputationRegistry');
 }
 
 /**

@@ -36,6 +36,9 @@ import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
+// Payment Channels (V5.3)
+import MicroPaymentChannelABIData from './MicroPaymentChannel.json' with { type: 'json' };
+
 // ========== Re-export ABIs - Core System ==========
 export const RegistryABI = (RegistryABIData as any).abi || RegistryABIData;
 export const RegistryArtifact = RegistryABIData;
@@ -93,6 +96,10 @@ export const BLSAggregatorArtifact = BLSAggregatorABIData;
 
 export const BLSValidatorABI = (BLSValidatorABIData as any).abi || BLSValidatorABIData;
 export const BLSValidatorArtifact = BLSValidatorABIData;
+
+// ========== Payment Channels (V5.3) ==========
+export const MicroPaymentChannelABI = (MicroPaymentChannelABIData as any).abi || MicroPaymentChannelABIData;
+export const MicroPaymentChannelArtifact = MicroPaymentChannelABIData;
 
 
 
