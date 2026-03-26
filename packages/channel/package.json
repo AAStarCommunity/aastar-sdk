@@ -1,0 +1,27 @@
+{
+  "name": "@aastar/channel",
+  "version": "0.17.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@aastar/core": "workspace:*",
+    "viem": "2.43.3"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  },
+  "scripts": {
+    "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
+    "prebuild": "pnpm clean",
+    "build": "tsc",
+    "test": "vitest run"
+  }
+}
