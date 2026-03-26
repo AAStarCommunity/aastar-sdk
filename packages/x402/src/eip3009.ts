@@ -1,4 +1,4 @@
-import { type Address, type Hex, type WalletClient, keccak256, toHex } from 'viem';
+import { type Address, type Hex, type WalletClient, toHex } from 'viem';
 
 export const EIP3009_TYPES = {
     TransferWithAuthorization: [

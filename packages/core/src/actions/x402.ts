@@ -1,6 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
-import { validateAddress, validateRequired } from '../validators/index.js';
+import { validateAddress, validateRequired, validateDeployedAddress } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
 export type X402Actions = {
@@ -27,7 +27,9 @@ export type X402Actions = {
     setOperatorFacilitatorFee: (args: { operator: Address, fee: bigint, account?: Account | Address }) => Promise<Hash>;
 };
 
-export const x402Actions = (address: Address) => (client: PublicClient | WalletClient): X402Actions => ({
+export const x402Actions = (address: Address) => (client: PublicClient | WalletClient): X402Actions => {
+    validateDeployedAddress(address, 'SuperPaymaster');
+    return ({
     // --- Settlement ---
     async settleX402Payment({ from, to, asset, amount, validAfter, validBefore, nonce, signature, account }) {
         try {
@@ -158,3 +160,4 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
         }
     },
 });
+};

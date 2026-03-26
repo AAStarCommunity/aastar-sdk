@@ -17,6 +17,10 @@ export class ChannelClient {
 
     constructor(config: ChannelClientConfig) {
         this.config = config;
+        // Separate clients: publicClient for reads (no account required),
+        // walletClient for writes. Unlike X402Client which is always write-first,
+        // ChannelClient exposes read-heavy helpers (getChannel, verifyVoucher) that
+        // callers may invoke without a wallet configured.
         this.readActions = channelActions(config.channelAddress)(config.publicClient);
         this.writeActions = channelActions(config.channelAddress)(config.walletClient);
     }

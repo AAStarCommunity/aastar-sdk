@@ -148,14 +148,14 @@ export const channelActions = (address: Address) => (client: PublicClient | Wall
                 args: [channelId]
             }) as any;
             return {
-                payer: result.payer ?? result[0],
-                payee: result.payee ?? result[1],
-                token: result.token ?? result[2],
-                authorizedSigner: result.authorizedSigner ?? result[3],
-                deposit: result.deposit ?? result[4],
-                settled: result.settled ?? result[5],
-                closeRequestedAt: result.closeRequestedAt ?? result[6],
-                finalized: result.finalized ?? result[7],
+                payer: result.payer as Address,
+                payee: result.payee as Address,
+                token: result.token as Address,
+                authorizedSigner: result.authorizedSigner as Address,
+                deposit: result.deposit as bigint,
+                settled: result.settled as bigint,
+                closeRequestedAt: result.closeRequestedAt as bigint,
+                finalized: result.finalized as boolean,
             } as ChannelState;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getChannel');
