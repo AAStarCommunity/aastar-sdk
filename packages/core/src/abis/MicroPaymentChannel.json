@@ -1,0 +1,142 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "openChannel",
+      "inputs": [
+        { "name": "payee", "type": "address" },
+        { "name": "token", "type": "address" },
+        { "name": "deposit", "type": "uint128" },
+        { "name": "salt", "type": "bytes32" },
+        { "name": "authorizedSigner", "type": "address" }
+      ],
+      "outputs": [{ "name": "channelId", "type": "bytes32" }],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "settleChannel",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32" },
+        { "name": "cumulativeAmount", "type": "uint128" },
+        { "name": "signature", "type": "bytes" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "topUpChannel",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32" },
+        { "name": "amount", "type": "uint128" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "requestCloseChannel",
+      "inputs": [{ "name": "channelId", "type": "bytes32" }],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "closeChannel",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32" },
+        { "name": "cumulativeAmount", "type": "uint128" },
+        { "name": "signature", "type": "bytes" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "withdrawChannel",
+      "inputs": [{ "name": "channelId", "type": "bytes32" }],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getChannel",
+      "inputs": [{ "name": "channelId", "type": "bytes32" }],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            { "name": "payer", "type": "address" },
+            { "name": "payee", "type": "address" },
+            { "name": "token", "type": "address" },
+            { "name": "authorizedSigner", "type": "address" },
+            { "name": "deposit", "type": "uint128" },
+            { "name": "settled", "type": "uint128" },
+            { "name": "closeRequestedAt", "type": "uint64" }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "version",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "string" }],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "event",
+      "name": "ChannelOpened",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32", "indexed": true },
+        { "name": "payer", "type": "address", "indexed": true },
+        { "name": "payee", "type": "address", "indexed": true },
+        { "name": "token", "type": "address", "indexed": false },
+        { "name": "deposit", "type": "uint128", "indexed": false }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "ChannelSettled",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32", "indexed": true },
+        { "name": "amount", "type": "uint128", "indexed": false }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "ChannelTopUp",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32", "indexed": true },
+        { "name": "amount", "type": "uint128", "indexed": false }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "CloseRequested",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32", "indexed": true },
+        { "name": "at", "type": "uint64", "indexed": false }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "ChannelClosed",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32", "indexed": true },
+        { "name": "finalAmount", "type": "uint128", "indexed": false }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "ChannelWithdrawn",
+      "inputs": [
+        { "name": "channelId", "type": "bytes32", "indexed": true },
+        { "name": "refund", "type": "uint128", "indexed": false }
+      ]
+    }
+  ]
+}

@@ -25,6 +25,9 @@ import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
 import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };
 
+// Agent Economy (SP V5.3)
+import MicroPaymentChannelABIData from './MicroPaymentChannel.json' with { type: 'json' };
+
 // Identity & Reputation
 import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json' };
 
@@ -72,6 +75,10 @@ export const xPNTsFactoryArtifact = xPNTsFactoryABIData;
 
 export const MySBTABI = (MySBTABIData as any).abi || MySBTABIData;
 export const MySBTArtifact = MySBTABIData;
+
+// ========== Agent Economy (SP V5.3) ==========
+export const MicroPaymentChannelABI = (MicroPaymentChannelABIData as any).abi || MicroPaymentChannelABIData;
+export const MicroPaymentChannelArtifact = MicroPaymentChannelABIData;
 
 // ========== Identity & Reputation ==========
 export const ReputationSystemABI = (ReputationSystemABIData as any).abi || ReputationSystemABIData;

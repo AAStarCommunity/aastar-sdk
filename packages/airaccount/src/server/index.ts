@@ -2,8 +2,8 @@
 export { YAAAServerClient } from "./server-client";
 
 // ── Config ────────────────────────────────────────────────────────
-export { validateConfig } from "./config";
-export type { ServerConfig, EntryPointVersionConfig } from "./config";
+export { validateConfig, sepoliaV07Config } from "./config";
+export type { ServerConfig, EntryPointVersionConfig, AirAccountVersion } from "./config";
 
 // ── Interfaces ────────────────────────────────────────────────────
 export type {
@@ -22,6 +22,15 @@ export { EthereumProvider } from "./providers/ethereum-provider";
 
 // ── Services ──────────────────────────────────────────────────────
 export { AccountManager } from "./services/account-manager";
+export { ModuleManager } from "./services/module-manager";
+export { buildInstallModuleHash, buildUninstallModuleHash } from "./services/module-manager";
+export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";
+export { SessionKeyService } from "./services/session-key-service";
+export type { GrantSessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
+export { GuardStateReader } from "./services/guard-state-reader";
+export type { GuardState, TokenGuardState } from "./services/guard-state-reader";
+export { computeOapdSalt, getOapdAddress, getOapdAddressWithChainId, isOapdDeployed } from "./utils/oapd";
+export type { OapdConfig } from "./utils/oapd";
 export { TransferManager } from "./services/transfer-manager";
 export type {
   ExecuteTransferParams,
@@ -68,6 +77,17 @@ export {
   AIRACCOUNT_ABI,
   AIRACCOUNT_FACTORY_ABI,
   GLOBAL_GUARD_ABI,
+  // M7 module ABIs
+  AGENT_SESSION_KEY_VALIDATOR_ABI,
+  TIER_GUARD_HOOK_ABI,
+  AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI,
+  FORCE_EXIT_MODULE_ABI,
+  // M6 inherited ABIs
+  SESSION_KEY_VALIDATOR_ABI,
+  CALLDATA_PARSER_REGISTRY_ABI,
+  AIR_ACCOUNT_DELEGATE_ABI,
+  MODULE_TYPE,
+  ALG_ID,
 } from "./constants/entrypoint";
 export type { EntryPointConfig } from "./constants/entrypoint";
 

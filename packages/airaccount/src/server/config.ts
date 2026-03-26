@@ -1,6 +1,7 @@
 import { IStorageAdapter } from "./interfaces/storage-adapter";
 import { ISignerAdapter } from "./interfaces/signer-adapter";
 import { ILogger } from "./interfaces/logger";
+import { AIRACCOUNT_ADDRESSES, ENTRYPOINT_ADDRESSES, EntryPointVersion } from "./constants/entrypoint";
 
 /**
  * Per-version EntryPoint configuration.
@@ -50,6 +51,33 @@ export interface ServerConfig {
   signer: ISignerAdapter;
   /** Logger (optional, defaults to ConsoleLogger). */
   logger?: ILogger;
+}
+
+/** AirAccount contract version selection. */
+export type AirAccountVersion = "M5" | "M7";
+
+/**
+ * Build a pre-configured EntryPointVersionConfig for Sepolia using a known AirAccount deployment.
+ * Eliminates the need to look up contract addresses manually.
+ *
+ * @example
+ * // Use M7 (default)
+ * const config = { entryPoints: { v07: sepoliaV07Config() }, ... };
+ *
+ * // Use M5 legacy
+ * const config = { entryPoints: { v07: sepoliaV07Config("M5") }, ... };
+ */
+export function sepoliaV07Config(version: AirAccountVersion = "M7"): EntryPointVersionConfig {
+  const factoryAddress =
+    version === "M5"
+      ? AIRACCOUNT_ADDRESSES.sepolia.factoryM5
+      : AIRACCOUNT_ADDRESSES.sepolia.factory;
+
+  return {
+    entryPointAddress: ENTRYPOINT_ADDRESSES[EntryPointVersion.V0_7].sepolia,
+    factoryAddress,
+    validatorAddress: AIRACCOUNT_ADDRESSES.sepolia.validatorRouter,
+  };
 }
 
 /**
