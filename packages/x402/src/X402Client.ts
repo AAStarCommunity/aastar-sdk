@@ -39,14 +39,16 @@ function toNetworkId(chainId: number): `eip155:${number}` {
 
 export class X402Client {
     private readonly actions;
-    private readonly writeActions;
     private readonly config: X402ClientConfig;
     private readonly facilitatorClient?: FacilitatorClient;
 
     constructor(config: X402ClientConfig) {
+        if (!config.walletClient.account) {
+            throw new Error('WalletClient must have an account configured');
+        }
         this.config = config;
-        this.actions = x402Actions(config.superPaymasterAddress)(config.publicClient);
-        this.writeActions = x402Actions(config.superPaymasterAddress)(config.walletClient);
+        // walletClient supports both readContract and writeContract — single instance suffices
+        this.actions = x402Actions(config.superPaymasterAddress)(config.walletClient);
         if (config.facilitator) {
             this.facilitatorClient = new FacilitatorClient(config.facilitator);
         }
@@ -120,7 +122,7 @@ export class X402Client {
         from: Address; to: Address; asset: Address; amount: bigint;
         validAfter: bigint; validBefore: bigint; nonce: Hex; signature: Hex;
     }): Promise<Hex> {
-        return this.writeActions.settleX402Payment({
+        return this.actions.settleX402Payment({
             ...params,
             account: this.config.walletClient.account!,
         });
@@ -132,7 +134,7 @@ export class X402Client {
     async settleDirectOnChain(params: {
         from: Address; to: Address; asset: Address; amount: bigint; nonce: Hex;
     }): Promise<Hex> {
-        return this.writeActions.settleX402PaymentDirect({
+        return this.actions.settleX402PaymentDirect({
             ...params,
             account: this.config.walletClient.account!,
         });

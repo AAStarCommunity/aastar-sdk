@@ -1,6 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { MicroPaymentChannelABI } from '../abis/index.js';
-import { validateAddress, validateRequired } from '../validators/index.js';
+import { validateAddress, validateRequired, validateDeployedAddress } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
 export type ChannelState = {
@@ -45,12 +45,8 @@ export type ChannelActions = {
     version: () => Promise<string>;
 };
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
 export const channelActions = (address: Address) => (client: PublicClient | WalletClient): ChannelActions => {
-    if (address === ZERO_ADDRESS) {
-        throw new Error('MicroPaymentChannel contract is not deployed on this network');
-    }
+    validateDeployedAddress(address, 'MicroPaymentChannel');
     return ({
     // --- Write ---
     async openChannel({ payee, token, deposit, salt, authorizedSigner, account }) {

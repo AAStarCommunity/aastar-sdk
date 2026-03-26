@@ -1,6 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hash, type Account } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
-import { validateAddress } from '../validators/index.js';
+import { validateAddress, validateDeployedAddress } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
 export type AgentSponsorshipPolicy = {
@@ -23,12 +23,8 @@ export type AgentActions = {
     setAgentRegistries: (args: { identity: Address, reputation: Address, account?: Account | Address }) => Promise<Hash>;
 };
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
 export const agentActions = (address: Address) => (client: PublicClient | WalletClient): AgentActions => {
-    if (address === ZERO_ADDRESS) {
-        throw new Error('Agent contracts are not deployed on this network');
-    }
+    validateDeployedAddress(address, 'AgentContracts');
     return ({
     // --- View ---
     async isRegisteredAgent({ account: agentAddr }) {

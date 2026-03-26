@@ -86,3 +86,19 @@ export function validateRequired<T>(value: T | null | undefined, fieldName: stri
     );
   }
 }
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+/**
+ * Validates that a contract address is not the zero address (i.e. is deployed on this network)
+ * @throws {ValidationError} if address is zero
+ */
+export function validateDeployedAddress(address: Address, contractName: string): void {
+  if (address === ZERO_ADDRESS) {
+    throw new ValidationError(
+      contractName,
+      `${contractName} is not deployed on this network`,
+      'CONTRACT_NOT_DEPLOYED'
+    );
+  }
+}
