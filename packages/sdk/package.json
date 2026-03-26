@@ -23,6 +23,7 @@
     "@aastar/operator": "workspace:*",
     "@aastar/admin": "workspace:*",
     "@aastar/airaccount": "workspace:*",
+    "resend": "^6.0.0",
     "viem": "2.43.3"
   },
   "devDependencies": {
