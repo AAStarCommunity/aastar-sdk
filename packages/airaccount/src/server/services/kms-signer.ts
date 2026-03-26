@@ -160,7 +160,7 @@ export class KmsManager {
 
   /** POST with x-amz-target header (required for wallet/signing operations). */
   private async amzPost<T>(path: string, target: string, body: unknown): Promise<T> {
-    const response = await this.http.post(path, body, {
+    const response = await this.http.post(path, JSON.stringify(body), {
       headers: {
         "Content-Type": "application/x-amz-json-1.1",
         "x-amz-target": target,
