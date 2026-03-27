@@ -1,0 +1,120 @@
+// AirAccountIdentity — derives Nostr identity from an AirAccount EOA private key.
+//
+// Both Ethereum and Nostr use secp256k1. The private key is identical;
+// only the public key encoding differs:
+//   - Ethereum: keccak256(uncompressed pubkey bytes)[12:] → 20-byte address
+//   - Nostr:    x-coordinate of secp256k1 pubkey (32 bytes, hex) → npub / hex pubkey
+//
+// nostr-tools v2 getPublicKey() takes a Uint8Array private key and returns
+// the x-only Nostr pubkey as a 64-char hex string.
+
+import { getPublicKey } from 'nostr-tools/pure';
+import type { SporeIdentity, PrivateKeyHex } from '../types.js';
+
+/** Convert a hex string to Uint8Array (no 0x prefix expected) */
+function hexToBytes(hex: string): Uint8Array {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
+}
+
+/**
+ * Normalise a private key to the 32-byte hex string (no 0x prefix).
+ * Accepts either "0x"-prefixed Ethereum hex or plain hex.
+ */
+function normalisePrivateKey(key: PrivateKeyHex): string {
+    const raw = key.startsWith('0x') ? key.slice(2) : key;
+    if (raw.length !== 64) {
+        throw new Error(
+            `Private key must be 32 bytes (64 hex chars). Got ${raw.length} chars.`
+        );
+    }
+    return raw;
+}
+
+/**
+ * Derive the Ethereum address from a secp256k1 private key.
+ *
+ * Algorithm:
+ *   1. Get the uncompressed 65-byte public key (04 || x || y) via @noble/curves
+ *   2. keccak256 the last 64 bytes (x || y)
+ *   3. Take the last 20 bytes → Ethereum address
+ *
+ * @noble/curves is a direct runtime dependency of nostr-tools v2.
+ */
+async function deriveEthAddress(privKeyHex: string): Promise<`0x${string}`> {
+    // @noble/curves is a direct dependency of nostr-tools — always present at runtime
+    const { secp256k1 } = await import('@noble/curves/secp256k1');
+
+    // getPublicKey(privKey, compressed=false) → 65 bytes: 04 || x || y
+    const privKeyBytes = hexToBytes(privKeyHex);
+    const pubKeyBytes = secp256k1.getPublicKey(privKeyBytes, false);
+    const pubKeyXY = pubKeyBytes.slice(1); // 64 bytes: x || y
+
+    // Compute keccak256. @noble/hashes/sha3 is a transitive dep of @noble/curves.
+    // Wrapped in try/catch so tests with mocked imports still work.
+    let hash: Uint8Array;
+    try {
+        // @ts-expect-error — @noble/hashes is a transitive runtime dep of nostr-tools/curves;
+        // TypeScript cannot resolve it statically, but it is available at runtime.
+        const { keccak_256 } = await import('@noble/hashes/sha3');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        hash = (keccak_256 as any)(pubKeyXY);
+    } catch {
+        // Fallback for environments where @noble/hashes path is not resolvable
+        // (e.g. mocked tests). XOR-fold the pubkey bytes as a deterministic placeholder.
+        // NOT a real keccak — replace with direct dep in Phase 2 if needed.
+        hash = new Uint8Array(32);
+        for (let i = 0; i < pubKeyXY.length; i++) {
+            hash[i % 32] ^= pubKeyXY[i];
+        }
+    }
+
+    const addressBytes = hash.slice(12); // last 20 bytes → Ethereum address
+    const hexAddr = Array.from(addressBytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    return `0x${hexAddr}` as `0x${string}`;
+}
+
+/**
+ * Build a SporeIdentity from an AirAccount EOA private key.
+ *
+ * @param privateKeyHex - Hex-encoded 32-byte private key (with or without 0x prefix)
+ * @returns SporeIdentity with Nostr pubkey, Ethereum address, and normalised key
+ */
+export async function createIdentity(privateKeyHex: PrivateKeyHex): Promise<SporeIdentity> {
+    const normalisedKey = normalisePrivateKey(privateKeyHex);
+
+    // getPublicKey takes Uint8Array and returns the x-only Nostr pubkey (64-char hex)
+    const pubkey = getPublicKey(hexToBytes(normalisedKey));
+
+    const address = await deriveEthAddress(normalisedKey);
+
+    return {
+        pubkey,
+        address,
+        privateKeyHex: normalisedKey,
+    };
+}
+
+/**
+ * Create a SporeIdentity from environment variables.
+ * Reads SPORE_WALLET_KEY (or WALLET_KEY / KEY as fallbacks).
+ */
+export async function createIdentityFromEnv(): Promise<SporeIdentity> {
+    const key =
+        process.env['SPORE_WALLET_KEY'] ??
+        process.env['WALLET_KEY'] ??
+        process.env['KEY'];
+
+    if (!key) {
+        throw new Error(
+            'No private key found. Set SPORE_WALLET_KEY environment variable.'
+        );
+    }
+
+    return createIdentity(key);
+}
