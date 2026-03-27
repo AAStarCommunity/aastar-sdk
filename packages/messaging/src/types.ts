@@ -80,10 +80,23 @@ export interface SporeMessage {
     id: string;
     /** Sender's Nostr pubkey */
     senderPubkey: NostrPubkeyHex;
-    /** Plaintext content (after NIP-44 decryption) */
+    /** Raw content string (encoded payload — use decodedContent for structured data) */
     content: string;
-    /** Content type */
+    /** Content type (legacy simple union — prefer contentTypeId for M7+ codecs) */
     contentType: MessageContentType;
+    /**
+     * M7: Content type identifier string ("authority/type/version").
+     * Present when the event carries a 'ct' tag. Used to look up the
+     * registered SporeCodec for decoding structured content.
+     * Absent for plain-text messages.
+     */
+    contentTypeId?: string;
+    /**
+     * M7: Structured content decoded by the matching SporeCodec.
+     * Only populated by SporeAgent when a matching codec is registered.
+     * Absent when no codec is registered or the message is plain text.
+     */
+    decodedContent?: unknown;
     /** Unix timestamp (seconds) */
     sentAt: number;
     /** Reference to parent message id (for replies / reactions) */
