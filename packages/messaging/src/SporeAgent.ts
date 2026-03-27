@@ -402,6 +402,13 @@ export class SporeAgent extends EventEmitter {
         // Ignore messages we sent ourselves
         if (message.senderPubkey === this.identity.pubkey) return;
 
+        // F1: Consent check — allowlist takes precedence over blocklist
+        if (this.config.allowedSenders) {
+            if (!this.config.allowedSenders.has(message.senderPubkey)) return;
+        } else if (this.config.blockedSenders?.has(message.senderPubkey)) {
+            return;
+        }
+
         // Emit 'conversation' for new conversations
         const conv = message.conversation;
         if (!this.knownConversations.has(conv.id)) {

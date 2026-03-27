@@ -13,8 +13,34 @@ export interface PendingStats {
   totalUsdc: bigint;
 }
 
+/**
+ * Injectable interface for on-chain batch settlement.
+ * Production implementations connect to ChannelClient or a custom settlement contract.
+ * If not provided, settleNow() logs vouchers but does not submit on-chain.
+ */
+export interface SettlementClientLike {
+  /**
+   * Submit a batch of accepted payment commitments on-chain.
+   * @returns txHash of the settlement transaction
+   */
+  batchSettle(vouchers: PendingVoucher[]): Promise<{ txHash: `0x${string}` }>;
+}
+
+export interface SporeRelayOperatorConfig {
+  /**
+   * Optional on-chain settlement client.
+   * If omitted, settleNow() logs and clears vouchers without on-chain submission.
+   */
+  settlementClient?: SettlementClientLike;
+}
+
 export class SporeRelayOperator {
   private pending: PendingVoucher[] = [];
+  private readonly settlementClient?: SettlementClientLike;
+
+  constructor(config: SporeRelayOperatorConfig = {}) {
+    this.settlementClient = config.settlementClient;
+  }
 
   /**
    * Called when a kind:23405 payment commitment is accepted by the relay.
@@ -27,8 +53,8 @@ export class SporeRelayOperator {
   /**
    * Batch-settle all pending vouchers.
    *
-   * M3 (current): logs settlement details to console.
-   * M2+ (future): will call ChannelClient.batchSettle(vouchers) on-chain.
+   * If a settlementClient was injected, calls batchSettle() on-chain.
+   * Otherwise, logs voucher details to console (dev/offline mode).
    *
    * @returns settled voucher count
    */
@@ -44,16 +70,26 @@ export class SporeRelayOperator {
       `total ${formatUsdc(stats.totalUsdc)} USDC`
     );
 
-    for (const voucher of this.pending) {
-      console.log(
-        `  eventId=${voucher.eventId}` +
-        ` from=${voucher.commitment.from}` +
-        ` amount=${formatUsdc(voucher.commitment.amount)} USDC` +
-        ` nonce=${voucher.commitment.nonce}`
-      );
+    if (this.settlementClient) {
+      try {
+        const { txHash } = await this.settlementClient.batchSettle(this.pending);
+        console.log(`[SporeRelayOperator] On-chain settlement submitted: ${txHash}`);
+      } catch (err) {
+        // Log but do NOT clear pending — will retry on next settleNow() call
+        console.error(`[SporeRelayOperator] Settlement failed: ${err}`);
+        return 0;
+      }
+    } else {
+      // No settlement client — log only (dev/testing mode)
+      for (const voucher of this.pending) {
+        console.log(
+          `  [dry-run] eventId=${voucher.eventId}` +
+          ` from=${voucher.commitment.from}` +
+          ` amount=${formatUsdc(voucher.commitment.amount)} USDC` +
+          ` nonce=${voucher.commitment.nonce}`
+        );
+      }
     }
-
-    // TODO (M2+): await channelClient.batchSettle(this.pending);
 
     const settled = this.pending.length;
     this.pending = [];
