@@ -310,18 +310,17 @@ export class WakuTransport implements SporeTransport {
       try {
         const raw = JSON.parse(new TextDecoder().decode(payloads[i]!)) as unknown;
         if (!isValidEnvelope(raw)) continue;
-        const envelope = raw;
-        const ts = clampTs(envelope.ts);
+        const ts = clampTs(raw.ts);
         const conv: SporeConversation = {
           id: convId,
-          type: envelope.groupId ? 'group' : 'dm',
-          members: [envelope.from],
+          type: raw.groupId ? 'group' : 'dm',
+          members: [raw.from],
           createdAt: ts,
         };
         results.push({
           id: `waku-${i}-${ts}`,
-          senderPubkey: envelope.from,
-          content: envelope.ciphertext, // raw ciphertext — SporeAgent decrypts
+          senderPubkey: raw.from,
+          content: raw.ciphertext, // raw ciphertext — SporeAgent decrypts
           contentType: 'text',
           sentAt: ts,
           conversation: conv,
@@ -352,11 +351,6 @@ export class WakuTransport implements SporeTransport {
       envelope = raw;
     } catch {
       if (this.debug) console.debug('[WakuTransport] Failed to parse envelope');
-      return;
-    }
-
-    if (envelope.v !== 1) {
-      if (this.debug) console.debug(`[WakuTransport] Unknown envelope version: ${envelope.v}`);
       return;
     }
 
