@@ -132,15 +132,9 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       }
     }
 
-    // Step 2: Atomic replay protection — claim nonce before processing
-    // claim() is atomic: prevents TOCTOU under concurrent async stores.
-    // For InMemoryNonceStore this is safe (Node.js single-threaded).
-    const nonceKey = `${chainId}:${triggerNonce}`;
-    if (!(await this.nonceStore.claim(nonceKey))) {
-      return { success: false, error: 'trigger_nonce_replayed' };
-    }
-
-    // Step 3: Authorization mode check
+    // Step 2: Authorization mode check BEFORE nonce claim.
+    // Checking auth mode first prevents an attacker from consuming a victim's triggerNonce
+    // by submitting an event with an incorrect sender (denial-of-service on nonce).
     if (authMode === 'self_only') {
       if (!this.config.selfAddress) {
         return { success: false, error: 'self_address_not_configured' };
@@ -156,7 +150,14 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
     }
     // 'open' mode: accept any sender (for testing only)
 
-    // Step 4: Prompt injection defense — contract and selector whitelist
+    // Step 3: Atomic replay protection — claim nonce AFTER auth checks pass.
+    // claim() is atomic: prevents TOCTOU under concurrent async stores.
+    const nonceKey = `${chainId}:${triggerNonce}`;
+    if (!(await this.nonceStore.claim(nonceKey))) {
+      return { success: false, error: 'trigger_nonce_replayed' };
+    }
+
+    // Step 4: Prompt injection defense — contract and selector whitelist (unchanged)
     // callData layout for ERC-4337 execute(address target, uint256 value, bytes calldata data):
     //   [0:4]   selector of execute() itself  (0xb61d27f6 or similar)
     //   [4:36]  target address (padded to 32 bytes) → bytes [16:36] = 20-byte address
@@ -188,7 +189,7 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       }
     }
 
-    // Step 5: Submit UserOp to bundler
+    // Step 5: Submit UserOp to bundler (nonce already claimed in step 3)
     try {
       const { userOpHash } = await this.config.bundlerClient.sendUserOperation(
         userOp,

@@ -142,8 +142,8 @@ export interface SporeAgentEventMap {
     start: (agent: { address: string; pubkey: string }) => Promise<void> | void;
     /** Agent stopped */
     stop: () => Promise<void> | void;
-    /** Unhandled error in a message handler */
-    unhandledError: (error: Error, ctx: MessageContext) => Promise<void> | void;
+    /** Unhandled error in a message handler (ctx is null when error occurs outside a message context) */
+    unhandledError: (error: Error, ctx: MessageContext | ConversationContext | null) => Promise<void> | void;
     /** M2: Bridge failed to process a payment event (kind:23402–23405) */
     'bridge:error': (kind: number, event: SignedNostrEvent, error: Error) => Promise<void> | void;
 }

@@ -17,6 +17,7 @@
 //       └── ConversationContext (per-conversation handler context)
 
 import { EventEmitter } from 'node:events';
+import { verifyEvent } from 'nostr-tools';
 import { createIdentity, createIdentityFromEnv } from './identity/AirAccountIdentity.js';
 import { RelayPool, DEFAULT_RELAYS, parseRelaysFromEnv } from './relay/RelayPool.js';
 import { NostrTransport } from './transport/NostrTransport.js';
@@ -190,7 +191,6 @@ export class SporeAgent extends EventEmitter {
      */
     async start(): Promise<void> {
         if (this.running) return;
-        this.running = true;
 
         if (this.config.debug) {
             console.debug(
@@ -198,11 +198,16 @@ export class SporeAgent extends EventEmitter {
             );
         }
 
+        // MED-2: Async callbacks wrapped with .catch() to prevent unhandled promise rejections.
         // Subscribe to incoming DMs
         const unsubDm = this.transport.subscribeToDms(
             this.identity.pubkey,
             this.identity.privateKeyHex,
-            (message, rawEvent) => this.handleIncomingMessage(message)
+            (message, _rawEvent) => {
+                this.handleIncomingMessage(message).catch((err) => {
+                    this.emit('unhandledError', err instanceof Error ? err : new Error(String(err)), null);
+                });
+            }
         );
         this.unsubscribeFns.push(unsubDm);
 
@@ -210,7 +215,11 @@ export class SporeAgent extends EventEmitter {
         const unsubGroup = this.transport.subscribeToGroups(
             this.identity.pubkey,
             [], // all groups
-            (message, rawEvent) => this.handleIncomingMessage(message)
+            (message, _rawEvent) => {
+                this.handleIncomingMessage(message).catch((err) => {
+                    this.emit('unhandledError', err instanceof Error ? err : new Error(String(err)), null);
+                });
+            }
         );
         this.unsubscribeFns.push(unsubGroup);
 
@@ -221,11 +230,19 @@ export class SporeAgent extends EventEmitter {
             for (const kind of bridgeKinds) {
                 const unsubBridge = this.pool.subscribe(
                     { kinds: [kind], '#p': [this.identity.pubkey] },
-                    (rawEvent) => this.handleBridgeEvent(rawEvent as SignedNostrEvent)
+                    (rawEvent) => {
+                        this.handleBridgeEvent(rawEvent as SignedNostrEvent).catch((err) => {
+                            this.emit('bridge:error', kind, rawEvent as SignedNostrEvent, err instanceof Error ? err : new Error(String(err)));
+                        });
+                    }
                 );
                 this.unsubscribeFns.push(unsubBridge);
             }
         }
+
+        // MED-1: Set running=true only after all subscriptions are established,
+        // so a re-entrant start() call won't see running=true before we're ready.
+        this.running = true;
 
         // Emit start event
         this.emit('start', {
@@ -444,6 +461,16 @@ export class SporeAgent extends EventEmitter {
     private async handleBridgeEvent(event: SignedNostrEvent): Promise<void> {
         const bridge = this.bridges.get(event.kind);
         if (!bridge) return;
+
+        // HIGH-8: Verify Nostr event id hash and Schnorr signature before routing to a bridge.
+        // Bridge events arrive from external relays that may not enforce NIP-01 validation.
+        // An unverified event could carry a spoofed pubkey or tampered payload.
+        if (!verifyEvent(event)) {
+            if (this.config.debug) {
+                console.warn('[SporeAgent] dropped bridge event with invalid id/sig:', event.id);
+            }
+            return;
+        }
 
         try {
             const result = await bridge.handle(event);

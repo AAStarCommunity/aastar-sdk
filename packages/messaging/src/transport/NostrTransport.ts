@@ -10,9 +10,12 @@
 import {
     finalizeEvent,
     generateSecretKey,
+    verifyEvent,
     type NostrEvent,
     type EventTemplate,
 } from 'nostr-tools';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex as nobleBytesToHex } from '@noble/hashes/utils';
 import { RelayPool } from '../relay/RelayPool.js';
 import * as crypto from '../crypto/Nip44Crypto.js';
 import type { SporeConversation, SporeMessage, SignedNostrEvent } from '../types.js';
@@ -253,6 +256,11 @@ export class NostrTransport {
         if (typeof sealEvent.pubkey !== 'string' || typeof sealEvent.content !== 'string') {
             return null;
         }
+        // CRIT-1: Verify the seal's Schnorr signature before trusting its pubkey as sender.
+        // Without this, an attacker can craft a seal with an arbitrary pubkey to impersonate any user.
+        if (!verifyEvent(sealEvent)) {
+            return null;
+        }
 
         // Step 2: decrypt seal using sender's pubkey
         let rumorJson: string;
@@ -333,14 +341,22 @@ function unixNow(): number {
 /**
  * Return a random timestamp within the last 2 days.
  * NIP-17 requires randomising created_at to prevent timing correlation.
+ *
+ * Uses rejection sampling to eliminate modulo bias: the window (172800s) does not
+ * divide 2^32 evenly, so naive `% windowSeconds` would bias toward lower offsets.
+ * We discard samples ≥ floor(2^32 / windowSeconds) * windowSeconds and resample.
  */
 function randomTimestampInLastDay(): number {
     const twoDaysAgo = unixNow() - 2 * 24 * 60 * 60;
-    const windowSeconds = 2 * 24 * 60 * 60;
-    // Use cryptographically secure randomness to prevent timing correlation
+    const windowSeconds = 2 * 24 * 60 * 60; // 172800
+    const limit = Math.floor(0x100000000 / windowSeconds) * windowSeconds; // 4294656000
     const buf = new Uint32Array(1);
-    globalThis.crypto.getRandomValues(buf);
-    return twoDaysAgo + (buf[0]! % windowSeconds);
+    let offset: number;
+    do {
+        globalThis.crypto.getRandomValues(buf);
+        offset = buf[0]!;
+    } while (offset >= limit);
+    return twoDaysAgo + (offset % windowSeconds);
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -359,7 +375,9 @@ function bytesToHex(bytes: Uint8Array): string {
 
 /**
  * Deterministically derive a conversation id for a DM from sorted participant pubkeys.
+ * Uses SHA256 to prevent trivial collision via embedded ':' in crafted pubkey values.
  */
 function deriveConversationId(sortedPubkeys: string[]): string {
-    return sortedPubkeys.join(':');
+    const input = new TextEncoder().encode(sortedPubkeys.join(':'));
+    return nobleBytesToHex(sha256(input));
 }

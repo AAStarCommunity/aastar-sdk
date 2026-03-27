@@ -1,7 +1,7 @@
 // PaymentValidator: offline EIP-3009 payment commitment validator for Spore Protocol
 
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { keccak256, encodeAbiParameters, parseAbiParameters, toHex } from 'viem';
+import { keccak256, encodeAbiParameters, parseAbiParameters, toHex, type Hex } from 'viem';
 
 // EIP-712 TypeHash for TransferWithAuthorization
 // keccak256("TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)")
@@ -82,12 +82,13 @@ export class PaymentValidator {
 
     const paymentTag = tagMap.get('payment');
     const nonce = tagMap.get('nonce')?.[0];
-    const validBefore = Number(tagMap.get('valid_before')?.[0] ?? '0');
+    const validBeforeRaw = tagMap.get('valid_before')?.[0];
     const from = tagMap.get('from')?.[0];
     const to = tagMap.get('to')?.[0];
     const sig = tagMap.get('sig')?.[0];
 
-    if (!paymentTag || !nonce || !from || !to || !sig) return null;
+    if (!paymentTag || !nonce || !validBeforeRaw || !from || !to || !sig) return null;
+    const validBefore = Number(validBeforeRaw);
 
     const [amountStr, _symbol, tokenAddress, chainIdStr] = paymentTag;
     return {
@@ -167,13 +168,14 @@ export class PaymentValidator {
         )
       );
 
-      // EIP-712 digest: "\x19\x01" ++ domainSeparator ++ structHash
-      const digestHex = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters('bytes2, bytes32, bytes32'),
-          ['0x1901', domainSeparator as `0x${string}`, structHash]
-        )
-      );
+      // EIP-712 digest: raw 66-byte concat "\x19\x01" || domainSeparator || structHash
+      // MUST NOT use encodeAbiParameters (which right-pads bytes2 to 32 bytes)
+      const combined = new Uint8Array(66);
+      combined[0] = 0x19;
+      combined[1] = 0x01;
+      combined.set(hexToBytes(domainSeparator), 2);
+      combined.set(hexToBytes(structHash as Hex), 34);
+      const digestHex = keccak256(combined);
 
       const msgHash = hexToBytes(digestHex);
 
