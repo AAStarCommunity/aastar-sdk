@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### M7 r5 SDK Upgrade (feat/m7-sdk-upgrade)
+
+#### ⚠ BREAKING CHANGES
+- **`AIRACCOUNT_ADDRESSES.sepolia.factory`** now points to the **M7 r5** factory contract (`0xa0007c5db27548d8c1582773856db1d123107383`). The previous M5 address has been renamed to **`factoryM5`** (`0xd72a236d84be6c388a8bc7deb64afd54704ae385`). Any existing code referencing `.factory` will now target the M7 contract, producing **different CREATE2 account addresses**. This affects counterfactual address derivation and asset routing for accounts created via the old factory.
+  - Migration: use `.factoryM7` (explicit) or `.factoryM5` (legacy M5 accounts).
+- **`SessionKeyService` constructor** no longer has default address values for `sessionKeyValidatorAddress` and `agentSessionKeyValidatorAddress`. Both addresses must now be passed explicitly to avoid cross-network address mismatches.
+- **`SessionKeyService.encodeGrantAgentSession`** signature changed: the unused `account` parameter has been removed. Contract uses `msg.sender`; the first argument is now `sessionKey`.
+
+#### Features
+- M7 r5 contract addresses and ABIs (`compositeValidator`, `tierGuardHook`, `agentSessionKeyValidator`, `accountImpl`)
+- F6 `GuardStateReader` — ETH and per-token spending state
+- F7 OAPD address derivation (`getOapdAddress`, `getOapdAddressWithChainId`)
+- F4 EIP-1193/6963 — `AirAccountEIP1193Provider`, `announceAirAccount()`, `watchProviders()`
+- F4 `personal_sign` and `eth_signTypedData_v4` support in `AirAccountEIP1193Provider`
+- F1 Hardware wallets — `connectLedger()` (WebHID ECDSA) + `createYubiKeySigner()` (WebAuthn P256, Tier 2/3)
+- F2 Helios — `createHeliosTransport()` (a16z WASM light client viem transport)
+- F3 ENS — `resolveEns()`, `lookupAddress()`, `resolveEnsVerified()`
+
 ## [0.17.0] - 2026-03-24
 
 ### V5.3 Agent Economy SDK

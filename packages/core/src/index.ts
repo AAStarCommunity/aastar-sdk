@@ -22,3 +22,5 @@ export * from './crypto/index.js';
 export * from './roles.js'; // Role system
 export * from './requirementChecker.js'; // Requirement validation
 export * from './config/ContractConfigManager.js';
+export * from './transports/helios.js';
+export * from './utils/ens.js';

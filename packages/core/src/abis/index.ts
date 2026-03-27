@@ -25,6 +25,9 @@ import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
 import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };
 
+// Agent Economy (SP V5.3)
+import MicroPaymentChannelABIData from './MicroPaymentChannel.json' with { type: 'json' };
+
 // Identity & Reputation
 import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json' };
 
@@ -32,9 +35,6 @@ import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json
 import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
-
-// Payment Channels (V5.3)
-import MicroPaymentChannelABIData from './MicroPaymentChannel.json' with { type: 'json' };
 
 // ========== Re-export ABIs - Core System ==========
 export const RegistryABI = (RegistryABIData as any).abi || RegistryABIData;
@@ -76,6 +76,10 @@ export const xPNTsFactoryArtifact = xPNTsFactoryABIData;
 export const MySBTABI = (MySBTABIData as any).abi || MySBTABIData;
 export const MySBTArtifact = MySBTABIData;
 
+// ========== Agent Economy (SP V5.3) ==========
+export const MicroPaymentChannelABI = (MicroPaymentChannelABIData as any).abi || MicroPaymentChannelABIData;
+export const MicroPaymentChannelArtifact = MicroPaymentChannelABIData;
+
 // ========== Identity & Reputation ==========
 export const ReputationSystemABI = (ReputationSystemABIData as any).abi || ReputationSystemABIData;
 export const ReputationSystemArtifact = ReputationSystemABIData;
@@ -89,10 +93,4 @@ export const BLSAggregatorArtifact = BLSAggregatorABIData;
 
 export const BLSValidatorABI = (BLSValidatorABIData as any).abi || BLSValidatorABIData;
 export const BLSValidatorArtifact = BLSValidatorABIData;
-
-// ========== Payment Channels (V5.3) ==========
-export const MicroPaymentChannelABI = (MicroPaymentChannelABIData as any).abi || MicroPaymentChannelABIData;
-export const MicroPaymentChannelArtifact = MicroPaymentChannelABIData;
-
-
 

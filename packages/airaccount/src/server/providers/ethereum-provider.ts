@@ -7,7 +7,13 @@ import {
   FACTORY_ABI_V6,
   AIRACCOUNT_FACTORY_ABI,
   ACCOUNT_ABI,
+  AIRACCOUNT_ABI,
   VALIDATOR_ABI,
+  AGENT_SESSION_KEY_VALIDATOR_ABI,
+  TIER_GUARD_HOOK_ABI,
+  AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI,
+  FORCE_EXIT_MODULE_ABI,
+  AIRACCOUNT_ADDRESSES,
 } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { UserOperation, PackedUserOperation } from "../../core/types";
@@ -91,7 +97,25 @@ export class EthereumProvider {
   }
 
   getAccountContract(address: string): ethers.Contract {
-    return new ethers.Contract(address, ACCOUNT_ABI, this.provider);
+    return new ethers.Contract(address, AIRACCOUNT_ABI, this.provider);
+  }
+
+  // ── M7 Module contracts ─────────────────────────────────────────
+
+  getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidator): ethers.Contract {
+    return new ethers.Contract(address, AGENT_SESSION_KEY_VALIDATOR_ABI, this.provider);
+  }
+
+  getTierGuardHookContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.tierGuardHook): ethers.Contract {
+    return new ethers.Contract(address, TIER_GUARD_HOOK_ABI, this.provider);
+  }
+
+  getCompositeValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.compositeValidator): ethers.Contract {
+    return new ethers.Contract(address, AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI, this.provider);
+  }
+
+  getForceExitModuleContract(address: string): ethers.Contract {
+    return new ethers.Contract(address, FORCE_EXIT_MODULE_ABI, this.provider);
   }
 
   // ── On-chain queries ────────────────────────────────────────────

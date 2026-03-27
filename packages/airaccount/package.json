@@ -35,6 +35,11 @@
       "types": "./dist/auth/passkey/index.d.ts",
       "import": "./dist/auth/passkey/index.js",
       "require": "./dist/auth/passkey/index.cjs"
+    },
+    "./auth/hardware": {
+      "types": "./dist/auth/hardware/index.d.ts",
+      "import": "./dist/auth/hardware/index.js",
+      "require": "./dist/auth/hardware/index.cjs"
     }
   },
   "typesVersions": {
@@ -50,6 +55,9 @@
       ],
       "auth/passkey": [
         "dist/auth/passkey/index.d.ts"
+      ],
+      "auth/hardware": [
+        "dist/auth/hardware/index.d.ts"
       ]
     }
   },
@@ -83,6 +91,10 @@
     "@noble/curves": "^2.0.1",
     "@simplewebauthn/browser": "^13.2.2",
     "axios": "^1.12.2"
+  },
+  "optionalDependencies": {
+    "@ledgerhq/hw-app-eth": "^7.6.0",
+    "@ledgerhq/hw-transport-webhid": "^6.33.0"
   },
   "devDependencies": {
     "ethers": "^6.11.1",
