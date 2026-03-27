@@ -34,6 +34,10 @@ export type {
     SporeEventName,
     SealedEvent,
     GiftWrapEvent,
+    // M5 Conversations API
+    ListConversationsOptions,
+    GetMessagesOptions,
+    StreamAllMessagesOptions,
 } from './types.js';
 
 // ─── M2 Bridge Layer ──────────────────────────────────────────────────────────

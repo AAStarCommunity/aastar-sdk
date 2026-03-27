@@ -150,6 +150,32 @@ export interface SporeAgentEventMap {
 
 export type SporeEventName = keyof SporeAgentEventMap;
 
+// ─── M5: Conversations API ────────────────────────────────────────────────────
+
+/** Options for agent.listConversations() */
+export interface ListConversationsOptions {
+    /** Filter by conversation type. Default: 'all' */
+    type?: ConversationType | 'all';
+    /** Maximum number of conversations to return. Default: 100 */
+    limit?: number;
+}
+
+/** Options for agent.getMessages() */
+export interface GetMessagesOptions {
+    /** Maximum number of messages to return. Default: 50 */
+    limit?: number;
+    /** Only return messages created after this Unix timestamp (seconds) */
+    since?: number;
+    /** Only return messages created before this Unix timestamp (seconds) */
+    until?: number;
+}
+
+/** Options for agent.streamAllMessages() */
+export interface StreamAllMessagesOptions {
+    /** AbortSignal to stop the stream */
+    signal?: AbortSignal;
+}
+
 // ─── NIP-17 Gift Wrap ─────────────────────────────────────────────────────────
 
 /** Intermediate sealed event (kind:13) before gift wrapping */
