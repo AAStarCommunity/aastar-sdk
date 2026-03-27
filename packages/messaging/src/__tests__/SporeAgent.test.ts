@@ -434,3 +434,91 @@ describe('xmtp-compat', () => {
         expect(mod.ConversationContext).toBe(ConversationContext);
     });
 });
+
+// ─── SporeAgent consent API (F1) tests ────────────────────────────────────────
+
+describe('SporeAgent consent (allowedSenders / blockedSenders)', () => {
+    let agent: SporeAgent;
+
+    /** Invoke the private handleIncomingMessage via cast (white-box test). */
+    async function deliver(ag: SporeAgent, msg: SporeMessage): Promise<void> {
+        await (ag as unknown as { handleIncomingMessage: (m: SporeMessage) => Promise<void> })
+            .handleIncomingMessage(msg);
+    }
+
+    afterEach(async () => {
+        if (agent.isRunning) await agent.stop();
+    });
+
+    it('allowedSenders: only processes messages from allowlisted pubkeys', async () => {
+        agent = await SporeAgent.create({
+            privateKeyHex: TEST_PRIVATE_KEY,
+            relays: ['wss://relay.test'],
+            allowedSenders: new Set(['allowed-pubkey']),
+        });
+
+        const handler = vi.fn();
+        agent.on('text', handler);
+
+        // Message from non-allowed sender — should be dropped
+        await deliver(agent, makeMessage({ senderPubkey: 'blocked-pubkey' }));
+        expect(handler).not.toHaveBeenCalled();
+
+        // Message from allowed sender — should pass through
+        await deliver(agent, makeMessage({ senderPubkey: 'allowed-pubkey' }));
+        expect(handler).toHaveBeenCalledOnce();
+    });
+
+    it('blockedSenders: drops messages from blocklisted pubkeys', async () => {
+        agent = await SporeAgent.create({
+            privateKeyHex: TEST_PRIVATE_KEY,
+            relays: ['wss://relay.test'],
+            blockedSenders: new Set(['spammer-pubkey']),
+        });
+
+        const handler = vi.fn();
+        agent.on('text', handler);
+
+        // Message from blocked sender — should be dropped
+        await deliver(agent, makeMessage({ senderPubkey: 'spammer-pubkey' }));
+        expect(handler).not.toHaveBeenCalled();
+
+        // Message from other sender — should pass through
+        await deliver(agent, makeMessage({ senderPubkey: 'alice-pubkey' }));
+        expect(handler).toHaveBeenCalledOnce();
+    });
+
+    it('allowedSenders takes precedence over blockedSenders', async () => {
+        agent = await SporeAgent.create({
+            privateKeyHex: TEST_PRIVATE_KEY,
+            relays: ['wss://relay.test'],
+            allowedSenders: new Set(['only-this-pubkey']),
+            blockedSenders: new Set(['also-blocked']),
+        });
+
+        const handler = vi.fn();
+        agent.on('text', handler);
+
+        // Neither allowed nor blocked — not in allowlist → dropped
+        await deliver(agent, makeMessage({ senderPubkey: 'also-blocked' }));
+        await deliver(agent, makeMessage({ senderPubkey: 'random-pubkey' }));
+        expect(handler).not.toHaveBeenCalled();
+
+        // In allowlist → processed
+        await deliver(agent, makeMessage({ senderPubkey: 'only-this-pubkey' }));
+        expect(handler).toHaveBeenCalledOnce();
+    });
+
+    it('no consent config: all senders are processed', async () => {
+        agent = await SporeAgent.create({
+            privateKeyHex: TEST_PRIVATE_KEY,
+            relays: ['wss://relay.test'],
+        });
+
+        const handler = vi.fn();
+        agent.on('text', handler);
+
+        await deliver(agent, makeMessage({ senderPubkey: 'anyone-pubkey' }));
+        expect(handler).toHaveBeenCalledOnce();
+    });
+});

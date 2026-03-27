@@ -440,3 +440,156 @@ describe('SqliteEventStore', () => {
     expect(store.query({})).toHaveLength(1);
   });
 });
+
+// ─── SporeRelayNode rate limiting tests ───────────────────────────────────
+
+describe('SporeRelayNode rate limiting', () => {
+  let relay: SporeRelayNode;
+  let port: number;
+  let sk: Uint8Array;
+
+  beforeEach(async () => {
+    port = randomPort();
+    sk = generateSecretKey();
+    // maxEventsPerSecond: 3 — easy to exceed in tests
+    relay = new SporeRelayNode({ port, store: makeStore(), debug: false, maxEventsPerSecond: 3 });
+    relay.start();
+    await new Promise(r => setTimeout(r, 50));
+  });
+
+  afterEach(async () => {
+    await relay.stop();
+  }, 15000);
+
+  it('allows events within the rate limit', async () => {
+    const { ws, recv, send } = await connect(port);
+
+    for (let i = 0; i < 3; i++) {
+      const event = makeEvent(sk, { content: `msg${i}` });
+      send(['EVENT', event]);
+      const response = await recv();
+      expect(response[0]).toBe('OK');
+      expect(response[2]).toBe(true);
+    }
+
+    ws.close();
+  });
+
+  it('drops events exceeding the rate limit with NOTICE', async () => {
+    const { ws, recv, send } = await connect(port);
+
+    // Send 4 events — 4th should be rate-limited
+    const events = Array.from({ length: 4 }, (_, i) =>
+      makeEvent(sk, { content: `burst${i}`, created_at: Math.floor(Date.now() / 1000) + i })
+    );
+
+    for (const event of events) {
+      send(['EVENT', event]);
+    }
+
+    // First 3 → OK
+    for (let i = 0; i < 3; i++) {
+      const response = await recv();
+      expect(response[0]).toBe('OK');
+    }
+
+    // 4th → NOTICE
+    const notice = await recv();
+    expect(notice[0]).toBe('NOTICE');
+    expect(String(notice[1])).toContain('rate-limited');
+
+    ws.close();
+  });
+});
+
+// ─── SporeRelayOperator settlement client tests ────────────────────────────
+
+describe('SporeRelayOperator settlement', () => {
+  it('calls batchSettle when a settlement client is injected', async () => {
+    const { SporeRelayOperator } = await import('../SporeRelayOperator.js');
+
+    const settled: unknown[] = [];
+    const mockClient = {
+      batchSettle: async (vouchers: unknown[]) => {
+        settled.push(...vouchers);
+        return { txHash: '0xabc123' as `0x${string}` };
+      },
+    };
+
+    const operator = new SporeRelayOperator({ settlementClient: mockClient });
+
+    operator.onCommitmentAccepted({
+      commitment: {
+        amount: 1000n,
+        nonce: '0xnonce',
+        validBefore: Math.floor(Date.now() / 1000) + 3600,
+        from: '0xfrom',
+        to: '0xto',
+        tokenAddress: '0xtoken',
+        chainId: 10,
+        sig: '0xsig',
+      },
+      acceptedAt: Math.floor(Date.now() / 1000),
+      eventId: 'test-event-id',
+    });
+
+    const count = await operator.settleNow();
+    expect(count).toBe(1);
+    expect(settled).toHaveLength(1);
+    expect(operator.getPendingStats().count).toBe(0);
+  });
+
+  it('logs and clears without calling chain when no settlement client', async () => {
+    const { SporeRelayOperator } = await import('../SporeRelayOperator.js');
+    const operator = new SporeRelayOperator();
+
+    operator.onCommitmentAccepted({
+      commitment: {
+        amount: 500n,
+        nonce: '0xnonce2',
+        validBefore: Math.floor(Date.now() / 1000) + 3600,
+        from: '0xfrom',
+        to: '0xto',
+        tokenAddress: '0xtoken',
+        chainId: 10,
+        sig: '0xsig',
+      },
+      acceptedAt: Math.floor(Date.now() / 1000),
+      eventId: 'test-event-id-2',
+    });
+
+    const count = await operator.settleNow();
+    expect(count).toBe(1);
+    expect(operator.getPendingStats().count).toBe(0);
+  });
+
+  it('retains pending vouchers if settlement client throws', async () => {
+    const { SporeRelayOperator } = await import('../SporeRelayOperator.js');
+
+    const failingClient = {
+      batchSettle: async () => { throw new Error('rpc timeout'); },
+    };
+
+    const operator = new SporeRelayOperator({ settlementClient: failingClient });
+
+    operator.onCommitmentAccepted({
+      commitment: {
+        amount: 2000n,
+        nonce: '0xnonce3',
+        validBefore: Math.floor(Date.now() / 1000) + 3600,
+        from: '0xfrom',
+        to: '0xto',
+        tokenAddress: '0xtoken',
+        chainId: 10,
+        sig: '0xsig',
+      },
+      acceptedAt: Math.floor(Date.now() / 1000),
+      eventId: 'test-event-id-3',
+    });
+
+    const count = await operator.settleNow();
+    expect(count).toBe(0); // failed — nothing settled
+    // Pending is retained for retry
+    expect(operator.getPendingStats().count).toBe(1);
+  });
+});
