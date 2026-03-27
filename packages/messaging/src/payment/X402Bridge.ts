@@ -44,7 +44,8 @@ export interface X402BridgeConfig {
   settlementTimeoutSeconds?: number;
   /**
    * Maximum seconds into the future that validBefore may be set.
-   * Default: 86400 * 7 (7 days). Prevents commitments with multi-year expiry windows.
+   * Default: 86400 (24 hours). Prevents attackers from pre-signing authorizations
+   * with multi-day expiry windows that could be replayed long after intent.
    */
   maxValidBeforeWindowSeconds?: number;
   /**
@@ -133,7 +134,7 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
     if (validBefore <= nowSec) {
       return { success: false, error: 'expired' };
     }
-    const maxWindow = BigInt(this.config.maxValidBeforeWindowSeconds ?? 86400 * 7);
+    const maxWindow = BigInt(this.config.maxValidBeforeWindowSeconds ?? 86400);
     if (validBefore > nowSec + maxWindow) {
       return { success: false, error: 'valid_before_too_far' };
     }
