@@ -92,3 +92,18 @@ export * from './events/SporeEventTypes.js';
 // ─── Persistence Interfaces (H2/H3) ───────────────────────────────────────────
 export { InMemoryNonceStore, InMemoryVoucherStore } from './payment/NonceStore.js';
 export type { NonceStore, VoucherStore, BestVoucher } from './payment/NonceStore.js';
+
+// ─── M7: Content Type Codecs ──────────────────────────────────────────────────
+
+// Codec framework
+export { CodecRegistry, contentTypeIdToString, parseContentTypeId } from './codecs/SporeCodec.js';
+export type { SporeCodec, SporeContentTypeId } from './codecs/SporeCodec.js';
+
+// Built-in codecs
+export { TextCodec, ContentTypeText } from './codecs/TextCodec.js';
+export { ReactionCodec, ContentTypeReaction } from './codecs/ReactionCodec.js';
+export type { ReactionContent, ReactionAction } from './codecs/ReactionCodec.js';
+export { ReplyCodec, ContentTypeReply } from './codecs/ReplyCodec.js';
+export type { ReplyContent } from './codecs/ReplyCodec.js';
+export { RemoteAttachmentCodec, ContentTypeRemoteAttachment } from './codecs/RemoteAttachmentCodec.js';
+export type { RemoteAttachmentContent } from './codecs/RemoteAttachmentCodec.js';
