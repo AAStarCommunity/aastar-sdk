@@ -1,10 +1,9 @@
 import { useState, type FormEvent, type ChangeEvent } from 'react';
 import { usePayment } from '@aastar/react';
-import type { XiaoHeiNote, XiaoHeiAuthor } from '../types.js';
+import type { XiaoHeiNote } from '../types.js';
 
 export interface PaymentModalProps {
   note: XiaoHeiNote;
-  sender: XiaoHeiAuthor;
   /** USDC token address on Optimism (passed from app config) */
   usdcAddress: string;
   onClose: () => void;
@@ -20,6 +19,18 @@ const PRESET_AMOUNTS = [1, 5, 10, 20]; // USDC
  * The tip is sent as a kind:23402 Nostr event to the author's Spore pubkey.
  * Gas is sponsored by SuperPaymaster (gasless for end user).
  */
+/**
+ * Parse a USDC amount string into atomic units (6 decimals).
+ * Returns 0n for invalid / negative / NaN / Infinity inputs.
+ */
+function parseAtomicUsdc(raw: string | number): bigint {
+  const num = typeof raw === 'string' ? parseFloat(raw) : raw;
+  if (!Number.isFinite(num) || num <= 0) return 0n;
+  // Cap at a reasonable maximum to prevent overflow (1 billion USDC)
+  if (num > 1_000_000_000) return 0n;
+  return BigInt(Math.round(num * 1_000_000));
+}
+
 export function PaymentModal({ note, usdcAddress, onClose, onSuccess }: PaymentModalProps) {
   const { tip, status, error, reset } = usePayment();
   const [amount, setAmount] = useState(1);
@@ -28,7 +39,7 @@ export function PaymentModal({ note, usdcAddress, onClose, onSuccess }: PaymentM
 
   const recipientPubkey = note.author.sporePubkey;
   const finalAmount = customAmount ? parseFloat(customAmount) : amount;
-  const atomicAmount = BigInt(Math.round(finalAmount * 1_000_000)); // USDC 6 decimals
+  const atomicAmount = parseAtomicUsdc(finalAmount);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

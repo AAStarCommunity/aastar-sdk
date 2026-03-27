@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { IdentityProfile, LinkedDevice, LinkDeviceOptions } from '@aastar/messaging';
 import { useSporeContext } from '../context/SporeContext.js';
 
@@ -29,18 +29,11 @@ export function useIdentity(): UseIdentityResult {
   const { agent, ready } = useSporeContext();
   const [profile, setProfile] = useState<IdentityProfile | null>(null);
   const [devices, setDevices] = useState<LinkedDevice[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load profile on mount
-  useEffect(() => {
-    if (!agent || !ready) return;
-    setLoading(true);
-    // Profile is published to relay — fetch own profile by own pubkey
-    // SporeIdentityRegistry.fetchProfile is accessible via agent internals;
-    // here we just initialise from what the agent already knows.
-    setLoading(false);
-  }, [agent, ready]);
+  // TODO(M14): Fetch own profile from relay on mount once
+  // SporeIdentityRegistry.fetchProfile is exposed on the agent public API.
 
   const publishProfile = useCallback(
     async (p: Omit<IdentityProfile, 'nostrPubkey' | 'ethAddress'>) => {

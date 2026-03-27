@@ -71,7 +71,6 @@ export function FeedPage({
       {modal.type === 'tip' && (
         <PaymentModal
           note={modal.note}
-          sender={selfAuthor}
           usdcAddress={config.usdcAddress}
           onClose={closeModal}
           onSuccess={(txHash) => {

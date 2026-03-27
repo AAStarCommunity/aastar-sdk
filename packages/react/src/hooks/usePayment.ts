@@ -3,6 +3,9 @@ import { useSporeContext } from '../context/SporeContext.js';
 
 export type PaymentStatus = 'idle' | 'pending' | 'success' | 'error';
 
+/** Maximum allowed length for an X402 tip message to prevent payload bloat */
+const MAX_TIP_MESSAGE_LENGTH = 280;
+
 export interface TipParams {
   /** Recipient Nostr pubkey (hex) */
   recipientPubkeyHex: string;
@@ -47,13 +50,21 @@ export function usePayment(): UsePaymentResult {
       setError(null);
 
       try {
+        // Validate amount is positive
+        if (amount <= 0n) throw new Error('Tip amount must be positive');
+
+        // Bound message length to prevent payload bloat
+        const sanitizedMessage = message
+          ? message.slice(0, MAX_TIP_MESSAGE_LENGTH)
+          : '';
+
         // Encode the tip as an X402 payment event message.
         // The content is a JSON payload the recipient decodes with X402Bridge.
         const payload = JSON.stringify({
           type: 'x402-tip',
           amount: amount.toString(),
           token: tokenAddress,
-          message: message ?? '',
+          message: sanitizedMessage,
         });
         const hash = await agent.sendDm(recipientPubkeyHex, payload);
         setStatus('success');
