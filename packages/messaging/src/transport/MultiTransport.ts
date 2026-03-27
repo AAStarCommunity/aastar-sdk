@@ -1,29 +1,5 @@
 // MultiTransport — fan-out adapter that composes multiple SporeTransport instances.
-//
-// Sends messages across all configured transports simultaneously for redundancy.
-// Incoming subscriptions merge results from all transports with deduplication
-// so the caller's onMessage fires exactly once per unique message ID.
-//
-// Typical usage: Nostr + Waku running in parallel for transport resilience.
-//
-//   const transport = new MultiTransport({
-//     transports: [nostrTransport, wakuTransport],
-//   });
-//   // All sends go to both; all subscriptions merge from both with dedup.
-//
-// Send semantics:
-//   - sendDm / sendGroupMessage fan out to all transports concurrently.
-//   - Returns the hash from the first transport that resolves successfully.
-//   - If all transports fail, the last rejection is re-thrown.
-//
-// Subscribe semantics:
-//   - Each message ID is tracked in a per-subscription seen-set.
-//   - Duplicate IDs (same message arriving on multiple transports) are silently dropped.
-//   - The seen-set is bounded: entries older than seenTtlMs are evicted on each delivery.
-//
-// Query semantics:
-//   - Results from all transports are merged and sorted by sentAt (ascending).
-//   - Duplicate message IDs are deduplicated (first occurrence wins).
+// Sends to all transports concurrently; subscriptions merge with deduplication.
 
 import type { SporeTransport } from './SporeTransport.js';
 import type { SendDmOptions, SendGroupMessageOptions } from './NostrTransport.js';
@@ -45,18 +21,12 @@ export interface MultiTransportConfig {
 
 // ─── Seen-set with TTL eviction ────────────────────────────────────────────────
 
-interface SeenEntry {
-  id: string;
-  expiresAt: number;
-}
-
 /**
- * Bounded deduplication set.
- * Records message IDs with an expiry time; expired entries are pruned lazily
- * on each insertion to keep memory bounded without a background timer.
+ * Bounded deduplication set using a Map for O(1) lookups.
+ * Expired entries are pruned lazily on each add() call.
  */
 class SeenSet {
-  private readonly entries: SeenEntry[] = [];
+  private readonly items = new Map<string, number>(); // id → expiresAt
   private readonly ttlMs: number;
 
   constructor(ttlMs: number) {
@@ -66,16 +36,14 @@ class SeenSet {
   /** Returns true if this ID has not been seen before (and records it). */
   add(id: string): boolean {
     const now = Date.now();
-    // Lazy eviction: remove expired entries on each insertion
-    const cutoff = now;
-    let i = 0;
-    while (i < this.entries.length && this.entries[i]!.expiresAt <= cutoff) i++;
-    if (i > 0) this.entries.splice(0, i);
 
-    const found = this.entries.some((e) => e.id === id);
-    if (found) return false;
+    // Lazy eviction of expired entries
+    for (const [key, expiresAt] of this.items) {
+      if (expiresAt <= now) this.items.delete(key);
+    }
 
-    this.entries.push({ id, expiresAt: now + this.ttlMs });
+    if (this.items.has(id)) return false;
+    this.items.set(id, now + this.ttlMs);
     return true;
   }
 }
@@ -126,12 +94,9 @@ export class MultiTransport implements SporeTransport {
     onMessage: (msg: SporeMessage, conv: SporeConversation) => void,
     opts?: { signal?: AbortSignal }
   ): () => void {
-    const seen = new SeenSet(this.seenTtlMs);
-    const deduped = (msg: SporeMessage, conv: SporeConversation) => {
-      if (seen.add(msg.id)) onMessage(msg, conv);
-    };
-    const unsubs = this.transports.map((t) => t.subscribeToDms(myPubkeyHex, deduped, opts));
-    return () => { for (const u of unsubs) u(); };
+    return this.fanOutSubscribe(onMessage, (deduped) =>
+      this.transports.map((t) => t.subscribeToDms(myPubkeyHex, deduped, opts))
+    );
   }
 
   // ─── Subscribe to Groups ─────────────────────────────────────────────────
@@ -141,12 +106,9 @@ export class MultiTransport implements SporeTransport {
     onMessage: (msg: SporeMessage, conv: SporeConversation) => void,
     opts?: { signal?: AbortSignal }
   ): () => void {
-    const seen = new SeenSet(this.seenTtlMs);
-    const deduped = (msg: SporeMessage, conv: SporeConversation) => {
-      if (seen.add(msg.id)) onMessage(msg, conv);
-    };
-    const unsubs = this.transports.map((t) => t.subscribeToGroups(groupIds, deduped, opts));
-    return () => { for (const u of unsubs) u(); };
+    return this.fanOutSubscribe(onMessage, (deduped) =>
+      this.transports.map((t) => t.subscribeToGroups(groupIds, deduped, opts))
+    );
   }
 
   // ─── Query History ────────────────────────────────────────────────────────
@@ -159,7 +121,6 @@ export class MultiTransport implements SporeTransport {
       this.transports.map((t) => t.queryMessages(convId, opts))
     );
 
-    // Merge results from all transports; deduplicate by message ID; sort by sentAt
     const seen = new Set<string>();
     const merged: SporeMessage[] = [];
     for (const result of allResults) {
@@ -173,26 +134,30 @@ export class MultiTransport implements SporeTransport {
     }
     merged.sort((a, b) => a.sentAt - b.sentAt);
 
-    // Respect the limit after merge
-    if (opts?.limit !== undefined && merged.length > opts.limit) {
-      return merged.slice(0, opts.limit);
-    }
-    return merged;
+    return opts?.limit !== undefined ? merged.slice(0, opts.limit) : merged;
   }
 
   // ─── Internal ─────────────────────────────────────────────────────────────
 
-  /**
-   * Fan out a send operation across all transports concurrently.
-   * Returns the hash from the first transport to resolve successfully.
-   * Re-throws if all transports fail.
-   */
+  /** Subscribe across all transports with per-subscription deduplication. */
+  private fanOutSubscribe(
+    onMessage: (msg: SporeMessage, conv: SporeConversation) => void,
+    subscribe: (deduped: (msg: SporeMessage, conv: SporeConversation) => void) => Array<() => void>
+  ): () => void {
+    const seen = new SeenSet(this.seenTtlMs);
+    const deduped = (msg: SporeMessage, conv: SporeConversation): void => {
+      if (seen.add(msg.id)) onMessage(msg, conv);
+    };
+    const unsubs = subscribe(deduped);
+    return () => { for (const u of unsubs) u(); };
+  }
+
+  /** Fan out a send across all transports; return the first successful hash. */
   private async fanOutSend(op: (t: SporeTransport) => Promise<string>): Promise<string> {
     const results = await Promise.allSettled(this.transports.map(op));
     for (const result of results) {
       if (result.status === 'fulfilled') return result.value;
     }
-    // All failed — re-throw the last error
     const last = results[results.length - 1]!;
     throw (last as PromiseRejectedResult).reason;
   }
