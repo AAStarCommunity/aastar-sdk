@@ -129,3 +129,17 @@ export { ReplyCodec, ContentTypeReply } from './codecs/ReplyCodec.js';
 export type { ReplyContent } from './codecs/ReplyCodec.js';
 export { RemoteAttachmentCodec, ContentTypeRemoteAttachment } from './codecs/RemoteAttachmentCodec.js';
 export type { RemoteAttachmentContent } from './codecs/RemoteAttachmentCodec.js';
+
+// ─── M10: HTTP/SSE Gateway ────────────────────────────────────────────────────
+export { SporeHttpGateway } from './gateway/SporeHttpGateway.js';
+export type { SporeHttpGatewayConfig } from './gateway/SporeHttpGateway.js';
+export type {
+    SendMessageRequest,
+    SendMessageResponse,
+    ConversationsResponse,
+    MessagesResponse,
+    MessageSummary,
+    ConversationSummary,
+    StreamEvent,
+    GatewayErrorResponse,
+} from './gateway/GatewayTypes.js';
