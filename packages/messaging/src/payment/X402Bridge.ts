@@ -66,7 +66,8 @@ export type X402RejectReason =
   | 'payer_not_allowed'
   | 'invalid_signature'
   | 'chain_mismatch'
-  | 'missing_tags';
+  | 'missing_tags'
+  | 'invalid_tag_format';
 
 // ─── X402Bridge ───────────────────────────────────────────────────────────────
 
@@ -106,15 +107,14 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
     const chainId = Number(tagMap['chain']![0]);
     const sig = tagMap['sig']![0] as `0x${string}`;
 
-    // Wrap BigInt() — throws on non-numeric strings
-    let amount: bigint;
-    let validBefore: bigint;
-    try {
-      amount = BigInt(tagMap['amount']![0]);
-      validBefore = BigInt(tagMap['valid_before']![0]);
-    } catch {
-      return { success: false, error: 'missing_tags' };
+    // Validate numeric tag values before BigInt() conversion (throws on non-numeric strings)
+    const amountStr = tagMap['amount']![0]!;
+    const validBeforeStr = tagMap['valid_before']![0]!;
+    if (!/^\d+$/.test(amountStr) || !/^\d+$/.test(validBeforeStr)) {
+      return { success: false, error: 'invalid_tag_format' };
     }
+    const amount = BigInt(amountStr);
+    const validBefore = BigInt(validBeforeStr);
 
     // Step 2: Policy checks
 

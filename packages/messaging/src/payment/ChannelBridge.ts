@@ -4,6 +4,7 @@
 
 import type { SporeEventBridge, BridgeResult } from './SporeEventBridge.js';
 import { SPORE_KIND_CHANNEL } from './SporeEventBridge.js';
+import { parseTagsToObject } from '../events/SporeEventTypes.js';
 import type { SignedNostrEvent } from '../types.js';
 import type { VoucherStore, BestVoucher } from './NonceStore.js';
 import { InMemoryVoucherStore } from './NonceStore.js';
@@ -110,9 +111,9 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
 
   async handle(event: SignedNostrEvent): Promise<BridgeResult> {
     // Step 1: Parse tags
-    const tagMap = new Map(event.tags.map(([k, ...v]) => [k, v]));
-    const channelId = tagMap.get('channel')?.[0];
-    const cumulativeStr = tagMap.get('cumulative')?.[0];
+    const tagMap = parseTagsToObject(event.tags);
+    const channelId = tagMap['channel']?.[0];
+    const cumulativeStr = tagMap['cumulative']?.[0];
 
     if (!channelId || !cumulativeStr) {
       return { success: false, error: 'missing_tags' };

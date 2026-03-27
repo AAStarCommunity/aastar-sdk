@@ -6,9 +6,11 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3';
 import type { SporeEventBridge, BridgeResult } from './SporeEventBridge.js';
 import { SPORE_KIND_USEROP } from './SporeEventBridge.js';
+import { parseTagsToObject } from '../events/SporeEventTypes.js';
 import type { SignedNostrEvent } from '../types.js';
 import type { NonceStore } from './NonceStore.js';
 import { InMemoryNonceStore } from './NonceStore.js';
+import { hexToBytes } from '../utils/hex.js';
 
 // ─── Client Interface ─────────────────────────────────────────────────────────
 
@@ -100,9 +102,9 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
 
   async handle(event: SignedNostrEvent): Promise<BridgeResult> {
     // Step 1: Parse tags
-    const tagMap = new Map(event.tags.map(([k, ...v]) => [k, v]));
-    const chainId = tagMap.get('chain')?.[0];
-    const entryPoint = tagMap.get('ep')?.[0];
+    const tagMap = parseTagsToObject(event.tags);
+    const chainId = tagMap['chain']?.[0];
+    const entryPoint = tagMap['ep']?.[0];
 
     if (!chainId || !entryPoint) {
       return { success: false, error: 'missing_tags' };
@@ -167,21 +169,23 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       const callData = userOp['callData'] ?? '';
       const callBytes = hexToBytes(callData);
 
-      // Extract the target contract from callData[4:36] (first ABI param = address, right-aligned)
-      const target = callBytes.length >= 36
-        ? ('0x' + Buffer.from(callBytes.slice(16, 36)).toString('hex')).toLowerCase()
-        : userOp['sender']?.toLowerCase(); // fallback: sender itself
+      // Require well-formed execute(address,uint256,bytes) callData (at least 72 bytes).
+      // Malformed callData could circumvent allowlists — reject instead of silently falling back.
+      if (callBytes.length < 72) {
+        return { success: false, error: 'malformed_calldata' };
+      }
+
+      // Extract the target contract from callData[4:36] (address param, right-aligned to 32 bytes)
+      const target = ('0x' + Buffer.from(callBytes.slice(16, 36)).toString('hex')).toLowerCase();
 
       // Extract the inner selector from callData[68:72]
-      const innerSelector = callBytes.length >= 72
-        ? '0x' + Buffer.from(callBytes.slice(68, 72)).toString('hex')
-        : callData.slice(0, 10); // fallback: outer selector
+      const innerSelector = '0x' + Buffer.from(callBytes.slice(68, 72)).toString('hex');
 
-      if (target && this.config.allowedContracts && !this.config.allowedContracts.has(target)) {
+      if (this.config.allowedContracts && !this.config.allowedContracts.has(target)) {
         return { success: false, error: 'contract_not_allowed' };
       }
 
-      if (target && this.config.allowedSelectors) {
+      if (this.config.allowedSelectors) {
         const allowedForTarget = this.config.allowedSelectors.get(target);
         if (allowedForTarget !== undefined && !allowedForTarget.includes(innerSelector)) {
           return { success: false, error: 'selector_not_allowed' };
@@ -277,15 +281,6 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function hexToBytes(hex: string): Uint8Array {
-  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const result = new Uint8Array(Math.ceil(h.length / 2));
-  for (let i = 0; i < result.length; i++) {
-    result[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
-  }
-  return result;
-}
 
 function bytesToBigInt(bytes: Uint8Array): bigint {
   let result = 0n;

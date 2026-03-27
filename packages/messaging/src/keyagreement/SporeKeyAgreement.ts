@@ -29,6 +29,8 @@ import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha2';
 import { randomBytes as nobleRandomBytes } from '@noble/hashes/utils';
 import type { RelayPool } from '../relay/RelayPool.js';
+import { hexToBytes, bytesToHex } from '../utils/hex.js';
+import type { MlsGroupState, MlsWelcomePayload } from '../types.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -42,57 +44,8 @@ export const SPORE_MLS_WELCOME_PREFIX = '\x00spore-mls-welcome\x00';
 /** Cipher suite identifier included in KeyPackage and Welcome metadata. */
 export const SPORE_MLS_CIPHER = 'secp256k1-nip44-chacha20';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-/**
- * Runtime state for an active MLS group.
- *
- * Must be stored by the application; this module does not cache state.
- * The epochKey is sensitive — store it in memory only (never serialise to disk
- * without encrypting it first).
- */
-export interface MlsGroupState {
-    /** Globally unique group identifier (hex) */
-    groupId: string;
-    /** Current epoch number (0 at creation, incremented on each ratchet) */
-    epoch: number;
-    /** 32-byte symmetric key for the current epoch */
-    epochKey: Uint8Array;
-    /** Nostr pubkeys of all current group members */
-    members: string[];
-}
-
-/**
- * Welcome payload transmitted inside a NIP-17 DM to a new group member.
- *
- * The epochKeyHex field contains the symmetric key and must be treated as
- * secret — it is NIP-44 encrypted to the recipient's pubkey before delivery.
- */
-export interface MlsWelcomePayload {
-    type: 'spore-mls-welcome';
-    groupId: string;
-    epoch: number;
-    epochKeyHex: string;
-    members: string[];
-    cipher: string;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function hexToBytes(hex: string): Uint8Array {
-    const h = hex.startsWith('0x') ? hex.slice(2) : hex;
-    const result = new Uint8Array(h.length / 2);
-    for (let i = 0; i < result.length; i++) {
-        result[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
-    }
-    return result;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-    return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-}
+// Types MlsGroupState and MlsWelcomePayload are defined in ../types.ts and
+// re-exported from the package index. Imported above for internal use.
 
 // ─── SporeKeyAgreement ────────────────────────────────────────────────────────
 
