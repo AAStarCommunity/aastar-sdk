@@ -302,6 +302,43 @@ importers:
         specifier: 5.7.2
         version: 5.7.2
 
+  packages/message-relay:
+    dependencies:
+      '@noble/curves':
+        specifier: ^1.8.0
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: ^1.7.0
+        version: 1.8.0
+      '@scure/base':
+        specifier: ^1.2.4
+        version: 1.2.6
+      better-sqlite3:
+        specifier: ^11.0.0
+        version: 11.10.0
+      nostr-tools:
+        specifier: ^2.7.2
+        version: 2.23.3(typescript@5.7.2)
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.11
+        version: 7.6.13
+      '@types/ws':
+        specifier: ^8.5.10
+        version: 8.18.1
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@20.11.5)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/messaging:
     dependencies:
       nostr-tools:
@@ -340,40 +377,6 @@ importers:
       typescript:
         specifier: 5.6.3
         version: 5.6.3
-
-  packages/relay:
-    dependencies:
-      '@noble/curves':
-        specifier: ^1.8.0
-        version: 1.9.7
-      '@noble/hashes':
-        specifier: ^1.7.0
-        version: 1.8.0
-      better-sqlite3:
-        specifier: ^11.0.0
-        version: 11.10.0
-      nostr-tools:
-        specifier: ^2.7.2
-        version: 2.23.3(typescript@5.7.2)
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
-      ws:
-        specifier: ^8.18.0
-        version: 8.19.0
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.11
-        version: 7.6.13
-      '@types/ws':
-        specifier: ^8.5.10
-        version: 8.18.1
-      typescript:
-        specifier: 5.7.2
-        version: 5.7.2
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.4(@types/node@20.11.5)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/sdk:
     dependencies:
