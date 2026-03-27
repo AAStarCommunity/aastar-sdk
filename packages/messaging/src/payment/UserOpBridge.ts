@@ -223,16 +223,19 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
     triggerNonce: string
   ): boolean {
     try {
-      // Content hash of UserOp key fields.
-      // Fields are hex-encoded on-chain values — decode to bytes before hashing
-      // so the hash is case-insensitive and matches client-side implementations.
-      const opSenderBytes = hexToBytes(userOp['sender'] ?? '0x');
-      const opNonceBytes  = hexToBytes(userOp['nonce']  ?? '0x');
-      const opCallBytes   = hexToBytes(userOp['callData'] ?? '0x');
-      const combined = new Uint8Array(opSenderBytes.length + opNonceBytes.length + opCallBytes.length);
-      combined.set(opSenderBytes, 0);
-      combined.set(opNonceBytes, opSenderBytes.length);
-      combined.set(opCallBytes, opSenderBytes.length + opNonceBytes.length);
+      // Content hash of UserOp key fields — decoded from hex for case-insensitive matching
+      const parts = [
+        hexToBytes(userOp['sender'] ?? '0x'),
+        hexToBytes(userOp['nonce'] ?? '0x'),
+        hexToBytes(userOp['callData'] ?? '0x'),
+      ];
+      const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+      const combined = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const part of parts) {
+        combined.set(part, offset);
+        offset += part.length;
+      }
       const userOpHash = keccak_256(combined);
 
       // 128-byte signing payload: [chainId:32][entryPoint:32][userOpHash:32][triggerNonce:32]
@@ -253,7 +256,11 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       const r = sigBytes.slice(0, 32);
       const s = sigBytes.slice(32, 64);
       const v = sigBytes[64]!;
-      const recovery = v === 27 ? 0 : v === 28 ? 1 : v;
+      // EIP-155 recovery: 27 → 0, 28 → 1, otherwise raw
+      let recovery: number;
+      if (v === 27) recovery = 0;
+      else if (v === 28) recovery = 1;
+      else recovery = v;
 
       const sig = new secp256k1.Signature(bytesToBigInt(r), bytesToBigInt(s)).addRecoveryBit(recovery);
       const recoveredPubkey = sig.recoverPublicKey(digest).toRawBytes(false);
