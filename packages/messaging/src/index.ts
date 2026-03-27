@@ -130,6 +130,11 @@ export type { ReplyContent } from './codecs/ReplyCodec.js';
 export { RemoteAttachmentCodec, ContentTypeRemoteAttachment } from './codecs/RemoteAttachmentCodec.js';
 export type { RemoteAttachmentContent } from './codecs/RemoteAttachmentCodec.js';
 
+// ─── M12: Waku Transport Adapter ─────────────────────────────────────────────
+export { WakuTransport } from './transport/WakuTransport.js';
+export type { WakuTransportConfig, WakuNodeLike } from './transport/WakuTransport.js';
+export type { SporeTransport } from './transport/SporeTransport.js';
+
 // ─── M11: Mainnet Hardening ───────────────────────────────────────────────────
 export { RateLimiter, InMemoryRateLimitStore } from './hardening/RateLimiter.js';
 export type { RateLimiterConfig, RateLimitStore } from './hardening/RateLimiter.js';
