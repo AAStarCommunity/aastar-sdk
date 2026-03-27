@@ -226,10 +226,12 @@ describe('ChannelBridge', () => {
       getChannelState: vi.fn().mockResolvedValue(openChannel),
       submitVoucher: vi.fn().mockResolvedValue({ txHash: '0xchannel_txhash' as `0x${string}` }),
     };
-    // Use a low threshold (1_000_000) so we can test both lazy and eager paths
+    // Use a low threshold (1_000_000) so we can test both lazy and eager paths.
+    // skipVoucherSigVerification: true bypasses EIP-712 sig check (testing only).
     bridge = new ChannelBridge({
       channelClient: mockClient,
       lazySettleThreshold: 1_000_000n,
+      skipVoucherSigVerification: true,
     });
   });
 

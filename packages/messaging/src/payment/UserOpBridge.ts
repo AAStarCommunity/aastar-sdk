@@ -78,9 +78,10 @@ export interface UserOpBridgeConfig {
  * UserOpBridge — on-chain bridge for kind:23404 gasless UserOp trigger events.
  *
  * Security model:
- *   - triggerNonce prevents Nostr event replay (consumed after first use)
- *   - authorizationSig should be verified against the trigger payload
- *     (full cryptographic verification is left to the authorizationSig consumer)
+ *   - authorizationSig is cryptographically verified via secp256k1 ecrecover before any state change.
+ *     Signing payload: keccak256(chainId:32B || entryPoint:32B || userOpHash:32B || triggerNonce:32B).
+ *     Only 'open' mode skips this check (testing only — never use in production).
+ *   - triggerNonce prevents Nostr event replay (claimed atomically after sig verification)
  *   - allowedSelectors prevents prompt injection by restricting callable functions
  *
  * Processing pipeline:
@@ -124,9 +125,10 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
 
     const { userOp, authorizationSig, triggerNonce } = content;
 
-    // Step 1b: Verify authorizationSig — proves the sender authorized this specific UserOp.
-    // Signing payload: keccak256(abi.encode(chainId, entryPoint, userOpHash, triggerNonce))
-    // Skipped in 'open' mode (explicit no-auth, testing only).
+    // Step 1b: Verify authorizationSig via secp256k1 ecrecover — proves the sender authorized
+    // this specific UserOp. Signing payload (128 bytes):
+    //   keccak256(chainId:32B || entryPoint:32B || userOpHash:32B || triggerNonce:32B)
+    // Skipped only in 'open' mode (testing only — never use in production).
     const authMode = this.config.authMode ?? 'self_only';
     if (authMode !== 'open') {
       if (!this.verifyAuthorizationSig(authorizationSig, userOp, entryPoint, Number(chainId), triggerNonce)) {
@@ -159,12 +161,15 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       return { success: false, error: 'trigger_nonce_replayed' };
     }
 
-    // Step 4: Prompt injection defense — contract and selector whitelist (unchanged)
-    // callData layout for ERC-4337 execute(address target, uint256 value, bytes calldata data):
-    //   [0:4]   selector of execute() itself  (0xb61d27f6 or similar)
-    //   [4:36]  target address (padded to 32 bytes) → bytes [16:36] = 20-byte address
-    //   [36:68] value (uint256)
-    //   [68:]   inner calldata
+    // Step 4: Prompt injection defense — contract and selector whitelist.
+    // Assumes SimpleAccount / ERC-4337 reference execute(address,uint256,bytes) ABI:
+    //   selector: bytes4(keccak256("execute(address,uint256,bytes)")) = 0xb61d27f6
+    //   [0:4]    execute() selector
+    //   [4:36]   target address, ABI-encoded as uint256 (right-aligned, bytes [16:36] = address)
+    //   [36:68]  value (uint256)
+    //   [68:72]  inner calldata offset header (first 4 bytes = inner selector)
+    // Minimum well-formed callData: 72 bytes. Non-SimpleAccount wallets that use a different
+    // execute ABI should NOT configure allowedSelectors/allowedContracts.
     if (this.config.allowedSelectors !== undefined || this.config.allowedContracts !== undefined) {
       const callData = userOp['callData'] ?? '';
       const callBytes = hexToBytes(callData);
