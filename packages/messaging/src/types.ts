@@ -176,6 +176,24 @@ export interface StreamAllMessagesOptions {
     signal?: AbortSignal;
 }
 
+// ─── M6: Group Management ─────────────────────────────────────────────────────
+
+/** Options for creating a new group */
+export interface CreateGroupOptions {
+    /** Human-readable group name */
+    topic?: string;
+    /** Initial member pubkeys (not including self) */
+    initialMembers?: string[];
+}
+
+/** Snapshot of a group's current state */
+export interface GroupInfo {
+    id: string;
+    topic?: string;
+    members: string[];
+    createdAt: number;
+}
+
 // ─── NIP-17 Gift Wrap ─────────────────────────────────────────────────────────
 
 /** Intermediate sealed event (kind:13) before gift wrapping */

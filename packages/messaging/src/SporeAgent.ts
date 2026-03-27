@@ -35,9 +35,12 @@ import type {
     ListConversationsOptions,
     GetMessagesOptions,
     StreamAllMessagesOptions,
+    CreateGroupOptions,
+    GroupInfo,
 } from './types.js';
-import { KIND_GIFT_WRAP } from './transport/NostrTransport.js';
+import { KIND_GIFT_WRAP, KIND_GROUP_ADD, KIND_GROUP_REMOVE } from './transport/NostrTransport.js';
 import type { Filter } from 'nostr-tools';
+import { randomBytes } from 'node:crypto';
 import type { SporeEventBridge, SporeKind } from './payment/SporeEventBridge.js';
 import { X402Bridge } from './payment/X402Bridge.js';
 import { ChannelBridge } from './payment/ChannelBridge.js';
@@ -527,6 +530,140 @@ export class SporeAgent extends EventEmitter {
             this.off('message', push);
             opts?.signal?.removeEventListener('abort', stop);
         }
+    }
+
+    // ─── M6: Group Management ──────────────────────────────────────────────────
+
+    /**
+     * Create a new group conversation.
+     *
+     * Generates a random 32-byte hex groupId, registers it in the local
+     * conversation store, and optionally publishes a kind:9000 metadata event
+     * to the relay if `opts.topic` is provided.
+     *
+     * @param opts - Optional topic and initial member pubkeys
+     * @returns The newly created SporeConversation
+     */
+    async createGroup(opts?: CreateGroupOptions): Promise<SporeConversation> {
+        const groupId = randomBytes(32).toString('hex');
+        const members = [this.identity.pubkey, ...(opts?.initialMembers ?? [])];
+        const now = Math.floor(Date.now() / 1000);
+
+        const conv: SporeConversation = {
+            id: groupId,
+            type: 'group',
+            members,
+            topic: opts?.topic,
+            createdAt: now,
+        };
+
+        this.knownConversations.set(groupId, conv);
+
+        // Publish kind:9000 metadata if a topic was provided
+        if (opts?.topic) {
+            await this.transport.sendGroupMeta({
+                senderPrivkeyHex: this.identity.privateKeyHex,
+                groupId,
+                name: opts.topic,
+            });
+        }
+
+        // Add initial members via kind:9001 if any
+        if (opts?.initialMembers && opts.initialMembers.length > 0) {
+            await this.transport.sendGroupMembership({
+                senderPrivkeyHex: this.identity.privateKeyHex,
+                groupId,
+                kind: KIND_GROUP_ADD,
+                memberPubkeys: opts.initialMembers,
+            });
+        }
+
+        if (this.config.debug) {
+            console.debug('[SporeAgent] created group:', groupId, 'members:', members.length);
+        }
+
+        return conv;
+    }
+
+    /**
+     * Add a member to a known group conversation.
+     *
+     * Updates the local member list and publishes a kind:9001 (add member) event
+     * to notify other group participants.
+     *
+     * @param groupId  - Group identifier (from SporeConversation.id)
+     * @param pubkeyHex - Nostr pubkey of the member to add
+     * @throws If the group is not found in knownConversations
+     */
+    async addGroupMember(groupId: string, pubkeyHex: string): Promise<void> {
+        const conv = this.knownConversations.get(groupId);
+        if (!conv || conv.type !== 'group') {
+            throw new Error(`SporeAgent.addGroupMember: group '${groupId}' not found`);
+        }
+
+        // Idempotent: skip if already a member
+        if (conv.members.includes(pubkeyHex)) return;
+
+        conv.members = [...conv.members, pubkeyHex];
+        this.knownConversations.set(groupId, conv);
+
+        await this.transport.sendGroupMembership({
+            senderPrivkeyHex: this.identity.privateKeyHex,
+            groupId,
+            kind: KIND_GROUP_ADD,
+            memberPubkeys: [pubkeyHex],
+        });
+    }
+
+    /**
+     * Remove a member from a known group conversation.
+     *
+     * Updates the local member list and publishes a kind:9002 (remove member) event
+     * to notify other group participants.
+     *
+     * @param groupId  - Group identifier (from SporeConversation.id)
+     * @param pubkeyHex - Nostr pubkey of the member to remove
+     * @throws If the group is not found in knownConversations
+     */
+    async removeGroupMember(groupId: string, pubkeyHex: string): Promise<void> {
+        const conv = this.knownConversations.get(groupId);
+        if (!conv || conv.type !== 'group') {
+            throw new Error(`SporeAgent.removeGroupMember: group '${groupId}' not found`);
+        }
+
+        // Idempotent: skip if already not a member
+        if (!conv.members.includes(pubkeyHex)) return;
+
+        conv.members = conv.members.filter((pk) => pk !== pubkeyHex);
+        this.knownConversations.set(groupId, conv);
+
+        await this.transport.sendGroupMembership({
+            senderPrivkeyHex: this.identity.privateKeyHex,
+            groupId,
+            kind: KIND_GROUP_REMOVE,
+            memberPubkeys: [pubkeyHex],
+        });
+    }
+
+    /**
+     * Get the current state of a known group.
+     *
+     * Returns the in-memory snapshot. For fresh group state from the relay,
+     * call getMessages() to replay management events.
+     *
+     * @param groupId - Group identifier
+     * @returns GroupInfo or null if the group is not known
+     */
+    getGroupInfo(groupId: string): GroupInfo | null {
+        const conv = this.knownConversations.get(groupId);
+        if (!conv || conv.type !== 'group') return null;
+
+        return {
+            id: conv.id,
+            topic: conv.topic,
+            members: [...conv.members],
+            createdAt: conv.createdAt,
+        };
     }
 
     // ─── Incoming message pipeline ─────────────────────────────────────────────
