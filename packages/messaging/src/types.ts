@@ -109,6 +109,16 @@ export interface SporeAgentConfig {
     env?: SporeEnv;
     /** Whether to log debug messages (default: false) */
     debug?: boolean;
+    /**
+     * Consent allowlist: only messages from these Nostr pubkeys are processed.
+     * Takes precedence over blockedSenders. If omitted, all senders are allowed.
+     */
+    allowedSenders?: Set<string>;
+    /**
+     * Consent blocklist: messages from these Nostr pubkeys are silently dropped.
+     * Ignored if allowedSenders is set (allowlist takes full precedence).
+     */
+    blockedSenders?: Set<string>;
 }
 
 // ─── Event Handler Types ───────────────────────────────────────────────────────

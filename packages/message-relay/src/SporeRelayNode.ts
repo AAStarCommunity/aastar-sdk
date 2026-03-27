@@ -9,6 +9,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { EventStore, NostrEvent, EventFilter } from './storage/EventStore.js';
 import type { PaymentValidator } from './middleware/PaymentValidator.js';
 import { SporeRelayOperator } from './SporeRelayOperator.js';
+import type { SettlementClientLike } from './SporeRelayOperator.js';
 
 export interface SporeRelayConfig {
   /** WebSocket server port. Default: 7777 */
@@ -23,6 +24,14 @@ export interface SporeRelayConfig {
   requirePaymentForKinds?: number[];
   /** Maximum event size in bytes. Default: 65536 (64 KB) */
   maxEventSize?: number;
+  /**
+   * Maximum EVENT messages per client per second.
+   * Clients exceeding this rate receive NOTICE and the event is dropped.
+   * Default: 20. Set to 0 to disable rate limiting.
+   */
+  maxEventsPerSecond?: number;
+  /** Injectable on-chain settlement client for SporeRelayOperator. */
+  settlementClient?: SettlementClientLike;
   /** Enable verbose debug logging */
   debug?: boolean;
 }
@@ -30,10 +39,18 @@ export interface SporeRelayConfig {
 // Map: WebSocket → (subscriptionId → filters)
 type SubMap = Map<string, EventFilter[]>;
 
+// Per-client rate limit state
+interface RateState {
+  count: number;
+  windowStart: number; // ms timestamp
+}
+
 export class SporeRelayNode {
   private wss: WebSocketServer;
   private subscriptions = new Map<WebSocket, SubMap>();
-  private config: Required<Pick<SporeRelayConfig, 'port' | 'host' | 'store' | 'maxEventSize' | 'debug'>> &
+  /** Per-client rate limit counters (only used when maxEventsPerSecond > 0) */
+  private rateState = new Map<WebSocket, RateState>();
+  private config: Required<Pick<SporeRelayConfig, 'port' | 'host' | 'store' | 'maxEventSize' | 'maxEventsPerSecond' | 'debug'>> &
     Pick<SporeRelayConfig, 'paymentValidator' | 'requirePaymentForKinds'>;
   readonly operator: SporeRelayOperator;
 
@@ -45,10 +62,11 @@ export class SporeRelayNode {
       paymentValidator: rawConfig.paymentValidator,
       requirePaymentForKinds: rawConfig.requirePaymentForKinds,
       maxEventSize: rawConfig.maxEventSize ?? 65536,
+      maxEventsPerSecond: rawConfig.maxEventsPerSecond ?? 20,
       debug: rawConfig.debug ?? false,
     };
 
-    this.operator = new SporeRelayOperator();
+    this.operator = new SporeRelayOperator({ settlementClient: rawConfig.settlementClient });
     this.wss = new WebSocketServer({
       port: this.config.port,
       host: this.config.host,
@@ -58,6 +76,9 @@ export class SporeRelayNode {
   start(): void {
     this.wss.on('connection', (ws: WebSocket) => {
       this.subscriptions.set(ws, new Map());
+      if (this.config.maxEventsPerSecond > 0) {
+        this.rateState.set(ws, { count: 0, windowStart: Date.now() });
+      }
       this.log(`Client connected. Total: ${this.wss.clients.size}`);
 
       ws.on('message', (data) => {
@@ -70,12 +91,14 @@ export class SporeRelayNode {
 
       ws.on('close', () => {
         this.subscriptions.delete(ws);
+        this.rateState.delete(ws);
         this.log(`Client disconnected. Total: ${this.wss.clients.size}`);
       });
 
       ws.on('error', (err) => {
         this.log(`WebSocket error: ${err.message}`);
         this.subscriptions.delete(ws);
+        this.rateState.delete(ws);
       });
     });
 
@@ -136,6 +159,23 @@ export class SporeRelayNode {
   // ─── EVENT handler ────────────────────────────────────────────────────────
 
   private handleEvent(ws: WebSocket, rawEvent: unknown): void {
+    // Rate limiting — sliding 1-second window per client
+    if (this.config.maxEventsPerSecond > 0) {
+      const state = this.rateState.get(ws);
+      if (state) {
+        const now = Date.now();
+        if (now - state.windowStart >= 1000) {
+          state.count = 0;
+          state.windowStart = now;
+        }
+        state.count++;
+        if (state.count > this.config.maxEventsPerSecond) {
+          this.sendNotice(ws, 'rate-limited: too many events per second');
+          return;
+        }
+      }
+    }
+
     const event = rawEvent as NostrEvent;
 
     // Basic shape check
