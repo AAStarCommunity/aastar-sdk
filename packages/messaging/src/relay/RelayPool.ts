@@ -17,66 +17,65 @@ import type { RelayUrl } from '../types.js';
 
 /** Default public relays if no override is provided */
 export const DEFAULT_RELAYS: RelayUrl[] = [
-    'wss://relay.damus.io',
-    'wss://relay.nostr.band',
-    'wss://nos.lol',
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://nos.lol',
 ];
 
 /** Parse SPORE_RELAYS env var ("wss://a,wss://b,...") */
 export function parseRelaysFromEnv(): RelayUrl[] {
-    const raw = process.env['SPORE_RELAYS'];
-    if (!raw) return [];
-    return raw
-        .split(',')
-        .map((r) => r.trim())
-        .filter((r) => r.startsWith('wss://') || r.startsWith('ws://'));
+  const raw = process.env['SPORE_RELAYS'];
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((r) => r.trim())
+    .filter((r) => r.startsWith('wss://') || r.startsWith('ws://'));
 }
 
 export type RelayEventHandler = (event: NostrEvent) => void;
 
 export interface RelayPoolOptions {
-    relays: RelayUrl[];
-    debug?: boolean;
-    /**
-     * Allow plain ws:// connections (insecure). Default: false.
-     * Only set to true in local development/testing. Production relays
-     * must use wss:// to prevent relay operator MITM attacks.
-     */
-    allowInsecure?: boolean;
-    /**
-     * Maximum number of event IDs to keep in the deduplication set.
-     * Oldest IDs are evicted when the limit is reached.
-     * Default: 10_000
-     */
-    seenIdsCacheSize?: number;
+  relays: RelayUrl[];
+  debug?: boolean;
+  /**
+   * Allow plain ws:// connections (insecure). Default: false.
+   * Only set to true in local development/testing. Production relays
+   * must use wss:// to prevent relay operator MITM attacks.
+   */
+  allowInsecure?: boolean;
+  /**
+   * Maximum number of event IDs to keep in the deduplication set.
+   * Oldest IDs are evicted when the limit is reached.
+   * Default: 10_000
+   */
+  seenIdsCacheSize?: number;
 }
 
 // ─── Bounded dedup set ────────────────────────────────────────────────────────
 
 /**
  * Size-bounded Set for event ID deduplication.
- * When maxSize is reached, the oldest half of entries are evicted
+ * When maxSize is reached, the oldest quarter of entries are evicted
  * (insertion-order eviction using Map iteration).
  */
 class BoundedSet {
-    private readonly map = new Map<string, true>();
-    constructor(private readonly maxSize: number) {}
+  private readonly map = new Map<string, true>();
+  constructor(private readonly maxSize: number) {}
 
-    has(id: string): boolean { return this.map.has(id); }
+  has(id: string): boolean { return this.map.has(id); }
 
-    add(id: string): void {
-        if (this.map.has(id)) return;
-        if (this.map.size >= this.maxSize) {
-            // Evict oldest quarter of entries to amortise cost
-            const evictCount = Math.ceil(this.maxSize / 4);
-            let i = 0;
-            for (const key of this.map.keys()) {
-                if (i++ >= evictCount) break;
-                this.map.delete(key);
-            }
-        }
-        this.map.set(id, true);
+  add(id: string): void {
+    if (this.map.has(id)) return;
+    if (this.map.size >= this.maxSize) {
+      const evictCount = Math.ceil(this.maxSize / 4);
+      let i = 0;
+      for (const key of this.map.keys()) {
+        if (i++ >= evictCount) break;
+        this.map.delete(key);
+      }
     }
+    this.map.set(id, true);
+  }
 }
 
 /**
@@ -86,142 +85,141 @@ class BoundedSet {
  *  - Optional debug logging
  */
 export class RelayPool {
-    private readonly pool: SimplePool;
-    private readonly relays: RelayUrl[];
-    private readonly debug: boolean;
-    /** Tracks seen event IDs to deduplicate across relays (bounded to prevent OOM) */
-    private readonly seenIds: BoundedSet;
-    /** Active subscriptions returned by SimplePool */
-    private readonly activeSubs: SubCloser[] = [];
+  private readonly pool: SimplePool;
+  private readonly relays: RelayUrl[];
+  private readonly debug: boolean;
+  /** Tracks seen event IDs to deduplicate across relays (bounded to prevent OOM) */
+  private readonly seenIds: BoundedSet;
+  /** Active subscriptions returned by SimplePool */
+  private readonly activeSubs: SubCloser[] = [];
 
-    constructor(options: RelayPoolOptions) {
-        const rawRelays = options.relays.length > 0 ? options.relays : DEFAULT_RELAYS;
-        const allowInsecure = options.allowInsecure ?? false;
+  constructor(options: RelayPoolOptions) {
+    const rawRelays = options.relays.length > 0 ? options.relays : DEFAULT_RELAYS;
+    const allowInsecure = options.allowInsecure ?? false;
 
-        // Enforce wss:// in production — reject ws:// unless explicitly allowed
-        const insecure = rawRelays.filter((r) => r.startsWith('ws://'));
-        if (insecure.length > 0 && !allowInsecure) {
-            throw new Error(
-                `RelayPool: insecure ws:// relays are not allowed in production. ` +
-                `Set allowInsecure: true for local development only. ` +
-                `Rejected: ${insecure.join(', ')}`
-            );
-        }
-
-        this.relays = rawRelays;
-        this.debug = options.debug ?? false;
-        this.seenIds = new BoundedSet(options.seenIdsCacheSize ?? 10_000);
-        this.pool = new SimplePool();
-
-        if (this.debug) {
-            console.debug('[RelayPool] initialised with relays:', this.relays);
-        }
+    // Enforce wss:// in production — reject ws:// unless explicitly allowed
+    const insecure = rawRelays.filter((r) => r.startsWith('ws://'));
+    if (insecure.length > 0 && !allowInsecure) {
+      throw new Error(
+        `RelayPool: insecure ws:// relays are not allowed in production. ` +
+        `Set allowInsecure: true for local development only. ` +
+        `Rejected: ${insecure.join(', ')}`
+      );
     }
 
-    /** Relay URLs currently in use */
-    get connectedRelays(): RelayUrl[] {
-        return [...this.relays];
+    this.relays = rawRelays;
+    this.debug = options.debug ?? false;
+    this.seenIds = new BoundedSet(options.seenIdsCacheSize ?? 10_000);
+    this.pool = new SimplePool();
+
+    if (this.debug) {
+      console.debug('[RelayPool] initialised with relays:', this.relays);
+    }
+  }
+
+  /** Relay URLs currently in use */
+  get connectedRelays(): RelayUrl[] {
+    return [...this.relays];
+  }
+
+  /**
+   * Publish a signed Nostr event to all relays.
+   * Returns a settled array of per-relay results (fulfilled = published OK).
+   */
+  async publish(event: NostrEvent): Promise<PromiseSettledResult<string>[]> {
+    if (this.debug) {
+      console.debug(`[RelayPool] publishing event kind:${event.kind} id:${event.id}`);
     }
 
-    /**
-     * Publish a signed Nostr event to all relays.
-     * Returns a settled array of per-relay results (fulfilled = published OK).
-     */
-    async publish(event: NostrEvent): Promise<PromiseSettledResult<string>[]> {
-        if (this.debug) {
-            console.debug(`[RelayPool] publishing event kind:${event.kind} id:${event.id}`);
-        }
+    const promises = this.pool.publish(this.relays, event);
+    const results = await Promise.allSettled(promises);
 
-        // publish() returns Promise<string>[] — one promise per relay
-        const promises = this.pool.publish(this.relays, event);
-        const results = await Promise.allSettled(promises);
-
-        if (this.debug) {
-            const ok = results.filter((r) => r.status === 'fulfilled').length;
-            console.debug(`[RelayPool] published to ${ok}/${results.length} relays`);
-        }
-
-        return results;
+    if (this.debug) {
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      console.debug(`[RelayPool] published to ${ok}/${results.length} relays`);
     }
 
-    /**
-     * Subscribe to events matching the given filter across all relays.
-     * The handler is called once per unique event id (deduplication applied).
-     *
-     * Note: nostr-tools v2 subscribeMany accepts a single Filter, not Filter[].
-     * To subscribe with multiple filter conditions, call subscribe() multiple times
-     * or use a single merged filter.
-     *
-     * @param filter   - Nostr subscription filter
-     * @param handler  - Called for each unique incoming event
-     * @returns A close function to cancel the subscription
-     */
-    subscribe(filter: Filter, handler: RelayEventHandler): () => void {
-        if (this.debug) {
-            console.debug('[RelayPool] subscribing with filter:', filter);
-        }
+    return results;
+  }
 
-        const sub = this.pool.subscribeMany(this.relays, filter, {
-            onevent: (event: NostrEvent) => {
-                if (this.seenIds.has(event.id)) return; // deduplicate
-                this.seenIds.add(event.id);
-                handler(event);
-            },
-        });
-
-        this.activeSubs.push(sub);
-
-        return () => {
-            sub.close();
-            const idx = this.activeSubs.indexOf(sub);
-            if (idx !== -1) this.activeSubs.splice(idx, 1);
-        };
+  /**
+   * Subscribe to events matching the given filter across all relays.
+   * The handler is called once per unique event id (deduplication applied).
+   *
+   * Note: nostr-tools v2 subscribeMany accepts a single Filter, not Filter[].
+   * To subscribe with multiple filter conditions, call subscribe() multiple times
+   * or use a single merged filter.
+   *
+   * @param filter   - Nostr subscription filter
+   * @param handler  - Called for each unique incoming event
+   * @returns A close function to cancel the subscription
+   */
+  subscribe(filter: Filter, handler: RelayEventHandler): () => void {
+    if (this.debug) {
+      console.debug('[RelayPool] subscribing with filter:', filter);
     }
 
-    /**
-     * Subscribe with multiple filters (runs separate subscriptions).
-     * Returns a single closer that cancels all of them.
-     */
-    subscribeMany(filters: Filter[], handler: RelayEventHandler): () => void {
-        const closers = filters.map((f) => this.subscribe(f, handler));
-        return () => {
-            for (const close of closers) close();
-        };
-    }
+    const sub = this.pool.subscribeMany(this.relays, filter, {
+      onevent: (event: NostrEvent) => {
+        if (this.seenIds.has(event.id)) return;
+        this.seenIds.add(event.id);
+        handler(event);
+      },
+    });
 
-    /**
-     * Fetch events matching a filter (one-shot query, no ongoing subscription).
-     * Resolves once all relays have returned EOSE (end of stored events).
-     *
-     * @param filter     - Nostr filter
-     * @param timeoutMs  - How long to wait (default: 10 000 ms)
-     */
-    async fetchEvents(filter: Filter, timeoutMs = 10_000): Promise<NostrEvent[]> {
-        const events = await this.pool.querySync(this.relays, filter, {
-            maxWait: timeoutMs,
-        });
-        // Deduplicate by id
-        const seen = new Set<string>();
-        return events.filter((e) => {
-            if (seen.has(e.id)) return false;
-            seen.add(e.id);
-            return true;
-        });
-    }
+    this.activeSubs.push(sub);
 
-    /**
-     * Close all active subscriptions and clean up the pool.
-     * Should be called when the agent stops.
-     */
-    async close(): Promise<void> {
-        for (const sub of this.activeSubs) {
-            sub.close();
-        }
-        this.activeSubs.length = 0;
-        this.pool.close(this.relays);
+    return () => {
+      sub.close();
+      const idx = this.activeSubs.indexOf(sub);
+      if (idx !== -1) this.activeSubs.splice(idx, 1);
+    };
+  }
 
-        if (this.debug) {
-            console.debug('[RelayPool] closed all connections');
-        }
+  /**
+   * Subscribe with multiple filters (runs separate subscriptions).
+   * Returns a single closer that cancels all of them.
+   */
+  subscribeMany(filters: Filter[], handler: RelayEventHandler): () => void {
+    const closers = filters.map((f) => this.subscribe(f, handler));
+    return () => {
+      for (const close of closers) close();
+    };
+  }
+
+  /**
+   * Fetch events matching a filter (one-shot query, no ongoing subscription).
+   * Resolves once all relays have returned EOSE (end of stored events).
+   *
+   * @param filter     - Nostr filter
+   * @param timeoutMs  - How long to wait (default: 10 000 ms)
+   */
+  async fetchEvents(filter: Filter, timeoutMs = 10_000): Promise<NostrEvent[]> {
+    const events = await this.pool.querySync(this.relays, filter, {
+      maxWait: timeoutMs,
+    });
+    // Deduplicate by id
+    const seen = new Set<string>();
+    return events.filter((e) => {
+      if (seen.has(e.id)) return false;
+      seen.add(e.id);
+      return true;
+    });
+  }
+
+  /**
+   * Close all active subscriptions and clean up the pool.
+   * Should be called when the agent stops.
+   */
+  async close(): Promise<void> {
+    for (const sub of this.activeSubs) {
+      sub.close();
     }
+    this.activeSubs.length = 0;
+    this.pool.close(this.relays);
+
+    if (this.debug) {
+      console.debug('[RelayPool] closed all connections');
+    }
+  }
 }

@@ -33,7 +33,7 @@ type SubMap = Map<string, EventFilter[]>;
 export class SporeRelayNode {
   private wss: WebSocketServer;
   private subscriptions = new Map<WebSocket, SubMap>();
-  private config: Required<Omit<SporeRelayConfig, 'paymentValidator' | 'requirePaymentForKinds'>> &
+  private config: Required<Pick<SporeRelayConfig, 'port' | 'host' | 'store' | 'maxEventSize' | 'debug'>> &
     Pick<SporeRelayConfig, 'paymentValidator' | 'requirePaymentForKinds'>;
   readonly operator: SporeRelayOperator;
 
@@ -238,26 +238,16 @@ export class SporeRelayNode {
 
   /** Exposed for testing only — do not call from external code. */
   matchesFilter(event: NostrEvent, filter: EventFilter): boolean {
-    if (filter.ids && filter.ids.length > 0) {
-      if (!filter.ids.includes(event.id)) return false;
-    }
-    if (filter.authors && filter.authors.length > 0) {
-      if (!filter.authors.includes(event.pubkey)) return false;
-    }
-    if (filter.kinds && filter.kinds.length > 0) {
-      if (!filter.kinds.includes(event.kind)) return false;
-    }
-    if (filter.since !== undefined) {
-      if (event.created_at < filter.since) return false;
-    }
-    if (filter.until !== undefined) {
-      if (event.created_at > filter.until) return false;
-    }
-    if (filter['#e'] && filter['#e'].length > 0) {
+    if (filter.ids?.length && !filter.ids.includes(event.id)) return false;
+    if (filter.authors?.length && !filter.authors.includes(event.pubkey)) return false;
+    if (filter.kinds?.length && !filter.kinds.includes(event.kind)) return false;
+    if (filter.since !== undefined && event.created_at < filter.since) return false;
+    if (filter.until !== undefined && event.created_at > filter.until) return false;
+    if (filter['#e']?.length) {
       const eSet = new Set(filter['#e']);
       if (!event.tags.some(t => t[0] === 'e' && eSet.has(t[1]))) return false;
     }
-    if (filter['#p'] && filter['#p'].length > 0) {
+    if (filter['#p']?.length) {
       const pSet = new Set(filter['#p']);
       if (!event.tags.some(t => t[0] === 'p' && pSet.has(t[1]))) return false;
     }
