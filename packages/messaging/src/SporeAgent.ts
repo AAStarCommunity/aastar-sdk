@@ -37,6 +37,7 @@ import type {
     StreamAllMessagesOptions,
     CreateGroupOptions,
     GroupInfo,
+    MlsGroupState,
 } from './types.js';
 import { KIND_GIFT_WRAP, KIND_GROUP_ADD, KIND_GROUP_REMOVE } from './transport/NostrTransport.js';
 import type { Filter } from 'nostr-tools';
@@ -50,6 +51,10 @@ import {
     type LinkedDevice,
     type LinkDeviceOptions,
 } from './identity/SporeIdentityRegistry.js';
+import {
+    SporeKeyAgreement,
+    KIND_MLS_GROUP_MESSAGE,
+} from './keyagreement/SporeKeyAgreement.js';
 import { X402Bridge } from './payment/X402Bridge.js';
 import { ChannelBridge } from './payment/ChannelBridge.js';
 import { UserOpBridge } from './payment/UserOpBridge.js';
@@ -100,6 +105,9 @@ export class SporeAgent extends EventEmitter {
     /** M8: Identity registry for profile + multi-device operations */
     private readonly identityRegistry: SporeIdentityRegistry;
 
+    /** M9: MLS key agreement primitives */
+    private readonly keyAgreement: SporeKeyAgreement;
+
     private constructor(
         identity: SporeIdentity,
         pool: RelayPool,
@@ -112,6 +120,7 @@ export class SporeAgent extends EventEmitter {
         this.transport = transport;
         this.config = config;
         this.identityRegistry = new SporeIdentityRegistry(pool, config.debug ?? false);
+        this.keyAgreement = new SporeKeyAgreement(config.debug ?? false);
     }
 
     // ─── Factory methods ───────────────────────────────────────────────────────
@@ -823,6 +832,148 @@ export class SporeAgent extends EventEmitter {
      */
     async isLinkedDevice(primaryPubkey: string, devicePubkey: string): Promise<boolean> {
         return this.identityRegistry.isLinkedDevice(primaryPubkey, devicePubkey);
+    }
+
+    // ─── M9: MLS Key Agreement ─────────────────────────────────────────────────
+
+    /**
+     * Publish a NIP-104 KeyPackage (kind:443) for this device.
+     *
+     * Should be called once per device on first use, and periodically to
+     * refresh the key package (e.g. every 30 days).
+     *
+     * @returns Nostr event id of the published KeyPackage
+     */
+    async publishKeyPackage(): Promise<string> {
+        return this.keyAgreement.publishKeyPackage(this.identity.privateKeyHex, this.pool);
+    }
+
+    /**
+     * Fetch KeyPackages for a set of pubkeys.
+     *
+     * Used to verify device participation before sending group Welcomes.
+     * Events with invalid Schnorr signatures are silently discarded.
+     *
+     * @param pubkeys   - Device pubkeys to query
+     * @param timeoutMs - Relay query timeout (default: 5000ms)
+     */
+    async fetchKeyPackages(
+        pubkeys: string[],
+        timeoutMs = 5000
+    ): Promise<Map<string, { pubkey: string; eventId: string }>> {
+        return this.keyAgreement.fetchKeyPackages(pubkeys, this.pool, timeoutMs);
+    }
+
+    /**
+     * Create an MLS group and deliver the epoch key to all members via NIP-17 DM.
+     *
+     * Generates a random epoch-0 key, then NIP-17 DM-encrypts a Welcome to each
+     * member.  The Welcome DM is identified by SPORE_MLS_WELCOME_PREFIX in the
+     * plaintext.  Members call processWelcome() on receipt.
+     *
+     * @param memberPubkeys - Nostr pubkeys of all members to invite (excluding self)
+     * @param groupId       - Optional group identifier (default: random 32-byte hex)
+     * @returns Initial MlsGroupState (caller must persist this)
+     */
+    async createMlsGroup(memberPubkeys: string[], groupId?: string): Promise<MlsGroupState> {
+        const id = groupId ?? randomBytes(32).toString('hex');
+        const allMembers = [this.identity.pubkey, ...memberPubkeys];
+        const state = this.keyAgreement.createGroup(id, allMembers);
+
+        const welcome = this.keyAgreement.buildWelcomePayload(state);
+        const dmContent = this.keyAgreement.encodeWelcomeDmContent(welcome);
+
+        // Deliver Welcome to each member via NIP-17 gift-wrap DM
+        for (const memberPubkey of memberPubkeys) {
+            await this.transport.sendDm({
+                senderPrivkeyHex: this.identity.privateKeyHex,
+                senderPubkeyHex: this.identity.pubkey,
+                recipientPubkeyHex: memberPubkey,
+                content: dmContent,
+            });
+        }
+
+        if (this.config.debug) {
+            console.debug('[SporeAgent] MLS group created:', id, 'members:', allMembers.length);
+        }
+
+        return state;
+    }
+
+    /**
+     * Send an encrypted group message (kind:445) using the current epoch key.
+     *
+     * Optionally ratchets the epoch key after sending to provide forward secrecy.
+     * When ratcheting, all group members must ratchet in sync (after each message
+     * or on a scheduled boundary).
+     *
+     * @param state     - Current MLS group state
+     * @param plaintext - UTF-8 message to encrypt and publish
+     * @param ratchet   - If true, ratchet the epoch key after sending (default: false)
+     * @returns The Nostr event id and the (possibly updated) group state
+     */
+    async sendMlsMessage(
+        state: MlsGroupState,
+        plaintext: string,
+        ratchet = false
+    ): Promise<{ eventId: string; updatedState: MlsGroupState }> {
+        const ciphertext = this.keyAgreement.encryptGroupMessage(plaintext, state.epochKey);
+        const event = this.keyAgreement.buildGroupMessageEvent(
+            this.identity.privateKeyHex,
+            state.groupId,
+            state.epoch,
+            ciphertext
+        );
+
+        await this.pool.publish(event);
+
+        const updatedState = ratchet ? this.keyAgreement.ratchetEpoch(state) : state;
+        return { eventId: event.id, updatedState };
+    }
+
+    /**
+     * Decrypt a received kind:445 group message event.
+     *
+     * Verifies the Schnorr signature before decrypting.
+     * Returns null if verification fails or decryption throws.
+     *
+     * @param event    - Raw kind:445 Nostr event
+     * @param epochKey - 32-byte epoch key from MlsGroupState
+     * @returns Decrypted plaintext or null on failure
+     */
+    decryptMlsMessage(event: SignedNostrEvent, epochKey: Uint8Array): string | null {
+        try {
+            if (event.kind !== KIND_MLS_GROUP_MESSAGE) return null;
+            if (!verifyEvent(event)) return null;
+            return this.keyAgreement.decryptGroupMessage(event.content, epochKey);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Parse an incoming DM content string as a Welcome message.
+     *
+     * Call this inside an 'message' handler to detect when another user has
+     * invited this agent to an MLS group.
+     *
+     * @param dmContent - Decrypted content of an incoming NIP-17 DM
+     * @returns MlsGroupState if the content is a valid Welcome, null otherwise
+     *
+     * @example
+     * ```ts
+     * agent.on('message', async (ctx) => {
+     *   const groupState = agent.processWelcome(ctx.message.content);
+     *   if (groupState) {
+     *     console.log('Joined MLS group', groupState.groupId);
+     *   }
+     * });
+     * ```
+     */
+    processWelcome(dmContent: string): MlsGroupState | null {
+        const payload = this.keyAgreement.parseWelcomeDmContent(dmContent);
+        if (!payload) return null;
+        return this.keyAgreement.processWelcome(payload);
     }
 
     // ─── Incoming message pipeline ─────────────────────────────────────────────
