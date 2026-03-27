@@ -29,7 +29,7 @@ vi.mock('../identity/AirAccountIdentity.js', () => ({
     createIdentity: vi.fn().mockResolvedValue({
         pubkey: 'self'.padEnd(64, '0'),
         address: '0x' + 'a'.repeat(40),
-        privateKeyHex: 'priv'.padEnd(64, '0'),
+        privateKeyHex: 'abcd'.padEnd(64, '0'),
     }),
     createIdentityFromEnv: vi.fn(),
 }));
@@ -105,7 +105,7 @@ function makeMessageContext(
             sendDm: mockSendDm,
             sendGroupMessage: mockSendGroupMessage,
         } as never,
-        selfPrivkeyHex: 'priv'.padEnd(64, '0'),
+        selfPrivkeyHex: 'abcd'.padEnd(64, '0'),
         selfPubkeyHex: 'self'.padEnd(64, '0'),
         codecRegistry,
         sendTypedMessage,
@@ -297,7 +297,7 @@ describe('SporeAgent M7: registerCodec + auto-decode', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });

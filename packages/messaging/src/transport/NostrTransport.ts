@@ -19,6 +19,7 @@ import { bytesToHex as nobleBytesToHex } from '@noble/hashes/utils';
 import { RelayPool } from '../relay/RelayPool.js';
 import * as crypto from '../crypto/Nip44Crypto.js';
 import type { SporeConversation, SporeMessage, SignedNostrEvent } from '../types.js';
+import { hexToBytes } from '../utils/hex.js';
 
 // Nostr event kinds used by Spore Protocol
 export const KIND_GIFT_WRAP = 1059;  // NIP-17 outer gift wrap (DM)
@@ -146,7 +147,7 @@ export class NostrTransport {
 
         // Step 3: Gift wrap — ephemeral key encrypts the seal → recipient
         const ephemeralKeyBytes = generateSecretKey(); // Uint8Array
-        const ephemeralKeyHex = bytesToHex(ephemeralKeyBytes);
+        const ephemeralKeyHex = nobleBytesToHex(ephemeralKeyBytes);
 
         const sealJson = JSON.stringify(sealEvent);
         const wrapContent = crypto.encrypt(ephemeralKeyHex, recipientPubkeyHex, sealJson);
@@ -511,19 +512,6 @@ function randomTimestampInLastDay(): number {
     return twoDaysAgo + (offset % windowSeconds);
 }
 
-function hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-    return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-}
 
 /**
  * Deterministically derive a conversation id for a DM from sorted participant pubkeys.

@@ -130,20 +130,24 @@ describe('AirAccountIdentity', () => {
 // ─── Nip44Crypto tests ─────────────────────────────────────────────────────────
 
 describe('Nip44Crypto', () => {
+    // Use valid 32-byte (64 hex char) private key and 32-byte pubkey fixtures
+    const TEST_PRIVKEY = 'ab'.repeat(32);  // 64 hex chars, valid
+    const TEST_PUBKEY  = 'cd'.repeat(32);  // 64 hex chars, valid
+
     it('encrypts plaintext to an encrypted string', () => {
-        const cipher = encrypt('privkey', 'pubkey', 'hello');
+        const cipher = encrypt(TEST_PRIVKEY, TEST_PUBKEY, 'hello');
         expect(cipher).toBe('encrypted:hello');
     });
 
     it('decrypts back to the original plaintext', () => {
-        const cipher = encrypt('privkey', 'pubkey', 'hello');
-        const plain = decrypt('privkey', 'pubkey', cipher);
+        const cipher = encrypt(TEST_PRIVKEY, TEST_PUBKEY, 'hello');
+        const plain = decrypt(TEST_PRIVKEY, TEST_PUBKEY, cipher);
         expect(plain).toBe('hello');
     });
 
     it('produces different ciphertext for different content', () => {
-        const c1 = encrypt('privkey', 'pubkey', 'msg1');
-        const c2 = encrypt('privkey', 'pubkey', 'msg2');
+        const c1 = encrypt(TEST_PRIVKEY, TEST_PUBKEY, 'msg1');
+        const c2 = encrypt(TEST_PRIVKEY, TEST_PUBKEY, 'msg2');
         expect(c1).not.toBe(c2);
     });
 });

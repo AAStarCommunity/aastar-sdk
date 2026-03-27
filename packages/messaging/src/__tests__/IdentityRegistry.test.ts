@@ -19,7 +19,7 @@ vi.mock('../identity/AirAccountIdentity.js', () => ({
     createIdentity: vi.fn().mockResolvedValue({
         pubkey: 'self'.padEnd(64, '0'),
         address: '0xSelf' + 'a'.repeat(35),
-        privateKeyHex: 'priv'.padEnd(64, '0'),
+        privateKeyHex: 'abcd'.padEnd(64, '0'),
     }),
     createIdentityFromEnv: vi.fn(),
 }));
@@ -117,7 +117,7 @@ describe('SporeIdentityRegistry: publishProfile()', () => {
 
     it('publishes a kind:0 event with profile fields', async () => {
         const registry = new SporeIdentityRegistry(makeMockPool());
-        const eventId = await registry.publishProfile('priv'.padEnd(64, '0'), {
+        const eventId = await registry.publishProfile('abcd'.padEnd(64, '0'), {
             name: 'Alice',
             about: 'Spore dev',
             ethAddress: '0x' + 'a'.repeat(40) as `0x${string}`,
@@ -136,7 +136,7 @@ describe('SporeIdentityRegistry: publishProfile()', () => {
 
     it('omits undefined fields from content', async () => {
         const registry = new SporeIdentityRegistry(makeMockPool());
-        await registry.publishProfile('priv'.padEnd(64, '0'), {});
+        await registry.publishProfile('abcd'.padEnd(64, '0'), {});
 
         const published = mockPublish.mock.calls[0][0] as { content: string };
         const content = JSON.parse(published.content);
@@ -146,7 +146,7 @@ describe('SporeIdentityRegistry: publishProfile()', () => {
     it('extra fields cannot override reserved keys (eth_address)', async () => {
         const registry = new SporeIdentityRegistry(makeMockPool());
         const realAddress = '0x' + 'a'.repeat(40) as `0x${string}`;
-        await registry.publishProfile('priv'.padEnd(64, '0'), {
+        await registry.publishProfile('abcd'.padEnd(64, '0'), {
             ethAddress: realAddress,
             extra: { eth_address: '0xattacker' + 'b'.repeat(31) },
         });
@@ -249,7 +249,7 @@ describe('SporeIdentityRegistry: device list', () => {
             { pubkey: 'dev1'.padEnd(64, '0'), label: 'iPhone 15' },
             { pubkey: 'dev2'.padEnd(64, '0') },
         ];
-        await registry.publishDeviceList('priv'.padEnd(64, '0'), devices);
+        await registry.publishDeviceList('abcd'.padEnd(64, '0'), devices);
 
         const published = mockPublish.mock.calls[0][0] as { kind: number; tags: string[][] };
         expect(published.kind).toBe(10001);
@@ -307,7 +307,7 @@ describe('SporeAgent M8: publishProfile()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -332,7 +332,7 @@ describe('SporeAgent M8: fetchProfile()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -364,7 +364,7 @@ describe('SporeAgent M8: linkDevice / unlinkDevice / getLinkedDevices', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });

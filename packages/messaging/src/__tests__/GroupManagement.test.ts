@@ -19,7 +19,7 @@ vi.mock('../identity/AirAccountIdentity.js', () => ({
     createIdentity: vi.fn().mockResolvedValue({
         pubkey: 'self'.padEnd(64, '0'),
         address: '0x' + 'a'.repeat(40),
-        privateKeyHex: 'priv'.padEnd(64, '0'),
+        privateKeyHex: 'abcd'.padEnd(64, '0'),
     }),
     createIdentityFromEnv: vi.fn(),
 }));
@@ -81,7 +81,7 @@ describe('M6: createGroup()', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -153,7 +153,7 @@ describe('M6: addGroupMember()', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -220,7 +220,7 @@ describe('M6: removeGroupMember()', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -269,7 +269,7 @@ describe('M6: getGroupInfo()', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
