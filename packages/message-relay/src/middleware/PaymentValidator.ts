@@ -196,7 +196,8 @@ export class PaymentValidator {
       const recoveredPubkey = recoveredPoint.toRawBytes(false); // uncompressed
 
       // Derive ETH address: keccak256(pubkey[1:])[12:]
-      const pubkeyHash = keccak256(recoveredPubkey.slice(1) as unknown as `0x${string}`);
+      // keccak256 accepts ByteArray (Uint8Array) directly — no cast needed
+      const pubkeyHash = keccak256(recoveredPubkey.slice(1));
       const recoveredAddress = '0x' + pubkeyHash.slice(-40);
 
       return recoveredAddress.toLowerCase() === c.from.toLowerCase();
