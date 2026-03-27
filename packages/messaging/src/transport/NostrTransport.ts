@@ -38,6 +38,13 @@ export interface SendDmOptions {
     recipientPubkeyHex: string;
     content: string;
     replyToId?: string;
+    /**
+     * M7: Optional content type identifier ("authority/type/version").
+     * When set, a ['ct', '<id>'] tag is added to the rumor event so receivers
+     * can look up the appropriate codec to decode the content.
+     * If omitted, the content is treated as plain text by default.
+     */
+    contentTypeId?: string;
 }
 
 export interface SendGroupMessageOptions {
@@ -47,6 +54,11 @@ export interface SendGroupMessageOptions {
     memberPubkeys: string[];
     content: string;
     replyToId?: string;
+    /**
+     * M7: Optional content type identifier ("authority/type/version").
+     * When set, a ['ct', '<id>'] tag is added to the group event.
+     */
+    contentTypeId?: string;
 }
 
 /** Options for group metadata creation (kind:9000) */
@@ -97,12 +109,16 @@ export class NostrTransport {
      * This prevents correlation of sender identity to the outer event.
      */
     async sendDm(opts: SendDmOptions): Promise<string> {
-        const { senderPrivkeyHex, senderPubkeyHex, recipientPubkeyHex, content, replyToId } = opts;
+        const { senderPrivkeyHex, senderPubkeyHex, recipientPubkeyHex, content, replyToId, contentTypeId } = opts;
 
         // Step 1: Build rumor (unsigned — no id/sig)
         const rumorTags: string[][] = [['p', recipientPubkeyHex]];
         if (replyToId) {
             rumorTags.push(['e', replyToId, '', 'reply']);
+        }
+        // M7: add content-type tag so receivers can look up the correct codec
+        if (contentTypeId) {
+            rumorTags.push(['ct', contentTypeId]);
         }
 
         // Rumor is an unsigned event-like object (not a full EventTemplate since it
@@ -161,7 +177,7 @@ export class NostrTransport {
      * For M1 the content is sent plaintext; per-member encryption is layered in M2.
      */
     async sendGroupMessage(opts: SendGroupMessageOptions): Promise<string> {
-        const { senderPrivkeyHex, groupId, content, replyToId } = opts;
+        const { senderPrivkeyHex, groupId, content, replyToId, contentTypeId } = opts;
 
         const tags: string[][] = [
             ['h', groupId],
@@ -169,6 +185,10 @@ export class NostrTransport {
         ];
         if (replyToId) {
             tags.push(['e', replyToId, '', 'reply']);
+        }
+        // M7: add content-type tag
+        if (contentTypeId) {
+            tags.push(['ct', contentTypeId]);
         }
 
         const unsigned: EventTemplate = {
@@ -411,12 +431,16 @@ export class NostrTransport {
         const replyTag = rumor.tags?.find(
             (t: string[]) => t[0] === 'e' && t[3] === 'reply'
         );
+        // M7: extract content type tag from the rumor
+        const ctTag = rumor.tags?.find((t: string[]) => t[0] === 'ct');
+        const contentTypeId = ctTag?.[1];
 
         return {
             id: wrapEvent.id,
             senderPubkey,
             content: rumor.content,
             contentType: 'text',
+            contentTypeId,
             sentAt: wrapEvent.created_at,
             referencedMessageId: replyTag?.[1],
             conversation,
@@ -442,12 +466,16 @@ export class NostrTransport {
         };
 
         const replyTag = event.tags.find((t) => t[0] === 'e' && t[3] === 'reply');
+        // M7: extract content type tag
+        const ctTag = event.tags.find((t) => t[0] === 'ct');
+        const contentTypeId = ctTag?.[1];
 
         return {
             id: event.id,
             senderPubkey: event.pubkey,
             content: event.content,
             contentType: 'text',
+            contentTypeId,
             sentAt: event.created_at,
             referencedMessageId: replyTag?.[1],
             conversation,

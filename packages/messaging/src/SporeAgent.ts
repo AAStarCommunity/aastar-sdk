@@ -42,6 +42,8 @@ import { KIND_GIFT_WRAP, KIND_GROUP_ADD, KIND_GROUP_REMOVE } from './transport/N
 import type { Filter } from 'nostr-tools';
 import { randomBytes } from 'node:crypto';
 import type { SporeEventBridge, SporeKind } from './payment/SporeEventBridge.js';
+import { CodecRegistry, type SporeCodec } from './codecs/SporeCodec.js';
+import { TextCodec } from './codecs/TextCodec.js';
 import { X402Bridge } from './payment/X402Bridge.js';
 import { ChannelBridge } from './payment/ChannelBridge.js';
 import { UserOpBridge } from './payment/UserOpBridge.js';
@@ -85,6 +87,9 @@ export class SporeAgent extends EventEmitter {
 
     /** M2: Registered on-chain bridges keyed by Nostr event kind */
     private readonly bridges = new Map<number, SporeEventBridge<SporeKind>>();
+
+    /** M7: Registered content type codecs keyed by content type id string */
+    private readonly codecRegistry = new CodecRegistry([new TextCodec()]);
 
     private constructor(
         identity: SporeIdentity,
@@ -327,6 +332,28 @@ export class SporeAgent extends EventEmitter {
      */
     registerBridge<K extends SporeKind>(bridge: SporeEventBridge<K>): this {
         this.bridges.set(bridge.kind, bridge as SporeEventBridge<SporeKind>);
+        return this;
+    }
+
+    // ─── M7 Codec API ──────────────────────────────────────────────────────────
+
+    /**
+     * Register a content type codec.
+     *
+     * Registered codecs are used to:
+     *   1. Decode incoming messages that carry a matching 'ct' tag
+     *   2. Encode outgoing content and attach the 'ct' tag automatically
+     *
+     * Built-in TextCodec is always registered (handles plain text with no 'ct' tag).
+     *
+     * @example
+     * ```ts
+     * agent.registerCodec(new ReactionCodec());
+     * agent.registerCodec(new RemoteAttachmentCodec());
+     * ```
+     */
+    registerCodec(codec: SporeCodec<unknown>): this {
+        this.codecRegistry.register(codec);
         return this;
     }
 
@@ -689,6 +716,9 @@ export class SporeAgent extends EventEmitter {
             return;
         }
 
+        // M7: Decode structured content using registered codec (if any)
+        this.decodeMessageContent(message);
+
         // Emit 'conversation' for new conversations
         const conv = message.conversation;
         if (!this.knownConversations.has(conv.id)) {
@@ -774,12 +804,76 @@ export class SporeAgent extends EventEmitter {
         }
     }
 
+    /**
+     * M7: Attempt to decode message content using the registered codec.
+     * Mutates message.decodedContent in place (safe — this object is not shared).
+     * Silently ignores decoding errors so malformed payloads don't crash handlers.
+     */
+    private decodeMessageContent(message: SporeMessage): void {
+        if (!message.contentTypeId) return;
+        const codec = this.codecRegistry.get(message.contentTypeId);
+        if (!codec) return;
+        try {
+            message.decodedContent = codec.decode(message.content);
+        } catch {
+            if (this.config.debug) {
+                console.warn('[SporeAgent] codec decode failed for', message.contentTypeId);
+            }
+        }
+    }
+
+    /**
+     * M7: Send a typed message using a registered codec.
+     * Encodes the content, attaches the 'ct' tag, and sends via the appropriate transport.
+     *
+     * @param conversation - Target conversation
+     * @param contentTypeId - Content type id string ("authority/type/version")
+     * @param content       - Structured content to encode
+     * @returns Nostr event id
+     */
+    async sendTypedMessage(
+        conversation: SporeConversation,
+        contentTypeId: string,
+        content: unknown
+    ): Promise<string> {
+        const codec = this.codecRegistry.get(contentTypeId);
+        if (!codec) {
+            throw new Error(`SporeAgent: no codec registered for content type '${contentTypeId}'`);
+        }
+        const encoded = codec.encode(content);
+
+        if (conversation.type === 'dm') {
+            const recipientPubkey = conversation.members.find((pk) => pk !== this.identity.pubkey);
+            if (!recipientPubkey) {
+                throw new Error('SporeAgent.sendTypedMessage: cannot determine DM recipient');
+            }
+            return this.transport.sendDm({
+                senderPrivkeyHex: this.identity.privateKeyHex,
+                senderPubkeyHex: this.identity.pubkey,
+                recipientPubkeyHex: recipientPubkey,
+                content: encoded,
+                contentTypeId,
+            });
+        } else {
+            return this.transport.sendGroupMessage({
+                senderPrivkeyHex: this.identity.privateKeyHex,
+                senderPubkeyHex: this.identity.pubkey,
+                groupId: conversation.id,
+                memberPubkeys: conversation.members.filter((pk) => pk !== this.identity.pubkey),
+                content: encoded,
+                contentTypeId,
+            });
+        }
+    }
+
     private buildMessageContext(message: SporeMessage): MessageContext {
         return new MessageContext({
             message,
             transport: this.transport,
             selfPrivkeyHex: this.identity.privateKeyHex,
             selfPubkeyHex: this.identity.pubkey,
+            codecRegistry: this.codecRegistry,
+            sendTypedMessage: this.sendTypedMessage.bind(this),
         });
     }
 
