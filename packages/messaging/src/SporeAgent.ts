@@ -32,7 +32,12 @@ import type {
     SporeConversation,
     RelayUrl,
     SignedNostrEvent,
+    ListConversationsOptions,
+    GetMessagesOptions,
+    StreamAllMessagesOptions,
 } from './types.js';
+import { KIND_GIFT_WRAP } from './transport/NostrTransport.js';
+import type { Filter } from 'nostr-tools';
 import type { SporeEventBridge, SporeKind } from './payment/SporeEventBridge.js';
 import { X402Bridge } from './payment/X402Bridge.js';
 import { ChannelBridge } from './payment/ChannelBridge.js';
@@ -401,6 +406,127 @@ export class SporeAgent extends EventEmitter {
             memberPubkeys,
             content: text,
         });
+    }
+
+    // ─── M5: Conversations API ─────────────────────────────────────────────────
+
+    /**
+     * List known conversations.
+     *
+     * Returns conversations discovered during this session (from incoming messages).
+     * Results are sorted by createdAt descending (newest first).
+     *
+     * @param opts - Filter/pagination options
+     */
+    listConversations(opts?: ListConversationsOptions): SporeConversation[] {
+        const type = opts?.type ?? 'all';
+        const limit = opts?.limit ?? 100;
+
+        let convs = [...this.knownConversations.values()];
+        if (type !== 'all') {
+            convs = convs.filter((c) => c.type === type);
+        }
+        convs.sort((a, b) => b.createdAt - a.createdAt);
+        return convs.slice(0, limit);
+    }
+
+    /**
+     * Fetch historical messages for a known conversation.
+     *
+     * For DMs: queries kind:1059 gift-wrap events addressed to this agent
+     * and decrypts them, returning only messages belonging to the given conversation.
+     *
+     * For groups: queries kind:11 events filtered by the group id tag.
+     *
+     * @param convId - Conversation id (from SporeConversation.id)
+     * @param opts   - Pagination options (limit, since, until)
+     * @returns Decoded messages sorted by sentAt ascending
+     */
+    async getMessages(convId: string, opts?: GetMessagesOptions): Promise<SporeMessage[]> {
+        const conv = this.knownConversations.get(convId);
+        if (!conv) return [];
+
+        const limit = opts?.limit ?? 50;
+        const base: Filter = { limit };
+        if (opts?.since !== undefined) base.since = opts.since;
+        if (opts?.until !== undefined) base.until = opts.until;
+
+        let messages: SporeMessage[];
+
+        if (conv.type === 'dm') {
+            const filter: Filter = { ...base, kinds: [KIND_GIFT_WRAP], '#p': [this.identity.pubkey] };
+            const events = await this.pool.fetchEvents(filter);
+            messages = events
+                .map((e) => this.transport.decryptDm(e, this.identity.privateKeyHex, this.identity.pubkey))
+                .filter((m): m is SporeMessage => m !== null && m.conversation.id === convId);
+        } else {
+            // Group: convId IS the groupId (set by decodeGroupEvent)
+            const filter: Filter = { ...base, kinds: [11], '#h': [convId] };
+            const events = await this.pool.fetchEvents(filter);
+            messages = events
+                .map((e) => this.transport.decodeGroup(e))
+                .filter((m): m is SporeMessage => m !== null);
+        }
+
+        // Sort by sentAt ascending (chronological order)
+        messages.sort((a, b) => a.sentAt - b.sentAt);
+        return messages;
+    }
+
+    /**
+     * Stream all incoming messages as an AsyncIterable.
+     *
+     * Yields a MessageContext for every message received while the agent is running.
+     * The stream ends when the abort signal fires or stop() is called.
+     *
+     * @example
+     * ```ts
+     * for await (const ctx of agent.streamAllMessages({ signal })) {
+     *   console.log(ctx.message.content);
+     * }
+     * ```
+     *
+     * @param opts - Options including optional AbortSignal
+     */
+    async *streamAllMessages(opts?: StreamAllMessagesOptions): AsyncGenerator<MessageContext> {
+        const queue: MessageContext[] = [];
+        let notify: (() => void) | null = null;
+        let stopped = false;
+
+        const push = (ctx: MessageContext) => {
+            queue.push(ctx);
+            const fn = notify;
+            notify = null;
+            fn?.();
+        };
+
+        const stop = () => {
+            stopped = true;
+            const fn = notify;
+            notify = null;
+            fn?.();
+        };
+
+        // Check if signal is already aborted before starting
+        if (opts?.signal?.aborted) return;
+
+        this.on('message', push);
+        opts?.signal?.addEventListener('abort', stop);
+
+        try {
+            while (!stopped) {
+                if (queue.length > 0) {
+                    yield queue.shift()!;
+                } else {
+                    await new Promise<void>((resolve) => {
+                        notify = resolve;
+                    });
+                }
+            }
+        } finally {
+            this.off('message', push);
+            opts?.signal?.removeEventListener('abort', stop);
+        }
     }
 
     // ─── Incoming message pipeline ─────────────────────────────────────────────
