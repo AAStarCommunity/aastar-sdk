@@ -58,6 +58,25 @@ export interface ChannelBridgeConfig {
    * call forceSettleAll() on graceful shutdown.
    */
   voucherStore?: VoucherStore;
+  /**
+   * CRIT-3: Optional offline voucher signature verifier.
+   * If provided, called before accepting a voucher. Should verify the EIP-712
+   * voucherSig matches the expected payer for (channelId, cumulativeAmount).
+   * Without this, a spam attacker can force on-chain submitVoucher() calls that
+   * waste gas (the chain rejects them, but the RPC call still costs money).
+   *
+   * @param channelId        - Channel identifier
+   * @param cumulativeAmount - Claimed cumulative amount in the voucher
+   * @param sig              - EIP-712 Schnorr/ECDSA signature over the voucher
+   * @param expectedPayer    - Payer address from on-chain channel state
+   * @returns true if the signature is valid
+   */
+  verifyVoucherSig?: (
+    channelId: string,
+    cumulativeAmount: bigint,
+    sig: string,
+    expectedPayer: `0x${string}`
+  ) => Promise<boolean>;
 }
 
 // ─── ChannelBridge ────────────────────────────────────────────────────────────
@@ -119,6 +138,21 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
     }
     if (state.status !== 'Open') {
       return { success: false, error: 'channel_not_open' };
+    }
+
+    // CRIT-3: Offline voucher signature verification (if verifier is configured).
+    // Prevents spam: without this, an attacker can send fake high-amount vouchers to
+    // force expensive on-chain submitVoucher() calls that fail after spending gas.
+    if (this.config.verifyVoucherSig) {
+      const valid = await this.config.verifyVoucherSig(
+        channelId,
+        cumulativeAmount,
+        voucherSig,
+        state.payer
+      );
+      if (!valid) {
+        return { success: false, error: 'invalid_voucher_sig' };
+      }
     }
 
     // Step 3: Monotonicity check — cumulativeAmount must strictly increase
