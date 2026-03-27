@@ -13,7 +13,10 @@ export * from './identity/AirAccountIdentity.js';
 export * from './relay/RelayPool.js';
 export * as crypto from './crypto/Nip44Crypto.js';
 export { NostrTransport } from './transport/NostrTransport.js';
-export { KIND_GIFT_WRAP, KIND_SEAL, KIND_RUMOR, KIND_METADATA, KIND_RELAY_LIST } from './transport/NostrTransport.js';
+export {
+    KIND_GIFT_WRAP, KIND_SEAL, KIND_RUMOR, KIND_METADATA, KIND_RELAY_LIST,
+    KIND_GROUP_META, KIND_GROUP_ADD, KIND_GROUP_REMOVE,
+} from './transport/NostrTransport.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type {
@@ -38,6 +41,9 @@ export type {
     ListConversationsOptions,
     GetMessagesOptions,
     StreamAllMessagesOptions,
+    // M6 Group Management
+    CreateGroupOptions,
+    GroupInfo,
 } from './types.js';
 
 // ─── M2 Bridge Layer ──────────────────────────────────────────────────────────

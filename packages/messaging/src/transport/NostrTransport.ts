@@ -27,6 +27,11 @@ export const KIND_RUMOR = 14;        // NIP-17 plaintext rumor (direct message r
 export const KIND_METADATA = 0;      // NIP-01 profile metadata
 export const KIND_RELAY_LIST = 10050; // NIP-65 relay list
 
+// NIP-29 Group Management event kinds
+export const KIND_GROUP_META = 9000;    // Group metadata (name, picture, description)
+export const KIND_GROUP_ADD = 9001;     // Add member(s) to group
+export const KIND_GROUP_REMOVE = 9002;  // Remove member(s) from group
+
 export interface SendDmOptions {
     senderPrivkeyHex: string;
     senderPubkeyHex: string;
@@ -42,6 +47,26 @@ export interface SendGroupMessageOptions {
     memberPubkeys: string[];
     content: string;
     replyToId?: string;
+}
+
+/** Options for group metadata creation (kind:9000) */
+export interface SendGroupMetaOptions {
+    senderPrivkeyHex: string;
+    groupId: string;
+    name?: string;
+    picture?: string;
+    description?: string;
+    about?: string;
+}
+
+/** Options for adding or removing a group member (kind:9001 / kind:9002) */
+export interface SendGroupMembershipOptions {
+    senderPrivkeyHex: string;
+    groupId: string;
+    /** Action: 9001 = add, 9002 = remove */
+    kind: typeof KIND_GROUP_ADD | typeof KIND_GROUP_REMOVE;
+    /** Pubkeys to add or remove */
+    memberPubkeys: string[];
 }
 
 /** Callback invoked when a new message arrives over Nostr */
@@ -159,6 +184,77 @@ export class NostrTransport {
 
         if (this.debug) {
             console.debug('[NostrTransport] group message sent, id:', event.id);
+        }
+
+        return event.id;
+    }
+
+    // ─── Group Management (NIP-29) ────────────────────────────────────────────
+
+    /**
+     * Publish group metadata (kind:9000).
+     * Creates or updates the group's name/picture/description on relay.
+     * Typically called once when creating a new group.
+     *
+     * @returns Nostr event id
+     */
+    async sendGroupMeta(opts: SendGroupMetaOptions): Promise<string> {
+        const { senderPrivkeyHex, groupId, name, picture, description, about } = opts;
+
+        const tags: string[][] = [['d', groupId]];
+        if (name) tags.push(['name', name]);
+        if (picture) tags.push(['picture', picture]);
+        if (description) tags.push(['description', description]);
+        if (about) tags.push(['about', about]);
+
+        const unsigned: EventTemplate = {
+            kind: KIND_GROUP_META,
+            content: '',
+            created_at: unixNow(),
+            tags,
+        };
+
+        const event = finalizeEvent(unsigned, hexToBytes(senderPrivkeyHex));
+        await this.pool.publish(event);
+
+        if (this.debug) {
+            console.debug('[NostrTransport] group meta sent, id:', event.id, 'groupId:', groupId);
+        }
+
+        return event.id;
+    }
+
+    /**
+     * Add or remove group members via NIP-29 management events.
+     *
+     * - kind:9001 (KIND_GROUP_ADD)    — add member(s) to the group
+     * - kind:9002 (KIND_GROUP_REMOVE) — remove member(s) from the group
+     *
+     * Each target pubkey gets its own 'p' tag per NIP-29 convention.
+     *
+     * @returns Nostr event id
+     */
+    async sendGroupMembership(opts: SendGroupMembershipOptions): Promise<string> {
+        const { senderPrivkeyHex, groupId, kind, memberPubkeys } = opts;
+
+        const tags: string[][] = [
+            ['h', groupId],
+            ...memberPubkeys.map((pk) => ['p', pk]),
+        ];
+
+        const unsigned: EventTemplate = {
+            kind,
+            content: '',
+            created_at: unixNow(),
+            tags,
+        };
+
+        const event = finalizeEvent(unsigned, hexToBytes(senderPrivkeyHex));
+        await this.pool.publish(event);
+
+        if (this.debug) {
+            const action = kind === KIND_GROUP_ADD ? 'add' : 'remove';
+            console.debug(`[NostrTransport] group ${action} sent, id:`, event.id, 'groupId:', groupId);
         }
 
         return event.id;
