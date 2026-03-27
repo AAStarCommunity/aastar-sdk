@@ -44,6 +44,12 @@ import { randomBytes } from 'node:crypto';
 import type { SporeEventBridge, SporeKind } from './payment/SporeEventBridge.js';
 import { CodecRegistry, type SporeCodec } from './codecs/SporeCodec.js';
 import { TextCodec } from './codecs/TextCodec.js';
+import {
+    SporeIdentityRegistry,
+    type IdentityProfile,
+    type LinkedDevice,
+    type LinkDeviceOptions,
+} from './identity/SporeIdentityRegistry.js';
 import { X402Bridge } from './payment/X402Bridge.js';
 import { ChannelBridge } from './payment/ChannelBridge.js';
 import { UserOpBridge } from './payment/UserOpBridge.js';
@@ -91,6 +97,9 @@ export class SporeAgent extends EventEmitter {
     /** M7: Registered content type codecs keyed by content type id string */
     private readonly codecRegistry = new CodecRegistry([new TextCodec()]);
 
+    /** M8: Identity registry for profile + multi-device operations */
+    private readonly identityRegistry: SporeIdentityRegistry;
+
     private constructor(
         identity: SporeIdentity,
         pool: RelayPool,
@@ -102,6 +111,7 @@ export class SporeAgent extends EventEmitter {
         this.pool = pool;
         this.transport = transport;
         this.config = config;
+        this.identityRegistry = new SporeIdentityRegistry(pool, config.debug ?? false);
     }
 
     // ─── Factory methods ───────────────────────────────────────────────────────
@@ -691,6 +701,128 @@ export class SporeAgent extends EventEmitter {
             members: [...conv.members],
             createdAt: conv.createdAt,
         };
+    }
+
+    // ─── M8: Identity Registry + Multi-Device ──────────────────────────────────
+
+    /**
+     * Publish this agent's NIP-01 profile metadata (kind:0).
+     *
+     * Includes the agent's Ethereum address in the "eth_address" field so that
+     * other users can discover the Nostr pubkey for a given ETH address.
+     *
+     * @param profile - Profile fields to publish (eth address is auto-included)
+     * @returns Nostr event id
+     *
+     * @example
+     * ```ts
+     * await agent.publishProfile({ name: 'Alice', about: 'Building on Spore' });
+     * ```
+     */
+    async publishProfile(profile: Omit<IdentityProfile, 'nostrPubkey' | 'ethAddress'>): Promise<string> {
+        return this.identityRegistry.publishProfile(this.identity.privateKeyHex, {
+            ...profile,
+            ethAddress: this.identity.address,
+        });
+    }
+
+    /**
+     * Fetch the identity profile for any Nostr pubkey.
+     *
+     * @param nostrPubkey - 64-char hex Nostr pubkey (default: self)
+     * @param timeoutMs   - Relay query timeout in ms (default: 5000)
+     * @returns IdentityProfile or null if not published
+     */
+    async fetchProfile(nostrPubkey?: string, timeoutMs = 5000): Promise<IdentityProfile | null> {
+        return this.identityRegistry.fetchProfile(nostrPubkey ?? this.identity.pubkey, timeoutMs);
+    }
+
+    /**
+     * Fetch identity profiles for multiple pubkeys in one relay query.
+     *
+     * @param nostrPubkeys - Array of 64-char hex pubkeys
+     * @param timeoutMs    - Relay query timeout in ms (default: 5000)
+     * @returns Map of nostrPubkey → IdentityProfile
+     */
+    async fetchProfiles(nostrPubkeys: string[], timeoutMs = 5000): Promise<Map<string, IdentityProfile>> {
+        return this.identityRegistry.fetchProfiles(nostrPubkeys, timeoutMs);
+    }
+
+    /**
+     * Link a device pubkey to this identity by publishing a device list (kind:10001).
+     *
+     * The device list is a replaceable event. Each call to linkDevice() fetches
+     * the current list, appends the new device (if not already present), and
+     * republishes the full list.
+     *
+     * @param devicePubkey - Nostr pubkey of the device to link
+     * @param opts         - Optional label for the device
+     * @returns Nostr event id of the updated device list
+     *
+     * @example
+     * ```ts
+     * await agent.linkDevice(devicePubkey, { label: 'iPhone 15' });
+     * ```
+     */
+    async linkDevice(devicePubkey: string, opts?: LinkDeviceOptions): Promise<string> {
+        // Fetch current list to avoid overwriting existing devices
+        const existing = await this.identityRegistry.fetchDeviceList(this.identity.pubkey);
+
+        // Idempotent: skip if already linked
+        if (existing.some((d) => d.pubkey === devicePubkey)) {
+            if (this.config.debug) {
+                console.debug('[SporeAgent] device already linked:', devicePubkey);
+            }
+            return '';
+        }
+
+        const updated: LinkedDevice[] = [
+            ...existing,
+            { pubkey: devicePubkey, label: opts?.label },
+        ];
+
+        return this.identityRegistry.publishDeviceList(this.identity.privateKeyHex, updated);
+    }
+
+    /**
+     * Remove a device from the linked device list.
+     *
+     * Fetches the current list, removes the device, and republishes.
+     * No-op if the device is not in the list.
+     *
+     * @param devicePubkey - Nostr pubkey of the device to unlink
+     * @returns Nostr event id (empty string if device was not found)
+     */
+    async unlinkDevice(devicePubkey: string): Promise<string> {
+        const existing = await this.identityRegistry.fetchDeviceList(this.identity.pubkey);
+        const filtered = existing.filter((d) => d.pubkey !== devicePubkey);
+
+        if (filtered.length === existing.length) {
+            return ''; // not in list, no-op
+        }
+
+        return this.identityRegistry.publishDeviceList(this.identity.privateKeyHex, filtered);
+    }
+
+    /**
+     * Fetch the list of devices linked to this identity.
+     *
+     * @param primaryPubkey - Primary pubkey to query (default: self)
+     * @param timeoutMs     - Relay query timeout in ms (default: 5000)
+     * @returns Array of LinkedDevice entries
+     */
+    async getLinkedDevices(primaryPubkey?: string, timeoutMs = 5000): Promise<LinkedDevice[]> {
+        return this.identityRegistry.fetchDeviceList(primaryPubkey ?? this.identity.pubkey, timeoutMs);
+    }
+
+    /**
+     * Check if a pubkey is a linked device of a given identity.
+     *
+     * @param primaryPubkey - Primary identity pubkey
+     * @param devicePubkey  - Device pubkey to verify
+     */
+    async isLinkedDevice(primaryPubkey: string, devicePubkey: string): Promise<boolean> {
+        return this.identityRegistry.isLinkedDevice(primaryPubkey, devicePubkey);
     }
 
     // ─── Incoming message pipeline ─────────────────────────────────────────────

@@ -93,6 +93,14 @@ export * from './events/SporeEventTypes.js';
 export { InMemoryNonceStore, InMemoryVoucherStore } from './payment/NonceStore.js';
 export type { NonceStore, VoucherStore, BestVoucher } from './payment/NonceStore.js';
 
+// ─── M8: Identity Registry + Multi-Device ────────────────────────────────────
+export { SporeIdentityRegistry, KIND_PROFILE, KIND_DEVICE_LIST } from './identity/SporeIdentityRegistry.js';
+export type {
+    IdentityProfile,
+    LinkedDevice,
+    LinkDeviceOptions,
+} from './identity/SporeIdentityRegistry.js';
+
 // ─── M7: Content Type Codecs ──────────────────────────────────────────────────
 
 // Codec framework
