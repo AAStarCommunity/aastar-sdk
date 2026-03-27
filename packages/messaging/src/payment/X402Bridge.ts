@@ -43,6 +43,11 @@ export interface X402BridgeConfig {
   /** Timeout for the on-chain settlement call in seconds (default: 60) */
   settlementTimeoutSeconds?: number;
   /**
+   * Maximum seconds into the future that validBefore may be set.
+   * Default: 86400 * 7 (7 days). Prevents commitments with multi-year expiry windows.
+   */
+  maxValidBeforeWindowSeconds?: number;
+  /**
    * Nonce store for replay protection.
    * Defaults to InMemoryNonceStore (state lost on restart).
    * In production, inject a persistent store (SQLite, Redis, etc.).
@@ -95,12 +100,20 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
 
     const from = tagMap['from']![0] as `0x${string}`;
     const to = tagMap['to']![0] as `0x${string}`;
-    const amount = BigInt(tagMap['amount']![0]);
     const nonce = tagMap['nonce']![0] as `0x${string}`;
-    const validBefore = BigInt(tagMap['valid_before']![0]);
     const tokenAddress = tagMap['asset']![0] as `0x${string}`;
     const chainId = Number(tagMap['chain']![0]);
     const sig = tagMap['sig']![0] as `0x${string}`;
+
+    // Wrap BigInt() — throws on non-numeric strings
+    let amount: bigint;
+    let validBefore: bigint;
+    try {
+      amount = BigInt(tagMap['amount']![0]);
+      validBefore = BigInt(tagMap['valid_before']![0]);
+    } catch {
+      return { success: false, error: 'missing_tags' };
+    }
 
     // Step 2: Policy checks
 
@@ -114,14 +127,19 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
       return { success: false, error: 'amount_exceeds_limit' };
     }
 
-    // Expiry check: valid_before must be in the future
-    if (validBefore < BigInt(Math.floor(Date.now() / 1000))) {
+    // Expiry check: valid_before must be in the future but within the allowed window
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    if (validBefore <= nowSec) {
       return { success: false, error: 'expired' };
     }
+    const maxWindow = BigInt(this.config.maxValidBeforeWindowSeconds ?? 86400 * 7);
+    if (validBefore > nowSec + maxWindow) {
+      return { success: false, error: 'valid_before_too_far' };
+    }
 
-    // Step 3: Nonce idempotency check
+    // Step 3: Atomic nonce claim — prevents TOCTOU replay under concurrent async stores
     const nonceKey = `${chainId}:${nonce}`;
-    if (await this.nonceStore.has(nonceKey)) {
+    if (!(await this.nonceStore.claim(nonceKey))) {
       return { success: false, error: 'nonce_already_used' };
     }
 
@@ -138,9 +156,7 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
         sig,
       });
 
-      // Step 5: Mark nonce as used only after successful settlement
-      await this.nonceStore.add(nonceKey);
-
+      // Nonce already claimed atomically in step 3 before settlement
       return {
         success: true,
         txHash,
