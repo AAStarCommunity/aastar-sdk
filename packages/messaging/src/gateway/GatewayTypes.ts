@@ -64,23 +64,35 @@ export interface MessagesResponse {
 
 // ─── Stream ───────────────────────────────────────────────────────────────────
 
+/** Incoming DM received by the agent */
+export interface StreamMessageEvent {
+  type: 'message';
+  /** Sender's Nostr hex pubkey */
+  from: string;
+  /** Plaintext content */
+  content: string;
+  /** Nostr event ID */
+  id: string;
+  /** Unix timestamp (seconds) */
+  sentAt: number;
+}
+
+/** Sent once when the SSE connection is established */
+export interface StreamConnectedEvent {
+  type: 'connected';
+}
+
+/** Sent when a non-fatal error occurs on the stream */
+export interface StreamErrorEvent {
+  type: 'error';
+  error: string;
+}
+
 /**
  * SSE event data for GET /api/v1/stream.
  * Each Server-Sent Event carries a JSON-encoded StreamEvent.
  */
-export interface StreamEvent {
-  type: 'message' | 'connected' | 'error';
-  /** Sender pubkey (present when type = "message") */
-  from?: string;
-  /** Message content (present when type = "message") */
-  content?: string;
-  /** Nostr event ID (present when type = "message") */
-  id?: string;
-  /** Unix timestamp (present when type = "message") */
-  sentAt?: number;
-  /** Error detail (present when type = "error") */
-  error?: string;
-}
+export type StreamEvent = StreamMessageEvent | StreamConnectedEvent | StreamErrorEvent;
 
 // ─── Error ────────────────────────────────────────────────────────────────────
 

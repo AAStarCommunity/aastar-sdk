@@ -161,7 +161,8 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
     try {
       state = await this.config.channelClient.getChannelState(channelId);
     } catch (err) {
-      return { success: false, error: `channel_fetch_failed: ${err}` };
+      console.error('[ChannelBridge] getChannelState failed:', err);
+      return { success: false, error: 'channel_fetch_failed' };
     }
     if (state.status !== 'Open') {
       return { success: false, error: 'channel_not_open' };
@@ -171,7 +172,7 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
     // Prevents spam: an attacker sending fake high-amount vouchers would force
     // expensive on-chain submitVoucher() calls that fail after spending gas.
     // skipVoucherSigVerification is only for testing.
-    if ('verifyVoucherSig' in this.config && this.config.verifyVoucherSig) {
+    if (this.config.verifyVoucherSig) {
       const valid = await this.config.verifyVoucherSig(
         channelId,
         cumulativeAmount,
@@ -212,7 +213,8 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
           replyContent: { settled: true, txHash },
         };
       } catch (err) {
-        return { success: false, error: String(err) };
+        console.error('[ChannelBridge] submitVoucher failed:', err);
+        return { success: false, error: 'settlement_failed' };
       }
     }
 

@@ -106,8 +106,9 @@ export class RateLimiter {
   private readonly maxKeys: number;
   private readonly store: RateLimitStore;
 
-  // Insertion-order key tracking for maxKeys eviction
-  private readonly keyOrder: string[] = [];
+  // Insertion-order key tracking for maxKeys eviction.
+  // Set preserves insertion order and provides O(1) has() / add() / delete().
+  private readonly keySet = new Set<string>();
 
   constructor(config: RateLimiterConfig = {}) {
     this.ratePerSecond = config.ratePerSecond ?? 2;
@@ -126,15 +127,16 @@ export class RateLimiter {
   async allow(key: string): Promise<boolean> {
     const now = Date.now();
 
-    // Track key insertion order for maxKeys eviction
-    if (!this.keyOrder.includes(key)) {
-      this.keyOrder.push(key);
-      // Evict oldest key when limit is reached
-      if (this.keyOrder.length > this.maxKeys) {
-        const evicted = this.keyOrder.shift();
-        if (evicted) {
-          await this.store.setTokens(evicted, this.burstLimit);
-          await this.store.setLastRefill(evicted, 0);
+    // Track key insertion order for maxKeys eviction (O(1) has/add/delete via Set)
+    if (!this.keySet.has(key)) {
+      this.keySet.add(key);
+      // Evict the oldest key (first in insertion order) when limit is reached
+      if (this.keySet.size > this.maxKeys) {
+        const oldest = this.keySet.values().next().value as string | undefined;
+        if (oldest) {
+          this.keySet.delete(oldest);
+          await this.store.setTokens(oldest, this.burstLimit);
+          await this.store.setLastRefill(oldest, 0);
         }
       }
     }

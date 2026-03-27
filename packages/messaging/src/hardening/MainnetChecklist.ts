@@ -68,14 +68,6 @@ export interface MainnetChecklistInput {
 
 // ─── Checks ───────────────────────────────────────────────────────────────────
 
-function pass(id: string, name: string, severity: CheckSeverity, message: string): CheckResult {
-  return { id, name, severity, passed: true, message };
-}
-
-function fail(id: string, name: string, severity: CheckSeverity, message: string): CheckResult {
-  return { id, name, severity, passed: false, message };
-}
-
 function check(
   id: string,
   name: string,
@@ -84,9 +76,7 @@ function check(
   failMessage: string,
   passMessage: string
 ): CheckResult {
-  return condition
-    ? pass(id, name, severity, passMessage)
-    : fail(id, name, severity, failMessage);
+  return { id, name, severity, passed: condition, message: condition ? passMessage : failMessage };
 }
 
 // ─── runMainnetChecklist ──────────────────────────────────────────────────────
