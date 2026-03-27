@@ -132,9 +132,11 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       }
     }
 
-    // Step 2: Replay protection — triggerNonce is consumed after first use
+    // Step 2: Atomic replay protection — claim nonce before processing
+    // claim() is atomic: prevents TOCTOU under concurrent async stores.
+    // For InMemoryNonceStore this is safe (Node.js single-threaded).
     const nonceKey = `${chainId}:${triggerNonce}`;
-    if (await this.nonceStore.has(nonceKey)) {
+    if (!(await this.nonceStore.claim(nonceKey))) {
       return { success: false, error: 'trigger_nonce_replayed' };
     }
 
@@ -193,9 +195,7 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
         entryPoint
       );
 
-      // Step 6: Consume triggerNonce only after successful submission
-      await this.nonceStore.add(nonceKey);
-
+      // Nonce already claimed atomically in step 2 before submission
       return {
         success: true,
         txHash: userOpHash,

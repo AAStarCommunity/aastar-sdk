@@ -19,6 +19,18 @@ export interface NonceStore {
   has(key: string): boolean | Promise<boolean>;
   /** Mark this nonce key as consumed. */
   add(key: string): void | Promise<void>;
+  /**
+   * Atomic check-and-set: mark key as consumed and return whether it was already consumed.
+   * Returns true if the key was NEW (successfully claimed), false if already consumed.
+   *
+   * Async stores (Redis, DB) MUST implement this as a single atomic operation
+   * (e.g. Redis SET NX, SQL INSERT OR IGNORE) to prevent TOCTOU replay attacks
+   * under concurrent requests.
+   *
+   * The default implementation delegates to has()+add(), which is safe for
+   * InMemoryNonceStore (Node.js single-threaded) but not for async stores.
+   */
+  claim(key: string): boolean | Promise<boolean>;
 }
 
 /** Default in-memory implementation (state lost on restart). */
@@ -26,6 +38,12 @@ export class InMemoryNonceStore implements NonceStore {
   private readonly set = new Set<string>();
   has(key: string): boolean { return this.set.has(key); }
   add(key: string): void { this.set.add(key); }
+  // Safe: Node.js single-threaded — no interleaving between has() and add()
+  claim(key: string): boolean {
+    if (this.set.has(key)) return false;
+    this.set.add(key);
+    return true;
+  }
 }
 
 // ─── Voucher Store ────────────────────────────────────────────────────────────
