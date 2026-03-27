@@ -2,12 +2,15 @@ import { Resend } from 'resend';
 import type { CreateEmailOptions } from 'resend';
 
 /**
- * 邮件发送选项
+ * Options for sending a single email or one item in a batch.
  */
 export interface MailOptions {
-  /** 发件人地址。
-   *  - 使用自定义域名（如 `hi@aastar.io`）前，需在 Resend 后台完成域名验证（添加 SPF/DKIM/DMARC DNS 记录）。
-   *  - 未验证域名时只能使用 Resend 测试地址 `onboarding@resend.dev`，且只能发往账号绑定邮箱。
+  /**
+   * Sender address.
+   * - Custom domains (e.g. `hi@aastar.io`) must be verified in the Resend dashboard
+   *   (SPF/DKIM/DMARC DNS records) before use.
+   * - Without domain verification, use `onboarding@resend.dev` (test only, sends to
+   *   the account's own email address).
    */
   from: string;
   to: string | string[];
@@ -21,18 +24,22 @@ export interface MailOptions {
   headers?: Record<string, string>;
   tags?: Array<{ name: string; value: string }>;
   scheduledAt?: string;
-  /** agent 重试场景：设置后相同 key 的重复请求不会重复发送 */
+  /**
+   * Idempotency key for agent retry scenarios.
+   * When set, duplicate requests with the same key will not send the email again.
+   * Note: only supported by `send()`, not `sendBatch()`.
+   */
   idempotencyKey?: string;
 }
 
 /**
- * ResendMailer — 基于 Resend API 的邮件工具类
+ * ResendMailer — email utility built on the Resend API.
  *
- * 集成在 `@aastar/sdk` 的 utils 模块下，开发者填入 API Key 后即可直接发送邮件，无需额外配置。
+ * Exported from `@aastar/sdk` utils so agents can send emails without extra installs.
  *
  * ---
  *
- * ## 快速开始
+ * ## Quick start
  *
  * ```ts
  * import { ResendMailer } from '@aastar/sdk';
@@ -40,7 +47,7 @@ export interface MailOptions {
  * const mailer = new ResendMailer('re_your_api_key');
  *
  * await mailer.send({
- *   from: 'onboarding@resend.dev', // 测试用，无需域名验证
+ *   from: 'onboarding@resend.dev', // no domain verification needed for testing
  *   to: 'user@example.com',
  *   subject: 'Hello from AAstar',
  *   html: '<h1>Welcome!</h1>',
@@ -49,23 +56,20 @@ export interface MailOptions {
  *
  * ---
  *
- * ## 使用自定义域名发件（推荐生产环境）
+ * ## Custom sender domain (recommended for production)
  *
- * 例如用 `hi@aastar.io` 作为发件人：
+ * Example: send as `hi@aastar.io`
  *
- * **Step 1** — 在 Resend 后台添加并验证域名
- * 1. 登录 https://resend.com → Domains → Add Domain → 填入 `aastar.io`
- * 2. 按提示在 DNS 服务商处添加以下记录：
- *    - SPF：`TXT @ "v=spf1 include:amazonses.com ~all"`
- *    - DKIM：`TXT resend._domainkey.<你的 DKIM 值>`
- *    - DMARC（可选但推荐）：`TXT _dmarc "v=DMARC1; p=none;"`
- * 3. 回到 Resend 控制台点击 Verify，DNS 生效后状态变为 Verified ✓
+ * **Step 1** — Add and verify the domain in Resend
+ * 1. Go to https://resend.com → Domains → Add Domain → enter `aastar.io`
+ * 2. Add the DNS records shown (SPF, DKIM, optional DMARC)
+ * 3. Click Verify in the Resend dashboard; status becomes Verified once DNS propagates
  *
- * **Step 2** — 代码中直接使用
+ * **Step 2** — Use the verified address in code
  *
  * ```ts
  * await mailer.send({
- *   from: 'hi@aastar.io',          // ✅ 验证后可用任意该域名下的地址
+ *   from: 'hi@aastar.io',
  *   to: 'user@example.com',
  *   subject: 'Welcome to AAstar',
  *   html: '<h1>Hello!</h1>',
@@ -74,7 +78,7 @@ export interface MailOptions {
  *
  * ---
  *
- * ## 批量发送
+ * ## Batch sending
  *
  * ```ts
  * const results = await mailer.sendBatch([
@@ -86,21 +90,19 @@ export interface MailOptions {
  *
  * ---
  *
- * ## 从环境变量读取 Key（服务端/CI 推荐）
+ * ## Load API key from environment (recommended for servers/CI)
  *
  * ```ts
- * // 设置环境变量 RESEND_API_KEY=re_xxx
+ * // Set RESEND_API_KEY=re_xxx in environment
  * const mailer = ResendMailer.fromEnv();
  * ```
  *
  * ---
  *
- * ## 作为 AI Agent Tool 使用
+ * ## Use as an AI agent tool
  *
- * `ResendMailer` 已随 `@aastar/sdk` 导出，agent 无需额外安装依赖。
- * 设置 `RESEND_API_KEY` 环境变量后直接调用即可。
- *
- * **Claude / LangChain 等框架包成 tool 的最简写法：**
+ * `ResendMailer` is exported from `@aastar/sdk` — no extra dependencies needed.
+ * Set `RESEND_API_KEY` in the environment and call directly.
  *
  * ```ts
  * import { ResendMailer } from '@aastar/sdk';
@@ -113,8 +115,7 @@ export interface MailOptions {
  * };
  * ```
  *
- * **幂等 Key（agent 重试场景必备）：**
- * 设置 `idempotencyKey` 后，agent 重试时不会重复发送同一封邮件。
+ * **Idempotency key (recommended for agent retry scenarios):**
  *
  * ```ts
  * await mailer.send({
@@ -122,7 +123,7 @@ export interface MailOptions {
  *   to: 'user@example.com',
  *   subject: 'Your transaction receipt',
  *   html: '...',
- *   idempotencyKey: `tx-receipt-${txHash}`, // 用 txHash 或任意唯一 ID
+ *   idempotencyKey: `tx-receipt-${txHash}`,
  * });
  * ```
  */
@@ -130,20 +131,20 @@ export class ResendMailer {
   private client: Resend;
 
   /**
-   * @param apiKey - Resend API Key（以 `re_` 开头），从 https://resend.com/api-keys 获取
+   * @param apiKey - Resend API key. Obtain from https://resend.com/api-keys
    */
   constructor(apiKey: string) {
-    if (!apiKey || !apiKey.startsWith('re_')) {
+    if (!apiKey) {
       throw new Error(
-        'Invalid Resend API key. Keys should start with "re_". Get yours at https://resend.com/api-keys',
+        'Resend API key is required. Get yours at https://resend.com/api-keys',
       );
     }
     this.client = new Resend(apiKey);
   }
 
   /**
-   * 发送单封邮件
-   * @returns `{ id }` — Resend 返回的邮件 ID，可用于查询发送状态
+   * Send a single email.
+   * @returns `{ id }` — Resend email ID, usable for delivery status queries
    */
   async send(options: MailOptions): Promise<{ id: string }> {
     const { idempotencyKey, ...emailOptions } = options;
@@ -154,21 +155,25 @@ export class ResendMailer {
     if (error) {
       throw new Error(`Failed to send email: ${error.message}`);
     }
-    return { id: data!.id };
+    if (!data?.id) {
+      throw new Error('Resend returned no email ID');
+    }
+    return { id: data.id };
   }
 
   /**
-   * 批量发送邮件（最多 100 封/次）
-   * @returns 每封邮件的 `{ id }` 列表，顺序与入参一致
+   * Send a batch of emails (max 100 per request).
+   * Note: `idempotencyKey` is not supported by the Resend batch API and will be ignored.
+   * @returns List of `{ id }` objects in the same order as the input
    */
   async sendBatch(emails: MailOptions[]): Promise<Array<{ id: string }>> {
     if (emails.length === 0) return [];
     if (emails.length > 100) {
       throw new Error('Batch send supports at most 100 emails per request.');
     }
-    const { data, error } = await this.client.emails.sendBatch(
-      emails as CreateEmailOptions[],
-    );
+    // Strip idempotencyKey — not supported by the Resend batch endpoint
+    const payload = emails.map(({ idempotencyKey: _, ...rest }) => rest) as CreateEmailOptions[];
+    const { data, error } = await this.client.emails.sendBatch(payload);
     if (error) {
       throw new Error(`Failed to send batch emails: ${error.message}`);
     }
@@ -176,14 +181,15 @@ export class ResendMailer {
   }
 
   /**
-   * 从环境变量 `RESEND_API_KEY` 创建实例（适合服务端 / CI 场景）
-   * @throws 若环境变量未设置则抛出错误
+   * Create a ResendMailer from the `RESEND_API_KEY` environment variable.
+   * Recommended for server-side and CI usage.
+   * @throws if the environment variable is not set
    */
   static fromEnv(): ResendMailer {
     const key = process.env.RESEND_API_KEY;
     if (!key) {
       throw new Error(
-        'RESEND_API_KEY environment variable is not set. Set it or pass the key directly: new ResendMailer("re_...")',
+        'RESEND_API_KEY environment variable is not set. Pass the key directly: new ResendMailer("re_...")',
       );
     }
     return new ResendMailer(key);
