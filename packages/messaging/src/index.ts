@@ -90,7 +90,7 @@ export type {
 export * from './events/SporeEventTypes.js';
 
 // ─── Persistence Interfaces (H2/H3) ───────────────────────────────────────────
-export { InMemoryNonceStore, InMemoryVoucherStore } from './payment/NonceStore.js';
+export { InMemoryNonceStore, FileNonceStore, InMemoryVoucherStore } from './payment/NonceStore.js';
 export type { NonceStore, VoucherStore, BestVoucher } from './payment/NonceStore.js';
 
 // ─── M8: Identity Registry + Multi-Device ────────────────────────────────────

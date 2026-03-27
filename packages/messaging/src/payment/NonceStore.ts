@@ -1,8 +1,14 @@
 // NonceStore — injectable interface for nonce/state persistence.
 //
-// By default, X402Bridge and UserOpBridge use InMemoryNonceStore,
-// which loses state on process restart. In production, inject a
-// persistent implementation (SQLite, Redis, etc.).
+// PRODUCTION WARNING: X402Bridge and UserOpBridge default to InMemoryNonceStore,
+// which loses all consumed nonces on process restart, enabling replay attacks.
+// Inject a persistent NonceStore in production:
+//   - FileNonceStore (exported here) — simple JSON-file persistence, suitable for
+//     single-process deployments where the file path is on durable storage.
+//   - Implement NonceStore yourself using Redis SETNX or SQL INSERT OR IGNORE for
+//     multi-process or high-throughput deployments.
+
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 // ─── Nonce Store ──────────────────────────────────────────────────────────────
 
@@ -33,7 +39,7 @@ export interface NonceStore {
   claim(key: string): boolean | Promise<boolean>;
 }
 
-/** Default in-memory implementation (state lost on restart). */
+/** Default in-memory implementation (state lost on restart — NOT safe for production). */
 export class InMemoryNonceStore implements NonceStore {
   private readonly set = new Set<string>();
   has(key: string): boolean { return this.set.has(key); }
@@ -42,6 +48,49 @@ export class InMemoryNonceStore implements NonceStore {
   claim(key: string): boolean {
     if (this.set.has(key)) return false;
     this.set.add(key);
+    return true;
+  }
+}
+
+/**
+ * File-backed nonce store — persists consumed nonces to a JSON file.
+ *
+ * Suitable for single-process production deployments where the file path is on
+ * durable storage (e.g. mounted volume, local SSD). On startup, previously
+ * consumed nonces are reloaded, preventing replay attacks across restarts.
+ *
+ * Limitations:
+ *   - Synchronous file I/O on every claim() call — not suitable for high throughput.
+ *   - Single-process only: multiple processes writing to the same file will corrupt state.
+ *     For multi-process deployments, implement NonceStore with Redis SETNX or SQL.
+ *   - File grows unbounded; prune old nonces periodically if needed.
+ *
+ * @param filePath - Absolute path to the JSON persistence file (created if absent).
+ */
+export class FileNonceStore implements NonceStore {
+  private readonly store: Set<string>;
+
+  constructor(private readonly filePath: string) {
+    if (existsSync(filePath)) {
+      const raw = readFileSync(filePath, 'utf-8');
+      const data = JSON.parse(raw) as string[];
+      this.store = new Set(data);
+    } else {
+      this.store = new Set();
+    }
+  }
+
+  has(key: string): boolean { return this.store.has(key); }
+
+  add(key: string): void {
+    this.store.add(key);
+    writeFileSync(this.filePath, JSON.stringify([...this.store]));
+  }
+
+  // Synchronous, safe within a single Node.js process (event loop is single-threaded)
+  claim(key: string): boolean {
+    if (this.store.has(key)) return false;
+    this.add(key);
     return true;
   }
 }

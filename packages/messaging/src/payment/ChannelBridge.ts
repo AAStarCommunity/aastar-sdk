@@ -41,8 +41,8 @@ export interface ChannelClientLike {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-/** Configuration for ChannelBridge */
-export interface ChannelBridgeConfig {
+/** Shared configuration fields for ChannelBridge */
+interface ChannelBridgeConfigBase {
   /** Injected channel client for on-chain settlement */
   channelClient: ChannelClientLike;
   /**
@@ -59,26 +59,52 @@ export interface ChannelBridgeConfig {
    * call forceSettleAll() on graceful shutdown.
    */
   voucherStore?: VoucherStore;
-  /**
-   * CRIT-3: Optional offline voucher signature verifier.
-   * If provided, called before accepting a voucher. Should verify the EIP-712
-   * voucherSig matches the expected payer for (channelId, cumulativeAmount).
-   * Without this, a spam attacker can force on-chain submitVoucher() calls that
-   * waste gas (the chain rejects them, but the RPC call still costs money).
-   *
-   * @param channelId        - Channel identifier
-   * @param cumulativeAmount - Claimed cumulative amount in the voucher
-   * @param sig              - EIP-712 Schnorr/ECDSA signature over the voucher
-   * @param expectedPayer    - Payer address from on-chain channel state
-   * @returns true if the signature is valid
-   */
-  verifyVoucherSig?: (
-    channelId: string,
-    cumulativeAmount: bigint,
-    sig: string,
-    expectedPayer: `0x${string}`
-  ) => Promise<boolean>;
 }
+
+/**
+ * Configuration for ChannelBridge.
+ *
+ * You MUST supply one of:
+ *   - `verifyVoucherSig` — an offline EIP-712 verifier that rejects invalid vouchers before
+ *     any on-chain call is made. Without this, a spam attacker can force submitVoucher() calls
+ *     that burn gas even when the chain rejects them.
+ *   - `skipVoucherSigVerification: true` — explicit opt-out (testing only).
+ *
+ * Production note: implement verifyVoucherSig using ecrecover on the EIP-712 hash of
+ * (channelId, cumulativeAmount) signed by the payer's Ethereum key.
+ */
+export type ChannelBridgeConfig = ChannelBridgeConfigBase &
+  (
+    | {
+        /**
+         * Offline EIP-712 voucher signature verifier.
+         * Called before accepting a voucher. Rejects invalid signatures early,
+         * preventing gas-wasting submitVoucher() calls to the chain.
+         *
+         * @param channelId        - Channel identifier
+         * @param cumulativeAmount - Claimed cumulative amount in the voucher
+         * @param sig              - EIP-712 signature over the voucher
+         * @param expectedPayer    - Payer address from on-chain channel state
+         * @returns true if the signature is valid
+         */
+        verifyVoucherSig: (
+          channelId: string,
+          cumulativeAmount: bigint,
+          sig: string,
+          expectedPayer: `0x${string}`
+        ) => Promise<boolean>;
+        skipVoucherSigVerification?: never;
+      }
+    | {
+        verifyVoucherSig?: never;
+        /**
+         * Explicitly opt out of voucher signature verification.
+         * ONLY for testing — a production node without sig verification can be
+         * forced to waste gas by any attacker who knows the channel ID.
+         */
+        skipVoucherSigVerification: true;
+      }
+  );
 
 // ─── ChannelBridge ────────────────────────────────────────────────────────────
 
@@ -141,10 +167,11 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
       return { success: false, error: 'channel_not_open' };
     }
 
-    // CRIT-3: Offline voucher signature verification (if verifier is configured).
-    // Prevents spam: without this, an attacker can send fake high-amount vouchers to
-    // force expensive on-chain submitVoucher() calls that fail after spending gas.
-    if (this.config.verifyVoucherSig) {
+    // Offline voucher signature verification.
+    // Prevents spam: an attacker sending fake high-amount vouchers would force
+    // expensive on-chain submitVoucher() calls that fail after spending gas.
+    // skipVoucherSigVerification is only for testing.
+    if ('verifyVoucherSig' in this.config && this.config.verifyVoucherSig) {
       const valid = await this.config.verifyVoucherSig(
         channelId,
         cumulativeAmount,
