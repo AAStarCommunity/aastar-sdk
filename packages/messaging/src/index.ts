@@ -130,6 +130,17 @@ export type { ReplyContent } from './codecs/ReplyCodec.js';
 export { RemoteAttachmentCodec, ContentTypeRemoteAttachment } from './codecs/RemoteAttachmentCodec.js';
 export type { RemoteAttachmentContent } from './codecs/RemoteAttachmentCodec.js';
 
+// ─── M11: Mainnet Hardening ───────────────────────────────────────────────────
+export { RateLimiter, InMemoryRateLimitStore } from './hardening/RateLimiter.js';
+export type { RateLimiterConfig, RateLimitStore } from './hardening/RateLimiter.js';
+export { runMainnetChecklist } from './hardening/MainnetChecklist.js';
+export type {
+    MainnetChecklistInput,
+    ChecklistReport,
+    CheckResult,
+    CheckSeverity,
+} from './hardening/MainnetChecklist.js';
+
 // ─── M10: HTTP/SSE Gateway ────────────────────────────────────────────────────
 export { SporeHttpGateway } from './gateway/SporeHttpGateway.js';
 export type { SporeHttpGatewayConfig } from './gateway/SporeHttpGateway.js';
