@@ -30,6 +30,16 @@ export interface SporeRelayConfig {
    * Default: 20. Set to 0 to disable rate limiting.
    */
   maxEventsPerSecond?: number;
+  /**
+   * Maximum number of REQ filters per message. Default: 10.
+   * Prevents CPU/DB DoS from clients submitting thousands of filters.
+   */
+  maxFiltersPerReq?: number;
+  /**
+   * Maximum number of concurrent subscriptions per client. Default: 20.
+   * Prevents memory DoS from clients opening unlimited subscriptions.
+   */
+  maxSubscriptionsPerClient?: number;
   /** Injectable on-chain settlement client for SporeRelayOperator. */
   settlementClient?: SettlementClientLike;
   /** Enable verbose debug logging */
@@ -50,7 +60,7 @@ export class SporeRelayNode {
   private subscriptions = new Map<WebSocket, SubMap>();
   /** Per-client rate limit counters (only used when maxEventsPerSecond > 0) */
   private rateState = new Map<WebSocket, RateState>();
-  private config: Required<Pick<SporeRelayConfig, 'port' | 'host' | 'store' | 'maxEventSize' | 'maxEventsPerSecond' | 'debug'>> &
+  private config: Required<Pick<SporeRelayConfig, 'port' | 'host' | 'store' | 'maxEventSize' | 'maxEventsPerSecond' | 'maxFiltersPerReq' | 'maxSubscriptionsPerClient' | 'debug'>> &
     Pick<SporeRelayConfig, 'paymentValidator' | 'requirePaymentForKinds'>;
   readonly operator: SporeRelayOperator;
 
@@ -63,6 +73,8 @@ export class SporeRelayNode {
       requirePaymentForKinds: rawConfig.requirePaymentForKinds,
       maxEventSize: rawConfig.maxEventSize ?? 65536,
       maxEventsPerSecond: rawConfig.maxEventsPerSecond ?? 20,
+      maxFiltersPerReq: rawConfig.maxFiltersPerReq ?? 10,
+      maxSubscriptionsPerClient: rawConfig.maxSubscriptionsPerClient ?? 20,
       debug: rawConfig.debug ?? false,
     };
 
@@ -85,7 +97,9 @@ export class SporeRelayNode {
         try {
           this.handleMessage(ws, data.toString());
         } catch (err) {
-          this.sendNotice(ws, `internal error: ${String(err)}`);
+          // Log full error server-side; send generic message to client to prevent info leak
+          this.log(`handleMessage error: ${String(err)}`);
+          this.sendNotice(ws, 'internal error');
         }
       });
 
@@ -121,7 +135,7 @@ export class SporeRelayNode {
   // ─── NIP-01 message dispatcher ────────────────────────────────────────────
 
   private handleMessage(ws: WebSocket, raw: string): void {
-    if (raw.length > this.config.maxEventSize * 2) {
+    if (raw.length > this.config.maxEventSize + 1024) {
       this.sendNotice(ws, 'message too large');
       return;
     }
@@ -176,13 +190,9 @@ export class SporeRelayNode {
       }
     }
 
+    // Full structural validation before trusting any field
+    if (!this.validateEventShape(ws, rawEvent)) return;
     const event = rawEvent as NostrEvent;
-
-    // Basic shape check
-    if (!event || typeof event.id !== 'string' || typeof event.pubkey !== 'string') {
-      this.sendOk(ws, event?.id ?? '', false, 'invalid: malformed event');
-      return;
-    }
 
     // Size check
     const eventJson = JSON.stringify(event);
@@ -229,13 +239,25 @@ export class SporeRelayNode {
   // ─── REQ handler ──────────────────────────────────────────────────────────
 
   private handleReq(ws: WebSocket, subId: string, filters: EventFilter[]): void {
-    if (typeof subId !== 'string' || subId.length === 0) {
+    if (typeof subId !== 'string' || subId.length === 0 || subId.length > 128) {
       this.sendNotice(ws, 'invalid subscription id');
       return;
     }
 
-    // Register subscription
+    // Cap filter count per REQ to prevent CPU/DB DoS
+    if (filters.length > this.config.maxFiltersPerReq) {
+      this.sendNotice(ws, `too many filters: max ${this.config.maxFiltersPerReq}`);
+      return;
+    }
+
+    // Cap concurrent subscriptions per client to prevent memory DoS
     const subMap = this.subscriptions.get(ws) ?? new Map<string, EventFilter[]>();
+    if (!subMap.has(subId) && subMap.size >= this.config.maxSubscriptionsPerClient) {
+      this.sendNotice(ws, `subscription limit reached: max ${this.config.maxSubscriptionsPerClient}`);
+      return;
+    }
+
+    // Register subscription
     subMap.set(subId, filters);
     this.subscriptions.set(ws, subMap);
 
@@ -290,6 +312,50 @@ export class SporeRelayNode {
     if (filter['#p']?.length) {
       const pSet = new Set(filter['#p']);
       if (!event.tags.some(t => t[0] === 'p' && pSet.has(t[1]))) return false;
+    }
+    return true;
+  }
+
+  // ─── Full structural validation ────────────────────────────────────────────
+
+  /**
+   * Validate the full shape of a raw (unknown) event object before trusting any field.
+   * Sends an OK rejection and returns false on any structural violation.
+   */
+  private validateEventShape(ws: WebSocket, raw: unknown): boolean {
+    if (!raw || typeof raw !== 'object') {
+      this.sendOk(ws, '', false, 'invalid: malformed event');
+      return false;
+    }
+    const e = raw as Record<string, unknown>;
+
+    if (typeof e['id'] !== 'string' || e['id'].length !== 64) {
+      this.sendOk(ws, '', false, 'invalid: malformed event id');
+      return false;
+    }
+    if (typeof e['pubkey'] !== 'string' || e['pubkey'].length !== 64) {
+      this.sendOk(ws, e['id'] as string, false, 'invalid: malformed pubkey');
+      return false;
+    }
+    if (typeof e['kind'] !== 'number' || !Number.isInteger(e['kind']) || e['kind'] < 0) {
+      this.sendOk(ws, e['id'] as string, false, 'invalid: malformed kind');
+      return false;
+    }
+    if (typeof e['created_at'] !== 'number' || !Number.isInteger(e['created_at'])) {
+      this.sendOk(ws, e['id'] as string, false, 'invalid: malformed created_at');
+      return false;
+    }
+    if (!Array.isArray(e['tags'])) {
+      this.sendOk(ws, e['id'] as string, false, 'invalid: tags must be array');
+      return false;
+    }
+    if (typeof e['content'] !== 'string') {
+      this.sendOk(ws, e['id'] as string, false, 'invalid: content must be string');
+      return false;
+    }
+    if (typeof e['sig'] !== 'string' || e['sig'].length !== 128) {
+      this.sendOk(ws, e['id'] as string, false, 'invalid: malformed sig');
+      return false;
     }
     return true;
   }

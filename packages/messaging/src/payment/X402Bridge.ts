@@ -62,6 +62,7 @@ export type X402RejectReason =
   | 'amount_exceeds_limit'
   | 'nonce_already_used'
   | 'expired'
+  | 'valid_before_too_far'
   | 'payer_not_allowed'
   | 'invalid_signature'
   | 'chain_mismatch'
