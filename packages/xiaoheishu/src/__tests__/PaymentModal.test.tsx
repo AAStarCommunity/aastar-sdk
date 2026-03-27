@@ -35,7 +35,6 @@ const NOTE: XiaoHeiNote = {
   createdAt: '2025-01-01T00:00:00Z',
 };
 
-const SENDER: XiaoHeiAuthor = { did: 'did:plc:bob', handle: 'bob.test' };
 const USDC = '0xUSDC';
 const PRIVKEY = 'aa'.repeat(32);
 
@@ -51,7 +50,7 @@ describe('PaymentModal', () => {
   });
 
   it('renders preset amount buttons', () => {
-    render(<PaymentModal note={NOTE} sender={SENDER} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
+    render(<PaymentModal note={NOTE} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
     expect(screen.getByTestId('preset-1')).toBeDefined();
     expect(screen.getByTestId('preset-5')).toBeDefined();
     expect(screen.getByTestId('preset-10')).toBeDefined();
@@ -59,13 +58,13 @@ describe('PaymentModal', () => {
   });
 
   it('shows author name in dialog', () => {
-    render(<PaymentModal note={NOTE} sender={SENDER} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
+    render(<PaymentModal note={NOTE} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
     expect(screen.getByRole('dialog').textContent).toContain('Alice');
   });
 
   it('calls onClose when X clicked', () => {
     const onClose = vi.fn();
-    render(<PaymentModal note={NOTE} sender={SENDER} usdcAddress={USDC} onClose={onClose} />, { wrapper });
+    render(<PaymentModal note={NOTE} usdcAddress={USDC} onClose={onClose} />, { wrapper });
     fireEvent.click(screen.getByTestId('modal-close'));
     expect(onClose).toHaveBeenCalledOnce();
   });
@@ -73,7 +72,7 @@ describe('PaymentModal', () => {
   it('sends tip and shows success state', async () => {
     const onSuccess = vi.fn();
     render(
-      <PaymentModal note={NOTE} sender={SENDER} usdcAddress={USDC} onClose={vi.fn()} onSuccess={onSuccess} />,
+      <PaymentModal note={NOTE} usdcAddress={USDC} onClose={vi.fn()} onSuccess={onSuccess} />,
       { wrapper },
     );
     await waitFor(() => expect(screen.getByTestId('confirm-btn')).toBeDefined());
@@ -84,7 +83,7 @@ describe('PaymentModal', () => {
   });
 
   it('encodes correct USDC amount for preset 5', async () => {
-    render(<PaymentModal note={NOTE} sender={SENDER} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
+    render(<PaymentModal note={NOTE} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
     await waitFor(() => expect(screen.getByTestId('preset-5')).toBeDefined());
 
     fireEvent.click(screen.getByTestId('preset-5'));
@@ -101,13 +100,13 @@ describe('PaymentModal', () => {
       author: { did: 'did:plc:x', handle: 'x' },
       tipAddress: undefined,
     };
-    render(<PaymentModal note={noteNoAddr} sender={SENDER} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
+    render(<PaymentModal note={noteNoAddr} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
     expect(screen.getByTestId('no-tip-address')).toBeDefined();
   });
 
   it('shows error state when tip fails', async () => {
     mockAgent.sendDm.mockRejectedValueOnce(new Error('wallet rejected'));
-    render(<PaymentModal note={NOTE} sender={SENDER} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
+    render(<PaymentModal note={NOTE} usdcAddress={USDC} onClose={vi.fn()} />, { wrapper });
     await waitFor(() => expect(screen.getByTestId('confirm-btn')).toBeDefined());
 
     fireEvent.click(screen.getByTestId('confirm-btn'));

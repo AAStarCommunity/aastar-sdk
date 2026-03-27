@@ -28,6 +28,19 @@ export interface UseGatewayStreamResult {
  * );
  * ```
  */
+/**
+ * Validate that a gateway URL uses an allowed protocol (http or https).
+ * Prevents SSRF / open-redirect via arbitrary protocol schemes.
+ */
+function isAllowedGatewayUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function useGatewayStream(
   gatewayUrl: string,
   token: string,
@@ -41,7 +54,13 @@ export function useGatewayStream(
   useEffect(() => {
     if (!gatewayUrl || !token) return;
 
-    // EventSource doesn't support custom headers — pass token as query param
+    if (!isAllowedGatewayUrl(gatewayUrl)) {
+      setError(new Error(`Invalid gateway URL: must use http or https protocol`));
+      return;
+    }
+
+    // EventSource doesn't support custom headers — pass token as query param.
+    // Note: The token will be visible in server logs and browser network tab.
     const url = `${gatewayUrl}/api/v1/stream?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
 

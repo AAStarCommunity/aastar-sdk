@@ -48,6 +48,34 @@ export function FeedList({
       ? items
       : items.filter((i) => i.note.category === selectedCategory);
 
+  function renderFeedContent() {
+    if (loading && items.length === 0) {
+      return (
+        <div data-testid="feed-loading" role="status" aria-label="Loading notes">
+          Loading…
+        </div>
+      );
+    }
+    if (visible.length === 0) {
+      return <div data-testid="feed-empty">暂时没有笔记</div>;
+    }
+    return (
+      <div data-testid="feed-grid">
+        {visible.map((item) => (
+          <NoteCard
+            key={item.note.uri ?? item.note.cid ?? item.note.title}
+            item={item}
+            onLike={onLike}
+            onSave={onSave}
+            onTip={onTip}
+            onDm={onDm}
+            onClick={onNoteClick}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <section data-testid="feed-list">
       {/* Category tabs */}
@@ -64,27 +92,7 @@ export function FeedList({
       </nav>
 
       {/* Notes grid */}
-      {loading && items.length === 0 ? (
-        <div data-testid="feed-loading" role="status" aria-label="Loading notes">
-          Loading…
-        </div>
-      ) : visible.length === 0 ? (
-        <div data-testid="feed-empty">暂时没有笔记</div>
-      ) : (
-        <div data-testid="feed-grid">
-          {visible.map((item) => (
-            <NoteCard
-              key={item.note.uri ?? item.note.cid ?? item.note.title}
-              item={item}
-              onLike={onLike}
-              onSave={onSave}
-              onTip={onTip}
-              onDm={onDm}
-              onClick={onNoteClick}
-            />
-          ))}
-        </div>
-      )}
+      {renderFeedContent()}
 
       {/* Load more */}
       {hasMore && !loading && (
