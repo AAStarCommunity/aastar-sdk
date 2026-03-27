@@ -101,6 +101,20 @@ export type {
     LinkDeviceOptions,
 } from './identity/SporeIdentityRegistry.js';
 
+// ─── M9: MLS Key Agreement ────────────────────────────────────────────────────
+export {
+    SporeKeyAgreement,
+    KIND_KEY_PACKAGE,
+    KIND_MLS_WELCOME,
+    KIND_MLS_GROUP_MESSAGE,
+    SPORE_MLS_WELCOME_PREFIX,
+    SPORE_MLS_CIPHER,
+} from './keyagreement/SporeKeyAgreement.js';
+export type {
+    MlsGroupState,
+    MlsWelcomePayload,
+} from './types.js';
+
 // ─── M7: Content Type Codecs ──────────────────────────────────────────────────
 
 // Codec framework

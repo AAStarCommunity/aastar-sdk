@@ -207,6 +207,40 @@ export interface GroupInfo {
     createdAt: number;
 }
 
+// ─── M9: MLS Key Agreement ────────────────────────────────────────────────────
+
+/**
+ * Runtime state for an active MLS group.
+ *
+ * Must be persisted by the application; SporeKeyAgreement is stateless.
+ * epochKey is sensitive — keep in memory; never serialise to disk unencrypted.
+ */
+export interface MlsGroupState {
+    /** Unique group identifier (32-byte hex) */
+    groupId: string;
+    /** Current epoch number (0 at creation, incremented on each ratchet) */
+    epoch: number;
+    /** 32-byte symmetric key for the current epoch */
+    epochKey: Uint8Array;
+    /** Nostr pubkeys of all current group members */
+    members: string[];
+}
+
+/**
+ * Welcome payload carried inside a NIP-17 DM to a new group member.
+ *
+ * epochKeyHex is the shared group key — it must be NIP-44 encrypted to the
+ * recipient before being sent (the DM transport handles this automatically).
+ */
+export interface MlsWelcomePayload {
+    type: 'spore-mls-welcome';
+    groupId: string;
+    epoch: number;
+    epochKeyHex: string;
+    members: string[];
+    cipher: string;
+}
+
 // ─── NIP-17 Gift Wrap ─────────────────────────────────────────────────────────
 
 /** Intermediate sealed event (kind:13) before gift wrapping */
