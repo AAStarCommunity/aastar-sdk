@@ -12,15 +12,7 @@ import { getPublicKey } from 'nostr-tools/pure';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3';
 import type { SporeIdentity, PrivateKeyHex } from '../types.js';
-
-/** Convert a hex string to Uint8Array (no 0x prefix expected) */
-function hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
-}
+import { hexToBytes } from '../utils/hex.js';
 
 /**
  * Normalise a private key to the 32-byte hex string (no 0x prefix).

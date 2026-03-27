@@ -464,20 +464,26 @@ describe('UserOpBridge', () => {
   });
 
   it('selector not in allowlist → rejected (prompt injection defense)', async () => {
-    const targetContract = '0xselfaddress';
+    // Target is at callData bytes 16-35; inner selector at bytes 68-71.
+    // Layout: outerSelector(4) + pad(12) + target(20) + value(32) + innerSelector(4)
+    const targetContract = '0x1111111111111111111111111111111111111111';
+    const callDataBlockedSelector =
+      '0xb61d27f6' +                                              // outer selector
+      '000000000000000000000000' + '1111111111111111111111111111111111111111' + // target
+      '0000000000000000000000000000000000000000000000000000000000000000' + // value
+      '12345678';                                                  // inner selector (NOT allowed)
     const bridge = new UserOpBridge({
       bundlerClient: mockBundler,
       authMode: 'open',
       selfAddress: '0xselfaddress',
       allowedSelectors: new Map([
-        [targetContract, ['0xdeadbeef']], // only this selector allowed
+        [targetContract, ['0xdeadbeef']], // only deadbeef allowed, not 12345678
       ]),
     });
 
-    // callData starts with 0x12345678 which is NOT in the allowlist
     const event = makeUserOpEvent({
       sender: '0xselfaddress',
-      callData: '0x12345678abcdef',
+      callData: callDataBlockedSelector,
     });
     const result = await bridge.handle(event);
 
@@ -487,19 +493,24 @@ describe('UserOpBridge', () => {
   });
 
   it('selector in allowlist → submitted', async () => {
-    const targetContract = '0xselfaddress';
+    const targetContract = '0x1111111111111111111111111111111111111111';
+    const callDataAllowedSelector =
+      '0xb61d27f6' +
+      '000000000000000000000000' + '1111111111111111111111111111111111111111' +
+      '0000000000000000000000000000000000000000000000000000000000000000' +
+      'deadbeef';                                                  // inner selector IS allowed
     const bridge = new UserOpBridge({
       bundlerClient: mockBundler,
       authMode: 'open',
       selfAddress: '0xselfaddress',
       allowedSelectors: new Map([
-        [targetContract, ['0x12345678']], // 4-byte selector prefix
+        [targetContract, ['0xdeadbeef']],
       ]),
     });
 
     const event = makeUserOpEvent({
       sender: '0xselfaddress',
-      callData: '0x12345678abcdef', // starts with allowed selector
+      callData: callDataAllowedSelector,
     });
     const result = await bridge.handle(event);
 
@@ -569,19 +580,41 @@ describe('UserOpBridge', () => {
   });
 
   it('contract not in allowedContracts → rejected', async () => {
+    // target at callData[16:36] = 0x2222...2222 which is NOT in allowedContracts
+    const callDataBlockedTarget =
+      '0xb61d27f6' +
+      '000000000000000000000000' + '2222222222222222222222222222222222222222' +
+      '0000000000000000000000000000000000000000000000000000000000000000' +
+      'deadbeef';
     const bridge = new UserOpBridge({
       bundlerClient: mockBundler,
       authMode: 'open',
       selfAddress: '0xselfaddress',
-      allowedContracts: new Set(['0xapprovedcontract']),
+      allowedContracts: new Set(['0x3333333333333333333333333333333333333333']),
     });
 
-    // sender = '0xselfaddress' which is NOT in allowedContracts
-    const event = makeUserOpEvent({ sender: '0xselfaddress' });
+    const event = makeUserOpEvent({
+      sender: '0xselfaddress',
+      callData: callDataBlockedTarget,
+    });
     const result = await bridge.handle(event);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('contract_not_allowed');
     expect(mockBundler.sendUserOperation).not.toHaveBeenCalled();
+  });
+
+  it('malformed callData → rejected when allowedContracts or allowedSelectors set', async () => {
+    const bridge = new UserOpBridge({
+      bundlerClient: mockBundler,
+      authMode: 'open',
+      allowedContracts: new Set(['0x1111111111111111111111111111111111111111']),
+    });
+
+    const event = makeUserOpEvent({ callData: '0x12345678' }); // only 4 bytes
+    const result = await bridge.handle(event);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('malformed_calldata');
   });
 });

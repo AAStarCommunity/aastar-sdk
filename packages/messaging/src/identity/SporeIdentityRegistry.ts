@@ -32,6 +32,7 @@ import {
     type EventTemplate,
 } from 'nostr-tools';
 import type { RelayPool } from '../relay/RelayPool.js';
+import { hexToBytes } from '../utils/hex.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ function parseProfile(event: NostrEvent): IdentityProfile | null {
         if (typeof json['name'] === 'string') profile.name = json['name'];
         if (typeof json['about'] === 'string') profile.about = json['about'];
         if (typeof json['picture'] === 'string') profile.picture = json['picture'];
-        if (typeof json['eth_address'] === 'string') {
+        if (typeof json['eth_address'] === 'string' && /^0x[0-9a-fA-F]{40}$/.test(json['eth_address'])) {
             profile.ethAddress = json['eth_address'] as `0x${string}`;
         }
         return profile;
@@ -292,11 +293,3 @@ function parseDeviceList(event: NostrEvent): LinkedDevice[] {
         }));
 }
 
-function hexToBytes(hex: string): Uint8Array {
-    const h = hex.startsWith('0x') ? hex.slice(2) : hex;
-    const result = new Uint8Array(Math.ceil(h.length / 2));
-    for (let i = 0; i < result.length; i++) {
-        result[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
-    }
-    return result;
-}

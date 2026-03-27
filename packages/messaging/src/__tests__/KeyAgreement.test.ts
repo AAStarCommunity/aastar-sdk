@@ -20,7 +20,7 @@ vi.mock('../identity/AirAccountIdentity.js', () => ({
     createIdentity: vi.fn().mockResolvedValue({
         pubkey: 'self'.padEnd(64, '0'),
         address: '0xSelf' + 'a'.repeat(35),
-        privateKeyHex: 'priv'.padEnd(64, '0'),
+        privateKeyHex: 'abcd'.padEnd(64, '0'),
     }),
     createIdentityFromEnv: vi.fn(),
 }));
@@ -76,6 +76,12 @@ vi.mock('nostr-tools', async (importOriginal) => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Compare two Uint8Arrays without relying on Buffer.equals() to avoid TS strict typing issues. */
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((byte, i) => byte === b[i]);
+}
+
 function makeKeyPackageEvent(pubkey: string, createdAt = 1000) {
     return {
         id: 'kp-' + pubkey.slice(0, 8),
@@ -103,7 +109,7 @@ describe('SporeKeyAgreement: publishKeyPackage()', () => {
     it('publishes a kind:443 event with expected tags', async () => {
         const ka = new SporeKeyAgreement();
         const pool = makeMockPool();
-        const eventId = await ka.publishKeyPackage('priv'.padEnd(64, '0'), pool);
+        const eventId = await ka.publishKeyPackage('abcd'.padEnd(64, '0'), pool);
 
         expect(eventId).toContain('mock-event-id-443');
         expect(mockPublish).toHaveBeenCalledWith(
@@ -184,7 +190,7 @@ describe('SporeKeyAgreement: createGroup()', () => {
         const s1 = ka.createGroup('g1', []);
         const s2 = ka.createGroup('g2', []);
         // Two independent groups should have different epoch keys
-        expect(Buffer.from(s1.epochKey).equals(Buffer.from(s2.epochKey))).toBe(false);
+        expect(bytesEqual(s1.epochKey, s2.epochKey)).toBe(false);
     });
 });
 
@@ -195,7 +201,7 @@ describe('SporeKeyAgreement: ratchetEpoch()', () => {
         const next = ka.ratchetEpoch(state);
 
         expect(next.epoch).toBe(1);
-        expect(Buffer.from(next.epochKey).equals(Buffer.from(state.epochKey))).toBe(false);
+        expect(bytesEqual(next.epochKey, state.epochKey)).toBe(false);
         expect(next.groupId).toBe(state.groupId);
         expect(next.members).toEqual(state.members);
     });
@@ -206,7 +212,7 @@ describe('SporeKeyAgreement: ratchetEpoch()', () => {
         const next1 = ka.ratchetEpoch(state);
         const next2 = ka.ratchetEpoch(state);
 
-        expect(Buffer.from(next1.epochKey).equals(Buffer.from(next2.epochKey))).toBe(true);
+        expect(bytesEqual(next1.epochKey, next2.epochKey)).toBe(true);
     });
 
     it('produces a chain: epoch 0 → 1 → 2 → all different', () => {
@@ -216,8 +222,8 @@ describe('SporeKeyAgreement: ratchetEpoch()', () => {
         const s2 = ka.ratchetEpoch(s1);
 
         expect(s2.epoch).toBe(2);
-        expect(Buffer.from(s0.epochKey).equals(Buffer.from(s2.epochKey))).toBe(false);
-        expect(Buffer.from(s1.epochKey).equals(Buffer.from(s2.epochKey))).toBe(false);
+        expect(bytesEqual(s0.epochKey, s2.epochKey)).toBe(false);
+        expect(bytesEqual(s1.epochKey, s2.epochKey)).toBe(false);
     });
 });
 
@@ -262,7 +268,7 @@ describe('SporeKeyAgreement: Welcome encode/decode', () => {
 
         expect(recovered.groupId).toBe(original.groupId);
         expect(recovered.epoch).toBe(original.epoch);
-        expect(Buffer.from(recovered.epochKey).equals(Buffer.from(original.epochKey))).toBe(true);
+        expect(bytesEqual(recovered.epochKey, original.epochKey)).toBe(true);
         expect(recovered.members).toEqual(original.members);
     });
 });
@@ -303,7 +309,7 @@ describe('SporeKeyAgreement: encryptGroupMessage / decryptGroupMessage', () => {
 describe('SporeKeyAgreement: buildGroupMessageEvent()', () => {
     it('builds a kind:445 event with correct tags', () => {
         const ka = new SporeKeyAgreement();
-        const ev = ka.buildGroupMessageEvent('priv'.padEnd(64, '0'), 'group1', 3, 'encrypted-ct');
+        const ev = ka.buildGroupMessageEvent('abcd'.padEnd(64, '0'), 'group1', 3, 'encrypted-ct');
 
         expect(ev.kind).toBe(445);
         expect(ev.content).toBe('encrypted-ct');
@@ -321,7 +327,7 @@ describe('SporeAgent M9: publishKeyPackage()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -342,7 +348,7 @@ describe('SporeAgent M9: fetchKeyPackages()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -370,7 +376,7 @@ describe('SporeAgent M9: createMlsGroup()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -422,7 +428,7 @@ describe('SporeAgent M9: sendMlsMessage()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -441,13 +447,13 @@ describe('SporeAgent M9: sendMlsMessage()', () => {
     it('returns same state when ratchet=false', async () => {
         const { updatedState } = await agent.sendMlsMessage(groupState, 'msg', false);
         expect(updatedState.epoch).toBe(groupState.epoch);
-        expect(Buffer.from(updatedState.epochKey).equals(Buffer.from(groupState.epochKey))).toBe(true);
+        expect(bytesEqual(updatedState.epochKey, groupState.epochKey)).toBe(true);
     });
 
     it('returns ratcheted state when ratchet=true', async () => {
         const { updatedState } = await agent.sendMlsMessage(groupState, 'msg', true);
         expect(updatedState.epoch).toBe(1);
-        expect(Buffer.from(updatedState.epochKey).equals(Buffer.from(groupState.epochKey))).toBe(false);
+        expect(bytesEqual(updatedState.epochKey, groupState.epochKey)).toBe(false);
     });
 });
 
@@ -458,7 +464,7 @@ describe('SporeAgent M9: decryptMlsMessage()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -493,7 +499,7 @@ describe('SporeAgent M9: processWelcome()', () => {
         vi.clearAllMocks();
         mockFetchEventsImpl = async () => [];
         agent = await SporeAgent.create({
-            privateKeyHex: 'priv'.padEnd(64, '0'),
+            privateKeyHex: 'abcd'.padEnd(64, '0'),
             relays: ['ws://localhost:9999'],
             env: 'test',
         });
@@ -509,7 +515,7 @@ describe('SporeAgent M9: processWelcome()', () => {
         expect(result).not.toBeNull();
         expect(result!.groupId).toBe('g-welcome');
         expect(result!.epoch).toBe(0);
-        expect(Buffer.from(result!.epochKey).equals(Buffer.from(original.epochKey))).toBe(true);
+        expect(bytesEqual(result!.epochKey, original.epochKey)).toBe(true);
     });
 
     it('returns null for non-Welcome DM content', () => {
@@ -528,7 +534,7 @@ describe('SporeAgent M9: processWelcome()', () => {
         const receiverState = agent.processWelcome(dmContent);
         expect(receiverState).not.toBeNull();
         expect(receiverState!.groupId).toBe(senderState.groupId);
-        expect(Buffer.from(receiverState!.epochKey).equals(Buffer.from(senderState.epochKey))).toBe(true);
+        expect(bytesEqual(receiverState!.epochKey, senderState.epochKey)).toBe(true);
         expect(receiverState!.members).toEqual(senderState.members);
     });
 });
