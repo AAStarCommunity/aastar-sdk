@@ -9,6 +9,8 @@
 // the x-only Nostr pubkey as a 64-char hex string.
 
 import { getPublicKey } from 'nostr-tools/pure';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { keccak_256 } from '@noble/hashes/sha3';
 import type { SporeIdentity, PrivateKeyHex } from '../types.js';
 
 /** Convert a hex string to Uint8Array (no 0x prefix expected) */
@@ -44,35 +46,15 @@ function normalisePrivateKey(key: PrivateKeyHex): string {
  *
  * @noble/curves is a direct runtime dependency of nostr-tools v2.
  */
-async function deriveEthAddress(privKeyHex: string): Promise<`0x${string}`> {
-    // @noble/curves is a direct dependency of nostr-tools — always present at runtime
-    const { secp256k1 } = await import('@noble/curves/secp256k1');
-
+function deriveEthAddress(privKeyHex: string): `0x${string}` {
     // getPublicKey(privKey, compressed=false) → 65 bytes: 04 || x || y
     const privKeyBytes = hexToBytes(privKeyHex);
     const pubKeyBytes = secp256k1.getPublicKey(privKeyBytes, false);
-    const pubKeyXY = pubKeyBytes.slice(1); // 64 bytes: x || y
+    const pubKeyXY = pubKeyBytes.slice(1); // 64 bytes: x || y (drop 0x04 prefix)
 
-    // Compute keccak256. @noble/hashes/sha3 is a transitive dep of @noble/curves.
-    // Wrapped in try/catch so tests with mocked imports still work.
-    let hash: Uint8Array;
-    try {
-        // @ts-expect-error — @noble/hashes is a transitive runtime dep of nostr-tools/curves;
-        // TypeScript cannot resolve it statically, but it is available at runtime.
-        const { keccak_256 } = await import('@noble/hashes/sha3');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        hash = (keccak_256 as any)(pubKeyXY);
-    } catch {
-        // Fallback for environments where @noble/hashes path is not resolvable
-        // (e.g. mocked tests). XOR-fold the pubkey bytes as a deterministic placeholder.
-        // NOT a real keccak — replace with direct dep in Phase 2 if needed.
-        hash = new Uint8Array(32);
-        for (let i = 0; i < pubKeyXY.length; i++) {
-            hash[i % 32] ^= pubKeyXY[i];
-        }
-    }
-
-    const addressBytes = hash.slice(12); // last 20 bytes → Ethereum address
+    // keccak256(x || y), take last 20 bytes → Ethereum address
+    const hash = keccak_256(pubKeyXY);
+    const addressBytes = hash.slice(12);
     const hexAddr = Array.from(addressBytes)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
@@ -91,7 +73,7 @@ export async function createIdentity(privateKeyHex: PrivateKeyHex): Promise<Spor
     // getPublicKey takes Uint8Array and returns the x-only Nostr pubkey (64-char hex)
     const pubkey = getPublicKey(hexToBytes(normalisedKey));
 
-    const address = await deriveEthAddress(normalisedKey);
+    const address = deriveEthAddress(normalisedKey);
 
     return {
         pubkey,

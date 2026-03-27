@@ -296,21 +296,21 @@ describe('SporeRelayNode', () => {
     }
   }, 15000);
 
-  // ── Test 10: validateEventId + validateEventSig ────────────────────────────
+  // ── Test 10: validateEventId + validateEventSig (private — accessed via cast) ──
   it('validateEventId returns true for correctly formed event', () => {
     const event = makeEvent(sk);
-    expect(relay.validateEventId(event)).toBe(true);
+    expect((relay as unknown as { validateEventId: (e: typeof event) => boolean }).validateEventId(event)).toBe(true);
   });
 
   it('validateEventSig returns true for correctly signed event', () => {
     const event = makeEvent(sk);
-    expect(relay.validateEventSig(event)).toBe(true);
+    expect((relay as unknown as { validateEventSig: (e: typeof event) => boolean }).validateEventSig(event)).toBe(true);
   });
 
   it('validateEventId returns false for tampered content', () => {
     const event = makeEvent(sk);
     const tampered = { ...event, content: 'tampered content' };
-    expect(relay.validateEventId(tampered)).toBe(false);
+    expect((relay as unknown as { validateEventId: (e: typeof tampered) => boolean }).validateEventId(tampered)).toBe(false);
   });
 });
 

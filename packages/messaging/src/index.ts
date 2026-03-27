@@ -78,3 +78,7 @@ export type {
 
 // M2 event type system
 export * from './events/SporeEventTypes.js';
+
+// ─── Persistence Interfaces (H2/H3) ───────────────────────────────────────────
+export { InMemoryNonceStore, InMemoryVoucherStore } from './payment/NonceStore.js';
+export type { NonceStore, VoucherStore, BestVoucher } from './payment/NonceStore.js';

@@ -30,12 +30,15 @@ interface StrfryOutput {
  * - For kind:23405 events: validate the payment tags directly on the event
  * - For other events: accept (or check for bundled payment tags if strictMode is set)
  *
- * @param validator - PaymentValidator instance (configures fee, recipient, chain)
+ * @param validator  - PaymentValidator instance (configures fee, recipient, chain)
  * @param strictMode - If true, ALL events must carry a valid payment commitment
+ * @param onClose    - Called when stdin closes. Defaults to `process.exit(0)`.
+ *                     Override in tests to prevent killing the test process.
  */
 export function runStrfryPlugin(
   validator: PaymentValidator,
-  strictMode: boolean = false
+  strictMode: boolean = false,
+  onClose: () => void = () => process.exit(0)
 ): void {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -61,10 +64,7 @@ export function runStrfryPlugin(
     process.stdout.write(JSON.stringify(output) + '\n');
   });
 
-  rl.on('close', () => {
-    // stdin closed — plugin lifecycle ends
-    process.exit(0);
-  });
+  rl.on('close', onClose);
 }
 
 function evaluateEvent(

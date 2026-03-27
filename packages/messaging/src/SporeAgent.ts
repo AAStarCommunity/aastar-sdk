@@ -132,6 +132,8 @@ export class SporeAgent extends EventEmitter {
         const pool = new RelayPool({
             relays,
             debug: config.debug ?? false,
+            // Allow ws:// in dev/test environments; production requires wss://
+            allowInsecure: config.env === 'dev' || config.env === 'test',
         });
 
         const transport = new NostrTransport(pool, config.debug ?? false);
