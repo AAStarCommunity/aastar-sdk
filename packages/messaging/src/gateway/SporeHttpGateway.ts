@@ -158,6 +158,8 @@ export class SporeHttpGateway {
     // Auth check (before any response)
     if (!this.checkAuth(req, res)) return;
 
+    // The http:// scheme here is only used for URL parsing (hostname + path);
+    // the actual transport is determined by whether this.server uses TLS.
     const url = new URL(req.url ?? '/', `http://${this.config.host}`);
     const path = url.pathname;
     const method = req.method ?? 'GET';
@@ -280,7 +282,8 @@ export class SporeHttpGateway {
     // Clamp limit to [1, 200]; treat NaN or negative as default 20
     const limit = Math.max(1, Math.min(parseInt(limitStr, 10) || 20, 200));
 
-    // Derive the conversation ID from the peer pubkey (same format as SporeAgent internals)
+    // Conversation ID: sorted pubkey pair joined by ':', matching SporeAgent's internal format.
+    // If SporeAgent changes its convention, this must be updated in sync.
     const convId = [this.config.agent.pubkey, peer].sort().join(':');
     const messages = await this.config.agent.getMessages(convId, { limit });
 
@@ -394,23 +397,19 @@ export class SporeHttpGateway {
 
 /**
  * Constant-time string equality using Node.js crypto.timingSafeEqual.
- * Prevents timing oracle attacks on bearer token comparison.
- * Returns false immediately (but after equal-length padding work) if lengths differ.
+ * Pads both inputs to equal length before comparison, eliminating any length timing oracle.
+ * Returns false when lengths differ (checked separately after the constant-time comparison).
  */
 function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const aBytes = enc.encode(a);
   const bBytes = enc.encode(b);
-
-  if (aBytes.length !== bBytes.length) {
-    // Perform dummy work proportional to the shorter length to avoid a length oracle,
-    // then always return false — lengths cannot be equal.
-    const minLen = Math.min(aBytes.length, bBytes.length);
-    if (minLen > 0) {
-      cryptoTimingSafeEqual(aBytes.subarray(0, minLen), bBytes.subarray(0, minLen));
-    }
-    return false;
-  }
-
-  return cryptoTimingSafeEqual(aBytes, bBytes);
+  // Pad to the same length so crypto.timingSafeEqual always runs over equal-size buffers.
+  // The final && check rejects inputs that differ in length.
+  const len = Math.max(aBytes.length, bBytes.length, 1);
+  const aBuf = new Uint8Array(len);
+  const bBuf = new Uint8Array(len);
+  aBuf.set(aBytes);
+  bBuf.set(bBytes);
+  return cryptoTimingSafeEqual(aBuf, bBuf) && aBytes.length === bBytes.length;
 }

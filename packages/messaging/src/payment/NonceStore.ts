@@ -72,9 +72,17 @@ export class FileNonceStore implements NonceStore {
 
   constructor(private readonly filePath: string) {
     if (existsSync(filePath)) {
-      const raw = readFileSync(filePath, 'utf-8');
-      const data = JSON.parse(raw) as string[];
-      this.store = new Set(data);
+      try {
+        const raw = readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw) as string[];
+        this.store = new Set(Array.isArray(data) ? data : []);
+      } catch (err) {
+        // Corrupted or unreadable file — start with an empty store and log a warning.
+        // Existing nonces are lost, which may allow replay attacks for prior sessions.
+        // Operators should investigate and restore from backup before accepting payments.
+        console.warn(`[FileNonceStore] Failed to load ${filePath}, starting empty:`, err);
+        this.store = new Set();
+      }
     } else {
       this.store = new Set();
     }
