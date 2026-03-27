@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AAStar SDK is a TypeScript monorepo for the Mycelium Network — a comprehensive Account Abstraction (ERC-4337) infrastructure SDK. It provides gasless transaction support, community economies, reputation-based credit systems, and role-based access through SuperPaymaster contracts on Optimism and Ethereum testnets.
 
-Current version: **v0.16.23** | Package manager: **pnpm only** | Runtime: **Node.js with ESM**
+Current version: **v0.18.0** | Package manager: **pnpm only** | Runtime: **Node.js with ESM**
 
 ## Common Commands
 
