@@ -54,7 +54,8 @@ export interface SporeTransport {
    */
   subscribeToGroups(
     groupIds: string[],
-    onMessage: (msg: SporeMessage, conv: SporeConversation) => void
+    onMessage: (msg: SporeMessage, conv: SporeConversation) => void,
+    opts?: { signal?: AbortSignal }
   ): () => void;
 
   /**

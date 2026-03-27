@@ -285,6 +285,17 @@ describe('WakuTransport', () => {
       expect(conv.type).toBe('group');
       expect(msg.senderPubkey).toBe(senderPubkey);
     });
+
+    it('respects AbortSignal for group subscriptions', () => {
+      const controller = new AbortController();
+      const onMessage = vi.fn();
+      transport.subscribeToGroups(['grpAbort'], onMessage, { signal: controller.signal });
+
+      const handler = node._handlers.get('/spore/1/group-grpAbort/proto')![0]!;
+      controller.abort();
+      handler(makeEnvelope(senderPubkey, 'after abort', 'grpAbort'));
+      expect(onMessage).not.toHaveBeenCalled();
+    });
   });
 
   // ─── Query history ────────────────────────────────────────────────────────
@@ -311,11 +322,30 @@ describe('WakuTransport', () => {
       expect(msgs[0]!.senderPubkey).toBe('f'.repeat(64));
     });
 
+    it('uses group topic when isGroup option is set', async () => {
+      node.query = vi.fn().mockResolvedValue([]);
+      await transport.queryMessages('grpX', { isGroup: true });
+      expect((node.query as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe('/spore/1/group-grpX/proto');
+    });
+
+    it('uses DM topic by default (no isGroup)', async () => {
+      node.query = vi.fn().mockResolvedValue([]);
+      await transport.queryMessages(recipientPubkey);
+      expect((node.query as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe(`/spore/1/dm-${recipientPubkey}/proto`);
+    });
+
     it('skips malformed payloads gracefully', async () => {
       node.query = vi.fn().mockResolvedValue([
         new TextEncoder().encode('not-json'),
         makeEnvelope('f'.repeat(64), 'valid msg'),
       ]);
+      const msgs = await transport.queryMessages('convAbc');
+      expect(msgs).toHaveLength(1);
+    });
+
+    it('skips envelopes missing required fields', async () => {
+      const bad = new TextEncoder().encode(JSON.stringify({ v: 1, from: 'abc' })); // missing ciphertext + ts
+      node.query = vi.fn().mockResolvedValue([bad, makeEnvelope('f'.repeat(64), 'good')]);
       const msgs = await transport.queryMessages('convAbc');
       expect(msgs).toHaveLength(1);
     });

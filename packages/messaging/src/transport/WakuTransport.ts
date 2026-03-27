@@ -15,6 +15,14 @@
 //   DM:    /spore/1/dm-{recipientPubkeyHex}/proto
 //   Group: /spore/1/group-{groupId}/proto
 //
+// Security notes:
+//   - The `from` field in WakuEnvelope is NOT cryptographically verified at the transport
+//     layer. It is set by the sender and could be forged by a malicious Waku peer.
+//     SporeAgent MUST verify that NIP-44 decryption succeeds using the claimed sender
+//     pubkey before trusting `senderPubkey` on any received SporeMessage.
+//   - There is no replay protection at the transport layer. Callers that require
+//     exactly-once delivery should maintain a seen-message set keyed on message ID.
+//
 // Production deployment requires @waku/sdk (a peer dependency, not bundled here).
 // This file provides the adapter; the caller injects a WakuNode instance.
 
@@ -89,12 +97,18 @@ function groupTopic(prefix: string, groupId: string): string {
  * JSON-encoded and then UTF-8 encoded into the Waku payload bytes.
  *
  * For DMs: content is NIP-44 encrypted with the recipient's conversation key.
- * For groups: each member receives the message on their own DM topic (fan-out).
+ * For groups: each member receives an individually encrypted copy on the shared group
+ * topic. Note: this exposes the sender pubkey to passive Waku observers on that topic.
+ * True metadata privacy requires sending to each member's individual DM topic instead.
  */
 interface WakuEnvelope {
   /** Protocol version (always 1) */
   v: 1;
-  /** Sender's Nostr hex pubkey */
+  /**
+   * Sender's Nostr hex pubkey.
+   * WARNING: not cryptographically authenticated at transport layer.
+   * Verify via NIP-44 decryption in SporeAgent before trusting.
+   */
   from: string;
   /** NIP-44 encrypted ciphertext (base64) */
   ciphertext: string;
@@ -104,6 +118,28 @@ interface WakuEnvelope {
   groupId?: string;
   /** Content type identifier (M7 codec, optional) */
   contentTypeId?: string;
+}
+
+// Maximum clock drift tolerated for incoming message timestamps (seconds).
+// Envelopes outside this window are dropped to mitigate extreme timestamp manipulation.
+const MAX_CLOCK_SKEW_SECONDS = 300; // 5 minutes
+
+/** Clamp a timestamp to a reasonable window around now. Returns clamped value. */
+function clampTs(ts: number): number {
+  const now = Math.floor(Date.now() / 1000);
+  return Math.max(now - 86400, Math.min(ts, now + MAX_CLOCK_SKEW_SECONDS));
+}
+
+/** Runtime guard: ensure essential envelope fields are present strings. */
+function isValidEnvelope(e: unknown): e is WakuEnvelope {
+  if (typeof e !== 'object' || e === null) return false;
+  const env = e as Record<string, unknown>;
+  return (
+    env['v'] === 1 &&
+    typeof env['from'] === 'string' &&
+    typeof env['ciphertext'] === 'string' &&
+    typeof env['ts'] === 'number'
+  );
 }
 
 // ─── WakuTransport ────────────────────────────────────────────────────────────
@@ -116,6 +152,9 @@ interface WakuEnvelope {
  *   - Content topics replace Nostr event kinds + #p tag routing
  *   - Waku Store protocol provides offline message history (if enabled on node)
  *   - NIP-44 encryption is preserved for end-to-end security
+ *
+ * Security caveat: the `from` field is not verified at this layer. SporeAgent
+ * must confirm decryption succeeded with the claimed sender pubkey.
  *
  * @example
  * ```ts
@@ -174,9 +213,11 @@ export class WakuTransport implements SporeTransport {
   async sendGroupMessage(opts: SendGroupMessageOptions): Promise<string> {
     const { senderPrivkeyHex, senderPubkeyHex, groupId, memberPubkeys, content, contentTypeId } = opts;
 
-    // Fan-out: send an individually encrypted copy to each member's DM topic.
-    // This mirrors NIP-17 gift-wrap semantics: each recipient's payload is
-    // encrypted specifically for them, not a single multicast ciphertext.
+    // Send individually encrypted copies to the shared group topic.
+    // Each member's payload is encrypted with their specific conversation key,
+    // but all are published to the same group topic (visible to passive observers).
+    // Note: this is NOT full NIP-17 gift-wrap privacy; for metadata privacy, use
+    // individual DM topics per recipient instead.
     const topic = groupTopic(this.prefix, groupId);
     let lastHash = '';
 
@@ -225,24 +266,33 @@ export class WakuTransport implements SporeTransport {
 
   subscribeToGroups(
     groupIds: string[],
-    onMessage: (msg: SporeMessage, conv: SporeConversation) => void
+    onMessage: (msg: SporeMessage, conv: SporeConversation) => void,
+    opts?: { signal?: AbortSignal }
   ): () => void {
     const unsubs = groupIds.map((groupId) => {
       const topic = groupTopic(this.prefix, groupId);
       return this.node.subscribe(topic, (payload) => {
+        if (opts?.signal?.aborted) return;
         this.handleIncomingPayload(payload, '', onMessage, groupId);
       });
     });
 
-    return () => { for (const u of unsubs) u(); };
+    const unsub = () => { for (const u of unsubs) u(); };
+    opts?.signal?.addEventListener('abort', unsub, { once: true });
+    return unsub;
   }
 
   // ─── Query History ────────────────────────────────────────────────────────
 
-  async queryMessages(convId: string, opts?: { limit?: number; since?: number }): Promise<SporeMessage[]> {
-    // convId is either a DM topic suffix or group topic suffix
-    // We assume convId matches the topic format used during subscription
-    const topic = convId.includes('group-') ? convId : dmTopic(this.prefix, convId);
+  async queryMessages(
+    convId: string,
+    opts?: { limit?: number; since?: number; isGroup?: boolean }
+  ): Promise<SporeMessage[]> {
+    // Resolve topic: callers pass either a full topic string or a bare convId.
+    // Use explicit isGroup flag to avoid fragile substring matching on convId.
+    const topic = opts?.isGroup
+      ? groupTopic(this.prefix, convId)
+      : dmTopic(this.prefix, convId);
 
     let payloads: Uint8Array[];
     try {
@@ -258,19 +308,22 @@ export class WakuTransport implements SporeTransport {
     const results: SporeMessage[] = [];
     for (let i = 0; i < payloads.length; i++) {
       try {
-        const envelope = JSON.parse(new TextDecoder().decode(payloads[i]!)) as WakuEnvelope;
+        const raw = JSON.parse(new TextDecoder().decode(payloads[i]!)) as unknown;
+        if (!isValidEnvelope(raw)) continue;
+        const envelope = raw;
+        const ts = clampTs(envelope.ts);
         const conv: SporeConversation = {
           id: convId,
           type: envelope.groupId ? 'group' : 'dm',
           members: [envelope.from],
-          createdAt: envelope.ts,
+          createdAt: ts,
         };
         results.push({
-          id: `waku-${i}-${envelope.ts}`,
+          id: `waku-${i}-${ts}`,
           senderPubkey: envelope.from,
           content: envelope.ciphertext, // raw ciphertext — SporeAgent decrypts
           contentType: 'text',
-          sentAt: envelope.ts,
+          sentAt: ts,
           conversation: conv,
           rawEvent: {} as never,
         } satisfies SporeMessage);
@@ -291,7 +344,12 @@ export class WakuTransport implements SporeTransport {
   ): void {
     let envelope: WakuEnvelope;
     try {
-      envelope = JSON.parse(new TextDecoder().decode(payload)) as WakuEnvelope;
+      const raw = JSON.parse(new TextDecoder().decode(payload)) as unknown;
+      if (!isValidEnvelope(raw)) {
+        if (this.debug) console.debug('[WakuTransport] Envelope failed validation');
+        return;
+      }
+      envelope = raw;
     } catch {
       if (this.debug) console.debug('[WakuTransport] Failed to parse envelope');
       return;
@@ -302,9 +360,8 @@ export class WakuTransport implements SporeTransport {
       return;
     }
 
-    // Decryption: use sender pubkey + own privkey via NIP-44.
-    // In a real agent, the private key would be injected. Here we emit the
-    // raw ciphertext and let SporeAgent handle decryption through the normal pipeline.
+    const ts = clampTs(envelope.ts);
+
     const convId = groupId
       ? groupTopic(this.prefix, groupId)
       : [myPubkeyHex, envelope.from].sort().join(':');
@@ -313,15 +370,15 @@ export class WakuTransport implements SporeTransport {
       id: convId,
       type: groupId ? 'group' : 'dm',
       members: groupId ? [envelope.from] : [myPubkeyHex, envelope.from],
-      createdAt: envelope.ts,
+      createdAt: ts,
     };
 
     const msg: SporeMessage = {
-      id: `waku-${envelope.ts}-${envelope.from.slice(0, 8)}`,
+      id: `waku-${ts}-${envelope.from.slice(0, 8)}`,
       senderPubkey: envelope.from,
       content: envelope.ciphertext, // SporeAgent decrypts via its identity
       contentType: 'text',
-      sentAt: envelope.ts,
+      sentAt: ts,
       conversation: conv,
       rawEvent: {} as never,
     };
