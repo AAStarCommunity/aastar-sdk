@@ -232,6 +232,34 @@ export class NostrTransport {
         });
     }
 
+    // ─── Public decoding helpers (used by SporeAgent.getMessages) ────────────
+
+    /**
+     * Attempt to decrypt a gift-wrapped DM event (kind:1059) into a SporeMessage.
+     * Returns null if the event is not addressed to us or decryption fails.
+     *
+     * @param wrapEvent    - Raw kind:1059 event from relay
+     * @param myPrivkeyHex - Our private key for decryption
+     * @param myPubkeyHex  - Our public key (used to derive conversation id)
+     */
+    decryptDm(
+        wrapEvent: NostrEvent,
+        myPrivkeyHex: string,
+        myPubkeyHex: string
+    ): SporeMessage | null {
+        return this.unwrapDm(wrapEvent, myPrivkeyHex, myPubkeyHex);
+    }
+
+    /**
+     * Decode a plaintext NIP-29 group event (kind:11) into a SporeMessage.
+     * Returns null if the 'h' (group id) tag is missing.
+     *
+     * @param event - Raw kind:11 Nostr event
+     */
+    decodeGroup(event: NostrEvent): SporeMessage | null {
+        return this.decodeGroupEvent(event);
+    }
+
     // ─── Private decoding helpers ─────────────────────────────────────────────
 
     /**
