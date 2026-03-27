@@ -2,9 +2,13 @@
 // Validates the authorization signature and submits the ERC-4337 UserOperation
 // to a bundler via an injected BundlerClientLike interface.
 
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { keccak_256 } from '@noble/hashes/sha3';
 import type { SporeEventBridge, BridgeResult } from './SporeEventBridge.js';
 import { SPORE_KIND_USEROP } from './SporeEventBridge.js';
 import type { SignedNostrEvent } from '../types.js';
+import type { NonceStore } from './NonceStore.js';
+import { InMemoryNonceStore } from './NonceStore.js';
 
 // ─── Client Interface ─────────────────────────────────────────────────────────
 
@@ -58,6 +62,12 @@ export interface UserOpBridgeConfig {
    * If set, only UserOps targeting these contracts are accepted.
    */
   allowedContracts?: Set<string>;
+  /**
+   * Nonce store for triggerNonce replay protection.
+   * Defaults to InMemoryNonceStore (state lost on restart).
+   * In production, inject a persistent store (SQLite, Redis, etc.).
+   */
+  nonceStore?: NonceStore;
 }
 
 // ─── UserOpBridge ─────────────────────────────────────────────────────────────
@@ -82,11 +92,11 @@ export interface UserOpBridgeConfig {
 export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> {
   readonly kind = SPORE_KIND_USEROP;
 
-  // Consumed trigger nonces to prevent Nostr event replay.
-  // Key format: "<chainId>:<triggerNonce>"
-  private readonly consumedNonces = new Set<string>();
+  private readonly nonceStore: NonceStore;
 
-  constructor(private readonly config: UserOpBridgeConfig) {}
+  constructor(private readonly config: UserOpBridgeConfig) {
+    this.nonceStore = config.nonceStore ?? new InMemoryNonceStore();
+  }
 
   async handle(event: SignedNostrEvent): Promise<BridgeResult> {
     // Step 1: Parse tags
@@ -110,17 +120,25 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       return { success: false, error: 'invalid_content' };
     }
 
-    const { userOp, authorizationSig: _authorizationSig, triggerNonce } = content;
+    const { userOp, authorizationSig, triggerNonce } = content;
+
+    // Step 1b: Verify authorizationSig — proves the sender authorized this specific UserOp.
+    // Signing payload: keccak256(abi.encode(chainId, entryPoint, userOpHash, triggerNonce))
+    // Skipped in 'open' mode (explicit no-auth, testing only).
+    const authMode = this.config.authMode ?? 'self_only';
+    if (authMode !== 'open') {
+      if (!this.verifyAuthorizationSig(authorizationSig, userOp, entryPoint, Number(chainId), triggerNonce)) {
+        return { success: false, error: 'invalid_authorization_sig' };
+      }
+    }
 
     // Step 2: Replay protection — triggerNonce is consumed after first use
     const nonceKey = `${chainId}:${triggerNonce}`;
-    if (this.consumedNonces.has(nonceKey)) {
+    if (await this.nonceStore.has(nonceKey)) {
       return { success: false, error: 'trigger_nonce_replayed' };
     }
 
     // Step 3: Authorization mode check
-    const authMode = this.config.authMode ?? 'self_only';
-
     if (authMode === 'self_only') {
       if (!this.config.selfAddress) {
         return { success: false, error: 'self_address_not_configured' };
@@ -137,11 +155,24 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
     // 'open' mode: accept any sender (for testing only)
 
     // Step 4: Prompt injection defense — contract and selector whitelist
+    // callData layout for ERC-4337 execute(address target, uint256 value, bytes calldata data):
+    //   [0:4]   selector of execute() itself  (0xb61d27f6 or similar)
+    //   [4:36]  target address (padded to 32 bytes) → bytes [16:36] = 20-byte address
+    //   [36:68] value (uint256)
+    //   [68:]   inner calldata
     if (this.config.allowedSelectors !== undefined || this.config.allowedContracts !== undefined) {
-      const target = userOp['sender']?.toLowerCase();
       const callData = userOp['callData'] ?? '';
-      // Extract 4-byte selector: "0x" + first 8 hex characters
-      const selector = callData.slice(0, 10);
+      const callBytes = hexToBytes(callData);
+
+      // Extract the target contract from callData[4:36] (first ABI param = address, right-aligned)
+      const target = callBytes.length >= 36
+        ? ('0x' + Buffer.from(callBytes.slice(16, 36)).toString('hex')).toLowerCase()
+        : userOp['sender']?.toLowerCase(); // fallback: sender itself
+
+      // Extract the inner selector from callData[68:72]
+      const innerSelector = callBytes.length >= 72
+        ? '0x' + Buffer.from(callBytes.slice(68, 72)).toString('hex')
+        : callData.slice(0, 10); // fallback: outer selector
 
       if (target && this.config.allowedContracts && !this.config.allowedContracts.has(target)) {
         return { success: false, error: 'contract_not_allowed' };
@@ -149,7 +180,7 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
 
       if (target && this.config.allowedSelectors) {
         const allowedForTarget = this.config.allowedSelectors.get(target);
-        if (allowedForTarget !== undefined && !allowedForTarget.includes(selector)) {
+        if (allowedForTarget !== undefined && !allowedForTarget.includes(innerSelector)) {
           return { success: false, error: 'selector_not_allowed' };
         }
       }
@@ -163,7 +194,7 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       );
 
       // Step 6: Consume triggerNonce only after successful submission
-      this.consumedNonces.add(nonceKey);
+      await this.nonceStore.add(nonceKey);
 
       return {
         success: true,
@@ -174,4 +205,82 @@ export class UserOpBridge implements SporeEventBridge<typeof SPORE_KIND_USEROP> 
       return { success: false, error: String(err) };
     }
   }
+
+  /**
+   * Verify the authorizationSig proves the account owner authorized this UserOp trigger.
+   *
+   * Signing payload per M2 spec:
+   *   keccak256(chainId_32B || entryPoint_32B || userOpHash_32B || triggerNonce_32B)
+   *
+   * userOpHash = keccak256(sender || nonce || callData) — lightweight content hash
+   * (not the full ERC-4337 on-chain hash; bundler validates the UserOp independently).
+   */
+  private verifyAuthorizationSig(
+    authorizationSig: string,
+    userOp: Record<string, string>,
+    entryPoint: string,
+    chainId: number,
+    triggerNonce: string
+  ): boolean {
+    try {
+      // Content hash of UserOp key fields.
+      // Fields are hex-encoded on-chain values — decode to bytes before hashing
+      // so the hash is case-insensitive and matches client-side implementations.
+      const opSenderBytes = hexToBytes(userOp['sender'] ?? '0x');
+      const opNonceBytes  = hexToBytes(userOp['nonce']  ?? '0x');
+      const opCallBytes   = hexToBytes(userOp['callData'] ?? '0x');
+      const combined = new Uint8Array(opSenderBytes.length + opNonceBytes.length + opCallBytes.length);
+      combined.set(opSenderBytes, 0);
+      combined.set(opNonceBytes, opSenderBytes.length);
+      combined.set(opCallBytes, opSenderBytes.length + opNonceBytes.length);
+      const userOpHash = keccak_256(combined);
+
+      // 128-byte signing payload: [chainId:32][entryPoint:32][userOpHash:32][triggerNonce:32]
+      const payload = new Uint8Array(128);
+      const chainView = new DataView(payload.buffer, 24, 8);
+      chainView.setBigUint64(0, BigInt(chainId), false);
+      const epBytes = hexToBytes(entryPoint);
+      payload.set(epBytes.slice(-20), 44); // right-align 20-byte address in 32-byte slot
+      payload.set(userOpHash, 64);
+      const nonceBytes = hexToBytes(triggerNonce);
+      payload.set(nonceBytes.slice(0, 32), 96);
+
+      const digest = keccak_256(payload);
+
+      // ecrecover
+      const sigBytes = hexToBytes(authorizationSig);
+      if (sigBytes.length !== 65) return false;
+      const r = sigBytes.slice(0, 32);
+      const s = sigBytes.slice(32, 64);
+      const v = sigBytes[64]!;
+      const recovery = v === 27 ? 0 : v === 28 ? 1 : v;
+
+      const sig = new secp256k1.Signature(bytesToBigInt(r), bytesToBigInt(s)).addRecoveryBit(recovery);
+      const recoveredPubkey = sig.recoverPublicKey(digest).toRawBytes(false);
+      const pubHash = keccak_256(recoveredPubkey.slice(1)); // keccak256(x || y)
+      const recoveredAddress = '0x' + Buffer.from(pubHash.slice(12)).toString('hex');
+
+      const sender = userOp['sender'] ?? '';
+      return recoveredAddress.toLowerCase() === sender.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function hexToBytes(hex: string): Uint8Array {
+  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const result = new Uint8Array(Math.ceil(h.length / 2));
+  for (let i = 0; i < result.length; i++) {
+    result[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+  }
+  return result;
+}
+
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  let result = 0n;
+  for (const byte of bytes) result = (result << 8n) | BigInt(byte);
+  return result;
 }

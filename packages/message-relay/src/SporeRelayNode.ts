@@ -236,6 +236,7 @@ export class SporeRelayNode {
 
   // ─── Filter matching ──────────────────────────────────────────────────────
 
+  /** Exposed for testing only — do not call from external code. */
   matchesFilter(event: NostrEvent, filter: EventFilter): boolean {
     if (filter.ids && filter.ids.length > 0) {
       if (!filter.ids.includes(event.id)) return false;
@@ -265,7 +266,7 @@ export class SporeRelayNode {
 
   // ─── Cryptographic validation ─────────────────────────────────────────────
 
-  validateEventId(event: NostrEvent): boolean {
+  private validateEventId(event: NostrEvent): boolean {
     try {
       // NIP-01 canonical serialization
       const serialized = JSON.stringify([
@@ -283,7 +284,7 @@ export class SporeRelayNode {
     }
   }
 
-  validateEventSig(event: NostrEvent): boolean {
+  private validateEventSig(event: NostrEvent): boolean {
     try {
       // NIP-01: Schnorr (BIP-340) signature over the event id (32-byte sha256 hash)
       // schnorr.verify(sig_bytes, msg_bytes, pubkey_bytes)

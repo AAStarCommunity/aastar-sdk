@@ -1,23 +1,49 @@
 // PaymentValidator: offline EIP-3009 payment commitment validator for Spore Protocol
 
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { keccak256, encodeAbiParameters, parseAbiParameters, toHex } from 'viem';
 
 // EIP-712 TypeHash for TransferWithAuthorization
 // keccak256("TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)")
 const TRANSFER_WITH_AUTHORIZATION_TYPEHASH =
   '0x7c7c6cdb67a18743f49ec6fa9b35f50d52ed05cbed4cc592e13b44501c1a2267' as const;
 
-// Pre-computed USDC domain separators per chainId (avoids RPC in hot path)
-// These are the official Circle USDC domain separators. Add more chains as needed.
-const USDC_DOMAIN_SEPARATORS: Record<number, `0x${string}`> = {
-  // Optimism Mainnet — official USDC (0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85)
-  10: '0x' as `0x${string}`, // placeholder — populate with actual value in production
-  // Base Mainnet — official USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
-  8453: '0x' as `0x${string}`, // placeholder
-  // Optimism Sepolia (testnet USDC)
-  11155420: '0x' as `0x${string}`, // placeholder
-};
+// EIP-712 domain type hash (constant — does not change per chain)
+const EIP712_DOMAIN_TYPEHASH = keccak256(
+  toHex('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)')
+) as `0x${string}`;
+
+// Cache of computed domain separators: "${chainId}:${tokenAddress}" → domainSeparator
+const DOMAIN_SEPARATOR_CACHE = new Map<string, `0x${string}`>();
+
+/**
+ * Compute the EIP-712 domain separator for USDC offline (no RPC required).
+ * Circle's USDC contracts use name="USD Coin", version="2" across all chains.
+ *
+ * domainSeparator = keccak256(abi.encode(
+ *   typeHash,
+ *   keccak256("USD Coin"),
+ *   keccak256("2"),
+ *   chainId,
+ *   verifyingContract
+ * ))
+ */
+function computeDomainSeparator(chainId: number, tokenAddress: `0x${string}`): `0x${string}` {
+  const cacheKey = `${chainId}:${tokenAddress.toLowerCase()}`;
+  const cached = DOMAIN_SEPARATOR_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const nameHash = keccak256(toHex('USD Coin')) as `0x${string}`;
+  const versionHash = keccak256(toHex('2')) as `0x${string}`;
+
+  const encoded = encodeAbiParameters(
+    parseAbiParameters('bytes32, bytes32, bytes32, uint256, address'),
+    [EIP712_DOMAIN_TYPEHASH, nameHash, versionHash, BigInt(chainId), tokenAddress]
+  );
+  const domainSeparator = keccak256(encoded) as `0x${string}`;
+  DOMAIN_SEPARATOR_CACHE.set(cacheKey, domainSeparator);
+  return domainSeparator;
+}
 
 export interface PaymentCommitment {
   amount: bigint;
@@ -120,12 +146,8 @@ export class PaymentValidator {
    */
   private verifyEip3009Sig(c: PaymentCommitment): boolean {
     try {
-      const domainSeparator = USDC_DOMAIN_SEPARATORS[c.chainId];
-      if (!domainSeparator || domainSeparator === '0x') {
-        // Domain separator not configured for this chain — skip crypto check
-        // In production: throw or fetch from contract once and cache
-        return true;
-      }
+      // Compute USDC domain separator from chainId + token address (no RPC needed)
+      const domainSeparator = computeDomainSeparator(c.chainId, c.tokenAddress);
 
       // Encode the struct hash
       const structHash = keccak256(

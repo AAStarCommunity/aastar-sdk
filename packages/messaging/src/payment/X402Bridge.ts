@@ -6,6 +6,8 @@ import type { SporeEventBridge, BridgeResult } from './SporeEventBridge.js';
 import { SPORE_KIND_X402 } from './SporeEventBridge.js';
 import { parseTagsToObject, validateX402Tags } from '../events/SporeEventTypes.js';
 import type { SignedNostrEvent } from '../types.js';
+import type { NonceStore } from './NonceStore.js';
+import { InMemoryNonceStore } from './NonceStore.js';
 
 // ─── Client Interface ─────────────────────────────────────────────────────────
 
@@ -40,6 +42,12 @@ export interface X402BridgeConfig {
   maxAmountPerRequest?: bigint;
   /** Timeout for the on-chain settlement call in seconds (default: 60) */
   settlementTimeoutSeconds?: number;
+  /**
+   * Nonce store for replay protection.
+   * Defaults to InMemoryNonceStore (state lost on restart).
+   * In production, inject a persistent store (SQLite, Redis, etc.).
+   */
+  nonceStore?: NonceStore;
 }
 
 // ─── Reject Reason ────────────────────────────────────────────────────────────
@@ -72,11 +80,11 @@ export type X402RejectReason =
 export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
   readonly kind = SPORE_KIND_X402;
 
-  // Track used nonces to prevent replay attacks.
-  // Key format: "<chainId>:<nonce>"
-  private readonly usedNonces = new Set<string>();
+  private readonly nonceStore: NonceStore;
 
-  constructor(private readonly config: X402BridgeConfig) {}
+  constructor(private readonly config: X402BridgeConfig) {
+    this.nonceStore = config.nonceStore ?? new InMemoryNonceStore();
+  }
 
   async handle(event: SignedNostrEvent): Promise<BridgeResult> {
     // Step 1: Parse and validate tags
@@ -113,7 +121,7 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
 
     // Step 3: Nonce idempotency check
     const nonceKey = `${chainId}:${nonce}`;
-    if (this.usedNonces.has(nonceKey)) {
+    if (await this.nonceStore.has(nonceKey)) {
       return { success: false, error: 'nonce_already_used' };
     }
 
@@ -131,7 +139,7 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
       });
 
       // Step 5: Mark nonce as used only after successful settlement
-      this.usedNonces.add(nonceKey);
+      await this.nonceStore.add(nonceKey);
 
       return {
         success: true,

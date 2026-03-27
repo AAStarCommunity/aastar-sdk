@@ -249,6 +249,10 @@ export class NostrTransport {
         }
 
         const sealEvent: SignedNostrEvent = JSON.parse(sealJson) as SignedNostrEvent;
+        // Guard against malformed seal — both fields must be strings
+        if (typeof sealEvent.pubkey !== 'string' || typeof sealEvent.content !== 'string') {
+            return null;
+        }
 
         // Step 2: decrypt seal using sender's pubkey
         let rumorJson: string;
@@ -332,7 +336,11 @@ function unixNow(): number {
  */
 function randomTimestampInLastDay(): number {
     const twoDaysAgo = unixNow() - 2 * 24 * 60 * 60;
-    return twoDaysAgo + Math.floor(Math.random() * 2 * 24 * 60 * 60);
+    const windowSeconds = 2 * 24 * 60 * 60;
+    // Use cryptographically secure randomness to prevent timing correlation
+    const buf = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(buf);
+    return twoDaysAgo + (buf[0]! % windowSeconds);
 }
 
 function hexToBytes(hex: string): Uint8Array {

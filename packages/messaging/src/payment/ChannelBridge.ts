@@ -5,6 +5,8 @@
 import type { SporeEventBridge, BridgeResult } from './SporeEventBridge.js';
 import { SPORE_KIND_CHANNEL } from './SporeEventBridge.js';
 import type { SignedNostrEvent } from '../types.js';
+import type { VoucherStore, BestVoucher } from './NonceStore.js';
+import { InMemoryVoucherStore } from './NonceStore.js';
 
 // ─── Client Interface ─────────────────────────────────────────────────────────
 
@@ -49,14 +51,13 @@ export interface ChannelBridgeConfig {
    * Default: 5_000_000n (5 USDC at 6 decimals)
    */
   lazySettleThreshold?: bigint;
-}
-
-// ─── Internal State ───────────────────────────────────────────────────────────
-
-/** Best (highest cumulative) pending voucher for a channel */
-interface BestVoucher {
-  cumulativeAmount: bigint;
-  sig: `0x${string}`;
+  /**
+   * Voucher store for pending voucher and settled amount persistence.
+   * Defaults to InMemoryVoucherStore (state lost on restart).
+   * In production, inject a persistent store (SQLite, Redis, etc.) and
+   * call forceSettleAll() on graceful shutdown.
+   */
+  voucherStore?: VoucherStore;
 }
 
 // ─── ChannelBridge ────────────────────────────────────────────────────────────
@@ -82,12 +83,11 @@ interface BestVoucher {
 export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL> {
   readonly kind = SPORE_KIND_CHANNEL;
 
-  // channelId → best (highest cumulative) unsubmitted voucher
-  private readonly pendingVouchers = new Map<string, BestVoucher>();
-  // channelId → last settled cumulative amount (after successful submitVoucher)
-  private readonly settledAmounts = new Map<string, bigint>();
+  private readonly store: VoucherStore;
 
-  constructor(private readonly config: ChannelBridgeConfig) {}
+  constructor(private readonly config: ChannelBridgeConfig) {
+    this.store = config.voucherStore ?? new InMemoryVoucherStore();
+  }
 
   async handle(event: SignedNostrEvent): Promise<BridgeResult> {
     // Step 1: Parse tags
@@ -122,16 +122,16 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
     }
 
     // Step 3: Monotonicity check — cumulativeAmount must strictly increase
-    const best = this.pendingVouchers.get(channelId);
+    const best = await this.store.getBest(channelId);
     if (best && cumulativeAmount <= best.cumulativeAmount) {
       return { success: false, error: 'non_monotonic_cumulative' };
     }
 
     // Step 4: Update best voucher for this channel
-    this.pendingVouchers.set(channelId, { cumulativeAmount, sig: voucherSig });
+    await this.store.setBest(channelId, { cumulativeAmount, sig: voucherSig });
 
     // Step 5: Lazy settle — check if gain exceeds threshold
-    const lastSettled = this.settledAmounts.get(channelId) ?? 0n;
+    const lastSettled = await this.store.getSettled(channelId);
     const gain = cumulativeAmount - lastSettled;
     const threshold = this.config.lazySettleThreshold ?? 5_000_000n;
 
@@ -142,8 +142,8 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
           cumulativeAmount,
           voucherSig,
         });
-        this.settledAmounts.set(channelId, cumulativeAmount);
-        this.pendingVouchers.delete(channelId);
+        await this.store.setSettled(channelId, cumulativeAmount);
+        await this.store.deleteBest(channelId);
         return {
           success: true,
           txHash,
@@ -170,15 +170,16 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
    */
   async forceSettleAll(): Promise<Map<string, `0x${string}`>> {
     const results = new Map<string, `0x${string}`>();
-    for (const [channelId, voucher] of this.pendingVouchers) {
+    const pending = await this.store.getAllPending();
+    for (const [channelId, voucher] of pending) {
       try {
         const { txHash } = await this.config.channelClient.submitVoucher({
           channelId,
           cumulativeAmount: voucher.cumulativeAmount,
           voucherSig: voucher.sig,
         });
-        this.settledAmounts.set(channelId, voucher.cumulativeAmount);
-        this.pendingVouchers.delete(channelId);
+        await this.store.setSettled(channelId, voucher.cumulativeAmount);
+        await this.store.deleteBest(channelId);
         results.set(channelId, txHash);
       } catch {
         // Continue with other channels even if one fails
