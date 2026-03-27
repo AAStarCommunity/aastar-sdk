@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-03-27
+
 ### M7 r5 SDK Upgrade (feat/m7-sdk-upgrade)
 
 #### ⚠ BREAKING CHANGES
