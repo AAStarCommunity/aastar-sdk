@@ -134,6 +134,8 @@ export interface SporeAgentEventMap {
     stop: () => Promise<void> | void;
     /** Unhandled error in a message handler */
     unhandledError: (error: Error, ctx: MessageContext) => Promise<void> | void;
+    /** M2: Bridge failed to process a payment event (kind:23402–23405) */
+    'bridge:error': (kind: number, event: SignedNostrEvent, error: Error) => Promise<void> | void;
 }
 
 export type SporeEventName = keyof SporeAgentEventMap;

@@ -30,7 +30,15 @@ import type {
     SporeMessage,
     SporeConversation,
     RelayUrl,
+    SignedNostrEvent,
 } from './types.js';
+import type { SporeEventBridge, SporeKind } from './payment/SporeEventBridge.js';
+import { X402Bridge } from './payment/X402Bridge.js';
+import { ChannelBridge } from './payment/ChannelBridge.js';
+import { UserOpBridge } from './payment/UserOpBridge.js';
+import type { X402BridgeConfig } from './payment/X402Bridge.js';
+import type { ChannelBridgeConfig } from './payment/ChannelBridge.js';
+import type { UserOpBridgeConfig } from './payment/UserOpBridge.js';
 
 // ─── SporeAgent ───────────────────────────────────────────────────────────────
 
@@ -65,6 +73,9 @@ export class SporeAgent extends EventEmitter {
 
     /** Tracks known conversations to emit 'conversation' events only once */
     private readonly knownConversations = new Map<string, SporeConversation>();
+
+    /** M2: Registered on-chain bridges keyed by Nostr event kind */
+    private readonly bridges = new Map<number, SporeEventBridge<SporeKind>>();
 
     private constructor(
         identity: SporeIdentity,
@@ -201,6 +212,19 @@ export class SporeAgent extends EventEmitter {
         );
         this.unsubscribeFns.push(unsubGroup);
 
+        // M2: Subscribe to bridge payment event kinds (23402–23405) if any bridges registered
+        if (this.bridges.size > 0) {
+            const bridgeKinds = [...this.bridges.keys()];
+            // Subscribe once per kind with a #p filter so only events addressed to us arrive
+            for (const kind of bridgeKinds) {
+                const unsubBridge = this.pool.subscribe(
+                    { kinds: [kind], '#p': [this.identity.pubkey] },
+                    (rawEvent) => this.handleBridgeEvent(rawEvent as SignedNostrEvent)
+                );
+                this.unsubscribeFns.push(unsubBridge);
+            }
+        }
+
         // Emit start event
         this.emit('start', {
             address: this.identity.address,
@@ -259,6 +283,63 @@ export class SporeAgent extends EventEmitter {
     /** Whether the agent is currently running */
     get isRunning(): boolean {
         return this.running;
+    }
+
+    // ─── M2 Bridge API ─────────────────────────────────────────────────────────
+
+    /**
+     * Register an on-chain bridge for a specific Nostr event kind.
+     *
+     * Bridges handle payment event kinds (23402–23405) by routing the raw
+     * Nostr event to the appropriate on-chain settlement logic.
+     *
+     * @example
+     * ```ts
+     * agent.registerBridge(new X402Bridge({ x402Client }));
+     * ```
+     */
+    registerBridge<K extends SporeKind>(bridge: SporeEventBridge<K>): this {
+        this.bridges.set(bridge.kind, bridge as SporeEventBridge<SporeKind>);
+        return this;
+    }
+
+    /**
+     * Convenience method: enable x402 payment receiving on kind:23402.
+     * Equivalent to registerBridge(new X402Bridge(config)).
+     *
+     * @example
+     * ```ts
+     * agent.enableX402({ x402Client, maxAmountPerRequest: 10_000_000n });
+     * ```
+     */
+    enableX402(config: X402BridgeConfig): this {
+        return this.registerBridge(new X402Bridge(config));
+    }
+
+    /**
+     * Convenience method: enable channel voucher settlement on kind:23403.
+     * Equivalent to registerBridge(new ChannelBridge(config)).
+     *
+     * @example
+     * ```ts
+     * agent.enableChannel({ channelClient, lazySettleThreshold: 5_000_000n });
+     * ```
+     */
+    enableChannel(config: ChannelBridgeConfig): this {
+        return this.registerBridge(new ChannelBridge(config));
+    }
+
+    /**
+     * Convenience method: enable gasless UserOp triggering on kind:23404.
+     * Equivalent to registerBridge(new UserOpBridge(config)).
+     *
+     * @example
+     * ```ts
+     * agent.enableUserOp({ bundlerClient, authMode: 'self_only', selfAddress: '0x...' });
+     * ```
+     */
+    enableUserOp(config: UserOpBridgeConfig): this {
+        return this.registerBridge(new UserOpBridge(config));
     }
 
     // ─── Send API ──────────────────────────────────────────────────────────────
@@ -342,6 +423,32 @@ export class SporeAgent extends EventEmitter {
             await this.safeEmit('dm', msgCtx);
         } else if (conv.type === 'group') {
             await this.safeEmit('group', msgCtx);
+        }
+    }
+
+    /**
+     * M2: Route a raw Nostr payment event to its registered bridge.
+     * Emits 'bridge:error' if the bridge returns failure or throws.
+     *
+     * @param event - Raw SignedNostrEvent from the relay subscription
+     */
+    private async handleBridgeEvent(event: SignedNostrEvent): Promise<void> {
+        const bridge = this.bridges.get(event.kind);
+        if (!bridge) return;
+
+        try {
+            const result = await bridge.handle(event);
+            if (!result.success) {
+                this.emit(
+                    'bridge:error',
+                    event.kind,
+                    event,
+                    new Error(result.error ?? 'unknown bridge error')
+                );
+            }
+        } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            this.emit('bridge:error', event.kind, event, error);
         }
     }
 
