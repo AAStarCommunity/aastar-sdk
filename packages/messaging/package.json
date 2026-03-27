@@ -22,7 +22,9 @@
     "dist"
   ],
   "dependencies": {
-    "nostr-tools": "^2.7.2"
+    "nostr-tools": "^2.7.2",
+    "@noble/curves": "^1.8.0",
+    "@noble/hashes": "^1.7.0"
   },
   "devDependencies": {
     "typescript": "5.7.2",

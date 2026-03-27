@@ -97,7 +97,7 @@ export interface SporeMessage {
 // ─── Agent Config ─────────────────────────────────────────────────────────────
 
 /** Deployment environment */
-export type SporeEnv = 'dev' | 'production';
+export type SporeEnv = 'dev' | 'test' | 'production';
 
 /** Configuration for SporeAgent */
 export interface SporeAgentConfig {

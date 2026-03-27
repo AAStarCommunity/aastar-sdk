@@ -37,6 +37,46 @@ export type RelayEventHandler = (event: NostrEvent) => void;
 export interface RelayPoolOptions {
     relays: RelayUrl[];
     debug?: boolean;
+    /**
+     * Allow plain ws:// connections (insecure). Default: false.
+     * Only set to true in local development/testing. Production relays
+     * must use wss:// to prevent relay operator MITM attacks.
+     */
+    allowInsecure?: boolean;
+    /**
+     * Maximum number of event IDs to keep in the deduplication set.
+     * Oldest IDs are evicted when the limit is reached.
+     * Default: 10_000
+     */
+    seenIdsCacheSize?: number;
+}
+
+// ─── Bounded dedup set ────────────────────────────────────────────────────────
+
+/**
+ * Size-bounded Set for event ID deduplication.
+ * When maxSize is reached, the oldest half of entries are evicted
+ * (insertion-order eviction using Map iteration).
+ */
+class BoundedSet {
+    private readonly map = new Map<string, true>();
+    constructor(private readonly maxSize: number) {}
+
+    has(id: string): boolean { return this.map.has(id); }
+
+    add(id: string): void {
+        if (this.map.has(id)) return;
+        if (this.map.size >= this.maxSize) {
+            // Evict oldest quarter of entries to amortise cost
+            const evictCount = Math.ceil(this.maxSize / 4);
+            let i = 0;
+            for (const key of this.map.keys()) {
+                if (i++ >= evictCount) break;
+                this.map.delete(key);
+            }
+        }
+        this.map.set(id, true);
+    }
 }
 
 /**
@@ -49,14 +89,28 @@ export class RelayPool {
     private readonly pool: SimplePool;
     private readonly relays: RelayUrl[];
     private readonly debug: boolean;
-    /** Tracks seen event IDs to deduplicate across relays */
-    private readonly seenIds = new Set<string>();
+    /** Tracks seen event IDs to deduplicate across relays (bounded to prevent OOM) */
+    private readonly seenIds: BoundedSet;
     /** Active subscriptions returned by SimplePool */
     private readonly activeSubs: SubCloser[] = [];
 
     constructor(options: RelayPoolOptions) {
-        this.relays = options.relays.length > 0 ? options.relays : DEFAULT_RELAYS;
+        const rawRelays = options.relays.length > 0 ? options.relays : DEFAULT_RELAYS;
+        const allowInsecure = options.allowInsecure ?? false;
+
+        // Enforce wss:// in production — reject ws:// unless explicitly allowed
+        const insecure = rawRelays.filter((r) => r.startsWith('ws://'));
+        if (insecure.length > 0 && !allowInsecure) {
+            throw new Error(
+                `RelayPool: insecure ws:// relays are not allowed in production. ` +
+                `Set allowInsecure: true for local development only. ` +
+                `Rejected: ${insecure.join(', ')}`
+            );
+        }
+
+        this.relays = rawRelays;
         this.debug = options.debug ?? false;
+        this.seenIds = new BoundedSet(options.seenIdsCacheSize ?? 10_000);
         this.pool = new SimplePool();
 
         if (this.debug) {
