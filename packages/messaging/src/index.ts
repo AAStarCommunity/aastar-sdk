@@ -135,6 +135,10 @@ export { WakuTransport } from './transport/WakuTransport.js';
 export type { WakuTransportConfig, WakuNodeLike } from './transport/WakuTransport.js';
 export type { SporeTransport } from './transport/SporeTransport.js';
 
+// ─── M13: Multi-Transport Fan-Out ─────────────────────────────────────────────
+export { MultiTransport } from './transport/MultiTransport.js';
+export type { MultiTransportConfig } from './transport/MultiTransport.js';
+
 // ─── M11: Mainnet Hardening ───────────────────────────────────────────────────
 export { RateLimiter, InMemoryRateLimitStore } from './hardening/RateLimiter.js';
 export type { RateLimiterConfig, RateLimitStore } from './hardening/RateLimiter.js';
