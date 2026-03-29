@@ -18,6 +18,15 @@ export interface AccountRecord {
    * Written into the factory config at account creation time.
    */
   dailyLimit?: string;
+  /**
+   * Guardian addresses and their acceptance signatures.
+   * Present only for accounts created via createAccountWithGuardians().
+   * Required by transfer-manager to reconstruct initCode using createAccountWithDefaults.
+   */
+  guardian1?: string;
+  guardian1Sig?: string;
+  guardian2?: string;
+  guardian2Sig?: string;
 }
 
 /**

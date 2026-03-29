@@ -183,6 +183,12 @@ export class AccountManager {
     }
   ): Promise<AccountRecord> {
     const version = params.entryPointVersion ?? this.ethereum.getDefaultVersion();
+    if (version === EntryPointVersion.V0_6) {
+      throw new Error(
+        "createAccountWithGuardians requires EntryPoint v0.7 or v0.8; " +
+          "v0.6 factory does not support getAddressWithDefaults"
+      );
+    }
     const versionStr = version as string;
 
     const existingAccounts = await this.storage.getAccounts();
@@ -231,6 +237,12 @@ export class AccountManager {
       createdAt: new Date().toISOString(),
       // Persist dailyLimit so transfer-manager can reconstruct identical initCode at deploy time.
       ...(params.dailyLimit > 0n ? { dailyLimit: params.dailyLimit.toString() } : {}),
+      // Persist guardian addresses and sigs so transfer-manager can use createAccountWithDefaults
+      // to reconstruct the correct initCode on first UserOp deployment.
+      guardian1: params.guardian1,
+      guardian1Sig: params.guardian1Sig,
+      guardian2: params.guardian2,
+      guardian2Sig: params.guardian2Sig,
     };
 
     await this.storage.saveAccount(account);

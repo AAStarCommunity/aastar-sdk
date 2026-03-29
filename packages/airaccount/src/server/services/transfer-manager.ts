@@ -438,22 +438,35 @@ export class TransferManager {
 
         let deployCalldata: string;
         if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-          // M5 factory: createAccount with the same config used during account creation.
-          // Read dailyLimit from stored account record to reproduce the identical initCode hash.
           const storedDailyLimit = account.dailyLimit ? BigInt(account.dailyLimit) : 0n;
-          const minimalConfig = [
-            [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
-            storedDailyLimit, // dailyLimit (matches account creation config)
-            [], // approvedAlgIds
-            0n, // minDailyLimit
-            [], // initialTokens
-            [], // initialTokenConfigs
-          ];
-          deployCalldata = factory.interface.encodeFunctionData("createAccount", [
-            account.signerAddress,
-            account.salt,
-            minimalConfig,
-          ]);
+          if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
+            // Guardian account: use createAccountWithDefaults so the factory-computed address
+            // matches the stored sender (which was predicted via getAddressWithDefaults).
+            deployCalldata = factory.interface.encodeFunctionData("createAccountWithDefaults", [
+              account.signerAddress,
+              account.salt,
+              account.guardian1,
+              account.guardian1Sig,
+              account.guardian2,
+              account.guardian2Sig,
+              storedDailyLimit,
+            ]);
+          } else {
+            // Standard account: createAccount with zero guardians and stored dailyLimit.
+            const minimalConfig = [
+              [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
+              storedDailyLimit,
+              [], // approvedAlgIds
+              0n, // minDailyLimit
+              [], // initialTokens
+              [], // initialTokenConfigs
+            ];
+            deployCalldata = factory.interface.encodeFunctionData("createAccount", [
+              account.signerAddress,
+              account.salt,
+              minimalConfig,
+            ]);
+          }
         } else {
           deployCalldata = factory.interface.encodeFunctionData(
             "createAccountWithAAStarValidator",
