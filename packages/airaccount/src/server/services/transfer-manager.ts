@@ -438,10 +438,12 @@ export class TransferManager {
 
         let deployCalldata: string;
         if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-          // M5 factory: createAccount with minimal config (no guardians, no guard — simple ECDSA account)
+          // M5 factory: createAccount with the same config used during account creation.
+          // Read dailyLimit from stored account record to reproduce the identical initCode hash.
+          const storedDailyLimit = account.dailyLimit ? BigInt(account.dailyLimit) : 0n;
           const minimalConfig = [
             [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
-            0n, // dailyLimit (0 = no guard)
+            storedDailyLimit, // dailyLimit (matches account creation config)
             [], // approvedAlgIds
             0n, // minDailyLimit
             [], // initialTokens

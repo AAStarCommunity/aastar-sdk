@@ -12,6 +12,12 @@ export interface AccountRecord {
   entryPointVersion: string;
   factoryAddress: string;
   createdAt: string;
+  /**
+   * Daily transfer limit in wei, stored as a decimal string (bigint serialization).
+   * "0" or undefined means no guard / no limit.
+   * Written into the factory config at account creation time.
+   */
+  dailyLimit?: string;
 }
 
 /**
