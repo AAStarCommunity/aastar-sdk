@@ -70,15 +70,15 @@ export const AIRACCOUNT_ADDRESSES = {
     factoryM4: "0x914db0a849f55e68a726c72fd02b7114b1176d88",
     // M5 factory r5 — 6-field InitConfig, guardian acceptance sigs required
     factoryM5: "0xd72a236d84be6c388a8bc7deb64afd54704ae385",
-    // M7 factory r5 — recordSpend auth fix, hook overwrite fix, sig binds moduleInitData
-    // BREAKING CHANGE: `.factory` now points to M7 r5. Former M5 address is at `.factoryM5`.
-    // Callers using `.factory` will now create M7 accounts with a different CREATE2 address.
-    // Migration: replace `.factory` usages with `.factoryM7` (explicit) or `.factoryM5` (legacy).
-    factory: "0xa0007c5db27548d8c1582773856db1d123107383",
+    // M7 factory r5 (prev) — defaultCommunityGuardian was address(0), do not use for new accounts
+    factoryM7r5Prev: "0xa0007c5db27548d8c1582773856db1d123107383",
+    // M7 factory r6 — defaultCommunityGuardian = team Safe 0x51eD...E114 (deployed 2026-03-29)
+    // BREAKING CHANGE: `.factory` now points to r6. Accounts created here have a new CREATE2 address.
+    factory: "0x42f82d77f9cf940686b6a64a369245cb563e0e85",
     // M7 factory alias — use this to be explicit about targeting M7
-    factoryM7: "0xa0007c5db27548d8c1582773856db1d123107383",
-    // M7 account implementation r5 (shared by all clone proxies)
-    accountImpl: "0xf58900fE20C9d8C4d86259D383b9d810CFd138DB",
+    factoryM7: "0x42f82d77f9cf940686b6a64a369245cb563e0e85",
+    // M7 account implementation r6 (shared by all clone proxies)
+    accountImpl: "0x2F1B4EB63143D338bE78d0AF878B806f075080c1",
     validatorRouter: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
     blsAlgorithm: "0xc2096E8D04beb3C337bb388F5352710d62De0287",
     blsAggregator: "0x7700aec8a15a94db5697c581de8c88ecf83b59ff",

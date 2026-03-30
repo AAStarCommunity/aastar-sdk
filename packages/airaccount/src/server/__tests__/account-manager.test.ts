@@ -21,16 +21,16 @@ function makeEthereumMock(overrides: Record<string, jest.Mock> = {}) {
   };
 
   return {
-    getDefaultVersion: jest.fn().mockReturnValue(EntryPointVersion.V0_6),
-    getFactoryContract: jest.fn().mockReturnValue(mockFactory),
-    getValidatorContract: jest.fn().mockReturnValue({ target: VALIDATOR_ADDRESS }),
-    getValidatorAddress: jest.fn().mockReturnValue(VALIDATOR_ADDRESS),
-    getFactoryAddress: jest.fn().mockReturnValue(FACTORY_ADDRESS),
-    getProvider: jest.fn().mockReturnValue({
-      getCode: jest.fn().mockResolvedValue("0x"), // not deployed by default
+    getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_6),
+    getFactoryContract: vi.fn().mockReturnValue(mockFactory),
+    getValidatorContract: vi.fn().mockReturnValue({ target: VALIDATOR_ADDRESS }),
+    getValidatorAddress: vi.fn().mockReturnValue(VALIDATOR_ADDRESS),
+    getFactoryAddress: vi.fn().mockReturnValue(FACTORY_ADDRESS),
+    getProvider: vi.fn().mockReturnValue({
+      getCode: vi.fn().mockResolvedValue("0x"), // not deployed by default
     }),
-    getBalance: jest.fn().mockResolvedValue("1.5"),
-    getNonce: jest.fn().mockResolvedValue(3n),
+    getBalance: vi.fn().mockResolvedValue("1.5"),
+    getNonce: vi.fn().mockResolvedValue(3n),
     ...overrides,
   };
 }
@@ -103,7 +103,7 @@ describe("AccountManager", () => {
 
     it("marks account as deployed when contract code exists", async () => {
       ethereum.getProvider.mockReturnValue({
-        getCode: jest.fn().mockResolvedValue("0x6080604052"), // non-empty bytecode
+        getCode: vi.fn().mockResolvedValue("0x6080604052"), // non-empty bytecode
       });
 
       const account = await manager.createAccount("user-1");
@@ -112,7 +112,7 @@ describe("AccountManager", () => {
 
     it("marks account as not deployed when getCode throws (RPC failure)", async () => {
       ethereum.getProvider.mockReturnValue({
-        getCode: jest.fn().mockRejectedValue(new Error("RPC error")),
+        getCode: vi.fn().mockRejectedValue(new Error("RPC error")),
       });
 
       const account = await manager.createAccount("user-1");
@@ -224,6 +224,178 @@ describe("AccountManager", () => {
       await manager.createAccount("user-1");
       const result = await manager.getAccountByUserId("user-1");
       expect(result?.userId).toBe("user-1");
+    });
+  });
+
+  // ── buildGuardianAcceptanceHash ────────────────────────────────────
+
+  describe("buildGuardianAcceptanceHash", () => {
+    const OWNER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    const FACTORY = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // hardhat account #1 as stand-in
+    const SALT = 42;
+    const CHAIN_ID = 11155111;
+
+    it("produces a consistent hash for the same inputs", () => {
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      expect(h1).toBe(h2);
+    });
+
+    it("returns a 32-byte hex string", () => {
+      const hash = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      expect(hash).toMatch(/^0x[0-9a-f]{64}$/i);
+    });
+
+    it("changes hash when chainId changes", () => {
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, 1);
+      expect(h1).not.toBe(h2);
+    });
+
+    it("changes hash when factory address changes", () => {
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", CHAIN_ID);
+      expect(h1).not.toBe(h2);
+    });
+
+    it("changes hash when owner changes", () => {
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const h2 = manager.buildGuardianAcceptanceHash("0x70997970C51812dc3A010C7d01b50e0d17dc79C8", SALT, FACTORY, CHAIN_ID);
+      expect(h1).not.toBe(h2);
+    });
+
+    it("changes hash when salt changes", () => {
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, 99, FACTORY, CHAIN_ID);
+      expect(h1).not.toBe(h2);
+    });
+
+    it("matches known contract encoding vector (golden value)", () => {
+      // Pre-computed: keccak256(solidityPacked(
+      //   ["string","uint256","address","address","uint256"],
+      //   ["ACCEPT_GUARDIAN", 11155111, factory, owner, 42]
+      // ))
+      // Matches the contract's abi.encodePacked before toEthSignedMessageHash().
+      expect(
+        manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID)
+      ).toBe("0xc33ef49e1f171163a391bd35e80f4ed220ec9bb14d6a993c3baa048b13ac80c3");
+    });
+  });
+
+  // ── createAccountWithGuardians ─────────────────────────────────────
+
+  describe("createAccountWithGuardians", () => {
+    const GUARDIAN_ACCOUNT = "0xGuardianAccountAddress0000000000000001";
+    const GUARDIAN1 = "0x1111111111111111111111111111111111111111";
+    const GUARDIAN1_SIG = "0xaabbccdd";
+    const GUARDIAN2 = "0x2222222222222222222222222222222222222222";
+    const GUARDIAN2_SIG = "0xeeff0011";
+    const DAILY_LIMIT = 1000000000000000000n; // 1 ETH
+
+    function makeV7Mock() {
+      const getAddressWithDefaultsFn = vi.fn().mockResolvedValue(GUARDIAN_ACCOUNT);
+      const mockFactory = {
+        getFunction: vi.fn().mockReturnValue(getAddressWithDefaultsFn),
+        target: FACTORY_ADDRESS,
+      };
+      return makeEthereumMock({
+        getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_7),
+        getFactoryContract: vi.fn().mockReturnValue(mockFactory),
+      });
+    }
+
+    it("throws when dailyLimit is zero", async () => {
+      const eth7 = makeV7Mock();
+      const mgr7 = new AccountManager(eth7 as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr7.createAccountWithGuardians("user-1", {
+          guardian1: GUARDIAN1, guardian1Sig: GUARDIAN1_SIG,
+          guardian2: GUARDIAN2, guardian2Sig: GUARDIAN2_SIG,
+          dailyLimit: 0n,
+        })
+      ).rejects.toThrow("dailyLimit > 0");
+    });
+
+    it("throws for EntryPoint v0.6", async () => {
+      await expect(
+        manager.createAccountWithGuardians("user-1", {
+          guardian1: GUARDIAN1,
+          guardian1Sig: GUARDIAN1_SIG,
+          guardian2: GUARDIAN2,
+          guardian2Sig: GUARDIAN2_SIG,
+          dailyLimit: DAILY_LIMIT,
+        })
+      ).rejects.toThrow("v0.6");
+    });
+
+    it("throws when guardian1 === guardian2", async () => {
+      const eth7 = makeV7Mock();
+      const mgr7 = new AccountManager(eth7 as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr7.createAccountWithGuardians("user-1", {
+          guardian1: GUARDIAN1,
+          guardian1Sig: GUARDIAN1_SIG,
+          guardian2: GUARDIAN1, // same as guardian1
+          guardian2Sig: GUARDIAN2_SIG,
+          dailyLimit: DAILY_LIMIT,
+        })
+      ).rejects.toThrow("must be different");
+    });
+
+    it("stores guardian fields in AccountRecord", async () => {
+      const eth7 = makeV7Mock();
+      const mgr7 = new AccountManager(eth7 as any, storage, signer, new SilentLogger());
+
+      const account = await mgr7.createAccountWithGuardians("user-1", {
+        guardian1: GUARDIAN1,
+        guardian1Sig: GUARDIAN1_SIG,
+        guardian2: GUARDIAN2,
+        guardian2Sig: GUARDIAN2_SIG,
+        dailyLimit: DAILY_LIMIT,
+        salt: 7,
+      });
+
+      expect(account.address).toBe(GUARDIAN_ACCOUNT);
+      expect(account.guardian1).toBe(GUARDIAN1);
+      expect(account.guardian1Sig).toBe(GUARDIAN1_SIG);
+      expect(account.guardian2).toBe(GUARDIAN2);
+      expect(account.guardian2Sig).toBe(GUARDIAN2_SIG);
+      expect(account.dailyLimit).toBe(DAILY_LIMIT.toString());
+    });
+
+    it("returns existing guardian account idempotently", async () => {
+      const eth7 = makeV7Mock();
+      const mgr7 = new AccountManager(eth7 as any, storage, signer, new SilentLogger());
+
+      const first = await mgr7.createAccountWithGuardians("user-1", {
+        guardian1: GUARDIAN1, guardian1Sig: GUARDIAN1_SIG,
+        guardian2: GUARDIAN2, guardian2Sig: GUARDIAN2_SIG,
+        dailyLimit: DAILY_LIMIT,
+      });
+      const second = await mgr7.createAccountWithGuardians("user-1", {
+        guardian1: GUARDIAN1, guardian1Sig: GUARDIAN1_SIG,
+        guardian2: GUARDIAN2, guardian2Sig: GUARDIAN2_SIG,
+        dailyLimit: DAILY_LIMIT,
+      });
+
+      expect(second).toEqual(first);
+      expect((await storage.getAccounts()).length).toBe(1);
+    });
+
+    it("does not reuse a no-guardian account as a guardian account", async () => {
+      // First create a regular account for user-1 (v0.7)
+      const eth7 = makeV7Mock();
+      const mgr7 = new AccountManager(eth7 as any, storage, signer, new SilentLogger());
+      await mgr7.createAccount("user-1", { entryPointVersion: EntryPointVersion.V0_7 });
+
+      // Now create a guardian account for the same user+version — should create a new record
+      await mgr7.createAccountWithGuardians("user-1", {
+        guardian1: GUARDIAN1, guardian1Sig: GUARDIAN1_SIG,
+        guardian2: GUARDIAN2, guardian2Sig: GUARDIAN2_SIG,
+        dailyLimit: DAILY_LIMIT,
+      });
+
+      expect((await storage.getAccounts()).length).toBe(2);
     });
   });
 });

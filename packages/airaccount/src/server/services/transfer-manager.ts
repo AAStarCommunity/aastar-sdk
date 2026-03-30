@@ -438,20 +438,42 @@ export class TransferManager {
 
         let deployCalldata: string;
         if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-          // M5 factory: createAccount with minimal config (no guardians, no guard — simple ECDSA account)
-          const minimalConfig = [
-            [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
-            0n, // dailyLimit (0 = no guard)
-            [], // approvedAlgIds
-            0n, // minDailyLimit
-            [], // initialTokens
-            [], // initialTokenConfigs
-          ];
-          deployCalldata = factory.interface.encodeFunctionData("createAccount", [
-            account.signerAddress,
-            account.salt,
-            minimalConfig,
-          ]);
+          const storedDailyLimit = account.dailyLimit ? BigInt(account.dailyLimit) : 0n;
+          if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
+            // Guardian account: use createAccountWithDefaults so the factory-computed address
+            // matches the stored sender (which was predicted via getAddressWithDefaults).
+            // ethers.js v6: bytes params require 0x-prefixed hex — guard against missing prefix.
+            const sig1 = account.guardian1Sig.startsWith("0x")
+              ? account.guardian1Sig
+              : `0x${account.guardian1Sig}`;
+            const sig2 = account.guardian2Sig.startsWith("0x")
+              ? account.guardian2Sig
+              : `0x${account.guardian2Sig}`;
+            deployCalldata = factory.interface.encodeFunctionData("createAccountWithDefaults", [
+              account.signerAddress,
+              account.salt,
+              account.guardian1,
+              sig1,
+              account.guardian2,
+              sig2,
+              storedDailyLimit,
+            ]);
+          } else {
+            // Standard account: createAccount with zero guardians and stored dailyLimit.
+            const minimalConfig = [
+              [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
+              storedDailyLimit,
+              [], // approvedAlgIds
+              0n, // minDailyLimit
+              [], // initialTokens
+              [], // initialTokenConfigs
+            ];
+            deployCalldata = factory.interface.encodeFunctionData("createAccount", [
+              account.signerAddress,
+              account.salt,
+              minimalConfig,
+            ]);
+          }
         } else {
           deployCalldata = factory.interface.encodeFunctionData(
             "createAccountWithAAStarValidator",

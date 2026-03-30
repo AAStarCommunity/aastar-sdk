@@ -12,6 +12,21 @@ export interface AccountRecord {
   entryPointVersion: string;
   factoryAddress: string;
   createdAt: string;
+  /**
+   * Daily transfer limit in wei, stored as a decimal string (bigint serialization).
+   * "0" or undefined means no guard / no limit.
+   * Written into the factory config at account creation time.
+   */
+  dailyLimit?: string;
+  /**
+   * Guardian addresses and their acceptance signatures.
+   * Present only for accounts created via createAccountWithGuardians().
+   * Required by transfer-manager to reconstruct initCode using createAccountWithDefaults.
+   */
+  guardian1?: string;
+  guardian1Sig?: string;
+  guardian2?: string;
+  guardian2Sig?: string;
 }
 
 /**

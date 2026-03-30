@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking Changes
+- `AIRACCOUNT_ADDRESSES.sepolia.factory` now points to M7 r6 (`0x42f82d77...`).
+  Existing M7 r5 accounts will have different CREATE2 addresses under the new factory.
+  Old r5 factory address is preserved as `factoryM7r5Prev` for reference.
+
+### Added
+- `AccountManager.buildGuardianAcceptanceHash(owner, salt, factoryAddress, chainId)` —
+  computes the raw keccak256 guardian acceptance hash (guardians sign via `personal_sign`)
+- `AccountManager.createAccountWithGuardians(params)` — creates an account with
+  two explicit user guardians + community guardian (v0.7+ only); throws for v0.6
+- `AccountRecord` new optional fields: `dailyLimit`, `guardian1`, `guardian1Sig`,
+  `guardian2`, `guardian2Sig` — persisted for deterministic initCode reconstruction
+- `createAccount` accepts new optional `dailyLimit: bigint` parameter; written into
+  the factory config so initCode stays identical across process restarts
+- `TransferManager`: guardian accounts use `createAccountWithDefaults` for initCode
+  (fixes sender/initCode mismatch that would cause bundlers to reject first UserOp)
+
 ## [0.18.0] - 2026-03-27
 
 ### M7 r5 SDK Upgrade (feat/m7-sdk-upgrade)
@@ -137,8 +154,8 @@ All notable changes to this project will be documented in this file.
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
-**Current Code Integrity Hash (v0.16.22)**:
-`89da8c80ebe6ad8b06adbd4946a00817b18ae79296550709b20bd9ca3af424f9`
+**Current Code Integrity Hash (v0.18.0)**:
+`47d8780693e31c970ff862af24d755867d50eaeb93f1749e95965bccb77e6881`
 
 To verify, run this stable command (excludes non-code markdown files):
 ```bash
