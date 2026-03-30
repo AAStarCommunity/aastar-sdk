@@ -155,7 +155,7 @@ All notable changes to this project will be documented in this file.
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
 **Current Code Integrity Hash (v0.18.0)**:
-`d1380ca77f2597ff762ba3f1810753840760fd5c40187598f51669089ecb24ab`
+`47d8780693e31c970ff862af24d755867d50eaeb93f1749e95965bccb77e6881`
 
 To verify, run this stable command (excludes non-code markdown files):
 ```bash

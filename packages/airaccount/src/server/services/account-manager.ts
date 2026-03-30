@@ -194,6 +194,9 @@ export class AccountManager {
     if (params.guardian1.toLowerCase() === params.guardian2.toLowerCase()) {
       throw new Error("guardian1 and guardian2 must be different addresses");
     }
+    if (params.dailyLimit <= 0n) {
+      throw new Error("Guardian accounts require dailyLimit > 0 (on-chain enforcement)");
+    }
 
     const version = params.entryPointVersion ?? this.ethereum.getDefaultVersion();
     if (version === EntryPointVersion.V0_6) {

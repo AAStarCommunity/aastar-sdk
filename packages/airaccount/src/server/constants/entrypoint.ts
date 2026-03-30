@@ -54,7 +54,6 @@ export const FACTORY_ABI_V7_V8 = [
   "function createAccount(address creator, address signer, address aaStarValidator, bool useAAStarValidator, uint256 salt) returns (address)",
 ];
 
-
 export const ACCOUNT_ABI = [
   "function execute(address dest, uint256 value, bytes calldata func) external",
 ];

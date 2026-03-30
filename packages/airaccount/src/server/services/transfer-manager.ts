@@ -442,13 +442,20 @@ export class TransferManager {
           if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
             // Guardian account: use createAccountWithDefaults so the factory-computed address
             // matches the stored sender (which was predicted via getAddressWithDefaults).
+            // ethers.js v6: bytes params require 0x-prefixed hex — guard against missing prefix.
+            const sig1 = account.guardian1Sig.startsWith("0x")
+              ? account.guardian1Sig
+              : `0x${account.guardian1Sig}`;
+            const sig2 = account.guardian2Sig.startsWith("0x")
+              ? account.guardian2Sig
+              : `0x${account.guardian2Sig}`;
             deployCalldata = factory.interface.encodeFunctionData("createAccountWithDefaults", [
               account.signerAddress,
               account.salt,
               account.guardian1,
-              account.guardian1Sig,
+              sig1,
               account.guardian2,
-              account.guardian2Sig,
+              sig2,
               storedDailyLimit,
             ]);
           } else {

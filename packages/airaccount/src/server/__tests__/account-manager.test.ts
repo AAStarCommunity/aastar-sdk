@@ -21,16 +21,16 @@ function makeEthereumMock(overrides: Record<string, jest.Mock> = {}) {
   };
 
   return {
-    getDefaultVersion: jest.fn().mockReturnValue(EntryPointVersion.V0_6),
-    getFactoryContract: jest.fn().mockReturnValue(mockFactory),
-    getValidatorContract: jest.fn().mockReturnValue({ target: VALIDATOR_ADDRESS }),
-    getValidatorAddress: jest.fn().mockReturnValue(VALIDATOR_ADDRESS),
-    getFactoryAddress: jest.fn().mockReturnValue(FACTORY_ADDRESS),
-    getProvider: jest.fn().mockReturnValue({
-      getCode: jest.fn().mockResolvedValue("0x"), // not deployed by default
+    getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_6),
+    getFactoryContract: vi.fn().mockReturnValue(mockFactory),
+    getValidatorContract: vi.fn().mockReturnValue({ target: VALIDATOR_ADDRESS }),
+    getValidatorAddress: vi.fn().mockReturnValue(VALIDATOR_ADDRESS),
+    getFactoryAddress: vi.fn().mockReturnValue(FACTORY_ADDRESS),
+    getProvider: vi.fn().mockReturnValue({
+      getCode: vi.fn().mockResolvedValue("0x"), // not deployed by default
     }),
-    getBalance: jest.fn().mockResolvedValue("1.5"),
-    getNonce: jest.fn().mockResolvedValue(3n),
+    getBalance: vi.fn().mockResolvedValue("1.5"),
+    getNonce: vi.fn().mockResolvedValue(3n),
     ...overrides,
   };
 }
@@ -103,7 +103,7 @@ describe("AccountManager", () => {
 
     it("marks account as deployed when contract code exists", async () => {
       ethereum.getProvider.mockReturnValue({
-        getCode: jest.fn().mockResolvedValue("0x6080604052"), // non-empty bytecode
+        getCode: vi.fn().mockResolvedValue("0x6080604052"), // non-empty bytecode
       });
 
       const account = await manager.createAccount("user-1");
@@ -112,7 +112,7 @@ describe("AccountManager", () => {
 
     it("marks account as not deployed when getCode throws (RPC failure)", async () => {
       ethereum.getProvider.mockReturnValue({
-        getCode: jest.fn().mockRejectedValue(new Error("RPC error")),
+        getCode: vi.fn().mockRejectedValue(new Error("RPC error")),
       });
 
       const account = await manager.createAccount("user-1");
@@ -269,6 +269,17 @@ describe("AccountManager", () => {
       const h2 = manager.buildGuardianAcceptanceHash(OWNER, 99, FACTORY, CHAIN_ID);
       expect(h1).not.toBe(h2);
     });
+
+    it("matches known contract encoding vector (golden value)", () => {
+      // Pre-computed: keccak256(solidityPacked(
+      //   ["string","uint256","address","address","uint256"],
+      //   ["ACCEPT_GUARDIAN", 11155111, factory, owner, 42]
+      // ))
+      // Matches the contract's abi.encodePacked before toEthSignedMessageHash().
+      expect(
+        manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID)
+      ).toBe("0xc33ef49e1f171163a391bd35e80f4ed220ec9bb14d6a993c3baa048b13ac80c3");
+    });
   });
 
   // ── createAccountWithGuardians ─────────────────────────────────────
@@ -288,10 +299,22 @@ describe("AccountManager", () => {
         target: FACTORY_ADDRESS,
       };
       return makeEthereumMock({
-        getDefaultVersion: jest.fn().mockReturnValue(EntryPointVersion.V0_7),
-        getFactoryContract: jest.fn().mockReturnValue(mockFactory),
+        getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_7),
+        getFactoryContract: vi.fn().mockReturnValue(mockFactory),
       });
     }
+
+    it("throws when dailyLimit is zero", async () => {
+      const eth7 = makeV7Mock();
+      const mgr7 = new AccountManager(eth7 as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr7.createAccountWithGuardians("user-1", {
+          guardian1: GUARDIAN1, guardian1Sig: GUARDIAN1_SIG,
+          guardian2: GUARDIAN2, guardian2Sig: GUARDIAN2_SIG,
+          dailyLimit: 0n,
+        })
+      ).rejects.toThrow("dailyLimit > 0");
+    });
 
     it("throws for EntryPoint v0.6", async () => {
       await expect(
