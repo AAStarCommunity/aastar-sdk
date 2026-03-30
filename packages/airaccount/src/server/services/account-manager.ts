@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
 import { ISignerAdapter } from "../interfaces/signer-adapter";
-import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ADDRESSES } from "../constants/entrypoint";
+import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 
 /**
@@ -141,10 +141,19 @@ export class AccountManager {
 
   /**
    * Build the acceptance hash that guardian devices must sign before account creation.
-   * The hash is domain-separated: keccak256("ACCEPT_GUARDIAN" || chainId || factory || owner || salt)
-   * Each guardian signs the EIP-191 prefixed version: ethers.hashMessage(ethers.getBytes(hash))
    *
-   * @returns hex hash string — encode this into the QR code shown to guardian devices
+   * Encoding: keccak256(solidityPacked(
+   *   ["string","uint256","address","address","uint256"],
+   *   ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt]
+   * ))
+   * Total packed bytes: 13 + 32 + 20 + 20 + 32 = 117 bytes
+   *
+   * Returns the RAW keccak256 hash (no EIP-191 prefix).
+   * Guardians MUST sign via personal_sign / ethers.signMessage(ethers.getBytes(hash)).
+   * Do NOT use eth_sign — the EIP-191 "\x19Ethereum Signed Message:\n32" prefix
+   * is applied inside the contract (toEthSignedMessageHash) before ecrecover, not here.
+   *
+   * @returns raw hex keccak256 hash — encode this into the QR code shown to guardian devices
    */
   buildGuardianAcceptanceHash(
     owner: string,
@@ -182,6 +191,10 @@ export class AccountManager {
       entryPointVersion?: EntryPointVersion;
     }
   ): Promise<AccountRecord> {
+    if (params.guardian1.toLowerCase() === params.guardian2.toLowerCase()) {
+      throw new Error("guardian1 and guardian2 must be different addresses");
+    }
+
     const version = params.entryPointVersion ?? this.ethereum.getDefaultVersion();
     if (version === EntryPointVersion.V0_6) {
       throw new Error(
@@ -193,19 +206,15 @@ export class AccountManager {
 
     const existingAccounts = await this.storage.getAccounts();
     const existing = existingAccounts.find(
-      a => a.userId === userId && a.entryPointVersion === versionStr
+      a => a.userId === userId && a.entryPointVersion === versionStr && a.guardian1
     );
     if (existing) return existing;
 
     const { address: signerAddress } = await this.signer.ensureSigner(userId);
     const salt = params.salt ?? Math.floor(Math.random() * 1000000);
 
-    const factoryAddress = this.ethereum.getFactoryAddress(version);
-    const factory = new ethers.Contract(
-      factoryAddress,
-      AIRACCOUNT_FACTORY_ABI,
-      this.ethereum.getProvider()
-    );
+    const factory = this.ethereum.getFactoryContract(version);
+    const factoryAddress = (factory.target as string) ?? this.ethereum.getFactoryAddress(version);
 
     const accountAddress = await factory.getFunction("getAddressWithDefaults")(
       signerAddress,
