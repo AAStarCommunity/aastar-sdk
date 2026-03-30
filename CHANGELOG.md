@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-03-30
+
 ### Breaking Changes
 - `AIRACCOUNT_ADDRESSES.sepolia.factory` now points to M7 r6 (`0x42f82d77...`).
   Existing M7 r5 accounts will have different CREATE2 addresses under the new factory.
@@ -154,8 +156,8 @@ All notable changes to this project will be documented in this file.
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code immediately after installation.
 
-**Current Code Integrity Hash (v0.18.0)**:
-`47d8780693e31c970ff862af24d755867d50eaeb93f1749e95965bccb77e6881`
+**Current Code Integrity Hash (v0.19.0)**:
+`b39aef2a020061c37725d0e80295774dadadc7ff964fef723287bfc71520dbb5`
 
 To verify, run this stable command (excludes non-code markdown files):
 ```bash
