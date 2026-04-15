@@ -499,3 +499,8 @@ git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 
 ---
 MIT © AAStar Community / AAStar 社区
+
+## License
+
+Licensed under the [Apache License, Version 2.0](https://opensource.org/licenses/Apache-2.0). See [LICENSE](./LICENSE) for details.
+
