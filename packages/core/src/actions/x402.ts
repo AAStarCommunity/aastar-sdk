@@ -1,7 +1,47 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateDeployedAddress } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
+
+/**
+ * Computes the storage key for x402SettlementNonces[key].
+ * Mirrors SuperPaymaster.x402NonceKey: keccak256(abi.encode(asset, from, nonce)).
+ * Changed from raw nonce (pre P0-13) to triple-key (post P0-13).
+ */
+export function x402NonceKey(asset: Address, from: Address, nonce: Hex): Hex {
+  return keccak256(encodeAbiParameters(
+    parseAbiParameters('address, address, bytes32'),
+    [asset, from, nonce]
+  ));
+}
+
+/**
+ * Checks if an x402 settlement nonce has been used.
+ * Queries the triple-key slot: keccak256(abi.encode(asset, from, nonce)).
+ * Replaces the pre-P0-13 pattern of querying x402SettlementNonces({ nonce }).
+ */
+export async function x402IsNonceUsed(
+  client: PublicClient,
+  superPaymasterAddress: Address,
+  params: { asset: Address; from: Address; nonce: Hex }
+): Promise<boolean> {
+  const key = x402NonceKey(params.asset, params.from, params.nonce);
+  const result = await client.readContract({
+    address: superPaymasterAddress,
+    abi: [
+      {
+        inputs: [{ internalType: 'bytes32', name: '', type: 'bytes32' }],
+        name: 'x402SettlementNonces',
+        outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ],
+    functionName: 'x402SettlementNonces',
+    args: [key],
+  });
+  return result as boolean;
+}
 
 export type X402Actions = {
     // Settlement
