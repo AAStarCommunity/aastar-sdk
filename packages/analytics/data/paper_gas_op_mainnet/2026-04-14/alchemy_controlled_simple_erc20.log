@@ -1,0 +1,120 @@
+[2026-04-14T09:34:15.658Z] === Start run: n=22, label=B1_ALCHEMY_CONTROLLED ===
+[2026-04-14T09:34:27.257Z] Run 1: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
+[2026-04-14T09:34:55.215Z] Run 2: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
+[2026-04-14T09:35:10.361Z] Run 3: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
+[2026-04-14T09:35:24.671Z] Run 4: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
+[2026-04-14T09:35:39.137Z] Run 5: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
+[2026-04-14T09:35:54.966Z] Run 6: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
+[2026-04-14T09:36:10.303Z] Run 7: FAILED HTTP request failed.
+
+URL: https://opt-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_API_KEY
+Request body: {"method":"eth_call","params":[{"data":"0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000","to":"0x0000000071727De22E5E9d8BAf0edAc6f37da032"},"latest"]}
+ 
+Raw Call Arguments:
+  to:    0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  data:  0x35567e1a000000000000000000000000e8eaad6a4802300f33e53c40e65863cccda6898b0000000000000000000000000000000000000000000000000000000000000000
+ 
+Contract Call:
+  address:   0x0000000071727De22E5E9d8BAf0edAc6f37da032
+  function:  getNonce(address, uint192)
+  args:              (0xe8eaad6a4802300f33e53c40e65863cccda6898b, 0)
+
+Docs: https://viem.sh/docs/contract/readContract
+Details: Unexpected token 'M', "Must be au"... is not valid JSON
+Version: viem@2.43.3
