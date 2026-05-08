@@ -1,0 +1,38 @@
+{
+  "name": "@aastar/message-relay",
+  "version": "0.1.0",
+  "publishConfig": { "access": "public" },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "spore-relay": "./dist/bin/spore-relay.js"
+  },
+  "exports": {
+    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+  },
+  "files": ["dist", "docker"],
+  "dependencies": {
+    "nostr-tools": "^2.7.2",
+    "@scure/base": "^1.2.4",
+    "ws": "^8.18.0",
+    "better-sqlite3": "^11.0.0",
+    "@noble/curves": "^1.8.0",
+    "@noble/hashes": "^1.7.0",
+    "viem": "2.43.3"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2",
+    "@types/ws": "^8.5.10",
+    "@types/better-sqlite3": "^7.6.11",
+    "vitest": "^3.0.0"
+  },
+  "scripts": {
+    "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
+    "prebuild": "pnpm clean",
+    "build": "tsc",
+    "test": "vitest run",
+    "start": "node dist/bin/spore-relay.js"
+  }
+}
