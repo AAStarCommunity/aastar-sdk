@@ -26,6 +26,10 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",
+    // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
+    // Kept here so the inferred CanonicalAddresses union has `pnts` on every
+    // chain (consumers see Address, not Address|undefined per-chain).
+    pnts: "0x0000000000000000000000000000000000000000",
   },
 
   // --- Sepolia (Chain ID: 11155111) ---
@@ -85,6 +89,8 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",
+    // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
+    pnts: "0x0000000000000000000000000000000000000000",
   }
 } as const;
 
