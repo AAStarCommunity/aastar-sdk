@@ -24,9 +24,9 @@ async function main() {
     
     const hash = await walletClient.writeContract({
         address: superPaymaster,
-        abi: parseAbi(['function updatePriceDVT(int256 price, uint256 updatedAt, bytes calldata proof) external']),
+        abi: parseAbi(['function updatePriceDVT(int256 price, uint256 updatedAt, bytes calldata proof, uint8 chainlinkRecovered) external']),
         functionName: 'updatePriceDVT',
-        args: [price, BigInt(now), proof]
+        args: [price, BigInt(now), proof, 0]
     });
     console.log(`📝 Transaction: ${hash}`);
     

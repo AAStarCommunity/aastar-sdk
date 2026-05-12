@@ -244,15 +244,17 @@ To establish a pure **0-PVG architectural control group** free from ERC-4337 bun
 
 **Data Source & Methodology:**
 - **Target Contract (`USDC`)**: `0x0b2c639c533813f4aa9d7837caf62653d097ff85` on OP Mainnet.
-- **Acquisition Script**: `packages/analytics/scripts/collect_eoa_baseline.ts`
-- **Method**: The script natively iterates backwards from recent blocks, fetching OP Mainnet standard `Transfer` events (`0xddf252ad...`). It verifies that `tx.to` is exactly the USDC contract (excluding Router swaps) and retrieves the exact `gasUsed` from `eth_getTransactionReceipt`. Exceedingly high values (>80k) are parsed out to avoid complex smart-contract multisig/proxy interactions masquerading as basic transfers. 
+- **Acquisition Script**: `packages/analytics/scripts/collect_eoa_erc20_baseline.ts`
+- **Output CSV**: `packages/analytics/data/eoa_erc20_baseline.csv`
+- **Method**: The script iterates backwards from recent blocks, fetching OP Mainnet standard `Transfer` events (`0xddf252ad...`). It verifies that `tx.to` is exactly the USDC contract, `input` is a direct ERC20 `transfer(address,uint256)`, and `tx.from` has no contract code at the transaction block. It retrieves exact `gasUsed` from `eth_getTransactionReceipt`; values outside the normal ERC20 transfer range (`<=35k` or `>=80k`) are excluded.
 
 **Statistical Breakdown (`n=50`)**:
 - **Sample size**: `n = 50`
-- **Mean L2 Execution Gas** (`txGasUsed`): `48,826`
-- **95% Confidence Interval**: `±673`
+- **Mean L2 Execution Gas** (`txGasUsed`): `43,334`
+- **Range**: `40,235 - 62,689`
+- **95% Confidence Interval**: `±1,492`
 
-*Contextual Note*: The variation inside pure EOA transfers (~48k) strictly maps to EVM cold/warm slot state-access deltas (e.g. `SSTORE` triggers). This establishes the absolute physical gas floor for any token transfer, completely eliminating ERC-4337 noise, and is utilized functionally in Paper 3's *Total Cost* breakdown formulas (Table 5.1 & 5.2).
+*Contextual Note*: The variation inside pure EOA transfers (~43k mean, with cold/warm storage-access deltas such as `SSTORE` effects) establishes the absolute physical gas floor for direct token transfers, completely eliminating ERC-4337 noise, and is utilized functionally in Paper 3's *Total Cost* breakdown formulas (Table 5.1 & 5.2).
 
 ### 6. Suggested Paper Phrasing (Avoiding Overstated Conclusions)
 
