@@ -19,7 +19,7 @@ export const DEFAULT_ADMIN_ROLE: Hash = '0x0000000000000000000000000000000000000
  * Community Role
  * @description Community administrator, can issue xPNTs, configure SBT rules
  * @permission Community-level governance
- * @requirement minStake: 30 GT, entryBurn: 3 GT (line 99)
+ * @requirement minStake: 30 GT, ticketPrice: 3 GT (line 99)
  * @exitFee 5% (500 basis points), min 1 GT
  * @lockDuration 30 days
  * @source Registry.sol line 32: ROLE_COMMUNITY = keccak256("COMMUNITY")
@@ -30,7 +30,7 @@ export const ROLE_COMMUNITY: Hash = keccak256(toHex('COMMUNITY'));
  * End User Role
  * @description Community member, can participate and use gasless transactions
  * @permission Basic user level
- * @requirement minStake: 0.3 GT, entryBurn: 0.05 GT (line 100)
+ * @requirement minStake: 0.3 GT, ticketPrice: 0.05 GT (line 100)
  * @additionalRequirement Must hold MySBT from community
  * @exitFee 10% (1000 basis points), min 0.05 GT
  * @lockDuration 7 days
@@ -42,7 +42,7 @@ export const ROLE_ENDUSER: Hash = keccak256(toHex('ENDUSER'));
  * Paymaster AOA Role (Account Ownership Authentication)
  * @description Basic Paymaster node operator with account-based auth
  * @permission Infrastructure operator
- * @requirement minStake: 30 GT, entryBurn: 3 GT (line 92)
+ * @requirement minStake: 30 GT, ticketPrice: 3 GT (line 92)
  * @exitFee 10% (1000 basis points), min 1 GT
  * @lockDuration 30 days
  * @source Registry.sol line 34: ROLE_PAYMASTER_AOA = keccak256("PAYMASTER_AOA")
@@ -53,7 +53,7 @@ export const ROLE_PAYMASTER_AOA: Hash = keccak256(toHex('PAYMASTER_AOA'));
  * Paymaster Super Role
  * @description Advanced Paymaster operator, can use SuperPaymaster with aPNTs collateral
  * @permission Infrastructure operator (higher tier)
- * @requirement minStake: 50 GT, entryBurn: 5 GT (line 93)
+ * @requirement minStake: 50 GT, ticketPrice: 5 GT (line 93)
  * @additionalRequirement aPNTs collateral in SuperPaymaster contract
  * @exitFee 10% (1000 basis points), min 2 GT
  * @lockDuration 30 days
@@ -65,7 +65,7 @@ export const ROLE_PAYMASTER_SUPER: Hash = keccak256(toHex('PAYMASTER_SUPER'));
  * DVT Role (Distributed Validator Technology)
  * @description DVT node operator for consensus validation
  * @permission Infrastructure operator
- * @requirement minStake: 30 GT, entryBurn: 3 GT (line 94)
+ * @requirement minStake: 30 GT, ticketPrice: 3 GT (line 94)
  * @exitFee 10% (1000 basis points), min 1 GT
  * @lockDuration 30 days
  * @source Registry.sol line 36: ROLE_DVT = keccak256("DVT")
@@ -76,7 +76,7 @@ export const ROLE_DVT: Hash = keccak256(toHex('DVT'));
  * ANODE Role (Anonymous Node)
  * @description Anonymous infrastructure node operator
  * @permission Infrastructure operator
- * @requirement minStake: 20 GT, entryBurn: 2 GT (line 95)
+ * @requirement minStake: 20 GT, ticketPrice: 2 GT (line 95)
  * @exitFee 10% (1000 basis points), min 1 GT
  * @lockDuration 30 days
  * @source Registry.sol line 37: ROLE_ANODE = keccak256("ANODE")
@@ -87,7 +87,7 @@ export const ROLE_ANODE: Hash = keccak256(toHex('ANODE'));
  * KMS Role (Key Management Service)
  * @description KMS operator for secure key storage and management
  * @permission Infrastructure operator (highest stake)
- * @requirement minStake: 100 GT, entryBurn: 10 GT (line 98)
+ * @requirement minStake: 100 GT, ticketPrice: 10 GT (line 98)
  * @exitFee 10% (1000 basis points), min 5 GT
  * @lockDuration 30 days
  * @source Registry.sol line 38: ROLE_KMS = keccak256("KMS")
@@ -101,7 +101,7 @@ export const ROLE_KMS: Hash = keccak256(toHex('KMS'));
  */
 export interface RoleConfig {
     minStake: bigint;           // Minimum GToken stake required
-    entryBurn: bigint;          // Amount burned on entry
+    ticketPrice: bigint;        // Ticket price for role entry
     slashThreshold: number;     // Slash threshold (0-100)
     slashBase: number;          // Base slash percentage
     slashIncrement: number;     // Increment per offense
@@ -109,6 +109,7 @@ export interface RoleConfig {
     exitFeePercent: bigint;     // Exit fee percentage (basis points, 1000 = 10%)
     minExitFee: bigint;         // Minimum exit fee
     isActive: boolean;          // Whether role is active
+    isOperatorRole?: boolean;   // Whether this is an operator role
     description: string;        // Role description
 }
 
@@ -172,7 +173,7 @@ export const ROLE_PERMISSION_LEVELS: Record<string, RolePermissionLevel> = {
 export const INITIAL_ROLE_STAKES = {
     [ROLE_PAYMASTER_AOA]: {
         minStake: '30 GT',
-        entryBurn: '3 GT',
+        ticketPrice: '3 GT',
         exitFeePercent: '10%',
         minExitFee: '1 GT',
         lockDuration: '30 days',
@@ -180,7 +181,7 @@ export const INITIAL_ROLE_STAKES = {
     },
     [ROLE_PAYMASTER_SUPER]: {
         minStake: '50 GT',
-        entryBurn: '5 GT',
+        ticketPrice: '5 GT',
         exitFeePercent: '10%',
         minExitFee: '2 GT',
         lockDuration: '30 days',
@@ -189,7 +190,7 @@ export const INITIAL_ROLE_STAKES = {
     },
     [ROLE_DVT]: {
         minStake: '30 GT',
-        entryBurn: '3 GT',
+        ticketPrice: '3 GT',
         exitFeePercent: '10%',
         minExitFee: '1 GT',
         lockDuration: '30 days',
@@ -197,7 +198,7 @@ export const INITIAL_ROLE_STAKES = {
     },
     [ROLE_ANODE]: {
         minStake: '20 GT',
-        entryBurn: '2 GT',
+        ticketPrice: '2 GT',
         exitFeePercent: '10%',
         minExitFee: '1 GT',
         lockDuration: '30 days',
@@ -205,7 +206,7 @@ export const INITIAL_ROLE_STAKES = {
     },
     [ROLE_KMS]: {
         minStake: '100 GT',
-        entryBurn: '10 GT',
+        ticketPrice: '10 GT',
         exitFeePercent: '10%',
         minExitFee: '5 GT',
         lockDuration: '30 days',
@@ -213,7 +214,7 @@ export const INITIAL_ROLE_STAKES = {
     },
     [ROLE_COMMUNITY]: {
         minStake: '30 GT',
-        entryBurn: '3 GT',
+        ticketPrice: '3 GT',
         exitFeePercent: '5%',
         minExitFee: '1 GT',
         lockDuration: '30 days',
@@ -221,7 +222,7 @@ export const INITIAL_ROLE_STAKES = {
     },
     [ROLE_ENDUSER]: {
         minStake: '0.3 GT',
-        entryBurn: '0.05 GT',
+        ticketPrice: '0.05 GT',
         exitFeePercent: '10%',
         minExitFee: '0.05 GT',
         lockDuration: '7 days',

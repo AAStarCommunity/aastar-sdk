@@ -5,7 +5,7 @@ import { AAStarError } from '../errors/index.js';
 
 export type StakingActions = {
     // Staking Operations
-    lockStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, entryBurn: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
+    lockStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, ticketPrice: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
     topUpStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
     unlockStake: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     unlockAndTransfer: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -80,17 +80,17 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
      * @internal
      * @warning This is a low-level internal API. Use high-level clients instead.
      */
-    async lockStake({ user, roleId, stakeAmount, entryBurn, payer, account }) {
+    async lockStake({ user, roleId, stakeAmount, ticketPrice, payer, account }) {
         try {
             validateAddress(user, 'user');
             validateAddress(payer, 'payer');
             validateAmount(stakeAmount, 'stakeAmount');
-            validateAmount(entryBurn, 'entryBurn');
+            validateAmount(ticketPrice, 'ticketPrice');
             return await (client as any).writeContract({
                 address,
                 abi: GTokenStakingABI,
                 functionName: 'lockStake',
-                args: [user, roleId, stakeAmount, entryBurn, payer],
+                args: [user, roleId, stakeAmount, ticketPrice, payer],
                 account: account as any,
                 chain: (client as any).chain
             });
