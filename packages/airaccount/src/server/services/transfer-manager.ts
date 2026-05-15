@@ -169,11 +169,11 @@ export class TransferManager {
     }
 
     if (useECDSA) {
-      // M4 ECDSA path: raw 65-byte sig, no validator needed
-      this.logger.log("M4: using ECDSA signature (validator not set)");
+      // M7 ECDSA path: prepend algId=0x02 (ECDSA) for compositeValidator routing
+      this.logger.log("M7: using ECDSA signature with algId=0x02 prefix");
       const signer = await this.signer.getSigner(userId, assertionCtx);
       const ecdsaSig = await signer.signMessage(ethers.getBytes(userOpHash));
-      userOp.signature = ecdsaSig;
+      userOp.signature = ethers.concat(["0x02", ecdsaSig]);
     } else if (params.useAirAccountTiering && this.guardChecker) {
       // AirAccount tiered signature routing
       const transferValue = params.tokenAddress ? 0n : ethers.parseEther(params.amount);
