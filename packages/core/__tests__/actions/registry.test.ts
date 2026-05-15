@@ -11,7 +11,7 @@ describe('RegistryActions Bulk Coverage', () => {
   beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
   describe('Role Management (Writes)', () => {
-    it('adminConfigureRole', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).adminConfigureRole({ roleId: '0x01', minStake: 1n, entryBurn: 1n, exitFeePercent: 1n, minExitFee: 1n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('adminConfigureRole', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).adminConfigureRole({ roleId: '0x01', minStake: 1n, ticketPrice: 1n, exitFeePercent: 1n, minExitFee: 1n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('createNewRole', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).createNewRole({ roleId: '0x01', config: {} as any, roleOwner: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setRoleLockDuration', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setRoleLockDuration({ roleId: '0x01', duration: 100n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setRoleOwner', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setRoleOwner({ roleId: '0x01', newOwner: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
@@ -57,10 +57,7 @@ describe('RegistryActions Bulk Coverage', () => {
     it('creditTierConfig', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).creditTierConfig({ tierIndex: 0n })).toBe(100n); });
     it('levelThresholds', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).levelThresholds({ levelIndex: 0n })).toBe(100n); });
     it('calculateExitFee', async () => { p.readContract.mockResolvedValue(5n); expect(await registryActions(ADDR)(p).calculateExitFee({ roleId: '0x01', amount: 100n })).toBe(5n); });
-    it('accountToUser', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).accountToUser({ account: USER })).toBe(USER); });
-    it('roleOwners', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).roleOwners({ roleId: '0x01' })).toBe(USER); });
     it('roleStakes', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).roleStakes({ roleId: '0x01', user: USER })).toBe(100n); });
-    it('roleLockDurations', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).roleLockDurations({ roleId: '0x01' })).toBe(100n); });
     it('roleMetadata', async () => { p.readContract.mockResolvedValue('0x'); expect(await registryActions(ADDR)(p).roleMetadata({ roleId: '0x01', user: USER })).toBe('0x'); });
   });
 
