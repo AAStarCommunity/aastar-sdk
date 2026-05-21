@@ -72,21 +72,35 @@ export const AIRACCOUNT_ADDRESSES = {
     factoryM5: "0xd72a236d84be6c388a8bc7deb64afd54704ae385",
     // M7 factory r5 (prev) — defaultCommunityGuardian was address(0), do not use for new accounts
     factoryM7r5Prev: "0xa0007c5db27548d8c1582773856db1d123107383",
-    // M7 factory r6 — defaultCommunityGuardian = team Safe 0x51eD...E114 (deployed 2026-03-29)
-    // BREAKING CHANGE: `.factory` now points to r6. Accounts created here have a new CREATE2 address.
-    factory: "0x42f82d77f9cf940686b6a64a369245cb563e0e85",
-    // M7 factory alias — use this to be explicit about targeting M7
-    factoryM7: "0x42f82d77f9cf940686b6a64a369245cb563e0e85",
-    // M7 account implementation r6 (shared by all clone proxies)
-    accountImpl: "0x2F1B4EB63143D338bE78d0AF878B806f075080c1",
+
+    // ── Deprecated: r6 addresses (2026-03-29 deployment, superseded by r4 audit-final) ──────────
+    // Retain for legacy account lookups and historical event indexing ONLY.
+    // DO NOT use for new account creation — CREATE2 address will differ from r4.
+    /** @deprecated Use {@link factory} (r4 audit-final) for new accounts. */
+    factoryM7r6: "0x42f82d77f9cf940686b6a64a369245cb563e0e85",
+    /** @deprecated Use {@link accountImpl} (r4 audit-final). */
+    accountImplM7r6: "0x2F1B4EB63143D338bE78d0AF878B806f075080c1",
+    /** @deprecated Use {@link compositeValidator} (r4 audit-final). */
+    compositeValidatorM7r6: "0x4135c539fec5e200fe9762b721f6829b2315cbe1",
+    /** @deprecated Use {@link tierGuardHook} (r4 audit-final). */
+    tierGuardHookM7r6: "0x73572e9e6138fd53465ee243e2fb4842cf86a787",
+    /** @deprecated Use {@link agentSessionKeyValidator} (r4 audit-final). */
+    agentSessionKeyValidatorM7r6: "0xa3e52db4b6e0a9d7cd5dd1414a90eedcf950e029",
+
+    // ── Current: r4 audit-final (freeze/m7-v0.16.0, 660 tests, all audit findings resolved) ─────
+    // M7 factory r4 — EIP-1167 clone factory, full audit-final release
+    factory: "0x61bbaf9e1b8fd78ff874776cfa50497db9d43c3f",
+    factoryM7: "0x61bbaf9e1b8fd78ff874776cfa50497db9d43c3f",
+    // M7 account implementation r4 (shared by all clone proxies, 23,847B EIP-170 compliant)
+    accountImpl: "0xA674D308ce22230B70412b20Ee5a66fC6B24F49c",
     validatorRouter: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
     blsAlgorithm: "0xc2096E8D04beb3C337bb388F5352710d62De0287",
     blsAggregator: "0x7700aec8a15a94db5697c581de8c88ecf83b59ff",
     superPaymaster: "0x16cE0c7d846f9446bbBeb9C5a84A4D140fAeD94A",
-    // M7 r5 ERC-7579 modules (pre-installed by factory on every new account)
-    compositeValidator: "0x4135c539fec5e200fe9762b721f6829b2315cbe1",
-    tierGuardHook: "0x73572e9e6138fd53465ee243e2fb4842cf86a787",
-    agentSessionKeyValidator: "0xa3e52db4b6e0a9d7cd5dd1414a90eedcf950e029",
+    // M7 r4 ERC-7579 modules (pre-installed by factory on every new account)
+    compositeValidator: "0xb65569950c48aa56dbe876915ca3605fd6ff2980",
+    tierGuardHook: "0x67f878295cff7451cbd2a775c4490607af1b07d7",
+    agentSessionKeyValidator: "0x1f06961e133217801f92e1cf552187f594a32873",
     // M6 继承合约（M7 factory 仍可配合使用）
     sessionKeyValidator: "0xcaba5a18e46f728b5330ea33bd099693a1b76217",
     calldataParserRegistry: "0x7099eb39fbab795e66dd71fbeaace150edf1b3c3",
