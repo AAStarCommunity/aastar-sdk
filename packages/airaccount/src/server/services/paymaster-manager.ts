@@ -169,7 +169,7 @@ export class PaymasterManager {
 
         if (isSuperPaymaster) {
           const verGas = BigInt(80000);
-          const postGas = BigInt(100000);
+          const postGas = BigInt(300000);
           const maxRate = (BigInt(1) << BigInt(256)) - BigInt(1);
           return ethers.concat([
             formattedAddress,
