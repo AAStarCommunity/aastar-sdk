@@ -8,12 +8,43 @@ import { TokenService } from "./token-service";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
 import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
 import { LegacyPasskeyAssertion } from "./kms-signer";
-import { EntryPointVersion } from "../constants/entrypoint";
+import { EntryPointVersion, ALG_ID } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { PaymasterPriceStalenessError } from "./paymaster-manager";
 import { UserOperation, PackedUserOperation } from "../../core/types";
 import { ERC4337Utils } from "../../core/erc4337";
 import { TierLevel } from "../../core/tier";
+
+// ── Signature strategy detection ─────────────────────────────────
+
+/**
+ * Determines whether to use plain ECDSA and whether the account is a compositeValidator.
+ * Exported for unit testing.
+ */
+export async function detectSignatureStrategy(
+  provider: ethers.Provider,
+  accountAddress: string
+): Promise<{ useECDSA: boolean; isCompositeValidator: boolean }> {
+  try {
+    const accountCode = await provider.getCode(accountAddress);
+    if (accountCode === "0x") {
+      // Counterfactual AirAccount: will deploy as compositeValidator.
+      return { useECDSA: true, isCompositeValidator: true };
+    }
+    const acc = new ethers.Contract(
+      accountAddress,
+      ["function validator() view returns (address)"],
+      provider
+    );
+    const v = (await acc.validator()) as string;
+    // validator() exists → confirmed compositeValidator account.
+    return { useECDSA: v === ethers.ZeroAddress, isCompositeValidator: true };
+  } catch {
+    // validator() call failed: account may not be compositeValidator.
+    // Use raw ECDSA (no algId prefix) to avoid AA24 on non-compositeValidator accounts.
+    return { useECDSA: true, isCompositeValidator: false };
+  }
+}
 
 // ── Public DTOs ───────────────────────────────────────────────────
 
@@ -146,34 +177,28 @@ export class TransferManager {
       ? { assertion: params.passkeyAssertion }
       : undefined;
 
-    // M4 accounts: check if validator is set; if not, use ECDSA instead of BLS
+    // Detect whether this is a compositeValidator account (has validator() fn) or plain ECDSA.
+    // Only compositeValidator accounts expect the algId prefix in the signature.
     let useECDSA = false;
+    let isCompositeValidator = false;
     if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-      try {
-        const provider = this.ethereum.getProvider();
-        const accountCode = await provider.getCode(account.address);
-        if (accountCode === "0x") {
-          useECDSA = true;
-        } else {
-          const acc = new ethers.Contract(
-            account.address,
-            ["function validator() view returns (address)"],
-            provider
-          );
-          const v = await acc.validator();
-          if (v === ethers.ZeroAddress) useECDSA = true;
-        }
-      } catch {
-        useECDSA = true;
-      }
+      const provider = this.ethereum.getProvider();
+      ({ useECDSA, isCompositeValidator } = await detectSignatureStrategy(
+        provider,
+        account.address
+      ));
     }
 
     if (useECDSA) {
-      // M7 ECDSA path: prepend algId=0x02 (ECDSA) for compositeValidator routing
-      this.logger.log("M7: using ECDSA signature with algId=0x02 prefix");
       const signer = await this.signer.getSigner(userId, assertionCtx);
       const ecdsaSig = await signer.signMessage(ethers.getBytes(userOpHash));
-      userOp.signature = ethers.concat(["0x02", ecdsaSig]);
+      if (isCompositeValidator) {
+        this.logger.log("ECDSA path for compositeValidator: prepending algId prefix");
+        userOp.signature = ethers.concat([ethers.toBeHex(ALG_ID.ECDSA, 1), ecdsaSig]);
+      } else {
+        this.logger.log("ECDSA path for non-compositeValidator: raw signature");
+        userOp.signature = ecdsaSig;
+      }
     } else if (params.useAirAccountTiering && this.guardChecker) {
       // AirAccount tiered signature routing
       const transferValue = params.tokenAddress ? 0n : ethers.parseEther(params.amount);
@@ -196,11 +221,10 @@ export class TransferManager {
         ctx: assertionCtx,
       });
     } else {
-      // BLS triple signature with algId 0x01 prefix for M4 account routing
+      // BLS triple signature with algId prefix for compositeValidator routing
       const blsData = await this.blsService.generateBLSSignature(userId, userOpHash, assertionCtx);
       const packedBls = await this.blsService.packSignature(blsData);
-      // Prepend algId=0x01 byte for M4 _validateSignature routing
-      userOp.signature = "0x01" + packedBls.slice(2);
+      userOp.signature = ethers.concat([ethers.toBeHex(ALG_ID.BLS, 1), packedBls]);
     }
 
     // Create transfer record

@@ -169,7 +169,8 @@ export class PaymasterManager {
 
         if (isSuperPaymaster) {
           const verGas = BigInt(80000);
-          const postGas = BigInt(300000);
+          // recordXPNTsDebt + event emit in postOp observed ~117k gas on Sepolia; 300k gives safe headroom.
+          const postGas = BigInt(300_000);
           const maxRate = (BigInt(1) << BigInt(256)) - BigInt(1);
           return ethers.concat([
             formattedAddress,
