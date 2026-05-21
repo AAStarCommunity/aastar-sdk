@@ -96,7 +96,7 @@ describe('@aastar/x402', () => {
         it('should be declared as const', () => {
             // `as const` provides TypeScript-level immutability
             // Verify the structure is stable and well-defined
-            expect(Object.keys(EIP3009_TYPES)).toEqual(['TransferWithAuthorization']);
+            expect(Object.keys(EIP3009_TYPES)).toEqual(['TransferWithAuthorization', 'ReceiveWithAuthorization', 'CancelAuthorization']);
         });
     });
 

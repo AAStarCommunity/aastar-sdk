@@ -9,6 +9,20 @@ export const EIP3009_TYPES = {
         { name: 'validBefore', type: 'uint256' },
         { name: 'nonce', type: 'bytes32' },
     ],
+    // Distinct typehash from TransferWithAuthorization — prevents replay across variants.
+    // msg.sender must equal `to` on-chain (CallerMustBeRecipient error if violated).
+    ReceiveWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' },
+    ],
+    CancelAuthorization: [
+        { name: 'authorizer', type: 'address' },
+        { name: 'nonce', type: 'bytes32' },
+    ],
 } as const;
 
 export function getEIP3009Domain(tokenName: string, tokenVersion: string, chainId: number, verifyingContract: Address) {
@@ -25,6 +39,9 @@ export function generateNonce(): Hex {
     globalThis.crypto.getRandomValues(bytes);
     return toHex(bytes);
 }
+
+// GToken EIP-712 domain constants (GTokenAuthorization v2.2.0)
+export const GTOKEN_EIP712_DOMAIN = { name: 'GToken', version: '1' } as const;
 
 export async function signTransferWithAuthorization(
     walletClient: WalletClient,
@@ -64,6 +81,79 @@ export async function signTransferWithAuthorization(
             value: params.value,
             validAfter: params.validAfter,
             validBefore: params.validBefore,
+            nonce: params.nonce,
+        },
+    });
+}
+
+/**
+ * Sign a ReceiveWithAuthorization for GTokenAuthorization (EIP-3009).
+ * The signed `to` address must be the one submitting the transaction on-chain.
+ * Note: `xPNTsToken` is NOT included in the signature (it's a relay-supplied hint for RC-2).
+ */
+export async function signReceiveWithAuthorization(
+    walletClient: WalletClient,
+    params: {
+        from: Address;
+        to: Address;
+        value: bigint;
+        validAfter: bigint;
+        validBefore: bigint;
+        nonce: Hex;
+        tokenName: string;
+        tokenVersion: string;
+        chainId: number;
+        verifyingContract: Address;
+    }
+): Promise<Hex> {
+    const account = walletClient.account;
+    if (!account) {
+        throw new Error('WalletClient must have an account');
+    }
+
+    return walletClient.signTypedData({
+        account,
+        domain: getEIP3009Domain(params.tokenName, params.tokenVersion, params.chainId, params.verifyingContract),
+        types: EIP3009_TYPES,
+        primaryType: 'ReceiveWithAuthorization',
+        message: {
+            from: params.from,
+            to: params.to,
+            value: params.value,
+            validAfter: params.validAfter,
+            validBefore: params.validBefore,
+            nonce: params.nonce,
+        },
+    });
+}
+
+/**
+ * Sign a CancelAuthorization for GTokenAuthorization (EIP-3009).
+ * Must be signed by the original `authorizer` address.
+ */
+export async function signCancelAuthorization(
+    walletClient: WalletClient,
+    params: {
+        authorizer: Address;
+        nonce: Hex;
+        tokenName: string;
+        tokenVersion: string;
+        chainId: number;
+        verifyingContract: Address;
+    }
+): Promise<Hex> {
+    const account = walletClient.account;
+    if (!account) {
+        throw new Error('WalletClient must have an account');
+    }
+
+    return walletClient.signTypedData({
+        account,
+        domain: getEIP3009Domain(params.tokenName, params.tokenVersion, params.chainId, params.verifyingContract),
+        types: EIP3009_TYPES,
+        primaryType: 'CancelAuthorization',
+        message: {
+            authorizer: params.authorizer,
             nonce: params.nonce,
         },
     });

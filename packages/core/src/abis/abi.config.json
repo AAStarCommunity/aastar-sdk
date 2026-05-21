@@ -9,6 +9,7 @@
     { "name": "DVTValidator.json", "hash": "7fbc002acbd897b23bbdfcc1a50811d2091a1e43a9c05334aa0e787604474f13" },
     { "name": "EntryPoint.json", "hash": "fb52a7e1d92dfed8285b78d1849661936c09401227e27e2eceda905b20cd6844" },
     { "name": "GToken.json", "hash": "27d6adc3c327cdee1d4f8b57f2a19f0a59ac6d9f020e664be6fc4a51ddf828a9" },
+    { "name": "GTokenAuthorization.json", "hash": "6a3e474c6f070ba848b59b718e6477cf30fd35b849a65ecd1d72ccaf512b07e3" },
     { "name": "GTokenStaking.json", "hash": "207b5e22dcfd734c90ca1c1035d06a3cbbd0a6646544ce46e3cde8ed43524d26" },
     { "name": "MicroPaymentChannel.json", "hash": "f91f26a39a5c4f930710c713e117e1fd6f400565e90316e5e54134cc47b47dff" },
     { "name": "MySBT.json", "hash": "b3c2bec8b4d26ff44f39b4c26a7bfc4754add68bd2dd233a7ff0a1facac162cf" },

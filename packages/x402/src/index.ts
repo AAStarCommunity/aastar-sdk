@@ -5,7 +5,15 @@ export type {
     SettleResponse, VerifyResponse, FacilitatorSupported, FacilitatorConfig,
     EIP3009Authorization, DirectPaymentPayload, ResourceInfo, NetworkId,
 } from './types.js';
-export { signTransferWithAuthorization, generateNonce, getEIP3009Domain, EIP3009_TYPES } from './eip3009.js';
+export {
+    signTransferWithAuthorization,
+    signReceiveWithAuthorization,
+    signCancelAuthorization,
+    generateNonce,
+    getEIP3009Domain,
+    EIP3009_TYPES,
+    GTOKEN_EIP712_DOMAIN,
+} from './eip3009.js';
 export {
     encodePaymentRequired, decodePaymentRequired,
     encodePaymentPayload, decodePaymentPayload,
