@@ -11,8 +11,15 @@ export enum AuthorizationState {
 
 export type GTokenAuthorizationActions = GTokenActions & {
     // ── EIP-3009 Write ────────────────────────────────────────────────────────
-    // Any relay may submit. validBefore - validAfter must be < 300s (MAX_AUTH_VALIDITY).
-    // xPNTsToken: address(0) to rely on SBT path alone for RC-2 check.
+    // Any relay may submit. validBefore - validAfter must be <= 300s (MAX_AUTH_VALIDITY).
+    //
+    // xPNTsToken trust model (RC-2):
+    //   xPNTsToken is NOT part of the EIP-712 signature — the signer does not commit to it.
+    //   It is supplied by the relay at submission time as a hint for the RC-2 access check.
+    //   Pass address(0) to fall back to the SBT-only path (no xPNTs required).
+    //   If a non-zero xPNTsToken is accepted by the contract for access, the relay is trusted
+    //   to supply the correct token address. Callers in untrusted relay environments should
+    //   always pass address(0) to avoid relay-supplied access escalation.
     transferWithAuthorization: (args: {
         token: Address;
         from: Address;
@@ -21,6 +28,7 @@ export type GTokenAuthorizationActions = GTokenActions & {
         validAfter: bigint;
         validBefore: bigint;
         nonce: Hex;
+        /** RC-2 access hint — NOT signed; pass address(0) to use SBT path only. See trust model above. */
         xPNTsToken: Address;
         signature: Hex;
         account?: Account | Address;
@@ -36,6 +44,7 @@ export type GTokenAuthorizationActions = GTokenActions & {
         validAfter: bigint;
         validBefore: bigint;
         nonce: Hex;
+        /** RC-2 access hint — NOT signed; pass address(0) to use SBT path only. See trust model above. */
         xPNTsToken: Address;
         signature: Hex;
         account?: Account | Address;

@@ -106,6 +106,16 @@ export async function signReceiveWithAuthorization(
         verifyingContract: Address;
     }
 ): Promise<Hex> {
+    // GTokenAuthorization enforces MAX_AUTH_VALIDITY = 300s on-chain (RC-1).
+    if (params.validBefore <= params.validAfter) {
+        throw new Error('validBefore must be greater than validAfter');
+    }
+    if (params.validBefore - params.validAfter > 300n) {
+        throw new Error(
+            `Authorization window ${params.validBefore - params.validAfter}s exceeds MAX_AUTH_VALIDITY (300s)`
+        );
+    }
+
     const account = walletClient.account;
     if (!account) {
         throw new Error('WalletClient must have an account');
