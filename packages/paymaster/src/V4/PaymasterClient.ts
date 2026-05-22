@@ -336,13 +336,13 @@ export class PaymasterClient {
             verificationGasLimit: options?.verificationGasLimit,
             callGasLimit: options?.callGasLimit,
             paymasterVerificationGasLimit: options?.paymasterVerificationGasLimit,
-            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 150000n
+            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 200_000n
         };
 
         if (options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
             const est = await this.estimateUserOperationGas(
-                client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, 
-                { 
+                client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData,
+                {
                     validityWindow: options?.validityWindow,
                     operator: options?.operator,
                     factory: options?.factory,
@@ -353,7 +353,12 @@ export class PaymasterClient {
             gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;
             gasLimits.callGasLimit = options?.callGasLimit ?? est.callGasLimit;
             gasLimits.paymasterVerificationGasLimit = options?.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
-            gasLimits.paymasterPostOpGasLimit = options?.paymasterPostOpGasLimit ?? est.paymasterPostOpGasLimit;
+            // SuperPaymaster postOp calls burnFromWithOpHash (~40k) + storage writes.
+            // Apply 100k buffer with 200k floor. Pure BigInt to avoid Number precision loss.
+            if (!options?.paymasterPostOpGasLimit) {
+                const _base = est.paymasterPostOpGasLimit + 100_000n;
+                gasLimits.paymasterPostOpGasLimit = _base > 200_000n ? _base : 200_000n;
+            }
         }
 
         // 1. Get Nonce

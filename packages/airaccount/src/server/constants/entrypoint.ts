@@ -70,8 +70,8 @@ export const AIRACCOUNT_ADDRESSES = {
     factoryM4: "0x914db0a849f55e68a726c72fd02b7114b1176d88",
     // M5 factory r5 — 6-field InitConfig, guardian acceptance sigs required
     factoryM5: "0xd72a236d84be6c388a8bc7deb64afd54704ae385",
-    // M7 factory r5 (prev) — defaultCommunityGuardian was address(0), do not use for new accounts
-    factoryM7r5Prev: "0xa0007c5db27548d8c1582773856db1d123107383",
+    /** @deprecated defaultCommunityGuardian was address(0); superseded by r6 and r4. Do not use for new accounts. */
+    factoryM7r5Prev: "0xa0007c5dB27548D8c1582773856dB1D123107383",
 
     // ── Deprecated: r6 addresses (2026-03-29 deployment, superseded by r4 audit-final) ──────────
     // Retain for legacy account lookups and historical event indexing ONLY.
@@ -89,8 +89,8 @@ export const AIRACCOUNT_ADDRESSES = {
 
     // ── Current: r4 audit-final (freeze/m7-v0.16.0, 660 tests, all audit findings resolved) ─────
     // M7 factory r4 — EIP-1167 clone factory, full audit-final release
-    factory: "0x61bbaf9e1b8fd78ff874776cfa50497db9d43c3f",
-    factoryM7: "0x61bbaf9e1b8fd78ff874776cfa50497db9d43c3f",
+    factory: "0x61bBAf9E1b8Fd78fF874776cFa50497dB9d43C3F",
+    factoryM7: "0x61bBAf9E1b8Fd78fF874776cFa50497dB9d43C3F",
     // M7 account implementation r4 (shared by all clone proxies, 23,847B EIP-170 compliant)
     accountImpl: "0xA674D308ce22230B70412b20Ee5a66fC6B24F49c",
     validatorRouter: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
@@ -98,9 +98,9 @@ export const AIRACCOUNT_ADDRESSES = {
     blsAggregator: "0x7700aec8a15a94db5697c581de8c88ecf83b59ff",
     superPaymaster: "0x16cE0c7d846f9446bbBeb9C5a84A4D140fAeD94A",
     // M7 r4 ERC-7579 modules (pre-installed by factory on every new account)
-    compositeValidator: "0xb65569950c48aa56dbe876915ca3605fd6ff2980",
-    tierGuardHook: "0x67f878295cff7451cbd2a775c4490607af1b07d7",
-    agentSessionKeyValidator: "0x1f06961e133217801f92e1cf552187f594a32873",
+    compositeValidator: "0xB65569950C48AA56dbe876915ca3605fD6FF2980",
+    tierGuardHook: "0x67f878295cFF7451CBD2A775C4490607AF1b07d7",
+    agentSessionKeyValidator: "0x1F06961e133217801F92e1CF552187F594a32873",
     // M6 继承合约（M7 factory 仍可配合使用）
     sessionKeyValidator: "0xcaba5a18e46f728b5330ea33bd099693a1b76217",
     calldataParserRegistry: "0x7099eb39fbab795e66dd71fbeaace150edf1b3c3",

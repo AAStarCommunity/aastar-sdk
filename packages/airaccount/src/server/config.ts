@@ -53,16 +53,23 @@ export interface ServerConfig {
   logger?: ILogger;
 }
 
-/** AirAccount contract version selection. */
-export type AirAccountVersion = "M5" | "M7";
+/** AirAccount contract version selection.
+ * - "M7"   — r4 audit-final (default). Use for all new account creation.
+ * - "M7r6" — r6 deployment (2026-03-29, superseded). Use ONLY to recover existing r6-deployed accounts.
+ * - "M5"   — legacy 6-field InitConfig deployment.
+ */
+export type AirAccountVersion = "M5" | "M7" | "M7r6";
 
 /**
  * Build a pre-configured EntryPointVersionConfig for Sepolia using a known AirAccount deployment.
  * Eliminates the need to look up contract addresses manually.
  *
  * @example
- * // Use M7 (default)
+ * // Use M7 r4 audit-final (default)
  * const config = { entryPoints: { v07: sepoliaV07Config() }, ... };
+ *
+ * // Recover an existing r6-deployed account (do NOT use for new accounts)
+ * const config = { entryPoints: { v07: sepoliaV07Config("M7r6") }, ... };
  *
  * // Use M5 legacy
  * const config = { entryPoints: { v07: sepoliaV07Config("M5") }, ... };
@@ -71,7 +78,9 @@ export function sepoliaV07Config(version: AirAccountVersion = "M7"): EntryPointV
   const factoryAddress =
     version === "M5"
       ? AIRACCOUNT_ADDRESSES.sepolia.factoryM5
-      : AIRACCOUNT_ADDRESSES.sepolia.factory;
+      : version === "M7r6"
+      ? AIRACCOUNT_ADDRESSES.sepolia.factoryM7r6
+      : AIRACCOUNT_ADDRESSES.sepolia.factory; // "M7" = r4 audit-final (default)
 
   return {
     entryPointAddress: ENTRYPOINT_ADDRESSES[EntryPointVersion.V0_7].sepolia,
