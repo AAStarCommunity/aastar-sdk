@@ -28,7 +28,7 @@ export async function detectSignatureStrategy(
   try {
     const accountCode = await provider.getCode(accountAddress);
     if (accountCode === "0x") {
-      // Counterfactual AirAccount: will deploy as compositeValidator.
+      // AirAccount factory invariant: all counterfactual addresses are compositeValidator deployments.
       return { useECDSA: true, isCompositeValidator: true };
     }
     const acc = new ethers.Contract(
@@ -40,7 +40,7 @@ export async function detectSignatureStrategy(
     // validator() exists → confirmed compositeValidator account.
     return { useECDSA: v === ethers.ZeroAddress, isCompositeValidator: true };
   } catch {
-    // validator() call failed: account may not be compositeValidator.
+    // Covers both getCode() and validator() failures (network error or non-compositeValidator account).
     // Use raw ECDSA (no algId prefix) to avoid AA24 on non-compositeValidator accounts.
     return { useECDSA: true, isCompositeValidator: false };
   }
@@ -221,7 +221,7 @@ export class TransferManager {
         ctx: assertionCtx,
       });
     } else {
-      // BLS triple signature with algId prefix for compositeValidator routing
+      // BLS accounts are always compositeValidator by design — algId prefix applied unconditionally.
       const blsData = await this.blsService.generateBLSSignature(userId, userOpHash, assertionCtx);
       const packedBls = await this.blsService.packSignature(blsData);
       userOp.signature = ethers.concat([ethers.toBeHex(ALG_ID.BLS, 1), packedBls]);
