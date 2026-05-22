@@ -113,8 +113,10 @@ export class SuperPaymasterClient {
         const bundlerEstimateVGL = est.paymasterVerificationGasLimit || 100000n;
         const tunedPMVerificationGas = tuneGasLimit(bundlerEstimateVGL, 60_000n, 0.45);
 
-        // Same for PostOp
-        const tunedPostOp = est.paymasterPostOpGasLimit + 10000n;
+        // SuperPaymaster postOp calls burnFromWithOpHash (~40k gas) + storage writes.
+        // Add 100k buffer; floor at 200k to prevent OOG. Pure BigInt to avoid Number precision loss.
+        const _postOpBase = est.paymasterPostOpGasLimit + 100_000n;
+        const tunedPostOp = _postOpBase > 200_000n ? _postOpBase : 200_000n;
 
         console.log(`[SuperPaymasterClient] 🔧 Tuned Limits: VGL=${tunedVGL}, PMVGL=${tunedPMVerificationGas}, PostOp=${tunedPostOp}`);
 

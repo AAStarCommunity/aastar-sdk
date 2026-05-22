@@ -498,8 +498,10 @@ export class UserClient extends BaseClient {
                 const SAFETY_PAD = 80000n;
                 verificationGasLimit = est.verificationGasLimit + SAFETY_PAD;
                 
-                // PostOp Tuning
-                paymasterPostOpGasLimit = est.paymasterPostOpGasLimit + 10000n;
+                // SuperPaymaster postOp calls burnFromWithOpHash (~40k gas) + storage writes.
+                // Add 100k buffer; floor at 200k to prevent OOG. Pure BigInt to avoid Number precision loss.
+                const _postOpBase = est.paymasterPostOpGasLimit + 100_000n;
+                paymasterPostOpGasLimit = _postOpBase > 200_000n ? _postOpBase : 200_000n;
                 
                 autoEstimate = false; // logic handled
             }
