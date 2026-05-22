@@ -109,7 +109,6 @@ export interface RoleConfig {
     exitFeePercent: bigint;     // Exit fee percentage (basis points, 1000 = 10%)
     minExitFee: bigint;         // Minimum exit fee
     isActive: boolean;          // Whether role is active
-    isOperatorRole?: boolean;   // Whether this is an operator role
     description: string;        // Role description
 }
 

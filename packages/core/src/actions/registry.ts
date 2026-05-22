@@ -16,13 +16,11 @@ export type RoleConfigDetailed = {
     description: string;
     owner: Address;
     roleLockDuration: bigint;
-    isOperatorRole?: boolean;
 };
 
 export type RegistryActions = {
     // Role Management
     configureRole: (args: { roleId: Hex, config: RoleConfigDetailed, account?: Account | Address }) => Promise<Hash>;
-    adminConfigureRole: (args: { roleId: Hex, minStake: bigint, ticketPrice: bigint, exitFeePercent: bigint, minExitFee: bigint, account?: Account | Address }) => Promise<Hash>;
     syncExitFees: (args: { roles: Hex[], account?: Account | Address }) => Promise<Hash>;
     createNewRole: (args: { roleId: Hex, config: RoleConfigDetailed, roleOwner: Address, account?: Account | Address }) => Promise<Hash>;
     registerRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -113,22 +111,6 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'configureRole');
-        }
-    },
-
-    async adminConfigureRole({ roleId, minStake, ticketPrice, exitFeePercent, minExitFee, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'adminConfigureRole',
-                args: [roleId, minStake, ticketPrice, exitFeePercent, minExitFee],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'adminConfigureRole');
         }
     },
 
@@ -298,8 +280,9 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async syncExitFees({ roles, account }) {
+        validateRequired(roles, 'roles');
+        if (roles.length === 0) throw new Error('syncExitFees: roles array must not be empty');
         try {
-            validateRequired(roles, 'roles');
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
