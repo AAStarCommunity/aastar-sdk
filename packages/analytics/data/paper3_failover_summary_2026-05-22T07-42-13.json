@@ -1,0 +1,313 @@
+{
+  "experiment": "E1: Paymaster-Signer Decentralization Failover",
+  "paper_section": "Paper3 §5.1",
+  "date": "2026-05-22T07:42:13.560Z",
+  "network": "Ethereum Sepolia",
+  "chainId": 11155111,
+  "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+  "simpleAccount": "0xECD9C07f648B09CFb78906302822Ec52Ab87dd70",
+  "relayerA": "Pimlico-Hostile (invalid API key → 401/403 Forbidden)",
+  "relayerB": "Candide-Public (permissionless, no API key required)",
+  "N": 50,
+  "successCount": 49,
+  "successRate": "49/50",
+  "meanFailoverLatencyMs": 1215,
+  "newPaymasterSignaturesRequired": 0,
+  "aoa_property": "UserOp validity is determined by on-chain account state only. Relayer A refusal does not invalidate the UserOp; the identical signed UserOp is accepted by any permissionless bundler (Relayer B).",
+  "txHashes": [
+    {
+      "trial": 1,
+      "txHash": "0x1f3f1fdbae84d9f72712c5f09e5f61144d3957c1960dc4987307e9522e77fa0b",
+      "failoverMs": 803,
+      "block": ""
+    },
+    {
+      "trial": 2,
+      "txHash": "0xd2fa981a272457f30e94d4d0beb680dd49cde5f8217971e3d877fe916d9c831d",
+      "failoverMs": 813,
+      "block": ""
+    },
+    {
+      "trial": 3,
+      "txHash": "0x13ad4c7d533dc107b1c51d56b9a73387b254a18b5bfc42358896820ab1c3338b",
+      "failoverMs": 844,
+      "block": ""
+    },
+    {
+      "trial": 4,
+      "txHash": "0x723fef99d8ef88cfa1284f68fc53ffffd0818e762a7539094c939da76c2e084c",
+      "failoverMs": 1081,
+      "block": ""
+    },
+    {
+      "trial": 5,
+      "txHash": "0x7d81ba088ab89f455773aa891bbc8bc408c80d522d46b92426b245b16a1c84c2",
+      "failoverMs": 774,
+      "block": ""
+    },
+    {
+      "trial": 6,
+      "txHash": "0xc9ef81915e9e7362e7537dfdaa8dcce3fa014131a3b075155eb06be4cc2f7e3f",
+      "failoverMs": 786,
+      "block": ""
+    },
+    {
+      "trial": 7,
+      "txHash": "0x5451fccff51aee43bc4733c301967ce54c4fb4b9acf8827b37b123fb08479d90",
+      "failoverMs": 783,
+      "block": ""
+    },
+    {
+      "trial": 8,
+      "txHash": "0x9303b3a2e2198e7295ea6938ac06e5e6199f16fa195d1601aa0781bc176e612f",
+      "failoverMs": 861,
+      "block": ""
+    },
+    {
+      "trial": 9,
+      "txHash": "0xd37f41bb7b9abf6a84585c1e7b7929111465bf5844a277386231588dbbbe6bea",
+      "failoverMs": 1086,
+      "block": ""
+    },
+    {
+      "trial": 10,
+      "txHash": "0x7bbb8c388ce3138606ad9d6ca993a4cc10026ad90fbbbcdfd619c3302b274187",
+      "failoverMs": 2622,
+      "block": ""
+    },
+    {
+      "trial": 11,
+      "txHash": "0x7c56770231f301dbcce4f322a8506328b562ec14f0ba77c5f72d61e00adc39c4",
+      "failoverMs": 795,
+      "block": ""
+    },
+    {
+      "trial": 12,
+      "txHash": "0xe0b97f1962ccc916d05b809d0f8ca46d426a0d6588c463f97a413469fb7a8b21",
+      "failoverMs": 792,
+      "block": ""
+    },
+    {
+      "trial": 13,
+      "txHash": "0x70ecf155a6f64f5fabb92cc5f46cb45f180a11b1b364e001e48593638754e277",
+      "failoverMs": 786,
+      "block": ""
+    },
+    {
+      "trial": 14,
+      "txHash": "0xe9f0035740c730acf21992c94c3ebee72306df2b9caa95505b448cecae487b4d",
+      "failoverMs": 836,
+      "block": ""
+    },
+    {
+      "trial": 15,
+      "txHash": "0xb4ee40ad76ddd379e2aa5e6a05e0d95a349972015c8fb82e3b3b798524d81b28",
+      "failoverMs": 1501,
+      "block": ""
+    },
+    {
+      "trial": 16,
+      "txHash": "0x703e23bbbf95a429aa16694ab4209b14557c2cabd31159af14960dc4db83ab46",
+      "failoverMs": 4035,
+      "block": ""
+    },
+    {
+      "trial": 17,
+      "txHash": "0x84f0c402d642107e96b067908e33064c9add0b48b8acfb6762a43e6638c95e10",
+      "failoverMs": 1059,
+      "block": ""
+    },
+    {
+      "trial": 18,
+      "txHash": "0x77940c91f647df378fa6aa72ca4edce340b9884997a6bae403712947c94b5bc0",
+      "failoverMs": 1751,
+      "block": ""
+    },
+    {
+      "trial": 19,
+      "txHash": "0xdd367bc132845de8245fcc3bfa7bf1434bd8c859b2a6c3eb5be5647f06739472",
+      "failoverMs": 864,
+      "block": ""
+    },
+    {
+      "trial": 20,
+      "txHash": "0x056b849131843bbaf5c31237e60bd94f40f69aaec404b3abca7b70bfb9ec7bc7",
+      "failoverMs": 1530,
+      "block": ""
+    },
+    {
+      "trial": 21,
+      "txHash": "0xb73fc8f35fba2040db43c44183f63fceca1150859e93819f5f3982f8539a659c",
+      "failoverMs": 809,
+      "block": ""
+    },
+    {
+      "trial": 22,
+      "txHash": "0xe8e7c0c2588c2d2cb9e853b8d86a6ed28a2205f9babd1c2ac9dffb3f46bcdc10",
+      "failoverMs": 2070,
+      "block": ""
+    },
+    {
+      "trial": 23,
+      "txHash": "0xfc5e10df763be0a32c7309287f7903045e94161328ef886916c5264d5e51f0df",
+      "failoverMs": 856,
+      "block": ""
+    },
+    {
+      "trial": 24,
+      "txHash": "0xc4b27fa55a05023e52409a3ffe58fb98f619fad12e1019dd5cd41d2d311906e3",
+      "failoverMs": 1630,
+      "block": ""
+    },
+    {
+      "trial": 25,
+      "txHash": "0xc053470593b6fbcafd1dfd973167cff21a1a96f4c1ca284431b3549c2964e5e8",
+      "failoverMs": 1865,
+      "block": ""
+    },
+    {
+      "trial": 26,
+      "txHash": "0xa3ba3832e5d364a18092a171669907a85880c9ea3c6117786af147d6b8a2f741",
+      "failoverMs": 831,
+      "block": ""
+    },
+    {
+      "trial": 27,
+      "txHash": "0x018a33c505b5460dfb734d2ecd9d6df83b4904fb57ca248ab51e901e8b6fd7c5",
+      "failoverMs": 897,
+      "block": ""
+    },
+    {
+      "trial": 28,
+      "txHash": "0x2a28088b7d199e1c80bbe71284421d0ef8294b2d67c7e3ab90c0f3f03df6e173",
+      "failoverMs": 902,
+      "block": ""
+    },
+    {
+      "trial": 29,
+      "txHash": "0x7982b8dda5c97665f7368c86e402513122ce8dafb7390b92d8bab905e6069a83",
+      "failoverMs": 1429,
+      "block": ""
+    },
+    {
+      "trial": 31,
+      "txHash": "0x4303ea64bbc5d0d4ff60af0d8f6d64af2b515ee11b62341ddcb08a1993ee1eff",
+      "failoverMs": 1055,
+      "block": ""
+    },
+    {
+      "trial": 32,
+      "txHash": "0xe11f0cc817c88cbbfc15f45ecb5de7ec84bd535fc0e10ecdefe2f83f77c43144",
+      "failoverMs": 1196,
+      "block": ""
+    },
+    {
+      "trial": 33,
+      "txHash": "0x2c79de2729ea3db1a2545411dcbdd5cbea36457c432118e484a0226f3270fbed",
+      "failoverMs": 892,
+      "block": ""
+    },
+    {
+      "trial": 34,
+      "txHash": "0x7c102cf3554a6de5468fee4795f4e794d170251a13c30594ff3a914cd4c682b4",
+      "failoverMs": 828,
+      "block": ""
+    },
+    {
+      "trial": 35,
+      "txHash": "0x22fbfa4472a3a086a0fab6d494e76f256a4b16f75b31224a064c6aa469eb2a43",
+      "failoverMs": 839,
+      "block": ""
+    },
+    {
+      "trial": 36,
+      "txHash": "0x73f9a32f65fa20479279e157bf866ce7869236796c3ed34cd8f193e68e6e6253",
+      "failoverMs": 892,
+      "block": ""
+    },
+    {
+      "trial": 37,
+      "txHash": "0x8c755ebe55291285981b9e7aa9531de351fc2a1e2ce511f27b042bd0d6c371c4",
+      "failoverMs": 816,
+      "block": ""
+    },
+    {
+      "trial": 38,
+      "txHash": "0xaa1bfaf8d31e8c5b277bf28cf5f0137bdef48fcf6b65d6b830a73d7c8df58984",
+      "failoverMs": 808,
+      "block": ""
+    },
+    {
+      "trial": 39,
+      "txHash": "0x405da1d5ef84bff374a920c6e7e63146f3838be24b8bc9033b09352125fe2853",
+      "failoverMs": 834,
+      "block": ""
+    },
+    {
+      "trial": 40,
+      "txHash": "0xf1884af4eb5be1327508777b48e7eb90269ba1eb82cbe80d3871641317916625",
+      "failoverMs": 1671,
+      "block": ""
+    },
+    {
+      "trial": 41,
+      "txHash": "0x3741b632c71cac7c0c995f65b0767cb3ce650671036c4dd733cf699297532906",
+      "failoverMs": 830,
+      "block": ""
+    },
+    {
+      "trial": 42,
+      "txHash": "0xe1b79d5945671f057039f1229779f8c66ab36558e6210060f711c16c214db491",
+      "failoverMs": 1150,
+      "block": ""
+    },
+    {
+      "trial": 43,
+      "txHash": "0x4885fb48981dde8121f6c77d034f407e569c764390ebcec7c23da6fcfc2870a3",
+      "failoverMs": 1430,
+      "block": ""
+    },
+    {
+      "trial": 44,
+      "txHash": "0x9aa87a884928ce37e6c658be4f81848ed8b185fca693c215e728736d68e654e6",
+      "failoverMs": 799,
+      "block": ""
+    },
+    {
+      "trial": 45,
+      "txHash": "0xbe36bf91077cf8176f76394b7a3d71c1e7ef1de7e2972063b73654a56a4694ef",
+      "failoverMs": 1956,
+      "block": ""
+    },
+    {
+      "trial": 46,
+      "txHash": "0x42cff74cfe9d975f125e829766a9591681312a96e58121a0a7e5cb63e8f879af",
+      "failoverMs": 2315,
+      "block": ""
+    },
+    {
+      "trial": 47,
+      "txHash": "0x55cc9d6d7f1d30c68c17f34608975148c6f3e99ef4808a6eafde4adca07ee13f",
+      "failoverMs": 837,
+      "block": ""
+    },
+    {
+      "trial": 48,
+      "txHash": "0xdd9f34353790be8de70f3a0b7b54ef93f4e815e3447b6722bc8cf68642401010",
+      "failoverMs": 1054,
+      "block": ""
+    },
+    {
+      "trial": 49,
+      "txHash": "0xeb10d2e071d204ced57df8183f3b92b47e14afa3469a8314c0dfc4b253df7534",
+      "failoverMs": 2572,
+      "block": ""
+    },
+    {
+      "trial": 50,
+      "txHash": "0x2ccd37735be9da3bd049c7f9401c24d0a8f5aa1eb1bbcef56b7888312eada178",
+      "failoverMs": 1050,
+      "block": ""
+    }
+  ]
+}
