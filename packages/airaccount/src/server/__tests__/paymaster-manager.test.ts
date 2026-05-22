@@ -192,5 +192,24 @@ describe("PaymasterManager", () => {
       );
       expect(data).toBe("0x");
     });
+
+    it("v0.7 PaymasterV4 path: encodes verGas and postGas in correct byte positions", async () => {
+      // Without a live RPC the SuperPaymaster/token() calls fail and fall through to the
+      // PaymasterV4 branch, which uses hardcoded gas limits (0x30000 each).
+      // This test validates the packed-data byte layout.
+      const addr = "0x1234567890AbcDeF1234567890abcDEf12345678";
+      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+
+      const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
+
+      // Layout: 0x | address(40 hex) | verGas(32 hex) | postGas(32 hex)
+      // indices:     2               42               74              106
+      const verGas = BigInt("0x" + data.slice(42, 74));
+      const postGas = BigInt("0x" + data.slice(74, 106));
+      expect(verGas).toBe(BigInt(0x30000));
+      expect(postGas).toBe(BigInt(0x30000));
+      // No token appended when token() is unavailable
+      expect(data.length).toBe(106);
+    });
   });
 });

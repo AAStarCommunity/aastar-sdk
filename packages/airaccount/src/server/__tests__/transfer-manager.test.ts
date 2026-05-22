@@ -1,6 +1,7 @@
+import { ethers } from "ethers";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { TransferRecord } from "../interfaces/storage-adapter";
-import { TransferManager } from "../services/transfer-manager";
+import { TransferManager, detectSignatureStrategy } from "../services/transfer-manager";
 import { SilentLogger } from "../interfaces/logger";
 
 /**
@@ -122,6 +123,61 @@ describe("TransferManager", () => {
       const manager = makeManager();
       const result = await manager.getTransferStatus("user-1", "tx-4");
       expect(result.statusDescription).toBe("Transaction failed");
+    });
+  });
+
+  describe("detectSignatureStrategy", () => {
+    const ACCOUNT = "0x1234567890123456789012345678901234567890";
+
+    function makeProvider(opts: {
+      code: string;
+      validatorResult?: string;
+      validatorThrows?: boolean;
+    }): ethers.Provider {
+      return {
+        getCode: vi.fn().mockResolvedValue(opts.code),
+        call: vi.fn().mockImplementation(() => {
+          if (opts.validatorThrows) throw new Error("revert");
+          // ABI-encode address return value (32-byte zero-padded)
+          return opts.validatorResult ?? ethers.zeroPadValue(ethers.ZeroAddress, 32);
+        }),
+        getNetwork: vi.fn().mockResolvedValue({ chainId: 1n }),
+      } as unknown as ethers.Provider;
+    }
+
+    it("undeployed account → useECDSA=true, isCompositeValidator=true", async () => {
+      const provider = makeProvider({ code: "0x" });
+      const result = await detectSignatureStrategy(provider, ACCOUNT);
+      expect(result.useECDSA).toBe(true);
+      expect(result.isCompositeValidator).toBe(true);
+    });
+
+    it("deployed compositeValidator with no validator set → useECDSA=true, isCompositeValidator=true", async () => {
+      const provider = makeProvider({
+        code: "0x608060",
+        validatorResult: ethers.zeroPadValue(ethers.ZeroAddress, 32),
+      });
+      const result = await detectSignatureStrategy(provider, ACCOUNT);
+      expect(result.useECDSA).toBe(true);
+      expect(result.isCompositeValidator).toBe(true);
+    });
+
+    it("deployed compositeValidator with validator set → useECDSA=false, isCompositeValidator=true", async () => {
+      const validatorAddr = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+      const provider = makeProvider({
+        code: "0x608060",
+        validatorResult: ethers.zeroPadValue(validatorAddr, 32),
+      });
+      const result = await detectSignatureStrategy(provider, ACCOUNT);
+      expect(result.useECDSA).toBe(false);
+      expect(result.isCompositeValidator).toBe(true);
+    });
+
+    it("validator() call throws → useECDSA=true, isCompositeValidator=false (no algId prefix)", async () => {
+      const provider = makeProvider({ code: "0x608060", validatorThrows: true });
+      const result = await detectSignatureStrategy(provider, ACCOUNT);
+      expect(result.useECDSA).toBe(true);
+      expect(result.isCompositeValidator).toBe(false);
     });
   });
 
