@@ -88,31 +88,30 @@ export class ProtocolGovernance extends BaseClient {
     }
 
     /**
-     * Configure a Role's parameters (Admin only)
-     * e.g. Setting minStake for ROLE_PAYMASTER_SUPER
+     * Configure a Role's parameters (Admin only).
+     * Reads the current on-chain config first, then merges the provided overrides
+     * and writes back the full struct via configureRole.
      */
     async configureRole(params: {
         roleId: Hex;
         minStake?: bigint;
-        entryBurn?: bigint;
+        ticketPrice?: bigint;
         exitFeePercent?: bigint;
         minExitFee?: bigint;
     }, options?: TransactionOptions): Promise<Hash> {
-        const registry = registryActions(this.registryAddress);
-        
-        // Use the admin shortcut if only updating financial params
-        if (params.minStake !== undefined || params.entryBurn !== undefined) {
-             return await registry(this.client).adminConfigureRole({
-                 roleId: params.roleId,
-                 minStake: params.minStake || 0n, // Careful: this might overwrite if API expects full set
-                 entryBurn: params.entryBurn || 0n,
-                 exitFeePercent: params.exitFeePercent || 0n,
-                 minExitFee: params.minExitFee || 0n,
-                 account: options?.account
-             });
-        }
-        
-        throw new Error("Invalid parameters for configureRole");
+        const registry = registryActions(this.registryAddress)(this.client);
+        const current = await registry.getRoleConfig({ roleId: params.roleId });
+        return await (registry as any).configureRole({
+            roleId: params.roleId,
+            config: {
+                ...current,
+                ...(params.minStake !== undefined && { minStake: params.minStake }),
+                ...(params.ticketPrice !== undefined && { ticketPrice: params.ticketPrice }),
+                ...(params.exitFeePercent !== undefined && { exitFeePercent: params.exitFeePercent }),
+                ...(params.minExitFee !== undefined && { minExitFee: params.minExitFee }),
+            },
+            account: options?.account,
+        });
     }
 
     // ===========================================
