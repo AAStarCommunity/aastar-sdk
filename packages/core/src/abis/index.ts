@@ -10,6 +10,7 @@
 // Core System
 import RegistryABIData from './Registry.json' with { type: 'json' };
 import GTokenABIData from './GToken.json' with { type: 'json' };
+import GTokenAuthorizationABIData from './GTokenAuthorization.json' with { type: 'json' };
 import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
 import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
 import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
@@ -42,6 +43,13 @@ export const RegistryArtifact = RegistryABIData;
 
 export const GTokenABI = (GTokenABIData as any).abi || GTokenABIData;
 export const GTokenArtifact = GTokenABIData;
+
+// GTokenAuthorization v2.2.0 — EIP-3009 gasless transfers (SuperPaymaster main, 2026-05-21)
+// @notice Requires GTokenAuthorization contract deployment. Do NOT use with legacy GToken address.
+// @notice MAX_AUTH_VALIDITY = 5 min — keep validBefore - validAfter < 300s.
+// @notice receiveWithAuthorization: msg.sender must equal `to` (relay cannot submit).
+export const GTokenAuthorizationABI = (GTokenAuthorizationABIData as any).abi || GTokenAuthorizationABIData;
+export const GTokenAuthorizationArtifact = GTokenAuthorizationABIData;
 
 export const GTokenStakingABI = (GTokenStakingABIData as any).abi || GTokenStakingABIData;
 export const GTokenStakingArtifact = GTokenStakingABIData;

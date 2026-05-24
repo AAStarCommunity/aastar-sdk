@@ -15,4 +15,5 @@ export * from './faucet.js';
 export * from './x402.js';
 export * from './agent.js';
 export * from './channel.js';
+export * from './gTokenAuthorization.js';
 // validators.ts legacy removed
