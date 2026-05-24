@@ -107,6 +107,13 @@ export async function signGTokenTransferWithAuthorization(
         verifyingContract: Address;
     }
 ): Promise<Hex> {
+    const account = walletClient.account;
+    if (!account) {
+        throw new Error('WalletClient must have an account');
+    }
+    if (account.address.toLowerCase() !== params.from.toLowerCase()) {
+        throw new Error(`Signer ${account.address} does not match from ${params.from}`);
+    }
     // GTokenAuthorization enforces MAX_AUTH_VALIDITY = 300s on-chain.
     if (params.validBefore <= params.validAfter) {
         throw new Error('validBefore must be greater than validAfter');
@@ -139,6 +146,13 @@ export async function signReceiveWithAuthorization(
         verifyingContract: Address;
     }
 ): Promise<Hex> {
+    const account = walletClient.account;
+    if (!account) {
+        throw new Error('WalletClient must have an account');
+    }
+    if (account.address.toLowerCase() !== params.from.toLowerCase()) {
+        throw new Error(`Signer ${account.address} does not match from ${params.from}`);
+    }
     // GTokenAuthorization enforces MAX_AUTH_VALIDITY = 300s on-chain (RC-1).
     if (params.validBefore <= params.validAfter) {
         throw new Error('validBefore must be greater than validAfter');
@@ -147,11 +161,6 @@ export async function signReceiveWithAuthorization(
         throw new Error(
             `Authorization window ${params.validBefore - params.validAfter}s exceeds MAX_AUTH_VALIDITY (300s)`
         );
-    }
-
-    const account = walletClient.account;
-    if (!account) {
-        throw new Error('WalletClient must have an account');
     }
 
     return walletClient.signTypedData({
@@ -188,6 +197,9 @@ export async function signCancelAuthorization(
     const account = walletClient.account;
     if (!account) {
         throw new Error('WalletClient must have an account');
+    }
+    if (account.address.toLowerCase() !== params.authorizer.toLowerCase()) {
+        throw new Error(`Signer ${account.address} does not match authorizer ${params.authorizer}`);
     }
 
     return walletClient.signTypedData({

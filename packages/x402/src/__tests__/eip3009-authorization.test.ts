@@ -62,6 +62,20 @@ describe('signGTokenTransferWithAuthorization', () => {
         }));
     });
 
+    it('throws if walletClient has no account', async () => {
+        const wallet = { account: undefined, signTypedData: vi.fn() };
+        await expect(signGTokenTransferWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
+        })).rejects.toThrow('WalletClient must have an account');
+    });
+
+    it('throws when signer does not match from', async () => {
+        const wallet = makeWalletClient(BOB);
+        await expect(signGTokenTransferWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
+        })).rejects.toThrow('does not match from');
+    });
+
     it('throws when validBefore <= validAfter', async () => {
         const wallet = makeWalletClient(ALICE);
         await expect(signGTokenTransferWithAuthorization(wallet as any, {
@@ -85,7 +99,7 @@ describe('signReceiveWithAuthorization', () => {
     };
 
     it('calls signTypedData with ReceiveWithAuthorization primaryType', async () => {
-        const wallet = makeWalletClient(BOB);
+        const wallet = makeWalletClient(ALICE);
         await signReceiveWithAuthorization(wallet as any, {
             ...BASE_PARAMS, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
         });
@@ -95,39 +109,45 @@ describe('signReceiveWithAuthorization', () => {
         }));
     });
 
+    it('throws if walletClient has no account', async () => {
+        const wallet = { account: undefined, signTypedData: vi.fn() };
+        await expect(signReceiveWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
+        })).rejects.toThrow('WalletClient must have an account');
+    });
+
+    it('throws when signer does not match from', async () => {
+        const wallet = makeWalletClient(ALICE);
+        await expect(signReceiveWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, from: BOB, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
+        })).rejects.toThrow('does not match from');
+    });
+
     it('throws when validBefore <= validAfter', async () => {
         const wallet = makeWalletClient(BOB);
         await expect(signReceiveWithAuthorization(wallet as any, {
-            ...BASE_PARAMS, validAfter: 100n, validBefore: 100n, nonce: generateNonce(),
+            ...BASE_PARAMS, from: BOB, validAfter: 100n, validBefore: 100n, nonce: generateNonce(),
         })).rejects.toThrow('validBefore must be greater than validAfter');
     });
 
     it('throws when authorization window exceeds 300s', async () => {
         const wallet = makeWalletClient(BOB);
         await expect(signReceiveWithAuthorization(wallet as any, {
-            ...BASE_PARAMS, validAfter: 0n, validBefore: 301n, nonce: generateNonce(),
+            ...BASE_PARAMS, from: BOB, validAfter: 0n, validBefore: 301n, nonce: generateNonce(),
         })).rejects.toThrow('exceeds MAX_AUTH_VALIDITY (300s)');
-    });
-
-    it('throws if walletClient has no account', async () => {
-        const wallet = { account: undefined, signTypedData: vi.fn() };
-        await expect(signReceiveWithAuthorization(wallet as any, {
-            from: ALICE, to: BOB, value: 1n, validAfter: 0n, validBefore: 1n,
-            nonce: generateNonce(), tokenName: 'GToken', tokenVersion: '1',
-            chainId: 1, verifyingContract: TOKEN,
-        })).rejects.toThrow('WalletClient must have an account');
     });
 });
 
 describe('signCancelAuthorization', () => {
+    const BASE_PARAMS = {
+        tokenName: 'GToken', tokenVersion: '1',
+        chainId: 11155111, verifyingContract: TOKEN,
+    };
+
     it('calls signTypedData with CancelAuthorization primaryType', async () => {
         const wallet = makeWalletClient(ALICE);
         const nonce = generateNonce();
-        await signCancelAuthorization(wallet as any, {
-            authorizer: ALICE, nonce,
-            tokenName: 'GToken', tokenVersion: '1',
-            chainId: 11155111, verifyingContract: TOKEN,
-        });
+        await signCancelAuthorization(wallet as any, { authorizer: ALICE, nonce, ...BASE_PARAMS });
         expect(wallet.signTypedData).toHaveBeenCalledWith(expect.objectContaining({
             primaryType: 'CancelAuthorization',
             message: { authorizer: ALICE, nonce },
@@ -137,9 +157,14 @@ describe('signCancelAuthorization', () => {
     it('throws if walletClient has no account', async () => {
         const wallet = { account: undefined, signTypedData: vi.fn() };
         await expect(signCancelAuthorization(wallet as any, {
-            authorizer: ALICE, nonce: generateNonce(),
-            tokenName: 'GToken', tokenVersion: '1',
-            chainId: 1, verifyingContract: TOKEN,
+            authorizer: ALICE, nonce: generateNonce(), ...BASE_PARAMS,
         })).rejects.toThrow('WalletClient must have an account');
+    });
+
+    it('throws when signer does not match authorizer', async () => {
+        const wallet = makeWalletClient(BOB);
+        await expect(signCancelAuthorization(wallet as any, {
+            authorizer: ALICE, nonce: generateNonce(), ...BASE_PARAMS,
+        })).rejects.toThrow('does not match authorizer');
     });
 });
