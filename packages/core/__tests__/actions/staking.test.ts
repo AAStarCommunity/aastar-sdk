@@ -11,7 +11,7 @@ describe('StakingActions Bulk Coverage', () => {
   beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
   describe('Staking Operations', () => {
-    it('lockStake', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).lockStake({ user: USER, roleId: '0x01', stakeAmount: 100n, entryBurn: 10n, payer: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('lockStake', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).lockStake({ user: USER, roleId: '0x01', stakeAmount: 100n, ticketPrice: 10n, payer: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('topUpStake', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).topUpStake({ user: USER, roleId: '0x01', stakeAmount: 100n, payer: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('unlockStake', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).unlockStake({ user: USER, roleId: '0x01', account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('slash', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).slash({ user: USER, amount: 100n, reason: 'test', account: USER }); expect(w.writeContract).toHaveBeenCalled(); });

@@ -5,7 +5,7 @@ import { AAStarError } from '../errors/index.js';
 
 export type RoleConfigDetailed = {
     minStake: bigint;
-    entryBurn: bigint;
+    ticketPrice: bigint;
     slashThreshold: number;
     slashBase: number;
     slashInc: number;
@@ -21,7 +21,7 @@ export type RoleConfigDetailed = {
 export type RegistryActions = {
     // Role Management
     configureRole: (args: { roleId: Hex, config: RoleConfigDetailed, account?: Account | Address }) => Promise<Hash>;
-    adminConfigureRole: (args: { roleId: Hex, minStake: bigint, entryBurn: bigint, exitFeePercent: bigint, minExitFee: bigint, account?: Account | Address }) => Promise<Hash>;
+    syncExitFees: (args: { roles: Hex[], account?: Account | Address }) => Promise<Hash>;
     createNewRole: (args: { roleId: Hex, config: RoleConfigDetailed, roleOwner: Address, account?: Account | Address }) => Promise<Hash>;
     registerRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
     registerRoleSelf: (args: { roleId: Hex, data: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -71,10 +71,7 @@ export type RegistryActions = {
     creditTierConfig: (args: { tierIndex: bigint }) => Promise<bigint>;
     levelThresholds: (args: { levelIndex: bigint }) => Promise<bigint>;
     calculateExitFee: (args: { roleId: Hex, amount: bigint }) => Promise<bigint>;
-    accountToUser: (args: { account: Address }) => Promise<Address>;
-    roleOwners: (args: { roleId: Hex }) => Promise<Address>;
     roleStakes: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
-    roleLockDurations: (args: { roleId: Hex }) => Promise<bigint>;
     
     // Constants (Role IDs)
     ROLE_COMMUNITY: () => Promise<Hex>;
@@ -114,22 +111,6 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'configureRole');
-        }
-    },
-
-    async adminConfigureRole({ roleId, minStake, entryBurn, exitFeePercent, minExitFee, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'adminConfigureRole',
-                args: [roleId, minStake, entryBurn, exitFeePercent, minExitFee],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'adminConfigureRole');
         }
     },
 
@@ -229,7 +210,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             if (Array.isArray(result)) {
                 return {
                     minStake: result[0],
-                    entryBurn: result[1],
+                    ticketPrice: result[1],
                     slashThreshold: result[2],
                     slashBase: result[3],
                     slashInc: result[4],
@@ -295,6 +276,23 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'exitRole');
+        }
+    },
+
+    async syncExitFees({ roles, account }) {
+        validateRequired(roles, 'roles');
+        if (roles.length === 0) throw new Error('syncExitFees: roles array must not be empty');
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'syncExitFees',
+                args: [roles],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'syncExitFees');
         }
     },
 
@@ -624,7 +622,7 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             if (Array.isArray(result)) {
                 return {
                     minStake: result[0],
-                    entryBurn: result[1],
+                    ticketPrice: result[1],
                     slashThreshold: result[2],
                     slashBase: result[3],
                     slashInc: result[4],
@@ -772,34 +770,6 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async accountToUser({ account }) {
-        try {
-            validateAddress(account, 'account');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'accountToUser',
-                args: [account]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'accountToUser');
-        }
-    },
-
-    async roleOwners({ roleId }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleOwners',
-                args: [roleId]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleOwners');
-        }
-    },
-
     async roleStakes({ roleId, user }) {
         try {
             validateRequired(roleId, 'roleId');
@@ -812,20 +782,6 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             }) as Promise<bigint>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'roleStakes');
-        }
-    },
-
-    async roleLockDurations({ roleId }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleLockDurations',
-                args: [roleId]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleLockDurations');
         }
     },
 

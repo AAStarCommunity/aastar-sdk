@@ -6,10 +6,11 @@ import { type Address } from 'viem';
 
 // Define mocks using vi.hoisted
 const mocks = vi.hoisted(() => {
-  const mockRegistry = { 
-      setSuperPaymaster: vi.fn(), 
-      setStaking: vi.fn(), 
-      adminConfigureRole: vi.fn(),
+  const mockRegistry = {
+      setSuperPaymaster: vi.fn(),
+      setStaking: vi.fn(),
+      getRoleConfig: vi.fn(),
+      configureRole: vi.fn(),
       transferOwnership: vi.fn(),
       SUPER_PAYMASTER: vi.fn(),
       GTOKEN_STAKING: vi.fn(),
@@ -58,7 +59,21 @@ describe('ProtocolGovernance', () => {
     // Default Resolves
     mocks.mockRegistry.setSuperPaymaster.mockResolvedValue('0xSetSPHash');
     mocks.mockRegistry.setStaking.mockResolvedValue('0xSetStakingHash');
-    mocks.mockRegistry.adminConfigureRole.mockResolvedValue('0xConfigRoleHash');
+    mocks.mockRegistry.getRoleConfig.mockResolvedValue({
+        minStake: 0n,
+        ticketPrice: 0n,
+        slashThreshold: 0n,
+        slashBase: 0n,
+        slashInc: 0n,
+        slashMax: 0n,
+        exitFeePercent: 0n,
+        isActive: true,
+        minExitFee: 0n,
+        description: '',
+        owner: '0x0000000000000000000000000000000000000000',
+        roleLockDuration: 0n,
+    });
+    mocks.mockRegistry.configureRole.mockResolvedValue('0xConfigRoleHash');
     mocks.mockRegistry.transferOwnership.mockResolvedValue('0xTransferHash');
     
     // Getters
@@ -92,39 +107,35 @@ describe('ProtocolGovernance', () => {
   });
 
   describe('Role Governance', () => {
-      it('configureRole should call adminConfigureRole', async () => {
-          const params = {
-              roleId: '0xRole' as const, // Cast as specific Hex if checked, strict typing
-              minStake: 100n,
-              entryBurn: 50n
-          };
-          
-          // Note: In test file we might need exact types matching what viem expects
-          // but mocks usually accept any args. config.params.roleId needs to match.
-          
+      const ROLE_ID = '0x1234567890123456789012345678901234567890123456789012345678901234' as const;
+
+      it('configureRole should read current config then write merged config', async () => {
           const result = await governance.configureRole({
-              roleId: '0x1234567890123456789012345678901234567890123456789012345678901234', 
-              minStake: 100n
-          });
-          
-          expect(result).toBe('0xConfigRoleHash');
-          expect(mocks.mockRegistry.adminConfigureRole).toHaveBeenCalledWith(expect.objectContaining({
-              roleId: '0x1234567890123456789012345678901234567890123456789012345678901234',
+              roleId: ROLE_ID,
               minStake: 100n,
-              entryBurn: 0n // Defaulted in method
+              ticketPrice: 50n,
+          });
+
+          expect(result).toBe('0xConfigRoleHash');
+          expect(mocks.mockRegistry.getRoleConfig).toHaveBeenCalledWith({ roleId: ROLE_ID });
+          expect(mocks.mockRegistry.configureRole).toHaveBeenCalledWith(expect.objectContaining({
+              roleId: ROLE_ID,
+              config: expect.objectContaining({
+                  minStake: 100n,
+                  ticketPrice: 50n,
+              }),
           }));
       });
 
-      it('configureRole should throw on invalid params', async () => {
-         // The implementation checks if some params are defined. 
-         // If we pass an empty object (besides required roleId), it might fail if we don't handle logic.
-         // Let's check implementation behavior: 
-         // "if (params.minStake !== undefined || params.entryBurn !== undefined) { ... }"
-         // Else throws.
-         
-         await expect(governance.configureRole({
-             roleId: '0x1234567890123456789012345678901234567890123456789012345678901234'
-         })).rejects.toThrow('Invalid parameters');
+      it('configureRole with no overrides should still call configureRole with unchanged values', async () => {
+          const result = await governance.configureRole({ roleId: ROLE_ID });
+
+          expect(result).toBe('0xConfigRoleHash');
+          expect(mocks.mockRegistry.getRoleConfig).toHaveBeenCalledWith({ roleId: ROLE_ID });
+          expect(mocks.mockRegistry.configureRole).toHaveBeenCalledWith(expect.objectContaining({
+              roleId: ROLE_ID,
+              config: expect.objectContaining({ minStake: 0n }),
+          }));
       });
   });
 
