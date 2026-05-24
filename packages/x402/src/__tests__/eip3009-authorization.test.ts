@@ -3,6 +3,7 @@ import { type Address, type Hex } from 'viem';
 import {
     EIP3009_TYPES,
     GTOKEN_EIP712_DOMAIN,
+    signGTokenTransferWithAuthorization,
     signReceiveWithAuthorization,
     signCancelAuthorization,
     generateNonce,
@@ -43,20 +44,69 @@ describe('GTOKEN_EIP712_DOMAIN', () => {
     });
 });
 
+describe('signGTokenTransferWithAuthorization', () => {
+    const BASE_PARAMS = {
+        from: ALICE, to: BOB, value: 100n,
+        tokenName: 'GToken', tokenVersion: '1',
+        chainId: 11155111, verifyingContract: TOKEN,
+    };
+
+    it('calls signTypedData with TransferWithAuthorization primaryType for valid window', async () => {
+        const wallet = makeWalletClient(ALICE);
+        await signGTokenTransferWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
+        });
+        expect(wallet.signTypedData).toHaveBeenCalledWith(expect.objectContaining({
+            primaryType: 'TransferWithAuthorization',
+            message: expect.objectContaining({ from: ALICE, to: BOB, value: 100n }),
+        }));
+    });
+
+    it('throws when validBefore <= validAfter', async () => {
+        const wallet = makeWalletClient(ALICE);
+        await expect(signGTokenTransferWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 100n, validBefore: 100n, nonce: generateNonce(),
+        })).rejects.toThrow('validBefore must be greater than validAfter');
+    });
+
+    it('throws when authorization window exceeds 300s', async () => {
+        const wallet = makeWalletClient(ALICE);
+        await expect(signGTokenTransferWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 301n, nonce: generateNonce(),
+        })).rejects.toThrow('exceeds MAX_AUTH_VALIDITY (300s)');
+    });
+});
+
 describe('signReceiveWithAuthorization', () => {
+    const BASE_PARAMS = {
+        from: ALICE, to: BOB, value: 100n,
+        tokenName: 'GToken', tokenVersion: '1',
+        chainId: 11155111, verifyingContract: TOKEN,
+    };
+
     it('calls signTypedData with ReceiveWithAuthorization primaryType', async () => {
         const wallet = makeWalletClient(BOB);
-        const nonce = generateNonce();
         await signReceiveWithAuthorization(wallet as any, {
-            from: ALICE, to: BOB, value: 100n,
-            validAfter: 0n, validBefore: 299n,
-            nonce, tokenName: 'GToken', tokenVersion: '1',
-            chainId: 11155111, verifyingContract: TOKEN,
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 299n, nonce: generateNonce(),
         });
         expect(wallet.signTypedData).toHaveBeenCalledWith(expect.objectContaining({
             primaryType: 'ReceiveWithAuthorization',
             message: expect.objectContaining({ from: ALICE, to: BOB, value: 100n }),
         }));
+    });
+
+    it('throws when validBefore <= validAfter', async () => {
+        const wallet = makeWalletClient(BOB);
+        await expect(signReceiveWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 100n, validBefore: 100n, nonce: generateNonce(),
+        })).rejects.toThrow('validBefore must be greater than validAfter');
+    });
+
+    it('throws when authorization window exceeds 300s', async () => {
+        const wallet = makeWalletClient(BOB);
+        await expect(signReceiveWithAuthorization(wallet as any, {
+            ...BASE_PARAMS, validAfter: 0n, validBefore: 301n, nonce: generateNonce(),
+        })).rejects.toThrow('exceeds MAX_AUTH_VALIDITY (300s)');
     });
 
     it('throws if walletClient has no account', async () => {

@@ -7,6 +7,7 @@ export type {
 } from './types.js';
 export {
     signTransferWithAuthorization,
+    signGTokenTransferWithAuthorization,
     signReceiveWithAuthorization,
     signCancelAuthorization,
     generateNonce,

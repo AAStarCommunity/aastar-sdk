@@ -87,6 +87,39 @@ export async function signTransferWithAuthorization(
 }
 
 /**
+ * Sign a TransferWithAuthorization for GTokenAuthorization (EIP-3009).
+ * GToken-specific wrapper: enforces MAX_AUTH_VALIDITY = 300s before signing.
+ * Use this instead of the generic signTransferWithAuthorization when the
+ * verifying contract is GTokenAuthorization.
+ */
+export async function signGTokenTransferWithAuthorization(
+    walletClient: WalletClient,
+    params: {
+        from: Address;
+        to: Address;
+        value: bigint;
+        validAfter: bigint;
+        validBefore: bigint;
+        nonce: Hex;
+        tokenName: string;
+        tokenVersion: string;
+        chainId: number;
+        verifyingContract: Address;
+    }
+): Promise<Hex> {
+    // GTokenAuthorization enforces MAX_AUTH_VALIDITY = 300s on-chain.
+    if (params.validBefore <= params.validAfter) {
+        throw new Error('validBefore must be greater than validAfter');
+    }
+    if (params.validBefore - params.validAfter > 300n) {
+        throw new Error(
+            `Authorization window ${params.validBefore - params.validAfter}s exceeds MAX_AUTH_VALIDITY (300s)`
+        );
+    }
+    return signTransferWithAuthorization(walletClient, params);
+}
+
+/**
  * Sign a ReceiveWithAuthorization for GTokenAuthorization (EIP-3009).
  * The signed `to` address must be the one submitting the transaction on-chain.
  * Note: `xPNTsToken` is NOT included in the signature (it's a relay-supplied hint for RC-2).
