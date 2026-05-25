@@ -143,10 +143,12 @@ export class AccountManager {
    * Build the acceptance hash that guardian devices must sign before account creation.
    *
    * Encoding: keccak256(solidityPacked(
-   *   ["string","uint256","address","address","uint256"],
-   *   ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt]
+   *   ["string","uint256","address","address","uint256","uint256"],
+   *   ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt, dailyLimit]
    * ))
-   * Total packed bytes: 13 + 32 + 20 + 20 + 32 = 117 bytes
+   *
+   * dailyLimit is bound in the hash (PR #47 / C-3) to prevent a front-runner from
+   * replaying guardian sigs with a weaker limit on the same counterfactual address.
    *
    * Returns the RAW keccak256 hash (no EIP-191 prefix).
    * Guardians MUST sign via personal_sign / ethers.signMessage(ethers.getBytes(hash)).
@@ -159,12 +161,13 @@ export class AccountManager {
     owner: string,
     salt: number,
     factoryAddress: string,
-    chainId: number
+    chainId: number,
+    dailyLimit: bigint
   ): string {
     return ethers.keccak256(
       ethers.solidityPacked(
-        ["string", "uint256", "address", "address", "uint256"],
-        ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt]
+        ["string", "uint256", "address", "address", "uint256", "uint256"],
+        ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt, dailyLimit]
       )
     );
   }

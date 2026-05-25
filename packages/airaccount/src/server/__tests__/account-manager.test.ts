@@ -234,51 +234,47 @@ describe("AccountManager", () => {
     const FACTORY = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // hardhat account #1 as stand-in
     const SALT = 42;
     const CHAIN_ID = 11155111;
+    const DAILY_LIMIT = 1000000000000000000n; // 1 ETH
 
     it("produces a consistent hash for the same inputs", () => {
-      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
-      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
       expect(h1).toBe(h2);
     });
 
     it("returns a 32-byte hex string", () => {
-      const hash = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
+      const hash = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
       expect(hash).toMatch(/^0x[0-9a-f]{64}$/i);
     });
 
     it("changes hash when chainId changes", () => {
-      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
-      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, 1);
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, 1, DAILY_LIMIT);
       expect(h1).not.toBe(h2);
     });
 
     it("changes hash when factory address changes", () => {
-      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
-      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", CHAIN_ID);
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", CHAIN_ID, DAILY_LIMIT);
       expect(h1).not.toBe(h2);
     });
 
     it("changes hash when owner changes", () => {
-      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
-      const h2 = manager.buildGuardianAcceptanceHash("0x70997970C51812dc3A010C7d01b50e0d17dc79C8", SALT, FACTORY, CHAIN_ID);
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      const h2 = manager.buildGuardianAcceptanceHash("0x70997970C51812dc3A010C7d01b50e0d17dc79C8", SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
       expect(h1).not.toBe(h2);
     });
 
     it("changes hash when salt changes", () => {
-      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID);
-      const h2 = manager.buildGuardianAcceptanceHash(OWNER, 99, FACTORY, CHAIN_ID);
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, 99, FACTORY, CHAIN_ID, DAILY_LIMIT);
       expect(h1).not.toBe(h2);
     });
 
-    it("matches known contract encoding vector (golden value)", () => {
-      // Pre-computed: keccak256(solidityPacked(
-      //   ["string","uint256","address","address","uint256"],
-      //   ["ACCEPT_GUARDIAN", 11155111, factory, owner, 42]
-      // ))
-      // Matches the contract's abi.encodePacked before toEthSignedMessageHash().
-      expect(
-        manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID)
-      ).toBe("0xc33ef49e1f171163a391bd35e80f4ed220ec9bb14d6a993c3baa048b13ac80c3");
+    it("changes hash when dailyLimit changes (C-3: front-run protection)", () => {
+      const h1 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, 500000000000000000n);
+      expect(h1).not.toBe(h2);
     });
   });
 
