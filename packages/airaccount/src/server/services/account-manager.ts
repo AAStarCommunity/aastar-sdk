@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
 import { ISignerAdapter } from "../interfaces/signer-adapter";
-import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
+import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 
 /**
@@ -159,7 +159,7 @@ export class AccountManager {
    */
   buildGuardianAcceptanceHash(
     owner: string,
-    salt: number,
+    salt: number | bigint,
     factoryAddress: string,
     chainId: number,
     dailyLimit: bigint
@@ -170,6 +170,32 @@ export class AccountManager {
         ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt, dailyLimit]
       )
     );
+  }
+
+  /**
+   * Encode calldata for modifyTierLimitsWithGuardians() — guardian-gated tier-limit change (PR #43).
+   *
+   * Both tier1 and tier2 can be raised or lowered, subject to guardian approval.
+   * Caller is responsible for building and submitting the resulting UserOp.
+   *
+   * @param tier1        New Tier-1 ceiling in wei (ECDSA-only spending; 0 = no limit)
+   * @param tier2        New Tier-2 ceiling in wei (dual-factor; 0 = no limit)
+   * @param deadline     Unix timestamp — guardian sigs rejected after this
+   * @param guardianSigs 65-byte EIP-191 hex signatures from required guardians
+   */
+  encodeModifyTierLimits(
+    tier1: bigint,
+    tier2: bigint,
+    deadline: bigint,
+    guardianSigs: string[]
+  ): string {
+    const iface = new ethers.Interface(AIRACCOUNT_ABI);
+    return iface.encodeFunctionData("modifyTierLimitsWithGuardians", [
+      tier1,
+      tier2,
+      deadline,
+      guardianSigs,
+    ]);
   }
 
   /**

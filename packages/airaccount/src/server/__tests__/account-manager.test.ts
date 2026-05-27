@@ -276,6 +276,62 @@ describe("AccountManager", () => {
       const h2 = manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, 500000000000000000n);
       expect(h1).not.toBe(h2);
     });
+
+    it("matches contract encoding vector with dailyLimit (C-3 golden value)", () => {
+      // Vector computed independently via forge (airaccount-contract):
+      //   keccak256(abi.encodePacked(
+      //     "ACCEPT_GUARDIAN", uint256(11155111),
+      //     address(0x7099...),  // FACTORY
+      //     address(0xf39F...),  // OWNER
+      //     uint256(42),         // SALT
+      //     uint256(1e18)        // DAILY_LIMIT
+      //   ))
+      // Source: forge script GoldenValue.s.sol → 0x1b674...d6
+      expect(
+        manager.buildGuardianAcceptanceHash(OWNER, SALT, FACTORY, CHAIN_ID, DAILY_LIMIT)
+      ).toBe("0x1b6743191b193d4fa46fe86477caf58392d1eaf8c7e0b2c10fe5dbbcd5999ad6");
+    });
+
+    it("accepts bigint salt without precision loss", () => {
+      const largeSalt = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
+      const hash = manager.buildGuardianAcceptanceHash(OWNER, largeSalt, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      expect(hash).toMatch(/^0x[0-9a-f]{64}$/i);
+      // Must differ from the number-typed MAX_SAFE_INTEGER (would truncate without bigint support)
+      const hashAtMax = manager.buildGuardianAcceptanceHash(OWNER, Number.MAX_SAFE_INTEGER, FACTORY, CHAIN_ID, DAILY_LIMIT);
+      expect(hash).not.toBe(hashAtMax);
+    });
+  });
+
+  // ── encodeModifyTierLimits ─────────────────────────────────────────
+
+  describe("encodeModifyTierLimits", () => {
+    const TIER1 = 100000000000000000n;  // 0.1 ETH
+    const TIER2 = 1000000000000000000n; // 1 ETH
+    const DEADLINE = 9999999999n;
+    const DUMMY_SIG = "0x" + "ab".repeat(65);
+
+    it("returns valid hex calldata", () => {
+      const cd = manager.encodeModifyTierLimits(TIER1, TIER2, DEADLINE, [DUMMY_SIG]);
+      expect(cd).toMatch(/^0x[0-9a-f]+$/i);
+    });
+
+    it("calldata starts with consistent function selector", () => {
+      const cd1 = manager.encodeModifyTierLimits(TIER1, TIER2, DEADLINE, [DUMMY_SIG]);
+      const cd2 = manager.encodeModifyTierLimits(TIER1 * 2n, TIER2, DEADLINE, [DUMMY_SIG]);
+      expect(cd1.slice(0, 10)).toBe(cd2.slice(0, 10));
+    });
+
+    it("encodes different tier values distinctly", () => {
+      const cd1 = manager.encodeModifyTierLimits(TIER1, TIER2, DEADLINE, []);
+      const cd2 = manager.encodeModifyTierLimits(TIER1 * 2n, TIER2, DEADLINE, []);
+      expect(cd1).not.toBe(cd2);
+    });
+
+    it("encodes empty guardian sigs without throwing", () => {
+      expect(() =>
+        manager.encodeModifyTierLimits(TIER1, TIER2, DEADLINE, [])
+      ).not.toThrow();
+    });
   });
 
   // ── createAccountWithGuardians ─────────────────────────────────────
