@@ -20,8 +20,8 @@ const APNTS = process.env.XPNTS_ADDR as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !REGISTRY) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)',
-    'function configureOperator(address, address, uint256)',
+    'function operators(address) view returns (uint128 aPNTsBalance, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
+    'function configureOperator(address, address)',
     'function setOperatorPaused(address, bool)',
     'function updateReputation(address, uint256)',
     'function setAPNTsToken(address)',
@@ -101,11 +101,11 @@ async function runAdminTest() {
     console.log("   ⚙️ Testing configureOperator...");
     const hashConf = await wallet.writeContract({
         address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'configureOperator', 
-        args: [APNTS, signer.address, 1000000000000000000n] 
+        args: [APNTS, signer.address] // rate read live from xPNTsToken.exchangeRate()
     });
     await publicClient.waitForTransactionReceipt({ hash: hashConf });
     opData = await publicClient.readContract({ address: SUPER_PAYMASTER, abi: pmAbi, functionName: 'operators', args: [signer.address] });
-    if (!opData[2]) throw new Error("configureOperator failed");
+    if (!opData[1]) throw new Error("configureOperator failed"); // isConfigured is now index 1
     console.log("   ✅ Operator Configured.");
 
     // 3. Test setOperatorPaused

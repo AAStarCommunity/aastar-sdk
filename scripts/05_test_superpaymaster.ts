@@ -116,8 +116,8 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
     const wallet = createWalletClient({ account: signer, chain: foundry, transport: http(process.env.SEPOLIA_RPC_URL) });
     
     const pmAbi = parseAbi([
-        'function operators(address) view returns (uint128, uint96, bool, bool, address, uint32, address, uint256, uint256)',
-        'function configureOperator(address, address, uint256)',
+        'function operators(address) view returns (uint128, bool, bool, address, uint32, uint48, address, uint256, uint256)',
+        'function configureOperator(address, address)',
         'function deposit(uint256)',
         'function depositFor(address, uint256)',
         'function notifyDeposit(uint256)',
@@ -148,7 +148,7 @@ async function setupOperator(publicClient: any, bundlerClient: any, signer: any,
         console.log("   ⚙️  Configuring Operator...");
         const hash = await wallet.writeContract({
             address: pm, abi: pmAbi, functionName: 'configureOperator', 
-            args: [token, treasury, 1000000000000000000n], // 1:1 Rate
+            args: [token, treasury], // rate is now read live from xPNTsToken.exchangeRate()
             account: signer
         });
         await publicClient.waitForTransactionReceipt({ hash });

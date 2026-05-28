@@ -201,11 +201,10 @@ export function createOperatorClient({
         async onboardToSuperPaymaster(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) {
             return this.onboardOperator(args);
         },
-        async configureOperator({ xPNTsToken, treasury, exchangeRate, account: accountOverride }: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) {
-            const tx = await spActions.configureOperator({ 
-                xPNTsToken, 
-                opTreasury: treasury, 
-                exchangeRate,
+        async configureOperator({ xPNTsToken, treasury, account: accountOverride }: { xPNTsToken: Address, treasury: Address, account?: Account | Address }) {
+            const tx = await spActions.configureOperator({
+                xPNTsToken,
+                opTreasury: treasury,
                 account: accountOverride || account
             });
             await (client as any).waitForTransactionReceipt({ hash: tx });

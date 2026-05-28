@@ -13,7 +13,7 @@ export type SlashRecord = {
 
 export type OperatorConfig = {
     aPNTsBalance: bigint;
-    exchangeRate: bigint;
+    // exchangeRate removed in v5.3.3: read live from xPNTsToken.exchangeRate() at runtime
     isConfigured: boolean;
     isPaused: boolean;
     xPNTsToken: Address;
@@ -38,7 +38,7 @@ export type SuperPaymasterActions = {
     withdrawStake: (args: { to: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Operator Management
-    configureOperator: (args: { xPNTsToken: Address, opTreasury: Address, exchangeRate: bigint, account?: Account | Address }) => Promise<Hash>;
+    configureOperator: (args: { xPNTsToken: Address, opTreasury: Address, account?: Account | Address }) => Promise<Hash>;
     setOperatorPaused: (args: { operator: Address, paused: boolean, account?: Account | Address }) => Promise<Hash>;
     setOperatorLimits: (args: { minTxInterval: number, account?: Account | Address }) => Promise<Hash>;
     updateReputation: (args: { operator: Address, newScore: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -247,16 +247,15 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
     },
 
     // Operator Management
-    async configureOperator({ xPNTsToken, opTreasury, exchangeRate, account }) {
+    async configureOperator({ xPNTsToken, opTreasury, account }) {
         try {
             validateAddress(xPNTsToken, 'xPNTsToken');
             validateAddress(opTreasury, 'opTreasury');
-            validateAmount(exchangeRate, 'exchangeRate');
             return await (client as any).writeContract({
                 address,
                 abi: SuperPaymasterABI,
                 functionName: 'configureOperator',
-                args: [xPNTsToken, opTreasury, exchangeRate],
+                args: [xPNTsToken, opTreasury],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -578,15 +577,14 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             if (Array.isArray(result)) {
                 return {
                     aPNTsBalance: result[0],
-                    exchangeRate: result[1],
-                    isConfigured: result[2],
-                    isPaused: result[3],
-                    xPNTsToken: result[4],
-                    reputation: result[5],
-                    minTxInterval: result[6],
-                    treasury: result[7],
-                    totalSpent: result[8],
-                    totalTxSponsored: result[9]
+                    isConfigured: result[1],
+                    isPaused: result[2],
+                    xPNTsToken: result[3],
+                    reputation: result[4],
+                    minTxInterval: result[5],
+                    treasury: result[6],
+                    totalSpent: result[7],
+                    totalTxSponsored: result[8]
                 };
             }
             return result as OperatorConfig;

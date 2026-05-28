@@ -316,18 +316,14 @@ export class PaymasterOperatorClient extends BaseClient {
         }
     }
 
-    async updateExchangeRate(exchangeRate: bigint, options?: TransactionOptions): Promise<Hash> {
-        return this.configureOperator(undefined, undefined, exchangeRate, options);
-    }
-
     /**
-     * Configure operator parameters (Token, Treasury, Exchange Rate).
+     * Configure operator parameters (Token, Treasury).
+     * Exchange rate is now read live from xPNTsToken.exchangeRate() at runtime.
      * If parameters are undefined, existing values are preserved.
      */
     async configureOperator(
-        xPNTsToken?: Address, 
-        treasury?: Address, 
-        exchangeRate?: bigint, 
+        xPNTsToken?: Address,
+        treasury?: Address,
         options?: TransactionOptions
     ): Promise<Hash> {
         try {
@@ -336,15 +332,13 @@ export class PaymasterOperatorClient extends BaseClient {
 
             // Fetch current config to preserve missing values
             const currentConfig = await sp(publicClient).operators({ operator: this.getAddress() });
-            
+
             const currentToken = currentConfig.xPNTsToken;
             const currentTreasury = currentConfig.treasury;
-            const currentRate = currentConfig.exchangeRate;
 
             return await sp(this.client).configureOperator({
                 xPNTsToken: xPNTsToken || currentToken,
                 opTreasury: treasury || currentTreasury,
-                exchangeRate: exchangeRate ?? currentRate,
                 account: options?.account
             });
         } catch (error) {

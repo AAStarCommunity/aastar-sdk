@@ -111,17 +111,16 @@ export class SuperPaymasterAdminClient {
     }
 
     static async configureOperator(
-        wallet: any, 
-        paymaster: Address, 
-        token: Address, 
-        treasury: Address, 
-        exchangeRate: bigint
+        wallet: any,
+        paymaster: Address,
+        token: Address,
+        treasury: Address
     ) {
         return wallet.writeContract({
             address: paymaster,
             abi: SUPERPAYMASTER_ABI,
             functionName: 'configureOperator',
-            args: [token, treasury, exchangeRate],
+            args: [token, treasury],
             chain: wallet.chain
         } as any);
     }

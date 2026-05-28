@@ -35,7 +35,7 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
     it('configure/paused/limits', async () => {
       w.writeContract.mockResolvedValue('0x');
       const act = superPaymasterActions(A)(w);
-      await act.configureOperator({ xPNTsToken: U, opTreasury: U, exchangeRate: 100n, account: U });
+      await act.configureOperator({ xPNTsToken: U, opTreasury: U, account: U });
       await act.setOperatorPaused({ operator: U, paused: true, account: U });
       await act.setOperatorLimits({ minTxInterval: 10, account: U });
       await act.updateReputation({ operator: U, newScore: 100n, account: U });

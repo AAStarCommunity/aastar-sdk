@@ -69,7 +69,6 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 const hConfig = await this.configureOperator(
                     token,
                     this.getAddress(), // Default treasury to self
-                    parseEther('1'),    // Default 1:1 rate
                     options
                 );
                 hashes.push(hConfig);
