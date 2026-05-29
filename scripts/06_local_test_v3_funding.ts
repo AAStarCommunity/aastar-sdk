@@ -17,7 +17,7 @@ const APNTS = process.env.XPNTS_ADDR as Hex;
 if (!SUPER_PAYMASTER || !SIGNER_KEY || !APNTS) throw new Error("Missing Config");
 
 const pmAbi = parseAbi([
-    'function operators(address) view returns (uint128 aPNTsBalance, uint96 exchangeRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
+    'function operators(address) view returns (uint128 aPNTsBalance, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
     'function deposit(uint256) external',
     'function depositFor(address, uint256) external',
     'function withdraw(uint256) external',

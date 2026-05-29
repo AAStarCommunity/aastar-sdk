@@ -181,8 +181,8 @@ async function runFullV3Test() {
     }
 
     const pmAbi = parseAbi([
-        'function operators(address) view returns (uint128 balance, uint96 exRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)',
-        'function configureOperator(address, address, uint256)',
+        'function operators(address) view returns (uint128 aPNTsBalance, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
+        'function configureOperator(address, address)',
         'function deposit(uint256)',
         'function notifyDeposit(uint256)',
         'function withdraw(uint256)',

@@ -452,7 +452,7 @@ async function main() {
             paymasterFactoryAddress: config.contracts.paymasterFactory,
             ethUsdPriceFeedAddress: config.contracts.priceFeed
         });
-        const h = await operatorSdk.configureOperator(anniToken, anniAcc.address, parseEther('1'));
+        const h = await operatorSdk.configureOperator(anniToken, anniAcc.address); // rate now live from xPNTsToken
         await trackGas(publicClient, h, '2b.Anni.ConfigureOperator');
     }
 

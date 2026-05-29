@@ -216,7 +216,7 @@ async function main() {
     console.log(`\n[Step 1.5] Checking Operator Credit (Anni)...`);
     try {
         const pmAbi = parseAbi([
-            'function operators(address) view returns (uint128 aPNTsBalance, uint96 exchangeRate, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
+            'function operators(address) view returns (uint128 aPNTsBalance, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)',
             'function depositFor(address targetOperator, uint256 amount) external'
         ]);
         

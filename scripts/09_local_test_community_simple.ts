@@ -25,7 +25,7 @@ const registryAbi = parseAbi([
 ]);
 
 const superPaymasterAbi = parseAbi([
-    'function operators(address) view returns (address xPNTsToken, bool isConfigured, bool isPaused, address treasury, uint96 exchangeRate, uint256 aPNTsBalance, uint256 totalSpent, uint256 totalTxSponsored, uint256 reputation)'
+    'function operators(address) view returns (uint128 aPNTsBalance, bool isConfigured, bool isPaused, address xPNTsToken, uint32 reputation, uint48 minTxInterval, address treasury, uint256 totalSpent, uint256 totalTxSponsored)'
 ]);
 
 async function runSimplifiedCommunityTest() {

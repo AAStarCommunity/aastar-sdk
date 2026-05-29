@@ -470,7 +470,7 @@ async function main() {
                         console.log(`      🔧 Configuring SuperPM Operator Anni with token ${anniToken}...`);
                         // Ensure it's called by an account with ROLE_COMMUNITY and ROLE_PAYMASTER_SUPER
                         // Acc is the Anni Community account, which should have these roles.
-                        const h = await operatorSdk.configureOperator(anniToken, acc.address, parseEther('1'));
+                        const h = await operatorSdk.configureOperator(anniToken, acc.address); // rate now live from xPNTsToken
                         await publicClient.waitForTransactionReceipt({ hash: h });
                         console.log(`      ✅ Operator Configured.`);
                     }
