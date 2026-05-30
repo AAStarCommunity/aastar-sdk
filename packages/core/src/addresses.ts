@@ -65,6 +65,11 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0xbD1807328Dd654512B13d6320C9Cc78685a405Ed",
     agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    // NOTE: config.sepolia.json also has agentValidationRegistry
+    // (0x8004Cb1BF31DAf7788923b405b754f57acEB4272). It is intentionally NOT added
+    // here yet: CANONICAL_ADDRESSES is a homogeneous union (every chain must share
+    // the same keys), and no SDK client consumes the validation registry today.
+    // Add it to ALL chain blocks (0x0 on chains without it) when an SDK client needs it.
     // Mycelium community PNTs token (Anni's xPNTsToken)
     pnts: "0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6",
   },
