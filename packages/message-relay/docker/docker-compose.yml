@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  spore-relay:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - relay_data:/app/data
+    environment:
+      - PORT=7777
+      - SPORE_DB_PATH=/app/data/spore-relay.db
+      - SPORE_REQUIRE_PAYMENT=false
+    command: node dist/bin/spore-relay.js
+    ports:
+      - "7777:7777"
+    restart: unless-stopped
+
+volumes:
+  relay_data:
