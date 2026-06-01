@@ -1,0 +1,39 @@
+{
+  "name": "@aastar/messaging",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./xmtp-compat": {
+      "import": "./dist/xmtp-compat.js",
+      "types": "./dist/xmtp-compat.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "nostr-tools": "^2.7.2",
+    "@noble/curves": "^1.8.0",
+    "@noble/hashes": "^1.7.0"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2",
+    "vitest": "^3.0.0"
+  },
+  "scripts": {
+    "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
+    "prebuild": "pnpm clean",
+    "build": "tsc",
+    "test": "vitest run"
+  }
+}

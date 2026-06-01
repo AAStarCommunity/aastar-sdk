@@ -1,0 +1,35 @@
+{
+  "name": "@aastar/react",
+  "version": "0.1.0",
+  "description": "React hooks for Spore Protocol — @aastar/messaging",
+  "publishConfig": { "access": "public" },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aastar/messaging": "workspace:*"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.0.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "5.7.2",
+    "vitest": "^3.0.0"
+  },
+  "scripts": {
+    "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f 2>/dev/null; rm -rf dist",
+    "prebuild": "pnpm clean",
+    "build": "tsc",
+    "test": "vitest run"
+  }
+}
