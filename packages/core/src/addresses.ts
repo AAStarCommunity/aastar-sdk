@@ -26,6 +26,18 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",
+    // --- AirAccount v0.17.2-beta.2 stack (not yet deployed on this chain) ---
+    aaStarBLSAlgorithm: "0x0000000000000000000000000000000000000000",
+    aaStarValidator: "0x0000000000000000000000000000000000000000",
+    aaStarBLSAggregator: "0x0000000000000000000000000000000000000000",
+    sessionKeyValidator: "0x0000000000000000000000000000000000000000",
+    forceExitModule: "0x0000000000000000000000000000000000000000",
+    airAccountDelegate: "0x0000000000000000000000000000000000000000",
+    calldataParserRegistry: "0x0000000000000000000000000000000000000000",
+    airAccountFactoryV7: "0x0000000000000000000000000000000000000000",
+    airAccountV7Impl: "0x0000000000000000000000000000000000000000",
+    airAccountExtension: "0x0000000000000000000000000000000000000000",
+    agentRegistry: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     // Kept here so the inferred CanonicalAddresses union has `pnts` on every
     // chain (consumers see Address, not Address|undefined per-chain).
@@ -63,6 +75,18 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x5753e9675f68221cA901e495C1696e33F552ea36",
     agentIdentityRegistry: "0x400624Fa1423612B5D16c416E1B4125699467d9a",
     agentReputationRegistry: "0x2D82b2De1A0745454cDCf38f8c022f453d02Ca55",
+    // --- AirAccount v0.17.2-beta.2 stack (synced 2026-06-03 from airaccount-contract) ---
+    aaStarBLSAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",
+    aaStarValidator: "0x29edC0e59C7cCcd89334139556Bc254bBC1B1E2F",
+    aaStarBLSAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",
+    sessionKeyValidator: "0xc1e2534D9Cae27Fd9776e612229115604A9e07E9",
+    forceExitModule: "0xc7128A1F66DFf7B607d595371FCAEeAdC485CFC9",  // v0.17.2-beta.2 (LOW-3 stale-guardian fix)
+    airAccountDelegate: "0x8603AAF6C3f07fdae810B323c95a198D796EC52E",
+    calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",
+    airAccountFactoryV7: "0xc6c7FA51814f109Dea73757c73c378a25b2BAeE9",
+    airAccountV7Impl: "0x05274e4Af481e5c23287571F71C52afCCC5Df127",
+    airAccountExtension: "0x6e3E6d7e6DFb383CeaAe6A9ae478745FFc5cAac0",
+    agentRegistry: "0xc60E7D1d13027Ed63a899926ba1a9A2692f1D9EB",
     // Mycelium community PNTs token (Anni's xPNTsToken)
     pnts: "0x83ca2b02f325B2C2e846BFe7582993acD10E5cc8",
   },
@@ -89,6 +113,18 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",
+    // --- AirAccount v0.17.2-beta.2 stack (not yet deployed on this chain) ---
+    aaStarBLSAlgorithm: "0x0000000000000000000000000000000000000000",
+    aaStarValidator: "0x0000000000000000000000000000000000000000",
+    aaStarBLSAggregator: "0x0000000000000000000000000000000000000000",
+    sessionKeyValidator: "0x0000000000000000000000000000000000000000",
+    forceExitModule: "0x0000000000000000000000000000000000000000",
+    airAccountDelegate: "0x0000000000000000000000000000000000000000",
+    calldataParserRegistry: "0x0000000000000000000000000000000000000000",
+    airAccountFactoryV7: "0x0000000000000000000000000000000000000000",
+    airAccountV7Impl: "0x0000000000000000000000000000000000000000",
+    airAccountExtension: "0x0000000000000000000000000000000000000000",
+    agentRegistry: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     pnts: "0x0000000000000000000000000000000000000000",
   }
