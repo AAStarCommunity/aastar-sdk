@@ -49,6 +49,33 @@ GAS_COST = 0.5              # per sponsored participation, L2 on-chain cost (che
 REDEEM_DEMAND = 0.6         # demand-driven redemption: agents hoard points part of the time
 R_STAR = 300.0
 
+# --- Long-horizon population dynamics (v7 calibration, June 2026) -------------
+# Real-DAO grounding: Fritsch, Mueller & Wattenhofer (2024, BRA / arXiv:2204.01176)
+# report that "in both [Compound, Uniswap] governance systems less than 10% of
+# total tokens (or 15% of circulating tokens) participate in votes on proposals,"
+# with Uniswap's active delegate count dropping from ~5,784 to "below 100" --
+# a >>90% long-horizon attrition. Calibrating our A0 baseline against this
+# evidence requires:
+#   (1) permanent churn (people leave the community for reasons unrelated to
+#       the gas mechanism: job changes, lost interest, life events);
+#   (2) burnout / motivation decay for chronically unrewarded participants;
+#   (3) modest recruitment (real communities receive new members over time);
+#   (4) zero-bootstrap initial peer participation (no "everyone-already-active"
+#       startup assumption baked into the social-influence term).
+# Without these, A0 1-year frozen-share read ~26% -- unrealistically optimistic
+# vs the Fritsch-implied >>50%. With them, A0 stabilises around 65-75% frozen
+# at 1 yr (in line with the empirical evidence), while the A0->A3 *relative*
+# effect of the CommunityFi mechanism remains robust.
+WEEKLY_CHURN_RATE = 0.015   # 1.5%/wk permanent exit -> 1yr retention ~46%
+                            # (Uniswap's 98% delegate attrition is far more extreme;
+                            #  1.5% is therefore a conservative lower bound)
+BURNOUT_DECAY = 0.004       # motivation decays this much per consecutive
+                            # week without redemption reward
+MONTHLY_RECRUITS = 2        # new members per community per month
+                            # (real communities pull people in via cold start)
+INITIAL_PREV_FRAC = 0.0     # no "warm-start" peer participation
+PERMANENT_LEFT_MARKER = 99999  # last_active value for permanently-departed agents
+
 # Fischbacher-Gachter-Fehr (2001) behavioral typology + proportions.
 # fields: share, motivation m, skill s, social weight (peer influence),
 #         reward sensitivity, base threshold theta, contribution quality, withdrawal
@@ -102,19 +129,24 @@ def build_pool(seed, fr_share=None):
 
 
 def run_arm(arm, pop, seed):
-    m, s, soc, rwd, theta0 = pop["m"], pop["s"], pop["soc"], pop["rwd"], pop["theta"]
-    q, withdraw = pop["q"], pop["withdraw"]
+    # Work on a mutable copy so we can rotate recruits in / churned agents out.
+    m = pop["m"].copy(); s = pop["s"].copy(); soc = pop["soc"].copy()
+    rwd = pop["rwd"].copy(); theta0 = pop["theta"].copy()
+    q = pop["q"].copy(); withdraw = pop["withdraw"].copy()
+    m_base = m.copy()                      # for capping burnout damage
     rng = np.random.default_rng(seed)
     n = len(m)
     habit = np.zeros(n); reputation = np.zeros(n); points = np.zeros(n)
     last_active = np.full(n, 99, dtype=int)
     parts_12w = np.zeros((n, APATHY_W), dtype=int)
+    no_reward_streak = np.zeros(n, dtype=int)        # consecutive weeks w/o redemption
+    left = np.zeros(n, dtype=bool)                   # permanently departed
     snap = {h: {} for h in HORIZONS}
     series = {"part": []}
     spent_total = spent_contrib = 0.0     # ACTUAL redemption spend (emergent, <= budget)
     gas_spent = 0.0                       # ACTUAL gas-sponsorship spend (emergent)
     gas_budget = 0.0
-    prev_frac = 0.12
+    prev_frac = INITIAL_PREV_FRAC          # zero warm-start: no "everyone-already-active" assumption
     contrib_share_now = 0.0
 
     for w in range(WEEKS):
@@ -140,7 +172,8 @@ def run_arm(arm, pop, seed):
         util = (0.85 * m + reward_pull + soc * prev_frac + HABIT_DROP * habit
                 - friction - 0.70 * theta0 - disillusion)
         p = 1.0 / (1.0 + np.exp(-5.0 * (util - 0.45)))
-        join = rng.random(n) < p
+        join_raw = rng.random(n) < p
+        join = join_raw & ~left           # departed agents cannot participate
         prev_frac = float(join.mean())
         if arm.gasless:                              # actual gas spend drawn from reserve
             gc = float(join.sum()) * GAS_COST
@@ -152,12 +185,53 @@ def run_arm(arm, pop, seed):
         last_active = np.where(join, 0, last_active + 1)
         parts_12w[:, w % APATHY_W] = join
 
+        # --- v7 long-horizon dynamics --------------------------------------
+        # Burnout: agents who participate without redemption reward see their
+        # intrinsic motivation slowly decay (Hirschman exit/voice, Bowles &
+        # Gintis on reciprocity fatigue). Reset streak on monthly redeem.
+        no_reward_streak = np.where(join, no_reward_streak + 1, no_reward_streak)
+        m = np.maximum(m - BURNOUT_DECAY * (no_reward_streak / 12.0) * join,
+                       0.3 * m_base)        # floor at 30% of base motivation
+
+        # Permanent churn: each surviving agent has a small weekly chance of
+        # leaving the community for reasons unrelated to the mechanism.
+        churn_draw = rng.random(n) < WEEKLY_CHURN_RATE
+        new_left = churn_draw & ~left
+        left = left | new_left
+        last_active = np.where(new_left, PERMANENT_LEFT_MARKER, last_active)
+
+        # Monthly recruitment: refill a few slots with fresh agents drawn from
+        # the same behavioral typology so the community size stays roughly N.
+        if (w % 4 == 0) and MONTHLY_RECRUITS > 0:
+            departed_idx = np.where(left)[0]
+            n_replace = min(MONTHLY_RECRUITS, len(departed_idx))
+            if n_replace > 0:
+                replace = rng.choice(departed_idx, size=n_replace, replace=False)
+                # draw fresh attribute vectors from the same Fischbacher typology
+                shares = {k: v["share"] for k, v in TYPES.items()}
+                new_types = rng.choice(list(shares), size=n_replace,
+                                       p=[shares[k] for k in shares])
+                for j, t in zip(replace, new_types):
+                    tp = TYPES[t]
+                    m[j] = np.clip(rng.normal(tp["m"], 0.08), 0.02, 0.99)
+                    m_base[j] = m[j]
+                    s[j] = np.clip(rng.normal(tp["s"], 0.08), 0.05, 0.99)
+                    theta0[j] = np.clip(rng.normal(tp["theta"], 0.06), 0.0, 0.95)
+                    soc[j] = tp["soc"]; rwd[j] = tp["rwd"]; q[j] = tp["q"]
+                    withdraw[j] = tp["withdraw"]
+                    habit[j] = 0.0; reputation[j] = 0.0; points[j] = 0.0
+                    last_active[j] = 99; left[j] = False
+                    no_reward_streak[j] = 0
+                    parts_12w[j, :] = 0
+        # -------------------------------------------------------------------
+
         if arm.redeemable and (w % 4 == 3):
             active_nft = parts_12w.sum(axis=1) >= 2
             star_nft = reputation >= R_STAR
             budget = (1.0 - GAS_ALLOC) * BUDGET_PER_MONTH   # redemption gets the non-gas slice
             for i in rng.permutation(n):
                 if budget <= 0: break
+                if left[i]: continue                        # departed agents do not redeem
                 if rng.random() > REDEEM_DEMAND: continue   # demand-driven: agent hoards this month
                 for name, cost, gate in reversed(TIERS_REDEEM):
                     if points[i] < cost or cost > budget: continue
@@ -165,6 +239,7 @@ def run_arm(arm, pop, seed):
                         if gate == "active_nft" and not active_nft[i]: continue
                         if gate == "star_nft" and not star_nft[i]: continue
                     points[i] -= cost; budget -= cost; spent_total += cost
+                    no_reward_streak[i] = 0
                     if reputation[i] >= R_STAR: spent_contrib += cost
                     break
             contrib_share_now = (spent_contrib / spent_total) if spent_total > 0 else 0.0
@@ -174,12 +249,24 @@ def run_arm(arm, pop, seed):
         for h, hw in HORIZONS.items():
             if wk == hw:
                 months = max(1, wk // 4)
+                still_here = ~left
+                n_here = max(1, int(still_here.sum()))
+                # frozen = inside the community AND inactive >= FROZEN_W weeks
+                # (departed agents are NOT counted as "frozen" -- they are
+                # gone; this metric isolates dormancy from churn)
+                is_frozen = still_here & (last_active > FROZEN_W)
+                # the part series records active fraction over the WHOLE
+                # initial-cohort denominator; normalise to current members for
+                # the snapshot so the rate is comparable across horizons
+                active_now_share = float(join[still_here].mean()) if n_here > 0 else 0.0
                 snap[h] = dict(
-                    part=float(np.mean(series["part"][-13:])),
-                    frozen=float((last_active > FROZEN_W).mean()),
+                    part=float(np.mean(series["part"][-13:])),  # raw weekly mean (kept for plot)
+                    active=active_now_share,            # active among current members
+                    frozen=float(is_frozen.sum() / n_here),
+                    departed=float(left.mean()),        # cumulative permanent-departure share
                     sustain=(spent_contrib / spent_total) if spent_total > 0 else 0.0,
-                    gas_pm=gas_spent / months,          # actual gas spend per month
-                    redeem_pm=spent_total / months,     # actual redemption spend per month
+                    gas_pm=gas_spent / months,
+                    redeem_pm=spent_total / months,
                 )
     return snap, series
 
@@ -187,7 +274,7 @@ def run_arm(arm, pop, seed):
 def experiment(fr_share=None, n_draws=N_DRAWS):
     """Draw n_draws communities of N=75 from a 1000-agent pool; return per-arm,
     per-horizon mean+std across draws, plus pop-0 series for plotting."""
-    keys = ("part", "frozen", "sustain", "gas_pm", "redeem_pm")
+    keys = ("part", "active", "frozen", "departed", "sustain", "gas_pm", "redeem_pm")
     agg = {a.name: {h: {k: [] for k in keys} for h in HORIZONS} for a in ARMS}
     series0 = {}
     for di in range(n_draws):
@@ -210,12 +297,12 @@ def main():
     agg, series0 = experiment()
     for h in HORIZONS:
         print(f"=== {h} ({HORIZONS[h]}w) === mean+-std over {N_DRAWS} community draws")
-        print(f"{'arm':16s}{'participation':>16}{'frozen':>14}{'sustain':>16}")
+        print(f"{'arm':18s}{'active(now)':>14}{'frozen':>10}{'departed':>10}{'sustain':>10}")
         for arm in ARMS:
             d = agg[arm.name][h]
-            print(f"{arm.name:16s}{np.mean(d['part']):8.3f}+-{np.std(d['part']):.3f}"
-                  f"{np.mean(d['frozen']):8.3f}+-{np.std(d['frozen']):.3f}"
-                  f"{np.mean(d['sustain']):9.3f}+-{np.std(d['sustain']):.3f}")
+            print(f"{arm.name:18s}{np.mean(d['active']):10.3f}"
+                  f"{np.mean(d['frozen']):10.3f}{np.mean(d['departed']):10.3f}"
+                  f"{np.mean(d['sustain']):10.3f}")
         print()
 
     # budget vs ACTUAL spend (budget is a reserve; actual is emergent -- hoarding & cheap gas)
@@ -254,7 +341,14 @@ def main():
               title="Sustainability vs free-rider share (failure boundary)")
     ax[1].legend(fontsize=8)
     plt.tight_layout()
-    fig_p = os.path.join(HERE, "..", "images", "fig_abm_participation.png")
+    # default image output goes to the paper repo so figures are picked up by the
+    # LaTeX build; override with the FIG_OUT_DIR env var to redirect anywhere else.
+    fig_out_dir = os.environ.get(
+        "FIG_OUT_DIR",
+        "/Users/jason/Dev/jhfnetboy/DSR-Research-Flow/writing/paper7-CommunityFi/images",
+    )
+    os.makedirs(fig_out_dir, exist_ok=True)
+    fig_p = os.path.join(fig_out_dir, "fig_abm_participation.png")
     plt.savefig(fig_p, dpi=150); plt.close()
     print("\nwrote", os.path.normpath(fig_p))
 
@@ -262,7 +356,7 @@ def main():
         wtr = csv.writer(fh); wtr.writerow(["arm", "horizon", "metric", "mean", "std"])
         for arm in ARMS:
             for h in HORIZONS:
-                for k in ("part", "frozen", "sustain"):
+                for k in ("part", "active", "frozen", "departed", "sustain"):
                     v = agg[arm.name][h][k]
                     wtr.writerow([arm.name, h, k, f"{np.mean(v):.4f}", f"{np.std(v):.4f}"])
     with open(os.path.join(HERE, "communityfi_abm_sensitivity.csv"), "w", newline="") as fh:

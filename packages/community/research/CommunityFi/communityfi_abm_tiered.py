@@ -35,6 +35,8 @@ from communityfi_abm import (
     APATHY_W, FROZEN_W, BUDGET_PER_MONTH, GAS_ALLOC, GAS_COST,
     REDEEM_DEMAND, R_STAR, REWARDS, GAS_FRICTION, REWARD_DROP,
     HABIT_DROP, HABIT_GAIN, HABIT_DECAY, build_pool,
+    WEEKLY_CHURN_RATE, BURNOUT_DECAY, MONTHLY_RECRUITS,
+    INITIAL_PREV_FRAC, PERMANENT_LEFT_MARKER, TYPES,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,21 +60,27 @@ LADDER = [
 
 def run_tiered(pop, seed, enabled_tiers):
     """Run the full A3 mechanism (gasless + redeemable + gated) with redemption
-    restricted to `enabled_tiers`. Returns per-horizon snapshot plus per-tier
-    accounting and total re-engagement events (frozen -> active transitions)."""
+    restricted to `enabled_tiers`. Includes the same v7 long-horizon dynamics as
+    the backbone ABM (permanent churn, burnout decay, monthly recruitment, zero-
+    bootstrap social influence) so tier-ladder numbers stay calibrated against
+    Fritsch et al. 2024 / arXiv:2204.01176 alongside the A0--A3 results."""
     tiers = [(n, c, g) for (n, c, g) in COMMUNITY_TIERS if n in enabled_tiers]
-    m, s, soc, rwd, theta0 = pop["m"], pop["s"], pop["soc"], pop["rwd"], pop["theta"]
-    q, withdraw = pop["q"], pop["withdraw"]
+    m = pop["m"].copy(); s = pop["s"].copy(); soc = pop["soc"].copy()
+    rwd = pop["rwd"].copy(); theta0 = pop["theta"].copy()
+    q = pop["q"].copy(); withdraw = pop["withdraw"].copy()
+    m_base = m.copy()
     rng = np.random.default_rng(seed)
     n = len(m)
     habit = np.zeros(n); reputation = np.zeros(n); points = np.zeros(n)
     last_active = np.full(n, 99, dtype=int)
     parts_12w = np.zeros((n, APATHY_W), dtype=int)
+    no_reward_streak = np.zeros(n, dtype=int)
+    left = np.zeros(n, dtype=bool)
     snap = {h: {} for h in HORIZONS}
     series_part = []
     spent_total = spent_contrib = 0.0
     gas_spent = 0.0; gas_budget = 0.0
-    prev_frac = 0.12; contrib_share_now = 0.0
+    prev_frac = INITIAL_PREV_FRAC; contrib_share_now = 0.0
     tier_count = {n_: 0 for (n_, _, _) in COMMUNITY_TIERS}
     tier_spend = {n_: 0.0 for (n_, _, _) in COMMUNITY_TIERS}
     tier_to_contrib = {n_: 0.0 for (n_, _, _) in COMMUNITY_TIERS}
@@ -95,9 +103,10 @@ def run_tiered(pop, seed, enabled_tiers):
         util = (0.85 * m + reward_pull + soc * prev_frac + HABIT_DROP * habit
                 - friction - 0.70 * theta0 - disillusion)
         p = 1.0 / (1.0 + np.exp(-5.0 * (util - 0.45)))
-        join = rng.random(n) < p
+        join_raw = rng.random(n) < p
+        join = join_raw & ~left
 
-        was_frozen = last_active > FROZEN_W
+        was_frozen = (last_active > FROZEN_W) & ~left
         reengaged += int(np.sum(join & was_frozen))
         prev_frac = float(join.mean())
 
@@ -112,12 +121,43 @@ def run_tiered(pop, seed, enabled_tiers):
         parts_12w[:, w % APATHY_W] = join
         credit_eligible = last_active <= 2 * APATHY_W
 
+        # --- v7 long-horizon dynamics (identical to communityfi_abm.run_arm) -
+        no_reward_streak = np.where(join, no_reward_streak + 1, no_reward_streak)
+        m = np.maximum(m - BURNOUT_DECAY * (no_reward_streak / 12.0) * join,
+                       0.3 * m_base)
+        churn_draw = rng.random(n) < WEEKLY_CHURN_RATE
+        new_left = churn_draw & ~left
+        left = left | new_left
+        last_active = np.where(new_left, PERMANENT_LEFT_MARKER, last_active)
+        if (w % 4 == 0) and MONTHLY_RECRUITS > 0:
+            departed_idx = np.where(left)[0]
+            n_replace = min(MONTHLY_RECRUITS, len(departed_idx))
+            if n_replace > 0:
+                replace = rng.choice(departed_idx, size=n_replace, replace=False)
+                shares = {k: v["share"] for k, v in TYPES.items()}
+                new_types = rng.choice(list(shares), size=n_replace,
+                                       p=[shares[k] for k in shares])
+                for j, t in zip(replace, new_types):
+                    tp = TYPES[t]
+                    m[j] = np.clip(rng.normal(tp["m"], 0.08), 0.02, 0.99)
+                    m_base[j] = m[j]
+                    s[j] = np.clip(rng.normal(tp["s"], 0.08), 0.05, 0.99)
+                    theta0[j] = np.clip(rng.normal(tp["theta"], 0.06), 0.0, 0.95)
+                    soc[j] = tp["soc"]; rwd[j] = tp["rwd"]; q[j] = tp["q"]
+                    withdraw[j] = tp["withdraw"]
+                    habit[j] = 0.0; reputation[j] = 0.0; points[j] = 0.0
+                    last_active[j] = 99; left[j] = False
+                    no_reward_streak[j] = 0
+                    parts_12w[j, :] = 0
+        # -------------------------------------------------------------------
+
         if w % 4 == 3:
             active_nft = parts_12w.sum(axis=1) >= 2
             star_nft = reputation >= R_STAR
             budget = (1.0 - GAS_ALLOC) * BUDGET_PER_MONTH
             for i in rng.permutation(n):
                 if budget <= 0: break
+                if left[i]: continue
                 if rng.random() > REDEEM_DEMAND: continue
                 for (name, cost, gate) in reversed(tiers):
                     if points[i] < cost or cost > budget: continue
@@ -128,6 +168,7 @@ def run_tiered(pop, seed, enabled_tiers):
                     spent_total += cost
                     tier_count[name] += 1
                     tier_spend[name] += cost
+                    no_reward_streak[i] = 0
                     if reputation[i] >= R_STAR:
                         spent_contrib += cost
                         tier_to_contrib[name] += cost
@@ -139,9 +180,15 @@ def run_tiered(pop, seed, enabled_tiers):
         for h, hw in HORIZONS.items():
             if wk == hw:
                 months = max(1, wk // 4)
+                still_here = ~left
+                n_here = max(1, int(still_here.sum()))
+                is_frozen = still_here & (last_active > FROZEN_W)
+                active_now_share = float(join[still_here].mean()) if n_here > 0 else 0.0
                 snap[h] = dict(
                     part=float(np.mean(series_part[-13:])),
-                    frozen=float((last_active > FROZEN_W).mean()),
+                    active=active_now_share,
+                    frozen=float(is_frozen.sum() / n_here),
+                    departed=float(left.mean()),
                     sustain=(spent_contrib / spent_total) if spent_total > 0 else 0.0,
                     reengaged_pm=reengaged / months,
                 )
@@ -154,7 +201,7 @@ def main():
     print(f"Ladder: {[n for n, _ in LADDER]}")
     print(f"Pool={POOL_SIZE} | community N={N_COMMUNITY} | {N_DRAWS} draws | horizons={list(HORIZONS)}\n")
 
-    keys = ("part", "frozen", "sustain", "reengaged_pm")
+    keys = ("part", "active", "frozen", "departed", "sustain", "reengaged_pm")
     agg = {name: {h: {k: [] for k in keys} for h in HORIZONS} for name, _ in LADDER}
     tier_count_agg = {name: {t: [] for t, _, _ in COMMUNITY_TIERS} for name, _ in LADDER}
     tier_spend_agg = {name: {t: [] for t, _, _ in COMMUNITY_TIERS} for name, _ in LADDER}
@@ -174,11 +221,11 @@ def main():
                 tier_spend_agg[name][t].append(ts[t])
                 tier_contrib_agg[name][t].append(tcontrib[t])
 
-    print(f"{'ladder':22s}{'@1yr part':>12}{'frozen':>10}{'sustain':>10}{'re-engaged/mo':>16}")
+    print(f"{'ladder':22s}{'active(now)':>12}{'frozen':>10}{'departed':>10}{'sustain':>10}{'re-eng/mo':>12}")
     for (name, _) in LADDER:
         d = agg[name]["1yr"]
-        print(f"{name:22s}{np.mean(d['part']):12.3f}{np.mean(d['frozen']):10.3f}"
-              f"{np.mean(d['sustain']):10.3f}{np.mean(d['reengaged_pm']):16.2f}")
+        print(f"{name:22s}{np.mean(d['active']):12.3f}{np.mean(d['frozen']):10.3f}"
+              f"{np.mean(d['departed']):10.3f}{np.mean(d['sustain']):10.3f}{np.mean(d['reengaged_pm']):12.2f}")
 
     print(f"\nPer-tier redemption breakdown @3yr (full T4 portfolio):")
     print(f"  {'tier':12s}{'count':>10}{'spend(pts)':>12}{'contrib-share':>16}")
@@ -218,10 +265,10 @@ def main():
     short = [n.split(" ")[0] for n in names]
     fr = [np.mean(agg[n]["1yr"]["frozen"]) for n in names]
     su = [np.mean(agg[n]["1yr"]["sustain"]) for n in names]
-    pt = [np.mean(agg[n]["1yr"]["part"]) for n in names]
+    pt = [np.mean(agg[n]["1yr"]["active"]) for n in names]
     x = np.arange(len(names))
     ax[0].bar(x - 0.27, fr, width=0.27, label="Frozen share (lower better)", color="#c44")
-    ax[0].bar(x,       pt, width=0.27, label="Participation rate",            color="#48a")
+    ax[0].bar(x,       pt, width=0.27, label="Active among current members", color="#48a")
     ax[0].bar(x + 0.27, su, width=0.27, label="Contributor budget-share",    color="#4a8")
     ax[0].set_xticks(x); ax[0].set_xticklabels(short)
     ax[0].set_ylim(0, 1)
@@ -246,7 +293,12 @@ def main():
     ax[1].set_ylabel("Redemption count (mean)")
     ax[1].legend(fontsize=8)
     plt.tight_layout()
-    fig_p = os.path.join(HERE, "..", "images", "fig_abm_tiered.png")
+    fig_out_dir = os.environ.get(
+        "FIG_OUT_DIR",
+        "/Users/jason/Dev/jhfnetboy/DSR-Research-Flow/writing/paper7-CommunityFi/images",
+    )
+    os.makedirs(fig_out_dir, exist_ok=True)
+    fig_p = os.path.join(fig_out_dir, "fig_abm_tiered.png")
     plt.savefig(fig_p, dpi=150); plt.close()
     print(f"\nwrote {os.path.normpath(fig_p)}")
 
