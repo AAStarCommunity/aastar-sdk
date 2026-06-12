@@ -12,8 +12,9 @@ All notable changes to this project will be documented in this file.
   Old r5 factory address is preserved as `factoryM7r5Prev` for reference.
 
 ### Added
-- `AccountManager.buildGuardianAcceptanceHash(owner, salt, factoryAddress, chainId)` —
-  computes the raw keccak256 guardian acceptance hash (guardians sign via `personal_sign`)
+- `AccountManager.buildGuardianAcceptanceHash(owner, salt, factoryAddress, chainId, dailyLimit)` —
+  computes the raw keccak256 guardian acceptance hash (guardians sign via `personal_sign`);
+  `dailyLimit` is bound into the hash (M9 C-3 front-run fix); `salt` accepts `number | bigint`
 - `AccountManager.createAccountWithGuardians(params)` — creates an account with
   two explicit user guardians + community guardian (v0.7+ only); throws for v0.6
 - `AccountRecord` new optional fields: `dailyLimit`, `guardian1`, `guardian1Sig`,

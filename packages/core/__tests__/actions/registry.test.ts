@@ -29,7 +29,6 @@ describe('RegistryActions Bulk Coverage', () => {
   });
 
   describe('Contract References (Setters)', () => {
-    it('setBLSValidator', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setBLSValidator({ validator: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setBLSAggregator', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setBLSAggregator({ aggregator: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setMySBT', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setMySBT({ sbt: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setSuperPaymaster', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setSuperPaymaster({ paymaster: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
@@ -38,7 +37,6 @@ describe('RegistryActions Bulk Coverage', () => {
   });
 
   describe('Contract References (Getters)', () => {
-    it('blsValidator', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).blsValidator()).toBe(USER); });
     it('blsAggregator', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).blsAggregator()).toBe(USER); });
     it('MYSBT', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).MYSBT()).toBe(USER); });
     it('SUPER_PAYMASTER', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).SUPER_PAYMASTER()).toBe(USER); });
