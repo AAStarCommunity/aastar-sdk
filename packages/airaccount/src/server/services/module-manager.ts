@@ -1,12 +1,12 @@
 import { ethers } from "ethers";
 import { MODULE_TYPE, AIRACCOUNT_ABI, AIRACCOUNT_ADDRESSES } from "../constants/entrypoint";
 
-export type ModuleTypeId = 1 | 2 | 3; // VALIDATOR | EXECUTOR | HOOK
+export type ModuleTypeId = 1 | 2 | 3 | 4; // VALIDATOR | EXECUTOR | FALLBACK | HOOK
 
 export interface InstallModuleParams {
   /** The deployed AirAccount address */
   account: string;
-  /** ERC-7579 module type: 1=Validator, 2=Executor, 3=Hook */
+  /** ERC-7579 module type: 1=Validator, 2=Executor, 3=Fallback, 4=Hook */
   moduleTypeId: ModuleTypeId;
   /** Module contract address to install */
   module: string;

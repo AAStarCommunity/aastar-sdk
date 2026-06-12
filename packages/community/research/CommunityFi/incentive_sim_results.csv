@@ -1,0 +1,21 @@
+metric,value,note
+usd_per_sponsored_tx,5.0349e-03,USD value a defaulter steals per tx
+safe_credit_cap_N7_USD,30.00,"max IC credit cap at N=7, S_op=50, rho=0.8 (= 5,958 sponsored tx)"
+safe_credit_cap_N37_USD,150.00,"max IC credit cap at N=37, S_op=50, rho=0.8 (= 29,792 sponsored tx)"
+safe_credit_cap_N100_USD,402.00,"max IC credit cap at N=100, S_op=50, rho=0.8 (= 79,843 sponsored tx)"
+safe_credit_cap_N200_USD,804.00,"max IC credit cap at N=200, S_op=50, rho=0.8 (= 159,685 sponsored tx)"
+max_work_drain_profit_e0.001_USD,1.3843,max genuine-work drain profit over R (>0 => attack viable)
+max_work_drain_profit_e0.005_USD,0.7998,max genuine-work drain profit over R (>0 => attack viable)
+max_work_drain_profit_e0.020_USD,0.1307,max genuine-work drain profit over R (>0 => attack viable)
+collusion_prob_h0.70_N7,2.86e-02,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.70_N37,5.00e-06,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.70_N100,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.70_N200,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.80_N7,4.77e-03,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.80_N37,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.80_N100,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.80_N200,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.90_N7,1.50e-04,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.90_N37,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.90_N100,0.00e+00,Monte Carlo P(>=2/3 corruptible)
+collusion_prob_h0.90_N200,0.00e+00,Monte Carlo P(>=2/3 corruptible)

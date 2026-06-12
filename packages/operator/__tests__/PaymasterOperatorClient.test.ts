@@ -84,7 +84,6 @@ describe('PaymasterOperatorClient', () => {
         aPNTsBalance: 0n,
         xPNTsToken: '0x2222222222222222222222222222222222222222',
         treasury: '0x3333333333333333333333333333333333333333',
-        exchangeRate: 150n,
         isConfigured: true,
         isPaused: false,
         reputation: 100,
@@ -195,13 +194,11 @@ describe('PaymasterOperatorClient', () => {
           }));
       });
 
-      it('updateExchangeRate should fetch config and call configureOperator', async () => {
-          // Mock operators return [balance, token, treasury, rate]
+      it('configureOperator should fetch current config and forward preserved values', async () => {
           mocks.mockSuperPaymaster.operators.mockResolvedValue({
               aPNTsBalance: 1000n,
               xPNTsToken: '0x2222222222222222222222222222222222222222',
               treasury: '0x3333333333333333333333333333333333333333',
-              exchangeRate: 150n,
               isConfigured: true,
               isPaused: false,
               reputation: 100,
@@ -211,16 +208,30 @@ describe('PaymasterOperatorClient', () => {
           });
           mocks.mockSuperPaymaster.configureOperator.mockResolvedValue('0xTxHash');
 
-          await client.updateExchangeRate(200n);
-          
-          expect(mocks.mockSuperPaymaster.operators).toHaveBeenCalledWith(expect.objectContaining({
-              operator: '0x1234567890123456789012345678901234567890' // Default mock address from client.ts
-          }));
-          
+          // Call with new treasury only — xPNTsToken should be preserved from current config
+          await client.configureOperator(
+              undefined,
+              '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+          );
+
+          expect(mocks.mockSuperPaymaster.operators).toHaveBeenCalled();
           expect(mocks.mockSuperPaymaster.configureOperator).toHaveBeenCalledWith(expect.objectContaining({
-              xPNTsToken: '0x2222222222222222222222222222222222222222',
-              opTreasury: '0x3333333333333333333333333333333333333333',
-              exchangeRate: 200n
+              xPNTsToken: '0x2222222222222222222222222222222222222222', // preserved
+              opTreasury: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', // overridden
+          }));
+      });
+
+      it('configureOperator with explicit token and treasury overrides both', async () => {
+          mocks.mockSuperPaymaster.configureOperator.mockResolvedValue('0xTxHash2');
+
+          await client.configureOperator(
+              '0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+              '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+          );
+
+          expect(mocks.mockSuperPaymaster.configureOperator).toHaveBeenCalledWith(expect.objectContaining({
+              xPNTsToken: '0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+              opTreasury: '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
           }));
       });
   });

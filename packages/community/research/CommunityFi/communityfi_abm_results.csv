@@ -1,0 +1,81 @@
+arm,horizon,metric,mean,std
+A0 baseline,3mo,part,0.1203,0.0243
+A0 baseline,3mo,active,0.1433,0.0564
+A0 baseline,3mo,frozen,0.4133,0.0599
+A0 baseline,3mo,departed,0.0893,0.0438
+A0 baseline,3mo,sustain,0.0000,0.0000
+A0 baseline,6mo,part,0.1257,0.0271
+A0 baseline,6mo,active,0.1587,0.0532
+A0 baseline,6mo,frozen,0.3060,0.0471
+A0 baseline,6mo,departed,0.1780,0.0598
+A0 baseline,6mo,sustain,0.0000,0.0000
+A0 baseline,1yr,part,0.1082,0.0394
+A0 baseline,1yr,active,0.1576,0.0571
+A0 baseline,1yr,frozen,0.3027,0.0765
+A0 baseline,1yr,departed,0.3333,0.0752
+A0 baseline,1yr,sustain,0.0000,0.0000
+A0 baseline,3yr,part,0.0535,0.0143
+A0 baseline,3yr,active,0.1069,0.0385
+A0 baseline,3yr,frozen,0.3530,0.0824
+A0 baseline,3yr,departed,0.5073,0.0655
+A0 baseline,3yr,sustain,0.0000,0.0000
+A1 +gasless,3mo,part,0.2949,0.0534
+A1 +gasless,3mo,active,0.3929,0.0957
+A1 +gasless,3mo,frozen,0.2532,0.0403
+A1 +gasless,3mo,departed,0.0893,0.0438
+A1 +gasless,3mo,sustain,0.0000,0.0000
+A1 +gasless,6mo,part,0.3565,0.0567
+A1 +gasless,6mo,active,0.3947,0.0832
+A1 +gasless,6mo,frozen,0.1835,0.0322
+A1 +gasless,6mo,departed,0.1780,0.0598
+A1 +gasless,6mo,sustain,0.0000,0.0000
+A1 +gasless,1yr,part,0.2443,0.0523
+A1 +gasless,1yr,active,0.3347,0.0844
+A1 +gasless,1yr,frozen,0.1952,0.0530
+A1 +gasless,1yr,departed,0.3333,0.0752
+A1 +gasless,1yr,sustain,0.0000,0.0000
+A1 +gasless,3yr,part,0.1098,0.0193
+A1 +gasless,3yr,active,0.2180,0.0744
+A1 +gasless,3yr,frozen,0.2256,0.0498
+A1 +gasless,3yr,departed,0.5073,0.0655
+A1 +gasless,3yr,sustain,0.0000,0.0000
+A2 +redeemable,3mo,part,0.6208,0.0498
+A2 +redeemable,3mo,active,0.6937,0.0500
+A2 +redeemable,3mo,frozen,0.0647,0.0218
+A2 +redeemable,3mo,departed,0.0807,0.0381
+A2 +redeemable,3mo,sustain,0.1841,0.2742
+A2 +redeemable,6mo,part,0.6265,0.0552
+A2 +redeemable,6mo,active,0.7277,0.0710
+A2 +redeemable,6mo,frozen,0.0244,0.0184
+A2 +redeemable,6mo,departed,0.1607,0.0339
+A2 +redeemable,6mo,sustain,0.5454,0.1469
+A2 +redeemable,1yr,part,0.5037,0.0582
+A2 +redeemable,1yr,active,0.6600,0.0924
+A2 +redeemable,1yr,frozen,0.0197,0.0189
+A2 +redeemable,1yr,departed,0.3107,0.0618
+A2 +redeemable,1yr,sustain,0.7607,0.0609
+A2 +redeemable,3yr,part,0.3012,0.0579
+A2 +redeemable,3yr,active,0.5626,0.0795
+A2 +redeemable,3yr,frozen,0.0352,0.0214
+A2 +redeemable,3yr,departed,0.5020,0.0731
+A2 +redeemable,3yr,sustain,0.8506,0.0302
+A3 full CommFi,3mo,part,0.4671,0.0616
+A3 full CommFi,3mo,active,0.5883,0.0944
+A3 full CommFi,3mo,frozen,0.1836,0.0426
+A3 full CommFi,3mo,departed,0.0813,0.0382
+A3 full CommFi,3mo,sustain,0.1322,0.2053
+A3 full CommFi,6mo,part,0.5492,0.0641
+A3 full CommFi,6mo,active,0.6441,0.0643
+A3 full CommFi,6mo,frozen,0.1233,0.0295
+A3 full CommFi,6mo,departed,0.1627,0.0352
+A3 full CommFi,6mo,sustain,0.5110,0.1403
+A3 full CommFi,1yr,part,0.4512,0.0500
+A3 full CommFi,1yr,active,0.5868,0.0777
+A3 full CommFi,1yr,frozen,0.1296,0.0378
+A3 full CommFi,1yr,departed,0.2987,0.0496
+A3 full CommFi,1yr,sustain,0.7845,0.0611
+A3 full CommFi,3yr,part,0.2770,0.0529
+A3 full CommFi,3yr,active,0.5145,0.0724
+A3 full CommFi,3yr,frozen,0.1247,0.0444
+A3 full CommFi,3yr,departed,0.4907,0.0718
+A3 full CommFi,3yr,sustain,0.8785,0.0300
