@@ -102,15 +102,17 @@ export class EthereumProvider {
 
   // ── M7 Module contracts ─────────────────────────────────────────
 
-  getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidator): ethers.Contract {
+  // M7 r4 module helpers — addresses renamed to *M7r4 suffix in beta.3 to avoid ambiguity.
+  // These methods are retained for backwards compatibility; callers should pass an explicit address.
+  getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidatorM7r4): ethers.Contract {
     return new ethers.Contract(address, AGENT_SESSION_KEY_VALIDATOR_ABI, this.provider);
   }
 
-  getTierGuardHookContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.tierGuardHook): ethers.Contract {
+  getTierGuardHookContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.tierGuardHookM7r4): ethers.Contract {
     return new ethers.Contract(address, TIER_GUARD_HOOK_ABI, this.provider);
   }
 
-  getCompositeValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.compositeValidator): ethers.Contract {
+  getCompositeValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.compositeValidatorM7r4): ethers.Contract {
     return new ethers.Contract(address, AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI, this.provider);
   }
 

@@ -40,6 +40,10 @@ export type {
 export { BLSSignatureService } from "./services/bls-signature-service";
 export { GuardChecker } from "./services/guard-checker";
 export { PaymasterManager, PaymasterPriceStalenessError } from "./services/paymaster-manager";
+export { ForceExitService, L2_TYPE } from "./services/force-exit-service";
+export type { PendingExit, L2Type } from "./services/force-exit-service";
+export { EIP7702DelegateService, AIR_ACCOUNT_DELEGATE_ADDRESS } from "./services/eip7702-delegate-service";
+export type { DelegateInitParams, EIP7702Authorization } from "./services/eip7702-delegate-service";
 export { TokenService } from "./services/token-service";
 export type { TokenInfo, TokenBalance } from "./services/token-service";
 export { WalletManager } from "./services/wallet-manager";

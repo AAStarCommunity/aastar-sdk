@@ -1,2593 +1,2591 @@
-{
-  "abi": [
-    {
-      "type": "constructor",
-      "inputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "fallback",
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "receive",
-      "stateMutability": "payable"
-    },
-    {
-      "type": "function",
-      "name": "accountId",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "string",
-          "internalType": "string"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "activeRecovery",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "newOwner",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "proposedAt",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "approvalBitmap",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "cancellationBitmap",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "addDeposit",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "payable"
-    },
-    {
-      "type": "function",
-      "name": "addGuardian",
-      "inputs": [
-        {
-          "name": "_guardian",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "agentExtension",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "approveRecovery",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "blsAggregator",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "cancelRecovery",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "entryPoint",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "execute",
-      "inputs": [
-        {
-          "name": "dest",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "value",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "func",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "executeBatch",
-      "inputs": [
-        {
-          "name": "dest",
-          "type": "address[]",
-          "internalType": "address[]"
-        },
-        {
-          "name": "value",
-          "type": "uint256[]",
-          "internalType": "uint256[]"
-        },
-        {
-          "name": "func",
-          "type": "bytes[]",
-          "internalType": "bytes[]"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "executeFromExecutor",
-      "inputs": [
-        {
-          "name": "mode",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "executionCalldata",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "returnData",
-          "type": "bytes[]",
-          "internalType": "bytes[]"
-        }
-      ],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "executeRecovery",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "getCurrentAlgId",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "algId",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getCurrentSessionKey",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "taggedId",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getDeposit",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "guard",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "contract AAStarGlobalGuard"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "guardAddTokenConfig",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "config",
-          "type": "tuple",
-          "internalType": "struct AAStarGlobalGuard.TokenConfig",
-          "components": [
-            {
-              "name": "tier1Limit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "tier2Limit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "dailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "guardApproveAlgorithm",
-      "inputs": [
-        {
-          "name": "algId",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "guardDecreaseDailyLimit",
-      "inputs": [
-        {
-          "name": "newLimit",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "guardDecreaseTokenDailyLimit",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "newLimit",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "guardianCount",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "guardians",
-      "inputs": [
-        {
-          "name": "i",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "initialize",
-      "inputs": [
-        {
-          "name": "_entryPoint",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_owner",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_config",
-          "type": "tuple",
-          "internalType": "struct AAStarAirAccountBase.InitConfig",
-          "components": [
-            {
-              "name": "guardians",
-              "type": "address[3]",
-              "internalType": "address[3]"
-            },
-            {
-              "name": "dailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "approvedAlgIds",
-              "type": "uint8[]",
-              "internalType": "uint8[]"
-            },
-            {
-              "name": "minDailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "initialTokens",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "initialTokenConfigs",
-              "type": "tuple[]",
-              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-              "components": [
-                {
-                  "name": "tier1Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                },
-                {
-                  "name": "tier2Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                },
-                {
-                  "name": "dailyLimit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name": "_guardAddr",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "initialize",
-      "inputs": [
-        {
-          "name": "_entryPoint",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_owner",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_config",
-          "type": "tuple",
-          "internalType": "struct AAStarAirAccountBase.InitConfig",
-          "components": [
-            {
-              "name": "guardians",
-              "type": "address[3]",
-              "internalType": "address[3]"
-            },
-            {
-              "name": "dailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "approvedAlgIds",
-              "type": "uint8[]",
-              "internalType": "uint8[]"
-            },
-            {
-              "name": "minDailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "initialTokens",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "initialTokenConfigs",
-              "type": "tuple[]",
-              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-              "components": [
-                {
-                  "name": "tier1Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                },
-                {
-                  "name": "tier2Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                },
-                {
-                  "name": "dailyLimit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                }
-              ]
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "initializeAgentAccount",
-      "inputs": [
-        {
-          "name": "_entryPoint",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_owner",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_config",
-          "type": "tuple",
-          "internalType": "struct AAStarAirAccountBase.InitConfig",
-          "components": [
-            {
-              "name": "guardians",
-              "type": "address[3]",
-              "internalType": "address[3]"
-            },
-            {
-              "name": "dailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "approvedAlgIds",
-              "type": "uint8[]",
-              "internalType": "uint8[]"
-            },
-            {
-              "name": "minDailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "initialTokens",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "initialTokenConfigs",
-              "type": "tuple[]",
-              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-              "components": [
-                {
-                  "name": "tier1Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                },
-                {
-                  "name": "tier2Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                },
-                {
-                  "name": "dailyLimit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name": "_guardAddr",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "installModule",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "initData",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "isModuleInstalled",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "isValidSignature",
-      "inputs": [
-        {
-          "name": "hash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "sig",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes4",
-          "internalType": "bytes4"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "modifyTierLimitsWithGuardians",
-      "inputs": [
-        {
-          "name": "_tier1",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "_tier2",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "deadline",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "guardianSigs",
-          "type": "bytes[]",
-          "internalType": "bytes[]"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "onERC721Received",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes4",
-          "internalType": "bytes4"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "owner",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "p256KeyX",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "p256KeyY",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "parserRegistry",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "pendingWeightChange",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "proposed",
-          "type": "tuple",
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        },
-        {
-          "name": "proposedAt",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "approvalBitmap",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "proposeRecovery",
-      "inputs": [
-        {
-          "name": "_newOwner",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "removeGuardian",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "guardianSigs",
-          "type": "bytes[]",
-          "internalType": "bytes[]"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "requiredTier",
-      "inputs": [
-        {
-          "name": "txValue",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "setAggregator",
-      "inputs": [
-        {
-          "name": "_aggregator",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setP256Key",
-      "inputs": [
-        {
-          "name": "_x",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "_y",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setParserRegistry",
-      "inputs": [
-        {
-          "name": "registry",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setTierLimits",
-      "inputs": [
-        {
-          "name": "_tier1",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "_tier2",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setValidator",
-      "inputs": [
-        {
-          "name": "_validator",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "supportsInterface",
-      "inputs": [
-        {
-          "name": "interfaceId",
-          "type": "bytes4",
-          "internalType": "bytes4"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "supportsModule",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "tier1Limit",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "tier2Limit",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "uninstallModule",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "deInitData",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "validateUserOp",
-      "inputs": [
-        {
-          "name": "userOp",
-          "type": "tuple",
-          "internalType": "struct PackedUserOperation",
-          "components": [
-            {
-              "name": "sender",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "nonce",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "initCode",
-              "type": "bytes",
-              "internalType": "bytes"
-            },
-            {
-              "name": "callData",
-              "type": "bytes",
-              "internalType": "bytes"
-            },
-            {
-              "name": "accountGasLimits",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "preVerificationGas",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "gasFees",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "paymasterAndData",
-              "type": "bytes",
-              "internalType": "bytes"
-            },
-            {
-              "name": "signature",
-              "type": "bytes",
-              "internalType": "bytes"
-            }
-          ]
-        },
-        {
-          "name": "userOpHash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "missingAccountFunds",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "validationData",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "validator",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "contract IAAStarValidator"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "weightConfig",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "passkeyWeight",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "ecdsaWeight",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "blsWeight",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "guardian0Weight",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "guardian1Weight",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "guardian2Weight",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "_padding",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "tier1Threshold",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "tier2Threshold",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "tier3Threshold",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "withdrawDepositTo",
-      "inputs": [
-        {
-          "name": "to",
-          "type": "address",
-          "internalType": "address payable"
-        },
-        {
-          "name": "amount",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "event",
-      "name": "AgentIdentityMinted",
-      "inputs": [
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "indexed": true,
-          "internalType": "uint256"
-        },
-        {
-          "name": "identityRegistry",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "agentURI",
-          "type": "string",
-          "indexed": false,
-          "internalType": "string"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "AgentReputationSubmitted",
-      "inputs": [
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "indexed": true,
-          "internalType": "uint256"
-        },
-        {
-          "name": "reputationRegistry",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "value",
-          "type": "int128",
-          "indexed": false,
-          "internalType": "int128"
-        },
-        {
-          "name": "tag1",
-          "type": "string",
-          "indexed": false,
-          "internalType": "string"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "AgentWalletSet",
-      "inputs": [
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "indexed": true,
-          "internalType": "uint256"
-        },
-        {
-          "name": "agentWallet",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "agentRegistry",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "AggregatorSet",
-      "inputs": [
-        {
-          "name": "aggregator",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "ERC8004WalletBound",
-      "inputs": [
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "indexed": true,
-          "internalType": "uint256"
-        },
-        {
-          "name": "agentWallet",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "identityRegistry",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "GuardInitialized",
-      "inputs": [
-        {
-          "name": "guard",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "dailyLimit",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "GuardianAdded",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint8",
-          "indexed": true,
-          "internalType": "uint8"
-        },
-        {
-          "name": "guardian",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "GuardianRemoved",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint8",
-          "indexed": true,
-          "internalType": "uint8"
-        },
-        {
-          "name": "guardian",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "Initialized",
-      "inputs": [
-        {
-          "name": "version",
-          "type": "uint64",
-          "indexed": false,
-          "internalType": "uint64"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "ModuleInstalled",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "indexed": true,
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "ModuleUninstalled",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "indexed": true,
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "OwnerChanged",
-      "inputs": [
-        {
-          "name": "oldOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "newOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "P256KeySet",
-      "inputs": [
-        {
-          "name": "x",
-          "type": "bytes32",
-          "indexed": false,
-          "internalType": "bytes32"
-        },
-        {
-          "name": "y",
-          "type": "bytes32",
-          "indexed": false,
-          "internalType": "bytes32"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "ParserRegistrySet",
-      "inputs": [
-        {
-          "name": "registry",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "RecoveryApproved",
-      "inputs": [
-        {
-          "name": "newOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "approvedBy",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "approvalCount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "RecoveryCancelVoted",
-      "inputs": [
-        {
-          "name": "votedBy",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "cancelCount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "RecoveryCancelled",
-      "inputs": [],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "RecoveryExecuted",
-      "inputs": [
-        {
-          "name": "oldOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "newOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "RecoveryProposed",
-      "inputs": [
-        {
-          "name": "newOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "proposedBy",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "TierLimitsSet",
-      "inputs": [
-        {
-          "name": "tier1",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "tier2",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "ValidatorSet",
-      "inputs": [
-        {
-          "name": "validator",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WeightChangeApproved",
-      "inputs": [
-        {
-          "name": "approvedBy",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "approvalCount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WeightChangeCancelled",
-      "inputs": [],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WeightChangeExecuted",
-      "inputs": [
-        {
-          "name": "oldConfig",
-          "type": "tuple",
-          "indexed": false,
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        },
-        {
-          "name": "newConfig",
-          "type": "tuple",
-          "indexed": false,
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WeightChangeProposed",
-      "inputs": [
-        {
-          "name": "proposed",
-          "type": "tuple",
-          "indexed": false,
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        },
-        {
-          "name": "proposedBy",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WeightConfigUpdated",
-      "inputs": [
-        {
-          "name": "config",
-          "type": "tuple",
-          "indexed": false,
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "error",
-      "name": "AgentRegistrationFailed",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "AgentSessionBatchNotSupported",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "AlreadyApproved",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "AlreadyCancelVoted",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ArrayLengthMismatch",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "CallFailed",
-      "inputs": [
-        {
-          "name": "returnData",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "CannotIncreaseTierLimit",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "DuplicateGuardianSig",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ECDSAInvalidSignature",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ECDSAInvalidSignatureLength",
-      "inputs": [
-        {
-          "name": "length",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "ECDSAInvalidSignatureS",
-      "inputs": [
-        {
-          "name": "s",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "GuardianAlreadySet",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "HookReverted",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "IdentityRegistrationFailed",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InsecureWeightConfig",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InstallModuleUnauthorized",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InsufficientGuardianApprovals",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InsufficientTier",
-      "inputs": [
-        {
-          "name": "required",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "provided",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "InsufficientWeight",
-      "inputs": [
-        {
-          "name": "tier",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "provided",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "required",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "InvalidGuardian",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidGuardianSignature",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidInitialization",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidModuleType",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidNewOwner",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidP256Key",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidTierConfig",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "MaxGuardiansReached",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "MinGuardianRequired",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ModuleAlreadyInstalled",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ModuleInstallCallbackFailed",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "ModuleInvalid",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ModuleNotInstalled",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NoActiveRecovery",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NoWeightChangeProposal",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotEntryPoint",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotGuardian",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotInitializing",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotOwner",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotOwnerOrEntryPoint",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "RecoveryAlreadyActive",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "RecoveryNotApproved",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "RecoveryTimelockNotExpired",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "Reentrancy",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ReputationRegistryFailed",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "SessionScopeViolation",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "TierLimitSigExpired",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "UnauthorizedRegistry",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "WeakeningRequiresProposal",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "WeightChangeAlreadyApproved",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "WeightChangeNotApproved",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "WeightChangePending",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "WeightChangeTimelockNotExpired",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "WeightConfigNotInitialized",
-      "inputs": []
-    },
-    {
-      "type": "function",
-      "name": "approveWeightChange",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "bindERC8004AgentWallet",
-      "inputs": [
-        {
-          "name": "identityRegistry",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "agentWallet",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "deadline",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "signature",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "cancelWeightChange",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "executeWeightChange",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "mintAgentIdentity",
-      "inputs": [
-        {
-          "name": "identityRegistry",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "agentURI",
-          "type": "string",
-          "internalType": "string"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "proposeWeightChange",
-      "inputs": [
-        {
-          "name": "proposed",
-          "type": "tuple",
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "queryAgentReputation",
-      "inputs": [
-        {
-          "name": "reputationRegistry",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "clientAddresses",
-          "type": "address[]",
-          "internalType": "address[]"
-        },
-        {
-          "name": "tag1",
-          "type": "string",
-          "internalType": "string"
-        },
-        {
-          "name": "tag2",
-          "type": "string",
-          "internalType": "string"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "count",
-          "type": "uint64",
-          "internalType": "uint64"
-        },
-        {
-          "name": "summaryValue",
-          "type": "int128",
-          "internalType": "int128"
-        },
-        {
-          "name": "summaryDecimals",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "setAgentWallet",
-      "inputs": [
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "agentWallet",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "agentRegistry",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "agentWalletSig",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setWeightConfig",
-      "inputs": [
-        {
-          "name": "config",
-          "type": "tuple",
-          "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
-          "components": [
-            {
-              "name": "passkeyWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "ecdsaWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "blsWeight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian0Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian1Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "guardian2Weight",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "_padding",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier1Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier2Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            },
-            {
-              "name": "tier3Threshold",
-              "type": "uint8",
-              "internalType": "uint8"
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "submitAgentReputation",
-      "inputs": [
-        {
-          "name": "reputationRegistry",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "agentId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "value",
-          "type": "int128",
-          "internalType": "int128"
-        },
-        {
-          "name": "valueDecimals",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "tag1",
-          "type": "string",
-          "internalType": "string"
-        },
-        {
-          "name": "tag2",
-          "type": "string",
-          "internalType": "string"
-        },
-        {
-          "name": "endpoint",
-          "type": "string",
-          "internalType": "string"
-        },
-        {
-          "name": "feedbackURI",
-          "type": "string",
-          "internalType": "string"
-        },
-        {
-          "name": "feedbackHash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "ACCOUNT_VERSION",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "string",
-          "internalType": "string"
-        }
-      ],
-      "stateMutability": "pure"
-    }
-  ]
-}
+[
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "fallback",
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "receive",
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "ACCOUNT_VERSION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "accountId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "activeRecovery",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "proposedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "approvalBitmap",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cancellationBitmap",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "addDeposit",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "addGuardian",
+    "inputs": [
+      {
+        "name": "_guardian",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "agentExtension",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "approveRecovery",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "blsAggregator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelRecovery",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "entryPoint",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "execute",
+    "inputs": [
+      {
+        "name": "dest",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "func",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executeBatch",
+    "inputs": [
+      {
+        "name": "dest",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "value",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "func",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executeFromExecutor",
+    "inputs": [
+      {
+        "name": "mode",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "executionCalldata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "returnData",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executeRecovery",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getCurrentAlgId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "algId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getCurrentSessionKey",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "taggedId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDeposit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "guard",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract AAStarGlobalGuard"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "guardAddTokenConfig",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "config",
+        "type": "tuple",
+        "internalType": "struct AAStarGlobalGuard.TokenConfig",
+        "components": [
+          {
+            "name": "tier1Limit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "tier2Limit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "guardApproveAlgorithm",
+    "inputs": [
+      {
+        "name": "algId",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "guardDecreaseDailyLimit",
+    "inputs": [
+      {
+        "name": "newLimit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "guardDecreaseTokenDailyLimit",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "newLimit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "guardianCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "guardians",
+    "inputs": [
+      {
+        "name": "i",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "_entryPoint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_config",
+        "type": "tuple",
+        "internalType": "struct AAStarAirAccountBase.InitConfig",
+        "components": [
+          {
+            "name": "guardians",
+            "type": "address[3]",
+            "internalType": "address[3]"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "approvedAlgIds",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "minDailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initialTokens",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "initialTokenConfigs",
+            "type": "tuple[]",
+            "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+            "components": [
+              {
+                "name": "tier1Limit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "tier2Limit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "dailyLimit",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "_guardAddr",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "_entryPoint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_config",
+        "type": "tuple",
+        "internalType": "struct AAStarAirAccountBase.InitConfig",
+        "components": [
+          {
+            "name": "guardians",
+            "type": "address[3]",
+            "internalType": "address[3]"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "approvedAlgIds",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "minDailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initialTokens",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "initialTokenConfigs",
+            "type": "tuple[]",
+            "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+            "components": [
+              {
+                "name": "tier1Limit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "tier2Limit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "dailyLimit",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "initializeAgentAccount",
+    "inputs": [
+      {
+        "name": "_entryPoint",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_config",
+        "type": "tuple",
+        "internalType": "struct AAStarAirAccountBase.InitConfig",
+        "components": [
+          {
+            "name": "guardians",
+            "type": "address[3]",
+            "internalType": "address[3]"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "approvedAlgIds",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "minDailyLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initialTokens",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "initialTokenConfigs",
+            "type": "tuple[]",
+            "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+            "components": [
+              {
+                "name": "tier1Limit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "tier2Limit",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "dailyLimit",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "_guardAddr",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "installModule",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "initData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isModuleInstalled",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isValidSignature",
+    "inputs": [
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sig",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "modifyTierLimitsWithGuardians",
+    "inputs": [
+      {
+        "name": "_tier1",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_tier2",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "guardianSigs",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "onERC721Received",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "p256KeyX",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "p256KeyY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "parserRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingWeightChange",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "proposed",
+        "type": "tuple",
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "proposedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "approvalBitmap",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposeRecovery",
+    "inputs": [
+      {
+        "name": "_newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "removeGuardian",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "guardianSigs",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "requiredTier",
+    "inputs": [
+      {
+        "name": "txValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setAggregator",
+    "inputs": [
+      {
+        "name": "_aggregator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setP256Key",
+    "inputs": [
+      {
+        "name": "_x",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_y",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setParserRegistry",
+    "inputs": [
+      {
+        "name": "registry",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTierLimits",
+    "inputs": [
+      {
+        "name": "_tier1",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_tier2",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setValidator",
+    "inputs": [
+      {
+        "name": "_validator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "name": "interfaceId",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "supportsModule",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "tier1Limit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tier2Limit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "uninstallModule",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "deInitData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "validateUserOp",
+    "inputs": [
+      {
+        "name": "userOp",
+        "type": "tuple",
+        "internalType": "struct PackedUserOperation",
+        "components": [
+          {
+            "name": "sender",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initCode",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "callData",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "accountGasLimits",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "preVerificationGas",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "gasFees",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "paymasterAndData",
+            "type": "bytes",
+            "internalType": "bytes"
+          },
+          {
+            "name": "signature",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "userOpHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "missingAccountFunds",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "validationData",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "validator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAAStarValidator"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "weightConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "passkeyWeight",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "ecdsaWeight",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "blsWeight",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "guardian0Weight",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "guardian1Weight",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "guardian2Weight",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "_padding",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "tier1Threshold",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "tier2Threshold",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "tier3Threshold",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "withdrawDepositTo",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address payable"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AgentIdentityMinted",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "identityRegistry",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "agentURI",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentReputationSubmitted",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "reputationRegistry",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "int128",
+        "indexed": false,
+        "internalType": "int128"
+      },
+      {
+        "name": "tag1",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentWalletSet",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "agentWallet",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "agentRegistry",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AggregatorSet",
+    "inputs": [
+      {
+        "name": "aggregator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ERC8004WalletBound",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "agentWallet",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "identityRegistry",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GuardInitialized",
+    "inputs": [
+      {
+        "name": "guard",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "dailyLimit",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GuardianAdded",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "uint8"
+      },
+      {
+        "name": "guardian",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GuardianRemoved",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "uint8"
+      },
+      {
+        "name": "guardian",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ModuleInstalled",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ModuleUninstalled",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnerChanged",
+    "inputs": [
+      {
+        "name": "oldOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "P256KeySet",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "y",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ParserRegistrySet",
+    "inputs": [
+      {
+        "name": "registry",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecoveryApproved",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "approvedBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "approvalCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecoveryCancelVoted",
+    "inputs": [
+      {
+        "name": "votedBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cancelCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecoveryCancelled",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecoveryExecuted",
+    "inputs": [
+      {
+        "name": "oldOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RecoveryProposed",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "proposedBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TierLimitsSet",
+    "inputs": [
+      {
+        "name": "tier1",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "tier2",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ValidatorSet",
+    "inputs": [
+      {
+        "name": "validator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WeightChangeApproved",
+    "inputs": [
+      {
+        "name": "approvedBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "approvalCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WeightChangeCancelled",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WeightChangeExecuted",
+    "inputs": [
+      {
+        "name": "oldConfig",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "newConfig",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WeightChangeProposed",
+    "inputs": [
+      {
+        "name": "proposed",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "proposedBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WeightConfigUpdated",
+    "inputs": [
+      {
+        "name": "config",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AgentRegistrationFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AgentSessionBatchNotSupported",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AlreadyApproved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AlreadyCancelVoted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ArrayLengthMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CallFailed",
+    "inputs": [
+      {
+        "name": "returnData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CannotIncreaseTierLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DuplicateGuardianSig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureS",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "GuardianAlreadySet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "HookReverted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "IdentityRegistrationFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsecureWeightConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InstallModuleUnauthorized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientGuardianApprovals",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientTier",
+    "inputs": [
+      {
+        "name": "required",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "provided",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientWeight",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "provided",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "required",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidGuardian",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidGuardianSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidModuleType",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidNewOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidP256Key",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTierConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxGuardiansReached",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MinGuardianRequired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ModuleAlreadyInstalled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ModuleInstallCallbackFailed",
+    "inputs": [
+      {
+        "name": "moduleTypeId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ModuleInvalid",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ModuleNotInstalled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoActiveRecovery",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoWeightChangeProposal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotEntryPoint",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotGuardian",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOwnerOrEntryPoint",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecoveryAlreadyActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecoveryNotApproved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RecoveryTimelockNotExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Reentrancy",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReputationRegistryFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SessionScopeViolation",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TierLimitSigExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedRegistry",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WeakeningRequiresProposal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WeightChangeAlreadyApproved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WeightChangeNotApproved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WeightChangePending",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WeightChangeTimelockNotExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WeightConfigNotInitialized",
+    "inputs": []
+  },
+  {
+    "type": "function",
+    "name": "approveWeightChange",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "bindERC8004AgentWallet",
+    "inputs": [
+      {
+        "name": "identityRegistry",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "agentWallet",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelWeightChange",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executeWeightChange",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "mintAgentIdentity",
+    "inputs": [
+      {
+        "name": "identityRegistry",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentURI",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "proposeWeightChange",
+    "inputs": [
+      {
+        "name": "proposed",
+        "type": "tuple",
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "queryAgentReputation",
+    "inputs": [
+      {
+        "name": "reputationRegistry",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "clientAddresses",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "tag1",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "tag2",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "count",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "summaryValue",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "summaryDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setAgentWallet",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "agentWallet",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentRegistry",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentWalletSig",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setWeightConfig",
+    "inputs": [
+      {
+        "name": "config",
+        "type": "tuple",
+        "internalType": "struct AAStarAgentStorageLayout.WeightConfig",
+        "components": [
+          {
+            "name": "passkeyWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "ecdsaWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "blsWeight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian0Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian1Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "guardian2Weight",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "_padding",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier1Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier2Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tier3Threshold",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submitAgentReputation",
+    "inputs": [
+      {
+        "name": "reputationRegistry",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "value",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "valueDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "tag1",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "tag2",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "endpoint",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "feedbackURI",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "feedbackHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  }
+]

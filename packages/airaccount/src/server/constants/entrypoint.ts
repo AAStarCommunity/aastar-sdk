@@ -87,23 +87,36 @@ export const AIRACCOUNT_ADDRESSES = {
     /** @deprecated Use {@link agentSessionKeyValidator} (r4 audit-final). */
     agentSessionKeyValidatorM7r6: "0xa3e52db4b6e0a9d7cd5dd1414a90eedcf950e029",
 
-    // ── Current: r4 audit-final (freeze/m7-v0.16.0, 660 tests, all audit findings resolved) ─────
-    // M7 factory r4 — EIP-1167 clone factory, full audit-final release
-    factory: "0x61bBAf9E1b8Fd78fF874776cFa50497dB9d43C3F",
-    factoryM7: "0x61bBAf9E1b8Fd78fF874776cFa50497dB9d43C3F",
-    // M7 account implementation r4 (shared by all clone proxies, 23,847B EIP-170 compliant)
-    accountImpl: "0xA674D308ce22230B70412b20Ee5a66fC6B24F49c",
-    validatorRouter: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
-    blsAlgorithm: "0xc2096E8D04beb3C337bb388F5352710d62De0287",
-    blsAggregator: "0x7700aec8a15a94db5697c581de8c88ecf83b59ff",
-    superPaymaster: "0x16cE0c7d846f9446bbBeb9C5a84A4D140fAeD94A",
-    // M7 r4 ERC-7579 modules (pre-installed by factory on every new account)
-    compositeValidator: "0xB65569950C48AA56dbe876915ca3605fD6FF2980",
-    tierGuardHook: "0x67f878295cFF7451CBD2A775C4490607AF1b07d7",
-    agentSessionKeyValidator: "0x1F06961e133217801F92e1CF552187F594a32873",
-    // M6 继承合约（M7 factory 仍可配合使用）
-    sessionKeyValidator: "0xcaba5a18e46f728b5330ea33bd099693a1b76217",
-    calldataParserRegistry: "0x7099eb39fbab795e66dd71fbeaace150edf1b3c3",
+    // ── Deprecated: r4 audit-final (v0.16.0 era — pre-beta). Retained for existing account recovery. ─
+    /** @deprecated Use factory (beta.3) for new accounts. */
+    factoryM7r4: "0x61bBAf9E1b8Fd78fF874776cFa50497dB9d43C3F",
+    /** @deprecated */
+    accountImplM7r4: "0xA674D308ce22230B70412b20Ee5a66fC6B24F49c",
+    /** @deprecated Use validatorRouter (beta.3). */
+    validatorRouterM7r4: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
+    /** @deprecated */
+    compositeValidatorM7r4: "0xB65569950C48AA56dbe876915ca3605fD6FF2980",
+    /** @deprecated */
+    tierGuardHookM7r4: "0x67f878295cFF7451CBD2A775C4490607AF1b07d7",
+    /** @deprecated */
+    agentSessionKeyValidatorM7r4: "0x1F06961e133217801F92e1CF552187F594a32873",
+
+    // ── Current: v0.17.2-beta.3 (2026-06-12 Sepolia deployment, router finalized) ─────────────────
+    // Router has M3 governance timelock — future algId changes require proposeAlgorithm + 7-day wait.
+    factory: "0xfc6234bbd6283610659211347c6309904be86b0a",
+    factoryM7: "0xfc6234bbd6283610659211347c6309904be86b0a",
+    accountImpl: "0xe33EeCF21AAC2B776b49A4dd52BA8b7e683dE9C3",
+    validatorRouter: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",
+    blsAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",
+    blsAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",
+    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",
+    // beta.3 ERC-7579 modules
+    sessionKeyValidator: "0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf",
+    forceExitModule: "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702",
+    airAccountDelegate: "0x8603AAF6C3f07fdae810B323c95a198D796EC52E",
+    airAccountExtension: "0xB3c7312bA52dF306DE1cBa781B91f3AfA7e86F99",
+    agentRegistry: "0x9e8f576cad8a8f949181fd10d9ad1c49a7b0bc17",
+    calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",
     uniswapV3Parser: "0x5671810ac8aa1857397870e60232579cfc519515",
   },
 };

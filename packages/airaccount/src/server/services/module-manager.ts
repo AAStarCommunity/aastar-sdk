@@ -160,8 +160,11 @@ export class ModuleManager {
 
   /**
    * Convenience: build install calldata for the standard M7 module set.
-   * Uses pre-deployed Sepolia addresses. No guardian sigs required when
+   * Uses pre-deployed Sepolia addresses (r4 audit-final). No guardian sigs required when
    * account threshold <= 40 (default for newly created accounts).
+   *
+   * Note: beta.3 unifies these into SessionKeyValidator. This helper retains the r4
+   * addresses for accounts already deployed on r4; new accounts use SessionKeyValidator.
    */
   encodeInstallDefaultModules(account: string): {
     compositeValidator: string;
@@ -172,12 +175,12 @@ export class ModuleManager {
       compositeValidator: this.encodeInstall({
         account,
         moduleTypeId: MODULE_TYPE.VALIDATOR,
-        module: addresses.compositeValidator,
+        module: addresses.compositeValidatorM7r4,
       }),
       tierGuardHook: this.encodeInstall({
         account,
         moduleTypeId: MODULE_TYPE.HOOK,
-        module: addresses.tierGuardHook,
+        module: addresses.tierGuardHookM7r4,
       }),
     };
   }
