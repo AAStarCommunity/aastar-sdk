@@ -229,3 +229,63 @@ export class SessionKeyService {
     return this.askValidator.delegatedBy(account, subKey) as Promise<string>;
   }
 }
+
+// ─── UserOp Signature Packing (v0.17.2+) ────────────────────────
+
+/**
+ * Pack a secp256k1 session key signature into the 106-byte UserOp.signature format.
+ *
+ * Layout: [0x08][account(20)][sessionKey(20)][r(32)][s(32)][v(1)]
+ *
+ * @param account - The AirAccount address (20 bytes, with or without 0x)
+ * @param sessionKey - The ephemeral EOA session key address (20 bytes)
+ * @param signature - 65-byte hex signature from KMS sign-grant-session (R||S||V)
+ * @returns 106-byte hex string (0x-prefixed) suitable as UserOp.signature
+ */
+export function packSecp256k1SessionSignature(
+  account: string,
+  sessionKey: string,
+  signature: string
+): string {
+  const acc = account.startsWith("0x") ? account.slice(2) : account;
+  const key = sessionKey.startsWith("0x") ? sessionKey.slice(2) : sessionKey;
+  const sig = signature.startsWith("0x") ? signature.slice(2) : signature;
+
+  if (acc.length !== 40) throw new Error("account must be 20 bytes (40 hex chars)");
+  if (key.length !== 40) throw new Error("sessionKey must be 20 bytes (40 hex chars)");
+  if (sig.length !== 130) throw new Error("signature must be 65 bytes (130 hex chars)");
+
+  // [0x08][account(20)][sessionKey(20)][r(32)][s(32)][v(1)] = 106 bytes
+  return `0x08${acc}${key}${sig}`;
+}
+
+/**
+ * Pack a P256 session key signature into the 149-byte UserOp.signature format.
+ *
+ * Layout: [0x08][account(20)][keyX(32)][keyY(32)][r(32)][s(32)]
+ *
+ * @param account - The AirAccount address (20 bytes)
+ * @param keyX - P256 public key X coordinate (32 bytes hex, without 0x)
+ * @param keyY - P256 public key Y coordinate (32 bytes hex, without 0x)
+ * @param signature - 64-byte hex signature from KMS sign-p256-grant-session (R||S, no V)
+ * @returns 149-byte hex string (0x-prefixed) suitable as UserOp.signature
+ */
+export function packP256SessionSignature(
+  account: string,
+  keyX: string,
+  keyY: string,
+  signature: string
+): string {
+  const acc = account.startsWith("0x") ? account.slice(2) : account;
+  const x = keyX.startsWith("0x") ? keyX.slice(2) : keyX;
+  const y = keyY.startsWith("0x") ? keyY.slice(2) : keyY;
+  const sig = signature.startsWith("0x") ? signature.slice(2) : signature;
+
+  if (acc.length !== 40) throw new Error("account must be 20 bytes (40 hex chars)");
+  if (x.length !== 64) throw new Error("keyX must be 32 bytes (64 hex chars)");
+  if (y.length !== 64) throw new Error("keyY must be 32 bytes (64 hex chars)");
+  if (sig.length !== 128) throw new Error("P256 signature must be 64 bytes (128 hex chars, R||S)");
+
+  // [0x08][account(20)][keyX(32)][keyY(32)][r(32)][s(32)] = 149 bytes
+  return `0x08${acc}${x}${y}${sig}`;
+}

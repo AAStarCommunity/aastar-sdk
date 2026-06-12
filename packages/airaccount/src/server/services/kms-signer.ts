@@ -10,6 +10,13 @@ export interface LegacyPasskeyAssertion {
   Signature: string; // "0x..."
 }
 
+// ── WebAuthn Assertion (v0.19.0+, one-time use) ──────────────────
+
+export interface WebAuthnAssertion {
+  challengeId: string;
+  credential: unknown; // AuthenticationResponseJSON from @simplewebauthn/browser
+}
+
 // ── CreateKey ────────────────────────────────────────────────────
 
 export interface KmsCreateKeyRequest {
@@ -78,6 +85,74 @@ export interface KmsBeginAuthenticationRequest {
 export interface KmsBeginAuthenticationResponse {
   ChallengeId: string;
   Options: PublicKeyCredentialRequestOptions;
+}
+
+// ── Sign Typed Data (v0.19.0+) ───────────────────────────────────
+
+export interface KmsSignTypedDataRequest {
+  keyId?: string;
+  address?: string;
+  domainSeparator: string; // 0x-prefixed 32-byte hash
+  structHash: string; // 0x-prefixed 32-byte hash
+  webAuthnAssertion: WebAuthnAssertion;
+}
+
+export interface KmsSignTypedDataResponse {
+  keyId: string;
+  signature: string; // 65-byte hex (R||S||V)
+}
+
+// ── Grant Session Signing (v0.19.0+) ────────────────────────────
+
+export interface KmsBeginGrantSessionAuthRequest {
+  keyId: string;
+}
+
+export interface KmsBeginGrantSessionAuthResponse {
+  challengeId: string;
+  options: PublicKeyCredentialRequestOptions;
+}
+
+export interface KmsSignGrantSessionRequest {
+  keyId: string;
+  hdPath?: string;
+  chainId: number;
+  verifyingContract: string;
+  account: string;
+  sessionKey: string;
+  expiry: number;
+  contractScope: number;
+  selectorScope: number;
+  velocityLimit: number;
+  velocityWindow: number;
+  callTargets: string[];
+  selectorAllowlist: string[];
+  nonce: number;
+  webAuthnAssertion: WebAuthnAssertion;
+}
+
+export interface KmsSignGrantSessionResponse {
+  keyId: string;
+  signature: string; // 65-byte hex (R||S||V, V=27/28)
+}
+
+export interface KmsSignP256GrantSessionRequest {
+  keyId: string;
+  hdPath?: string;
+  chainId: number;
+  verifyingContract: string;
+  account: string;
+  keyX: string; // 32-byte hex P256 public key X coordinate
+  keyY: string; // 32-byte hex P256 public key Y coordinate
+  expiry: number;
+  contractScope: number;
+  selectorScope: number;
+  velocityLimit: number;
+  velocityWindow: number;
+  callTargets: string[];
+  selectorAllowlist: string[];
+  nonce: number;
+  webAuthnAssertion: WebAuthnAssertion;
 }
 
 // ── Key Status ───────────────────────────────────────────────────
@@ -285,6 +360,64 @@ export class KmsManager {
     return this.amzPost("/SignHash", "TrentService.SignHash", body);
   }
 
+  // ── Sign Typed Data (v0.19.0+) ─────────────────────────────────
+
+  /**
+   * Sign EIP-712 typed data using a WebAuthn ceremony (v0.19.0+).
+   * The webAuthnAssertion MUST come from beginWebAuthnAuth (not beginAuthentication).
+   */
+  async signTypedDataWithWebAuthn(
+    params: KmsSignTypedDataRequest
+  ): Promise<KmsSignTypedDataResponse> {
+    this.ensureEnabled();
+
+    const response = await this.http.post("/kms/sign-typed-data", params);
+    return response.data as KmsSignTypedDataResponse;
+  }
+
+  // ── Grant Session Off-chain Signing (v0.19.0+) ─────────────────
+
+  /**
+   * Begin a grant-session WebAuthn challenge.
+   * The returned challengeId can ONLY be used with sign-grant-session, not sign-typed-data.
+   */
+  async beginGrantSessionAuth(
+    params: KmsBeginGrantSessionAuthRequest
+  ): Promise<KmsBeginGrantSessionAuthResponse> {
+    this.ensureEnabled();
+
+    const response = await this.http.get("/kms/begin-grant-session-auth", {
+      params: { keyId: params.keyId },
+    });
+    return response.data as KmsBeginGrantSessionAuthResponse;
+  }
+
+  /**
+   * Sign a GRANT_SESSION_V2 hash off-chain inside the TEE (secp256k1 session key).
+   * Returns a 65-byte signature (R||S||V, V=27/28) for use in grantSessionWithSig().
+   */
+  async signGrantSession(
+    params: KmsSignGrantSessionRequest
+  ): Promise<KmsSignGrantSessionResponse> {
+    this.ensureEnabled();
+
+    const response = await this.http.post("/kms/sign-grant-session", params);
+    return response.data as KmsSignGrantSessionResponse;
+  }
+
+  /**
+   * Sign a GRANT_P256_SESSION_V2 hash off-chain inside the TEE (P256 session key).
+   * Returns a 65-byte signature for use in grantP256SessionWithSig().
+   */
+  async signP256GrantSession(
+    params: KmsSignP256GrantSessionRequest
+  ): Promise<KmsSignGrantSessionResponse> {
+    this.ensureEnabled();
+
+    const response = await this.http.post("/kms/sign-p256-grant-session", params);
+    return response.data as KmsSignGrantSessionResponse;
+  }
+
   // ── WebAuthn Ceremonies ─────────────────────────────────────────
 
   async beginRegistration(
@@ -311,6 +444,19 @@ export class KmsManager {
     this.ensureEnabled();
 
     const response = await this.http.post("/BeginAuthentication", params);
+    return response.data as KmsBeginAuthenticationResponse;
+  }
+
+  /**
+   * Begin a WebAuthn challenge for sign-typed-data (v0.19.0+).
+   * The returned challengeId can ONLY be used for sign-typed-data (purpose="sign-typed-data").
+   */
+  async beginWebAuthnAuth(keyId: string): Promise<KmsBeginAuthenticationResponse> {
+    this.ensureEnabled();
+
+    const response = await this.http.get("/kms/begin-webauthn-auth", {
+      params: { keyId },
+    });
     return response.data as KmsBeginAuthenticationResponse;
   }
 

@@ -25,7 +25,7 @@ export { AccountManager } from "./services/account-manager";
 export { ModuleManager } from "./services/module-manager";
 export { buildInstallModuleHash, buildUninstallModuleHash } from "./services/module-manager";
 export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";
-export { SessionKeyService } from "./services/session-key-service";
+export { SessionKeyService, packSecp256k1SessionSignature, packP256SessionSignature } from "./services/session-key-service";
 export type { GrantSessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
 export { GuardStateReader } from "./services/guard-state-reader";
 export type { GuardState, TokenGuardState } from "./services/guard-state-reader";
@@ -48,6 +48,7 @@ export type {
   KmsCreateKeyResponse,
   KmsSignHashResponse,
   LegacyPasskeyAssertion,
+  WebAuthnAssertion,
   KmsBeginRegistrationRequest,
   KmsBeginRegistrationResponse,
   KmsCompleteRegistrationRequest,
@@ -56,6 +57,13 @@ export type {
   KmsBeginAuthenticationResponse,
   KmsKeyStatusResponse,
   KmsDescribeKeyResponse,
+  KmsSignTypedDataRequest,
+  KmsSignTypedDataResponse,
+  KmsBeginGrantSessionAuthRequest,
+  KmsBeginGrantSessionAuthResponse,
+  KmsSignGrantSessionRequest,
+  KmsSignGrantSessionResponse,
+  KmsSignP256GrantSessionRequest,
 } from "./services/kms-signer";
 
 // ── Adapters ──────────────────────────────────────────────────────
