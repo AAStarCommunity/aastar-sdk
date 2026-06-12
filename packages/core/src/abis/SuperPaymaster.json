@@ -2819,6 +2819,8 @@
     },
     {
       "type": "error",
+      "name": "InvalidX402Signature",
+      "inputs": []
     },
     {
       "type": "error",
