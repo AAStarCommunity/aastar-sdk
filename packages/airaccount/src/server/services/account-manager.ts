@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
 import { ISignerAdapter } from "../interfaces/signer-adapter";
-import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
+import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 
 /**
@@ -25,7 +25,7 @@ export class AccountManager {
     userId: string,
     options?: {
       entryPointVersion?: EntryPointVersion;
-      salt?: number;
+      salt?: number | bigint;
       /** Daily transfer limit in wei. When > 0 the account is created with on-chain guard enforcement. */
       dailyLimit?: bigint;
     }
@@ -143,10 +143,12 @@ export class AccountManager {
    * Build the acceptance hash that guardian devices must sign before account creation.
    *
    * Encoding: keccak256(solidityPacked(
-   *   ["string","uint256","address","address","uint256"],
-   *   ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt]
+   *   ["string","uint256","address","address","uint256","uint256"],
+   *   ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt, dailyLimit]
    * ))
-   * Total packed bytes: 13 + 32 + 20 + 20 + 32 = 117 bytes
+   *
+   * dailyLimit is bound in the hash (PR #47 / C-3) to prevent a front-runner from
+   * replaying guardian sigs with a weaker limit on the same counterfactual address.
    *
    * Returns the RAW keccak256 hash (no EIP-191 prefix).
    * Guardians MUST sign via personal_sign / ethers.signMessage(ethers.getBytes(hash)).
@@ -157,16 +159,48 @@ export class AccountManager {
    */
   buildGuardianAcceptanceHash(
     owner: string,
-    salt: number,
+    salt: number | bigint,
     factoryAddress: string,
-    chainId: number
+    chainId: number,
+    dailyLimit: bigint
   ): string {
+    if (typeof salt === "number" && !Number.isSafeInteger(salt)) {
+      throw new Error(
+        `salt value ${salt} exceeds Number.MAX_SAFE_INTEGER; pass as bigint to avoid precision loss`
+      );
+    }
     return ethers.keccak256(
       ethers.solidityPacked(
-        ["string", "uint256", "address", "address", "uint256"],
-        ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt]
+        ["string", "uint256", "address", "address", "uint256", "uint256"],
+        ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt, dailyLimit]
       )
     );
+  }
+
+  /**
+   * Encode calldata for modifyTierLimitsWithGuardians() — guardian-gated tier-limit change (PR #43).
+   *
+   * Both tier1 and tier2 can be raised or lowered, subject to guardian approval.
+   * Caller is responsible for building and submitting the resulting UserOp.
+   *
+   * @param tier1        New Tier-1 ceiling in wei (ECDSA-only spending; 0 = no limit)
+   * @param tier2        New Tier-2 ceiling in wei (dual-factor; 0 = no limit)
+   * @param deadline     Unix timestamp — guardian sigs rejected after this
+   * @param guardianSigs 65-byte EIP-191 hex signatures from required guardians
+   */
+  encodeModifyTierLimits(
+    tier1: bigint,
+    tier2: bigint,
+    deadline: bigint,
+    guardianSigs: string[]
+  ): string {
+    const iface = new ethers.Interface(AIRACCOUNT_ABI);
+    return iface.encodeFunctionData("modifyTierLimitsWithGuardians", [
+      tier1,
+      tier2,
+      deadline,
+      guardianSigs,
+    ]);
   }
 
   /**
@@ -187,7 +221,7 @@ export class AccountManager {
       guardian2: string;
       guardian2Sig: string;
       dailyLimit: bigint;
-      salt?: number;
+      salt?: number | bigint;
       entryPointVersion?: EntryPointVersion;
     }
   ): Promise<AccountRecord> {
