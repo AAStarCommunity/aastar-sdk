@@ -1,18 +1,18 @@
 {
   "description": "SuperPaymaster Contract ABIs Manifest",
   "source": "SuperPaymaster/contracts/src",
-  "buildTime": "2026-06-03T00:00:00Z",
+  "buildTime": "2026-06-12T00:00:00Z",
   "totalHash": "cb198e28f8b781d01e59f8e584bea4246e8ad7f5b0e40e390136be59506d78ab",
   "files": [
     {
       "name": "AAStarAirAccountFactoryV7.json",
       "hash": "0d58ba6a2cdbb7bf67248ae981d2ac46ab6d80e6e2e9bd874132e36d7f00e8bf",
-      "source": "airaccount-contract v0.17.2-beta.2"
+      "source": "airaccount-contract v0.17.2-beta.3"
     },
     {
       "name": "AAStarAirAccountV7.json",
       "hash": "d03611cc8adef20a662aad86ffb14c7a06258c0762950f31c21421d41f1801f3",
-      "source": "airaccount-contract v0.17.2-beta.2"
+      "source": "airaccount-contract v0.17.2-beta.3"
     },
     {
       "name": "AAStarBLSAggregator.json",
@@ -68,7 +68,7 @@
     {
       "name": "ForceExitModule.json",
       "hash": "8d3b50feeae4bf952c2ca12fbd8813fbb804e0716a19ad6bd4a02341b2c0334a",
-      "source": "airaccount-contract v0.17.2-beta.2"
+      "source": "airaccount-contract v0.17.2-beta.3"
     },
     {
       "name": "GToken.json",
@@ -132,5 +132,5 @@
       "hash": "8d023f1c6af375b63d8c0e4f2cc943b3435bca3a6c6480b298f91d5024def1ea"
     }
   ],
-  "airaccountSource": "github.com/AAStarCommunity/airaccount-contract tag v0.17.2-beta.2"
+  "airaccountSource": "github.com/AAStarCommunity/airaccount-contract tag v0.17.2-beta.3"
 }

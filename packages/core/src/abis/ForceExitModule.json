@@ -456,6 +456,11 @@
       "type": "error",
       "name": "UnsupportedL2Type",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "IncompatibleAccount",
+      "inputs": []
     }
   ]
 }
