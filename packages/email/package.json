@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "resend": "^6.0.0"
+    "resend": "^6.12.4"
   },
   "devDependencies": {
     "typescript": "5.7.2",

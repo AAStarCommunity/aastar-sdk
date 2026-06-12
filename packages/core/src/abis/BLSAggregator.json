@@ -368,6 +368,11 @@
               "internalType": "bytes32"
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "InvalidProposalId",
       "inputs": []
     },

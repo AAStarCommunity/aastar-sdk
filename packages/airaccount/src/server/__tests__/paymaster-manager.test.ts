@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { PaymasterManager } from "../services/paymaster-manager";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { SilentLogger } from "../interfaces/logger";
@@ -191,6 +192,48 @@ describe("PaymasterManager", () => {
         "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
       );
       expect(data).toBe("0x");
+    });
+
+    it("v0.7 SuperPaymaster path: postGas=300_000 when operators() signals SuperPaymaster", async () => {
+      // SuperPaymaster detection runs inside the "custom-user-provided" + v0.7 path.
+      // Mock provider.call() so:
+      //   owner()         → 0xAAAA...
+      //   operators(addr) → [true, 0, 0xBBBB..., 0]
+      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+
+      const ownerEncoded =
+        "0x000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+      const operatorsEncoded =
+        "0x" +
+        "0000000000000000000000000000000000000000000000000000000000000001" + // bool true
+        "0000000000000000000000000000000000000000000000000000000000000000" + // uint256 0
+        "000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" + // address
+        "0000000000000000000000000000000000000000000000000000000000000000"; // uint256 0
+
+      const provider = (pm as any).ethereum.getProvider();
+      vi.spyOn(provider, "call").mockImplementation(async (tx: { data?: string }) => {
+        const data = typeof tx === "object" ? tx.data ?? "" : "";
+        if (data.startsWith("0x8da5cb5b")) return ownerEncoded; // owner()
+        if (data.startsWith("0x13e7c9d8")) return operatorsEncoded; // operators(address)
+        return "0x";
+      });
+
+      // Must use "custom-user-provided" — that is the only path where SuperPaymaster
+      // detection runs.  The named-paymaster branch (lines 224-228) just does a storage
+      // lookup and would throw "Paymaster <name> not found".
+      const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
+
+      // packed layout (SuperPaymaster branch):
+      //   0x + address(40) + verGas(32) + postGas(32) + operatorAddr(40) + maxRate(64)
+      // indices:  2         42           74            106
+      const verGas  = BigInt("0x" + packed.slice(42, 74));
+      const postGas = BigInt("0x" + packed.slice(74, 106));
+
+      expect(verGas).toBe(BigInt(80_000));
+      expect(postGas).toBe(BigInt(300_000));
+
+      vi.restoreAllMocks();
     });
 
     it("v0.7 PaymasterV4 path: encodes verGas and postGas in correct byte positions", async () => {

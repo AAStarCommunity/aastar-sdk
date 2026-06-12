@@ -239,3 +239,83 @@ describe("getAgentSession M9 decoder logic", () => {
     expect(isActive).toBe(false);
   });
 });
+
+// ─── packSecp256k1SessionSignature + packP256SessionSignature (Issue #38) ────
+
+import { packSecp256k1SessionSignature, packP256SessionSignature } from "../services/session-key-service";
+
+describe("packSecp256k1SessionSignature (106-byte format)", () => {
+  const account = "0x1111111111111111111111111111111111111111";
+  const sessionKey = "0x2222222222222222222222222222222222222222";
+  // 65-byte secp256k1 sig: r(32) + s(32) + v(1)
+  const sig65 = "aa".repeat(32) + "bb".repeat(32) + "1c";
+
+  it("produces 106-byte (212 hex chars + 0x prefix) output", () => {
+    const packed = packSecp256k1SessionSignature(account, sessionKey, "0x" + sig65);
+    // 0x + 1(algId) + 20(account) + 20(key) + 32(r) + 32(s) + 1(v) = 106 bytes = 212 hex chars
+    expect(packed.slice(2).length).toBe(212);
+  });
+
+  it("starts with algId 0x08", () => {
+    const packed = packSecp256k1SessionSignature(account, sessionKey, "0x" + sig65);
+    expect(packed.startsWith("0x08")).toBe(true);
+  });
+
+  it("contains account address after algId byte", () => {
+    const packed = packSecp256k1SessionSignature(account, sessionKey, "0x" + sig65);
+    // 0x + 08 + account(40) → chars 4..44
+    expect(packed.slice(4, 44).toLowerCase()).toBe("1111111111111111111111111111111111111111");
+  });
+
+  it("accepts addresses without 0x prefix", () => {
+    const packed = packSecp256k1SessionSignature(
+      "1111111111111111111111111111111111111111",
+      "2222222222222222222222222222222222222222",
+      sig65
+    );
+    expect(packed.slice(2).length).toBe(212);
+  });
+
+  it("throws if account is wrong length", () => {
+    expect(() =>
+      packSecp256k1SessionSignature("0x1234", sessionKey, "0x" + sig65)
+    ).toThrow("20 bytes");
+  });
+
+  it("throws if signature is wrong length", () => {
+    expect(() =>
+      packSecp256k1SessionSignature(account, sessionKey, "0x" + "aa".repeat(64))
+    ).toThrow("65 bytes");
+  });
+});
+
+describe("packP256SessionSignature (149-byte format)", () => {
+  const account = "0x1111111111111111111111111111111111111111";
+  const keyX = "cc".repeat(32); // 32 bytes = 64 hex
+  const keyY = "dd".repeat(32);
+  // 64-byte P256 sig: r(32) + s(32), no V
+  const sig64 = "ee".repeat(32) + "ff".repeat(32);
+
+  it("produces 149-byte (298 hex chars + 0x prefix) output", () => {
+    const packed = packP256SessionSignature(account, keyX, keyY, sig64);
+    // 0x + 1(algId) + 20(account) + 32(keyX) + 32(keyY) + 32(r) + 32(s) = 149 bytes = 298 hex chars
+    expect(packed.slice(2).length).toBe(298);
+  });
+
+  it("starts with algId 0x08", () => {
+    const packed = packP256SessionSignature(account, keyX, keyY, sig64);
+    expect(packed.startsWith("0x08")).toBe(true);
+  });
+
+  it("throws if keyX is wrong length", () => {
+    expect(() =>
+      packP256SessionSignature(account, "cc", keyY, sig64)
+    ).toThrow("32 bytes");
+  });
+
+  it("throws if signature is not 64 bytes", () => {
+    expect(() =>
+      packP256SessionSignature(account, keyX, keyY, "0x" + "aa".repeat(65))
+    ).toThrow("64 bytes");
+  });
+});

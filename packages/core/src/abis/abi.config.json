@@ -1,136 +1,25 @@
 {
-  "description": "SuperPaymaster Contract ABIs Manifest",
-  "source": "SuperPaymaster/contracts/src",
-  "buildTime": "2026-06-03T00:00:00Z",
-  "totalHash": "cb198e28f8b781d01e59f8e584bea4246e8ad7f5b0e40e390136be59506d78ab",
+  "description": "SuperPaymaster Contract ABIs Manifest", 
+  "source": "SuperPaymaster/contracts/src", 
+  "buildTime": "2026-06-12T12:54:41Z", 
+  "totalHash": "6cf8e4719c53bd2a1b0586b5e9295ae6bccc47d8259ddfae2ef66dc65c9c7314", 
   "files": [
-    {
-      "name": "AAStarAirAccountFactoryV7.json",
-      "hash": "0d58ba6a2cdbb7bf67248ae981d2ac46ab6d80e6e2e9bd874132e36d7f00e8bf",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AAStarAirAccountV7.json",
-      "hash": "d03611cc8adef20a662aad86ffb14c7a06258c0762950f31c21421d41f1801f3",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AAStarBLSAggregator.json",
-      "hash": "e7c48e84d6e40b489e35dbba696d2c6ff01ba0823a98152b61e5341d7f6d107f",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AAStarBLSAlgorithm.json",
-      "hash": "4f89e08cfde44b35d442a04c345006699fb515b98e69ea622c2b4bbf953a53b9",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AAStarValidator.json",
-      "hash": "d387eae68e8958dfe76df1d6a00c2607aec555f876f30db5c7eedc3c5c6e8b11",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AgentRegistry.json",
-      "hash": "708248e86880af910320c2a54a5dfa2c3cd1e98f633b3d7385289c53e124eff0",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AirAccountDelegate.json",
-      "hash": "642068c822f435294ba557942435e25f2e103ac15cc096090cf58e9b911c3399",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "AirAccountExtension.json",
-      "hash": "0eed8b5d36c029f6b1b93344a372cc4e84dd43f495d1a4d8ff99bc8f2f2e68c4",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "BLSAggregator.json",
-      "hash": "18de0c259accd22a659451ab981edc9bdd29d8563d8c696f05a5af673e032448"
-    },
-    {
-      "name": "BLSValidator.json",
-      "hash": "2573f445ebff777923a14d8282651178a67bd6883d8730501390d8969c299585"
-    },
-    {
-      "name": "CalldataParserRegistry.json",
-      "hash": "0fcd33c7d09e76ffc469354ecc8cf15209558d9182fb650c47f904786917cfd4",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "DVTValidator.json",
-      "hash": "7fbc002acbd897b23bbdfcc1a50811d2091a1e43a9c05334aa0e787604474f13"
-    },
-    {
-      "name": "EntryPoint.json",
-      "hash": "fb52a7e1d92dfed8285b78d1849661936c09401227e27e2eceda905b20cd6844"
-    },
-    {
-      "name": "ForceExitModule.json",
-      "hash": "8d3b50feeae4bf952c2ca12fbd8813fbb804e0716a19ad6bd4a02341b2c0334a",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "GToken.json",
-      "hash": "27d6adc3c327cdee1d4f8b57f2a19f0a59ac6d9f020e664be6fc4a51ddf828a9"
-    },
-    {
-      "name": "GTokenAuthorization.json",
-      "hash": "6a3e474c6f070ba848b59b718e6477cf30fd35b849a65ecd1d72ccaf512b07e3"
-    },
-    {
-      "name": "GTokenStaking.json",
-      "hash": "207b5e22dcfd734c90ca1c1035d06a3cbbd0a6646544ce46e3cde8ed43524d26"
-    },
-    {
-      "name": "MicroPaymentChannel.json",
-      "hash": "f91f26a39a5c4f930710c713e117e1fd6f400565e90316e5e54134cc47b47dff"
-    },
-    {
-      "name": "MySBT.json",
-      "hash": "b3c2bec8b4d26ff44f39b4c26a7bfc4754add68bd2dd233a7ff0a1facac162cf"
-    },
-    {
-      "name": "Paymaster.json",
-      "hash": "0631cbbfcfe705947f084f187fb127527c7e25459ecdfede404882dd33211509"
-    },
-    {
-      "name": "PaymasterFactory.json",
-      "hash": "4dfe5ee7ca47ec2be550930885e6615e77c8c7a8596f3e81c4ac4a71076643de"
-    },
-    {
-      "name": "Registry.json",
-      "hash": "2ae3f8b0533da32e23a4f63aaf11b3a05eb4b126bbb76af937eee781ad17a458"
-    },
-    {
-      "name": "ReputationSystem.json",
-      "hash": "33be70a278f63df5bb36cb2a55301e0703b0713c73d8746d0dd558b96643c8c2"
-    },
-    {
-      "name": "SessionKeyValidator.json",
-      "hash": "9e5820ee206ebb98cc4466bda23777de1d94628780307941c0dbd9716b4909ca",
-      "source": "airaccount-contract v0.17.2-beta.2"
-    },
-    {
-      "name": "SimpleAccount.json",
-      "hash": "8ce0cf540d5f131b88578d6d3fe550c378c13e36099b1b23586529b4187e50da"
-    },
-    {
-      "name": "SimpleAccountFactory.json",
-      "hash": "54de0987d947381efe89546322b02564f96cba4c9704c67822f785df39f37022"
-    },
-    {
-      "name": "SuperPaymaster.json",
-      "hash": "5db58b946ca2efe6537c3e3b8d3bbd2fa344d01df8cccdfa8d77ac41dd147679"
-    },
-    {
-      "name": "xPNTsFactory.json",
-      "hash": "2c4ec11a32a1db6671dc1e6ed9940d328887820fa6787b87c0836b5140757a56"
-    },
-    {
-      "name": "xPNTsToken.json",
-      "hash": "8d023f1c6af375b63d8c0e4f2cc943b3435bca3a6c6480b298f91d5024def1ea"
-    }
-  ],
-  "airaccountSource": "github.com/AAStarCommunity/airaccount-contract tag v0.17.2-beta.2"
+    { "name": "BLSAggregator.json", "hash": "cfaf442eab555f3b52ab14454b65da99efc3ee7ce6da3a41325b27d89749472d" },
+    { "name": "DVTValidator.json", "hash": "0ec640c54e3f40149e4e47bf50b67ce491e5ad8a3948a9d392eed1fca0f07490" },
+    { "name": "EntryPoint.json", "hash": "fb52a7e1d92dfed8285b78d1849661936c09401227e27e2eceda905b20cd6844" },
+    { "name": "GToken.json", "hash": "7cf4d406163244cc95a8867c81f8a7979cfec16d0f2b2b354b94f91e4168ad14" },
+    { "name": "GTokenAuthorization.json", "hash": "3494156cf697b2ab8e2fd5c4041790854c1219ae44671dc64dc434dcbe80ef54" },
+    { "name": "GTokenStaking.json", "hash": "26bbebb123ec021726fcb8b3ad7ed0ac48474ccf02739eb63ee7590e8e0501f8" },
+    { "name": "MicroPaymentChannel.json", "hash": "10a3a1d16d5a591d2da84e4d7e6bf04445354bc452285955bc02bc32dca99ad1" },
+    { "name": "MySBT.json", "hash": "93b0027febd39b67b1fe38887bf968a7c0f578ca2bf1d8b18b6cd3002a62b946" },
+    { "name": "Paymaster.json", "hash": "7a5d7c52bbf313430fcf2d30f7bdd56548f3328525d2adecfd6f13e591a49e93" },
+    { "name": "PaymasterFactory.json", "hash": "f4f974f8cfda7d6c81091df64e7fb4079b71e0fa8d944a1c8cd6e8062b9528db" },
+    { "name": "Registry.json", "hash": "b70b732118015227d4dd654387c687f4a4351db7f0519c22e6f194233fe5b3fd" },
+    { "name": "ReputationSystem.json", "hash": "29ebf5a761609eb18f3708b62d4291be06b6dc7849fb2c1487aadd97b42304f5" },
+    { "name": "SimpleAccount.json", "hash": "8ce0cf540d5f131b88578d6d3fe550c378c13e36099b1b23586529b4187e50da" },
+    { "name": "SimpleAccountFactory.json", "hash": "54de0987d947381efe89546322b02564f96cba4c9704c67822f785df39f37022" },
+    { "name": "SuperPaymaster.json", "hash": "0973a179b7f33213fcff6606c6c8a8fb3ecf60245fbfb23fb33a35e1a31495dc" },
+    { "name": "xPNTsFactory.json", "hash": "42032ab0bae0e8cb5e21cbd324584b35e5ee31c74d4e8af0cbaa2a074f430881" },
+    { "name": "xPNTsToken.json", "hash": "bae9a6d3382abfda1212413110ca62907798f05c24b86f060294c22a7174c388" }
+  ]
 }

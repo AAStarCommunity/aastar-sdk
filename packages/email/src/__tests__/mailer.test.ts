@@ -1,34 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ResendMailer, BatchSendError } from '../mailer.js';
 
-const makeMockResend = (overrides: Record<string, unknown> = {}) => ({
-  emails: {
-    send: vi.fn().mockResolvedValue({ data: { id: 'email-123' }, error: null }),
-    sendBatch: vi.fn().mockResolvedValue({
-      data: [{ id: 'batch-1' }, { id: 'batch-2' }],
-      error: null,
-    }),
-    ...overrides,
-  },
-});
+type MockClient = {
+  emails: { send: ReturnType<typeof vi.fn> };
+  batch: { send: ReturnType<typeof vi.fn> };
+};
 
-// Patch Resend constructor to inject mock
-vi.mock('resend', () => {
-  let mockInstance: ReturnType<typeof makeMockResend>;
-  return {
-    Resend: vi.fn().mockImplementation(() => {
-      mockInstance = makeMockResend();
-      return mockInstance;
-    }),
-    __getMockInstance: () => mockInstance,
-  };
-});
+let currentMock: MockClient;
 
-import { Resend } from 'resend';
+vi.mock('resend', () => ({
+  Resend: vi.fn().mockImplementation(() => {
+    currentMock = {
+      emails: {
+        send: vi.fn().mockResolvedValue({ data: { id: 'email-123' }, error: null }),
+      },
+      batch: {
+        send: vi.fn().mockResolvedValue({
+          data: [{ id: 'batch-1' }, { id: 'batch-2' }],
+          error: null,
+        }),
+      },
+    };
+    return currentMock;
+  }),
+}));
 
-function getMock(): ReturnType<typeof makeMockResend> {
-  return (Resend as unknown as { __getMockInstance: () => ReturnType<typeof makeMockResend> }).__getMockInstance();
-}
+function getMock(): MockClient { return currentMock; }
 
 describe('ResendMailer constructor', () => {
   it('throws on empty API key', () => {
@@ -101,7 +98,7 @@ describe('ResendMailer.sendBatch', () => {
   it('returns empty array for empty input', async () => {
     const result = await mailer.sendBatch([]);
     expect(result).toEqual([]);
-    expect(getMock().emails.sendBatch).not.toHaveBeenCalled();
+    expect(getMock().batch.send).not.toHaveBeenCalled();
   });
 
   it('throws for > 100 emails', async () => {
@@ -123,12 +120,12 @@ describe('ResendMailer.sendBatch', () => {
     await mailer.sendBatch([
       { from: 'a@x.io', to: 'b@y.io', subject: 'Hi', idempotencyKey: 'k1' },
     ]);
-    const payload = getMock().emails.sendBatch.mock.calls[0][0];
+    const payload = getMock().batch.send.mock.calls[0][0];
     expect(payload[0]).not.toHaveProperty('idempotencyKey');
   });
 
   it('throws BatchSendError when any item has no ID', async () => {
-    getMock().emails.sendBatch.mockResolvedValueOnce({
+    getMock().batch.send.mockResolvedValueOnce({
       data: [{ id: 'ok-1' }, { id: null }, { id: 'ok-3' }],
       error: null,
     });
@@ -147,7 +144,7 @@ describe('ResendMailer.sendBatch', () => {
   });
 
   it('throws on top-level Resend error', async () => {
-    getMock().emails.sendBatch.mockResolvedValueOnce({ data: null, error: { message: 'Rate limit' } });
+    getMock().batch.send.mockResolvedValueOnce({ data: null, error: { message: 'Rate limit' } });
     await expect(mailer.sendBatch([{ from: 'a@x.io', to: 'b@y.io', subject: 'Hi' }]))
       .rejects.toThrow('Failed to send batch emails: Rate limit');
   });

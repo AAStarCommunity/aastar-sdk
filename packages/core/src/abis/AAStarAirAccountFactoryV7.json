@@ -687,6 +687,117 @@
       "type": "error",
       "name": "NotFactoryAdmin",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardiansRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardiansMustBeDistinct",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DailyLimitRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Guardian2Required",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CallerCannotBeGuardian2",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyCannotBeGuardian2",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardianSigExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DeadlineTooFarInFuture",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "HumanOwnerCannotBeCommunityGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Guardian2CannotBeCommunityGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyCannotBeCommunityGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "TokenConfigLengthMismatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DefaultTokenAddressZero",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "DuplicateDefaultToken",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidDefaultTokenConfig",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "FACTORY_VERSION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "pure"
     }
   ]
 }

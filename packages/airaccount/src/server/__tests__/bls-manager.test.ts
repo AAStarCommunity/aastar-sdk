@@ -240,6 +240,26 @@ describe("BLSManager", () => {
       const d2 = { ...validData(), nodeIds: ["0x" + "22".repeat(32)] };
       expect(manager.packSignature(d1 as any)).not.toBe(manager.packSignature(d2 as any));
     });
+
+    // Guard against double-prefix regression (issue #25):
+    // TransferManager does: ethers.concat([toBeHex(ALG_ID.BLS, 1), packedBls])
+    // This is only correct if packSignature() does NOT already prepend an algId.
+    it("output does NOT start with 0x01 (no algId prefix — caller adds it)", () => {
+      const packed = manager.packSignature(validData() as any);
+      expect(packed.startsWith("0x01")).toBe(false);
+    });
+
+    it("ethers.concat with ALG_ID.BLS prefix starts with 0x01 and raw BLS bytes follow", () => {
+      const { ethers } = require("ethers");
+      const ALG_ID_BLS = 0x01;
+      const packed = manager.packSignature(validData() as any);
+      const userOpSig = ethers.concat([ethers.toBeHex(ALG_ID_BLS, 1), packed]);
+      // Must start with 0x01 algId
+      expect(userOpSig.startsWith("0x01")).toBe(true);
+      // Byte at index 1 must match the FIRST byte of packed (nodeIds length prefix, not another 0x01)
+      const packedFirst = packed.slice(2, 4); // first byte of packed (hex)
+      expect(userOpSig.slice(4, 6)).toBe(packedFirst); // after 0x01, raw packed bytes
+    });
   });
 
   // ── generateMessagePoint ───────────────────────────────────────────
