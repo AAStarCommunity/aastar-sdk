@@ -5,7 +5,7 @@ export interface AccountRecord {
   userId: string;
   address: string;
   signerAddress: string;
-  salt: number;
+  salt: number | bigint;
   deployed: boolean;
   deploymentTxHash: string | null;
   validatorAddress: string;

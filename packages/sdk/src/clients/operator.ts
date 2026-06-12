@@ -1,14 +1,15 @@
-import { createClient, type Client, type Transport, type Chain, type Account, type Hash, type Hex, erc20Abi, parseAbi, publicActions, walletActions, type PublicActions, type WalletActions, type Address, keccak256, stringToBytes } from 'viem';
+import { createClient, type Client, type Transport, type Chain, type Account, type Hash, type Hex, erc20Abi, publicActions, walletActions, type PublicActions, type WalletActions, type Address, keccak256, stringToBytes, zeroAddress } from 'viem';
 
-import { 
-    stakingActions, 
+import {
+    stakingActions,
     registryActions,
     RegistryABI,
     superPaymasterActions,
-
+    SuperPaymasterABI,
     paymasterActions,
     PaymasterFactoryABI,
-    type StakingActions, 
+    xPNTsTokenABI,
+    type StakingActions,
     type RegistryActions,
     type SuperPaymasterActions,
     type PaymasterActions,
@@ -35,13 +36,14 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
     onboardOperator: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<Hash[]>;
     /** @deprecated Use onboardOperator */
     onboardToSuperPaymaster: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex }) => Promise<Hash[]>
-    configureOperator: (args: { xPNTsToken: Address, treasury: Address, exchangeRate: bigint, account?: Account | Address }) => Promise<Hash>
+    configureOperator: (args: { xPNTsToken: Address, treasury: Address, account?: Account | Address }) => Promise<Hash>
     getOperatorStatus: (accountAddress: Address) => Promise<{
         type: 'super' | 'v4' | null;
         superPaymaster: {
             hasRole: boolean;
             isConfigured: boolean;
             balance: bigint;
+            /** Exchange rate read from xPNTsToken.exchangeRate() — not from operators() */
             exchangeRate: bigint;
             treasury: Address;
         } | null;
@@ -182,7 +184,7 @@ export function createOperatorClient({
                     console.log('   SDK: Depositing aPNTs via depositFor...');
                     const depositTx = await (client as any).writeContract({
                         address: usedAddresses.superPaymaster,
-                        abi: parseAbi(['function depositFor(address targetOperator, uint256 amount) external']),
+                        abi: SuperPaymasterABI,
                         functionName: 'depositFor',
                         args: [accountToUse.address, depositAmount],
                         account: accountToUse,
@@ -224,38 +226,58 @@ export function createOperatorClient({
                 let paymasterV4Info = null;
 
                 if (hasRole && usedAddresses.superPaymaster) {
-                    const pmAbi = parseAbi(['function operators(address) view returns (uint128 balance, uint96 exchangeRate, bool isConfigured, bool isPaused, address token, uint32 reputation, address treasury, uint256 spent, uint256 txSponsored)']);
+                    // v5.3.3: operators() is 9-field tuple (exchangeRate removed, minTxInterval added)
+                    // [0] aPNTsBalance, [1] isConfigured, [2] isPaused, [3] xPNTsToken,
+                    // [4] reputation, [5] minTxInterval, [6] treasury, [7] totalSpent, [8] totalTxSponsored
                     const operatorData = await client.readContract({
                         address: usedAddresses.superPaymaster!,
-                        abi: pmAbi,
+                        abi: SuperPaymasterABI,
                         functionName: 'operators',
                         args: [accountAddress]
                     }) as any;
 
-                    if (operatorData && operatorData[2]) { // isConfigured
+                    if (operatorData && operatorData[1]) { // isConfigured at index 1
                         operatorType = 'super';
+                        // Exchange rate is now on the xPNTs token contract, not in operators()
+                        const xPNTsTokenAddr = operatorData[3] as Address;
+                        let exchangeRate = 0n;
+                        if (xPNTsTokenAddr && xPNTsTokenAddr !== zeroAddress) {
+                            try {
+                                exchangeRate = await client.readContract({
+                                    address: xPNTsTokenAddr,
+                                    abi: xPNTsTokenABI,
+                                    functionName: 'exchangeRate',
+                                }) as bigint;
+                            } catch (rateErr: unknown) {
+                                // ContractFunctionExecutionError = contract not deployed yet (expected, silent)
+                                // Anything else = RPC or decode failure (log warning)
+                                const msg = rateErr instanceof Error ? rateErr.message : String(rateErr);
+                                if (!msg.includes('ContractFunctionExecutionError') && !msg.includes('code: -32')) {
+                                    console.warn(`   ⚠️ Unexpected error reading exchangeRate from ${xPNTsTokenAddr}:`, msg);
+                                }
+                            }
+                        }
                         superPaymasterInfo = {
                             hasRole: true,
                             isConfigured: true,
                             balance: operatorData[0],
-                            exchangeRate: operatorData[1],
+                            exchangeRate,
                             treasury: operatorData[6]
                         };
                     }
                 }
                 
                 // 检查 Paymaster V4 (Direct)
-                if (usedAddresses.paymasterFactory && usedAddresses.paymasterFactory !== '0x0000000000000000000000000000000000000000') {
+                if (usedAddresses.paymasterFactory && usedAddresses.paymasterFactory !== zeroAddress) {
                     try {
-                        const factoryAbi = parseAbi(['function getPaymasterByOperator(address) view returns (address)']);
                         const pmAddr = await client.readContract({
                             address: usedAddresses.paymasterFactory,
-                            abi: factoryAbi,
+                            abi: PaymasterFactoryABI,
                             functionName: 'getPaymasterByOperator',
                             args: [accountAddress]
                         }) as Address;
             
-                        if (pmAddr !== '0x0000000000000000000000000000000000000000') {
+                        if (pmAddr !== zeroAddress) {
                             operatorType = operatorType || 'v4';
                             paymasterV4Info = {
                                 address: pmAddr,

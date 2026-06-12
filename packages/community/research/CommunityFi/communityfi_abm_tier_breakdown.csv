@@ -1,0 +1,17 @@
+ladder,tier,count_mean,spend_mean,contrib_share_mean
+T1 snack only,snack,919.00,9190.00,0.6406
+T1 snack only,merch,0.00,0.00,0.0000
+T1 snack only,venue,0.00,0.00,0.0000
+T1 snack only,conference,0.00,0.00,0.0000
+T2 +merch,snack,114.85,1148.50,0.0000
+T2 +merch,merch,780.30,39015.00,0.7540
+T2 +merch,venue,0.00,0.00,0.0000
+T2 +merch,conference,0.00,0.00,0.0000
+T3 +venue,snack,116.90,1169.00,0.0247
+T3 +venue,merch,153.20,7660.00,0.1777
+T3 +venue,venue,624.30,93645.00,0.9054
+T3 +venue,conference,0.00,0.00,0.0000
+T4 +conference,snack,139.20,1392.00,0.2267
+T4 +conference,merch,213.45,10672.50,0.4327
+T4 +conference,venue,285.15,42772.50,0.8043
+T4 +conference,conference,175.40,70160.00,1.0000
