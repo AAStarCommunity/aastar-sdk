@@ -1,0 +1,37 @@
+{
+  "experiment": "E1: Paymaster-Signer Decentralization Failover",
+  "paper_section": "Paper3 §5.1",
+  "date": "2026-05-22T06:45:02.094Z",
+  "network": "Ethereum Sepolia",
+  "chainId": 11155111,
+  "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+  "simpleAccount": "0xECD9C07f648B09CFb78906302822Ec52Ab87dd70",
+  "relayerA": "Pimlico-Hostile (invalid API key → 401/403 Forbidden)",
+  "relayerB": "Candide-Public (permissionless, no API key required)",
+  "N": 3,
+  "successCount": 3,
+  "successRate": "3/3",
+  "meanFailoverLatencyMs": 910,
+  "newPaymasterSignaturesRequired": 0,
+  "aoa_property": "UserOp validity is determined by on-chain account state only. Relayer A refusal does not invalidate the UserOp; the identical signed UserOp is accepted by any permissionless bundler (Relayer B).",
+  "txHashes": [
+    {
+      "trial": 1,
+      "txHash": "0x80286548a8832eaf108ad05f882e66ddf1e71550b13949913ab95c1876fd7d0f",
+      "failoverMs": 1062,
+      "block": ""
+    },
+    {
+      "trial": 2,
+      "txHash": "0x54746a2b23e23dc01543f3c99ca586c1c42adeb8f9cf5b52b9c5cc4b5c4ae8e2",
+      "failoverMs": 820,
+      "block": ""
+    },
+    {
+      "trial": 3,
+      "txHash": "0xd6e4e44b6e327cbb99a9fe0799ae486342103b4db6222e30ce18877d6399ba93",
+      "failoverMs": 849,
+      "block": ""
+    }
+  ]
+}
