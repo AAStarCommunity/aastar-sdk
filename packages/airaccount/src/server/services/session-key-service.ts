@@ -35,8 +35,6 @@ export interface AgentSessionConfig {
   expiry: number;               // Unix timestamp
   velocityLimit: number;        // Max calls per velocityWindow (0 = unlimited)
   velocityWindow: number;       // Window in seconds
-  spendToken: string;           // address(0) = no spend cap
-  spendCap: bigint;             // 0 = no cap
   callTargets: string[];        // Allowed dest addresses (empty = any)
   selectorAllowlist: string[];  // Allowed selectors (empty = any)
 }
@@ -45,7 +43,6 @@ export interface AgentSessionInfo extends AgentSessionConfig {
   revoked: boolean;
   callCount: bigint;
   windowStart: bigint;
-  totalSpent: bigint;
 }
 
 /**
@@ -163,8 +160,6 @@ export class SessionKeyService {
         expiry: cfg.expiry,
         velocityLimit: cfg.velocityLimit,
         velocityWindow: cfg.velocityWindow,
-        spendToken: cfg.spendToken,
-        spendCap: cfg.spendCap,
         revoked: false,
         callTargets: cfg.callTargets,
         selectorAllowlist: cfg.selectorAllowlist,
@@ -176,17 +171,17 @@ export class SessionKeyService {
    * Encode calldata for delegateSession() — sub-agent delegation.
    * The sub-agent config must be a strict subset of the parent session's scope.
    * Called by the parent session key (not the account owner).
+   * @param account The smart account under which the parent session was granted.
    */
-  encodeDelegateSession(subKey: string, subCfg: AgentSessionConfig): string {
+  encodeDelegateSession(account: string, subKey: string, subCfg: AgentSessionConfig): string {
     const iface = new ethers.Interface(AGENT_SESSION_KEY_VALIDATOR_ABI);
     return iface.encodeFunctionData("delegateSession", [
+      account,
       subKey,
       {
         expiry: subCfg.expiry,
         velocityLimit: subCfg.velocityLimit,
         velocityWindow: subCfg.velocityWindow,
-        spendToken: subCfg.spendToken,
-        spendCap: subCfg.spendCap,
         revoked: false,
         callTargets: subCfg.callTargets,
         selectorAllowlist: subCfg.selectorAllowlist,
@@ -202,22 +197,19 @@ export class SessionKeyService {
 
   /** Query agent session config + runtime state. */
   async getAgentSession(account: string, sessionKey: string): Promise<AgentSessionInfo> {
-    const [expiry, velocityLimit, velocityWindow, spendToken, spendCap, revoked, callTargets, selectorAllowlist] =
+    const [expiry, velocityLimit, velocityWindow, revoked, callTargets, selectorAllowlist] =
       await this.askValidator.agentSessions(account, sessionKey);
-    const [callCount, windowStart, totalSpent] =
+    const [callCount, windowStart] =
       await this.askValidator.sessionStates(account, sessionKey);
     return {
       expiry: Number(expiry),
       velocityLimit: Number(velocityLimit),
       velocityWindow: Number(velocityWindow),
-      spendToken,
-      spendCap: BigInt(spendCap),
       callTargets,
       selectorAllowlist,
       revoked,
       callCount: BigInt(callCount),
       windowStart: BigInt(windowStart),
-      totalSpent: BigInt(totalSpent),
     };
   }
 

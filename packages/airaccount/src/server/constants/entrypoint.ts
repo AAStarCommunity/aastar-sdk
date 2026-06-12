@@ -139,6 +139,7 @@ export const AIRACCOUNT_ABI = [
   "function setValidator(address _validator) external",
   "function setP256Key(bytes32 _x, bytes32 _y) external",
   "function setTierLimits(uint256 _tier1, uint256 _tier2) external",
+  "function modifyTierLimitsWithGuardians(uint256 _tier1, uint256 _tier2, uint256 deadline, bytes[] calldata guardianSigs) external",
   // ── Events ──
   "event ModuleInstalled(uint256 indexed moduleTypeId, address indexed module)",
   "event ModuleUninstalled(uint256 indexed moduleTypeId, address indexed module)",
@@ -197,18 +198,17 @@ export const AGENT_SESSION_KEY_VALIDATOR_ABI = [
   "function onUninstall(bytes calldata data) external",
   "function isInitialized(address smartAccount) external view returns (bool)",
   // Session management
-  "function grantAgentSession(address sessionKey, (uint48 expiry, uint16 velocityLimit, uint32 velocityWindow, address spendToken, uint256 spendCap, bool revoked, address[] callTargets, bytes4[] selectorAllowlist) cfg) external",
-  "function delegateSession(address subKey, (uint48 expiry, uint16 velocityLimit, uint32 velocityWindow, address spendToken, uint256 spendCap, bool revoked, address[] callTargets, bytes4[] selectorAllowlist) subCfg) external",
+  "function grantAgentSession(address sessionKey, (uint48 expiry, uint16 velocityLimit, uint32 velocityWindow, bool revoked, address[] callTargets, bytes4[] selectorAllowlist) cfg) external",
+  "function delegateSession(address account, address subKey, (uint48 expiry, uint16 velocityLimit, uint32 velocityWindow, bool revoked, address[] callTargets, bytes4[] selectorAllowlist) subCfg) external",
   "function revokeAgentSession(address sessionKey) external",
   // Validation
   "function validateUserOp((address sender, uint256 nonce, bytes initCode, bytes callData, bytes32 accountGasLimits, uint256 preVerificationGas, bytes32 gasFees, bytes paymasterAndData, bytes signature) userOp, bytes32 userOpHash) external returns (uint256 validationData)",
   "function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata data) external pure returns (bytes4)",
   // Enforcement
   "function enforceSessionScope(address account, address sessionKey, address callTarget, bytes4 selector) external view",
-  "function recordSpend(address account, address sessionKey, uint256 amount) external",
   // State readers
-  "function agentSessions(address account, address sessionKey) external view returns (uint48 expiry, uint16 velocityLimit, uint32 velocityWindow, address spendToken, uint256 spendCap, bool revoked, address[] memory callTargets, bytes4[] memory selectorAllowlist)",
-  "function sessionStates(address account, address sessionKey) external view returns (uint256 callCount, uint256 windowStart, uint256 totalSpent)",
+  "function agentSessions(address account, address sessionKey) external view returns (uint48 expiry, uint16 velocityLimit, uint32 velocityWindow, bool revoked, address[] memory callTargets, bytes4[] memory selectorAllowlist)",
+  "function sessionStates(address account, address sessionKey) external view returns (uint256 callCount, uint256 windowStart)",
   "function sessionKeyOwner(address sessionKey) external view returns (address)",
   "function delegatedBy(address account, address subKey) external view returns (address parentKey)",
   // Events
@@ -267,11 +267,12 @@ export const FORCE_EXIT_MODULE_ABI = [
   "event ExitCancelled(address indexed account)",
 ];
 
-// ERC-7579 Module type IDs
+// ERC-7579 Module type IDs (spec: 1=validator, 2=executor, 3=fallback, 4=hook)
 export const MODULE_TYPE = {
   VALIDATOR: 1,
   EXECUTOR: 2,
-  HOOK: 3,
+  FALLBACK: 3,
+  HOOK: 4,
 } as const;
 
 // AirAccount algorithm IDs (algId values for signature dispatch)
