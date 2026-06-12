@@ -518,6 +518,83 @@
     },
     {
       "type": "function",
+      "name": "initializeAgentAccount",
+      "inputs": [
+        {
+          "name": "_entryPoint",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_config",
+          "type": "tuple",
+          "internalType": "struct AAStarAirAccountBase.InitConfig",
+          "components": [
+            {
+              "name": "guardians",
+              "type": "address[3]",
+              "internalType": "address[3]"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "approvedAlgIds",
+              "type": "uint8[]",
+              "internalType": "uint8[]"
+            },
+            {
+              "name": "minDailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialTokens",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "initialTokenConfigs",
+              "type": "tuple[]",
+              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+              "components": [
+                {
+                  "name": "tier1Limit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "tier2Limit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "dailyLimit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "_guardAddr",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "installModule",
       "inputs": [
         {
@@ -991,30 +1068,6 @@
         }
       ],
       "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "validateCompositeSignature",
-      "inputs": [
-        {
-          "name": "hash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "sig",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
       "stateMutability": "nonpayable"
     },
     {
