@@ -25,7 +25,7 @@ export class AccountManager {
     userId: string,
     options?: {
       entryPointVersion?: EntryPointVersion;
-      salt?: number;
+      salt?: number | bigint;
       /** Daily transfer limit in wei. When > 0 the account is created with on-chain guard enforcement. */
       dailyLimit?: bigint;
     }
@@ -164,6 +164,11 @@ export class AccountManager {
     chainId: number,
     dailyLimit: bigint
   ): string {
+    if (typeof salt === "number" && !Number.isSafeInteger(salt)) {
+      throw new Error(
+        `salt value ${salt} exceeds Number.MAX_SAFE_INTEGER; pass as bigint to avoid precision loss`
+      );
+    }
     return ethers.keccak256(
       ethers.solidityPacked(
         ["string", "uint256", "address", "address", "uint256", "uint256"],
@@ -216,7 +221,7 @@ export class AccountManager {
       guardian2: string;
       guardian2Sig: string;
       dailyLimit: bigint;
-      salt?: number;
+      salt?: number | bigint;
       entryPointVersion?: EntryPointVersion;
     }
   ): Promise<AccountRecord> {

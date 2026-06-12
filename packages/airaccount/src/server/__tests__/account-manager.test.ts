@@ -300,6 +300,13 @@ describe("AccountManager", () => {
       const hashAtMax = manager.buildGuardianAcceptanceHash(OWNER, Number.MAX_SAFE_INTEGER, FACTORY, CHAIN_ID, DAILY_LIMIT);
       expect(hash).not.toBe(hashAtMax);
     });
+
+    it("throws when number salt exceeds MAX_SAFE_INTEGER", () => {
+      const unsafeSalt = Number.MAX_SAFE_INTEGER + 1; // 2^53 — loses precision as number
+      expect(() =>
+        manager.buildGuardianAcceptanceHash(OWNER, unsafeSalt, FACTORY, CHAIN_ID, DAILY_LIMIT)
+      ).toThrow(/exceeds Number\.MAX_SAFE_INTEGER/);
+    });
   });
 
   // ── encodeModifyTierLimits ─────────────────────────────────────────
