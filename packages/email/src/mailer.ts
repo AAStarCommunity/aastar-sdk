@@ -131,15 +131,15 @@ export class ResendMailer {
     }
 
     const payload = emails.map(({ idempotencyKey: _, ...rest }) => toResendPayload(rest));
-    const { data, error } = await this.client.emails.sendBatch(payload);
+    const { data, error } = await this.client.batch.send(payload);
 
     if (error) throw new Error(`Failed to send batch emails: ${error.message}`);
 
-    const results = data ?? [];
+    const results = (data as unknown as Array<{ id?: string }>) ?? [];
     const failures: Array<{ index: number; reason: string }> = [];
     const successes: BatchSendResult[] = [];
 
-    results.forEach((item, index) => {
+    results.forEach((item: { id?: string }, index: number) => {
       if (!item?.id) {
         failures.push({ index, reason: 'No email ID returned for this item' });
       } else {
