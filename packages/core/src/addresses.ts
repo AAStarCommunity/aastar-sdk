@@ -34,37 +34,44 @@ export const CANONICAL_ADDRESSES = {
 
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
-  // Latest sync: 2026-05-12 — post v5.3.2 UUPS upgrade
-  //   Registry @ Registry-5.3.3, SuperPaymaster @ SuperPaymaster-5.3.2
-  //   spImpl currently delegating: 0x6B84C7A49E6A4fB139f279B148359E82dB6370eE
-  //   New on-chain deployment from 2026-05-10 DeployLive (deployer 0xb56...adf0E)
+  // Latest sync: 2026-05-29 — post audit-core-toolchain redeploy (updateTime 2026-05-29 21:57:56)
+  //   Registry @ Registry-5.3.x (impl 0x24F262702A72Bc5E0255c0ed513b6a2021Ee1129)
+  //   SuperPaymaster proxy 0xFb09... (impl spImpl 0x8E2d93Bb9176b5796fFA91587BD2a755510C9819)
+  //   ERC-8004 agent registries now use the 0x8004… vanity addresses.
+  //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
+  //   verify against the community's own deployment before use.
   11155111: {
-    registry: "0xa62EFc8a9138617E245bd21BcF5b5E406D864525",
-    gToken: "0x4e6A1125B8619d6D05c99AB2F30BDFc96C843B67",
-    staking: "0x197D243Ee21815a6419406B066626db94D8D7F99",
-    sbt: "0xA74820A243B34904290ae4e614cE9cCE6e242fA4",
-    reputationSystem: "0xE25E29e32D62f8BE8a61EfD8C7f1d431B95FB8b3",
-    superPaymaster: "0x33404ccD9559759b85302cFfB19e66dA25380aDf",  // V5.3.2 Proxy (impl 0x6B84C7A4...)
-    paymasterFactory: "0x9c80Fe26bDd01bEb958d6560fcbF2d1F511C4629",
-    paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy (anniPaymaster)
-    paymasterV4Impl: "0xC2a08d1d6e14c7E1306c53A787CEDA50E69b2836",
-    xPNTsFactory: "0x0195f1f30276f1455F650207F9A1D2AAeABBEc7D",
-    blsAggregator: "0x01E18f6460d1e4581E2c7Dd3A65e3eF26e962F16",
+    registry: "0xB5Fb8920F7AcD8b395934bd1F21222b32A30eF1A",
+    gToken: "0x46B82966f8a40f0Bbb8C13aCfBA746631CC2ec72",
+    staking: "0x574820E26Acb7D9a1202708C6183d6A8aC957dA6",
+    sbt: "0x754CeB687aCFC72136B02a1cb7cE2F911B63F1f8",
+    reputationSystem: "0xDD4D6162F426998E8B8FC97D0a8a5912cd70e6E0",
+    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0x8E2d93Bb...)
+    paymasterFactory: "0x60B8f728Abca14B82a4EC72f00Ff5437e0702e90",
+    paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy — NOT in core config, verify separately
+    paymasterV4Impl: "0x59aEAec186a8883c165adf5C72a64df2fD9af068",
+    xPNTsFactory: "0xC4f5A121c426734CC1c0DbE57f6A2Dd764E278e4",
+    blsAggregator: "0xCDCdb8e2b62cdDCC3918f4d120322C6eB5910276",
     // blsValidator: standalone BLSValidator was deprecated in P0-1; aggregator
-    // verifies BLS inline now. Address kept (0x0A71C5a3...) only for legacy
-    // tooling — do not use for new integrations.
+    // verifies BLS inline now. Not in core config — legacy address kept for
+    // tooling only; do not use for new integrations.
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",
-    dvtValidator: "0x70a06AC908e3589B0B9DC35D657D96Fa1F0Fb1f1",
+    dvtValidator: "0xB60C82158734def92D0d2163C93927cf19b86a95",
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
-    aPNTs: "0x4C4EC2e866f0c43DCA4670A6033e962a05B4C772",  // AAStar aPNTs (deployer operator)
+    aPNTs: "0x9f0E11e0D33Ec0a5c9608990E7B3498B5EE3210B",  // AAStar aPNTs (deployer operator)
     priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",  // Sepolia Chainlink ETH/USD
     simpleAccountFactory: "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
     // SP V5.3 新增合约（Agent Economy + x402 + Streaming Channels）
-    microPaymentChannel: "0x5753e9675f68221cA901e495C1696e33F552ea36",
-    agentIdentityRegistry: "0x400624Fa1423612B5D16c416E1B4125699467d9a",
-    agentReputationRegistry: "0x2D82b2De1A0745454cDCf38f8c022f453d02Ca55",
+    microPaymentChannel: "0xbD1807328Dd654512B13d6320C9Cc78685a405Ed",
+    agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    // NOTE: config.sepolia.json also has agentValidationRegistry
+    // (0x8004Cb1BF31DAf7788923b405b754f57acEB4272). It is intentionally NOT added
+    // here yet: CANONICAL_ADDRESSES is a homogeneous union (every chain must share
+    // the same keys), and no SDK client consumes the validation registry today.
+    // Add it to ALL chain blocks (0x0 on chains without it) when an SDK client needs it.
     // Mycelium community PNTs token (Anni's xPNTsToken)
-    pnts: "0x83ca2b02f325B2C2e846BFe7582993acD10E5cc8",
+    pnts: "0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6",
   },
 
   // --- OP Sepolia (Chain ID: 11155420) ---

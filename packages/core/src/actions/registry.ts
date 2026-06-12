@@ -44,14 +44,12 @@ export type RegistryActions = {
     batchUpdateGlobalReputation: (args: { proposalId: bigint, users: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     
     // Contract References
-    setBLSValidator: (args: { validator: Address, account?: Account | Address }) => Promise<Hash>;
     setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
     setMySBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
     setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     setStaking: (args: { staking: Address, account?: Account | Address }) => Promise<Hash>;
     setReputationSource: (args: { source: Address, account?: Account | Address }) => Promise<Hash>;
     
-    blsValidator: () => Promise<Address>;
     blsAggregator: () => Promise<Address>;
     MYSBT: () => Promise<Address>;
     SUPER_PAYMASTER: () => Promise<Address>;
@@ -406,22 +404,6 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     // Contract References
-    async setBLSValidator({ validator, account }) {
-        try {
-            validateAddress(validator, 'validator');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'setBLSValidator',
-                args: [validator],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setBLSValidator');
-        }
-    },
-
     async setBLSAggregator({ aggregator, account }) {
         try {
             validateAddress(aggregator, 'aggregator');
@@ -499,19 +481,6 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'setReputationSource');
-        }
-    },
-
-    async blsValidator() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'blsValidator',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'blsValidator');
         }
     },
 

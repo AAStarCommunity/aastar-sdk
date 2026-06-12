@@ -93,7 +93,6 @@ async function main() {
         await operatorClient.configureOperator({
             xPNTsToken: aPNTsAddress as `0x${string}`,
             treasury: account.address,
-            exchangeRate: 1000000000000000000n // 1:1
         });
 
         console.log(`   ✅ Operator configured.`);
