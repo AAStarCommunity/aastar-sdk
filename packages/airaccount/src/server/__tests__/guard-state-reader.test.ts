@@ -34,6 +34,8 @@ function setupContracts(guardAddress: string, guardValues: Partial<Record<string
 
   const mockAccount = {
     guard: vi.fn().mockResolvedValue(guardAddress),
+    // v0.17.2-beta.4: algorithm whitelist lives on the account.
+    approvedAlgorithms: vi.fn().mockResolvedValue(guardValues.approvedAlgorithms ?? true),
   };
 
   MockContract.mockImplementation(function (addr: string) {
@@ -133,18 +135,19 @@ describe("GuardStateReader", () => {
   });
 
   describe("isAlgorithmApproved", () => {
-    it("returns true when account has no guard", async () => {
-      setupContracts(ethers.ZeroAddress, {});
+    // v0.17.2-beta.4: read the whitelist from the ACCOUNT (not the guard).
+    it("returns account.approvedAlgorithms = true", async () => {
+      setupContracts(GUARD_ADDR, { approvedAlgorithms: true });
       const reader = new GuardStateReader(provider);
       const approved = await reader.isAlgorithmApproved(ACCOUNT_ADDR, 1);
       expect(approved).toBe(true);
     });
 
-    it("returns guard.approvedAlgorithms result when guard exists", async () => {
-      setupContracts(GUARD_ADDR, { approvedAlgorithms: true });
+    it("returns account.approvedAlgorithms = false", async () => {
+      setupContracts(GUARD_ADDR, { approvedAlgorithms: false });
       const reader = new GuardStateReader(provider);
       const approved = await reader.isAlgorithmApproved(ACCOUNT_ADDR, 1);
-      expect(approved).toBe(true);
+      expect(approved).toBe(false);
     });
   });
 });

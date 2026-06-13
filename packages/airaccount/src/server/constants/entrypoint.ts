@@ -88,11 +88,11 @@ export const AIRACCOUNT_ADDRESSES = {
     agentSessionKeyValidatorM7r6: "0xa3e52db4b6e0a9d7cd5dd1414a90eedcf950e029",
 
     // ── Deprecated: r4 audit-final (v0.16.0 era — pre-beta). Retained for existing account recovery. ─
-    /** @deprecated Use factory (beta.3) for new accounts. */
+    /** @deprecated Use factory (beta.4) for new accounts. */
     factoryM7r4: "0x61bBAf9E1b8Fd78fF874776cFa50497dB9d43C3F",
     /** @deprecated */
     accountImplM7r4: "0xA674D308ce22230B70412b20Ee5a66fC6B24F49c",
-    /** @deprecated Use validatorRouter (beta.3). */
+    /** @deprecated Use validatorRouter. */
     validatorRouterM7r4: "0x730a162Ce3202b94cC5B74181B75b11eBB3045B1",
     /** @deprecated */
     compositeValidatorM7r4: "0xB65569950C48AA56dbe876915ca3605fD6FF2980",
@@ -101,21 +101,22 @@ export const AIRACCOUNT_ADDRESSES = {
     /** @deprecated */
     agentSessionKeyValidatorM7r4: "0x1F06961e133217801F92e1CF552187F594a32873",
 
-    // ── Current: v0.17.2-beta.3 (2026-06-12 Sepolia deployment, router finalized) ─────────────────
-    // Router has M3 governance timelock — future algId changes require proposeAlgorithm + 7-day wait.
-    factory: "0xfc6234bbd6283610659211347c6309904be86b0a",
-    factoryM7: "0xfc6234bbd6283610659211347c6309904be86b0a",
-    accountImpl: "0xe33EeCF21AAC2B776b49A4dd52BA8b7e683dE9C3",
-    validatorRouter: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",
+    // ── Current: v0.17.2-beta.4 (bundler-compat — algId whitelist on account + executeUserOp) ─────
+    // beta.4 upgrades the AirAccount account contracts; it REUSES the beta.3 router /
+    // sessionKey / forceExit / BLS (per the beta.4 migration notes).
+    factory: "0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071",  // beta.4
+    factoryM7: "0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071",  // beta.4
+    accountImpl: "0x0321Fa7261Ad5945e4B3f0c73aFD7D9392E39796",  // beta.4
+    validatorRouter: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",  // beta.3 (reused; M3 timelock)
     blsAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",
     blsAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",
     superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",
-    // beta.3 ERC-7579 modules
+    // beta.3 ERC-7579 modules (reused by beta.4)
     sessionKeyValidator: "0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf",
     forceExitModule: "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702",
-    airAccountDelegate: "0x8603AAF6C3f07fdae810B323c95a198D796EC52E",
-    airAccountExtension: "0xB3c7312bA52dF306DE1cBa781B91f3AfA7e86F99",
-    agentRegistry: "0x9e8f576cad8a8f949181fd10d9ad1c49a7b0bc17",
+    airAccountDelegate: "0x4bda4849b80cc444fb2da65beec0724005c6675c",  // beta.4
+    airAccountExtension: "0x20FB2A65a52Fc6507FdD51260f055017a2BA2860",  // beta.4
+    agentRegistry: "0xe1320c35485b4d7817866a8d0d8f77dd58202253",  // beta.4
     calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",
     uniswapV3Parser: "0x5671810ac8aa1857397870e60232579cfc519515",
   },
@@ -153,6 +154,14 @@ export const AIRACCOUNT_ABI = [
   "function setP256Key(bytes32 _x, bytes32 _y) external",
   "function setTierLimits(uint256 _tier1, uint256 _tier2) external",
   "function modifyTierLimitsWithGuardians(uint256 _tier1, uint256 _tier2, uint256 deadline, bytes[] calldata guardianSigs) external",
+  // ── Algorithm whitelist (v0.17.2-beta.4: single source of truth on the ACCOUNT, not the guard) ──
+  "function approvedAlgorithms(uint8 algId) external view returns (bool)",
+  "function guardApproveAlgorithm(uint8 algId) external",
+  // ── ERC-4337 v0.7 bundler entrypoint (v0.17.2-beta.4) ──
+  // Routes a UserOp whose callData starts with the executeUserOp selector to the account,
+  // re-deriving the signature algId in-frame (fixes guard-account bundler gas estimation).
+  // Only an inner execute()/executeBatch() may be wrapped (else reverts UnsupportedInnerSelector).
+  "function executeUserOp((address sender, uint256 nonce, bytes initCode, bytes callData, bytes32 accountGasLimits, uint256 preVerificationGas, bytes32 gasFees, bytes paymasterAndData, bytes signature) userOp, bytes32 userOpHash) external",
   // ── Events ──
   "event ModuleInstalled(uint256 indexed moduleTypeId, address indexed module)",
   "event ModuleUninstalled(uint256 indexed moduleTypeId, address indexed module)",
@@ -183,11 +192,17 @@ export const AIRACCOUNT_FACTORY_ABI = [
   "event AccountCreated(address indexed account, address indexed owner, uint256 salt)",
 ];
 
+// v0.17.2-beta.4: the guard is now pure spend accounting. The algorithm whitelist
+// moved to the ACCOUNT (see AIRACCOUNT_ABI.approvedAlgorithms). checkTransaction/
+// checkTokenTransaction were renamed to recordSpend/recordTokenSpend, and
+// approveAlgorithm/approvedAlgorithms/AlgorithmNotApproved were removed from the guard.
 export const GLOBAL_GUARD_ABI = [
   "function remainingDailyAllowance() external view returns (uint256)",
   "function dailyLimit() external view returns (uint256)",
-  "function approvedAlgorithms(uint8 algId) external view returns (bool)",
   "function account() external view returns (address)",
+  // Spend accounting (record* — algId dropped from the ETH path; kept for per-token tier math)
+  "function recordSpend(uint256 value) external returns (bool)",
+  "function recordTokenSpend(address token, uint256 amount, uint8 algId) external returns (bool)",
 ];
 
 export const ERC20_ABI = [

@@ -3,6 +3,7 @@ import { EthereumProvider } from "../providers/ethereum-provider";
 import { AccountManager } from "./account-manager";
 import { BLSSignatureService } from "./bls-signature-service";
 import { GuardChecker } from "./guard-checker";
+import { wrapExecuteUserOp } from "../utils/execute-user-op";
 import { PaymasterManager } from "./paymaster-manager";
 import { TokenService } from "./token-service";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
@@ -67,6 +68,13 @@ export interface ExecuteTransferParams {
   guardianSigner?: ethers.Signer;
   /** Enable AirAccount tiered signature routing. Default: false (legacy BLS-only). */
   useAirAccountTiering?: boolean;
+  /**
+   * Wrap the execute()/executeBatch() callData with the `executeUserOp` selector
+   * (v0.17.2-beta.4 bundler-compat). REQUIRED for guard-enabled accounts submitted
+   * through a standard ERC-4337 bundler; the account re-derives the signature algId
+   * in-frame. Default: false. No-guard accounts and owner-direct calls leave it off.
+   */
+  wrapExecuteUserOp?: boolean;
 }
 
 export interface EstimateGasParams {
@@ -74,6 +82,8 @@ export interface EstimateGasParams {
   amount: string;
   data?: string;
   tokenAddress?: string;
+  /** Match the executeUserOp wrapping used at submission so gas estimation is accurate (v0.17.2-beta.4). */
+  wrapExecuteUserOp?: boolean;
 }
 
 export interface TransferResult {
@@ -163,7 +173,8 @@ export class TransferManager {
       params.paymasterData,
       params.tokenAddress,
       version,
-      params.paymasterTokenAddress
+      params.paymasterTokenAddress,
+      params.wrapExecuteUserOp ?? false
     );
 
     // Get hash
@@ -356,7 +367,9 @@ export class TransferManager {
       undefined,
       undefined,
       params.tokenAddress,
-      version
+      version,
+      undefined,
+      params.wrapExecuteUserOp ?? false
     );
 
     const formatted = this.formatUserOpForBundler(userOp, version);
@@ -442,7 +455,8 @@ export class TransferManager {
     _paymasterData?: string,
     tokenAddress?: string,
     version: EntryPointVersion = EntryPointVersion.V0_6,
-    paymasterTokenAddress?: string
+    paymasterTokenAddress?: string,
+    wrapExecuteUserOpFlag: boolean = false
   ): Promise<UserOperation | PackedUserOperation> {
     const accountContract = this.ethereum.getAccountContract(sender);
     const nonce = await this.ethereum.getNonce(sender, 0, version);
@@ -535,6 +549,12 @@ export class TransferManager {
         ethers.parseEther(amount),
         data,
       ]);
+    }
+
+    // v0.17.2-beta.4: guard-enabled accounts must route bundler UserOps through
+    // executeUserOp so the account re-derives the signature algId in-frame.
+    if (wrapExecuteUserOpFlag) {
+      callData = wrapExecuteUserOp(callData);
     }
 
     const gasPrices = await this.ethereum.getUserOperationGasPrice();
