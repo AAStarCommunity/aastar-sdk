@@ -61,7 +61,26 @@ export type SuperPaymasterActions = {
     setAPNTsToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
     setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
     withdrawProtocolRevenue: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    
+
+    // Timelocked aPNTs Token Migration (setAPNTsToken queues the change)
+    executeAPNTsTokenChange: (args: { account?: Account | Address }) => Promise<Hash>;
+    cancelAPNTsTokenChange: (args: { account?: Account | Address }) => Promise<Hash>;
+    pendingAPNTsToken: () => Promise<Address>;
+    pendingAPNTsTokenEta: () => Promise<bigint>;
+
+    // Emergency Price (kill switch)
+    emergencySetPrice: (args: { newPrice: bigint, account?: Account | Address }) => Promise<Hash>;
+    executeEmergencyPrice: (args: { account?: Account | Address }) => Promise<Hash>;
+    cancelEmergencyPrice: (args: { account?: Account | Address }) => Promise<Hash>;
+    emergencyPendingPrice: () => Promise<bigint>;
+    emergencyActivatedAt: () => Promise<bigint>;
+    emergencyQueuedAt: () => Promise<bigint>;
+    EMERGENCY_TIMELOCK: () => Promise<bigint>;
+
+    // BLS Aggregator Timelock (setBLSAggregator sets directly; queue/apply is timelocked)
+    queueBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
+    applyBLSAggregator: (args: { account?: Account | Address }) => Promise<Hash>;
+
     // Callbacks
     onTransferReceived: (args: { operator: Address, from: Address, value: bigint, data: Hex }) => Promise<Hex>;
     
@@ -530,6 +549,207 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'withdrawProtocolRevenue');
+        }
+    },
+
+    // Timelocked aPNTs Token Migration
+    /** Execute a queued aPNTs token change after the timelock has elapsed. */
+    async executeAPNTsTokenChange({ account }) {
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'executeAPNTsTokenChange',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'executeAPNTsTokenChange');
+        }
+    },
+
+    /** Cancel a queued aPNTs token change before it is executed. */
+    async cancelAPNTsTokenChange({ account }) {
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'cancelAPNTsTokenChange',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'cancelAPNTsTokenChange');
+        }
+    },
+
+    /** Address of the aPNTs token pending migration (zero if none queued). */
+    async pendingAPNTsToken() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'pendingAPNTsToken',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pendingAPNTsToken');
+        }
+    },
+
+    /** ETA (unix timestamp) at which the pending aPNTs token change becomes executable. */
+    async pendingAPNTsTokenEta() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'pendingAPNTsTokenEta',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pendingAPNTsTokenEta');
+        }
+    },
+
+    // Emergency Price (kill switch)
+    /** Queue an emergency price (int256) subject to the emergency timelock. */
+    async emergencySetPrice({ newPrice, account }) {
+        try {
+            validateRequired(newPrice, 'newPrice');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'emergencySetPrice',
+                args: [newPrice],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'emergencySetPrice');
+        }
+    },
+
+    /** Execute a queued emergency price after the emergency timelock has elapsed. */
+    async executeEmergencyPrice({ account }) {
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'executeEmergencyPrice',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'executeEmergencyPrice');
+        }
+    },
+
+    /** Cancel a queued emergency price before it is executed. */
+    async cancelEmergencyPrice({ account }) {
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'cancelEmergencyPrice',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'cancelEmergencyPrice');
+        }
+    },
+
+    /** Pending emergency price (int256) awaiting execution. */
+    async emergencyPendingPrice() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'emergencyPendingPrice',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'emergencyPendingPrice');
+        }
+    },
+
+    /** Timestamp at which the emergency price was activated (0 if inactive). */
+    async emergencyActivatedAt() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'emergencyActivatedAt',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'emergencyActivatedAt');
+        }
+    },
+
+    /** Timestamp at which the emergency price was queued (0 if none queued). */
+    async emergencyQueuedAt() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'emergencyQueuedAt',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'emergencyQueuedAt');
+        }
+    },
+
+    /** Duration (seconds) of the emergency price timelock. */
+    async EMERGENCY_TIMELOCK() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'EMERGENCY_TIMELOCK',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'EMERGENCY_TIMELOCK');
+        }
+    },
+
+    // BLS Aggregator Timelock
+    /** Queue a new BLS aggregator address subject to the timelock. */
+    async queueBLSAggregator({ aggregator, account }) {
+        try {
+            validateAddress(aggregator, 'aggregator');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'queueBLSAggregator',
+                args: [aggregator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'queueBLSAggregator');
+        }
+    },
+
+    /** Apply a queued BLS aggregator change after the timelock has elapsed. */
+    async applyBLSAggregator({ account }) {
+        try {
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'applyBLSAggregator',
+                args: [],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'applyBLSAggregator');
         }
     },
 
