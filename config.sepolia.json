@@ -4,6 +4,7 @@
     "agentReputationRegistry": "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     "agentValidationRegistry": "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
     "blsAggregator": "0x7ec72505220a13040c80EF2B895Bf3405b6ed3e9",
+    "blsValidator": "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",
     "dvtValidator": "0xB60C82158734def92D0d2163C93927cf19b86a95",
     "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
     "gToken": "0x46B82966f8a40f0Bbb8C13aCfBA746631CC2ec72",

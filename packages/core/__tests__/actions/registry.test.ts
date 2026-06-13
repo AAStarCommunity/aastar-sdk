@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { keccak256, toBytes } from 'viem';
 import { registryActions } from '../../src/actions/registry';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
 
@@ -61,13 +62,21 @@ describe('RegistryActions Bulk Coverage', () => {
   });
 
   describe('Constants (Role IDs)', () => {
-    it('ROLE_COMMUNITY', async () => { p.readContract.mockResolvedValue('0x01'); expect(await registryActions(ADDR)(p).ROLE_COMMUNITY()).toBe('0x01'); });
-    it('ROLE_ENDUSER', async () => { p.readContract.mockResolvedValue('0x02'); expect(await registryActions(ADDR)(p).ROLE_ENDUSER()).toBe('0x02'); });
-    it('ROLE_PAYMASTER_SUPER', async () => { p.readContract.mockResolvedValue('0x03'); expect(await registryActions(ADDR)(p).ROLE_PAYMASTER_SUPER()).toBe('0x03'); });
-    it('ROLE_PAYMASTER_AOA', async () => { p.readContract.mockResolvedValue('0x04'); expect(await registryActions(ADDR)(p).ROLE_PAYMASTER_AOA()).toBe('0x04'); });
-    it('ROLE_DVT', async () => { p.readContract.mockResolvedValue('0x05'); expect(await registryActions(ADDR)(p).ROLE_DVT()).toBe('0x05'); });
-    it('ROLE_KMS', async () => { p.readContract.mockResolvedValue('0x06'); expect(await registryActions(ADDR)(p).ROLE_KMS()).toBe('0x06'); });
-    it('ROLE_ANODE', async () => { p.readContract.mockResolvedValue('0x07'); expect(await registryActions(ADDR)(p).ROLE_ANODE()).toBe('0x07'); });
+    // Role IDs are compile-time keccak256 constants in the contract (IRegistry.sol),
+    // NOT on-chain getters — the SDK must compute them locally (no readContract call).
+    const roleId = (s: string) => keccak256(toBytes(s));
+    it('ROLE_COMMUNITY = keccak256("COMMUNITY")', async () => { expect(await registryActions(ADDR)(p).ROLE_COMMUNITY()).toBe(roleId('COMMUNITY')); });
+    it('ROLE_ENDUSER = keccak256("ENDUSER")', async () => { expect(await registryActions(ADDR)(p).ROLE_ENDUSER()).toBe(roleId('ENDUSER')); });
+    it('ROLE_PAYMASTER_SUPER', async () => { expect(await registryActions(ADDR)(p).ROLE_PAYMASTER_SUPER()).toBe(roleId('PAYMASTER_SUPER')); });
+    it('ROLE_PAYMASTER_AOA', async () => { expect(await registryActions(ADDR)(p).ROLE_PAYMASTER_AOA()).toBe(roleId('PAYMASTER_AOA')); });
+    it('ROLE_DVT', async () => { expect(await registryActions(ADDR)(p).ROLE_DVT()).toBe(roleId('DVT')); });
+    it('ROLE_KMS', async () => { expect(await registryActions(ADDR)(p).ROLE_KMS()).toBe(roleId('KMS')); });
+    it('ROLE_ANODE', async () => { expect(await registryActions(ADDR)(p).ROLE_ANODE()).toBe(roleId('ANODE')); });
+    it('does NOT call readContract for role IDs (regression: was reverting on-chain)', async () => {
+      p.readContract.mockClear();
+      await registryActions(ADDR)(p).ROLE_COMMUNITY();
+      expect(p.readContract).not.toHaveBeenCalled();
+    });
   });
 
   describe('Ownership & Version', () => {

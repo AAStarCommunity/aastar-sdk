@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, keccak256, toBytes } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
@@ -754,96 +754,35 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    // Constants (Role IDs)
+    // Role IDs are compile-time constants in the contract — `bytes32 constant ROLE_X =
+    // keccak256("X")` (see IRegistry.sol). They are NOT on-chain getters, so they must be
+    // computed locally; calling them as contract functions reverts ("execution reverted").
     async ROLE_COMMUNITY() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_COMMUNITY',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_COMMUNITY');
-        }
+        return keccak256(toBytes('COMMUNITY'));
     },
 
     async ROLE_ENDUSER() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_ENDUSER',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_ENDUSER');
-        }
+        return keccak256(toBytes('ENDUSER'));
     },
 
     async ROLE_PAYMASTER_SUPER() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_PAYMASTER_SUPER',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_PAYMASTER_SUPER');
-        }
+        return keccak256(toBytes('PAYMASTER_SUPER'));
     },
 
     async ROLE_PAYMASTER_AOA() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_PAYMASTER_AOA',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_PAYMASTER_AOA');
-        }
+        return keccak256(toBytes('PAYMASTER_AOA'));
     },
 
     async ROLE_DVT() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_DVT',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_DVT');
-        }
+        return keccak256(toBytes('DVT'));
     },
 
     async ROLE_KMS() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_KMS',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_KMS');
-        }
+        return keccak256(toBytes('KMS'));
     },
 
     async ROLE_ANODE() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'ROLE_ANODE',
-                args: []
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'ROLE_ANODE');
-        }
+        return keccak256(toBytes('ANODE'));
     },
 
     // Ownership
