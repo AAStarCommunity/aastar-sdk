@@ -17,6 +17,14 @@ export interface GrantSessionParams {
   contractScope?: string;
   /** bytes4(0) = any selector allowed */
   selectorScope?: string;
+  /** Max calls per velocityWindow (0 = unlimited). Session struct field. */
+  velocityLimit?: number;
+  /** Velocity window in seconds (0 = no window). Session struct field. */
+  velocityWindow?: number;
+  /** Allowed destination addresses ([] = any). Session struct field. */
+  callTargets?: string[];
+  /** Allowed selectors ([] = any). Session struct field. */
+  selectorAllowlist?: string[];
   /** Owner signature over buildGrantHash() — omit if calling directly from account */
   ownerSig?: string;
 }
@@ -26,7 +34,99 @@ export interface SessionInfo {
   contractScope: string;
   selectorScope: string;
   revoked: boolean;
+  velocityLimit: number;
+  velocityWindow: number;
+  callTargets: string[];
+  selectorAllowlist: string[];
   active: boolean;
+}
+
+export interface GrantP256SessionParams {
+  /** Account that owns the session */
+  account: string;
+  /** P256 public key X coordinate (0x-prefixed 32-byte hex) */
+  keyX: string;
+  /** P256 public key Y coordinate (0x-prefixed 32-byte hex) */
+  keyY: string;
+  /** Expiry unix timestamp (max 7 days from now) */
+  expiry: number;
+  /** address(0) = any destination allowed */
+  contractScope?: string;
+  /** bytes4(0) = any selector allowed */
+  selectorScope?: string;
+  /** Max calls per velocityWindow (0 = unlimited). Session struct field. */
+  velocityLimit?: number;
+  /** Velocity window in seconds (0 = no window). Session struct field. */
+  velocityWindow?: number;
+  /** Allowed destination addresses ([] = any). Session struct field. */
+  callTargets?: string[];
+  /** Allowed selectors ([] = any). Session struct field. */
+  selectorAllowlist?: string[];
+  /** Owner signature over buildP256GrantHash() — omit if calling directly from the owner EOA */
+  ownerSig?: string;
+}
+
+/**
+ * The on-chain `Session` struct (8 fields), passed as a single tuple arg to the
+ * grant/build functions and returned by getSession/getP256Session. Field order
+ * MUST match SessionKeyValidator.sol and packages/core/src/abis/SessionKeyValidator.json:
+ *   (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked,
+ *    uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist)
+ */
+interface SessionStruct {
+  expiry: number;
+  contractScope: string;
+  selectorScope: string;
+  revoked: boolean;
+  velocityLimit: number;
+  velocityWindow: number;
+  callTargets: string[];
+  selectorAllowlist: string[];
+}
+
+/** Build the Session tuple from grant params; `revoked` is always false on grant. */
+function buildSessionStruct(params: {
+  expiry: number;
+  contractScope?: string;
+  selectorScope?: string;
+  velocityLimit?: number;
+  velocityWindow?: number;
+  callTargets?: string[];
+  selectorAllowlist?: string[];
+}): SessionStruct {
+  return {
+    expiry: params.expiry,
+    contractScope: params.contractScope ?? ethers.ZeroAddress,
+    selectorScope: params.selectorScope ?? "0x00000000",
+    revoked: false,
+    velocityLimit: params.velocityLimit ?? 0,
+    velocityWindow: params.velocityWindow ?? 0,
+    callTargets: params.callTargets ?? [],
+    selectorAllowlist: params.selectorAllowlist ?? [],
+  };
+}
+
+/**
+ * Decode the 8-field Session tuple returned by getSession/getP256Session into
+ * a SessionInfo, computing the derived `active` flag.
+ * The contract returns the tuple positionally: ethers exposes it as an
+ * indexable Result, so we read by index to match the on-chain field order.
+ */
+function decodeSessionInfo(session: ethers.Result | unknown[]): SessionInfo {
+  const s = session as ArrayLike<unknown>;
+  const expiry = Number(s[0]);
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    expiry,
+    contractScope: s[1] as string,
+    selectorScope: s[2] as string,
+    revoked: s[3] as boolean,
+    velocityLimit: Number(s[4]),
+    velocityWindow: Number(s[5]),
+    callTargets: [...((s[6] as string[]) ?? [])],
+    selectorAllowlist: [...((s[7] as string[]) ?? [])],
+    active: expiry > now && !(s[3] as boolean),
+  };
 }
 
 // ─── M7 AgentSessionKeyValidator ─────────────────────────────────
@@ -89,24 +189,14 @@ export class SessionKeyService {
     return this.skValidator.buildGrantHash(
       params.account,
       params.sessionKey,
-      params.expiry,
-      params.contractScope ?? ethers.ZeroAddress,
-      params.selectorScope ?? "0x00000000",
+      buildSessionStruct(params),
     ) as Promise<string>;
   }
 
-  /** Query an ECDSA session key state. */
+  /** Query an ECDSA session key state (decodes the 8-field Session tuple). */
   async getSession(account: string, sessionKey: string): Promise<SessionInfo> {
-    const [expiry, contractScope, selectorScope, revoked] =
-      await this.skValidator.sessions(account, sessionKey);
-    const now = Math.floor(Date.now() / 1000);
-    return {
-      expiry: Number(expiry),
-      contractScope,
-      selectorScope,
-      revoked,
-      active: Number(expiry) > now && !revoked,
-    };
+    const session = await this.skValidator.getSession(account, sessionKey);
+    return decodeSessionInfo(session);
   }
 
   /** Check if an ECDSA session is currently active. */
@@ -129,13 +219,12 @@ export class SessionKeyService {
    */
   encodeGrantSession(params: GrantSessionParams): string {
     const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
+    const cfg = buildSessionStruct(params);
     if (params.ownerSig) {
       return iface.encodeFunctionData("grantSession", [
         params.account,
         params.sessionKey,
-        params.expiry,
-        params.contractScope ?? ethers.ZeroAddress,
-        params.selectorScope ?? "0x00000000",
+        cfg,
         params.ownerSig,
       ]);
     }
@@ -143,9 +232,7 @@ export class SessionKeyService {
     return iface.encodeFunctionData("grantSessionDirect", [
       params.account,
       params.sessionKey,
-      params.expiry,
-      params.contractScope ?? ethers.ZeroAddress,
-      params.selectorScope ?? "0x00000000",
+      cfg,
     ]);
   }
 
@@ -153,6 +240,78 @@ export class SessionKeyService {
   encodeRevokeSession(account: string, sessionKey: string): string {
     const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
     return iface.encodeFunctionData("revokeSession", [account, sessionKey]);
+  }
+
+  // ── M6: P256 / Passkey Session Keys ───────────────────────────
+
+  /**
+   * Build the hash that the account owner must sign to grant a P256/passkey session key.
+   * Use grantP256Session() with this sig, or grantP256SessionDirect() from the owner EOA itself.
+   * The owner/KMS signs this hash to authorize a gasless grantP256Session().
+   */
+  async buildP256GrantHash(
+    params: Omit<GrantP256SessionParams, "ownerSig">,
+  ): Promise<string> {
+    return this.skValidator.buildP256GrantHash(
+      params.account,
+      params.keyX,
+      params.keyY,
+      buildSessionStruct(params),
+    ) as Promise<string>;
+  }
+
+  /**
+   * Query a P256 session key state (decodes the 8-field Session tuple).
+   * @param keyHash The keccak256 hash of (keyX, keyY) used as the on-chain session id.
+   */
+  async getP256Session(account: string, keyHash: string): Promise<SessionInfo> {
+    const session = await this.skValidator.getP256Session(account, keyHash);
+    return decodeSessionInfo(session);
+  }
+
+  /** Check if a P256 session is currently active. */
+  async isP256SessionActive(account: string, keyX: string, keyY: string): Promise<boolean> {
+    return this.skValidator.isP256SessionActive(account, keyX, keyY) as Promise<boolean>;
+  }
+
+  /**
+   * Encode calldata for a P256/passkey session grant.
+   *
+   * - **With ownerSig** → `grantP256Session()` — for gasless/UserOp flows.
+   *   Owner signs the buildP256GrantHash() digest via KMS `sign-p256-grant-session`,
+   *   then the relayer calls `grantP256Session(account, keyX, keyY, cfg, ownerSig)` on-chain.
+   *   This is the ONLY path for ERC-4337 sponsored / gasless P256 grant flows.
+   *
+   * - **Without ownerSig** → `grantP256SessionDirect()` — **owner EOA direct-send only**.
+   *   Since v0.17.2 round 3, `grantP256SessionDirect` requires `msg.sender == ownerOf(account)`.
+   *   It does NOT accept `msg.sender == account` (removed in round 3 — confused-deputy fix).
+   *   Do NOT encode this for a UserOp callData; the EntryPoint is not the owner EOA.
+   */
+  encodeGrantP256Session(params: GrantP256SessionParams): string {
+    const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
+    const cfg = buildSessionStruct(params);
+    if (params.ownerSig) {
+      return iface.encodeFunctionData("grantP256Session", [
+        params.account,
+        params.keyX,
+        params.keyY,
+        cfg,
+        params.ownerSig,
+      ]);
+    }
+    // grantP256SessionDirect — owner EOA direct tx only (NOT for UserOp/gasless flows).
+    return iface.encodeFunctionData("grantP256SessionDirect", [
+      params.account,
+      params.keyX,
+      params.keyY,
+      cfg,
+    ]);
+  }
+
+  /** Encode calldata for revokeP256Session(). */
+  encodeRevokeP256Session(account: string, keyX: string, keyY: string): string {
+    const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
+    return iface.encodeFunctionData("revokeP256Session", [account, keyX, keyY]);
   }
 
   // ── M7: Agent Session Keys ────────────────────────────────────

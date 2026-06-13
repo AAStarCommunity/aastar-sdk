@@ -102,7 +102,17 @@ export class CommunityClient extends BaseClient {
                     roleId: API_ROLE_COMMUNITY,
                     user: target
                 });
-            } catch {
+            } catch (err) {
+                // Degrade ONLY on contract-level "no getter / reverted" errors — the deployed
+                // v5 Registry genuinely lacks a public roleMetadata getter. Re-throw genuine
+                // transport/RPC errors so a transient network failure is not silently masked as
+                // "no community profile".
+                const m = (err instanceof Error ? `${err.message} ${(err as { cause?: { message?: string } }).cause?.message ?? ''}` : String(err)).toLowerCase();
+                const isContractGap =
+                    m.includes('revert') || m.includes('returned no data') ||
+                    m.includes('does not exist') || m.includes('is not a function') ||
+                    m.includes('no data was returned');
+                if (!isContractGap) throw err;
                 metadataHex = undefined;
             }
 
