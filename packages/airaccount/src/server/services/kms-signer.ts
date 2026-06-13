@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
-import axios, { AxiosInstance } from "axios";
-import { ILogger, ConsoleLogger } from "../interfaces/logger";
+import { ILogger } from "../interfaces/logger";
+import { KmsHttpClient } from "./kms-http-client";
 
 // ── Legacy Passkey Assertion (reusable for BLS dual-signing) ─────
 
@@ -13,8 +13,10 @@ export interface LegacyPasskeyAssertion {
 // ── WebAuthn Assertion (v0.19.0+, one-time use) ──────────────────
 
 export interface WebAuthnAssertion {
-  challengeId: string;
-  credential: unknown; // AuthenticationResponseJSON from @simplewebauthn/browser
+  // PascalCase to match the KMS wire format: the server struct uses
+  // #[serde(rename = "ChallengeId")] / #[serde(rename = "Credential")].
+  ChallengeId: string;
+  Credential: unknown; // AuthenticationResponseJSON from @simplewebauthn/browser
 }
 
 // ── CreateKey ────────────────────────────────────────────────────
@@ -87,14 +89,38 @@ export interface KmsBeginAuthenticationResponse {
   Options: PublicKeyCredentialRequestOptions;
 }
 
-// ── Sign Typed Data (v0.19.0+) ───────────────────────────────────
+// ── Sign Typed Data (v0.20.0) ────────────────────────────────────
+// The KMS hashes the typed data host-side, so the full EIP-712 structure is sent
+// (NOT pre-computed domainSeparator/structHash — that was the pre-v0.19 contract).
+
+export interface KmsEip712Domain {
+  name?: string;
+  version?: string;
+  chainId?: number;
+  verifyingContract?: string;
+}
+
+/** One entry in a `types` definition: a struct name and its ordered fields. */
+export interface KmsEip712TypeDef {
+  name: string; // e.g. "Mail", "EIP712Domain"
+  fields: Array<{ name: string; type: string }>;
+}
+
+/** One field value for the primary type's message. */
+export interface KmsEip712FieldValue {
+  name: string;
+  value: unknown;
+}
 
 export interface KmsSignTypedDataRequest {
-  keyId?: string;
-  address?: string;
-  domainSeparator: string; // 0x-prefixed 32-byte hash
-  structHash: string; // 0x-prefixed 32-byte hash
-  webAuthnAssertion: WebAuthnAssertion;
+  keyId: string;
+  hdPath?: string; // defaults to m/44'/60'/0'/0/0 server-side
+  domain: KmsEip712Domain;
+  primaryType: string;
+  types: KmsEip712TypeDef[];
+  message: KmsEip712FieldValue[];
+  /** Required unless a Bearer agent JWT is supplied. Legacy passkeyAssertion is rejected. */
+  webAuthnAssertion?: WebAuthnAssertion;
 }
 
 export interface KmsSignTypedDataResponse {
@@ -109,8 +135,10 @@ export interface KmsBeginGrantSessionAuthRequest {
 }
 
 export interface KmsBeginGrantSessionAuthResponse {
-  challengeId: string;
-  options: PublicKeyCredentialRequestOptions;
+  // PascalCase to match the KMS AuthenticationOptionsResponse wire format
+  // (#[serde(rename = "ChallengeId" / "Options")]).
+  ChallengeId: string;
+  Options: PublicKeyCredentialRequestOptions;
 }
 
 export interface KmsSignGrantSessionRequest {
@@ -121,8 +149,8 @@ export interface KmsSignGrantSessionRequest {
   account: string;
   sessionKey: string;
   expiry: number;
-  contractScope: number;
-  selectorScope: number;
+  contractScope: string; // server type is String (scope mode marker)
+  selectorScope: string; // bytes4 hex — server type is String
   velocityLimit: number;
   velocityWindow: number;
   callTargets: string[];
@@ -145,8 +173,8 @@ export interface KmsSignP256GrantSessionRequest {
   keyX: string; // 32-byte hex P256 public key X coordinate
   keyY: string; // 32-byte hex P256 public key Y coordinate
   expiry: number;
-  contractScope: number;
-  selectorScope: number;
+  contractScope: string; // server type is String (scope mode marker)
+  selectorScope: string; // bytes4 hex — server type is String
   velocityLimit: number;
   velocityWindow: number;
   callTargets: string[];
@@ -185,19 +213,89 @@ export interface KmsDescribeKeyResponse {
   };
 }
 
+// ── EthereumTransaction (for POST /Sign) ─────────────────────────
+
+export interface KmsEthereumTransaction {
+  chainId: number;
+  nonce: number;
+  to: string;
+  value: string; // uint256 (decimal or 0x…)
+  gasPrice: string;
+  gas: number;
+  data: string;
+}
+
+// ── Sign (message or EIP-155 transaction) ────────────────────────
+
+export interface KmsSignRequest {
+  KeyId?: string;
+  Address?: string;
+  DerivationPath?: string;
+  /** Provide exactly one of Message or Transaction. */
+  Message?: string; // hex
+  Transaction?: KmsEthereumTransaction;
+  SigningAlgorithm?: string;
+  WebAuthn?: WebAuthnAssertion;
+  Passkey?: LegacyPasskeyAssertion;
+}
+
+export interface KmsSignResponse {
+  Signature: string;
+  TransactionHash?: string;
+}
+
+// ── GetPublicKey ─────────────────────────────────────────────────
+
+export interface KmsGetPublicKeyResponse {
+  KeyId: string;
+  PublicKey: string;
+  Address?: string;
+  KeyUsage?: string;
+  KeySpec?: string;
+}
+
+// ── DeriveAddress ────────────────────────────────────────────────
+
+export interface KmsDeriveAddressResponse {
+  Address: string;
+  PublicKey?: string;
+}
+
+// ── ListKeys ─────────────────────────────────────────────────────
+
+export interface KmsListKeysResponse {
+  Keys: Array<{ KeyId: string; KeyArn?: string }>;
+  Truncated?: boolean;
+  NextMarker?: string;
+}
+
+// ── DeleteKey ────────────────────────────────────────────────────
+
+export interface KmsDeleteKeyResponse {
+  KeyId: string;
+  DeletionDate?: string;
+}
+
+// ── ChangePasskey ────────────────────────────────────────────────
+
+export interface KmsChangePasskeyResponse {
+  KeyId: string;
+  Changed: boolean;
+}
+
 /**
  * KMS service for remote key management with WebAuthn/Passkey integration.
  *
- * The new STM32 KMS (kms1.aastar.io) natively integrates WebAuthn, so
- * registration/authentication ceremonies are handled by the KMS directly.
- * Signing operations require a Passkey assertion (Legacy hex or WebAuthn ceremony).
+ * Targets the AAStar TEE KMS (v0.20.0, kms.aastar.io). WebAuthn registration /
+ * authentication ceremonies are handled by the KMS directly; signing operations
+ * require a Passkey assertion (Legacy hex) or a one-time WebAuthn ceremony.
+ *
+ * Wraps a shared {@link KmsHttpClient}; the composed services (agent / session /
+ * payment / monitor) reuse the same client via {@link KmsManager.httpClient}.
  */
 export class KmsManager {
-  private readonly kmsEndpoint: string;
-  private readonly isEnabled: boolean;
-  private readonly apiKey?: string;
-  private readonly logger: ILogger;
-  private readonly http: AxiosInstance;
+  private readonly client: KmsHttpClient;
+  readonly logger: ILogger;
 
   constructor(options: {
     kmsEndpoint?: string;
@@ -205,43 +303,26 @@ export class KmsManager {
     kmsApiKey?: string;
     logger?: ILogger;
   }) {
-    this.kmsEndpoint = options.kmsEndpoint ?? "https://kms1.aastar.io";
-    this.isEnabled = options.kmsEnabled === true;
-    this.apiKey = options.kmsApiKey;
-    this.logger = options.logger ?? new ConsoleLogger("[KmsManager]");
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (this.apiKey) {
-      headers["x-api-key"] = this.apiKey;
-    }
-
-    this.http = axios.create({
-      baseURL: this.kmsEndpoint,
-      headers,
-    });
+    this.client = new KmsHttpClient(options);
+    this.logger = this.client.logger;
   }
 
   isKmsEnabled(): boolean {
-    return this.isEnabled;
+    return this.client.enabled;
+  }
+
+  /** Shared HTTP transport — pass to KmsAgentService / KmsSessionService / etc. */
+  get httpClient(): KmsHttpClient {
+    return this.client;
   }
 
   private ensureEnabled(): void {
-    if (!this.isEnabled) {
-      throw new Error("KMS service is not enabled");
-    }
+    this.client.ensureEnabled();
   }
 
   /** POST with x-amz-target header (required for wallet/signing operations). */
   private async amzPost<T>(path: string, target: string, body: unknown): Promise<T> {
-    const response = await this.http.post(path, body, {
-      headers: {
-        "Content-Type": "application/x-amz-json-1.1",
-        "x-amz-target": target,
-      },
-    });
-    return response.data as T;
+    return this.client.amzPost<T>(path, target, body);
   }
 
   // ── Key Management ──────────────────────────────────────────────
@@ -261,16 +342,79 @@ export class KmsManager {
   async getKeyStatus(keyId: string): Promise<KmsKeyStatusResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.get("/KeyStatus", {
+    return this.client.get<KmsKeyStatusResponse>("/KeyStatus", {
       params: { KeyId: keyId },
     });
-    return response.data as KmsKeyStatusResponse;
   }
 
   async describeKey(keyId: string): Promise<KmsDescribeKeyResponse> {
     this.ensureEnabled();
 
     return this.amzPost("/DescribeKey", "TrentService.DescribeKey", { KeyId: keyId });
+  }
+
+  /** Get a key's public key (uncompressed). Not WebAuthn-gated. */
+  async getPublicKey(target: { KeyId?: string; Address?: string }): Promise<KmsGetPublicKeyResponse> {
+    this.ensureEnabled();
+    return this.amzPost("/GetPublicKey", "TrentService.GetPublicKey", target);
+  }
+
+  /**
+   * Derive an Ethereum address at a BIP-44 path (WebAuthn-gated).
+   * Provide a WebAuthn ceremony assertion (preferred) or a Legacy passkey assertion.
+   */
+  async deriveAddress(params: {
+    KeyId: string;
+    DerivationPath: string;
+    WebAuthn?: WebAuthnAssertion;
+    Passkey?: LegacyPasskeyAssertion;
+  }): Promise<KmsDeriveAddressResponse> {
+    this.ensureEnabled();
+    return this.amzPost("/DeriveAddress", "TrentService.DeriveAddress", params);
+  }
+
+  /** List keys (paginated). Not WebAuthn-gated. */
+  async listKeys(params: { Limit?: number; Marker?: string } = {}): Promise<KmsListKeysResponse> {
+    this.ensureEnabled();
+    return this.amzPost("/ListKeys", "TrentService.ListKeys", params);
+  }
+
+  /**
+   * Schedule key deletion (AWS-KMS action ScheduleKeyDeletion; WebAuthn-gated).
+   * RPMB-bound on the TEE — requires a passkey/WebAuthn assertion on the normal path.
+   */
+  async deleteKey(params: {
+    KeyId: string;
+    PendingWindowInDays?: number;
+    WebAuthn?: WebAuthnAssertion;
+    Passkey?: LegacyPasskeyAssertion;
+  }): Promise<KmsDeleteKeyResponse> {
+    this.ensureEnabled();
+    return this.amzPost("/DeleteKey", "TrentService.ScheduleKeyDeletion", params);
+  }
+
+  /**
+   * Rotate the WebAuthn passkey bound to a key (WebAuthn-gated, RPMB-bound).
+   * `PasskeyPublicKey` is the NEW P-256 public key (0x04… 65-byte uncompressed).
+   */
+  async changePasskey(params: {
+    KeyId: string;
+    PasskeyPublicKey: string;
+    WebAuthn?: WebAuthnAssertion;
+    Passkey?: LegacyPasskeyAssertion;
+  }): Promise<KmsChangePasskeyResponse> {
+    this.ensureEnabled();
+    return this.amzPost("/ChangePasskey", "TrentService.ChangePasskey", params);
+  }
+
+  /**
+   * Sign a message or an EIP-155 transaction (WebAuthn-gated).
+   * Provide exactly one of `Message` (hex) or `Transaction`. For a raw 32-byte
+   * digest use {@link signHash} / {@link signHashWithWebAuthn} instead.
+   */
+  async sign(params: KmsSignRequest): Promise<KmsSignResponse> {
+    this.ensureEnabled();
+    return this.amzPost("/Sign", "TrentService.Sign", params);
   }
 
   /**
@@ -363,16 +507,21 @@ export class KmsManager {
   // ── Sign Typed Data (v0.19.0+) ─────────────────────────────────
 
   /**
-   * Sign EIP-712 typed data using a WebAuthn ceremony (v0.19.0+).
-   * The webAuthnAssertion MUST come from beginWebAuthnAuth (not beginAuthentication).
+   * Sign arbitrary EIP-712 typed data via `POST /kms/SignTypedData` (v0.20.0).
+   *
+   * The KMS hashes the typed data host-side, so the FULL EIP-712 structure
+   * (domain / primaryType / types / message) is sent — not a pre-hashed
+   * domainSeparator/structHash. The `webAuthnAssertion` challenge comes from a
+   * generic {@link beginAuthentication} ceremony (purpose="authentication").
+   *
+   * Alternatively, agents authenticate with a Bearer JWT — see KmsAgentService.
    */
   async signTypedDataWithWebAuthn(
     params: KmsSignTypedDataRequest
   ): Promise<KmsSignTypedDataResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.post("/kms/sign-typed-data", params);
-    return response.data as KmsSignTypedDataResponse;
+    return this.client.post<KmsSignTypedDataResponse>("/kms/SignTypedData", params);
   }
 
   // ── Grant Session Off-chain Signing (v0.19.0+) ─────────────────
@@ -386,10 +535,9 @@ export class KmsManager {
   ): Promise<KmsBeginGrantSessionAuthResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.get("/kms/begin-grant-session-auth", {
+    return this.client.get<KmsBeginGrantSessionAuthResponse>("/kms/begin-grant-session-auth", {
       params: { keyId: params.keyId },
     });
-    return response.data as KmsBeginGrantSessionAuthResponse;
   }
 
   /**
@@ -401,8 +549,7 @@ export class KmsManager {
   ): Promise<KmsSignGrantSessionResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.post("/kms/sign-grant-session", params);
-    return response.data as KmsSignGrantSessionResponse;
+    return this.client.post<KmsSignGrantSessionResponse>("/kms/sign-grant-session", params);
   }
 
   /**
@@ -414,8 +561,7 @@ export class KmsManager {
   ): Promise<KmsSignGrantSessionResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.post("/kms/sign-p256-grant-session", params);
-    return response.data as KmsSignGrantSessionResponse;
+    return this.client.post<KmsSignGrantSessionResponse>("/kms/sign-p256-grant-session", params);
   }
 
   // ── WebAuthn Ceremonies ─────────────────────────────────────────
@@ -425,8 +571,7 @@ export class KmsManager {
   ): Promise<KmsBeginRegistrationResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.post("/BeginRegistration", params);
-    return response.data as KmsBeginRegistrationResponse;
+    return this.client.post<KmsBeginRegistrationResponse>("/BeginRegistration", params);
   }
 
   async completeRegistration(
@@ -434,8 +579,7 @@ export class KmsManager {
   ): Promise<KmsCompleteRegistrationResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.post("/CompleteRegistration", params);
-    return response.data as KmsCompleteRegistrationResponse;
+    return this.client.post<KmsCompleteRegistrationResponse>("/CompleteRegistration", params);
   }
 
   async beginAuthentication(
@@ -443,21 +587,21 @@ export class KmsManager {
   ): Promise<KmsBeginAuthenticationResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.post("/BeginAuthentication", params);
-    return response.data as KmsBeginAuthenticationResponse;
+    return this.client.post<KmsBeginAuthenticationResponse>("/BeginAuthentication", params);
   }
 
   /**
-   * Begin a WebAuthn challenge for sign-typed-data (v0.19.0+).
-   * The returned challengeId can ONLY be used for sign-typed-data (purpose="sign-typed-data").
+   * Begin a generic WebAuthn authentication ceremony for a key, returning a
+   * challenge usable for SignHash / SignTypedData (purpose="authentication").
+   *
+   * NOTE: there is no dedicated `begin-webauthn-auth` endpoint — this delegates
+   * to `POST /BeginAuthentication`. (Grant-session signing needs a purpose-bound
+   * challenge from {@link beginGrantSessionAuth} instead.)
    */
   async beginWebAuthnAuth(keyId: string): Promise<KmsBeginAuthenticationResponse> {
     this.ensureEnabled();
 
-    const response = await this.http.get("/kms/begin-webauthn-auth", {
-      params: { keyId },
-    });
-    return response.data as KmsBeginAuthenticationResponse;
+    return this.client.post<KmsBeginAuthenticationResponse>("/BeginAuthentication", { KeyId: keyId });
   }
 
   // ── Factory ─────────────────────────────────────────────────────

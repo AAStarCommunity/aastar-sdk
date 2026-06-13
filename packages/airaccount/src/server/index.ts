@@ -44,11 +44,21 @@ export { ForceExitService, L2_TYPE } from "./services/force-exit-service";
 export type { PendingExit, L2Type } from "./services/force-exit-service";
 export { EIP7702DelegateService, AIR_ACCOUNT_DELEGATE_ADDRESS } from "./services/eip7702-delegate-service";
 export type { DelegateInitParams, EIP7702Authorization } from "./services/eip7702-delegate-service";
+export { ERC8004Service, ERC8004_ADDRESSES, erc8004AddressesForChain } from "./services/erc8004-service";
+export type {
+  SetAgentWalletParams,
+  MintAgentIdentityParams,
+  BindERC8004AgentWalletParams,
+  SubmitAgentReputationParams,
+  QueryAgentReputationParams,
+  AgentReputationSummary,
+} from "./services/erc8004-service";
 export { TokenService } from "./services/token-service";
 export type { TokenInfo, TokenBalance } from "./services/token-service";
 export { WalletManager } from "./services/wallet-manager";
 export { KmsManager, KmsSigner } from "./services/kms-signer";
 export type {
+  KmsCreateKeyRequest,
   KmsCreateKeyResponse,
   KmsSignHashResponse,
   LegacyPasskeyAssertion,
@@ -63,12 +73,73 @@ export type {
   KmsDescribeKeyResponse,
   KmsSignTypedDataRequest,
   KmsSignTypedDataResponse,
+  KmsEip712Domain,
+  KmsEip712TypeDef,
+  KmsEip712FieldValue,
   KmsBeginGrantSessionAuthRequest,
   KmsBeginGrantSessionAuthResponse,
   KmsSignGrantSessionRequest,
   KmsSignGrantSessionResponse,
   KmsSignP256GrantSessionRequest,
+  // P1 core key management
+  KmsEthereumTransaction,
+  KmsSignRequest,
+  KmsSignResponse,
+  KmsGetPublicKeyResponse,
+  KmsDeriveAddressResponse,
+  KmsListKeysResponse,
+  KmsDeleteKeyResponse,
+  KmsChangePasskeyResponse,
 } from "./services/kms-signer";
+
+// ── Shared KMS HTTP transport ─────────────────────────────────────
+export { KmsHttpClient, DEFAULT_KMS_ENDPOINT } from "./services/kms-http-client";
+export type { KmsHttpClientOptions } from "./services/kms-http-client";
+
+// ── KMS Agent keys (TEE-JWT credentials) ──────────────────────────
+export { KmsAgentService } from "./services/kms-agent-service";
+export type {
+  KmsCreateAgentKeyRequest,
+  KmsCreateAgentKeyResponse,
+  KmsSignAgentRequest,
+  KmsSignAgentResponse,
+  KmsRefreshAgentCredentialRequest,
+  KmsRefreshAgentCredentialResponse,
+  KmsRevokeAgentCredentialRequest,
+  KmsRevokeAgentCredentialResponse,
+} from "./services/kms-agent-service";
+
+// ── KMS P256 session keys (ERC-4337 UserOp signing) ───────────────
+export { KmsSessionService } from "./services/kms-session-service";
+export type {
+  CreateP256SessionKeyRequest,
+  CreateP256SessionKeyResponse,
+  SignP256UserOpRequest,
+  SignP256UserOpResponse,
+  RevokeP256SessionKeyRequest,
+  RevokeP256SessionKeyResponse,
+} from "./services/kms-session-service";
+
+// ── KMS SuperPaymaster convenience signers (v0.20.0) ──────────────
+export { KmsPaymentSigner } from "./services/kms-payment-signer";
+export type {
+  KmsPaymentAuth,
+  KmsPaymentSignatureResponse,
+  KmsSignMicropaymentVoucherRequest,
+  KmsSignGTokenAuthorizationRequest,
+  KmsSignX402PaymentRequest,
+} from "./services/kms-payment-signer";
+
+// ── KMS monitoring + operator admin ───────────────────────────────
+export { KmsMonitorService } from "./services/kms-monitor-service";
+export type {
+  KmsHealthResponse,
+  KmsVersionResponse,
+  KmsQueueStatusResponse,
+  KmsRollbackCounterResponse,
+  KmsStatsResponse,
+  KmsPurgeKeyResponse,
+} from "./services/kms-monitor-service";
 
 // ── Adapters ──────────────────────────────────────────────────────
 export { MemoryStorage } from "./adapters/memory-storage";
