@@ -146,6 +146,7 @@ export const AIRACCOUNT_ABI = [
   "function validator() external view returns (address)",
   "function guard() external view returns (address)",
   "function guardianCount() external view returns (uint8)",
+  "function guardians(uint256 index) external view returns (address)",
   "function p256KeyX() external view returns (bytes32)",
   "function p256KeyY() external view returns (bytes32)",
   "function getConfigDescription() external view returns (tuple(address accountOwner, address guardAddress, uint256 dailyLimit, uint256 dailyRemaining, uint256 tier1Limit, uint256 tier2Limit, address[3] guardianAddresses, uint8 guardianCount, bool hasP256Key, bool hasValidator, bool hasAggregator, bool hasActiveRecovery))",
@@ -157,6 +158,18 @@ export const AIRACCOUNT_ABI = [
   // ── Algorithm whitelist (v0.17.2-beta.4: single source of truth on the ACCOUNT, not the guard) ──
   "function approvedAlgorithms(uint8 algId) external view returns (bool)",
   "function guardApproveAlgorithm(uint8 algId) external",
+  // ── Social / guardian recovery (F28) ──
+  // Guardian set: owner adds guardians (max 3); removal needs RECOVERY_THRESHOLD guardian sigs.
+  // Recovery lifecycle: a guardian proposes a new owner (starts the timelock), guardians
+  // approve to reach 2-of-3 threshold, then anyone executes after the timelock; guardians
+  // (not the owner) can vote to cancel. See RecoveryService for the full flow.
+  "function addGuardian(address _guardian) external",
+  "function removeGuardian(uint8 index, bytes[] calldata guardianSigs) external",
+  "function proposeRecovery(address _newOwner) external",
+  "function approveRecovery() external",
+  "function cancelRecovery() external",
+  "function executeRecovery() external",
+  "function activeRecovery() external view returns (address newOwner, uint256 proposedAt, uint256 approvalBitmap, uint256 cancellationBitmap)",
   // ── ERC-4337 v0.7 bundler entrypoint (v0.17.2-beta.4) ──
   // Routes a UserOp whose callData starts with the executeUserOp selector to the account,
   // re-deriving the signature algId in-frame (fixes guard-account bundler gas estimation).
