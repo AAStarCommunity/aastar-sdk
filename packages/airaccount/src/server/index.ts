@@ -31,6 +31,13 @@ export { GuardStateReader } from "./services/guard-state-reader";
 export type { GuardState, TokenGuardState } from "./services/guard-state-reader";
 export { computeOapdSalt, getOapdAddress, getOapdAddressWithChainId, isOapdDeployed } from "./utils/oapd";
 export type { OapdConfig } from "./utils/oapd";
+export {
+  wrapExecuteUserOp,
+  isExecuteUserOpWrapped,
+  EXECUTE_USER_OP_SELECTOR,
+  EXECUTE_SELECTOR,
+  EXECUTE_BATCH_SELECTOR,
+} from "./utils/execute-user-op";
 export { TransferManager } from "./services/transfer-manager";
 export type {
   ExecuteTransferParams,

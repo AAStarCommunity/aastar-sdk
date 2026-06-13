@@ -73,19 +73,20 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0xbD1807328Dd654512B13d6320C9Cc78685a405Ed",  // beta.3 (was 0x5753...)
     agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",  // ERC-8004 vanity addr (beta.3)
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
-    // --- AirAccount v0.17.2-beta.3 stack (synced 2026-06-12) ---
-    // Router finalized — future algId changes require 7-day timelock governance.
+    // --- AirAccount stack: beta.3 base; account contracts upgraded to v0.17.2-beta.4 ---
+    // beta.4 reuses the beta.3 router/sessionKey/forceExit/BLS (per the beta.4 migration notes);
+    // only Factory/Impl/Extension/Delegate/AgentRegistry change for bundler-compat.
     aaStarBLSAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",  // unchanged
-    aaStarValidator: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",  // NEW beta.3 (M3 timelock; was 0x29edC0...)
+    aaStarValidator: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",  // beta.3 router (reused by beta.4)
     aaStarBLSAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",  // unchanged
-    sessionKeyValidator: "0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf",  // NEW beta.3 (was 0xc1e253...)
-    forceExitModule: "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702",  // NEW beta.3 (IncompatibleAccount; was 0xc7128A...)
-    airAccountDelegate: "0x8603AAF6C3f07fdae810B323c95a198D796EC52E",  // unchanged
+    sessionKeyValidator: "0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf",  // beta.3 (reused by beta.4)
+    forceExitModule: "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702",  // beta.3 (reused by beta.4)
+    airAccountDelegate: "0x4bda4849b80cc444fb2da65beec0724005c6675c",  // v0.17.2-beta.4 (bundler-compat)
     calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",  // unchanged
-    airAccountFactoryV7: "0xfc6234bbd6283610659211347c6309904be86b0a",  // NEW beta.3 (custom errors; was 0xc6c7FA...)
-    airAccountV7Impl: "0xe33EeCF21AAC2B776b49A4dd52BA8b7e683dE9C3",  // NEW beta.3 (was 0x05274e...)
-    airAccountExtension: "0xB3c7312bA52dF306DE1cBa781B91f3AfA7e86F99",  // NEW beta.3 (was 0x6e3E6d...)
-    agentRegistry: "0x9e8f576cad8a8f949181fd10d9ad1c49a7b0bc17",  // NEW beta.3 (was 0xc60E7D...)
+    airAccountFactoryV7: "0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071",  // v0.17.2-beta.4
+    airAccountV7Impl: "0x0321Fa7261Ad5945e4B3f0c73aFD7D9392E39796",  // v0.17.2-beta.4
+    airAccountExtension: "0x20FB2A65a52Fc6507FdD51260f055017a2BA2860",  // v0.17.2-beta.4
+    agentRegistry: "0xe1320c35485b4d7817866a8d0d8f77dd58202253",  // v0.17.2-beta.4
     // Mycelium community PNTs token (Anni's xPNTsToken)
     pnts: "0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6",
   },

@@ -113,14 +113,15 @@ export class GuardChecker {
       );
     }
 
-    // Check algorithm approval
+    // Check algorithm approval. v0.17.2-beta.4: the algorithm whitelist is the single
+    // source of truth on the ACCOUNT (enforced in validateUserOp), not the guard.
     const provider = this.ethereum.getProvider();
-    const guardContract = new ethers.Contract(guard.guardAddress, GLOBAL_GUARD_ABI, provider);
-    const isApproved = await guardContract.approvedAlgorithms(algId);
+    const accountContract = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, provider);
+    const isApproved = await accountContract.approvedAlgorithms(algId);
 
     if (!isApproved) {
       errors.push(
-        `Algorithm ${ALG_NAMES[algId] ?? `0x${algId.toString(16)}`} is not approved by the guard`
+        `Algorithm ${ALG_NAMES[algId] ?? `0x${algId.toString(16)}`} is not approved by the account`
       );
     }
 

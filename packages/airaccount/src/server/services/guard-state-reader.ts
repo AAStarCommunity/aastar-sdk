@@ -5,7 +5,7 @@ const EXTENDED_GUARD_ABI = [
   ...GLOBAL_GUARD_ABI,
   "function todaySpent() external view returns (uint256)",
   "function tokenTodaySpent(address token) external view returns (uint256)",
-  "function approvedAlgorithms(uint8 algId) external view returns (bool)",
+  // approvedAlgorithms removed from the guard in v0.17.2-beta.4 — now read from the account.
   "function tier1Limit() external view returns (uint256)",
   "function tier2Limit() external view returns (uint256)",
   "function minDailyLimit() external view returns (uint256)",
@@ -138,12 +138,10 @@ export class GuardStateReader {
    * Check if a given algorithm ID is approved on the guard.
    */
   async isAlgorithmApproved(accountAddress: string, algId: number): Promise<boolean> {
+    // v0.17.2-beta.4: the algorithm whitelist lives on the ACCOUNT (single source of
+    // truth, enforced in validateUserOp), not the guard.
     const account = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, this.provider);
-    const guardAddress: string = await account.guard();
-    if (guardAddress === ethers.ZeroAddress) return true;
-
-    const guard = new ethers.Contract(guardAddress, EXTENDED_GUARD_ABI, this.provider);
-    return guard.approvedAlgorithms(algId) as Promise<boolean>;
+    return account.approvedAlgorithms(algId) as Promise<boolean>;
   }
 }
 
