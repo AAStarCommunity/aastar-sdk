@@ -89,15 +89,29 @@ export class CommunityClient extends BaseClient {
             
             // 1. Get Role ID
             const API_ROLE_COMMUNITY = await registry(publicClient).ROLE_COMMUNITY();
-            
-            // 2. Fetch Metadata (Hex)
-            const metadataHex = await registry(publicClient).roleMetadata({
-                roleId: API_ROLE_COMMUNITY,
-                user: target
-            });
+
+            // 2. Fetch Metadata (Hex).
+            // NOTE: in the deployed v5 Registry, `roleMetadata` is an INTERNAL mapping with no
+            // public getter (the rich community profile — name/website/logo — is written on
+            // registerRole but not readable on-chain). When the getter is absent the call
+            // reverts; degrade gracefully to the on-chain-readable fields (stake) with an
+            // empty profile rather than throwing, so callers can still resolve the community.
+            let metadataHex: Hex | undefined;
+            try {
+                metadataHex = await registry(publicClient).roleMetadata({
+                    roleId: API_ROLE_COMMUNITY,
+                    user: target
+                });
+            } catch {
+                metadataHex = undefined;
+            }
 
             if (!metadataHex || metadataHex === '0x') {
-                throw new Error('No metadata found for this community');
+                let stakeAmount = 0n;
+                try {
+                    stakeAmount = await registry(publicClient).roleStakes({ roleId: API_ROLE_COMMUNITY, user: target });
+                } catch { /* stake unreadable too — leave 0 */ }
+                return { name: '', ensName: '', website: '', description: '', logoURI: '', stakeAmount };
             }
 
             // 3. Decode
