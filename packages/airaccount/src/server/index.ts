@@ -26,7 +26,7 @@ export { ModuleManager } from "./services/module-manager";
 export { buildInstallModuleHash, buildUninstallModuleHash } from "./services/module-manager";
 export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";
 export { SessionKeyService, packSecp256k1SessionSignature, packP256SessionSignature } from "./services/session-key-service";
-export type { GrantSessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
+export type { GrantSessionParams, GrantP256SessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
 export { GuardStateReader } from "./services/guard-state-reader";
 export type { GuardState, TokenGuardState } from "./services/guard-state-reader";
 export { computeOapdSalt, getOapdAddress, getOapdAddressWithChainId, isOapdDeployed } from "./utils/oapd";
