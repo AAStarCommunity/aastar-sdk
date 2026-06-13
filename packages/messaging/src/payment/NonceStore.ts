@@ -15,7 +15,11 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 /**
  * Persistent store for consumed nonces (replay protection).
  *
- * Key format used by bridges: "<chainId>:<nonce>"
+ * Key format used by X402Bridge: "<chainId>:<tokenAddress>:<from>:<nonce>" (all lowercased).
+ * The key is scoped per token contract AND per authorizer to match on-chain EIP-3009
+ * `authorizationState[authorizer][nonce]` semantics. Treat the key as an opaque string —
+ * do NOT parse or re-derive it with a narrower scope, or you reintroduce cross-account
+ * nonce burning. (UserOpBridge uses its own "<chainId>:<triggerNonce>" key.)
  *
  * Production implementations should persist to SQLite/Redis and survive
  * process restarts to prevent replay attacks across restarts.

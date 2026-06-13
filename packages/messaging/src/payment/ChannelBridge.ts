@@ -132,6 +132,16 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
   private readonly store: VoucherStore;
 
   constructor(private readonly config: ChannelBridgeConfig) {
+    // Runtime guard: the discriminated union enforces this at compile time, but configs
+    // built dynamically (JSON, DI containers, `as any`) can bypass the type. Fail fast so a
+    // production node can never silently run without offline voucher verification.
+    if (!config.skipVoucherSigVerification && !config.verifyVoucherSig) {
+      throw new Error(
+        'ChannelBridge: verifyVoucherSig is required (or set skipVoucherSigVerification: true ' +
+          'for tests). Without offline voucher verification, invalid-voucher spam can force ' +
+          'reverting submitVoucher() calls that waste operator gas.'
+      );
+    }
     this.store = config.voucherStore ?? new InMemoryVoucherStore();
   }
 
@@ -168,17 +178,32 @@ export class ChannelBridge implements SporeEventBridge<typeof SPORE_KIND_CHANNEL
       return { success: false, error: 'channel_not_open' };
     }
 
+    // A voucher can never redeem more than the channel's on-chain deposit. Reject early —
+    // before signature verification, storage, or settlement — so an over-deposit voucher
+    // cannot (a) force a guaranteed-to-revert submitVoucher() that burns gas, nor (b) lock
+    // the channel by occupying the monotonic "best" slot with an unsettleable amount.
+    if (cumulativeAmount > state.depositedAmount) {
+      return { success: false, error: 'exceeds_deposit' };
+    }
+
     // Offline voucher signature verification.
     // Prevents spam: an attacker sending fake high-amount vouchers would force
     // expensive on-chain submitVoucher() calls that fail after spending gas.
     // skipVoucherSigVerification is only for testing.
+    // Fail closed: a verifier that throws is treated as an invalid voucher, never propagated —
+    // handle() always resolves to a BridgeResult (consistent with X402Bridge).
     if (this.config.verifyVoucherSig) {
-      const valid = await this.config.verifyVoucherSig(
-        channelId,
-        cumulativeAmount,
-        voucherSig,
-        state.payer
-      );
+      let valid = false;
+      try {
+        valid = await this.config.verifyVoucherSig(
+          channelId,
+          cumulativeAmount,
+          voucherSig,
+          state.payer
+        );
+      } catch {
+        valid = false;
+      }
       if (!valid) {
         return { success: false, error: 'invalid_voucher_sig' };
       }

@@ -63,7 +63,7 @@ describe('X402Bridge', () => {
     mockClient = {
       settlePayment: vi.fn().mockResolvedValue({ txHash: '0xsuccesstxhash' as `0x${string}` }),
     };
-    bridge = new X402Bridge({ x402Client: mockClient });
+    bridge = new X402Bridge({ x402Client: mockClient, skipSignatureVerification: true });
   });
 
   it('valid payment → settlePayment called, returns success', async () => {
@@ -97,6 +97,7 @@ describe('X402Bridge', () => {
     bridge = new X402Bridge({
       x402Client: mockClient,
       maxAmountPerRequest: 500_000n,
+      skipSignatureVerification: true,
     });
 
     const event = makeEvent({
@@ -132,6 +133,7 @@ describe('X402Bridge', () => {
     bridge = new X402Bridge({
       x402Client: mockClient,
       allowedPayers: new Set(['0xallowedpayer']),
+      skipSignatureVerification: true,
     });
 
     const event = makeEvent({
@@ -175,6 +177,7 @@ describe('X402Bridge', () => {
     bridge = new X402Bridge({
       x402Client: mockClient,
       allowedPayers: new Set(['0xallowedpayer']), // lowercase
+      skipSignatureVerification: true,
     });
 
     const event = makeEvent({
@@ -186,6 +189,111 @@ describe('X402Bridge', () => {
     const result = await bridge.handle(event);
     // The from value '0xallowedpayer' should match since bridge lowercases it
     expect(result.success).toBe(true);
+  });
+
+  // ─── F2: offline EIP-3009 signature verification ──────────────────────────
+
+  it('constructor throws when neither verifyAuthorization nor skipSignatureVerification is set', () => {
+    // Bypass the compile-time discriminated union to exercise the runtime guard.
+    expect(
+      () => new X402Bridge({ x402Client: mockClient } as never)
+    ).toThrow(/verifyAuthorization is required/);
+  });
+
+  it('invalid signature → rejected BEFORE nonce claim and settlement', async () => {
+    const verifyAuthorization = vi.fn().mockResolvedValue(false);
+    bridge = new X402Bridge({ x402Client: mockClient, verifyAuthorization });
+
+    const event = makeEvent({ kind: 23402, tags: makeX402Tags() });
+    const result = await bridge.handle(event);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('invalid_signature');
+    expect(verifyAuthorization).toHaveBeenCalledOnce();
+    // The core of the finding: no on-chain call when the sig is invalid.
+    expect(mockClient.settlePayment).not.toHaveBeenCalled();
+
+    // And the nonce was NOT burned — a subsequent valid attempt with the same nonce settles.
+    const goodVerify = vi.fn().mockResolvedValue(true);
+    bridge = new X402Bridge({ x402Client: mockClient, verifyAuthorization: goodVerify });
+    const retry = await bridge.handle(event);
+    expect(retry.success).toBe(true);
+    expect(mockClient.settlePayment).toHaveBeenCalledOnce();
+  });
+
+  it('valid signature → verifyAuthorization called with EIP-3009 fields, then settles', async () => {
+    const verifyAuthorization = vi.fn().mockResolvedValue(true);
+    bridge = new X402Bridge({ x402Client: mockClient, verifyAuthorization });
+
+    const event = makeEvent({ kind: 23402, tags: makeX402Tags() });
+    const result = await bridge.handle(event);
+
+    expect(result.success).toBe(true);
+    expect(verifyAuthorization).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: '0xpayeraddress',
+        to: '0xpayeeaddress',
+        amount: 1_000_000n,
+        chainId: 10,
+        sig: '0xsignaturehex',
+      })
+    );
+    expect(mockClient.settlePayment).toHaveBeenCalledOnce();
+  });
+
+  it('verifyAuthorization that throws → fail-closed (invalid_signature, no settle)', async () => {
+    const verifyAuthorization = vi.fn().mockRejectedValue(new Error('bad recovery'));
+    bridge = new X402Bridge({ x402Client: mockClient, verifyAuthorization });
+
+    const event = makeEvent({ kind: 23402, tags: makeX402Tags() });
+    const result = await bridge.handle(event);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('invalid_signature');
+    expect(mockClient.settlePayment).not.toHaveBeenCalled();
+  });
+
+  // ─── F1: nonce key is scoped per payer (no cross-account burning) ─────────
+
+  it('same nonce from two different payers → both settle (no cross-account nonce burning)', async () => {
+    bridge = new X402Bridge({ x402Client: mockClient, skipSignatureVerification: true });
+    const sharedNonce =
+      '0x1234123412341234123412341234123412341234123412341234123412341234';
+
+    const eventA = makeEvent({
+      kind: 23402,
+      tags: makeX402Tags({ from: '0xpayerAAA', nonce: sharedNonce }),
+    });
+    const eventB = makeEvent({
+      kind: 23402,
+      tags: makeX402Tags({ from: '0xpayerBBB', nonce: sharedNonce }),
+    });
+
+    const resA = await bridge.handle(eventA);
+    const resB = await bridge.handle(eventB);
+
+    expect(resA.success).toBe(true);
+    expect(resB.success).toBe(true);
+    expect(mockClient.settlePayment).toHaveBeenCalledTimes(2);
+  });
+
+  it('same nonce + payer on two different tokens → both settle (per-token nonce scope)', async () => {
+    bridge = new X402Bridge({ x402Client: mockClient, skipSignatureVerification: true });
+    const sharedNonce =
+      '0x5678567856785678567856785678567856785678567856785678567856785678';
+
+    const eventTokenA = makeEvent({
+      kind: 23402,
+      tags: makeX402Tags({ from: '0xsamepayer', nonce: sharedNonce, asset: '0xtokenAAA' }),
+    });
+    const eventTokenB = makeEvent({
+      kind: 23402,
+      tags: makeX402Tags({ from: '0xsamepayer', nonce: sharedNonce, asset: '0xtokenBBB' }),
+    });
+
+    expect((await bridge.handle(eventTokenA)).success).toBe(true);
+    expect((await bridge.handle(eventTokenB)).success).toBe(true);
+    expect(mockClient.settlePayment).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -315,6 +423,39 @@ describe('ChannelBridge', () => {
     const result = await bridge.handle(event);
     expect(result.success).toBe(false);
     expect(result.error).toBe('invalid_content');
+  });
+
+  it('constructor throws when neither verifyVoucherSig nor skipVoucherSigVerification is set', () => {
+    // Bypass the compile-time discriminated union to exercise the runtime guard (F3).
+    expect(
+      () => new ChannelBridge({ channelClient: mockClient } as never)
+    ).toThrow(/verifyVoucherSig is required/);
+  });
+
+  it('verifyVoucherSig that throws → fail-closed (invalid_voucher_sig, no submit)', async () => {
+    const verifyVoucherSig = vi.fn().mockRejectedValue(new Error('bad recovery'));
+    bridge = new ChannelBridge({
+      channelClient: mockClient,
+      lazySettleThreshold: 1_000_000n,
+      verifyVoucherSig,
+    });
+
+    const event = makeChannelEvent('chan-001', '1000000');
+    const result = await bridge.handle(event);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('invalid_voucher_sig');
+    expect(mockClient.submitVoucher).not.toHaveBeenCalled();
+  });
+
+  it('voucher exceeding channel deposit → rejected before sig/store/settle', async () => {
+    // openChannel.depositedAmount is 100_000_000n; claim more than that.
+    const event = makeChannelEvent('chan-001', '200000000');
+    const result = await bridge.handle(event);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('exceeds_deposit');
+    expect(mockClient.submitVoucher).not.toHaveBeenCalled();
   });
 
   it('forceSettleAll settles all pending vouchers', async () => {

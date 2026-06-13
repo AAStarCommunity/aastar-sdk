@@ -72,6 +72,7 @@ export type {
     X402BridgeConfig,
     X402ClientLike,
     X402RejectReason,
+    X402AuthorizationParams,
 } from './payment/X402Bridge.js';
 
 export type {

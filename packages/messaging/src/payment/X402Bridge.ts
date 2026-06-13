@@ -32,8 +32,23 @@ export interface X402ClientLike {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-/** Configuration for X402Bridge */
-export interface X402BridgeConfig {
+/**
+ * Parameters passed to an offline EIP-3009 authorization verifier.
+ * Mirror of the on-chain `TransferWithAuthorization` fields.
+ */
+export interface X402AuthorizationParams {
+  from: `0x${string}`;
+  to: `0x${string}`;
+  amount: bigint;
+  nonce: `0x${string}`;
+  validBefore: bigint;
+  tokenAddress: `0x${string}`;
+  chainId: number;
+  sig: `0x${string}`;
+}
+
+/** Shared configuration fields for X402Bridge */
+interface X402BridgeConfigBase {
   /** Injected x402 client for on-chain settlement */
   x402Client: X402ClientLike;
   /** If set, reject payments from any address not in this set (lowercase) */
@@ -55,6 +70,41 @@ export interface X402BridgeConfig {
    */
   nonceStore?: NonceStore;
 }
+
+/**
+ * Configuration for X402Bridge.
+ *
+ * You MUST supply one of:
+ *   - `verifyAuthorization` — an offline EIP-3009 signature verifier that rejects invalid
+ *     authorizations BEFORE any nonce is claimed or on-chain settlement is attempted. Without
+ *     it, an attacker can spam invalid-signature events that burn nonce keys and force
+ *     reverting settlePayment() calls that still cost the operator gas.
+ *   - `skipSignatureVerification: true` — explicit opt-out (testing only).
+ *
+ * @aastar/messaging is intentionally free of blockchain dependencies, so the EIP-712 domain
+ * (token name/version) needed to recover the signer is not available here. Implement
+ * `verifyAuthorization` in the consuming layer (e.g. via @aastar/x402, which owns the domain).
+ */
+export type X402BridgeConfig = X402BridgeConfigBase &
+  (
+    | {
+        /**
+         * Offline EIP-3009 authorization verifier. Called before claiming a nonce or
+         * settling on-chain. Returns true if the signature recovers to `from`.
+         */
+        verifyAuthorization: (params: X402AuthorizationParams) => Promise<boolean>;
+        skipSignatureVerification?: never;
+      }
+    | {
+        verifyAuthorization?: never;
+        /**
+         * Explicitly opt out of offline signature verification.
+         * ONLY for testing — a production node without verification can be forced to
+         * burn nonces and operator gas by any attacker spamming invalid signatures.
+         */
+        skipSignatureVerification: true;
+      }
+  );
 
 // ─── Reject Reason ────────────────────────────────────────────────────────────
 
@@ -78,9 +128,9 @@ export type X402RejectReason =
  * Processing pipeline:
  *   1. Parse and validate tags (structure check)
  *   2. Policy checks (payer whitelist, amount cap, expiry)
- *   3. Nonce idempotency check (in-memory; production uses persistent store)
+ *   2.5 Offline EIP-3009 signature verification (reject invalid sigs before any state change)
+ *   3. Atomic nonce claim, keyed per (chainId, tokenAddress, from, nonce)
  *   4. On-chain settlement via X402ClientLike.settlePayment()
- *   5. Mark nonce as used on success
  *
  * Thread safety note: nonce deduplication uses an in-memory Set. Production
  * deployments should replace this with a persistent store (Redis, SQLite).
@@ -91,6 +141,16 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
   private readonly nonceStore: NonceStore;
 
   constructor(private readonly config: X402BridgeConfig) {
+    // Runtime guard: the discriminated union enforces this at compile time, but configs
+    // built dynamically (JSON, DI containers, `as any`) can bypass the type. Fail fast so a
+    // production node can never silently run without offline signature verification.
+    if (!config.skipSignatureVerification && !config.verifyAuthorization) {
+      throw new Error(
+        'X402Bridge: verifyAuthorization is required (or set skipSignatureVerification: true ' +
+          'for tests). Without offline signature verification, invalid-signature spam can burn ' +
+          'nonce keys and waste operator gas on reverting settlement calls.'
+      );
+    }
     this.nonceStore = config.nonceStore ?? new InMemoryNonceStore();
   }
 
@@ -139,8 +199,40 @@ export class X402Bridge implements SporeEventBridge<typeof SPORE_KIND_X402> {
       return { success: false, error: 'valid_before_too_far' };
     }
 
-    // Step 3: Atomic nonce claim — prevents TOCTOU replay under concurrent async stores
-    const nonceKey = `${chainId}:${nonce}`;
+    // Step 2.5: Offline EIP-3009 signature verification.
+    // Runs BEFORE claiming a nonce or touching the chain, so invalid-signature spam cannot
+    // burn nonce keys or force reverting (gas-wasting) settlePayment() calls. Verification is
+    // delegated to an injected verifier because @aastar/messaging has no chain deps / EIP-712
+    // domain. skipSignatureVerification is testing-only (enforced in the constructor).
+    if (this.config.verifyAuthorization) {
+      // Fail closed: a verifier that throws (e.g. malformed signature/recovery) is treated as
+      // an invalid signature, never propagated — handle() always resolves to a BridgeResult.
+      let sigValid = false;
+      try {
+        sigValid = await this.config.verifyAuthorization({
+          from,
+          to,
+          amount,
+          nonce,
+          validBefore,
+          tokenAddress,
+          chainId,
+          sig,
+        });
+      } catch {
+        sigValid = false;
+      }
+      if (!sigValid) {
+        return { success: false, error: 'invalid_signature' };
+      }
+    }
+
+    // Step 3: Atomic nonce claim — prevents TOCTOU replay under concurrent async stores.
+    // Keyed by (chainId, tokenAddress, from, nonce) to match on-chain EIP-3009 semantics:
+    // authorizationState is scoped per token contract AND per authorizer, so a coarser key
+    // (e.g. chainId:nonce) would let one (token, payer) burn the same key for another —
+    // cross-account / cross-token nonce burning.
+    const nonceKey = `${chainId}:${tokenAddress.toLowerCase()}:${from.toLowerCase()}:${nonce}`;
     if (!(await this.nonceStore.claim(nonceKey))) {
       return { success: false, error: 'nonce_already_used' };
     }
