@@ -157,6 +157,16 @@ export const AIRACCOUNT_ABI = [
   // ── Algorithm whitelist (v0.17.2-beta.4: single source of truth on the ACCOUNT, not the guard) ──
   "function approvedAlgorithms(uint8 algId) external view returns (bool)",
   "function guardApproveAlgorithm(uint8 algId) external",
+  // ── Weighted-signature governance (algId 0x07) ──
+  // WeightConfig tuple = (passkeyWeight, ecdsaWeight, blsWeight, guardian0Weight,
+  //   guardian1Weight, guardian2Weight, _padding, tier1Threshold, tier2Threshold, tier3Threshold)
+  "function setWeightConfig((uint8 passkeyWeight, uint8 ecdsaWeight, uint8 blsWeight, uint8 guardian0Weight, uint8 guardian1Weight, uint8 guardian2Weight, uint8 _padding, uint8 tier1Threshold, uint8 tier2Threshold, uint8 tier3Threshold) config) external",
+  "function proposeWeightChange((uint8 passkeyWeight, uint8 ecdsaWeight, uint8 blsWeight, uint8 guardian0Weight, uint8 guardian1Weight, uint8 guardian2Weight, uint8 _padding, uint8 tier1Threshold, uint8 tier2Threshold, uint8 tier3Threshold) proposed) external",
+  "function approveWeightChange() external",
+  "function cancelWeightChange() external",
+  "function executeWeightChange() external",
+  "function weightConfig() external view returns (uint8 passkeyWeight, uint8 ecdsaWeight, uint8 blsWeight, uint8 guardian0Weight, uint8 guardian1Weight, uint8 guardian2Weight, uint8 _padding, uint8 tier1Threshold, uint8 tier2Threshold, uint8 tier3Threshold)",
+  "function pendingWeightChange() external view returns ((uint8 passkeyWeight, uint8 ecdsaWeight, uint8 blsWeight, uint8 guardian0Weight, uint8 guardian1Weight, uint8 guardian2Weight, uint8 _padding, uint8 tier1Threshold, uint8 tier2Threshold, uint8 tier3Threshold) proposed, uint256 proposedAt, uint256 approvalBitmap)",
   // ── ERC-4337 v0.7 bundler entrypoint (v0.17.2-beta.4) ──
   // Routes a UserOp whose callData starts with the executeUserOp selector to the account,
   // re-deriving the signature algId in-frame (fixes guard-account bundler gas estimation).
@@ -179,6 +189,11 @@ export const AIRACCOUNT_FACTORY_ABI = [
   // Default guardian setup (requires guardian acceptance sigs — M5.3+)
   "function createAccountWithDefaults(address owner, uint256 salt, address guardian1, bytes guardian1Sig, address guardian2, bytes guardian2Sig, uint256 dailyLimit) external returns (address)",
   "function getAddressWithDefaults(address owner, uint256 salt, address guardian1, address guardian2, uint256 dailyLimit) external view returns (address)",
+  // Agent-account creation (V7: agentKey + human-guardian2 co-owned account, registered in AgentRegistry)
+  "function createAgentAccount(address agentKey, bytes32 agentId, address guardian2, bytes guardian2Sig, bytes agentKeySig, uint48 deadline, uint256 dailyLimit) external returns (address account)",
+  "function getAgentAddress(address humanOwner, address agentKey, bytes32 agentId) external view returns (address)",
+  "function setAgentRegistry(address _agentRegistry) external",
+  "function agentRegistry() external view returns (address)",
   // M7 immutable state
   "function implementation() external view returns (address)",
   "function entryPoint() external view returns (address)",

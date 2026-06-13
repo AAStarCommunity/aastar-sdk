@@ -51,6 +51,15 @@ export { ForceExitService, L2_TYPE } from "./services/force-exit-service";
 export type { PendingExit, L2Type } from "./services/force-exit-service";
 export { EIP7702DelegateService, AIR_ACCOUNT_DELEGATE_ADDRESS } from "./services/eip7702-delegate-service";
 export type { DelegateInitParams, EIP7702Authorization } from "./services/eip7702-delegate-service";
+export {
+  WeightedSignatureService,
+  WEIGHT_CHANGE_THRESHOLD,
+  WEIGHT_CHANGE_TIMELOCK_SECONDS,
+  WEIGHT_CHANGE_EXPIRY_SECONDS,
+} from "./services/weighted-signature-service";
+export type { WeightConfig, PendingWeightChange } from "./services/weighted-signature-service";
+export { AgentRegistryService } from "./services/agent-registry-service";
+export type { CreateAgentAccountParams } from "./services/agent-registry-service";
 export { ERC8004Service, ERC8004_ADDRESSES, erc8004AddressesForChain } from "./services/erc8004-service";
 export type {
   SetAgentWalletParams,
