@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### KMS v0.20.0 + ERC-8004 SDK integration (feat/kms-v0.20.0-integration)
+
+#### ⚠ BREAKING CHANGES
+- **`WebAuthnAssertion`** fields renamed from camelCase to **PascalCase** —
+  `challengeId` → **`ChallengeId`**, `credential` → **`Credential`** — to match the KMS
+  wire format (the server struct uses `#[serde(rename = "ChallengeId" / "Credential")]`).
+  Any code constructing a `WebAuthnAssertion` literal must update the field casing.
+  The previous camelCase shape never matched the server and would have been rejected.
+- **`KmsBeginGrantSessionAuthResponse`** fields likewise PascalCased: `challengeId` →
+  **`ChallengeId`**, `options` → **`Options`** (matches `AuthenticationOptionsResponse`).
+- **`KmsSignGrantSessionRequest` / `KmsSignP256GrantSessionRequest`**: `contractScope`
+  and `selectorScope` are now **`string`** (was `number`) — the KMS server types are
+  `String` (`selectorScope` is a bytes4 hex); numeric values failed server deserialization.
+- **Default KMS endpoint** is now `https://kms.aastar.io` (was `https://kms1.aastar.io`).
+
+#### Added
+- `KmsHttpClient` — shared KMS HTTP transport (`post`/`get`/`amzPost`/`postWithBearer`).
+- `KmsManager` key methods: `sign` (message/EIP-155 tx), `getPublicKey`, `deriveAddress`,
+  `listKeys`, `deleteKey`, `changePasskey`; `signTypedDataWithWebAuthn` now posts full
+  EIP-712 typed data to `/kms/SignTypedData`; `beginWebAuthnAuth` uses `/BeginAuthentication`.
+- `KmsAgentService` (agent TEE-JWT lifecycle), `KmsSessionService` (P256 session keys),
+  `KmsPaymentSigner` (Micropayment / GToken EIP-3009 / x402 signers), `KmsMonitorService`
+  (health/version/queueStatus/rollbackCounter/stats + `@internal` adminPurgeKey).
+- `ERC8004Service` — ERC-8004 agent identity calldata encoders + chain-derived registry addresses.
+
 ## [0.19.0] - 2026-03-30
 
 ### Breaking Changes

@@ -114,24 +114,24 @@ export const BLSValidatorABI = (BLSValidatorABIData as any).abi || BLSValidatorA
 export const BLSValidatorArtifact = BLSValidatorABIData;
 
 
-// ========== AirAccount v0.17.2-beta.2 stack (synced 2026-06-03) ==========
+// ========== AirAccount v0.17.2-beta.3 stack (synced 2026-06-12) ==========
 //
-// Source: github.com/AAStarCommunity/airaccount-contract tag `v0.17.2-beta.2`.
+// Source: github.com/AAStarCommunity/airaccount-contract tag `v0.17.2-beta.3`.
 // Generated via `forge build` artifacts; AAStarAirAccountV7 is the merged-full ABI
-// (account + fallback-routed agent/weight) — already imported above.
+// (account + fallback-routed agent/weight, 146 entries) — already imported above.
 //
-// Sepolia deployment 2026-06-01 (beta.1) + 2026-06-02 (beta.2 redeploy of ForceExitModule):
-//   AAStarBLSAlgorithm        0xB82127182A855B82eED05e47536FcE568b626457
-//   AAStarValidator (router)  0x29edC0e59C7cCcd89334139556Bc254bBC1B1E2F
-//   AAStarBLSAggregator       0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1
-//   SessionKeyValidator       0xc1e2534D9Cae27Fd9776e612229115604A9e07E9
-//   ForceExitModule           0xc7128A1F66DFf7B607d595371FCAEeAdC485CFC9  (beta.2)
-//   AirAccountDelegate        0x8603AAF6C3f07fdae810B323c95a198D796EC52E
-//   CalldataParserRegistry    0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F
-//   AAStarAirAccountFactoryV7 0xc6c7FA51814f109Dea73757c73c378a25b2BAeE9
-//   AAStarAirAccountV7 (impl) 0x05274e4Af481e5c23287571F71C52afCCC5Df127
-//   AirAccountExtension       0x6e3E6d7e6DFb383CeaAe6A9ae478745FFc5cAac0
-//   AgentRegistry             0xc60E7D1d13027Ed63a899926ba1a9A2692f1D9EB
+// Sepolia deployment 2026-06-12:
+//   AAStarBLSAlgorithm        0xB82127182A855B82eED05e47536FcE568b626457  (unchanged)
+//   AAStarValidator (router)  0x3c2b06f50300912794f29de031b33dd37bb8d6c6  (NEW — M3 timelock, finalized)
+//   AAStarBLSAggregator       0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1  (unchanged)
+//   SessionKeyValidator       0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf  (NEW — MODULE_VERSION + P256)
+//   ForceExitModule           0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702  (NEW — IncompatibleAccount error)
+//   AirAccountDelegate        0x8603AAF6C3f07fdae810B323c95a198D796EC52E  (unchanged)
+//   CalldataParserRegistry    0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F  (unchanged)
+//   AAStarAirAccountFactoryV7 0xfc6234bbd6283610659211347c6309904be86b0a  (NEW — custom errors + FACTORY_VERSION)
+//   AAStarAirAccountV7 (impl) 0xe33EeCF21AAC2B776b49A4dd52BA8b7e683dE9C3  (NEW — ACCOUNT_VERSION)
+//   AirAccountExtension       0xB3c7312bA52dF306DE1cBa781B91f3AfA7e86F99  (NEW — _popcount asm)
+//   AgentRegistry             0x9e8f576cad8a8f949181fd10d9ad1c49a7b0bc17  (NEW — bindFactory wired)
 //
 // NOTE on naming overlap with SuperPaymaster: this repo has BOTH
 //   - BLSAggregator.json + BLSValidator.json (legacy SuperPaymaster exports above)
@@ -161,8 +161,8 @@ export const AgentRegistryArtifact = AgentRegistryABIData;
 export const SessionKeyValidatorABI = (SessionKeyValidatorABIData as any).abi || SessionKeyValidatorABIData;
 export const SessionKeyValidatorArtifact = SessionKeyValidatorABIData;
 
-// v0.17.2-beta.2 ForceExitModule — with LOW-3 stale-guardian check.
-// Redeploys vs beta.1 carry new SignerNoLongerGuardian error. Per-account ERC-7579 install.
+// v0.17.2-beta.3 ForceExitModule — IncompatibleAccount error + assembly _countBits + MODULE_VERSION.
+// Per-account ERC-7579 Executor (moduleTypeId=2). Errors: SignerNoLongerGuardian, IncompatibleAccount.
 export const ForceExitModuleABI = (ForceExitModuleABIData as any).abi || ForceExitModuleABIData;
 export const ForceExitModuleArtifact = ForceExitModuleABIData;
 

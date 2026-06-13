@@ -1,1145 +1,1156 @@
-{
-  "abi": [
-    {
-      "type": "function",
-      "name": "buildGrantHash",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "buildP256GrantHash",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyX",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "p256KeyY",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "checkSessionScope",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKeyOrHash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "sessionType",
-          "type": "uint8",
-          "internalType": "uint8"
-        },
-        {
-          "name": "dest",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "selector",
-          "type": "bytes4",
-          "internalType": "bytes4"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getP256Session",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyHash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getSession",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "grantNonces",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "grantNonces_p256",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "grantP256Session",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyX",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "p256KeyY",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        },
-        {
-          "name": "ownerSig",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "grantP256SessionDirect",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyX",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "p256KeyY",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "grantSession",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        },
-        {
-          "name": "ownerSig",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "grantSessionDirect",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "isP256SessionActive",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyX",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "p256KeyY",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "isSessionActive",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "recordCallForVelocity",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKeyOrHash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "sessionType",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "revokeP256Session",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyX",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "p256KeyY",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "revokeSession",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "sessionStates",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "callCount",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "windowStart",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "sessionStates_p256",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "callCount",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "windowStart",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "validate",
-      "inputs": [
-        {
-          "name": "userOpHash",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        },
-        {
-          "name": "signature",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "validationData",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "event",
-      "name": "P256SessionGranted",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyHash",
-          "type": "bytes32",
-          "indexed": true,
-          "internalType": "bytes32"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "indexed": false,
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "P256SessionRevoked",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "p256KeyHash",
-          "type": "bytes32",
-          "indexed": true,
-          "internalType": "bytes32"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SessionGranted",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "cfg",
-          "type": "tuple",
-          "indexed": false,
-          "internalType": "struct SessionKeyValidator.Session",
-          "components": [
-            {
-              "name": "expiry",
-              "type": "uint48",
-              "internalType": "uint48"
-            },
-            {
-              "name": "contractScope",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "selectorScope",
-              "type": "bytes4",
-              "internalType": "bytes4"
-            },
-            {
-              "name": "revoked",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "velocityLimit",
-              "type": "uint16",
-              "internalType": "uint16"
-            },
-            {
-              "name": "velocityWindow",
-              "type": "uint32",
-              "internalType": "uint32"
-            },
-            {
-              "name": "callTargets",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "selectorAllowlist",
-              "type": "bytes4[]",
-              "internalType": "bytes4[]"
-            }
-          ]
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SessionRevoked",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "sessionKey",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "error",
-      "name": "CallTargetForbidden",
-      "inputs": [
-        {
-          "name": "dest",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "ECDSAInvalidSignature",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ECDSAInvalidSignatureLength",
-      "inputs": [
-        {
-          "name": "length",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "ECDSAInvalidSignatureS",
-      "inputs": [
-        {
-          "name": "s",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "ExpiryInPast",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "ExpiryTooFar",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidExpiry",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidSessionType",
-      "inputs": [
-        {
-          "name": "sessionType",
-          "type": "uint8",
-          "internalType": "uint8"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "InvalidVelocityWindow",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "MaxSelectorsExceeded",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "MaxTargetsExceeded",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotAccountOwner",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotAirAccount",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotBoundAccount",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "SelectorForbidden",
-      "inputs": [
-        {
-          "name": "selector",
-          "type": "bytes4",
-          "internalType": "bytes4"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "SessionAlreadyExists",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "SessionExpired",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "SessionNotFound",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "SessionRevoked_",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "VelocityLimitExceeded",
-      "inputs": []
-    }
-  ]
-}
+[
+  {
+    "type": "function",
+    "name": "MODULE_VERSION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "buildGrantHash",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "buildP256GrantHash",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyX",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p256KeyY",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "checkSessionScope",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKeyOrHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "dest",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getP256Session",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getSession",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "grantNonces",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "grantNonces_p256",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "grantP256Session",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyX",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p256KeyY",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      },
+      {
+        "name": "ownerSig",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "grantP256SessionDirect",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyX",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p256KeyY",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "grantSession",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      },
+      {
+        "name": "ownerSig",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "grantSessionDirect",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isP256SessionActive",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyX",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p256KeyY",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isSessionActive",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "recordCallForVelocity",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKeyOrHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionType",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revokeP256Session",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyX",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "p256KeyY",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revokeSession",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "sessionStates",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "callCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "windowStart",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "sessionStates_p256",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "callCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "windowStart",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "validate",
+    "inputs": [
+      {
+        "name": "userOpHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "validationData",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "P256SessionGranted",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "P256SessionRevoked",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "p256KeyHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SessionGranted",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cfg",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct SessionKeyValidator.Session",
+        "components": [
+          {
+            "name": "expiry",
+            "type": "uint48",
+            "internalType": "uint48"
+          },
+          {
+            "name": "contractScope",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "selectorScope",
+            "type": "bytes4",
+            "internalType": "bytes4"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "velocityLimit",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "velocityWindow",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "callTargets",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "selectorAllowlist",
+            "type": "bytes4[]",
+            "internalType": "bytes4[]"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SessionRevoked",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "CallTargetForbidden",
+    "inputs": [
+      {
+        "name": "dest",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureS",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ExpiryInPast",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExpiryTooFar",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidExpiry",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSessionType",
+    "inputs": [
+      {
+        "name": "sessionType",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidVelocityWindow",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxSelectorsExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxTargetsExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAccountOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAirAccount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotBoundAccount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SelectorForbidden",
+    "inputs": [
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SessionAlreadyExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SessionExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SessionNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SessionRevoked_",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "VelocityLimitExceeded",
+    "inputs": []
+  }
+]

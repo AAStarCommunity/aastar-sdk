@@ -46,10 +46,10 @@ export const CANONICAL_ADDRESSES = {
 
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
-  // Latest sync: 2026-05-29 — post audit-core-toolchain redeploy (updateTime 2026-05-29 21:57:56)
-  //   Registry @ Registry-5.3.x (impl 0x24F262702A72Bc5E0255c0ed513b6a2021Ee1129)
-  //   SuperPaymaster proxy 0xFb09... (impl spImpl 0x8E2d93Bb9176b5796fFA91587BD2a755510C9819)
-  //   ERC-8004 agent registries now use the 0x8004… vanity addresses.
+  //                  AirAccount repo docs/DEPLOYMENT-v0.17.2-beta.3.md
+  // Latest sync: 2026-06-12 — SuperPaymaster v5.3.3-beta.3 + AirAccount v0.17.2-beta.3
+  //   SP proxy 0xFb09... (impl 0xEB2C9Cb...), Registry 0xB5Fb...
+  //   AirAccount router NEW 0x3c2b... (M3 governance timelock), finalized.
   //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
   //   verify against the community's own deployment before use.
   11155111: {
@@ -58,42 +58,34 @@ export const CANONICAL_ADDRESSES = {
     staking: "0x574820E26Acb7D9a1202708C6183d6A8aC957dA6",
     sbt: "0x754CeB687aCFC72136B02a1cb7cE2F911B63F1f8",
     reputationSystem: "0xDD4D6162F426998E8B8FC97D0a8a5912cd70e6E0",
-    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0x8E2d93Bb...)
+    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0xEB2C9Cb...)
     paymasterFactory: "0x60B8f728Abca14B82a4EC72f00Ff5437e0702e90",
     paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy — NOT in core config, verify separately
     paymasterV4Impl: "0x59aEAec186a8883c165adf5C72a64df2fD9af068",
-    xPNTsFactory: "0xC4f5A121c426734CC1c0DbE57f6A2Dd764E278e4",
-    blsAggregator: "0xCDCdb8e2b62cdDCC3918f4d120322C6eB5910276",
-    // blsValidator: standalone BLSValidator was deprecated in P0-1; aggregator
-    // verifies BLS inline now. Not in core config — legacy address kept for
-    // tooling only; do not use for new integrations.
-    blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",
+    xPNTsFactory: "0xc312CAFcb49dFe3aB76bFB2F3e37CaEdBa65ccd9",  // beta.3 (was 0xC4f5...)
+    blsAggregator: "0x7ec72505220a13040c80EF2B895Bf3405b6ed3e9",  // SP BLSAggregator beta.3 (was 0xCDCdb8...)
+    blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
     dvtValidator: "0xB60C82158734def92D0d2163C93927cf19b86a95",
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
     aPNTs: "0x9f0E11e0D33Ec0a5c9608990E7B3498B5EE3210B",  // AAStar aPNTs (deployer operator)
     priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",  // Sepolia Chainlink ETH/USD
     simpleAccountFactory: "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
-    // SP V5.3 新增合约（Agent Economy + x402 + Streaming Channels）
-    microPaymentChannel: "0x5753e9675f68221cA901e495C1696e33F552ea36",
-    agentIdentityRegistry: "0x400624Fa1423612B5D16c416E1B4125699467d9a",
-    agentReputationRegistry: "0x2D82b2De1A0745454cDCf38f8c022f453d02Ca55",
-    // NOTE: config.sepolia.json also has agentValidationRegistry
-    // (0x8004Cb1BF31DAf7788923b405b754f57acEB4272). It is intentionally NOT added
-    // here yet: CANONICAL_ADDRESSES is a homogeneous union (every chain must share
-    // the same keys), and no SDK client consumes the validation registry today.
-    // Add it to ALL chain blocks (0x0 on chains without it) when an SDK client needs it.
-    // --- AirAccount v0.17.2-beta.2 stack (synced 2026-06-03 from airaccount-contract) ---
-    aaStarBLSAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",
-    aaStarValidator: "0x29edC0e59C7cCcd89334139556Bc254bBC1B1E2F",
-    aaStarBLSAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",
-    sessionKeyValidator: "0xc1e2534D9Cae27Fd9776e612229115604A9e07E9",
-    forceExitModule: "0xc7128A1F66DFf7B607d595371FCAEeAdC485CFC9",  // v0.17.2-beta.2 (LOW-3 stale-guardian fix)
-    airAccountDelegate: "0x8603AAF6C3f07fdae810B323c95a198D796EC52E",
-    calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",
-    airAccountFactoryV7: "0xc6c7FA51814f109Dea73757c73c378a25b2BAeE9",
-    airAccountV7Impl: "0x05274e4Af481e5c23287571F71C52afCCC5Df127",
-    airAccountExtension: "0x6e3E6d7e6DFb383CeaAe6A9ae478745FFc5cAac0",
-    agentRegistry: "0xc60E7D1d13027Ed63a899926ba1a9A2692f1D9EB",
+    microPaymentChannel: "0xbD1807328Dd654512B13d6320C9Cc78685a405Ed",  // beta.3 (was 0x5753...)
+    agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",  // ERC-8004 vanity addr (beta.3)
+    agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    // --- AirAccount v0.17.2-beta.3 stack (synced 2026-06-12) ---
+    // Router finalized — future algId changes require 7-day timelock governance.
+    aaStarBLSAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",  // unchanged
+    aaStarValidator: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",  // NEW beta.3 (M3 timelock; was 0x29edC0...)
+    aaStarBLSAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",  // unchanged
+    sessionKeyValidator: "0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf",  // NEW beta.3 (was 0xc1e253...)
+    forceExitModule: "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702",  // NEW beta.3 (IncompatibleAccount; was 0xc7128A...)
+    airAccountDelegate: "0x8603AAF6C3f07fdae810B323c95a198D796EC52E",  // unchanged
+    calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",  // unchanged
+    airAccountFactoryV7: "0xfc6234bbd6283610659211347c6309904be86b0a",  // NEW beta.3 (custom errors; was 0xc6c7FA...)
+    airAccountV7Impl: "0xe33EeCF21AAC2B776b49A4dd52BA8b7e683dE9C3",  // NEW beta.3 (was 0x05274e...)
+    airAccountExtension: "0xB3c7312bA52dF306DE1cBa781B91f3AfA7e86F99",  // NEW beta.3 (was 0x6e3E6d...)
+    agentRegistry: "0x9e8f576cad8a8f949181fd10d9ad1c49a7b0bc17",  // NEW beta.3 (was 0xc60E7D...)
     // Mycelium community PNTs token (Anni's xPNTsToken)
     pnts: "0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6",
   },

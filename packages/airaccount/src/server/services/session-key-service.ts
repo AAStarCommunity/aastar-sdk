@@ -115,8 +115,17 @@ export class SessionKeyService {
   }
 
   /**
-   * Encode calldata for grantSession() — submit via UserOp from the account.
-   * ownerSig is the account owner's signature over buildGrantHash().
+   * Encode calldata for session grant.
+   *
+   * - **With ownerSig** → `grantSession()` — for gasless/UserOp flows.
+   *   Owner signs the GRANT_SESSION_V2 typed hash via KMS `sign-grant-session`,
+   *   then the relayer calls `grantSession(account, key, cfg, ownerSig)` on-chain.
+   *   This is the ONLY path for ERC-4337 sponsored / gasless grant flows.
+   *
+   * - **Without ownerSig** → `grantSessionDirect()` — **owner EOA direct-send only**.
+   *   Since v0.17.2 round 3, `grantSessionDirect` requires `msg.sender == ownerOf(account)`.
+   *   It does NOT accept `msg.sender == account` (removed in round 3 — confused-deputy fix).
+   *   Do NOT encode this for a UserOp callData; the EntryPoint is not the owner EOA.
    */
   encodeGrantSession(params: GrantSessionParams): string {
     const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
@@ -130,6 +139,7 @@ export class SessionKeyService {
         params.ownerSig,
       ]);
     }
+    // grantSessionDirect — owner EOA direct tx only (NOT for UserOp/gasless flows).
     return iface.encodeFunctionData("grantSessionDirect", [
       params.account,
       params.sessionKey,
