@@ -200,4 +200,61 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       expect(w.writeContract).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('Governance & Timelock', () => {
+    it('aPNTs token migration writes', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = superPaymasterActions(A)(w);
+      await act.executeAPNTsTokenChange({ account: U });
+      await act.cancelAPNTsTokenChange({ account: U });
+      expect(w.writeContract).toHaveBeenCalledTimes(2);
+      expect(w.writeContract).toHaveBeenNthCalledWith(1, expect.objectContaining({ functionName: 'executeAPNTsTokenChange', args: [] }));
+      expect(w.writeContract).toHaveBeenNthCalledWith(2, expect.objectContaining({ functionName: 'cancelAPNTsTokenChange', args: [] }));
+    });
+    it('aPNTs token migration reads', async () => {
+      p.readContract.mockResolvedValueOnce(U);
+      p.readContract.mockResolvedValueOnce(1234n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.pendingAPNTsToken()).toBe(U);
+      expect(await act.pendingAPNTsTokenEta()).toBe(1234n);
+      expect(p.readContract).toHaveBeenNthCalledWith(1, expect.objectContaining({ functionName: 'pendingAPNTsToken', args: [] }));
+      expect(p.readContract).toHaveBeenNthCalledWith(2, expect.objectContaining({ functionName: 'pendingAPNTsTokenEta', args: [] }));
+    });
+    it('emergency price writes', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = superPaymasterActions(A)(w);
+      await act.emergencySetPrice({ newPrice: -500n, account: U });
+      await act.executeEmergencyPrice({ account: U });
+      await act.cancelEmergencyPrice({ account: U });
+      expect(w.writeContract).toHaveBeenCalledTimes(3);
+      expect(w.writeContract).toHaveBeenNthCalledWith(1, expect.objectContaining({ functionName: 'emergencySetPrice', args: [-500n] }));
+      expect(w.writeContract).toHaveBeenNthCalledWith(2, expect.objectContaining({ functionName: 'executeEmergencyPrice', args: [] }));
+      expect(w.writeContract).toHaveBeenNthCalledWith(3, expect.objectContaining({ functionName: 'cancelEmergencyPrice', args: [] }));
+    });
+    it('emergency price reads', async () => {
+      p.readContract.mockResolvedValueOnce(-100n);
+      p.readContract.mockResolvedValueOnce(111n);
+      p.readContract.mockResolvedValueOnce(222n);
+      p.readContract.mockResolvedValueOnce(86400n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.emergencyPendingPrice()).toBe(-100n);
+      expect(await act.emergencyActivatedAt()).toBe(111n);
+      expect(await act.emergencyQueuedAt()).toBe(222n);
+      expect(await act.EMERGENCY_TIMELOCK()).toBe(86400n);
+      expect(p.readContract).toHaveBeenCalledTimes(4);
+    });
+    it('BLS aggregator timelock writes', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      const act = superPaymasterActions(A)(w);
+      await act.queueBLSAggregator({ aggregator: U, account: U });
+      await act.applyBLSAggregator({ account: U });
+      expect(w.writeContract).toHaveBeenCalledTimes(2);
+      expect(w.writeContract).toHaveBeenNthCalledWith(1, expect.objectContaining({ functionName: 'queueBLSAggregator', args: [U] }));
+      expect(w.writeContract).toHaveBeenNthCalledWith(2, expect.objectContaining({ functionName: 'applyBLSAggregator', args: [] }));
+    });
+    it('rejects invalid aggregator address', async () => {
+      const act = superPaymasterActions(A)(w);
+      await expect(act.queueBLSAggregator({ aggregator: 'bad' as any, account: U })).rejects.toThrow();
+    });
+  });
 });
