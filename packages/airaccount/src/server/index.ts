@@ -26,7 +26,7 @@ export { ModuleManager } from "./services/module-manager";
 export { buildInstallModuleHash, buildUninstallModuleHash } from "./services/module-manager";
 export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";
 export { SessionKeyService, packSecp256k1SessionSignature, packP256SessionSignature } from "./services/session-key-service";
-export type { GrantSessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
+export type { GrantSessionParams, GrantP256SessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
 export { GuardStateReader } from "./services/guard-state-reader";
 export type { GuardState, TokenGuardState } from "./services/guard-state-reader";
 export { computeOapdSalt, getOapdAddress, getOapdAddressWithChainId, isOapdDeployed } from "./utils/oapd";
@@ -49,6 +49,13 @@ export { GuardChecker } from "./services/guard-checker";
 export { PaymasterManager, PaymasterPriceStalenessError } from "./services/paymaster-manager";
 export { ForceExitService, L2_TYPE } from "./services/force-exit-service";
 export type { PendingExit, L2Type } from "./services/force-exit-service";
+export {
+  RecoveryService,
+  RECOVERY_THRESHOLD,
+  RECOVERY_TIMELOCK_SECONDS,
+  MAX_GUARDIANS,
+} from "./services/recovery-service";
+export type { ActiveRecovery } from "./services/recovery-service";
 export { EIP7702DelegateService, AIR_ACCOUNT_DELEGATE_ADDRESS } from "./services/eip7702-delegate-service";
 export type { DelegateInitParams, EIP7702Authorization } from "./services/eip7702-delegate-service";
 export { ERC8004Service, ERC8004_ADDRESSES, erc8004AddressesForChain } from "./services/erc8004-service";

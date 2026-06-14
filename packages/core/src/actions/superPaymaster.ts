@@ -48,6 +48,14 @@ export type SuperPaymasterActions = {
     // User & SBT Management
     updateBlockedStatus: (args: { operator: Address, users: Address[], statuses: boolean[], account?: Account | Address }) => Promise<Hash>;
     updateSBTStatus: (args: { user: Address, status: boolean, account?: Account | Address }) => Promise<Hash>;
+
+    // Pending-Debt Reconciliation (operator)
+    /** Read the unrecovered debt recorded for a user after a failed burn/recordDebt. */
+    pendingDebts: (args: { token: Address, user: Address }) => Promise<bigint>;
+    /** Operator retries recovering up to `amount` of the user's pending debt. */
+    retryPendingDebt: (args: { token: Address, user: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** Operator force-clears the user's pending-debt entry without recording it. */
+    clearPendingDebt: (args: { token: Address, user: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Price Management
     setAPNTSPrice: (args: { newPrice: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -382,6 +390,57 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'updateSBTStatus');
+        }
+    },
+
+    // Pending-Debt Reconciliation
+    async pendingDebts({ token, user }) {
+        try {
+            validateAddress(token, 'token');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'pendingDebts',
+                args: [token, user]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pendingDebts');
+        }
+    },
+
+    async retryPendingDebt({ token, user, amount, account }) {
+        try {
+            validateAddress(token, 'token');
+            validateAddress(user, 'user');
+            validateAmount(amount, 'amount');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'retryPendingDebt',
+                args: [token, user, amount],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'retryPendingDebt');
+        }
+    },
+
+    async clearPendingDebt({ token, user, account }) {
+        try {
+            validateAddress(token, 'token');
+            validateAddress(user, 'user');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'clearPendingDebt',
+                args: [token, user],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'clearPendingDebt');
         }
     },
 

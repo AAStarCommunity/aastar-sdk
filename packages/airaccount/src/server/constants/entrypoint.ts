@@ -146,6 +146,7 @@ export const AIRACCOUNT_ABI = [
   "function validator() external view returns (address)",
   "function guard() external view returns (address)",
   "function guardianCount() external view returns (uint8)",
+  "function guardians(uint256 index) external view returns (address)",
   "function p256KeyX() external view returns (bytes32)",
   "function p256KeyY() external view returns (bytes32)",
   "function getConfigDescription() external view returns (tuple(address accountOwner, address guardAddress, uint256 dailyLimit, uint256 dailyRemaining, uint256 tier1Limit, uint256 tier2Limit, address[3] guardianAddresses, uint8 guardianCount, bool hasP256Key, bool hasValidator, bool hasAggregator, bool hasActiveRecovery))",
@@ -157,6 +158,18 @@ export const AIRACCOUNT_ABI = [
   // ── Algorithm whitelist (v0.17.2-beta.4: single source of truth on the ACCOUNT, not the guard) ──
   "function approvedAlgorithms(uint8 algId) external view returns (bool)",
   "function guardApproveAlgorithm(uint8 algId) external",
+  // ── Social / guardian recovery (F28) ──
+  // Guardian set: owner adds guardians (max 3); removal needs RECOVERY_THRESHOLD guardian sigs.
+  // Recovery lifecycle: a guardian proposes a new owner (starts the timelock), guardians
+  // approve to reach 2-of-3 threshold, then anyone executes after the timelock; guardians
+  // (not the owner) can vote to cancel. See RecoveryService for the full flow.
+  "function addGuardian(address _guardian) external",
+  "function removeGuardian(uint8 index, bytes[] calldata guardianSigs) external",
+  "function proposeRecovery(address _newOwner) external",
+  "function approveRecovery() external",
+  "function cancelRecovery() external",
+  "function executeRecovery() external",
+  "function activeRecovery() external view returns (address newOwner, uint256 proposedAt, uint256 approvalBitmap, uint256 cancellationBitmap)",
   // ── ERC-4337 v0.7 bundler entrypoint (v0.17.2-beta.4) ──
   // Routes a UserOp whose callData starts with the executeUserOp selector to the account,
   // re-deriving the signature algId in-frame (fixes guard-account bundler gas estimation).
@@ -321,20 +334,25 @@ export const ALG_ID = {
 // SessionKeyValidator — M6 基础 session key（algId=0x08）
 // 支持 ECDSA + P256 两种 session key，带合约/selector 作用域限制
 export const SESSION_KEY_VALIDATOR_ABI = [
+  // Session struct (8 fields) — authoritative tuple shape from
+  // airaccount-contract/src/validators/SessionKeyValidator.sol and
+  // packages/core/src/abis/SessionKeyValidator.json. The grant/build/read
+  // functions take/return this tuple as a single arg — NOT flat params.
+  // Canonical tuple type: (uint48,address,bytes4,bool,uint16,uint32,address[],bytes4[])
   // ECDSA session key
-  "function grantSession(address account, address sessionKey, uint48 expiry, address contractScope, bytes4 selectorScope, bytes calldata ownerSig) external",
-  "function grantSessionDirect(address account, address sessionKey, uint48 expiry, address contractScope, bytes4 selectorScope) external",
+  "function grantSession(address account, address sessionKey, (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist) cfg, bytes calldata ownerSig) external",
+  "function grantSessionDirect(address account, address sessionKey, (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist) cfg) external",
   "function revokeSession(address account, address sessionKey) external",
   "function isSessionActive(address account, address sessionKey) external view returns (bool)",
-  "function sessions(address account, address sessionKey) external view returns (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked)",
-  "function buildGrantHash(address account, address sessionKey, uint48 expiry, address contractScope, bytes4 selectorScope) external pure returns (bytes32)",
+  "function getSession(address account, address sessionKey) external view returns ((uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist))",
+  "function buildGrantHash(address account, address sessionKey, (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist) cfg) external view returns (bytes32)",
   // P256 session key
-  "function grantP256Session(address account, bytes32 p256KeyX, bytes32 p256KeyY, uint48 expiry, address contractScope, bytes4 selectorScope, bytes calldata ownerSig) external",
-  "function grantP256SessionDirect(address account, bytes32 p256KeyX, bytes32 p256KeyY, uint48 expiry, address contractScope, bytes4 selectorScope) external",
+  "function grantP256Session(address account, bytes32 p256KeyX, bytes32 p256KeyY, (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist) cfg, bytes calldata ownerSig) external",
+  "function grantP256SessionDirect(address account, bytes32 p256KeyX, bytes32 p256KeyY, (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist) cfg) external",
   "function revokeP256Session(address account, bytes32 p256KeyX, bytes32 p256KeyY) external",
   "function isP256SessionActive(address account, bytes32 p256KeyX, bytes32 p256KeyY) external view returns (bool)",
-  "function getP256Session(address account, bytes32 p256KeyHash) external view returns (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked)",
-  "function buildP256GrantHash(address account, bytes32 p256KeyX, bytes32 p256KeyY, uint48 expiry, address contractScope, bytes4 selectorScope) external pure returns (bytes32)",
+  "function getP256Session(address account, bytes32 p256KeyHash) external view returns ((uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist))",
+  "function buildP256GrantHash(address account, bytes32 p256KeyX, bytes32 p256KeyY, (uint48 expiry, address contractScope, bytes4 selectorScope, bool revoked, uint16 velocityLimit, uint32 velocityWindow, address[] callTargets, bytes4[] selectorAllowlist) cfg) external view returns (bytes32)",
   // Events
   "event SessionGranted(address indexed account, address indexed sessionKey, uint48 expiry, address contractScope, bytes4 selectorScope)",
   "event SessionRevoked(address indexed account, address indexed sessionKey)",

@@ -115,6 +115,51 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
     });
   });
 
+  describe('Pending-Debt Reconciliation', () => {
+    it('pendingDebts returns the recorded bigint', async () => {
+      p.readContract.mockResolvedValueOnce(4200n);
+      const act = superPaymasterActions(A)(p);
+      const debt = await act.pendingDebts({ token: A, user: U });
+      expect(debt).toBe(4200n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'pendingDebts',
+        args: [A, U],
+      }));
+    });
+
+    it('retryPendingDebt writes with token/user/amount', async () => {
+      w.writeContract.mockResolvedValue('0xretry');
+      const act = superPaymasterActions(A)(w);
+      const hash = await act.retryPendingDebt({ token: A, user: U, amount: 500n, account: U });
+      expect(hash).toBe('0xretry');
+      expect(w.writeContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'retryPendingDebt',
+        args: [A, U, 500n],
+      }));
+    });
+
+    it('clearPendingDebt writes with token/user', async () => {
+      w.writeContract.mockResolvedValue('0xclear');
+      const act = superPaymasterActions(A)(w);
+      const hash = await act.clearPendingDebt({ token: A, user: U, account: U });
+      expect(hash).toBe('0xclear');
+      expect(w.writeContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'clearPendingDebt',
+        args: [A, U],
+      }));
+    });
+
+    it('rejects invalid addresses', async () => {
+      const actP = superPaymasterActions(A)(p);
+      await expect(actP.pendingDebts({ token: 'bad' as any, user: U })).rejects.toThrow();
+      const actW = superPaymasterActions(A)(w);
+      await expect(actW.retryPendingDebt({ token: A, user: 'bad' as any, amount: 1n, account: U })).rejects.toThrow();
+      await expect(actW.clearPendingDebt({ token: 'bad' as any, user: U, account: U })).rejects.toThrow();
+      expect(p.readContract).not.toHaveBeenCalled();
+      expect(w.writeContract).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Constants & Meta', () => {
     it('refernce getters', async () => {
       p.readContract.mockResolvedValue(U);
