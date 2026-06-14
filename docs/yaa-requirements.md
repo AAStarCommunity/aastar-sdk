@@ -27,7 +27,8 @@
 ### P0.3 — `RequirementChecker` export + `checkResources(wallet, mode)` → 🔨 EXPORT + FACADE
 - **Evidence:** `packages/core/src/requirementChecker.ts` has the class but it is **not re-exported from `@aastar/core`'s index** (consumers use a dynamic `import('@aastar/core')` to reach it).
 - **Challenge:** `checkResources(wallet, mode)` with a string `mode` is loosely typed. Better: a typed `OperatorMode = 'AOA' | 'AOA+'` enum and a structured `ResourceReport` result (per-resource status + remediation hints), not a boolean.
-- **Solution:** export `RequirementChecker` from the core index; add `checkResources(wallet, mode: OperatorMode): Promise<ResourceReport>` aggregating role/stake/SBT/token/deposit checks with actionable issues (reuse the PaymasterV4 `checkGaslessReadiness` pattern).
+- **Update (⛔ #52 partly outdated):** `RequirementChecker` IS already re-exported from `@aastar/core`'s index (`export * from './requirementChecker.js'`) — the dynamic `import('@aastar/core')` workaround is unnecessary. No export change needed.
+- **Solution (shipped Beta3.1 Wave 1):** added `checkResources(wallet, mode: OperatorMode, options?): Promise<ResourceReport>` matching the codebase's real paymaster model — `AOA` = independent operator → `ROLE_PAYMASTER_AOA` + role stake; `AOA+` = shared SuperPaymaster operator → `ROLE_PAYMASTER_SUPER` + role stake + community SBT. **Stake is the on-chain `roleStakes(roleId, operator)` Registry getter, NOT plain GToken `balanceOf`** (Codex-caught: an earlier draft muddled balance vs stake and gave AOA no role check). Per-mode structured `checks` + actionable `issues[]`. Thresholds overridable via `{ requiredStake }`.
 
 ---
 

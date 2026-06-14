@@ -1,4 +1,4 @@
-import { Address, Hash, parseEther, parseAbi } from 'viem';
+import { Address, Hash, parseEther, decodeEventLog } from 'viem';
 import { ROLE_COMMUNITY, RequirementChecker, type RoleRequirement, type PublicClient, type WalletClient } from '@aastar/core';
 
 // Import contract addresses dynamically to avoid circular dependency
@@ -30,11 +30,25 @@ export interface SBTRuleConfig {
 
 /**
  * xPNTs issuance parameters
+ *
+ * @remarks
+ * These map 1:1 onto the on-chain `xPNTsFactory.deployxPNTsToken` signature.
+ * The factory deploys an ERC-1167 minimal-proxy token; it does NOT take an
+ * initial supply (tokens are minted later via the token's own mint flow).
  */
 export interface XPNTsIssuanceParams {
+    /** ERC-20 token name (e.g. "MyDAO Points") */
+    name: string;
+    /** ERC-20 token symbol (e.g. "MDP") */
     symbol: string;
-    initialSupply: bigint;
+    /** Human-readable community name recorded on the token */
+    communityName: string;
+    /** Community ENS name recorded on the token (e.g. "mydao.eth") */
+    communityENS: string;
+    /** xPNTs:aPNTs exchange rate (18-decimal fixed point, e.g. parseEther("1")) */
     exchangeRate: bigint;
+    /** Paymaster AOA (Account-Owned Address) authorized to burn/settle gas */
+    paymasterAOA: `0x${string}`;
 }
 
 /**
@@ -271,27 +285,56 @@ export class CommunityClient {
             );
         }
 
-        // Load contract addresses
-        const { CORE_ADDRESSES } = await import('@aastar/core');
+        // Load contract addresses + factory action factory from @aastar/core
+        // (ABIs MUST come from @aastar/core per the SDK ESLint rule).
+        const { CORE_ADDRESSES, xPNTsFactoryActions, xPNTsFactoryABI } = await import('@aastar/core');
         const factoryAddress = CORE_ADDRESSES.xPNTsFactory;
 
         if (!factoryAddress) throw new Error('xPNTsFactory address not found');
 
-        // Deploy xPNTs via Factory
-        // Assuming ABI: createXPNTs(string symbol, uint256 supply, uint256 rate)
-        const deployTx = await this.walletClient.writeContract({
-            address: factoryAddress,
-            abi: parseAbi(['function createXPNTs(string,uint256,uint256) returns (address)']),
-            functionName: 'createXPNTs',
-            args: [params.symbol, params.initialSupply, params.exchangeRate],
-            chain: this.walletClient.chain,
+        // Deploy xPNTs via the core action factory (no inline parseAbi).
+        const txHash = await xPNTsFactoryActions(factoryAddress)(this.walletClient).deployxPNTsToken({
+            name: params.name,
+            symbol: params.symbol,
+            communityName: params.communityName,
+            communityENS: params.communityENS,
+            exchangeRate: params.exchangeRate,
+            paymasterAOA: params.paymasterAOA,
             account
         });
 
-        // We can't easily get the address without parsing logs, so we return zero address for now or simulate
+        const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+
+        // Decode the `xPNTsTokenDeployed(community indexed, tokenAddress indexed, name, symbol)`
+        // event from the receipt logs to recover the real deployed token address.
+        let xpntsAddress: Address | undefined;
+        for (const log of receipt.logs) {
+            try {
+                const decoded = decodeEventLog({
+                    abi: xPNTsFactoryABI,
+                    data: log.data,
+                    topics: log.topics
+                }) as { eventName: string; args: { tokenAddress?: Address } };
+                if (decoded.eventName === 'xPNTsTokenDeployed') {
+                    xpntsAddress = decoded.args.tokenAddress;
+                    break;
+                }
+            } catch {
+                // Not a factory event (or a different event) — skip.
+                continue;
+            }
+        }
+
+        if (!xpntsAddress) {
+            throw new Error(
+                `xPNTs deployment succeeded (tx ${txHash}) but no xPNTsTokenDeployed event ` +
+                `was found in the receipt logs; unable to determine the deployed token address.`
+            );
+        }
+
         return {
-            xpntsAddress: '0x0000000000000000000000000000000000000000', 
-            txHash: deployTx
+            xpntsAddress,
+            txHash
         };
     }
 

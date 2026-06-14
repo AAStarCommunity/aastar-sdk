@@ -26,6 +26,7 @@ export const createMockPublicClient = (): PublicClient => {
 export const createMockWalletClient = (): WalletClient => {
   return {
     writeContract: vi.fn(),
+    readContract: vi.fn(),
     sendTransaction: vi.fn(),
     account: { address: '0x1234567890123456789012345678901234567890' },
     chain: { id: 11155111 }, // Sepolia

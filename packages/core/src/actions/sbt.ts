@@ -18,11 +18,26 @@ export type SBTData = {
     totalCommunities: bigint;
 };
 
+/** Per-item outcome of a sequential batch mint. */
+export type BatchMintResult = {
+    user: Address;
+    ok: boolean;
+    txHash?: Hash;
+    error?: string;
+};
+
 // MySBT (Soul Bound Token + Membership Management)
 export type SBTActions = {
     // SBT specific
     airdropMint: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Account | Address }) => Promise<Hash>;
     mintForRole: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Account | Address }) => Promise<Hash>;
+    batchAirdropMint: (args: {
+        items: { user: Address, roleId: Hex, roleData: Hex }[],
+        account?: Account | Address,
+        onProgress?: (done: number, total: number, lastResult: BatchMintResult) => void,
+        continueOnError?: boolean
+    }) => Promise<BatchMintResult[]>;
+    mintOrAddMembership: (args: { user: Address, roleId: Hex, roleData: Hex, account?: Account | Address }) => Promise<Hash>;
     getUserSBT: (args: { user: Address }) => Promise<bigint>;
     getSBTData: (args: { tokenId: bigint }) => Promise<SBTData>;
     getCommunityMembership: (args: { tokenId: bigint, community: Address }) => Promise<SBTMembership>;
@@ -133,6 +148,100 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'mintForRole');
+        }
+    },
+
+    /**
+     * Airdrop-mint an SBT to many users in one helper call.
+     *
+     * IMPORTANT: this is NOT atomic. MySBT exposes no on-chain batch entrypoint,
+     * so this helper sends N SEPARATE `airdropMint` transactions — one signature
+     * and one gas payment per item — awaited sequentially so account nonces stay
+     * ordered. A failure on item K does not roll back items 0..K-1 that already
+     * landed on-chain. For an all-or-nothing path, a future Multicall3 batch is
+     * planned (deferred).
+     *
+     * @param items          List of { user, roleId, roleData } to mint, in order.
+     * @param account        Sender account / address used for every transaction.
+     * @param onProgress     Invoked after each item with (done, total, lastResult).
+     * @param continueOnError When true, a failing item is recorded as { ok:false, error }
+     *                        and the loop continues; when false (default), the error is
+     *                        recorded then rethrown, aborting the remaining items.
+     * @returns Per-item results in the same order as `items`.
+     */
+    async batchAirdropMint({ items, account, onProgress, continueOnError }) {
+        validateRequired(items, 'items');
+        const results: BatchMintResult[] = [];
+        const total = items.length;
+        for (let i = 0; i < items.length; i++) {
+            const { user, roleId, roleData } = items[i];
+            let result: BatchMintResult;
+            try {
+                validateAddress(user, 'user');
+                validateRequired(roleId, 'roleId');
+                validateRequired(roleData, 'roleData');
+                // Sequential await keeps nonces ordered across the N transactions.
+                const txHash = await (client as any).writeContract({
+                    address,
+                    abi: MySBTABI,
+                    functionName: 'airdropMint',
+                    args: [user, roleId, roleData],
+                    account: account as any,
+                    chain: (client as any).chain
+                });
+                result = { user, ok: true, txHash };
+            } catch (error) {
+                const wrapped = AAStarError.fromViemError(error as Error, 'batchAirdropMint');
+                result = { user, ok: false, error: wrapped.message };
+                results.push(result);
+                onProgress?.(i + 1, total, result);
+                if (!continueOnError) throw wrapped;
+                continue;
+            }
+            results.push(result);
+            onProgress?.(i + 1, total, result);
+        }
+        return results;
+    },
+
+    /**
+     * Ensure `user` holds an SBT and is a member of the community encoded in
+     * `roleData`, minting if necessary.
+     *
+     * On-chain reality: MySBT has NO separate add-membership function. Its
+     * `airdropMint` IS the dual-purpose mint-or-add primitive — for a first-time
+     * user (tokenId == 0) it mints a fresh SBT, and for an existing holder it adds
+     * the new community membership (or reactivates a deactivated one). It is
+     * idempotent: if the user is already an ACTIVE member of that community it is a
+     * no-op on-chain (returns without reverting), so calling this when already a
+     * member is safe and simply emits/returns the transaction.
+     *
+     * We read `getUserSBT` first only to surface mint-vs-add intent; the issued
+     * call is `airdropMint` in both branches because it is the correct (and only)
+     * membership-add path the contract provides.
+     */
+    async mintOrAddMembership({ user, roleId, roleData, account }) {
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            validateRequired(roleData, 'roleData');
+            // 0n => first-time mint; >0n => existing holder, airdropMint adds/reactivates membership.
+            await (client as PublicClient).readContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'getUserSBT',
+                args: [user]
+            });
+            return await (client as any).writeContract({
+                address,
+                abi: MySBTABI,
+                functionName: 'airdropMint',
+                args: [user, roleId, roleData],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'mintOrAddMembership');
         }
     },
 
