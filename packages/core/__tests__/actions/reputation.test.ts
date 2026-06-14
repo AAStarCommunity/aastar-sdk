@@ -20,6 +20,32 @@ describe('ReputationActions Bulk Coverage', () => {
     it('getRuleCount', async () => { p.readContract.mockResolvedValue(5n); expect(await reputationActions(ADDR)(p).getRuleCount()).toBe(5n); });
     it('getUserScore', async () => { p.readContract.mockResolvedValue(100n); expect(await reputationActions(ADDR)(p).getUserScore({ user: USER })).toBe(100n); });
     it('getCommunityScore', async () => { p.readContract.mockResolvedValue(500n); expect(await reputationActions(ADDR)(p).getCommunityScore({ community: ADDR })).toBe(500n); });
+    it('calculateReputation maps the (communityScore, globalScore) tuple', async () => {
+      p.readContract.mockResolvedValue([42n, 100n]);
+      const res = await reputationActions(ADDR)(p).calculateReputation({ user: USER, community: ADDR, timestamp: 0n });
+      expect(res).toEqual({ communityScore: 42n, globalScore: 100n });
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'calculateReputation',
+        args: [USER, ADDR, 0n],
+      }));
+    });
+    it('getReputationBreakdown maps the per-community (base, nftBonus, activityBonus, multiplier) tuple', async () => {
+      p.readContract.mockResolvedValue([10n, 20n, 30n, 2n]);
+      const res = await reputationActions(ADDR)(p).getReputationBreakdown({ user: USER, community: ADDR, timestamp: 123n });
+      expect(res).toEqual({ baseScore: 10n, nftBonus: 20n, activityBonus: 30n, multiplier: 2n });
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'getReputationBreakdown',
+        args: [USER, ADDR, 123n],
+      }));
+    });
+    it('communityReputations reads the per-community score mapping', async () => {
+      p.readContract.mockResolvedValue(77n);
+      expect(await reputationActions(ADDR)(p).communityReputations({ community: ADDR, user: USER })).toBe(77n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'communityReputations',
+        args: [ADDR, USER],
+      }));
+    });
   });
 
   describe('NFT Boosts', () => {
