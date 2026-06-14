@@ -404,6 +404,11 @@
   },
   {
     "type": "error",
+    "name": "ApproverNoLongerGuardian",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ECDSAInvalidSignature",
     "inputs": []
   },

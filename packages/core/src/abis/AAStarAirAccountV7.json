@@ -128,19 +128,6 @@
     },
     {
       "type": "function",
-      "name": "blsAggregator",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "cancelRecovery",
       "inputs": [],
       "outputs": [],
@@ -343,13 +330,13 @@
           "components": [
             {
               "name": "tier1Limit",
-              "type": "uint256",
-              "internalType": "uint256"
+              "type": "uint128",
+              "internalType": "uint128"
             },
             {
               "name": "tier2Limit",
-              "type": "uint256",
-              "internalType": "uint256"
+              "type": "uint128",
+              "internalType": "uint128"
             },
             {
               "name": "dailyLimit",
@@ -489,13 +476,13 @@
               "components": [
                 {
                   "name": "tier1Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
+                  "type": "uint128",
+                  "internalType": "uint128"
                 },
                 {
                   "name": "tier2Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
+                  "type": "uint128",
+                  "internalType": "uint128"
                 },
                 {
                   "name": "dailyLimit",
@@ -566,13 +553,13 @@
               "components": [
                 {
                   "name": "tier1Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
+                  "type": "uint128",
+                  "internalType": "uint128"
                 },
                 {
                   "name": "tier2Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
+                  "type": "uint128",
+                  "internalType": "uint128"
                 },
                 {
                   "name": "dailyLimit",
@@ -638,13 +625,13 @@
               "components": [
                 {
                   "name": "tier1Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
+                  "type": "uint128",
+                  "internalType": "uint128"
                 },
                 {
                   "name": "tier2Limit",
-                  "type": "uint256",
-                  "internalType": "uint256"
+                  "type": "uint128",
+                  "internalType": "uint128"
                 },
                 {
                   "name": "dailyLimit",
@@ -767,6 +754,19 @@
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "moduleManagementNonce",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -978,19 +978,6 @@
         }
       ],
       "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "setAggregator",
-      "inputs": [
-        {
-          "name": "_aggregator",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -1382,19 +1369,6 @@
           "name": "agentRegistry",
           "type": "address",
           "indexed": false,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "AggregatorSet",
-      "inputs": [
-        {
-          "name": "aggregator",
-          "type": "address",
-          "indexed": true,
           "internalType": "address"
         }
       ],
@@ -2299,6 +2273,11 @@
     },
     {
       "type": "error",
+      "name": "ValidatorAlreadySet",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "WeakeningRequiresProposal",
       "inputs": []
     },
@@ -2369,8 +2348,28 @@
     },
     {
       "type": "function",
+      "name": "cancelModuleInstall",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "cancelWeightChange",
       "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "executeModuleInstall",
+      "inputs": [
+        {
+          "name": "moduleInitData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
       "outputs": [],
       "stateMutability": "nonpayable"
     },
@@ -2403,6 +2402,75 @@
           "internalType": "uint256"
         }
       ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "moduleInstallTimelock",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingModuleInstall",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "moduleTypeId",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "proposedAt",
+          "type": "uint40",
+          "internalType": "uint40"
+        },
+        {
+          "name": "executeAfter",
+          "type": "uint40",
+          "internalType": "uint40"
+        },
+        {
+          "name": "initDataHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "proposeModuleInstall",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "initData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
       "stateMutability": "nonpayable"
     },
     {
@@ -2540,6 +2608,24 @@
         },
         {
           "name": "agentWalletSig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setModuleInstallTimelock",
+      "inputs": [
+        {
+          "name": "newTimelock",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardianSigs",
           "type": "bytes",
           "internalType": "bytes"
         }
