@@ -9,6 +9,47 @@ and produces a fresh account + fresh tx hashes).
 
 ---
 
+## Beta1 — SuperPaymaster-sponsored gasless
+
+**Claim proven:** a PaymasterV4 sponsors the gas of an ERC-4337 v0.7 UserOperation while the smart
+account holds **0 ETH** and pays nothing; the paymaster debits the account's **gas-token deposit** in
+`postOp`. This is the sponsored (paymaster-paid) counterpart to the self-funded `executeUserOp` flow.
+
+- **Script:** `tests/regression/onchain-evidence/beta1-sponsored-gasless.ts` (re-runnable, unique salt per run)
+- **Run:** `pnpm tsx tests/regression/onchain-evidence/beta1-sponsored-gasless.ts`
+
+### Actors & contracts
+
+| Role | Address |
+|------|---------|
+| Smart account (sender, **0 ETH throughout**) | `0xF61d6AfAeBcd01D63C730b31b0d97Bb0A5038264` |
+| PaymasterV4 (gas sponsor) | `0xD0c82dc12B7d65b03dF7972f67d13F1D33469a98` |
+| Gas token (ERC-20, debited in postOp) | `0xDf669834F04988BcEE0E3B6013B6b867Bd38778d` |
+| Owner / operator (JASON) | `0xb5600060e6de5E11D3636731964218E53caadf0E` |
+| beta.4 factory | `0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071` |
+
+### Transactions (all `status=0x1`)
+
+| Step | Tx hash | Etherscan |
+|------|---------|-----------|
+| Account deploy (no ETH funding) | `0x6078e580adc782985fb336d8f5fb8477e338bda952cb793cd99294f4435b5333` | [link](https://sepolia.etherscan.io/tx/0x6078e580adc782985fb336d8f5fb8477e338bda952cb793cd99294f4435b5333) |
+| `depositFor` (credit account's token deposit in paymaster) | `0xba8a89a55eee9e393ed076fd721b99e219a9700e41d93475c948aeb9fda51a09` | [link](https://sepolia.etherscan.io/tx/0xba8a89a55eee9e393ed076fd721b99e219a9700e41d93475c948aeb9fda51a09) |
+| `updatePrice` (refresh stale ETH/USD oracle cache) | `0xb22a472bd0cb8d6bdd787236d8a6788db7748e58546305a39e4c29e4afada04d` | [link](https://sepolia.etherscan.io/tx/0xb22a472bd0cb8d6bdd787236d8a6788db7748e58546305a39e4c29e4afada04d) |
+| **Sponsored UserOp bundle tx** | `0xed4e5c17a1d922aa4d6b04a9cbdba36f7f9034bcf9aced0de4dfc36dfd1fa28d` | [link](https://sepolia.etherscan.io/tx/0xed4e5c17a1d922aa4d6b04a9cbdba36f7f9034bcf9aced0de4dfc36dfd1fa28d) |
+
+UserOp hash: `0x853fd144d7f0eee48feae4f86a280765abaa0be1fd4ffbfc67b29388a4e03b61` · bundler: Pimlico · receipt `success=true`.
+
+### Proof of gaslessness
+
+- **`checkGaslessReadiness` → `isReady=true`** (paymaster stake 0.05 ETH, EntryPoint deposit ~0.237 ETH, token price set, account deposit 200).
+- **Account ETH balance: `0` before AND `0` after** the UserOp — the account paid no gas; the paymaster did.
+- **Account token deposit inside paymaster: `200` → `165.111607…`** (Δ `34.888…` debited by `postOp`) — the paymaster recouped the sponsored gas in the gas token.
+
+### Notes / gotchas discovered
+
+- PaymasterV4 (`contracts/src/paymasters/v4/PaymasterBase.sol`) returns `validUntil = cachedPrice.updatedAt + priceStalenessThreshold`; it does **not** read `validUntil` from `paymasterData`. A stale price cache therefore yields a `validUntil` in the past and the bundler rejects with `UserOperation expires too soon`. `checkGaslessReadiness` only checks `price != 0`, not freshness — so the script adds a step `[3b]` that calls the permissionless `updatePrice()` to re-pull Chainlink before submitting.
+- `paymasterData` layout consumed by the contract is `[token(20)][validUntil(6)][validAfter(6)]` at paymasterData offset (after the 52-byte v0.7 header); `UserOperationBuilder.packPaymasterV4DepositData` matches this.
+
 ## Beta2 — Session keys (secp256k1 + P256)
 
 **What it proves:** the `SessionKeyValidator` **Session-tuple** ABI fix works on the live
