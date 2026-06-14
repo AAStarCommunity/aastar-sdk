@@ -26,6 +26,7 @@
     "audit": "pnpm audit --audit-level=moderate",
     "audit:fix": "pnpm audit --fix",
     "audit:abi": "tsx scripts/analyze_abi_coverage.ts",
+    "check:addresses": "tsx scripts/check-address-consistency.ts",
     "security:check": "bash scripts/security_audit.sh",
     "security:full": "pnpm audit && bash scripts/security_audit.sh",
     "precommit": "pnpm security:check",

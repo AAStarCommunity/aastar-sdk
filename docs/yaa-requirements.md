@@ -60,9 +60,19 @@
 - **Challenge:** YAA may be on ethers; SDK is viem. Rather than ship an adapter the SDK has to maintain, provide a documented pattern + a runnable example.
 - **Solution:** a `docs/` adapter guide (ethers Signer → viem WalletClient) + a verified `@safe-global` signing example; only ship an adapter helper if YAA truly can't bridge.
 
-### P2.8 — `CANONICAL_ADDRESSES` vs `@aastar/shared-config` single source → 🔨 CLARIFY
+### P2.8 — `CANONICAL_ADDRESSES` vs `@aastar/shared-config` single source → ✅ RESOLVED
 - **Challenge:** double-maintaining addresses is a real drift risk.
-- **Solution:** pick ONE source of truth (recommend `@aastar/core` `CANONICAL_ADDRESSES`) and have `shared-config` derive from it (or vice-versa), documented; add a CI check that they don't diverge.
+- **Investigation (actual state):**
+  - `@aastar/shared-config` is **not** a workspace package. It is an independent external repo (`AAStarCommunity/aastar-shared-config`) vendored here only as two git submodules (`ext/aastar-shared-config`, `lib/shared-config`), pinned to an old commit (~v0.2.13). Its addresses are stale and differ entirely from the SDK's live tables, and it is **not consumed by the SDK runtime** (its only import, in `scripts/deploy_paymaster_v4.ts`, is `// @ts-ignore`'d and unresolved). So it is not actually a competing source of truth for the SDK.
+  - The real address flow in the SDK is: `ENV` > `config.{network}.json` (only when `AASTAR_LOAD_LOCAL_CONFIG=1`, via `packages/core/src/node-init.ts`) > **`CANONICAL_ADDRESSES`** (`packages/core/src/addresses.ts`) → `constants.ts` (`*_ADDRESS`) → `contract-addresses.ts` (`CORE_ADDRESSES` …) → consumers.
+  - The operative drift risk is therefore **`config.{network}.json` ↔ `CANONICAL_ADDRESSES`**, not core ↔ shared-config.
+- **Decision:** `@aastar/core` `CANONICAL_ADDRESSES` is the **single source of truth**. `config.{network}.json` files are dev/deploy-time overrides that must agree with it for any network that has a canonical chainId entry. `@aastar/shared-config` stays an independent external repo (out of scope for this check).
+- **Solution shipped:** `scripts/check-address-consistency.ts` (npm: `pnpm run check:addresses`) asserts every address key shared between `config.{network}.json` and `CANONICAL_ADDRESSES[chainId]` matches; wired into CI (`.github/workflows/ci.yml`).
+- **Pre-existing drift found (needs human reconciliation, NOT auto-fixed):**
+  - `config.op-sepolia.json` (chain 11155420): 14/16 address keys diverge — the file appears to be a **stale clone of `config.optimism.json`** (identical `srcHash`, holds chain-10 Optimism mainnet addresses instead of OP-Sepolia). Canonical has the genuine OP-Sepolia deployment.
+  - `config.sepolia.json` `pnts`: `0x5aa8…` (config) vs `0x6a23…` (canonical, "Anni's xPNTsToken").
+  - Suspected typo in canonical itself: chain-11155420 `simpleAccountFactory` = `0x91E6060…` vs the deterministic `0x91E60e0…` used on chains 10/11155111 — verify on-chain before reconciling.
+  - `config.optimism.json` and `config.op-mainnet.json` (both chain 10) are clean.
 
 ---
 

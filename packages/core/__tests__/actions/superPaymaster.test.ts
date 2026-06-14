@@ -220,6 +220,50 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       expect(p.readContract).toHaveBeenNthCalledWith(1, expect.objectContaining({ functionName: 'pendingAPNTsToken', args: [] }));
       expect(p.readContract).toHaveBeenNthCalledWith(2, expect.objectContaining({ functionName: 'pendingAPNTsTokenEta', args: [] }));
     });
+    it('resolveAPNTsToken returns active + pending from chain', async () => {
+      const ACTIVE = '0xaaaa000000000000000000000000000000000001' as `0x${string}`;
+      const PENDING = '0xbbbb000000000000000000000000000000000002' as `0x${string}`;
+      // Reads run via Promise.all; route by functionName so order is irrelevant.
+      p.readContract.mockImplementation(({ functionName }: any) => {
+        if (functionName === 'APNTS_TOKEN') return Promise.resolve(ACTIVE);
+        if (functionName === 'pendingAPNTsToken') return Promise.resolve(PENDING);
+        if (functionName === 'pendingAPNTsTokenEta') return Promise.resolve(9999n);
+        return Promise.reject(new Error('unexpected functionName'));
+      });
+      const act = superPaymasterActions(A)(p);
+      const res = await act.resolveAPNTsToken();
+      expect(res).toEqual({ active: ACTIVE, pending: PENDING, pendingEta: 9999n, fallbackUsed: false });
+      expect(p.readContract).toHaveBeenCalledTimes(3);
+    });
+    it('resolveAPNTsToken reports no pending migration as zeroAddress', async () => {
+      const ACTIVE = '0xaaaa000000000000000000000000000000000001' as `0x${string}`;
+      const ZERO = '0x0000000000000000000000000000000000000000';
+      p.readContract.mockImplementation(({ functionName }: any) => {
+        if (functionName === 'APNTS_TOKEN') return Promise.resolve(ACTIVE);
+        if (functionName === 'pendingAPNTsToken') return Promise.resolve(ZERO);
+        if (functionName === 'pendingAPNTsTokenEta') return Promise.resolve(0n);
+        return Promise.reject(new Error('unexpected functionName'));
+      });
+      const act = superPaymasterActions(A)(p);
+      const res = await act.resolveAPNTsToken();
+      expect(res.active).toBe(ACTIVE);
+      expect(res.pending).toBe(ZERO);
+      expect(res.pendingEta).toBe(0n);
+      expect(res.fallbackUsed).toBe(false);
+    });
+    it('resolveAPNTsToken uses explicit fallback when chain read fails', async () => {
+      const FALLBACK = '0xcccc000000000000000000000000000000000003' as `0x${string}`;
+      const ZERO = '0x0000000000000000000000000000000000000000';
+      p.readContract.mockRejectedValue(new Error('rpc down'));
+      const act = superPaymasterActions(A)(p);
+      const res = await act.resolveAPNTsToken({ fallback: FALLBACK });
+      expect(res).toEqual({ active: FALLBACK, pending: ZERO, pendingEta: 0n, fallbackUsed: true });
+    });
+    it('resolveAPNTsToken rethrows when read fails and no fallback given', async () => {
+      p.readContract.mockRejectedValue(new Error('rpc down'));
+      const act = superPaymasterActions(A)(p);
+      await expect(act.resolveAPNTsToken()).rejects.toThrow();
+    });
     it('emergency price writes', async () => {
       w.writeContract.mockResolvedValue('0x');
       const act = superPaymasterActions(A)(w);
