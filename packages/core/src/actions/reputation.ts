@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { ReputationSystemABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 export type ReputationRule = {
     baseScore: bigint;
@@ -35,7 +35,21 @@ export type ReputationActions = {
     computeScore: (args: { user: Address, communities: Address[], ruleIds: Hex[][], activities: bigint[][] }) => Promise<bigint>;
     calculateReputation: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<{ communityScore: bigint, globalScore: bigint }>;
     getReputationBreakdown: (args: { user: Address, community: Address, timestamp: bigint }) => Promise<ReputationBreakdown>;
+    /**
+     * @deprecated NOT available on-chain. `getUserScore` does not exist in the deployed
+     * ReputationSystem ABI (calling it reverts). There is no single-argument global score
+     * getter — use {@link calculateReputation} (returns `globalScore`, requires a community
+     * + timestamp) or read `globalReputation(user)` from the Registry contract instead.
+     * This method now throws a descriptive error rather than reverting on-chain.
+     */
     getUserScore: (args: { user: Address }) => Promise<bigint>;
+    /**
+     * @deprecated NOT available on-chain. `getCommunityScore` does not exist in the deployed
+     * ReputationSystem ABI (calling it reverts). There is no aggregate per-community score
+     * getter — use {@link communityReputations} (per-user community score) or
+     * {@link calculateReputation} (returns `communityScore` for a given user) instead.
+     * This method now throws a descriptive error rather than reverting on-chain.
+     */
     getCommunityScore: (args: { community: Address }) => Promise<bigint>;
     communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>;
     setCommunityReputation: (args: { community: Address, user: Address, score: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -257,32 +271,36 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         }
     },
 
+    /**
+     * @deprecated `getUserScore` is absent from the deployed ReputationSystem ABI — there
+     * is no single-argument global score getter. Throws instead of issuing a call that
+     * would revert on-chain. Use `calculateReputation({ user, community, timestamp })`
+     * (read its `globalScore`) or the Registry's `globalReputation(user)` getter.
+     */
     async getUserScore({ user }) {
-        try {
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'getUserScore',
-                args: [user]
-            }) as bigint;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getUserScore');
-        }
+        validateAddress(user, 'user');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'getUserScore is not available on-chain: the deployed ReputationSystem ABI has ' +
+            'no getUserScore function. Use calculateReputation({ user, community, timestamp }) ' +
+            'and read globalScore, or read globalReputation(user) from the Registry contract.'
+        );
     },
 
+    /**
+     * @deprecated `getCommunityScore` is absent from the deployed ReputationSystem ABI —
+     * there is no aggregate per-community score getter. Throws instead of issuing a call
+     * that would revert on-chain. Use `communityReputations({ community, user })` for a
+     * per-user community score, or `calculateReputation(...)` and read `communityScore`.
+     */
     async getCommunityScore({ community }) {
-        try {
-            validateAddress(community, 'community');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'getCommunityScore',
-                args: [community]
-            }) as bigint;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getCommunityScore');
-        }
+        validateAddress(community, 'community');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'getCommunityScore is not available on-chain: the deployed ReputationSystem ABI ' +
+            'has no getCommunityScore function. Use communityReputations({ community, user }) ' +
+            'for a per-user community score, or calculateReputation(...) and read communityScore.'
+        );
     },
 
     async communityReputations({ community, user }) {

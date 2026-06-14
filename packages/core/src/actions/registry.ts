@@ -18,6 +18,81 @@ const COMMUNITY_ROLE_DATA_PARAMS = [{
     ]
 }] as const;
 
+/**
+ * Reconstruct the ACTIVE members of a role via event indexing.
+ *
+ * The deployed v5 Registry has NO `getRoleMembers` getter (storage was slimmed;
+ * members are not enumerable on-chain). Members are recovered from the membership
+ * lifecycle events: `RoleRegistered` (join, emitted by both `registerRole` and
+ * `safeMintForRole`) minus `RoleExited` (exit). Per user we keep only the LATEST
+ * lifecycle event (ordered by blockNumber, then logIndex) so a join -> exit ->
+ * re-join sequence — which naive set subtraction would mishandle — resolves to
+ * "active". (RoleRevoked / RoleGranted are OZ AccessControl events with different
+ * arg names and are NOT part of the registerRole/exitRole lifecycle.)
+ */
+const computeActiveRoleMembers = async (
+    client: PublicClient,
+    address: Address,
+    roleId: Hex,
+    fromBlock?: BlockNumber | BlockTag,
+    toBlock?: BlockNumber | BlockTag
+): Promise<Address[]> => {
+    const findEvent = (name: string): AbiEvent => {
+        const ev = (RegistryABI as readonly any[]).find(
+            (item) => item.type === 'event' && item.name === name
+        ) as AbiEvent | undefined;
+        if (!ev) {
+            throw new Error(`${name} event not found in Registry ABI`);
+        }
+        return ev;
+    };
+    const roleRegisteredEvent = findEvent('RoleRegistered');
+    const roleExitedEvent = findEvent('RoleExited');
+
+    const range = {
+        address,
+        fromBlock: fromBlock ?? 'earliest',
+        toBlock: toBlock ?? 'latest'
+    } as const;
+
+    const [joinLogs, exitLogs] = await Promise.all([
+        client.getLogs({ ...range, event: roleRegisteredEvent, args: { roleId } } as any),
+        client.getLogs({ ...range, event: roleExitedEvent, args: { roleId } } as any)
+    ]);
+
+    type Lifecycle = { active: boolean; blockNumber: bigint; logIndex: number };
+    const latest = new Map<string, Lifecycle>();
+    const addressByKey = new Map<string, Address>();
+
+    const ingest = (logs: readonly any[], active: boolean) => {
+        for (const log of logs) {
+            const user = (log.args?.user ?? '') as string;
+            if (!user) continue;
+            const key = user.toLowerCase();
+            // Pending logs may carry null blockNumber/logIndex; treat them as newest.
+            const blockNumber = (log.blockNumber ?? 0n) as bigint;
+            const logIndex = Number(log.logIndex ?? 0);
+            const prev = latest.get(key);
+            if (!prev || blockNumber > prev.blockNumber ||
+                (blockNumber === prev.blockNumber && logIndex >= prev.logIndex)) {
+                latest.set(key, { active, blockNumber, logIndex });
+                addressByKey.set(key, user as Address); // preserve checksummed address
+            }
+        }
+    };
+
+    ingest(joinLogs, true);
+    ingest(exitLogs, false);
+
+    const members: Address[] = [];
+    for (const [key, state] of latest) {
+        if (state.active) {
+            members.push(addressByKey.get(key) as Address);
+        }
+    }
+    return members;
+};
+
 export type RoleConfigDetailed = {
     minStake: bigint;
     ticketPrice: bigint;
@@ -75,7 +150,9 @@ export type RegistryActions = {
     roleMetadata: (args: { roleId: Hex, user: Address }) => Promise<Hex>;
     
     // Community Management
+    /** @deprecated The deployed v5 Registry ABI has no `communityByName` function — use {@link getCommunityByName}. This wrapper now delegates to `getCommunityByName` so it no longer reverts on-chain. */
     communityByName: (args: { name: string }) => Promise<Address>;
+    /** @deprecated The deployed v5 Registry ABI has no `communityByENS` function — use {@link getCommunityByENS}. This wrapper now delegates to `getCommunityByENS` so it no longer reverts on-chain. */
     communityByENS: (args: { ensName: string }) => Promise<Address>;
     // On-chain community registry getters (ABI-confirmed: getCommunityByName/getCommunityByENS).
     getCommunityByName: (args: { name: string }) => Promise<Address>;
@@ -110,7 +187,35 @@ export type RegistryActions = {
     // View Functions
     roleConfigs: (args: { roleId: Hex }) => Promise<RoleConfigDetailed>;
     getRoleUserCount: (args: { roleId: Hex }) => Promise<bigint>;
-    getRoleMembers: (args: { roleId: Hex }) => Promise<Address[]>;
+    /**
+     * Active members of a role, derived by event indexing.
+     *
+     * The deployed v5 Registry slimmed its storage: there is NO `getRoleMembers`
+     * getter in the ABI (members are not enumerable on-chain), so this is reconstructed
+     * from the membership-lifecycle events — `RoleRegistered` (join, emitted by both
+     * `registerRole` and `safeMintForRole`) minus `RoleExited` (exit). For each user we
+     * keep their LATEST lifecycle event (by block number, then log index) so a user who
+     * exited and later re-registered is correctly counted as active.
+     *
+     * ⚠️ The result is only as complete as the underlying `getLogs` response. Many RPC
+     * providers cap the block range or the number of logs returned and may SILENTLY
+     * truncate — in which case the member list will be incomplete with no error. This
+     * helper does NOT paginate. For large histories, pass a bounded `fromBlock`/`toBlock`
+     * window (and page yourself), or use an indexed data source (subgraph/indexer).
+     */
+    getRoleMembers: (args: { roleId: Hex, fromBlock?: BlockNumber | BlockTag, toBlock?: BlockNumber | BlockTag }) => Promise<Address[]>;
+    /**
+     * Count of active members for a role, derived from the same event indexing as
+     * {@link getRoleMembers} (i.e. `getRoleMembers(...).length`).
+     *
+     * NOTE: this differs from {@link getRoleUserCount}, which reads the on-chain
+     * `roleMembers[roleId].length` counter directly. Prefer `getRoleUserCount` when you
+     * only need a count and an authoritative on-chain value is acceptable; use this when
+     * you also need the member addresses or want a count consistent with `getRoleMembers`
+     * over a specific block range. Subject to the same `getLogs` truncation caveat as
+     * {@link getRoleMembers} — prefer `getRoleUserCount` for an authoritative count.
+     */
+    getRoleMemberCount: (args: { roleId: Hex, fromBlock?: BlockNumber | BlockTag, toBlock?: BlockNumber | BlockTag }) => Promise<number>;
     getUserRoles: (args: { user: Address }) => Promise<Hex[]>;
     roleMembers: (args: { roleId: Hex, index: bigint }) => Promise<Address>;
     userRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
@@ -359,13 +464,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     // Community Management
+    /**
+     * @deprecated Legacy alias. `communityByName` does NOT exist in the deployed v5
+     * Registry ABI (it would revert with "function does not exist"); the real getter is
+     * `getCommunityByName`. This wrapper now delegates to the ABI-confirmed function so
+     * existing callers keep working. Prefer {@link getCommunityByName} directly.
+     */
     async communityByName({ name }) {
         try {
             validateRequired(name, 'name');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'communityByName',
+                functionName: 'getCommunityByName',
                 args: [name]
             }) as Promise<Address>;
         } catch (error) {
@@ -373,13 +484,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
+    /**
+     * @deprecated Legacy alias. `communityByENS` does NOT exist in the deployed v5
+     * Registry ABI (it would revert with "function does not exist"); the real getter is
+     * `getCommunityByENS`. This wrapper now delegates to the ABI-confirmed function so
+     * existing callers keep working. Prefer {@link getCommunityByENS} directly.
+     */
     async communityByENS({ ensName }) {
         try {
             validateRequired(ensName, 'ensName');
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'communityByENS',
+                functionName: 'getCommunityByENS',
                 args: [ensName]
             }) as Promise<Address>;
         } catch (error) {
@@ -818,17 +935,25 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async getRoleMembers({ roleId }) {
+    async getRoleMembers({ roleId, fromBlock, toBlock }) {
         try {
             validateRequired(roleId, 'roleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'getRoleMembers',
-                args: [roleId]
-            }) as Promise<Address[]>;
+            // No on-chain getter exists — derive ACTIVE members via event indexing.
+            return await computeActiveRoleMembers(client as PublicClient, address, roleId, fromBlock, toBlock);
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getRoleMembers');
+        }
+    },
+
+    async getRoleMemberCount({ roleId, fromBlock, toBlock }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            // Event-derived count, consistent with getRoleMembers. For the authoritative
+            // on-chain counter use getRoleUserCount (reads roleMembers[roleId].length).
+            const members = await computeActiveRoleMembers(client as PublicClient, address, roleId, fromBlock, toBlock);
+            return members.length;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleMemberCount');
         }
     },
 
