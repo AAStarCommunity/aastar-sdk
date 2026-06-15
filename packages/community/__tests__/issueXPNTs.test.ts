@@ -136,4 +136,38 @@ describe('CommunityClient.issueXPNTs', () => {
         await expect(client.issueXPNTs(PARAMS)).rejects.toThrow(/ROLE_COMMUNITY/);
         expect(writeContract).not.toHaveBeenCalled();
     });
+
+    it('ignores a same-shaped event from a NON-factory address (anti-spoof) and uses the real factory log', async () => {
+        const ATTACKER_TOKEN = '0x8888888888888888888888888888888888888888' as Address;
+        // A valid-shaped xPNTsTokenDeployed, but emitted by a non-factory contract,
+        // placed FIRST so it would win the loop without the address filter.
+        const spoof = {
+            ...buildDeployedLog(COMMUNITY_ADDRESS, ATTACKER_TOKEN, 'Spoof', 'SPF'),
+            address: '0x7777777777777777777777777777777777777777' as Address,
+        };
+        const real = buildDeployedLog(COMMUNITY_ADDRESS, DEPLOYED_TOKEN, PARAMS.name, PARAMS.symbol);
+        waitForTransactionReceipt.mockResolvedValueOnce({ logs: [spoof, real] });
+
+        const result = await client.issueXPNTs(PARAMS);
+        expect(result.xpntsAddress.toLowerCase()).toBe(DEPLOYED_TOKEN.toLowerCase());
+        expect(result.xpntsAddress.toLowerCase()).not.toBe(ATTACKER_TOKEN.toLowerCase());
+    });
+});
+
+describe('CommunityClient.launchCommunity — zero-value guard', () => {
+    it('fast-fails a zero stake+burn launch before any on-chain call', async () => {
+        const walletClient: any = {
+            account: { address: ACCOUNT_ADDRESS },
+            chain: { id: 31337 },
+            writeContract: vi.fn(),
+        };
+        const publicClient: any = { waitForTransactionReceipt: vi.fn() };
+        const client = new CommunityClient(publicClient, walletClient);
+
+        await expect(
+            client.launchCommunity({ name: 'ZeroDAO', stakeAmount: 0n, entryBurn: 0n })
+        ).rejects.toThrow(/must be > 0/);
+        // No approve/stake/register was submitted.
+        expect(walletClient.writeContract).not.toHaveBeenCalled();
+    });
 });

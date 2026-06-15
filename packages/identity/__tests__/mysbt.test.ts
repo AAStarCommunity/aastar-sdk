@@ -26,9 +26,9 @@ describe('mysbt actions', () => {
             expect(await checkMySBT(client, SBT, USER)).toEqual({ hasSBT: false, balance: 0n });
         });
 
-        it('swallows read errors and returns hasSBT=false', async () => {
+        it('propagates read errors instead of masking them as no-SBT (false negative)', async () => {
             const client = mockClient(() => { throw new Error('rpc down'); });
-            expect(await checkMySBT(client, SBT, USER)).toEqual({ hasSBT: false });
+            await expect(checkMySBT(client, SBT, USER)).rejects.toThrow(/rpc down/);
         });
     });
 
@@ -47,9 +47,9 @@ describe('mysbt actions', () => {
             expect(await getMySBTId(client, SBT, USER)).toBeNull();
         });
 
-        it('returns null on read error', async () => {
+        it('propagates read errors instead of masking them as no-SBT (false negative)', async () => {
             const client = mockClient(() => { throw new Error('rpc down'); });
-            expect(await getMySBTId(client, SBT, USER)).toBeNull();
+            await expect(getMySBTId(client, SBT, USER)).rejects.toThrow(/rpc down/);
         });
     });
 });
