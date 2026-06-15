@@ -14,7 +14,7 @@ import { ROLE_PAYMASTER_AOA, ROLE_PAYMASTER_SUPER } from './roles.js';
  * - `AOA+` — a SHARED SuperPaymaster operator (role `ROLE_PAYMASTER_SUPER`).
  *   Readiness = that role + a GToken role stake + a community-issued SBT.
  *
- * In both modes the "stake" is the on-chain `roleStakes(roleId, operator)`
+ * In both modes the "stake" is the on-chain `getRoleStake(roleId, operator)`
  * recorded by the Registry — NOT the operator's plain GToken wallet balance.
  */
 export type OperatorMode = 'AOA' | 'AOA+';
@@ -31,7 +31,7 @@ export interface ResourceBoolCheck {
 
 /** Role-stake sub-check result. */
 export interface ResourceStakeCheck {
-    /** Current on-chain role stake (`roleStakes(roleId, operator)`). */
+    /** Current on-chain role stake (`getRoleStake(roleId, operator)`). */
     staked: bigint;
     /** Minimum stake required for this mode. */
     required: bigint;
@@ -68,7 +68,7 @@ const ERC20_ABI = parseAbi([
 
 const REGISTRY_ABI = parseAbi([
     'function hasRole(bytes32, address) view returns (bool)',
-    'function roleStakes(bytes32, address) view returns (uint256)'
+    'function getRoleStake(bytes32, address) view returns (uint256)'
 ]);
 
 const MYSBT_ABI = parseAbi([
@@ -283,7 +283,7 @@ export class RequirementChecker {
     }
 
     /**
-     * Check a user's on-chain role stake (`roleStakes(roleId, operator)`) (shortcut).
+     * Check a user's on-chain role stake (`getRoleStake(roleId, operator)`) (shortcut).
      */
     async checkRoleStake(roleId: `0x${string}`, address: Address, required: bigint): Promise<{
         staked: bigint;
@@ -293,7 +293,7 @@ export class RequirementChecker {
         const staked = await this.publicClient.readContract({
             address: this.addresses?.registry || CORE_ADDRESSES.registry,
             abi: REGISTRY_ABI,
-            functionName: 'roleStakes',
+            functionName: 'getRoleStake',
             args: [roleId, address]
         }) as bigint;
 

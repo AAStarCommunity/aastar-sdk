@@ -28,7 +28,10 @@ function mockReads(p: any, opts: {
             const [roleId] = args;
             return (opts.rolesHeld ?? []).includes(roleId);
         }
-        if (functionName === 'roleStakes') {
+        // Must be the REAL Registry getter `getRoleStake` — the mock rejects any
+        // other name, so a regression back to a non-existent fn (e.g. `roleStakes`)
+        // fails here instead of slipping through to an on-chain revert.
+        if (functionName === 'getRoleStake') {
             const [roleId] = args;
             return opts.stakes?.[roleId] ?? 0n;
         }
@@ -63,6 +66,12 @@ describe('RequirementChecker.checkResources', () => {
             expect(report.checks.stake?.ok).toBe(true);
             // AOA tier does not require an SBT.
             expect(report.checks.sbt).toBeUndefined();
+            // The stake read MUST use the real Registry getter `getRoleStake`
+            // (regression guard for the `roleStakes` DOA bug — that fn is absent
+            // from the deployed Registry ABI and reverts on-chain).
+            const stakeCall = p.readContract.mock.calls.find((c: any) => c[0].functionName === 'getRoleStake');
+            expect(stakeCall).toBeDefined();
+            expect(stakeCall[0].args).toEqual([ROLE_PAYMASTER_AOA, WALLET]);
         });
 
         it('ready=false with a role issue when PAYMASTER_AOA role is missing', async () => {
