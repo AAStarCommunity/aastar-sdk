@@ -40,7 +40,23 @@ export type ChannelActions = {
 
     // Read
     getChannel: (args: { channelId: Hex }) => Promise<ChannelState>;
+    /**
+     * @deprecated The deployed MicroPaymentChannel ABI no longer exposes a `CLOSE_TIMEOUT`
+     * constant — it was replaced by the configurable {@link closeTimeout} getter plus the
+     * {@link MIN_CLOSE_TIMEOUT}/{@link MAX_CLOSE_TIMEOUT} bounds. This wrapper will revert
+     * on-chain; use {@link closeTimeout} instead.
+     */
     CLOSE_TIMEOUT: () => Promise<bigint>;
+    /** Current configurable close-timeout (seconds, view). ABI: closeTimeout() -> uint64. */
+    closeTimeout: () => Promise<bigint>;
+    /** Set the configurable close-timeout window (owner-gated). ABI: setCloseTimeout(uint64 _timeout). */
+    setCloseTimeout: (args: { timeout: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** Whether a given channelId has already been closed (view). ABI: closedChannels(bytes32) -> bool. */
+    closedChannels: (args: { channelId: Hex }) => Promise<boolean>;
+    /** Upper bound for {@link setCloseTimeout} (view). ABI: MAX_CLOSE_TIMEOUT() -> uint64. */
+    MAX_CLOSE_TIMEOUT: () => Promise<bigint>;
+    /** Lower bound for {@link setCloseTimeout} (view). ABI: MIN_CLOSE_TIMEOUT() -> uint64. */
+    MIN_CLOSE_TIMEOUT: () => Promise<bigint>;
     VOUCHER_TYPEHASH: () => Promise<Hex>;
     version: () => Promise<string>;
 };
@@ -170,6 +186,66 @@ export const channelActions = (address: Address) => (client: PublicClient | Wall
             }) as bigint;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'CLOSE_TIMEOUT');
+        }
+    },
+
+    async closeTimeout() {
+        try {
+            return await (client as PublicClient).readContract({
+                address, abi: MicroPaymentChannelABI,
+                functionName: 'closeTimeout'
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'closeTimeout');
+        }
+    },
+
+    async setCloseTimeout({ timeout, account }) {
+        try {
+            validateRequired(timeout, 'timeout');
+            return await (client as any).writeContract({
+                address, abi: MicroPaymentChannelABI,
+                functionName: 'setCloseTimeout',
+                args: [timeout],
+                account: account as any, chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setCloseTimeout');
+        }
+    },
+
+    async closedChannels({ channelId }) {
+        try {
+            validateRequired(channelId, 'channelId');
+            return await (client as PublicClient).readContract({
+                address, abi: MicroPaymentChannelABI,
+                functionName: 'closedChannels',
+                args: [channelId]
+            }) as boolean;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'closedChannels');
+        }
+    },
+
+    async MAX_CLOSE_TIMEOUT() {
+        try {
+            return await (client as PublicClient).readContract({
+                address, abi: MicroPaymentChannelABI,
+                functionName: 'MAX_CLOSE_TIMEOUT'
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'MAX_CLOSE_TIMEOUT');
+        }
+    },
+
+    async MIN_CLOSE_TIMEOUT() {
+        try {
+            return await (client as PublicClient).readContract({
+                address, abi: MicroPaymentChannelABI,
+                functionName: 'MIN_CLOSE_TIMEOUT'
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'MIN_CLOSE_TIMEOUT');
         }
     },
 

@@ -171,6 +171,19 @@ export type RegistryActions = {
     globalReputation: (args: { user: Address }) => Promise<bigint>;
     addLevelThreshold: (args: { threshold: bigint, account?: Account | Address }) => Promise<Hash>;
     batchUpdateGlobalReputation: (args: { proposalId: bigint, users: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** Set the credit limit for a reputation level/tier (owner-gated). ABI: setCreditTier(uint256 level, uint256 limit). */
+    setCreditTier: (args: { level: bigint, limit: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** Replace the full reputation level-threshold array (owner-gated). ABI: setLevelThresholds(uint256[] thresholds). */
+    setLevelThresholds: (args: { thresholds: bigint[], account?: Account | Address }) => Promise<Hash>;
+    /**
+     * Update an operator's per-user blacklist in batch with a proof.
+     * ABI: updateOperatorBlacklist(address operator, address[] users, bool[] statuses, bytes proof).
+     */
+    updateOperatorBlacklist: (args: { operator: Address, users: Address[], statuses: boolean[], proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** Sync a user's role stake from the GTokenStaking contract (staking-gated). ABI: syncStakeFromStaking(address user, bytes32 roleId, uint256 newAmount). */
+    syncStakeFromStaking: (args: { user: Address, roleId: Hex, newAmount: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** Monotonic nonce bumped on each operator-blacklist update (view). ABI: blacklistNonce() -> uint256. */
+    blacklistNonce: () => Promise<bigint>;
     
     // Contract References
     setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
@@ -1184,6 +1197,90 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'revokeRole');
+        }
+    },
+
+    // Credit & Reputation (admin)
+    async setCreditTier({ level, limit, account }) {
+        try {
+            validateRequired(level, 'level');
+            validateRequired(limit, 'limit');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setCreditTier',
+                args: [level, limit],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setCreditTier');
+        }
+    },
+
+    async setLevelThresholds({ thresholds, account }) {
+        try {
+            validateRequired(thresholds, 'thresholds');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'setLevelThresholds',
+                args: [thresholds],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setLevelThresholds');
+        }
+    },
+
+    async updateOperatorBlacklist({ operator, users, statuses, proof, account }) {
+        try {
+            validateAddress(operator, 'operator');
+            validateRequired(users, 'users');
+            validateRequired(statuses, 'statuses');
+            validateRequired(proof, 'proof');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'updateOperatorBlacklist',
+                args: [operator, users, statuses, proof],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'updateOperatorBlacklist');
+        }
+    },
+
+    async syncStakeFromStaking({ user, roleId, newAmount, account }) {
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            validateRequired(newAmount, 'newAmount');
+            return await (client as any).writeContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'syncStakeFromStaking',
+                args: [user, roleId, newAmount],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'syncStakeFromStaking');
+        }
+    },
+
+    async blacklistNonce() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'blacklistNonce',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'blacklistNonce');
         }
     },
 

@@ -82,7 +82,9 @@ export type ReputationActions = {
     
     // Constants
     REGISTRY: () => Promise<Address>;
-    
+    /** Max number of NFT collections that can grant a reputation boost (view). ABI: MAX_BOOSTED_COLLECTIONS() -> uint256. */
+    MAX_BOOSTED_COLLECTIONS: () => Promise<bigint>;
+
     // Ownership
     owner: () => Promise<Address>;
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
@@ -623,6 +625,19 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
             }) as Address;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'REGISTRY');
+        }
+    },
+
+    async MAX_BOOSTED_COLLECTIONS() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: ReputationSystemABI,
+                functionName: 'MAX_BOOSTED_COLLECTIONS',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'MAX_BOOSTED_COLLECTIONS');
         }
     },
 
