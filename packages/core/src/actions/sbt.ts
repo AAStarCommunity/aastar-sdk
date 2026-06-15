@@ -189,6 +189,13 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
                     account: account as any,
                     chain: (client as any).chain
                 });
+                // A SUBMITTED tx is not a SUCCESSFUL one — wait for the receipt and
+                // require status 'success'. Otherwise an on-chain revert would be
+                // silently reported as ok:true (false positive).
+                const receipt = await (client as any).waitForTransactionReceipt({ hash: txHash });
+                if (receipt?.status !== 'success') {
+                    throw new Error(`airdropMint reverted on-chain (status=${receipt?.status}) for ${user}, tx ${txHash}`);
+                }
                 result = { user, ok: true, txHash };
             } catch (error) {
                 const wrapped = AAStarError.fromViemError(error as Error, 'batchAirdropMint');

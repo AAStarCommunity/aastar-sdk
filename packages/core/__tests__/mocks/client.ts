@@ -28,6 +28,10 @@ export const createMockWalletClient = (): WalletClient => {
     writeContract: vi.fn(),
     readContract: vi.fn(),
     sendTransaction: vi.fn(),
+    // Role-based SDK clients extend a wallet client with public actions, so
+    // receipt-waits are available on the same client used for writes. Defaults
+    // to a successful receipt; override per-test to simulate an on-chain revert.
+    waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: 'success' }),
     account: { address: '0x1234567890123456789012345678901234567890' },
     chain: { id: 11155111 }, // Sepolia
   } as any;

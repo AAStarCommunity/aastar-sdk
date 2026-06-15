@@ -134,6 +134,24 @@ describe('SBTActions Exhaustive Coverage', () => {
       expect(progress).toEqual([1, 2, 3]);
     });
 
+    it('reports ok:false when the tx is mined but REVERTED (submit != success)', async () => {
+      w.writeContract.mockResolvedValue('0xdead');
+      // Tx lands on-chain but reverts — must NOT be a false-positive ok:true.
+      w.waitForTransactionReceipt.mockResolvedValue({ status: 'reverted' });
+      const act = sbtActions(ADDR)(w);
+
+      const results = await act.batchAirdropMint({
+        items: [{ user: USER_A, roleId: '0x01', roleData: '0x' }],
+        account: USER,
+        continueOnError: true,
+      });
+
+      expect(w.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: '0xdead' });
+      expect(results[0].ok).toBe(false);
+      expect(results[0].txHash).toBeUndefined();
+      expect(typeof results[0].error).toBe('string');
+    });
+
     it('without continueOnError it rethrows after recording the failing item', async () => {
       w.writeContract
         .mockResolvedValueOnce('0xaa')
