@@ -18,8 +18,16 @@ describe('ReputationActions Bulk Coverage', () => {
     it('isRuleActive', async () => { p.readContract.mockResolvedValue(true); expect(await reputationActions(ADDR)(p).isRuleActive({ ruleId: '0x01' })).toBe(true); });
     it('getActiveRules', async () => { p.readContract.mockResolvedValue(['0x01']); expect(await reputationActions(ADDR)(p).getActiveRules({ community: ADDR })).toEqual(['0x01']); });
     it('getRuleCount', async () => { p.readContract.mockResolvedValue(5n); expect(await reputationActions(ADDR)(p).getRuleCount()).toBe(5n); });
-    it('getUserScore', async () => { p.readContract.mockResolvedValue(100n); expect(await reputationActions(ADDR)(p).getUserScore({ user: USER })).toBe(100n); });
-    it('getCommunityScore', async () => { p.readContract.mockResolvedValue(500n); expect(await reputationActions(ADDR)(p).getCommunityScore({ community: ADDR })).toBe(500n); });
+    // getUserScore / getCommunityScore do NOT exist in the deployed ReputationSystem ABI.
+    // They must throw a descriptive error instead of issuing a call that reverts on-chain.
+    it('getUserScore throws (not available on-chain) and never calls readContract', async () => {
+      await expect(reputationActions(ADDR)(p).getUserScore({ user: USER })).rejects.toThrow('not available on-chain');
+      expect(p.readContract).not.toHaveBeenCalled();
+    });
+    it('getCommunityScore throws (not available on-chain) and never calls readContract', async () => {
+      await expect(reputationActions(ADDR)(p).getCommunityScore({ community: ADDR })).rejects.toThrow('not available on-chain');
+      expect(p.readContract).not.toHaveBeenCalled();
+    });
     it('calculateReputation maps the (communityScore, globalScore) tuple', async () => {
       p.readContract.mockResolvedValue([42n, 100n]);
       const res = await reputationActions(ADDR)(p).calculateReputation({ user: USER, community: ADDR, timestamp: 0n });
