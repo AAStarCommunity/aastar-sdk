@@ -227,6 +227,13 @@ export class CommunityClient {
 
         // PRE-CHECK: Verify requirements
         const totalRequired = config.stakeAmount + (config.entryBurn || 0n);
+        // Fast-fail a zero-value launch instead of submitting a wasteful approve(0)
+        // + a stake/register that the Registry would reject on-chain anyway.
+        if (totalRequired <= 0n) {
+            throw new Error(
+                'launchCommunity: stakeAmount + entryBurn must be > 0 (refusing to submit a zero-value stake)'
+            );
+        }
         const check = await this.checkLaunchRequirements(account.address, totalRequired);
         
         if (!check.hasEnoughGToken) {
@@ -342,6 +349,10 @@ export class CommunityClient {
         // event from the receipt logs to recover the real deployed token address.
         let xpntsAddress: Address | undefined;
         for (const log of receipt.logs) {
+            // Only trust the event if it was emitted by the xPNTs factory itself —
+            // another contract in the same tx could emit a same-shaped event and
+            // spoof the resolved token address.
+            if (log.address.toLowerCase() !== factoryAddress.toLowerCase()) continue;
             try {
                 const decoded = decodeEventLog({
                     abi: xPNTsFactoryABI,
