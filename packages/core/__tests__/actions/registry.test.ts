@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { keccak256, toBytes } from 'viem';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { keccak256, toBytes, encodeFunctionData, encodeAbiParameters } from 'viem';
 import { registryActions } from '../../src/actions/registry';
+import { RegistryABI } from '../../src/abis/index';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from '../mocks/client';
 
 const ADDR = '0x1111111111111111111111111111111111111111' as `0x${string}`;
@@ -21,8 +22,10 @@ describe('RegistryActions Bulk Coverage', () => {
   });
 
   describe('Community & Credit (Views/Writes)', () => {
-    it('communityByName', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).communityByName({ name: 'test' })).toBe(USER); });
-    it('communityByENS', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).communityByENS({ ensName: 'test.eth' })).toBe(USER); });
+    // Legacy aliases must delegate to the ABI-confirmed getCommunityByName/getCommunityByENS
+    // (the bare communityByName/communityByENS names are absent from the deployed ABI).
+    it('communityByName delegates to ABI-confirmed getCommunityByName', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).communityByName({ name: 'test' })).toBe(USER); expect(p.readContract.mock.calls[0][0].functionName).toBe('getCommunityByName'); });
+    it('communityByENS delegates to ABI-confirmed getCommunityByENS', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).communityByENS({ ensName: 'test.eth' })).toBe(USER); expect(p.readContract.mock.calls[0][0].functionName).toBe('getCommunityByENS'); });
     it('getCreditLimit', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).getCreditLimit({ user: USER })).toBe(100n); });
     it('globalReputation', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).globalReputation({ user: USER })).toBe(100n); });
     it('addLevelThreshold', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).addLevelThreshold({ threshold: 100n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
@@ -49,7 +52,7 @@ describe('RegistryActions Bulk Coverage', () => {
 
   describe('View Functions', () => {
     it('getRoleUserCount', async () => { p.readContract.mockResolvedValue(10n); expect(await registryActions(ADDR)(p).getRoleUserCount({ roleId: '0x01' })).toBe(10n); });
-    it('getRoleMembers', async () => { p.readContract.mockResolvedValue([USER]); expect(await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01' })).toEqual([USER]); });
+    // getRoleMembers is event-indexed (no on-chain getter) — covered in its own describe below.
     it('getUserRoles', async () => { p.readContract.mockResolvedValue(['0x01']); expect(await registryActions(ADDR)(p).getUserRoles({ user: USER })).toEqual(['0x01']); });
     it('roleMembers', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).roleMembers({ roleId: '0x01', index: 0n })).toBe(USER); });
     it('userRoles', async () => { p.readContract.mockResolvedValue('0x01'); expect(await registryActions(ADDR)(p).userRoles({ user: USER, index: 0n })).toBe('0x01'); });
@@ -83,5 +86,210 @@ describe('RegistryActions Bulk Coverage', () => {
     it('transferOwnership', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).transferOwnership({ newOwner: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('renounceOwnership', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).renounceOwnership({ account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('version', async () => { p.readContract.mockResolvedValue('1.0'); expect(await registryActions(ADDR)(p).version()).toBe('1.0'); });
+  });
+});
+
+// P1.5 — on-chain community registry queries (Beta3.1 Wave 2).
+const ROLE_COMMUNITY = keccak256(toBytes('COMMUNITY'));
+const COMMUNITY_ROLE_DATA_PARAMS = [{
+  type: 'tuple',
+  components: [
+    { name: 'name', type: 'string' },
+    { name: 'ensName', type: 'string' },
+    { name: 'website', type: 'string' },
+    { name: 'description', type: 'string' },
+    { name: 'logoURI', type: 'string' },
+    { name: 'stakeAmount', type: 'uint256' }
+  ]
+}] as const;
+
+const buildRoleData = (pr: { name: string; ensName: string; website: string; description: string; logoURI: string; stakeAmount: bigint }) =>
+  encodeAbiParameters(COMMUNITY_ROLE_DATA_PARAMS, [[pr.name, pr.ensName, pr.website, pr.description, pr.logoURI, pr.stakeAmount] as any]);
+
+describe('RegistryActions — P1.5 community registry queries', () => {
+  let p: any;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); p.getLogs = vi.fn(); p.getTransaction = vi.fn(); });
+
+  describe('PART A — on-chain getters (ABI-confirmed)', () => {
+    it('getCommunityByName reads the correct ABI function name', async () => {
+      p.readContract.mockResolvedValue(USER);
+      const out = await registryActions(ADDR)(p).getCommunityByName({ name: 'AAStar' });
+      expect(out).toBe(USER);
+      expect(p.readContract.mock.calls[0][0].functionName).toBe('getCommunityByName');
+      expect(p.readContract.mock.calls[0][0].args).toEqual(['AAStar']);
+    });
+
+    it('getCommunityByENS reads the correct ABI function name', async () => {
+      p.readContract.mockResolvedValue(USER);
+      const out = await registryActions(ADDR)(p).getCommunityByENS({ ensName: 'aastar.eth' });
+      expect(out).toBe(USER);
+      expect(p.readContract.mock.calls[0][0].functionName).toBe('getCommunityByENS');
+    });
+
+    it('getRoleStake / getEffectiveStake pass args in ABI-declared order', async () => {
+      const act = registryActions(ADDR)(p);
+      p.readContract.mockResolvedValue(500n);
+      await act.getRoleStake({ roleId: ROLE_COMMUNITY, user: USER });
+      expect(p.readContract.mock.calls[0][0].functionName).toBe('getRoleStake');
+      expect(p.readContract.mock.calls[0][0].args).toEqual([ROLE_COMMUNITY, USER]); // (roleId, user)
+
+      await act.getEffectiveStake({ user: USER, roleId: ROLE_COMMUNITY });
+      expect(p.readContract.mock.calls[1][0].functionName).toBe('getEffectiveStake');
+      expect(p.readContract.mock.calls[1][0].args).toEqual([USER, ROLE_COMMUNITY]); // (user, roleId)
+    });
+  });
+
+  describe('PART B — getCommunityProfile (event -> calldata back-trace)', () => {
+    it('returns null when no RoleRegistered log is found', async () => {
+      p.getLogs.mockResolvedValue([]);
+      const out = await registryActions(ADDR)(p).getCommunityProfile({ community: USER });
+      expect(out).toBeNull();
+      // Filtered by indexed [roleId=ROLE_COMMUNITY, user=community].
+      expect(p.getLogs.mock.calls[0][0].args).toEqual({ roleId: ROLE_COMMUNITY, user: USER });
+    });
+
+    it('back-traces registerRole calldata and decodes the community profile', async () => {
+      const profile = { name: 'AAStar', ensName: 'aastar.eth', website: 'https://aastar.io', description: 'infra', logoURI: 'ipfs://logo', stakeAmount: 1000n };
+      const roleData = buildRoleData(profile);
+      const calldata = encodeFunctionData({ abi: RegistryABI, functionName: 'registerRole', args: [ROLE_COMMUNITY, USER, roleData] });
+
+      p.getLogs.mockResolvedValue([{ transactionHash: '0xdeadbeef', args: { roleId: ROLE_COMMUNITY, user: USER, burnAmount: 42n, timestamp: 1700000000n } }]);
+      p.getTransaction.mockResolvedValue({ input: calldata });
+
+      const out = await registryActions(ADDR)(p).getCommunityProfile({ community: USER });
+      expect(out).not.toBeNull();
+      expect(out!.name).toBe('AAStar');
+      expect(out!.ensName).toBe('aastar.eth');
+      expect(out!.website).toBe('https://aastar.io');
+      expect(out!.description).toBe('infra');
+      expect(out!.logoURI).toBe('ipfs://logo');
+      expect(out!.stakeAmount).toBe(1000n);
+      expect(out!.burnAmount).toBe(42n);
+      expect(out!.registeredAt).toBe(1700000000n);
+      expect(out!.txHash).toBe('0xdeadbeef');
+      expect(out!.rawRoleData).toBe(roleData);
+      expect(p.getTransaction.mock.calls[0][0]).toEqual({ hash: '0xdeadbeef' });
+    });
+
+    it('decodes safeMintForRole calldata (the other registration entrypoint, roleData at arg index 2)', async () => {
+      const roleData = buildRoleData({ name: 'MintedCommunity', ensName: '', website: '', description: '', logoURI: '', stakeAmount: 0n });
+      const calldata = encodeFunctionData({ abi: RegistryABI, functionName: 'safeMintForRole', args: [ROLE_COMMUNITY, USER, roleData] });
+      p.getLogs.mockResolvedValue([{ transactionHash: '0xabc', args: { burnAmount: 0n, timestamp: 1n } }]);
+      p.getTransaction.mockResolvedValue({ input: calldata });
+      const out = await registryActions(ADDR)(p).getCommunityProfile({ community: USER });
+      expect(out!.name).toBe('MintedCommunity');
+    });
+
+    it('returns null when the originating transaction has empty calldata', async () => {
+      p.getLogs.mockResolvedValue([{ transactionHash: '0xabc', args: {} }]);
+      p.getTransaction.mockResolvedValue({ input: '0x' });
+      const out = await registryActions(ADDR)(p).getCommunityProfile({ community: USER });
+      expect(out).toBeNull();
+    });
+  });
+});
+
+// BUG 3 — getRoleMembers / getRoleMemberCount via event indexing (no on-chain getter).
+const USER2 = '0x3333333333333333333333333333333333333333' as `0x${string}`;
+const USER3 = '0x4444444444444444444444444444444444444444' as `0x${string}`;
+
+describe('RegistryActions — getRoleMembers (event indexing)', () => {
+  let p: any;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); });
+
+  // Route getLogs by the event name the action requests so we can supply join vs exit logs.
+  const mockLifecycle = (joins: any[], exits: any[]) => {
+    p.getLogs = vi.fn((arg: any) => {
+      const name = arg?.event?.name;
+      if (name === 'RoleRegistered') return Promise.resolve(joins);
+      if (name === 'RoleExited') return Promise.resolve(exits);
+      return Promise.resolve([]);
+    });
+  };
+
+  it('uses RoleRegistered/RoleExited event logs, NOT a getRoleMembers readContract call', async () => {
+    mockLifecycle([{ args: { user: USER }, blockNumber: 1n, logIndex: 0 }], []);
+    const out = await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01' });
+    expect(out).toEqual([USER]);
+    expect(p.readContract).not.toHaveBeenCalled();
+    const requested = p.getLogs.mock.calls.map((c: any[]) => c[0].event.name).sort();
+    expect(requested).toEqual(['RoleExited', 'RoleRegistered']);
+    // BOTH the join AND the exit query must be filtered by the indexed roleId topic
+    // (a regression that filtered only RoleRegistered would over-count exits).
+    expect(p.getLogs.mock.calls).toHaveLength(2);
+    for (const call of p.getLogs.mock.calls) {
+      expect(call[0].args).toEqual({ roleId: '0x01' });
+    }
+  });
+
+  it('subtracts users whose latest lifecycle event is an exit', async () => {
+    mockLifecycle(
+      [
+        { args: { user: USER }, blockNumber: 1n, logIndex: 0 },
+        { args: { user: USER2 }, blockNumber: 2n, logIndex: 0 },
+      ],
+      [{ args: { user: USER }, blockNumber: 3n, logIndex: 0 }],
+    );
+    const out = await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01' });
+    expect(out).toEqual([USER2]); // USER exited after joining
+  });
+
+  it('keeps a user active when they re-register AFTER exiting (latest event wins)', async () => {
+    mockLifecycle(
+      [
+        { args: { user: USER }, blockNumber: 1n, logIndex: 0 },
+        { args: { user: USER }, blockNumber: 5n, logIndex: 2 }, // re-join, newest
+      ],
+      [{ args: { user: USER }, blockNumber: 3n, logIndex: 0 }], // exit in between
+    );
+    const out = await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01' });
+    expect(out).toEqual([USER]);
+  });
+
+  it('dedups repeated joins (e.g. ENDUSER re-registration) to a unique address set', async () => {
+    mockLifecycle(
+      [
+        { args: { user: USER }, blockNumber: 1n, logIndex: 0 },
+        { args: { user: USER }, blockNumber: 2n, logIndex: 0 },
+        { args: { user: USER2 }, blockNumber: 2n, logIndex: 1 },
+      ],
+      [],
+    );
+    const out = await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01' });
+    expect(out.sort()).toEqual([USER, USER2].sort());
+  });
+
+  it('treats addresses case-insensitively when matching join/exit (no duplicate, exit wins)', async () => {
+    mockLifecycle(
+      [{ args: { user: USER }, blockNumber: 1n, logIndex: 0 }],
+      [{ args: { user: USER.toUpperCase().replace('0X', '0x') }, blockNumber: 2n, logIndex: 0 }],
+    );
+    const out = await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01' });
+    expect(out).toEqual([]);
+  });
+
+  it('getRoleMemberCount returns the active-member count (event-derived)', async () => {
+    mockLifecycle(
+      [
+        { args: { user: USER }, blockNumber: 1n, logIndex: 0 },
+        { args: { user: USER2 }, blockNumber: 1n, logIndex: 1 },
+        { args: { user: USER3 }, blockNumber: 1n, logIndex: 2 },
+      ],
+      [{ args: { user: USER3 }, blockNumber: 2n, logIndex: 0 }],
+    );
+    const count = await registryActions(ADDR)(p).getRoleMemberCount({ roleId: '0x01' });
+    expect(count).toBe(2);
+  });
+
+  it('forwards fromBlock/toBlock to getLogs', async () => {
+    mockLifecycle([], []);
+    await registryActions(ADDR)(p).getRoleMembers({ roleId: '0x01', fromBlock: 100n, toBlock: 200n });
+    // The range must be forwarded to BOTH the join AND exit queries — otherwise an
+    // unbounded exit query could subtract exits from outside the requested window.
+    expect(p.getLogs.mock.calls).toHaveLength(2);
+    for (const call of p.getLogs.mock.calls) {
+      expect(call[0].fromBlock).toBe(100n);
+      expect(call[0].toBlock).toBe(200n);
+    }
   });
 });

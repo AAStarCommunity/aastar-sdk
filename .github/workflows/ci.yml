@@ -28,5 +28,16 @@ jobs:
       - name: Build
         run: pnpm -r build
 
+      # Reports config.{network}.json drift from @aastar/core CANONICAL_ADDRESSES
+      # (the single source of truth for contract addresses). See P2.8.
+      # ADVISORY for now (continue-on-error): there is known, documented drift
+      # (config.op-sepolia.json is a stale OP-mainnet copy; a sepolia `pnts`
+      # mismatch; a suspected canonical simpleAccountFactory typo) that needs
+      # on-chain verification before reconciling. Flip to a hard gate (remove
+      # continue-on-error) once `pnpm run check:addresses` passes clean.
+      - name: Check contract-address consistency (advisory)
+        continue-on-error: true
+        run: pnpm run check:addresses
+
       - name: Run unit tests
         run: pnpm -r test

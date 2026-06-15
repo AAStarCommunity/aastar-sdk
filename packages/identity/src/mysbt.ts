@@ -29,8 +29,10 @@ export async function checkMySBT(
 }
 
 /**
- * Fetch MySBT token ID for a specific user (if unique/SBT).
- * Note: Depends on whether the contract supports getTokenId or similar.
+ * Fetch MySBT token ID for a specific user.
+ * MySBT exposes `getUserSBT(address) -> uint256` (alias of the `userToSBT`
+ * mapping), which returns the user's tokenId or 0 when they hold no SBT.
+ * Returns the tokenId, or null if the user has no SBT (id == 0) or on error.
  */
 export async function getMySBTId(
     client: any,
@@ -38,10 +40,16 @@ export async function getMySBTId(
     user: Address
 ): Promise<bigint | null> {
     try {
-        // Implementation depends on the specific contract. 
-        // Most SBTs use ownerOf or similar if mapping is known.
-        // For standard SBT balances, we usually just need hasSBT.
-        return null;
+        const tokenId = await client.readContract({
+            address: sbtAddress,
+            abi: MySBTABI,
+            functionName: 'getUserSBT',
+            args: [user]
+        });
+
+        const id = tokenId as bigint;
+        // tokenId 0 is the contract's sentinel for "no SBT" (ids start at 1).
+        return id > 0n ? id : null;
     } catch (e) {
         return null;
     }

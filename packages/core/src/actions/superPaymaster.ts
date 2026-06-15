@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, zeroAddress } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
@@ -22,6 +22,25 @@ export type OperatorConfig = {
     treasury: Address;
     totalSpent: bigint;
     totalTxSponsored: bigint;
+};
+
+/**
+ * Runtime-resolved aPNTs token state read live from the SuperPaymaster contract.
+ *
+ * The contract exposes the currently active token via `APNTS_TOKEN()` and an
+ * upcoming (timelocked) token via `pendingAPNTsToken()` / `pendingAPNTsTokenEta()`.
+ * Consumers should prefer `active` and may surface `pending` to warn about an
+ * upcoming migration.
+ */
+export type ResolvedAPNTsToken = {
+    /** Currently active aPNTs token address, read from `APNTS_TOKEN()`. */
+    active: Address;
+    /** aPNTs token queued for migration; `zeroAddress` when none is queued. */
+    pending: Address;
+    /** Unix-second ETA when the pending change becomes executable; `0n` when none is queued. */
+    pendingEta: bigint;
+    /** True only when `active` came from the explicit `fallback` option after a failed chain read. */
+    fallbackUsed: boolean;
 };
 
 export type SuperPaymasterActions = {
@@ -75,6 +94,17 @@ export type SuperPaymasterActions = {
     cancelAPNTsTokenChange: (args: { account?: Account | Address }) => Promise<Hash>;
     pendingAPNTsToken: () => Promise<Address>;
     pendingAPNTsTokenEta: () => Promise<bigint>;
+    /**
+     * Resolve the live aPNTs token address from chain instead of relying on a static constant.
+     *
+     * Reads `APNTS_TOKEN()` (active), `pendingAPNTsToken()` and `pendingAPNTsTokenEta()`
+     * in parallel and returns them as a structured result. Prefer `active` for runtime use.
+     *
+     * If `fallback` is supplied and the chain reads fail, the static `fallback` address is
+     * returned with `fallbackUsed: true` (pending fields zeroed). Without a `fallback` the
+     * underlying error is re-thrown rather than silently masked.
+     */
+    resolveAPNTsToken: (args?: { fallback?: Address }) => Promise<ResolvedAPNTsToken>;
 
     // Emergency Price (kill switch)
     emergencySetPrice: (args: { newPrice: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -669,6 +699,28 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             }) as Promise<bigint>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'pendingAPNTsTokenEta');
+        }
+    },
+
+    /**
+     * Resolve the live aPNTs token address (active + pending) from chain.
+     * See {@link SuperPaymasterActions.resolveAPNTsToken} for fallback semantics.
+     */
+    async resolveAPNTsToken(args?: { fallback?: Address }) {
+        const pub = client as PublicClient;
+        try {
+            const [active, pending, pendingEta] = await Promise.all([
+                pub.readContract({ address, abi: SuperPaymasterABI, functionName: 'APNTS_TOKEN', args: [] }) as Promise<Address>,
+                pub.readContract({ address, abi: SuperPaymasterABI, functionName: 'pendingAPNTsToken', args: [] }) as Promise<Address>,
+                pub.readContract({ address, abi: SuperPaymasterABI, functionName: 'pendingAPNTsTokenEta', args: [] }) as Promise<bigint>,
+            ]);
+            return { active, pending, pendingEta, fallbackUsed: false };
+        } catch (error) {
+            // Only mask the failure when the caller explicitly opted into a static fallback.
+            if (args?.fallback) {
+                return { active: args.fallback, pending: zeroAddress, pendingEta: 0n, fallbackUsed: true };
+            }
+            throw AAStarError.fromViemError(error as Error, 'resolveAPNTsToken');
         }
     },
 
