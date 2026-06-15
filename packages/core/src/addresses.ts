@@ -1,6 +1,14 @@
 /**
  * Canonical Contract Addresses for Supported Networks
  * These are hardcoded as defaults for NPM distribution.
+ *
+ * SINGLE SOURCE OF TRUTH for SDK contract addresses (Beta3.1 P2.8).
+ * The root `config.{network}.json` files are dev/deploy-time overrides and MUST
+ * agree with this table for any network that has a chainId entry here. The
+ * `scripts/check-address-consistency.ts` drift check (CI: `pnpm run check:addresses`)
+ * enforces that. NOTE: `@aastar/shared-config` is a separate external repo (vendored
+ * as git submodules under ext/ and lib/), NOT a workspace package and NOT the SDK's
+ * source of truth — do not treat it as canonical here.
  */
 
 export const CANONICAL_ADDRESSES = {
@@ -101,8 +109,13 @@ export const CANONICAL_ADDRESSES = {
     x402Facilitator: "0xFe95a77e4Db593E6EA88000Aad9cD1230BAB4512",
     // SP v5.4 governance TimelockController (2-day minDelay; gates PolicyRegistry loosen/unfreeze).
     timelockController: "0x6cEc100c9CDc6ee7D9EDe0533edD3554E641DdBF",
-    // Mycelium community PNTs token (Anni's xPNTsToken)
-    pnts: "0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6",
+    // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
+    // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
+    // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
+    // drifted from the live deployment; realigned per "Sepolia deployment is the
+    // source of truth". A community-specific xPNTs belongs under its own key, not
+    // the canonical base `pnts`.
+    pnts: "0x5aa8b75eF1650CF3C67b17b474677eD5C847A435",
   },
 
   // --- OP Sepolia (Chain ID: 11155420) ---

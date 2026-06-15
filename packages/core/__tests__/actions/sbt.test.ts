@@ -60,6 +60,148 @@ describe('SBTActions Exhaustive Coverage', () => {
     });
   });
 
+  describe('Batch & Mint-or-Add', () => {
+    const USER_A = '0x000000000000000000000000000000000000000a' as `0x${string}`;
+    const USER_B = '0x000000000000000000000000000000000000000b' as `0x${string}`;
+    const USER_C = '0x000000000000000000000000000000000000000c' as `0x${string}`;
+
+    it('batchAirdropMint sends one tx per item, in order, firing onProgress', async () => {
+      w.writeContract
+        .mockResolvedValueOnce('0xaa')
+        .mockResolvedValueOnce('0xbb')
+        .mockResolvedValueOnce('0xcc');
+      const act = sbtActions(ADDR)(w);
+
+      const progress: Array<{ done: number; total: number; user: string; ok: boolean }> = [];
+      const results = await act.batchAirdropMint({
+        items: [
+          { user: USER_A, roleId: '0x01', roleData: '0x' },
+          { user: USER_B, roleId: '0x01', roleData: '0x' },
+          { user: USER_C, roleId: '0x01', roleData: '0x' },
+        ],
+        account: USER,
+        onProgress: (done, total, last) => progress.push({ done, total, user: last.user, ok: last.ok }),
+      });
+
+      // One tx per item.
+      expect(w.writeContract).toHaveBeenCalledTimes(3);
+      // All airdropMint, in submitted order.
+      expect(w.writeContract.mock.calls.map((c: any[]) => c[0].functionName)).toEqual([
+        'airdropMint', 'airdropMint', 'airdropMint',
+      ]);
+      expect(w.writeContract.mock.calls.map((c: any[]) => c[0].args[0])).toEqual([USER_A, USER_B, USER_C]);
+      // Results collected in order with tx hashes.
+      expect(results).toEqual([
+        { user: USER_A, ok: true, txHash: '0xaa' },
+        { user: USER_B, ok: true, txHash: '0xbb' },
+        { user: USER_C, ok: true, txHash: '0xcc' },
+      ]);
+      // onProgress fired once per item with monotonically increasing done/total.
+      expect(progress).toEqual([
+        { done: 1, total: 3, user: USER_A, ok: true },
+        { done: 2, total: 3, user: USER_B, ok: true },
+        { done: 3, total: 3, user: USER_C, ok: true },
+      ]);
+    });
+
+    it('continueOnError keeps going past a failing item and records the error', async () => {
+      w.writeContract
+        .mockResolvedValueOnce('0xaa')
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce('0xcc');
+      const act = sbtActions(ADDR)(w);
+
+      const progress: number[] = [];
+      const results = await act.batchAirdropMint({
+        items: [
+          { user: USER_A, roleId: '0x01', roleData: '0x' },
+          { user: USER_B, roleId: '0x01', roleData: '0x' },
+          { user: USER_C, roleId: '0x01', roleData: '0x' },
+        ],
+        account: USER,
+        continueOnError: true,
+        onProgress: (done) => progress.push(done),
+      });
+
+      // All three attempted despite the middle failure.
+      expect(w.writeContract).toHaveBeenCalledTimes(3);
+      expect(results[0]).toEqual({ user: USER_A, ok: true, txHash: '0xaa' });
+      expect(results[1].user).toBe(USER_B);
+      expect(results[1].ok).toBe(false);
+      expect(results[1].txHash).toBeUndefined();
+      expect(typeof results[1].error).toBe('string');
+      expect(results[2]).toEqual({ user: USER_C, ok: true, txHash: '0xcc' });
+      expect(progress).toEqual([1, 2, 3]);
+    });
+
+    it('reports ok:false when the tx is mined but REVERTED (submit != success)', async () => {
+      w.writeContract.mockResolvedValue('0xdead');
+      // Tx lands on-chain but reverts — must NOT be a false-positive ok:true.
+      w.waitForTransactionReceipt.mockResolvedValue({ status: 'reverted' });
+      const act = sbtActions(ADDR)(w);
+
+      const results = await act.batchAirdropMint({
+        items: [{ user: USER_A, roleId: '0x01', roleData: '0x' }],
+        account: USER,
+        continueOnError: true,
+      });
+
+      expect(w.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: '0xdead' });
+      expect(results[0].ok).toBe(false);
+      expect(results[0].txHash).toBeUndefined();
+      expect(typeof results[0].error).toBe('string');
+    });
+
+    it('without continueOnError it rethrows after recording the failing item', async () => {
+      w.writeContract
+        .mockResolvedValueOnce('0xaa')
+        .mockRejectedValueOnce(new Error('boom'));
+      const act = sbtActions(ADDR)(w);
+
+      // The rethrown error must carry the batchAirdropMint context (AAStarError
+      // wraps the underlying revert) — asserting the message guards against a
+      // regression that swallows the cause or rethrows a bare/unwrapped error.
+      await expect(
+        act.batchAirdropMint({
+          items: [
+            { user: USER_A, roleId: '0x01', roleData: '0x' },
+            { user: USER_B, roleId: '0x01', roleData: '0x' },
+            { user: USER_C, roleId: '0x01', roleData: '0x' },
+          ],
+          account: USER,
+        }),
+      ).rejects.toThrow(/batchAirdropMint/);
+
+      // Aborted: only the first two were attempted, the third never ran.
+      expect(w.writeContract).toHaveBeenCalledTimes(2);
+    });
+
+    it('mintOrAddMembership reads getUserSBT then calls airdropMint (the dual-purpose mint-or-add path)', async () => {
+      w.readContract.mockResolvedValue(0n); // first-time user
+      w.writeContract.mockResolvedValue('0xfeed');
+      const act = sbtActions(ADDR)(w);
+
+      const tx = await act.mintOrAddMembership({ user: USER_A, roleId: '0x01', roleData: '0x', account: USER });
+
+      expect(tx).toBe('0xfeed');
+      expect(w.readContract).toHaveBeenCalledTimes(1);
+      expect(w.readContract.mock.calls[0][0].functionName).toBe('getUserSBT');
+      expect(w.writeContract).toHaveBeenCalledTimes(1);
+      expect(w.writeContract.mock.calls[0][0].functionName).toBe('airdropMint');
+    });
+
+    it('mintOrAddMembership uses airdropMint for existing holders too (no separate add-membership fn)', async () => {
+      w.readContract.mockResolvedValue(42n); // existing SBT holder
+      w.writeContract.mockResolvedValue('0xbeef');
+      const act = sbtActions(ADDR)(w);
+
+      const tx = await act.mintOrAddMembership({ user: USER_B, roleId: '0x01', roleData: '0x', account: USER });
+
+      expect(tx).toBe('0xbeef');
+      expect(w.writeContract.mock.calls[0][0].functionName).toBe('airdropMint');
+    });
+  });
+
   describe('ERC721 Standard', () => {
     it('writes', async () => {
       w.writeContract.mockResolvedValue('0x');
