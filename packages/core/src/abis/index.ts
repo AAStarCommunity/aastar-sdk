@@ -49,6 +49,12 @@ import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 // EXTERNAL OZ TimelockController (2-day minDelay). See actions/policyRegistry.ts.
 import PolicyRegistryABIData from './PolicyRegistry.json' with { type: 'json' };
 
+// x402 settlement facilitator (SuperPaymaster v5.4) — on-chain settle path for the x402
+// micropayment protocol. Verifies EIP-3009 (transferWithAuthorization) / direct-settle
+// authorizations and routes operator/facilitator fees. Sepolia: 0xFe95a77e...
+// See deployments/config.sepolia.json (key `x402Facilitator`) + addresses.ts.
+import X402FacilitatorABIData from './X402Facilitator.json' with { type: 'json' };
+
 // ========== Re-export ABIs - Core System ==========
 export const RegistryABI = (RegistryABIData as any).abi || RegistryABIData;
 export const RegistryArtifact = RegistryABIData;
@@ -124,6 +130,12 @@ export const BLSValidatorArtifact = BLSValidatorABIData;
 // + asymmetric writes (immediate tighten/freeze; timelocked loosen/unfreeze).
 export const PolicyRegistryABI = (PolicyRegistryABIData as any).abi || PolicyRegistryABIData;
 export const PolicyRegistryArtifact = PolicyRegistryABIData;
+
+// X402Facilitator (SP v5.4). Settlement entrypoint for x402 micropayments: verify +
+// settle EIP-3009 authorizations (USDC-native) and direct xPNTs transfers, with
+// operator/facilitator fee accounting. Sepolia: 0xFe95a77e4Db593E6EA88000Aad9cD1230BAB4512.
+export const X402FacilitatorABI = (X402FacilitatorABIData as any).abi || X402FacilitatorABIData;
+export const X402FacilitatorArtifact = X402FacilitatorABIData;
 
 
 // ========== AirAccount v0.17.2-beta.3 stack (synced 2026-06-12) ==========
