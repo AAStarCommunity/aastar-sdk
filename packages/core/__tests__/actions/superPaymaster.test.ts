@@ -220,6 +220,50 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       expect(p.readContract).toHaveBeenNthCalledWith(1, expect.objectContaining({ functionName: 'pendingAPNTsToken', args: [] }));
       expect(p.readContract).toHaveBeenNthCalledWith(2, expect.objectContaining({ functionName: 'pendingAPNTsTokenEta', args: [] }));
     });
+    it('resolveAPNTsToken returns active + pending from chain', async () => {
+      const ACTIVE = '0xaaaa000000000000000000000000000000000001' as `0x${string}`;
+      const PENDING = '0xbbbb000000000000000000000000000000000002' as `0x${string}`;
+      // Reads run via Promise.all; route by functionName so order is irrelevant.
+      p.readContract.mockImplementation(({ functionName }: any) => {
+        if (functionName === 'APNTS_TOKEN') return Promise.resolve(ACTIVE);
+        if (functionName === 'pendingAPNTsToken') return Promise.resolve(PENDING);
+        if (functionName === 'pendingAPNTsTokenEta') return Promise.resolve(9999n);
+        return Promise.reject(new Error('unexpected functionName'));
+      });
+      const act = superPaymasterActions(A)(p);
+      const res = await act.resolveAPNTsToken();
+      expect(res).toEqual({ active: ACTIVE, pending: PENDING, pendingEta: 9999n, fallbackUsed: false });
+      expect(p.readContract).toHaveBeenCalledTimes(3);
+    });
+    it('resolveAPNTsToken reports no pending migration as zeroAddress', async () => {
+      const ACTIVE = '0xaaaa000000000000000000000000000000000001' as `0x${string}`;
+      const ZERO = '0x0000000000000000000000000000000000000000';
+      p.readContract.mockImplementation(({ functionName }: any) => {
+        if (functionName === 'APNTS_TOKEN') return Promise.resolve(ACTIVE);
+        if (functionName === 'pendingAPNTsToken') return Promise.resolve(ZERO);
+        if (functionName === 'pendingAPNTsTokenEta') return Promise.resolve(0n);
+        return Promise.reject(new Error('unexpected functionName'));
+      });
+      const act = superPaymasterActions(A)(p);
+      const res = await act.resolveAPNTsToken();
+      expect(res.active).toBe(ACTIVE);
+      expect(res.pending).toBe(ZERO);
+      expect(res.pendingEta).toBe(0n);
+      expect(res.fallbackUsed).toBe(false);
+    });
+    it('resolveAPNTsToken uses explicit fallback when chain read fails', async () => {
+      const FALLBACK = '0xcccc000000000000000000000000000000000003' as `0x${string}`;
+      const ZERO = '0x0000000000000000000000000000000000000000';
+      p.readContract.mockRejectedValue(new Error('rpc down'));
+      const act = superPaymasterActions(A)(p);
+      const res = await act.resolveAPNTsToken({ fallback: FALLBACK });
+      expect(res).toEqual({ active: FALLBACK, pending: ZERO, pendingEta: 0n, fallbackUsed: true });
+    });
+    it('resolveAPNTsToken rethrows when read fails and no fallback given', async () => {
+      p.readContract.mockRejectedValue(new Error('rpc down'));
+      const act = superPaymasterActions(A)(p);
+      await expect(act.resolveAPNTsToken()).rejects.toThrow();
+    });
     it('emergency price writes', async () => {
       w.writeContract.mockResolvedValue('0x');
       const act = superPaymasterActions(A)(w);
@@ -255,6 +299,103 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
     it('rejects invalid aggregator address', async () => {
       const act = superPaymasterActions(A)(w);
       await expect(act.queueBLSAggregator({ aggregator: 'bad' as any, account: U })).rejects.toThrow();
+    });
+  });
+
+  describe('Beta5 Wave A: SuperPaymaster reads', () => {
+    const USER_OP = {
+      sender: U,
+      nonce: 0n,
+      initCode: '0x' as `0x${string}`,
+      callData: '0x' as `0x${string}`,
+      accountGasLimits: ('0x' + '00'.repeat(32)) as `0x${string}`,
+      preVerificationGas: 21000n,
+      gasFees: ('0x' + '00'.repeat(32)) as `0x${string}`,
+      paymasterAndData: '0x' as `0x${string}`,
+      signature: '0x' as `0x${string}`,
+    };
+
+    it('dryRunValidation decodes (ok, reasonCode) tuple and passes userOp + maxCost', async () => {
+      const REASON = ('0x' + '00'.repeat(32)) as `0x${string}`;
+      p.readContract.mockResolvedValueOnce([true, REASON]);
+      const act = superPaymasterActions(A)(p);
+      const res = await act.dryRunValidation({ userOp: USER_OP, maxCost: 500n });
+      expect(res).toEqual({ ok: true, reasonCode: REASON });
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'dryRunValidation',
+        args: [USER_OP, 500n],
+      }));
+    });
+
+    it('dryRunValidation surfaces a rejection reasonCode', async () => {
+      const REASON = ('0x' + 'ab'.repeat(32)) as `0x${string}`;
+      p.readContract.mockResolvedValueOnce([false, REASON]);
+      const act = superPaymasterActions(A)(p);
+      const res = await act.dryRunValidation({ userOp: USER_OP, maxCost: 1n });
+      expect(res.ok).toBe(false);
+      expect(res.reasonCode).toBe(REASON);
+    });
+
+    it('isChainlinkStale returns the bool from the right functionName', async () => {
+      p.readContract.mockResolvedValueOnce(true);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.isChainlinkStale()).toBe(true);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'isChainlinkStale',
+        args: [],
+      }));
+    });
+
+    it('priceMode decodes uint8 to a number', async () => {
+      p.readContract.mockResolvedValueOnce(2);
+      const act = superPaymasterActions(A)(p);
+      const mode = await act.priceMode();
+      expect(mode).toBe(2);
+      expect(typeof mode).toBe('number');
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'priceMode',
+        args: [],
+      }));
+    });
+
+    it('priceValidUntil returns the uint48 timestamp as bigint', async () => {
+      p.readContract.mockResolvedValueOnce(1700000000n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.priceValidUntil()).toBe(1700000000n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'priceValidUntil',
+        args: [],
+      }));
+    });
+
+    it('pendingBLSAgg returns the pending aggregator address', async () => {
+      p.readContract.mockResolvedValueOnce(U);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.pendingBLSAgg()).toBe(U);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'pendingBLSAgg',
+        args: [],
+      }));
+    });
+
+    it('pendingBLSAggEta returns the uint48 ETA as bigint', async () => {
+      p.readContract.mockResolvedValueOnce(1234n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.pendingBLSAggEta()).toBe(1234n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'pendingBLSAggEta',
+        args: [],
+      }));
+    });
+
+    it('APNTS_TOKEN_TIMELOCK returns the timelock duration as bigint', async () => {
+      p.readContract.mockResolvedValueOnce(86400n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.APNTS_TOKEN_TIMELOCK()).toBe(86400n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'APNTS_TOKEN_TIMELOCK',
+        args: [],
+      }));
     });
   });
 });

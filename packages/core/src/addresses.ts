@@ -1,6 +1,14 @@
 /**
  * Canonical Contract Addresses for Supported Networks
  * These are hardcoded as defaults for NPM distribution.
+ *
+ * SINGLE SOURCE OF TRUTH for SDK contract addresses (Beta3.1 P2.8).
+ * The root `config.{network}.json` files are dev/deploy-time overrides and MUST
+ * agree with this table for any network that has a chainId entry here. The
+ * `scripts/check-address-consistency.ts` drift check (CI: `pnpm run check:addresses`)
+ * enforces that. NOTE: `@aastar/shared-config` is a separate external repo (vendored
+ * as git submodules under ext/ and lib/), NOT a workspace package and NOT the SDK's
+ * source of truth — do not treat it as canonical here.
  */
 
 export const CANONICAL_ADDRESSES = {
@@ -38,6 +46,12 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x0000000000000000000000000000000000000000",
     airAccountExtension: "0x0000000000000000000000000000000000000000",
     agentRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 PolicyRegistry (DVT layer-1) — not yet deployed on this chain.
+    policyRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 x402 settlement facilitator — not yet deployed on this chain.
+    x402Facilitator: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 governance TimelockController — not yet deployed on this chain.
+    timelockController: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     // Kept here so the inferred CanonicalAddresses union has `pnts` on every
     // chain (consumers see Address, not Address|undefined per-chain).
@@ -47,10 +61,12 @@ export const CANONICAL_ADDRESSES = {
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
   //                  AirAccount repo docs/deployment-v0.18.md
-  // Latest sync: 2026-06-14 — AirAccount v0.18 (full redeploy). SuperPaymaster addrs
-  //   below remain v5.3.3-beta.3 (untouched by this v0.18 contract sync).
-  //   SP proxy 0xFb09... (impl 0xEB2C9Cb...), Registry 0xB5Fb...
+  // Latest sync: 2026-06-15 — SuperPaymaster v5.4.0-beta.1 + AirAccount v0.18 (full redeploy).
+  //   SP proxy 0xFb09... (impl 0xE84Ae83E...), Registry 0xB5Fb... (impl 0x0B5ce703...)
+  //   v5.4 adds: x402Facilitator 0xFe95a77e..., policyRegistry 0x37e4E40e..., timelockController 0x6cEc100c...
   //   AirAccount v0.18 factory 0xB14a... (NEW ctor: impl injected as arg 1).
+  //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
+  //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
   //   verify against the community's own deployment before use.
   11155111: {
@@ -59,7 +75,7 @@ export const CANONICAL_ADDRESSES = {
     staking: "0x574820E26Acb7D9a1202708C6183d6A8aC957dA6",
     sbt: "0x754CeB687aCFC72136B02a1cb7cE2F911B63F1f8",
     reputationSystem: "0xDD4D6162F426998E8B8FC97D0a8a5912cd70e6E0",
-    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0xEB2C9Cb...)
+    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0xE84Ae83E...)
     paymasterFactory: "0x60B8f728Abca14B82a4EC72f00Ff5437e0702e90",
     paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy — NOT in core config, verify separately
     paymasterV4Impl: "0x59aEAec186a8883c165adf5C72a64df2fD9af068",
@@ -89,8 +105,20 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x1Bc1119e3Ce4B6D158a6eadb31A06FdcE51992cF",  // v0.18
     airAccountExtension: "0xB1B3acd47DB89806F8431da3452769f1243b4d56",  // v0.18 (module-install timelock)
     agentRegistry: "0x118eD73f22e41cb69282c78b216426D2d98A3935",  // v0.18 (bindFactory set-once)
-    // Mycelium community PNTs token (Anni's xPNTsToken)
-    pnts: "0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6",
+    // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
+    // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
+    policyRegistry: "0x37e4E40e69Fb7d5C3fbAA0F52A4002D27472Ff29",
+    // SP v5.4 x402 settlement facilitator (verify/settle EIP-3009 + direct xPNTs).
+    x402Facilitator: "0xFe95a77e4Db593E6EA88000Aad9cD1230BAB4512",
+    // SP v5.4 governance TimelockController (2-day minDelay; gates PolicyRegistry loosen/unfreeze).
+    timelockController: "0x6cEc100c9CDc6ee7D9EDe0533edD3554E641DdBF",
+    // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
+    // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
+    // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
+    // drifted from the live deployment; realigned per "Sepolia deployment is the
+    // source of truth". A community-specific xPNTs belongs under its own key, not
+    // the canonical base `pnts`.
+    pnts: "0x5aa8b75eF1650CF3C67b17b474677eD5C847A435",
   },
 
   // --- OP Sepolia (Chain ID: 11155420) ---
@@ -127,6 +155,12 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x0000000000000000000000000000000000000000",
     airAccountExtension: "0x0000000000000000000000000000000000000000",
     agentRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 PolicyRegistry (DVT layer-1) — not yet deployed on this chain.
+    policyRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 x402 settlement facilitator — not yet deployed on this chain.
+    x402Facilitator: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 governance TimelockController — not yet deployed on this chain.
+    timelockController: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     pnts: "0x0000000000000000000000000000000000000000",
   }

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### SuperPaymaster v5.4.0-beta.1 sync (chore/sync-superpaymaster-v5.4)
+
+#### Added
+- **`X402Facilitator` ABI** (`@aastar/core` `packages/core/src/abis/X402Facilitator.json`) +
+  `X402FacilitatorABI` / `X402FacilitatorArtifact` exports. x402 micropayment settlement
+  entrypoint (verify/settle EIP-3009 authorizations + direct xPNTs, operator/facilitator fees).
+- **`x402Facilitator`** and **`timelockController`** keys added to `CANONICAL_ADDRESSES` for all
+  chains (real on Sepolia `11155111`, zero on `10` / `11155420`). Sepolia x402Facilitator
+  `0xFe95a77e4Db593E6EA88000Aad9cD1230BAB4512`, timelockController `0x6cEc100c9CDc6ee7D9EDe0533edD3554E641DdBF`.
+  The x402 facilitator address is now resolvable from the SDK (previously absent everywhere).
+
+#### Changed
+- Re-synced `SuperPaymaster.json`, `Registry.json`, `PolicyRegistry.json` ABIs from the
+  SuperPaymaster repo (v5.4 god-split / L-C surface).
+- Fixed stale Sepolia addresses: SP impl comment `0xEB2C9Cb…` → **`0xE84Ae83E…`**;
+  `registryImpl` in root `config.sepolia.json` `0x1bd28f89…` → **`0x0B5ce703…`**; added
+  `x402Facilitator` / `policyRegistry` / `timelockController` and updated stale `spImpl` in
+  `config.sepolia.json`.
+- `@aastar/core` `0.18.0` → `0.18.1`.
+
 ### KMS v0.20.0 + ERC-8004 SDK integration (feat/kms-v0.20.0-integration)
 
 #### ⚠ BREAKING CHANGES
