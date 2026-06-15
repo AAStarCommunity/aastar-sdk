@@ -9,8 +9,8 @@
 |---|---|---|---|---|---|
 | KMS API (openapi.yaml) | 33 | 32 | 97.0% | 1 | 2 |
 | SuperPaymaster ABI | 256 | 218 | 85.2% | 38 | 3 |
-| AirAccount ABI | 129 | 87 | 67.4% | 42 | 2 |
-| **OVERALL** | **418** | **337** | **80.6%** | **81** | — |
+| AirAccount ABI | 128 | 128 | 100.0% | 0 | 9 |
+| **OVERALL** | **417** | **378** | **90.6%** | **39** | — |
 
 ## Coverage definition
 
@@ -93,55 +93,10 @@
 
 ### AirAccount ABI
 
-- Total (non-exempt): **129**
-- Covered: **87** (67.4%) — direct: 51, indirect/verify: 36
-- Gaps: **42**
-- Exempt: 2
-
-**Gaps (42) — no SDK wrapper found:**
-
-- `ACCOUNT_VERSION (AAStarAirAccountV7)`
-- `ARB_SYS (ForceExitModule)`
-- `FACTORY_VERSION (AAStarAirAccountFactoryV7)`
-- `L2_TO_L1_MESSAGE_PASSER_OP (ForceExitModule)`
-- `L2_TYPE_ARBITRUM (ForceExitModule)`
-- `L2_TYPE_OPTIMISM (ForceExitModule)`
-- `OP_DEFAULT_GAS_LIMIT (ForceExitModule)`
-- `accountId (AAStarAirAccountV7)`
-- `bindFactory (AgentRegistry)`
-- `checkSessionScope (SessionKeyValidator)`
-- `defaultCommunityGuardian (AAStarAirAccountFactoryV7)`
-- `deployer (AgentRegistry)`
-- `executeFromExecutor (AAStarAirAccountV7)`
-- `factory (AgentRegistry)`
-- `factoryAdmin (AAStarAirAccountFactoryV7)`
-- `getAddressWithChainId (AAStarAirAccountFactoryV7)`
-- `getAddressWithDefaults (AAStarAirAccountFactoryV7)`
-- `getChainQualifiedAddress (AAStarAirAccountFactoryV7)`
-- `grantNonces (SessionKeyValidator)`
-- `grantNonces_p256 (SessionKeyValidator)`
-- `guardAddTokenConfig (AAStarAirAccountV7)`
-- `guardApproveAlgorithm (AAStarAirAccountV7)`
-- `guardDecreaseDailyLimit (AAStarAirAccountV7)`
-- `guardDecreaseTokenDailyLimit (AAStarAirAccountV7)`
-- `implementation (AAStarAirAccountFactoryV7)`
-- `initializeAgentAccount (AAStarAirAccountV7)`
-- `isValidSignature (AAStarAirAccountV7)`
-- `markValid (AgentRegistry)`
-- `p256KeyX (AAStarAirAccountV7,AirAccountExtension)`
-- `p256KeyY (AAStarAirAccountV7,AirAccountExtension)`
-- `parserRegistry (AAStarAirAccountV7,AirAccountExtension)`
-- `pendingExit (ForceExitModule)`
-- `recordCallForVelocity (SessionKeyValidator)`
-- `requiredTier (AAStarAirAccountV7)`
-- `sessionStates_p256 (SessionKeyValidator)`
-- `setAggregator (AAStarAirAccountV7)`
-- `setP256Key (AAStarAirAccountV7)`
-- `setParserRegistry (AAStarAirAccountV7)`
-- `setTierLimits (AAStarAirAccountV7)`
-- `setValidator (AAStarAirAccountV7)`
-- `supportsModule (AAStarAirAccountV7)`
-- `validateUserOp (AAStarAirAccountV7)`
+- Total (non-exempt): **128**
+- Covered: **128** (100.0%) — direct: 92, indirect/verify: 36
+- Gaps: **0**
+- Exempt: 9
 
 **Indirect / verify (36) — only a bare `.fn(` reference, ambiguous:**
 
@@ -152,7 +107,7 @@
 - `agentExtension (AAStarAirAccountV7)`
 - `agentRegistry (AAStarAirAccountFactoryV7)`
 - `agentWalletOwner (AgentRegistry)`
-- `approvedAlgorithms (AAStarAirAccountV7)`
+- `approvedAlgorithms (AAStarAirAccountV7,AirAccountExtension)`
 - `buildGrantHash (SessionKeyValidator)`
 - `buildP256GrantHash (SessionKeyValidator)`
 - `executeUserOp (AAStarAirAccountV7)`
@@ -182,8 +137,15 @@
 - `validator (AAStarAirAccountV7,AirAccountExtension)`
 - `weightConfig (AAStarAirAccountV7,AirAccountExtension)`
 
-**Exempt (2):**
+**Exempt (9):**
 
+- `ACCOUNT_VERSION (AAStarAirAccountV7)` — Version string constant (AAStarAirAccountV7), not callable integration surface
+- `ARB_SYS (ForceExitModule)` — Arbitrum ArbSys precompile address constant (ForceExitModule L2 routing internal)
+- `FACTORY_VERSION (AAStarAirAccountFactoryV7)` — Version string constant (AAStarAirAccountFactoryV7), not callable integration surface
+- `L2_TO_L1_MESSAGE_PASSER_OP (ForceExitModule)` — OP Stack L2ToL1MessagePasser predeploy address constant (ForceExitModule L2 routing internal)
+- `L2_TYPE_ARBITRUM (ForceExitModule)` — L2-type enum constant (ForceExitModule L2 routing internal)
+- `L2_TYPE_OPTIMISM (ForceExitModule)` — L2-type enum constant (ForceExitModule L2 routing internal)
+- `OP_DEFAULT_GAS_LIMIT (ForceExitModule)` — OP withdrawal default gas-limit constant (ForceExitModule L2 routing internal)
 - `onERC721Received (AAStarAirAccountV7)` — ERC-721 receiver hook, called by token contracts
 - `supportsInterface (AAStarAirAccountV7)` — ERC-165 introspection, invoked by tooling not wrapped
 

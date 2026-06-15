@@ -17,4 +17,9 @@ export * from './x402.js';
 export * from './agent.js';
 export * from './channel.js';
 export * from './gTokenAuthorization.js';
+export * from './airAccount.js';
+export * from './airAccountFactory.js';
+export * from './agentRegistry.js';
+export * from './sessionKeyValidator.js';
+export * from './forceExit.js';
 // validators.ts legacy removed
