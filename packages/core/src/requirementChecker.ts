@@ -2,9 +2,65 @@
  * Unified requirement checker for role registration
  * Provides centralized validation for GToken, aPNTs, MySBT, and role permissions
  */
-import { Address, parseAbi } from 'viem';
+import { Address, parseAbi, parseEther, formatEther } from 'viem';
 import { type PublicClient } from './clients/doc-types.js';
 import type { RoleRequirement } from './roles.js';
+import { ROLE_PAYMASTER_AOA, ROLE_PAYMASTER_SUPER } from './roles.js';
+
+/**
+ * Operator onboarding mode (matches the codebase's paymaster model).
+ * - `AOA`  — an INDEPENDENT paymaster operator running their own PaymasterV4
+ *   (role `ROLE_PAYMASTER_AOA`). Readiness = that role + a GToken role stake.
+ * - `AOA+` — a SHARED SuperPaymaster operator (role `ROLE_PAYMASTER_SUPER`).
+ *   Readiness = that role + a GToken role stake + a community-issued SBT.
+ *
+ * In both modes the "stake" is the on-chain `getRoleStake(roleId, operator)`
+ * recorded by the Registry — NOT the operator's plain GToken wallet balance.
+ */
+export type OperatorMode = 'AOA' | 'AOA+';
+
+/** Default minimum role stake per mode (override via {@link CheckResourcesOptions}). */
+const DEFAULT_AOA_STAKE = parseEther('30');
+const DEFAULT_AOA_PLUS_STAKE = parseEther('50');
+
+/** Boolean sub-check result (role / SBT). */
+export interface ResourceBoolCheck {
+    value: boolean;
+    ok: boolean;
+}
+
+/** Role-stake sub-check result. */
+export interface ResourceStakeCheck {
+    /** Current on-chain role stake (`getRoleStake(roleId, operator)`). */
+    staked: bigint;
+    /** Minimum stake required for this mode. */
+    required: bigint;
+    ok: boolean;
+}
+
+/**
+ * Aggregated readiness report for a given {@link OperatorMode}.
+ * Mirrors the structured-report style of PaymasterV4 `checkGaslessReadiness`.
+ */
+export interface ResourceReport {
+    /** True when every relevant sub-check passed (`issues.length === 0`). */
+    ready: boolean;
+    mode: OperatorMode;
+    /** Only the sub-checks relevant to the requested mode are populated. */
+    checks: {
+        role?: ResourceBoolCheck & { roleId: `0x${string}` };
+        stake?: ResourceStakeCheck;
+        sbt?: ResourceBoolCheck;
+    };
+    /** Actionable, human-readable description of each unmet requirement. */
+    issues: string[];
+}
+
+/** Optional threshold overrides for {@link RequirementChecker.checkResources}. */
+export interface CheckResourcesOptions {
+    /** Minimum role stake (defaults: 30 GT for AOA, 50 GT for AOA+). */
+    requiredStake?: bigint;
+}
 
 const ERC20_ABI = parseAbi([
     'function balanceOf(address) view returns (uint256)'
@@ -12,7 +68,7 @@ const ERC20_ABI = parseAbi([
 
 const REGISTRY_ABI = parseAbi([
     'function hasRole(bytes32, address) view returns (bool)',
-    'function roleStakes(bytes32, address) view returns (uint256)'
+    'function getRoleStake(bytes32, address) view returns (uint256)'
 ]);
 
 const MYSBT_ABI = parseAbi([
@@ -224,5 +280,95 @@ export class RequirementChecker {
             functionName: 'hasRole',
             args: [roleId, address]
         }) as boolean;
+    }
+
+    /**
+     * Check a user's on-chain role stake (`getRoleStake(roleId, operator)`) (shortcut).
+     */
+    async checkRoleStake(roleId: `0x${string}`, address: Address, required: bigint): Promise<{
+        staked: bigint;
+        hasEnough: boolean;
+    }> {
+        const { CORE_ADDRESSES } = await import('./contract-addresses.js');
+        const staked = await this.publicClient.readContract({
+            address: this.addresses?.registry || CORE_ADDRESSES.registry,
+            abi: REGISTRY_ABI,
+            functionName: 'getRoleStake',
+            args: [roleId, address]
+        }) as bigint;
+
+        return {
+            staked,
+            hasEnough: staked >= required
+        };
+    }
+
+    /**
+     * Aggregated readiness query for an operator onboarding mode.
+     *
+     * Composes the existing `check*` shortcuts into a single structured report,
+     * so consumers (e.g. YAA) no longer need to wire each balance/role/SBT read
+     * by hand. Each unmet requirement produces an actionable `issue` string.
+     *
+     * - `AOA`  — independent paymaster operator: checks `ROLE_PAYMASTER_AOA` + role stake.
+     * - `AOA+` — shared SuperPaymaster operator: checks `ROLE_PAYMASTER_SUPER` + role stake + SBT.
+     *
+     * @param wallet  Operator address to evaluate.
+     * @param mode    Onboarding mode (`'AOA'` | `'AOA+'`).
+     * @param options Optional threshold overrides.
+     * @returns A {@link ResourceReport}; `ready` is true iff `issues` is empty.
+     */
+    async checkResources(
+        wallet: Address,
+        mode: OperatorMode,
+        options: CheckResourcesOptions = {}
+    ): Promise<ResourceReport> {
+        const issues: string[] = [];
+        const checks: ResourceReport['checks'] = {};
+
+        const isPlus = mode === 'AOA+';
+        const roleId = (isPlus ? ROLE_PAYMASTER_SUPER : ROLE_PAYMASTER_AOA) as `0x${string}`;
+        const roleName = isPlus ? 'PAYMASTER_SUPER' : 'PAYMASTER_AOA';
+        const requiredStake = options.requiredStake ?? (isPlus ? DEFAULT_AOA_PLUS_STAKE : DEFAULT_AOA_STAKE);
+
+        // SBT is only required for the shared SuperPaymaster (AOA+) tier.
+        const [hasRole, stake, hasSBT] = await Promise.all([
+            this.checkHasRole(roleId, wallet),
+            this.checkRoleStake(roleId, wallet, requiredStake),
+            isPlus ? this.checkHasSBT(wallet) : Promise.resolve(null)
+        ]);
+
+        checks.role = { roleId, value: hasRole, ok: hasRole };
+        if (!hasRole) {
+            issues.push(
+                `Missing ${roleName} role: register via registerRole(ROLE_${roleName})`
+            );
+        }
+
+        checks.stake = {
+            staked: stake.staked,
+            required: requiredStake,
+            ok: stake.hasEnough
+        };
+        if (!stake.hasEnough) {
+            issues.push(
+                `Insufficient role stake: need ${formatEther(requiredStake)} GT, have ${formatEther(stake.staked)} GT`
+            );
+        }
+
+        if (isPlus) {
+            const sbtOk = hasSBT === true;
+            checks.sbt = { value: sbtOk, ok: sbtOk };
+            if (!sbtOk) {
+                issues.push('Missing MySBT: a community-issued SBT is required for AOA+');
+            }
+        }
+
+        return {
+            ready: issues.length === 0,
+            mode,
+            checks,
+            issues
+        };
     }
 }

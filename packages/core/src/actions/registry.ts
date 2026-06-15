@@ -1,7 +1,22 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, keccak256, toBytes } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, type AbiEvent, type BlockNumber, type BlockTag, keccak256, toBytes, decodeFunctionData, decodeAbiParameters } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
+
+// ABI-parameter layout of Registry.sol CommunityRoleData, used to decode the `roleData`
+// recovered from registerRole calldata. This is an abi.encode struct (NOT a contract ABI),
+// so it is defined locally rather than imported from a *.json contract ABI.
+const COMMUNITY_ROLE_DATA_PARAMS = [{
+    type: 'tuple',
+    components: [
+        { name: 'name', type: 'string' },
+        { name: 'ensName', type: 'string' },
+        { name: 'website', type: 'string' },
+        { name: 'description', type: 'string' },
+        { name: 'logoURI', type: 'string' },
+        { name: 'stakeAmount', type: 'uint256' }
+    ]
+}] as const;
 
 export type RoleConfigDetailed = {
     minStake: bigint;
@@ -16,6 +31,32 @@ export type RoleConfigDetailed = {
     description: string;
     owner: Address;
     roleLockDuration: bigint;
+};
+
+/**
+ * Rich community metadata reconstructed from on-chain data.
+ *
+ * The deployed v5 Registry stores community `roleData` only in an internal mapping
+ * with NO public getter, so this profile is recovered via the event->calldata
+ * back-trace pattern: locate the `RoleRegistered(ROLE_COMMUNITY, community)` log,
+ * fetch the originating transaction, then decode its `registerRole` calldata to
+ * extract the submitted `roleData` struct.
+ */
+export type CommunityProfile = {
+    name: string;
+    ensName: string;
+    website: string;
+    description: string;
+    logoURI: string;
+    stakeAmount: bigint;
+    /** burnAmount from the RoleRegistered event. */
+    burnAmount: bigint;
+    /** Block timestamp recorded in the RoleRegistered event. */
+    registeredAt: bigint;
+    /** Transaction hash that registered the community (calldata source). */
+    txHash: Hash;
+    /** Raw ABI-encoded roleData bytes from the registration calldata. */
+    rawRoleData: Hex;
 };
 
 export type RegistryActions = {
@@ -36,6 +77,14 @@ export type RegistryActions = {
     // Community Management
     communityByName: (args: { name: string }) => Promise<Address>;
     communityByENS: (args: { ensName: string }) => Promise<Address>;
+    // On-chain community registry getters (ABI-confirmed: getCommunityByName/getCommunityByENS).
+    getCommunityByName: (args: { name: string }) => Promise<Address>;
+    getCommunityByENS: (args: { ensName: string }) => Promise<Address>;
+    // Stake / membership reads (ABI-confirmed: getRoleStake/getEffectiveStake).
+    getRoleStake: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
+    getEffectiveStake: (args: { user: Address, roleId: Hex }) => Promise<bigint>;
+    // Rich community metadata via event->calldata back-trace (no on-chain getter exists).
+    getCommunityProfile: (args: { community: Address, fromBlock?: BlockNumber | BlockTag, toBlock?: BlockNumber | BlockTag }) => Promise<CommunityProfile | null>;
     
     // Credit & Reputation
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
@@ -335,6 +384,151 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             }) as Promise<Address>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'communityByENS');
+        }
+    },
+
+    // getCommunityByName / getCommunityByENS are the names that actually exist in the
+    // Registry ABI (the legacy communityByName/communityByENS wrappers above reference
+    // function names that are NOT present in the deployed v5 ABI and would revert).
+    async getCommunityByName({ name }) {
+        try {
+            validateRequired(name, 'name');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getCommunityByName',
+                args: [name]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityByName');
+        }
+    },
+
+    async getCommunityByENS({ ensName }) {
+        try {
+            validateRequired(ensName, 'ensName');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getCommunityByENS',
+                args: [ensName]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityByENS');
+        }
+    },
+
+    async getRoleStake({ roleId, user }) {
+        try {
+            validateRequired(roleId, 'roleId');
+            validateAddress(user, 'user');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getRoleStake',
+                args: [roleId, user]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getRoleStake');
+        }
+    },
+
+    async getEffectiveStake({ user, roleId }) {
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: RegistryABI,
+                functionName: 'getEffectiveStake',
+                args: [user, roleId]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getEffectiveStake');
+        }
+    },
+
+    async getCommunityProfile({ community, fromBlock, toBlock }) {
+        try {
+            validateAddress(community, 'community');
+
+            // ROLE_COMMUNITY is a compile-time keccak256("COMMUNITY") constant, not a getter.
+            const roleCommunity = keccak256(toBytes('COMMUNITY'));
+
+            // Pull the RoleRegistered event definition from the centralized @aastar/core ABI.
+            const roleRegisteredEvent = (RegistryABI as readonly any[]).find(
+                (item) => item.type === 'event' && item.name === 'RoleRegistered'
+            ) as AbiEvent | undefined;
+            if (!roleRegisteredEvent) {
+                throw new Error('RoleRegistered event not found in Registry ABI');
+            }
+
+            // Step 1: filter logs by the indexed [roleId=ROLE_COMMUNITY, user=community] topics.
+            const logs = await (client as PublicClient).getLogs({
+                address,
+                event: roleRegisteredEvent,
+                args: { roleId: roleCommunity, user: community },
+                fromBlock: fromBlock ?? 'earliest',
+                toBlock: toBlock ?? 'latest'
+            } as any);
+
+            if (!logs || logs.length === 0) {
+                // No on-chain registration found for this community.
+                return null;
+            }
+
+            // Use the most recent registration log.
+            const log = logs[logs.length - 1] as any;
+            const txHash = log.transactionHash as Hash;
+            const eventArgs = (log.args ?? {}) as { burnAmount?: bigint; timestamp?: bigint };
+            if (!txHash) {
+                return null;
+            }
+
+            // Step 2: fetch the originating transaction to recover its calldata.
+            const tx = await (client as PublicClient).getTransaction({ hash: txHash });
+            const input = (tx as any)?.input as Hex | undefined;
+            if (!input || input === '0x') {
+                return null;
+            }
+
+            // Step 3: decode the registration calldata. roleData lives in the calldata,
+            // never in an event topic, so this back-trace is the only on-chain source.
+            const decoded = decodeFunctionData({ abi: RegistryABI, data: input });
+            // Both registration entrypoints present in the deployed Registry ABI carry
+            // roleData at calldata arg index 2:
+            //   registerRole(roleId, user, roleData)
+            //   safeMintForRole(roleId, user, roleData)
+            let rawRoleData: Hex | undefined;
+            const fnArgs = (decoded.args ?? []) as readonly unknown[];
+            if (decoded.functionName === 'registerRole' || decoded.functionName === 'safeMintForRole') {
+                rawRoleData = fnArgs[2] as Hex;
+            }
+            if (!rawRoleData || rawRoleData === '0x') {
+                return null;
+            }
+
+            // Step 4: decode roleData into the community profile struct. Field layout matches
+            // Registry.sol CommunityRoleData (string name, ensName, website, description,
+            // logoURI, uint256 stakeAmount) — the same encoding the SDK uses to build it.
+            const [profile] = decodeAbiParameters(COMMUNITY_ROLE_DATA_PARAMS, rawRoleData) as [{
+                name: string; ensName: string; website: string; description: string; logoURI: string; stakeAmount: bigint;
+            }];
+
+            return {
+                name: profile.name,
+                ensName: profile.ensName,
+                website: profile.website,
+                description: profile.description,
+                logoURI: profile.logoURI,
+                stakeAmount: profile.stakeAmount,
+                burnAmount: eventArgs.burnAmount ?? 0n,
+                registeredAt: eventArgs.timestamp ?? 0n,
+                txHash,
+                rawRoleData
+            };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getCommunityProfile');
         }
     },
 

@@ -1,6 +1,14 @@
 /**
  * Canonical Contract Addresses for Supported Networks
  * These are hardcoded as defaults for NPM distribution.
+ *
+ * SINGLE SOURCE OF TRUTH for SDK contract addresses (Beta3.1 P2.8).
+ * The root `config.{network}.json` files are dev/deploy-time overrides and MUST
+ * agree with this table for any network that has a chainId entry here. The
+ * `scripts/check-address-consistency.ts` drift check (CI: `pnpm run check:addresses`)
+ * enforces that. NOTE: `@aastar/shared-config` is a separate external repo (vendored
+ * as git submodules under ext/ and lib/), NOT a workspace package and NOT the SDK's
+ * source of truth — do not treat it as canonical here.
  */
 
 export const CANONICAL_ADDRESSES = {
