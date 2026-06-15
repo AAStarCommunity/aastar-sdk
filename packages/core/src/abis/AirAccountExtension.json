@@ -37,6 +37,25 @@
     },
     {
       "type": "function",
+      "name": "approvedAlgorithms",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "bindERC8004AgentWallet",
       "inputs": [
         {
@@ -70,16 +89,10 @@
     },
     {
       "type": "function",
-      "name": "blsAggregator",
+      "name": "cancelModuleInstall",
       "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -100,6 +113,19 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "executeModuleInstall",
+      "inputs": [
+        {
+          "name": "moduleInitData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -144,6 +170,19 @@
         }
       ],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "moduleInstallTimelock",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -193,6 +232,39 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingModuleInstall",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "moduleTypeId",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "proposedAt",
+          "type": "uint40",
+          "internalType": "uint40"
+        },
+        {
+          "name": "executeAfter",
+          "type": "uint40",
+          "internalType": "uint40"
+        },
+        {
+          "name": "initDataHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "stateMutability": "view"
@@ -271,6 +343,29 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "proposeModuleInstall",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "initData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -407,6 +502,24 @@
         },
         {
           "name": "agentWalletSig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setModuleInstallTimelock",
+      "inputs": [
+        {
+          "name": "newTimelock",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardianSigs",
           "type": "bytes",
           "internalType": "bytes"
         }
@@ -750,6 +863,113 @@
     },
     {
       "type": "event",
+      "name": "ModuleInstallCancelled",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "cancelledBy",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ModuleInstallExecuted",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ModuleInstallProposed",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "executeAfter",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ModuleInstallTimelockChanged",
+      "inputs": [
+        {
+          "name": "oldTimelock",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "newTimelock",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ModuleInstalled",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "WeightChangeApproved",
       "inputs": [
         {
@@ -1039,6 +1259,33 @@
     },
     {
       "type": "error",
+      "name": "ECDSAInvalidSignature",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ECDSAInvalidSignatureLength",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ECDSAInvalidSignatureS",
+      "inputs": [
+        {
+          "name": "s",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "IdentityRegistrationFailed",
       "inputs": []
     },
@@ -1049,12 +1296,88 @@
     },
     {
       "type": "error",
+      "name": "InstallModuleUnauthorized",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "InvalidGuardian",
       "inputs": []
     },
     {
       "type": "error",
       "name": "InvalidInitialization",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidModuleType",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleAlreadyInstalled",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallAuthChanged",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallCallbackFailed",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallDataMismatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallProposalExists",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallProposalExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallTimelockDisabled",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallTimelockNotExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInstallTimelockTooLong",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ModuleInvalid",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NoModuleInstallProposal",
       "inputs": []
     },
     {
@@ -1075,6 +1398,11 @@
     {
       "type": "error",
       "name": "NotOwner",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotOwnerOrEntryPoint",
       "inputs": []
     },
     {

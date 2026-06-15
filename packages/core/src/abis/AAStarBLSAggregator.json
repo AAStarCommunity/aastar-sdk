@@ -7,6 +7,11 @@
           "name": "_blsAlgorithm",
           "type": "address",
           "internalType": "address"
+        },
+        {
+          "name": "_entryPoint",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "stateMutability": "nonpayable"
@@ -86,6 +91,19 @@
           "name": "",
           "type": "address",
           "internalType": "contract AAStarBLSAlgorithm"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "entryPoint",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IEntryPoint"
         }
       ],
       "stateMutability": "view"

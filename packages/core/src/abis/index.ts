@@ -138,24 +138,31 @@ export const X402FacilitatorABI = (X402FacilitatorABIData as any).abi || X402Fac
 export const X402FacilitatorArtifact = X402FacilitatorABIData;
 
 
-// ========== AirAccount v0.17.2-beta.3 stack (synced 2026-06-12) ==========
+// ========== AirAccount v0.18 stack (synced 2026-06-14) ==========
 //
-// Source: github.com/AAStarCommunity/airaccount-contract tag `v0.17.2-beta.3`.
-// Generated via `forge build` artifacts; AAStarAirAccountV7 is the merged-full ABI
-// (account + fallback-routed agent/weight, 146 entries) — already imported above.
+// Source: github.com/AAStarCommunity/airaccount-contract `main` (v0.18).
+// ABIs copied from `out/<Contract>.sol/<Contract>.json` (per-contract) and the merged
+// `abi/AAStarAirAccountV7.full.json` (account + fallback-routed agent/weight, 153 entries).
 //
-// Sepolia deployment 2026-06-12:
-//   AAStarBLSAlgorithm        0xB82127182A855B82eED05e47536FcE568b626457  (unchanged)
-//   AAStarValidator (router)  0x3c2b06f50300912794f29de031b33dd37bb8d6c6  (NEW — M3 timelock, finalized)
-//   AAStarBLSAggregator       0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1  (unchanged)
-//   SessionKeyValidator       0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf  (NEW — MODULE_VERSION + P256)
-//   ForceExitModule           0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702  (NEW — IncompatibleAccount error)
-//   AirAccountDelegate        0x8603AAF6C3f07fdae810B323c95a198D796EC52E  (unchanged)
-//   CalldataParserRegistry    0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F  (unchanged)
-//   AAStarAirAccountFactoryV7 0xfc6234bbd6283610659211347c6309904be86b0a  (NEW — custom errors + FACTORY_VERSION)
-//   AAStarAirAccountV7 (impl) 0xe33EeCF21AAC2B776b49A4dd52BA8b7e683dE9C3  (NEW — ACCOUNT_VERSION)
-//   AirAccountExtension       0xB3c7312bA52dF306DE1cBa781B91f3AfA7e86F99  (NEW — _popcount asm)
-//   AgentRegistry             0x9e8f576cad8a8f949181fd10d9ad1c49a7b0bc17  (NEW — bindFactory wired)
+// v0.18 ABI deltas vs beta.4 (see docs/V0.18-SDK-MIGRATION.md):
+//   - AAStarAirAccountFactoryV7: NEW ctor — implementation injected as arg 1 (#82 EIP-3860 fix)
+//   - AAStarBLSAlgorithm: + aggregator() / setAggregator() / acceptOwnership() / pendingOwner() (Ownable2Step, #45)
+//   - AAStarBLSAggregator: NEW ctor (blsAlgorithm, entryPoint)
+//   - AAStarAirAccountV7: + moduleManagementNonce(), pendingModuleInstall() (w/ executeAfter), proposeModuleInstall()
+//   - AirAccountExtension: + module-install-timelock surface + ModuleInstall* errors
+//
+// Sepolia deployment 2026-06-14 (full redeploy — non-upgradable account):
+//   AAStarBLSAlgorithm        0x2869EEb04218ca666c6373c0DC5aCDa04F00adFA
+//   AAStarValidator (router)  0xe785AF830aD33F3E550FfdC0fEB81D42507DA39D
+//   AAStarBLSAggregator       0x9AD55930B77C002dF884F4dac846D2077CDA7C8b
+//   SessionKeyValidator       0x82f16163D0fb9c4dd7507b9999B79527a795291C
+//   ForceExitModule           0x0F6960526acf4cF9123e0aBc82d7a59fA0B6C934
+//   AirAccountDelegate        0x70A8E31c425Ef3F23a2F9E05C48Bd998Aa29085b
+//   CalldataParserRegistry    0x5dEE2c5279eFfC7c7FE711233bE42726EE0d4166
+//   AAStarAirAccountFactoryV7 0xB14a870e4f63CA21a7EB753588CC4eBFb429E163  (NEW ctor — impl arg 1)
+//   AAStarAirAccountV7 (impl) 0x1Bc1119e3Ce4B6D158a6eadb31A06FdcE51992cF
+//   AirAccountExtension       0xB1B3acd47DB89806F8431da3452769f1243b4d56
+//   AgentRegistry             0x118eD73f22e41cb69282c78b216426D2d98A3935
 //
 // NOTE on naming overlap with SuperPaymaster: this repo has BOTH
 //   - BLSAggregator.json + BLSValidator.json (legacy SuperPaymaster exports above)

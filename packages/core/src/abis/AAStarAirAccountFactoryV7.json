@@ -3,6 +3,11 @@
     "type": "constructor",
     "inputs": [
       {
+        "name": "_implementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "_entryPoint",
         "type": "address",
         "internalType": "address"
@@ -24,13 +29,13 @@
         "components": [
           {
             "name": "tier1Limit",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint128",
+            "internalType": "uint128"
           },
           {
             "name": "tier2Limit",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint128",
+            "internalType": "uint128"
           },
           {
             "name": "dailyLimit",
@@ -119,13 +124,13 @@
             "components": [
               {
                 "name": "tier1Limit",
-                "type": "uint256",
-                "internalType": "uint256"
+                "type": "uint128",
+                "internalType": "uint128"
               },
               {
                 "name": "tier2Limit",
-                "type": "uint256",
-                "internalType": "uint256"
+                "type": "uint128",
+                "internalType": "uint128"
               },
               {
                 "name": "dailyLimit",
@@ -334,13 +339,13 @@
             "components": [
               {
                 "name": "tier1Limit",
-                "type": "uint256",
-                "internalType": "uint256"
+                "type": "uint128",
+                "internalType": "uint128"
               },
               {
                 "name": "tier2Limit",
-                "type": "uint256",
-                "internalType": "uint256"
+                "type": "uint128",
+                "internalType": "uint128"
               },
               {
                 "name": "dailyLimit",
@@ -412,13 +417,13 @@
             "components": [
               {
                 "name": "tier1Limit",
-                "type": "uint256",
-                "internalType": "uint256"
+                "type": "uint128",
+                "internalType": "uint128"
               },
               {
                 "name": "tier2Limit",
-                "type": "uint256",
-                "internalType": "uint256"
+                "type": "uint128",
+                "internalType": "uint128"
               },
               {
                 "name": "dailyLimit",
@@ -759,6 +764,11 @@
   {
     "type": "error",
     "name": "HumanOwnerCannotBeCommunityGuardian",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ImplementationRequired",
     "inputs": []
   },
   {
