@@ -48,6 +48,10 @@ export const CANONICAL_ADDRESSES = {
     agentRegistry: "0x0000000000000000000000000000000000000000",
     // SP v5.4 PolicyRegistry (DVT layer-1) — not yet deployed on this chain.
     policyRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 x402 settlement facilitator — not yet deployed on this chain.
+    x402Facilitator: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 governance TimelockController — not yet deployed on this chain.
+    timelockController: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     // Kept here so the inferred CanonicalAddresses union has `pnts` on every
     // chain (consumers see Address, not Address|undefined per-chain).
@@ -57,8 +61,9 @@ export const CANONICAL_ADDRESSES = {
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
   //                  AirAccount repo docs/DEPLOYMENT-v0.17.2-beta.3.md
-  // Latest sync: 2026-06-12 — SuperPaymaster v5.3.3-beta.3 + AirAccount v0.17.2-beta.3
-  //   SP proxy 0xFb09... (impl 0xEB2C9Cb...), Registry 0xB5Fb...
+  // Latest sync: 2026-06-15 — SuperPaymaster v5.4.0-beta.1 + AirAccount v0.17.2-beta.3
+  //   SP proxy 0xFb09... (impl 0xE84Ae83E...), Registry 0xB5Fb... (impl 0x0B5ce703...)
+  //   v5.4 adds: x402Facilitator 0xFe95a77e..., policyRegistry 0x37e4E40e..., timelockController 0x6cEc100c...
   //   AirAccount router NEW 0x3c2b... (M3 governance timelock), finalized.
   //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
   //   verify against the community's own deployment before use.
@@ -68,7 +73,7 @@ export const CANONICAL_ADDRESSES = {
     staking: "0x574820E26Acb7D9a1202708C6183d6A8aC957dA6",
     sbt: "0x754CeB687aCFC72136B02a1cb7cE2F911B63F1f8",
     reputationSystem: "0xDD4D6162F426998E8B8FC97D0a8a5912cd70e6E0",
-    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0xEB2C9Cb...)
+    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0xE84Ae83E...)
     paymasterFactory: "0x60B8f728Abca14B82a4EC72f00Ff5437e0702e90",
     paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy — NOT in core config, verify separately
     paymasterV4Impl: "0x59aEAec186a8883c165adf5C72a64df2fD9af068",
@@ -97,10 +102,13 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x0321Fa7261Ad5945e4B3f0c73aFD7D9392E39796",  // v0.17.2-beta.4
     airAccountExtension: "0x20FB2A65a52Fc6507FdD51260f055017a2BA2860",  // v0.17.2-beta.4
     agentRegistry: "0xe1320c35485b4d7817866a8d0d8f77dd58202253",  // v0.17.2-beta.4
-    // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia. NOTE: its canonical
-    // deploy-record is PENDING MERGE to SuperPaymaster main (deploy-record branch not yet
-    // merged) — verify this address against SP's config.sepolia.json before any NPM release.
+    // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
+    // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x37e4E40e69Fb7d5C3fbAA0F52A4002D27472Ff29",
+    // SP v5.4 x402 settlement facilitator (verify/settle EIP-3009 + direct xPNTs).
+    x402Facilitator: "0xFe95a77e4Db593E6EA88000Aad9cD1230BAB4512",
+    // SP v5.4 governance TimelockController (2-day minDelay; gates PolicyRegistry loosen/unfreeze).
+    timelockController: "0x6cEc100c9CDc6ee7D9EDe0533edD3554E641DdBF",
     // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
     // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
     // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
@@ -146,6 +154,10 @@ export const CANONICAL_ADDRESSES = {
     agentRegistry: "0x0000000000000000000000000000000000000000",
     // SP v5.4 PolicyRegistry (DVT layer-1) — not yet deployed on this chain.
     policyRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 x402 settlement facilitator — not yet deployed on this chain.
+    x402Facilitator: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 governance TimelockController — not yet deployed on this chain.
+    timelockController: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     pnts: "0x0000000000000000000000000000000000000000",
   }
