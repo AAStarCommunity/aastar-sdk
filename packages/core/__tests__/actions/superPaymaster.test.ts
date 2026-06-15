@@ -301,4 +301,101 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       await expect(act.queueBLSAggregator({ aggregator: 'bad' as any, account: U })).rejects.toThrow();
     });
   });
+
+  describe('Beta5 Wave A: SuperPaymaster reads', () => {
+    const USER_OP = {
+      sender: U,
+      nonce: 0n,
+      initCode: '0x' as `0x${string}`,
+      callData: '0x' as `0x${string}`,
+      accountGasLimits: ('0x' + '00'.repeat(32)) as `0x${string}`,
+      preVerificationGas: 21000n,
+      gasFees: ('0x' + '00'.repeat(32)) as `0x${string}`,
+      paymasterAndData: '0x' as `0x${string}`,
+      signature: '0x' as `0x${string}`,
+    };
+
+    it('dryRunValidation decodes (ok, reasonCode) tuple and passes userOp + maxCost', async () => {
+      const REASON = ('0x' + '00'.repeat(32)) as `0x${string}`;
+      p.readContract.mockResolvedValueOnce([true, REASON]);
+      const act = superPaymasterActions(A)(p);
+      const res = await act.dryRunValidation({ userOp: USER_OP, maxCost: 500n });
+      expect(res).toEqual({ ok: true, reasonCode: REASON });
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'dryRunValidation',
+        args: [USER_OP, 500n],
+      }));
+    });
+
+    it('dryRunValidation surfaces a rejection reasonCode', async () => {
+      const REASON = ('0x' + 'ab'.repeat(32)) as `0x${string}`;
+      p.readContract.mockResolvedValueOnce([false, REASON]);
+      const act = superPaymasterActions(A)(p);
+      const res = await act.dryRunValidation({ userOp: USER_OP, maxCost: 1n });
+      expect(res.ok).toBe(false);
+      expect(res.reasonCode).toBe(REASON);
+    });
+
+    it('isChainlinkStale returns the bool from the right functionName', async () => {
+      p.readContract.mockResolvedValueOnce(true);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.isChainlinkStale()).toBe(true);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'isChainlinkStale',
+        args: [],
+      }));
+    });
+
+    it('priceMode decodes uint8 to a number', async () => {
+      p.readContract.mockResolvedValueOnce(2);
+      const act = superPaymasterActions(A)(p);
+      const mode = await act.priceMode();
+      expect(mode).toBe(2);
+      expect(typeof mode).toBe('number');
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'priceMode',
+        args: [],
+      }));
+    });
+
+    it('priceValidUntil returns the uint48 timestamp as bigint', async () => {
+      p.readContract.mockResolvedValueOnce(1700000000n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.priceValidUntil()).toBe(1700000000n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'priceValidUntil',
+        args: [],
+      }));
+    });
+
+    it('pendingBLSAgg returns the pending aggregator address', async () => {
+      p.readContract.mockResolvedValueOnce(U);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.pendingBLSAgg()).toBe(U);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'pendingBLSAgg',
+        args: [],
+      }));
+    });
+
+    it('pendingBLSAggEta returns the uint48 ETA as bigint', async () => {
+      p.readContract.mockResolvedValueOnce(1234n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.pendingBLSAggEta()).toBe(1234n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'pendingBLSAggEta',
+        args: [],
+      }));
+    });
+
+    it('APNTS_TOKEN_TIMELOCK returns the timelock duration as bigint', async () => {
+      p.readContract.mockResolvedValueOnce(86400n);
+      const act = superPaymasterActions(A)(p);
+      expect(await act.APNTS_TOKEN_TIMELOCK()).toBe(86400n);
+      expect(p.readContract).toHaveBeenCalledWith(expect.objectContaining({
+        functionName: 'APNTS_TOKEN_TIMELOCK',
+        args: [],
+      }));
+    });
+  });
 });
