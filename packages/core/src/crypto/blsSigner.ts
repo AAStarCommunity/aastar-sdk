@@ -108,6 +108,54 @@ export const BLSHelpers = {
     },
 
     /**
+     * Build a DVT co-sign `signerMask` from registration slots (frozen DVT program
+     * spec, hub YetAnotherAA-Validator#42).
+     *
+     * The on-chain BLSAggregator addresses signers by REGISTRATION SLOT, not by
+     * key-array index: bit `i` (LSB = 0) corresponds to slot `i + 1` (1-indexed) →
+     * `validatorAtSlot[i + 1]`. So a validator registered at slot `s` sets bit `s - 1`.
+     * Using a 0-indexed array position instead makes the contract rebuild the WRONG
+     * aggregate public key → verification always fails.
+     *
+     * @param slots Registration slots (1-indexed, `>= 1`) of the contributing signers.
+     * @returns The uint256 signerMask.
+     */
+    slotsToSignerMask(slots: number[]): bigint {
+        let mask = 0n;
+        for (const slot of slots) {
+            // On-chain slot is a uint8 in [1, 255] (bit 0..254, all within uint256).
+            // Rejecting > 255 here surfaces a clear error instead of a plausible-but-
+            // impossible mask (slot 256) or an opaque ABI-encode overflow (slot 257).
+            if (!Number.isInteger(slot) || slot < 1 || slot > 255) {
+                throw new Error(
+                    `invalid registration slot ${slot}: slots are 1-indexed uint8 (must be in [1, 255])`
+                );
+            }
+            mask |= 1n << BigInt(slot - 1);
+        }
+        return mask;
+    },
+
+    /**
+     * Encode a DVT co-sign proof (frozen DVT program spec, hub #42, decision B).
+     *
+     * Under decision B the on-chain verifier recomputes `msgG2 = hashToG2(userOpHash)`
+     * itself and rebuilds the aggregate public key from `signerMask` → registered
+     * keys, so the proof carries ONLY `(signerMask, sigG2)`. pkG1 and msgG2 are NOT
+     * included — this is intentionally narrower than the v3 {@link encodeBLSProof}
+     * still used by the slash/reputation path.
+     *
+     * @param signerMask Bitmask of contributing slots (see {@link slotsToSignerMask}).
+     * @param aggregatedSignature The BLS12-381 aggregated G2 signature (`sigG2`).
+     */
+    encodeDVTProof(signerMask: bigint, aggregatedSignature: Hex): Hex {
+        return encodeAbiParameters(
+            parseAbiParameters('uint256 signerMask, bytes sigG2'),
+            [signerMask, aggregatedSignature]
+        );
+    },
+
+    /**
      * Encode Reputation Proof (for test compatibility)
      * Matches format: (signature, publicKey, signerMask)
      */

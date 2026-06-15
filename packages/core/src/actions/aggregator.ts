@@ -2,12 +2,32 @@ import { type Address, type PublicClient, type WalletClient, type Hex, type Hash
 import { BLSAggregatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
+import { BLSHelpers } from '../crypto/blsSigner.js';
+
+/** A registered validator's on-chain BLS G1 public key point. */
+export type BLSG1Point = { x_a: Hex, x_b: Hex, y_a: Hex, y_b: Hex };
 
 export type AggregatorActions = {
     // BLS Public Key Management
     registerBLSPublicKey: (args: { validator: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
     blsPublicKeys: (args: { validator: Address }) => Promise<{ publicKey: Hex, isActive: boolean }>;
-    
+    /** Read a validator's registered G1 key + its registration SLOT (1-indexed) + active flag. */
+    getBLSPublicKey: (args: { validator: Address }) => Promise<{ publicKey: BLSG1Point, slot: number, isActive: boolean }>;
+    /** Reverse of {@link getBLSPublicKey}: the validator address registered at a given slot. */
+    validatorAtSlot: (args: { slot: number }) => Promise<Address>;
+
+    // DVT co-sign aggregation (frozen DVT program spec, hub #42)
+    /**
+     * Build the DVT `signerMask` for a set of signer addresses by reading each
+     * signer's on-chain registration slot. bit `s-1` is set for a validator at slot
+     * `s` (see {@link BLSHelpers.slotsToSignerMask}). Throws if any signer is not a
+     * registered, active validator, or if two signers map to the same slot.
+     */
+    buildSignerMask: (args: { signers: Address[] }) => Promise<{ signerMask: bigint, slots: number[] }>;
+    /** On-chain aggregate-signature verification (view). `sigBytes` = aggregated sigG2. */
+    verify: (args: { expectedMessageHash: Hex, signerMask: bigint, requiredThreshold: bigint, sigBytes: Hex }) => Promise<boolean>;
+
+
     // Threshold Management
     setDefaultThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
     setMinThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -73,6 +93,94 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             return { publicKey: result[0], isActive: result[1] };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'blsPublicKeys');
+        }
+    },
+
+    async getBLSPublicKey({ validator }) {
+        try {
+            validateAddress(validator, 'validator');
+            const r = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'getBLSPublicKey',
+                args: [validator]
+            }) as any;
+            // outputs: (G1Point publicKey, uint8 slot, bool isActive)
+            return { publicKey: r[0] as BLSG1Point, slot: Number(r[1]), isActive: r[2] as boolean };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getBLSPublicKey');
+        }
+    },
+
+    async validatorAtSlot({ slot }) {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'validatorAtSlot',
+                args: [slot]
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'validatorAtSlot');
+        }
+    },
+
+    // DVT co-sign aggregation (frozen DVT program spec, hub #42)
+    async buildSignerMask({ signers }) {
+        // Semantic validation throws with its own message (NOT wrapped via
+        // fromViemError, which would discard it for a generic "contract call failed").
+        validateRequired(signers, 'signers');
+        if (signers.length === 0) {
+            throw new Error('buildSignerMask: signers must be a non-empty array');
+        }
+        signers.forEach((s) => validateAddress(s, 'signer'));
+
+        // Only the genuine contract reads are wrapped. Reads are independent → run
+        // concurrently; the resulting mask is order-independent.
+        let infos: { signer: Address, slot: number, isActive: boolean }[];
+        try {
+            infos = await Promise.all(signers.map(async (signer) => {
+                const r = await (client as PublicClient).readContract({
+                    address,
+                    abi: BLSAggregatorABI,
+                    functionName: 'getBLSPublicKey',
+                    args: [signer]
+                }) as any;
+                return { signer, slot: Number(r[1]), isActive: r[2] as boolean };
+            }));
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'buildSignerMask');
+        }
+
+        for (const { signer, slot, isActive } of infos) {
+            if (!isActive || slot < 1) {
+                throw new Error(
+                    `buildSignerMask: signer ${signer} is not a registered active DVT validator (slot ${slot}, active ${isActive})`
+                );
+            }
+        }
+        const slots = infos.map((i) => i.slot);
+        if (new Set(slots).size !== slots.length) {
+            throw new Error(`buildSignerMask: duplicate registration slots in signer set: ${slots.join(', ')}`);
+        }
+        const signerMask = BLSHelpers.slotsToSignerMask(slots);
+        return { signerMask, slots: [...slots].sort((a, b) => a - b) };
+    },
+
+    async verify({ expectedMessageHash, signerMask, requiredThreshold, sigBytes }) {
+        try {
+            validateRequired(expectedMessageHash, 'expectedMessageHash');
+            validateRequired(signerMask, 'signerMask');
+            validateRequired(requiredThreshold, 'requiredThreshold');
+            validateRequired(sigBytes, 'sigBytes');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'verify',
+                args: [expectedMessageHash, signerMask, requiredThreshold, sigBytes]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'verify');
         }
     },
 

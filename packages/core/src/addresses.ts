@@ -46,6 +46,8 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x0000000000000000000000000000000000000000",
     airAccountExtension: "0x0000000000000000000000000000000000000000",
     agentRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 PolicyRegistry (DVT layer-1) — not yet deployed on this chain.
+    policyRegistry: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     // Kept here so the inferred CanonicalAddresses union has `pnts` on every
     // chain (consumers see Address, not Address|undefined per-chain).
@@ -95,6 +97,10 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x0321Fa7261Ad5945e4B3f0c73aFD7D9392E39796",  // v0.17.2-beta.4
     airAccountExtension: "0x20FB2A65a52Fc6507FdD51260f055017a2BA2860",  // v0.17.2-beta.4
     agentRegistry: "0xe1320c35485b4d7817866a8d0d8f77dd58202253",  // v0.17.2-beta.4
+    // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia. NOTE: its canonical
+    // deploy-record is PENDING MERGE to SuperPaymaster main (deploy-record branch not yet
+    // merged) — verify this address against SP's config.sepolia.json before any NPM release.
+    policyRegistry: "0x37e4E40e69Fb7d5C3fbAA0F52A4002D27472Ff29",
     // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
     // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
     // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
@@ -138,6 +144,8 @@ export const CANONICAL_ADDRESSES = {
     airAccountV7Impl: "0x0000000000000000000000000000000000000000",
     airAccountExtension: "0x0000000000000000000000000000000000000000",
     agentRegistry: "0x0000000000000000000000000000000000000000",
+    // SP v5.4 PolicyRegistry (DVT layer-1) — not yet deployed on this chain.
+    policyRegistry: "0x0000000000000000000000000000000000000000",
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     pnts: "0x0000000000000000000000000000000000000000",
   }
