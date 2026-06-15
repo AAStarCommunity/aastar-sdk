@@ -69,7 +69,10 @@ const computeActiveRoleMembers = async (
             const user = (log.args?.user ?? '') as string;
             if (!user) continue;
             const key = user.toLowerCase();
-            // Pending logs may carry null blockNumber/logIndex; treat them as newest.
+            // We query a confirmed range (toBlock defaults to 'latest' = last mined
+            // block), so blockNumber/logIndex are always present. The `?? 0n`/`?? 0`
+            // is a defensive fallback that orders any anomalous null entry as OLDEST
+            // (lowest priority), so a real confirmed event always wins the latest-slot.
             const blockNumber = (log.blockNumber ?? 0n) as bigint;
             const logIndex = Number(log.logIndex ?? 0);
             const prev = latest.get(key);
