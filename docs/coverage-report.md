@@ -7,10 +7,10 @@
 
 | Source | Total | Covered | Coverage % | Gaps | Exempt |
 |---|---|---|---|---|---|
-| KMS API (openapi.yaml) | 33 | 32 | 97.0% | 1 | 2 |
-| SuperPaymaster ABI | 256 | 218 | 85.2% | 38 | 3 |
-| AirAccount ABI | 129 | 87 | 67.4% | 42 | 2 |
-| **OVERALL** | **418** | **337** | **80.6%** | **81** | — |
+| KMS API (openapi.yaml) | 33 | 33 | 100.0% | 0 | 2 |
+| SuperPaymaster ABI | 256 | 238 | 93.0% | 18 | 3 |
+| AirAccount ABI | 135 | 86 | 63.7% | 49 | 2 |
+| **OVERALL** | **424** | **357** | **84.2%** | **67** | — |
 
 ## Coverage definition
 
@@ -24,13 +24,9 @@
 ### KMS API (openapi.yaml)
 
 - Total (non-exempt): **33**
-- Covered: **32** (97.0%) — direct: 32, indirect/verify: 0
-- Gaps: **1**
+- Covered: **33** (100.0%) — direct: 33, indirect/verify: 0
+- Gaps: **0**
 - Exempt: 2
-
-**Gaps (1) — no SDK wrapper found:**
-
-- `POST /UnfreezeKey`
 
 **Exempt (2):**
 
@@ -40,50 +36,30 @@
 ### SuperPaymaster ABI
 
 - Total (non-exempt): **256**
-- Covered: **218** (85.2%) — direct: 218, indirect/verify: 0
-- Gaps: **38**
+- Covered: **238** (93.0%) — direct: 238, indirect/verify: 0
+- Gaps: **18**
 - Exempt: 3
 
-**Gaps (38) — no SDK wrapper found:**
+**Gaps (18) — no SDK wrapper found:**
 
-- `EXCHANGE_RATE_COOLDOWN (xPNTsToken)`
-- `EXCHANGE_RATE_DELTA_BPS (xPNTsToken)`
-- `EXCHANGE_RATE_MAX (xPNTsToken)`
-- `EXCHANGE_RATE_MIN (xPNTsToken)`
 - `MAX_BOOSTED_COLLECTIONS (ReputationSystem)`
 - `MAX_CLOSE_TIMEOUT (MicroPaymentChannel)`
-- `MAX_SINGLE_TX_LIMIT_CAP (xPNTsToken)`
 - `MAX_TOTAL_STAKE (GTokenStaking)`
 - `MIN_CLOSE_TIMEOUT (MicroPaymentChannel)`
-- `addApprovedFacilitator (xPNTsToken)`
-- `approvedFacilitators (xPNTsToken)`
 - `blacklistNonce (Registry)`
 - `closeTimeout (MicroPaymentChannel)`
 - `closedChannels (MicroPaymentChannel)`
-- `emergencyDisabled (xPNTsToken)`
-- `emergencyRevokedAddress (xPNTsToken)`
-- `exchangeRateUpdatedAt (xPNTsToken)`
 - `lockStakeWithTicket (GTokenStaking)`
-- `maxSingleTxLimit (xPNTsToken)`
 - `permissionlessBLSRegistration (BLSAggregator)`
 - `pruneValidator (DVTValidator)`
-- `recordDebtWithOpHash (xPNTsToken)`
-- `removeApprovedFacilitator (xPNTsToken)`
 - `removeValidator (DVTValidator)`
-- `renounceFactory (xPNTsToken)`
 - `revokeBLSPublicKey (BLSAggregator)`
 - `setCloseTimeout (MicroPaymentChannel)`
 - `setCreditTier (Registry)`
 - `setLevelThresholds (Registry)`
-- `setMaxSingleTxLimit (xPNTsToken)`
 - `setPermissionlessBLSRegistration (BLSAggregator)`
-- `setSpenderDailyCap (xPNTsToken)`
-- `spenderDailyCapTokens (xPNTsToken)`
-- `spenderRateLimit (xPNTsToken)`
 - `syncStakeFromStaking (Registry)`
-- `unsetEmergencyDisabled (xPNTsToken)`
 - `updateOperatorBlacklist (Registry)`
-- `usedDebtHashes (xPNTsToken)`
 
 **Exempt (3):**
 
@@ -93,12 +69,12 @@
 
 ### AirAccount ABI
 
-- Total (non-exempt): **129**
-- Covered: **87** (67.4%) — direct: 51, indirect/verify: 36
-- Gaps: **42**
+- Total (non-exempt): **135**
+- Covered: **86** (63.7%) — direct: 50, indirect/verify: 36
+- Gaps: **49**
 - Exempt: 2
 
-**Gaps (42) — no SDK wrapper found:**
+**Gaps (49) — no SDK wrapper found:**
 
 - `ACCOUNT_VERSION (AAStarAirAccountV7)`
 - `ARB_SYS (ForceExitModule)`
@@ -109,10 +85,12 @@
 - `OP_DEFAULT_GAS_LIMIT (ForceExitModule)`
 - `accountId (AAStarAirAccountV7)`
 - `bindFactory (AgentRegistry)`
+- `cancelModuleInstall (AAStarAirAccountV7,AirAccountExtension)`
 - `checkSessionScope (SessionKeyValidator)`
 - `defaultCommunityGuardian (AAStarAirAccountFactoryV7)`
 - `deployer (AgentRegistry)`
 - `executeFromExecutor (AAStarAirAccountV7)`
+- `executeModuleInstall (AAStarAirAccountV7,AirAccountExtension)`
 - `factory (AgentRegistry)`
 - `factoryAdmin (AAStarAirAccountFactoryV7)`
 - `getAddressWithChainId (AAStarAirAccountFactoryV7)`
@@ -128,14 +106,19 @@
 - `initializeAgentAccount (AAStarAirAccountV7)`
 - `isValidSignature (AAStarAirAccountV7)`
 - `markValid (AgentRegistry)`
+- `moduleInstallTimelock (AAStarAirAccountV7,AirAccountExtension)`
+- `moduleManagementNonce (AAStarAirAccountV7)`
 - `p256KeyX (AAStarAirAccountV7,AirAccountExtension)`
 - `p256KeyY (AAStarAirAccountV7,AirAccountExtension)`
 - `parserRegistry (AAStarAirAccountV7,AirAccountExtension)`
 - `pendingExit (ForceExitModule)`
+- `pendingModuleInstall (AAStarAirAccountV7,AirAccountExtension)`
+- `proposeModuleInstall (AAStarAirAccountV7,AirAccountExtension)`
 - `recordCallForVelocity (SessionKeyValidator)`
 - `requiredTier (AAStarAirAccountV7)`
+- `sessionKeyCount (SessionKeyValidator)`
 - `sessionStates_p256 (SessionKeyValidator)`
-- `setAggregator (AAStarAirAccountV7)`
+- `setModuleInstallTimelock (AAStarAirAccountV7,AirAccountExtension)`
 - `setP256Key (AAStarAirAccountV7)`
 - `setParserRegistry (AAStarAirAccountV7)`
 - `setTierLimits (AAStarAirAccountV7)`
@@ -152,7 +135,7 @@
 - `agentExtension (AAStarAirAccountV7)`
 - `agentRegistry (AAStarAirAccountFactoryV7)`
 - `agentWalletOwner (AgentRegistry)`
-- `approvedAlgorithms (AAStarAirAccountV7)`
+- `approvedAlgorithms (AAStarAirAccountV7,AirAccountExtension)`
 - `buildGrantHash (SessionKeyValidator)`
 - `buildP256GrantHash (SessionKeyValidator)`
 - `executeUserOp (AAStarAirAccountV7)`

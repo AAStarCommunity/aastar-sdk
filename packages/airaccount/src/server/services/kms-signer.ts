@@ -283,6 +283,14 @@ export interface KmsChangePasskeyResponse {
   Changed: boolean;
 }
 
+// ── UnfreezeKey ──────────────────────────────────────────────────
+
+export interface KmsUnfreezeKeyResponse {
+  KeyId: string;
+  // "active" once unfrozen (or already active); mirrors the KMS LifecycleStatus enum.
+  LifecycleStatus: string;
+}
+
 /**
  * KMS service for remote key management with WebAuthn/Passkey integration.
  *
@@ -391,6 +399,23 @@ export class KmsManager {
   }): Promise<KmsDeleteKeyResponse> {
     this.ensureEnabled();
     return this.amzPost("/DeleteKey", "TrentService.ScheduleKeyDeletion", params);
+  }
+
+  /**
+   * Unfreeze a dormant (frozen) key (issue #42; WebAuthn-gated).
+   * A key auto-frozen by the dormant-key sweep rejects signing until unfrozen.
+   * The TEE verifies the owner via the same strict WebAuthn ceremony as
+   * {@link deleteKey}; ownership is checked even when the key is already active,
+   * so this cannot be used as an unauthenticated key-state probe. Unlike DeleteKey
+   * this endpoint takes no `x-amz-target` header — it authenticates via the default
+   * API key plus the WebAuthn assertion in the body.
+   */
+  async unfreezeKey(params: {
+    KeyId: string;
+    WebAuthn?: WebAuthnAssertion;
+  }): Promise<KmsUnfreezeKeyResponse> {
+    this.ensureEnabled();
+    return this.client.post<KmsUnfreezeKeyResponse>("/UnfreezeKey", params);
   }
 
   /**

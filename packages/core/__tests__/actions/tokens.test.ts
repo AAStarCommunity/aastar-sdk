@@ -109,6 +109,96 @@ describe('TokenActions Exhaustive Coverage', () => {
     });
   });
 
+  describe('XPNTs (Spending limits / facilitators / emergency / rate constants)', () => {
+    it('write ops assert functionName + args', async () => {
+      w.writeContract.mockResolvedValue('0xhash');
+      const acts = xPNTsTokenActions(ADDR)(w);
+
+      await acts.setMaxSingleTxLimit({ token: ADDR, newLimit: 500n, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        address: ADDR, functionName: 'setMaxSingleTxLimit', args: [500n],
+      }));
+
+      await acts.setSpenderDailyCap({ token: ADDR, newCap: 1000n, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'setSpenderDailyCap', args: [1000n],
+      }));
+
+      const opHash = ('0x' + 'ab'.repeat(32)) as `0x${string}`;
+      await acts.recordDebtWithOpHash({ token: ADDR, user: USER, amountAPNTs: 42n, opHash, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'recordDebtWithOpHash', args: [USER, 42n, opHash],
+      }));
+
+      await acts.addApprovedFacilitator({ token: ADDR, facilitator: USER, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'addApprovedFacilitator', args: [USER],
+      }));
+
+      await acts.removeApprovedFacilitator({ token: ADDR, facilitator: USER, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'removeApprovedFacilitator', args: [USER],
+      }));
+
+      await acts.renounceFactory({ token: ADDR, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'renounceFactory', args: [],
+      }));
+
+      await acts.unsetEmergencyDisabled({ token: ADDR, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'unsetEmergencyDisabled', args: [],
+      }));
+    });
+
+    it('read ops assert functionName + args', async () => {
+      const acts = xPNTsTokenActions(ADDR)(p);
+      const opHash = ('0x' + 'cd'.repeat(32)) as `0x${string}`;
+
+      p.readContract.mockResolvedValue(123n);
+      expect(await acts.maxSingleTxLimit({ token: ADDR })).toBe(123n);
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'maxSingleTxLimit', args: [] }));
+
+      await acts.spenderDailyCapTokens({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'spenderDailyCapTokens', args: [] }));
+
+      await acts.exchangeRateUpdatedAt({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'exchangeRateUpdatedAt', args: [] }));
+
+      // Exchange-rate guard constants
+      await acts.EXCHANGE_RATE_COOLDOWN({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'EXCHANGE_RATE_COOLDOWN', args: [] }));
+      await acts.EXCHANGE_RATE_DELTA_BPS({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'EXCHANGE_RATE_DELTA_BPS', args: [] }));
+      await acts.EXCHANGE_RATE_MAX({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'EXCHANGE_RATE_MAX', args: [] }));
+      await acts.EXCHANGE_RATE_MIN({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'EXCHANGE_RATE_MIN', args: [] }));
+      await acts.MAX_SINGLE_TX_LIMIT_CAP({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'MAX_SINGLE_TX_LIMIT_CAP', args: [] }));
+
+      p.readContract.mockResolvedValue(true);
+      expect(await acts.usedDebtHashes({ token: ADDR, opHash })).toBe(true);
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'usedDebtHashes', args: [opHash] }));
+      await acts.emergencyDisabled({ token: ADDR });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'emergencyDisabled', args: [] }));
+      await acts.approvedFacilitators({ token: ADDR, facilitator: USER });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'approvedFacilitators', args: [USER] }));
+
+      p.readContract.mockResolvedValue(USER);
+      expect(await acts.emergencyRevokedAddress({ token: ADDR })).toBe(USER);
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'emergencyRevokedAddress', args: [] }));
+    });
+
+    it('spenderRateLimit destructures the (dailyBurnTotal, windowStart, reserved) tuple', async () => {
+      const acts = xPNTsTokenActions(ADDR)(p);
+      p.readContract.mockResolvedValue([100n, 200n, 0n]);
+      const rl = await acts.spenderRateLimit({ token: ADDR, spender: USER });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'spenderRateLimit', args: [USER] }));
+      expect(rl).toEqual({ dailyBurnTotal: 100n, windowStart: 200n, reserved: 0n });
+    });
+  });
+
   describe('Legacy tokenActions', () => {
     it('defaults to xPNTs', async () => {
       p.readContract.mockResolvedValue('1.0');

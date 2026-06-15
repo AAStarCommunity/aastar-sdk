@@ -75,6 +75,47 @@ export type XPNTsTokenActions = ERC20Actions & {
     FACTORY: (args: { token: Address }) => Promise<Address>;
     version: (args: { token: Address }) => Promise<string>;
     usedOpHashes: (args: { token: Address, opHash: Hex }) => Promise<boolean>;
+
+    // Spending Limits (admin writes)
+    /** Set the per-tx burn ceiling. State-changing tx → resolves to a tx `Hash`. */
+    setMaxSingleTxLimit: (args: { token: Address, newLimit: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** Set the per-spender daily burn cap (in whole tokens). State-changing tx → resolves to a tx `Hash`. */
+    setSpenderDailyCap: (args: { token: Address, newCap: bigint, account?: Account | Address }) => Promise<Hash>;
+    maxSingleTxLimit: (args: { token: Address }) => Promise<bigint>;
+    spenderDailyCapTokens: (args: { token: Address }) => Promise<bigint>;
+    spenderRateLimit: (args: { token: Address, spender: Address }) => Promise<{ dailyBurnTotal: bigint, windowStart: bigint, reserved: bigint }>;
+
+    // Debt with op-hash replay protection
+    /**
+     * Record APNTs-denominated debt for a user, guarded by a unique `opHash` to prevent replay.
+     * ABI: recordDebtWithOpHash(address user, uint256 amountAPNTs, bytes32 opHash). This is a
+     * state-changing tx, so it resolves to the transaction `Hash`; the function has no return value.
+     */
+    recordDebtWithOpHash: (args: { token: Address, user: Address, amountAPNTs: bigint, opHash: Hex, account?: Account | Address }) => Promise<Hash>;
+    usedDebtHashes: (args: { token: Address, opHash: Hex }) => Promise<boolean>;
+
+    // Facilitator allow-list (admin writes)
+    /** Add an approved facilitator. State-changing tx → resolves to a tx `Hash`. */
+    addApprovedFacilitator: (args: { token: Address, facilitator: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Remove an approved facilitator. State-changing tx → resolves to a tx `Hash`. */
+    removeApprovedFacilitator: (args: { token: Address, facilitator: Address, account?: Account | Address }) => Promise<Hash>;
+    approvedFacilitators: (args: { token: Address, facilitator: Address }) => Promise<boolean>;
+
+    // Factory / Emergency lifecycle (admin writes)
+    /** Permanently renounce the factory link. State-changing tx → resolves to a tx `Hash`. */
+    renounceFactory: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Clear the emergency-disabled flag. State-changing tx → resolves to a tx `Hash`. */
+    unsetEmergencyDisabled: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    emergencyDisabled: (args: { token: Address }) => Promise<boolean>;
+    emergencyRevokedAddress: (args: { token: Address }) => Promise<Address>;
+    exchangeRateUpdatedAt: (args: { token: Address }) => Promise<bigint>;
+
+    // Exchange-rate guard constants (views)
+    EXCHANGE_RATE_COOLDOWN: (args: { token: Address }) => Promise<bigint>;
+    EXCHANGE_RATE_DELTA_BPS: (args: { token: Address }) => Promise<bigint>;
+    EXCHANGE_RATE_MAX: (args: { token: Address }) => Promise<bigint>;
+    EXCHANGE_RATE_MIN: (args: { token: Address }) => Promise<bigint>;
+    MAX_SINGLE_TX_LIMIT_CAP: (args: { token: Address }) => Promise<bigint>;
 };
 
 // Unified TokenActions (deprecated legacy support)
@@ -448,6 +489,120 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
             validateAddress(token!, 'token');
             validateRequired(opHash, 'opHash');
             return (client as PublicClient).readContract({ address: token!, abi, functionName: 'usedOpHashes', args: [opHash] }) as Promise<boolean>;
+        },
+        // --- Spending Limits ---
+        async setMaxSingleTxLimit({ token = address, newLimit, account }: { token?: Address, newLimit: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAmount(newLimit, 'newLimit');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'setMaxSingleTxLimit', args: [newLimit], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'setMaxSingleTxLimit'); }
+        },
+        async setSpenderDailyCap({ token = address, newCap, account }: { token?: Address, newCap: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAmount(newCap, 'newCap');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'setSpenderDailyCap', args: [newCap], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'setSpenderDailyCap'); }
+        },
+        async maxSingleTxLimit({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'maxSingleTxLimit', args: [] }) as Promise<bigint>;
+        },
+        async spenderDailyCapTokens({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'spenderDailyCapTokens', args: [] }) as Promise<bigint>;
+        },
+        async spenderRateLimit({ token = address, spender }: { token?: Address, spender: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(spender, 'spender');
+            // ABI: spenderRateLimit(address) -> (uint128 dailyBurnTotal, uint64 windowStart, uint64 reserved)
+            const res = await (client as PublicClient).readContract({ address: token!, abi, functionName: 'spenderRateLimit', args: [spender] }) as any;
+            if (Array.isArray(res)) {
+                return { dailyBurnTotal: res[0] as bigint, windowStart: res[1] as bigint, reserved: res[2] as bigint };
+            }
+            return res as { dailyBurnTotal: bigint, windowStart: bigint, reserved: bigint };
+        },
+        // --- Debt with op-hash replay protection ---
+        async recordDebtWithOpHash({ token = address, user, amountAPNTs, opHash, account }: { token?: Address, user: Address, amountAPNTs: bigint, opHash: Hex, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(user, 'user');
+                validateAmount(amountAPNTs, 'amountAPNTs');
+                validateRequired(opHash, 'opHash');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'recordDebtWithOpHash', args: [user, amountAPNTs, opHash], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'recordDebtWithOpHash'); }
+        },
+        async usedDebtHashes({ token = address, opHash }: { token?: Address, opHash: Hex }) {
+            validateAddress(token!, 'token');
+            validateRequired(opHash, 'opHash');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'usedDebtHashes', args: [opHash] }) as Promise<boolean>;
+        },
+        // --- Facilitator allow-list ---
+        async addApprovedFacilitator({ token = address, facilitator, account }: { token?: Address, facilitator: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(facilitator, 'facilitator');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'addApprovedFacilitator', args: [facilitator], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'addApprovedFacilitator'); }
+        },
+        async removeApprovedFacilitator({ token = address, facilitator, account }: { token?: Address, facilitator: Address, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(facilitator, 'facilitator');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'removeApprovedFacilitator', args: [facilitator], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'removeApprovedFacilitator'); }
+        },
+        async approvedFacilitators({ token = address, facilitator }: { token?: Address, facilitator: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(facilitator, 'facilitator');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'approvedFacilitators', args: [facilitator] }) as Promise<boolean>;
+        },
+        // --- Factory / Emergency lifecycle ---
+        async renounceFactory({ token = address, account }: { token?: Address, account?: Account | Address } = {}) {
+            try {
+                validateAddress(token!, 'token');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'renounceFactory', args: [], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'renounceFactory'); }
+        },
+        async unsetEmergencyDisabled({ token = address, account }: { token?: Address, account?: Account | Address } = {}) {
+            try {
+                validateAddress(token!, 'token');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'unsetEmergencyDisabled', args: [], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'unsetEmergencyDisabled'); }
+        },
+        async emergencyDisabled({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'emergencyDisabled', args: [] }) as Promise<boolean>;
+        },
+        async emergencyRevokedAddress({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'emergencyRevokedAddress', args: [] }) as Promise<Address>;
+        },
+        async exchangeRateUpdatedAt({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'exchangeRateUpdatedAt', args: [] }) as Promise<bigint>;
+        },
+        // --- Exchange-rate guard constants ---
+        async EXCHANGE_RATE_COOLDOWN({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'EXCHANGE_RATE_COOLDOWN', args: [] }) as Promise<bigint>;
+        },
+        async EXCHANGE_RATE_DELTA_BPS({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'EXCHANGE_RATE_DELTA_BPS', args: [] }) as Promise<bigint>;
+        },
+        async EXCHANGE_RATE_MAX({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'EXCHANGE_RATE_MAX', args: [] }) as Promise<bigint>;
+        },
+        async EXCHANGE_RATE_MIN({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'EXCHANGE_RATE_MIN', args: [] }) as Promise<bigint>;
+        },
+        async MAX_SINGLE_TX_LIMIT_CAP({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'MAX_SINGLE_TX_LIMIT_CAP', args: [] }) as Promise<bigint>;
         },
     };
     return actions as XPNTsTokenActions;
