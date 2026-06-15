@@ -43,6 +43,12 @@ import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
+// DVT layer-1 account policy (SuperPaymaster v5.4) — sender-keyed, governance-gated
+// trigger/spend policy read by staked consumers during validation. Asymmetric lifecycle:
+// tighten/freeze are immediate (guardian or timelock); loosen/unfreeze flow through an
+// EXTERNAL OZ TimelockController (2-day minDelay). See actions/policyRegistry.ts.
+import PolicyRegistryABIData from './PolicyRegistry.json' with { type: 'json' };
+
 // ========== Re-export ABIs - Core System ==========
 export const RegistryABI = (RegistryABIData as any).abi || RegistryABIData;
 export const RegistryArtifact = RegistryABIData;
@@ -112,6 +118,12 @@ export const BLSAggregatorArtifact = BLSAggregatorABIData;
 
 export const BLSValidatorABI = (BLSValidatorABIData as any).abi || BLSValidatorABIData;
 export const BLSValidatorArtifact = BLSValidatorABIData;
+
+// PolicyRegistry (SP v5.4 DVT layer-1). Reads (checkPolicy / getAssetPolicy / getContractScope
+// / getAssetSpend / isSelectorAllowed / isFrozen / isAuthorizedConsumer / guardian / timelock)
+// + asymmetric writes (immediate tighten/freeze; timelocked loosen/unfreeze).
+export const PolicyRegistryABI = (PolicyRegistryABIData as any).abi || PolicyRegistryABIData;
+export const PolicyRegistryArtifact = PolicyRegistryABIData;
 
 
 // ========== AirAccount v0.17.2-beta.3 stack (synced 2026-06-12) ==========
