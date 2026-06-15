@@ -3,6 +3,33 @@ import { SuperPaymasterABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
+/**
+ * ERC-4337 v0.7 PackedUserOperation tuple, matching the `struct PackedUserOperation`
+ * input of `dryRunValidation` / `validatePaymasterUserOp` in the SuperPaymaster ABI.
+ * Field order is load-bearing: viem encodes the tuple positionally from this shape.
+ */
+export type PackedUserOperation = {
+    sender: Address;
+    nonce: bigint;
+    initCode: Hex;
+    callData: Hex;
+    accountGasLimits: Hex;
+    preVerificationGas: bigint;
+    gasFees: Hex;
+    paymasterAndData: Hex;
+    signature: Hex;
+};
+
+/**
+ * Result of an off-chain `dryRunValidation` pre-flight check.
+ * `ok` mirrors whether the paymaster would accept the UserOp; `reasonCode` is a
+ * bytes32 machine-readable rejection code (zero when `ok` is true).
+ */
+export type DryRunValidationResult = {
+    ok: boolean;
+    reasonCode: Hex;
+};
+
 export type SlashRecord = {
     timestamp: bigint;
     amount: bigint;
@@ -124,6 +151,12 @@ export type SuperPaymasterActions = {
     
     // Validation
     validatePaymasterUserOp: (args: { userOp: any, userOpHash: Hex, maxCost: bigint }) => Promise<{ context: Hex, validationData: bigint }>;
+    /**
+     * Off-chain pre-flight validation of a UserOp against this paymaster.
+     * Returns `{ ok, reasonCode }` so callers can detect AA34-style rejections
+     * before submitting the UserOp on-chain. View call; never mutates state.
+     */
+    dryRunValidation: (args: { userOp: PackedUserOperation, maxCost: bigint }) => Promise<DryRunValidationResult>;
     
     // View Functions
     operators: (args: { operator: Address }) => Promise<OperatorConfig>;
@@ -141,6 +174,16 @@ export type SuperPaymasterActions = {
     totalTrackedBalance: () => Promise<bigint>;
     priceStalenessThreshold: () => Promise<bigint>;
     sbtHolders: (args: { user: Address }) => Promise<boolean>;
+    /** True when the Chainlink ETH/USD feed is considered stale by the contract. */
+    isChainlinkStale: () => Promise<boolean>;
+    /** Current pricing mode (uint8 enum on the contract). */
+    priceMode: () => Promise<number>;
+    /** Unix-second timestamp until which the cached price remains valid (uint48). */
+    priceValidUntil: () => Promise<bigint>;
+    /** Address of the BLS aggregator pending the timelock (`zeroAddress` if none queued). */
+    pendingBLSAgg: () => Promise<Address>;
+    /** Unix-second ETA at which the pending BLS aggregator change becomes executable (uint48). */
+    pendingBLSAggEta: () => Promise<bigint>;
     
     // Constants
     APNTS_TOKEN: () => Promise<Address>;
@@ -158,6 +201,8 @@ export type SuperPaymasterActions = {
     RATE_OFFSET: () => Promise<bigint>;
     VALIDATION_BUFFER_BPS: () => Promise<bigint>;
     BPS_DENOMINATOR: () => Promise<bigint>;
+    /** Duration (seconds) of the aPNTs-token-change timelock. */
+    APNTS_TOKEN_TIMELOCK: () => Promise<bigint>;
     
     // Ownership
     owner: () => Promise<Address>;
@@ -894,6 +939,25 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         }
     },
 
+    async dryRunValidation({ userOp, maxCost }) {
+        try {
+            const res = await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'dryRunValidation',
+                args: [userOp, maxCost]
+            }) as any;
+
+            // Solidity returns (bool ok, bytes32 reasonCode); viem decodes to a tuple.
+            if (Array.isArray(res)) {
+                return { ok: res[0], reasonCode: res[1] };
+            }
+            return res as DryRunValidationResult;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'dryRunValidation');
+        }
+    },
+
     // View Functions
     async operators({ operator }) {
         try {
@@ -1166,6 +1230,77 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         }
     },
 
+    /** True when the Chainlink ETH/USD feed is considered stale by the contract. */
+    async isChainlinkStale() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'isChainlinkStale',
+                args: []
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isChainlinkStale');
+        }
+    },
+
+    /** Current pricing mode (uint8 enum). Decoded to a JS number. */
+    async priceMode() {
+        try {
+            const res = await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'priceMode',
+                args: []
+            });
+            return Number(res);
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'priceMode');
+        }
+    },
+
+    /** Unix-second timestamp (uint48) until which the cached price remains valid. */
+    async priceValidUntil() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'priceValidUntil',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'priceValidUntil');
+        }
+    },
+
+    /** Address of the BLS aggregator pending the timelock (zero if none queued). */
+    async pendingBLSAgg() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'pendingBLSAgg',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pendingBLSAgg');
+        }
+    },
+
+    /** Unix-second ETA (uint48) at which the pending BLS aggregator change becomes executable. */
+    async pendingBLSAggEta() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'pendingBLSAggEta',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pendingBLSAggEta');
+        }
+    },
+
     // Constants
     async APNTS_TOKEN() {
         try {
@@ -1359,6 +1494,20 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             }) as Promise<bigint>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'BPS_DENOMINATOR');
+        }
+    },
+
+    /** Duration (seconds) of the aPNTs-token-change timelock. */
+    async APNTS_TOKEN_TIMELOCK() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'APNTS_TOKEN_TIMELOCK',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'APNTS_TOKEN_TIMELOCK');
         }
     },
 
