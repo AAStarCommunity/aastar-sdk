@@ -62,11 +62,11 @@ export const CANONICAL_ADDRESSES = {
 
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
-  //                  AirAccount repo docs/deployment-v0.18.md
-  // Latest sync: 2026-06-15 — SuperPaymaster v5.4.0-beta.1 + AirAccount v0.18 (full redeploy).
+  //                  AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md
+  // Latest sync: 2026-06-16 — SuperPaymaster v5.4.0-beta.1 + AirAccount v0.18.0-beta.2 (full redeploy).
   //   SP proxy 0xFb09... (impl 0xE84Ae83E...), Registry 0xB5Fb... (impl 0x0B5ce703...)
   //   v5.4 adds: x402Facilitator 0xFe95a77e..., policyRegistry 0x37e4E40e..., timelockController 0x6cEc100c...
-  //   AirAccount v0.18 factory 0xB14a... (NEW ctor: impl injected as arg 1).
+  //   AirAccount v0.18.0-beta.2 factory 0x1b69... (NEW ctor: impl injected as arg 1).
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
@@ -94,21 +94,23 @@ export const CANONICAL_ADDRESSES = {
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
     agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
-    // --- AirAccount v0.18 stack (full redeploy 2026-06-14) ---
+    // --- AirAccount v0.18.0-beta.2 stack (full redeploy 2026-06-15) ---
     // Non-upgradable account, so all 11 contracts are fresh for v0.18 (WS-A..G + #45
-    // BLS↔userOpHash binding + #82 factory EIP-3860 fix). Source: AirAccount repo
-    // docs/deployment-v0.18.md. NOTE: factory ctor is NEW — impl injected as arg 1.
-    aaStarBLSAlgorithm: "0x2869EEb04218ca666c6373c0DC5aCDa04F00adFA",  // v0.18 (#45 on-chain hash_to_curve; Ownable2Step; aggregator() getter)
-    aaStarValidator: "0xe785AF830aD33F3E550FfdC0fEB81D42507DA39D",  // v0.18 (set-once validator)
-    aaStarBLSAggregator: "0x9AD55930B77C002dF884F4dac846D2077CDA7C8b",  // v0.18 (new ctor (blsAlgorithm, entryPoint))
-    sessionKeyValidator: "0x82f16163D0fb9c4dd7507b9999B79527a795291C",  // v0.18 (cap + velocity)
-    forceExitModule: "0x0F6960526acf4cF9123e0aBc82d7a59fA0B6C934",  // v0.18 (TOCTOU re-verify)
-    airAccountDelegate: "0x70A8E31c425Ef3F23a2F9E05C48Bd998Aa29085b",  // v0.18
-    calldataParserRegistry: "0x5dEE2c5279eFfC7c7FE711233bE42726EE0d4166",  // v0.18
-    airAccountFactoryV7: "0xB14a870e4f63CA21a7EB753588CC4eBFb429E163",  // v0.18 (NEW ctor: implementation injected as arg 1)
-    airAccountV7Impl: "0x1Bc1119e3Ce4B6D158a6eadb31A06FdcE51992cF",  // v0.18
-    airAccountExtension: "0xB1B3acd47DB89806F8431da3452769f1243b4d56",  // v0.18 (module-install timelock)
-    agentRegistry: "0x118eD73f22e41cb69282c78b216426D2d98A3935",  // v0.18 (bindFactory set-once)
+    // BLS↔userOpHash binding + #82 factory EIP-3860 fix). beta.2 redeployed ALL 11
+    // contracts on Sepolia (same code as beta.1 + full 36-scenario on-chain E2E).
+    // Source of truth: AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md.
+    // NOTE: factory ctor is NEW — impl injected as arg 1.
+    aaStarBLSAlgorithm: "0xA9EE4f8A59fCE1B56f9da8e153c3f5F38D3C59ED",  // v0.18.0-beta.2 (#45 on-chain hash_to_curve; Ownable2Step; aggregator() getter)
+    aaStarValidator: "0xe8e5a8c5eeDfb75adb7FbA2BCCD3A6b1B766d6f0",  // v0.18.0-beta.2 (ValidatorRouter, set-once validator)
+    aaStarBLSAggregator: "0x321D68F5eD927B59E1A953Fd97972FbCB21f7601",  // v0.18.0-beta.2 (new ctor (blsAlgorithm, entryPoint))
+    sessionKeyValidator: "0xBB79BF812aE239443fF48323dD24860F9bFb2874",  // v0.18.0-beta.2 (cap + velocity)
+    forceExitModule: "0xEaDb9EEDD1aF021AEC687C18C3491337a481e4Ed",  // v0.18.0-beta.2 (TOCTOU re-verify)
+    airAccountDelegate: "0x6b60897172B7CA2fa3986d19a55B25d968988c22",  // v0.18.0-beta.2
+    calldataParserRegistry: "0xD6A16905C25F1D928e2fF5204f1385379e84D3Ff",  // v0.18.0-beta.2
+    airAccountFactoryV7: "0x1b694Aa55fBe2953e724037d2449905d531C1e65",  // v0.18.0-beta.2 (NEW ctor: implementation injected as arg 1)
+    airAccountV7Impl: "0x9Bf4d9FeFaA1e7358e58583294569adf730A97b0",  // v0.18.0-beta.2
+    airAccountExtension: "0x008B136106e98384B640bD5F0D0fb6012542F24D",  // v0.18.0-beta.2 (module-install timelock)
+    agentRegistry: "0x00D7045617b9807cE36db9591a63b5af66036192",  // v0.18.0-beta.2 (bindFactory set-once)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x37e4E40e69Fb7d5C3fbAA0F52A4002D27472Ff29",

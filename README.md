@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/Status-v0.19.0-green" alt="Status" style="display:inline-block;" />
+  <img src="https://img.shields.io/badge/Status-v0.20.0-green" alt="Status" style="display:inline-block;" />
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
@@ -22,7 +22,7 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 
 | Upstream | Pinned version | Releases | Source of truth in this SDK |
 |---|---|---|---|
-| **AirAccount** (contracts) | `v0.18.0-beta.1` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
+| **AirAccount** (contracts) | `v0.18.0-beta.2` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
 | **SuperPaymaster** | `v5.4.0-beta.1` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
 | **KMS** | `openapi 0.22.0` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
 | **DVT** (validator nodes) | `v1.2.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client; on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps) |

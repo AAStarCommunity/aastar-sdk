@@ -65,6 +65,37 @@ export interface KmsStatsResponse {
   [k: string]: unknown;
 }
 
+// ── TEE remote-attestation (GET /attestation + .well-known, #37/#12/#87) ──
+
+/** `GET /attestation` evidence bound to a caller nonce (#37). */
+export interface KmsAttestationResponse {
+  schema?: string;
+  nonce?: string;
+  ta_uuid?: string;
+  ta_measurement?: string;
+  signature?: string;
+  attest_pubkey_exp?: string;
+  attest_pubkey_mod?: string;
+  sig_alg?: number;
+  ree_time_secs?: number;
+  trust_root?: string;
+  [k: string]: unknown;
+}
+
+/** `GET /.well-known/attestation-measurements.json` — Ed25519-signed manifest (#12). */
+export interface KmsAttestationManifestResponse {
+  body?: Record<string, unknown>;
+  publisher_key?: string;
+  signature?: string;
+  [k: string]: unknown;
+}
+
+/** `GET /.well-known/attestation-measurements-proof.json` — Sigsum proof sidecar (#87). */
+export interface KmsAttestationProofResponse {
+  proof?: Record<string, unknown>;
+  [k: string]: unknown;
+}
+
 // ── Admin Purge Key (POST /admin/purge-key, v0.20.0) ─────────────
 
 /**
@@ -126,6 +157,31 @@ export class KmsMonitorService {
   async stats(): Promise<KmsStatsResponse> {
     this.http.ensureEnabled();
     return this.http.get<KmsStatsResponse>("/stats");
+  }
+
+  /**
+   * TEE remote-attestation evidence bound to a caller nonce (`GET /attestation`,
+   * #37). Public (no auth) — pass a fresh random `nonce` (hex, ≤64 bytes) to bind
+   * the evidence + defeat replay, then verify the returned signed measurement.
+   */
+  async getAttestation(nonce: string): Promise<KmsAttestationResponse> {
+    return this.http.get<KmsAttestationResponse>("/attestation", { params: { nonce } });
+  }
+
+  /**
+   * Ed25519-signed measurement manifest, version → ta_measurement
+   * (`GET /.well-known/attestation-measurements.json`, #12). Public.
+   */
+  async getAttestationMeasurements(): Promise<KmsAttestationManifestResponse> {
+    return this.http.get<KmsAttestationManifestResponse>("/.well-known/attestation-measurements.json");
+  }
+
+  /**
+   * Sigsum transparency proof sidecar for the measurement manifest
+   * (`GET /.well-known/attestation-measurements-proof.json`, #87). Public.
+   */
+  async getAttestationMeasurementsProof(): Promise<KmsAttestationProofResponse> {
+    return this.http.get<KmsAttestationProofResponse>("/.well-known/attestation-measurements-proof.json");
   }
 
   /**

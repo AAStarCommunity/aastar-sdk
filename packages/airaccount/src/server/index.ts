@@ -187,6 +187,9 @@ export type {
   KmsRollbackCounterResponse,
   KmsStatsResponse,
   KmsPurgeKeyResponse,
+  KmsAttestationResponse,
+  KmsAttestationManifestResponse,
+  KmsAttestationProofResponse,
 } from "./services/kms-monitor-service";
 
 // ── Adapters ──────────────────────────────────────────────────────
