@@ -1,5 +1,10 @@
 import { KmsHttpClient } from "./kms-http-client";
 import { WebAuthnAssertion, LegacyPasskeyAssertion } from "./kms-signer";
+import {
+  PasskeyCeremonySigner,
+  RunCeremonyOptions,
+  runAuthenticationCeremony,
+} from "./webauthn-ceremony";
 
 // ── CreateAgentKey ───────────────────────────────────────────────
 
@@ -169,5 +174,61 @@ export class KmsAgentService {
       "/kms/revoke-agent-credential",
       params
     );
+  }
+
+  // ── Challenge-binding ceremony variants (#49 / Beta3) ────────────
+  //
+  // All agent-key WebAuthn gates use the generic purpose="authentication"
+  // challenge bound to the HUMAN key. These helpers run the full ceremony
+  // (begin → clientDataJSON → assertion) via the shared
+  // {@link runAuthenticationCeremony} helper, then invoke the endpoint.
+
+  /** Mint an agent key, running the challenge-binding ceremony internally. */
+  async createAgentKeyWithCeremony(
+    params: Omit<KmsCreateAgentKeyRequest, "webAuthnAssertion" | "passkeyAssertion">,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsCreateAgentKeyResponse> {
+    this.http.ensureEnabled();
+    const webAuthnAssertion = await runAuthenticationCeremony(
+      this.http,
+      params.humanKeyId,
+      signer,
+      options
+    );
+    return this.createAgentKey({ ...params, webAuthnAssertion });
+  }
+
+  /**
+   * Refresh an agent credential, running the challenge-binding ceremony
+   * internally. `humanKeyId` is the owning human key challenged by the ceremony
+   * (distinct from the agent `keyId` in `params`); `jwt` is the existing credential.
+   */
+  async refreshAgentCredentialWithCeremony(
+    params: Omit<KmsRefreshAgentCredentialRequest, "webAuthnAssertion" | "passkeyAssertion">,
+    humanKeyId: string,
+    jwt: string,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsRefreshAgentCredentialResponse> {
+    this.http.ensureEnabled();
+    const webAuthnAssertion = await runAuthenticationCeremony(this.http, humanKeyId, signer, options);
+    return this.refreshAgentCredential({ ...params, webAuthnAssertion }, jwt);
+  }
+
+  /**
+   * Revoke an agent credential, running the challenge-binding ceremony internally.
+   * `humanKeyId` is the owning human key challenged by the ceremony (distinct from
+   * the agent `keyId` in `params`).
+   */
+  async revokeAgentCredentialWithCeremony(
+    params: Omit<KmsRevokeAgentCredentialRequest, "webAuthnAssertion" | "passkeyAssertion">,
+    humanKeyId: string,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsRevokeAgentCredentialResponse> {
+    this.http.ensureEnabled();
+    const webAuthnAssertion = await runAuthenticationCeremony(this.http, humanKeyId, signer, options);
+    return this.revokeAgentCredential({ ...params, webAuthnAssertion });
   }
 }

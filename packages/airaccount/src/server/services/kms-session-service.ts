@@ -1,5 +1,10 @@
 import { KmsHttpClient } from "./kms-http-client";
 import { WebAuthnAssertion } from "./kms-signer";
+import {
+  PasskeyCeremonySigner,
+  RunCeremonyOptions,
+  runAuthenticationCeremony,
+} from "./webauthn-ceremony";
 
 // ── Create P256 Session Key (v0.20.0) ───────────────────────────
 
@@ -138,5 +143,43 @@ export class KmsSessionService {
       "/kms/revoke-p256-session-key",
       params
     );
+  }
+
+  // ── Challenge-binding ceremony variants (#49 / Beta3) ────────────
+  //
+  // Create + revoke gate on the generic purpose="authentication" challenge bound
+  // to the HUMAN key. These helpers run the full ceremony (begin → clientDataJSON
+  // → assertion) via the shared {@link runAuthenticationCeremony} helper.
+
+  /** Create a P-256 session key, running the challenge-binding ceremony internally. */
+  async createP256SessionKeyWithCeremony(
+    params: Omit<CreateP256SessionKeyRequest, "webAuthnAssertion">,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<CreateP256SessionKeyResponse> {
+    this.http.ensureEnabled();
+    const webAuthnAssertion = await runAuthenticationCeremony(
+      this.http,
+      params.humanKeyId,
+      signer,
+      options
+    );
+    return this.createP256SessionKey({ ...params, webAuthnAssertion });
+  }
+
+  /**
+   * Revoke a P-256 session key, running the challenge-binding ceremony internally.
+   * `humanKeyId` is the owning human key challenged by the ceremony (distinct from
+   * the session `keyId` in `params`).
+   */
+  async revokeP256SessionKeyWithCeremony(
+    params: Omit<RevokeP256SessionKeyRequest, "webAuthnAssertion">,
+    humanKeyId: string,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<RevokeP256SessionKeyResponse> {
+    this.http.ensureEnabled();
+    const webAuthnAssertion = await runAuthenticationCeremony(this.http, humanKeyId, signer, options);
+    return this.revokeP256SessionKey({ ...params, webAuthnAssertion });
   }
 }
