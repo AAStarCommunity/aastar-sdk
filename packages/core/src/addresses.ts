@@ -96,24 +96,25 @@ export const CANONICAL_ADDRESSES = {
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
     agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
-    // --- AirAccount v0.19.0-beta.2 stack ---
-    // Pin bumped to v0.19.0-beta.2: NO new Solidity logic — the contract surface is
-    // identical to v0.18.0-beta.2 and the SAME 11 addresses remain live (the beta.2
-    // full Sepolia redeploy: WS-A..G + #45 BLS↔userOpHash binding + #82 factory
-    // EIP-3860 fix, validated by the full 36-scenario on-chain E2E).
-    // Source of truth: AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md.
+    // --- AirAccount v0.19.0-beta.2 stack (FULL Sepolia redeploy 2026-06-16) ---
+    // v0.19 has NO new Solidity logic (feature set identical to v0.18.0-beta.2), but it
+    // bumped ACCOUNT_VERSION/FACTORY_VERSION/accountId() → "0.19.0", which changes bytecode
+    // and therefore redeployed the ENTIRE stack to fresh addresses. All 11 below moved —
+    // the v0.18.0-beta.2 addresses are now stale. Verified by the v0.19 36-scenario on-chain
+    // E2E (Safe-guardian recovery #42 + KMS contract-side #67) + DVT real-node validate=0.
+    // Source of truth: AirAccount repo CHANGELOG.md [v0.19.0-beta.2] "Deployed (Sepolia 2026-06-16)".
     // NOTE: factory ctor is NEW — impl injected as arg 1.
-    aaStarBLSAlgorithm: "0xA9EE4f8A59fCE1B56f9da8e153c3f5F38D3C59ED",  // v0.18.0-beta.2 (#45 on-chain hash_to_curve; Ownable2Step; aggregator() getter)
-    aaStarValidator: "0xe8e5a8c5eeDfb75adb7FbA2BCCD3A6b1B766d6f0",  // v0.18.0-beta.2 (ValidatorRouter, set-once validator)
-    aaStarBLSAggregator: "0x321D68F5eD927B59E1A953Fd97972FbCB21f7601",  // v0.18.0-beta.2 (new ctor (blsAlgorithm, entryPoint))
-    sessionKeyValidator: "0xBB79BF812aE239443fF48323dD24860F9bFb2874",  // v0.18.0-beta.2 (cap + velocity)
-    forceExitModule: "0xEaDb9EEDD1aF021AEC687C18C3491337a481e4Ed",  // v0.18.0-beta.2 (TOCTOU re-verify)
-    airAccountDelegate: "0x6b60897172B7CA2fa3986d19a55B25d968988c22",  // v0.18.0-beta.2
-    calldataParserRegistry: "0xD6A16905C25F1D928e2fF5204f1385379e84D3Ff",  // v0.18.0-beta.2
-    airAccountFactoryV7: "0x1b694Aa55fBe2953e724037d2449905d531C1e65",  // v0.18.0-beta.2 (NEW ctor: implementation injected as arg 1)
-    airAccountV7Impl: "0x9Bf4d9FeFaA1e7358e58583294569adf730A97b0",  // v0.18.0-beta.2
-    airAccountExtension: "0x008B136106e98384B640bD5F0D0fb6012542F24D",  // v0.18.0-beta.2 (module-install timelock)
-    agentRegistry: "0x00D7045617b9807cE36db9591a63b5af66036192",  // v0.18.0-beta.2 (bindFactory set-once)
+    aaStarBLSAlgorithm: "0x68c381Ad3A2e3380F22840008027E9Ec2783F43A",  // v0.19.0-beta.2 (#45 on-chain hash_to_curve; Ownable2Step; aggregator() getter)
+    aaStarValidator: "0xC20A986Bcd5bF5Cc2fE5fFde6b155B8419E0389e",  // v0.19.0-beta.2 (ValidatorRouter, set-once validator)
+    aaStarBLSAggregator: "0x77f7bf95B8602b7851f392F412257539242947e0",  // v0.19.0-beta.2 (new ctor (blsAlgorithm, entryPoint))
+    sessionKeyValidator: "0x70de2e36004d6Ddc24DEB80e1Ef76c03EdC0c2AE",  // v0.19.0-beta.2 (cap + velocity)
+    forceExitModule: "0xd882a16Ea37Be463D1885EF4a397Dbbf157dC211",  // v0.19.0-beta.2 (TOCTOU re-verify)
+    airAccountDelegate: "0xA8D7f70c9D36bC4a4eb14F0dCEE19053FCB3309f",  // v0.19.0-beta.2
+    calldataParserRegistry: "0xb8Af1C039dF88F6bD9fE36Ca683492a3c09e7D17",  // v0.19.0-beta.2
+    airAccountFactoryV7: "0x52c5190E7308Ea9B149157FF016cC99B6C6bf984",  // v0.19.0-beta.2 (NEW ctor: implementation injected as arg 1)
+    airAccountV7Impl: "0x7fe62d512f0b8238DE6Ff17175DcE40eA312bBF2",  // v0.19.0-beta.2
+    airAccountExtension: "0xD61C0F3DE6D98070E9986743d35A56d56855A249",  // v0.19.0-beta.2 (module-install timelock)
+    agentRegistry: "0x3895b3E6fEf4e121E6289dC7881A0eEd5283C652",  // v0.19.0-beta.2 (bindFactory set-once)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x8c2488d46d5447418558c38AA6441720df656094",
@@ -148,7 +149,7 @@ export const CANONICAL_ADDRESSES = {
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
     aPNTs: "0x3BBcA92Ad828b3dD619c980Ba09f929b9d2BC440",
     priceFeed: "0x61Ec26aA57019C486B10502285c5A3D4A4750AD7",
-    simpleAccountFactory: "0x91E6060613810449d098b0b5Ec8b51A0FE8c8985",
+    simpleAccountFactory: "0x91E6060613810449d098b0b5EC8b51A0fe8C8985",
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",

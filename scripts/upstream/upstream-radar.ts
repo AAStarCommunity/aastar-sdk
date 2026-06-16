@@ -269,9 +269,9 @@ const KMS_API_EXEMPT = new Set<string>([
  * Parse a markdown table of `| <label> | 0x... |` rows into label->address.
  * Only the FIRST address on each line is taken.
  */
-function parseAddressTableByLabel(file: string): { label: string; address: string }[] {
+function parseAddressTableFromText(text: string): { label: string; address: string }[] {
   const out: { label: string; address: string }[] = [];
-  for (const line of readText(file).split("\n")) {
+  for (const line of text.split("\n")) {
     const addr = line.match(ADDRESS_RE);
     if (!addr) continue;
     // label = first table cell text (strip leading pipe + backticks)
@@ -281,6 +281,56 @@ function parseAddressTableByLabel(file: string): { label: string; address: strin
     if (label) out.push({ label, address: addr[0] });
   }
   return out;
+}
+
+function parseAddressTableByLabel(file: string): { label: string; address: string }[] {
+  return parseAddressTableFromText(readText(file));
+}
+
+/**
+ * The AirAccount addresses the SDK tracks follow the LATEST upstream release.
+ * Each release redeploys the full stack on a version bump (new bytecode →
+ * new CREATE addresses) even with no Solidity change, so the per-release
+ * "Deployed (Sepolia ...)" table at the TOP of the upstream CHANGELOG.md is the
+ * authoritative address record — NOT a fixed version-specific E2E doc (which
+ * would silently false-green a redeploy, as v0.19.0-beta.2 did). Returns the
+ * latest release's version heading + parsed table rows.
+ */
+function latestAirAccountRelease(repo: string): { version: string | null; rows: { label: string; address: string }[] } {
+  const changelog = join(repo, "CHANGELOG.md");
+  if (!existsSync(changelog)) return { version: null, rows: [] };
+  const text = readText(changelog);
+  const first = text.indexOf("## [");
+  if (first < 0) return { version: null, rows: [] };
+  const next = text.indexOf("\n## [", first + 4);
+  const section = next < 0 ? text.slice(first) : text.slice(first, next);
+  const vMatch = section.match(/##\s*\[v?([0-9][^\]]*)\]/);
+
+  // Restrict to the first markdown table under the "Deployed" HEADING (matched as
+  // a heading line, not any prose mention of "deployed") so sibling tables or
+  // descriptive text cannot pollute the address anchor. If a Deployed heading
+  // exists but has no table beneath it, return NO rows — do NOT fall back to the
+  // whole section (that is the false-green bug being fixed). Only when there is no
+  // Deployed heading at all do we parse the whole section.
+  let rows: { label: string; address: string }[];
+  const depMatch = section.match(/^#{2,6}\s+.*deployed.*$/im);
+  if (depMatch && depMatch.index !== undefined) {
+    const after = section.slice(depMatch.index + depMatch[0].length);
+    const block: string[] = [];
+    let started = false;
+    for (const line of after.split("\n")) {
+      if (line.includes("|")) {
+        started = true;
+        block.push(line);
+      } else if (started) {
+        break; // first contiguous table block ended
+      }
+    }
+    rows = parseAddressTableFromText(block.join("\n"));
+  } else {
+    rows = parseAddressTableFromText(section);
+  }
+  return { version: vMatch ? vMatch[1] : null, rows };
 }
 
 /**
@@ -426,48 +476,54 @@ function analyzeAirAccount(): UpstreamResult {
     ]),
   );
 
-  // addresses — E2E_TESTDATA (the beta.2 redeploy record) is the source of truth.
+  // addresses — the LATEST upstream CHANGELOG "Deployed (Sepolia ...)" table is the
+  // source of truth (a version bump redeploys the full stack to fresh addresses).
+  // Falls back to the legacy beta.2 E2E doc only if the CHANGELOG is unavailable.
+  const latest = latestAirAccountRelease(repo);
   {
     const findings: string[] = [];
-    const e2e = join(repo, "docs", "e2e", "E2E_TESTDATA_v0.18.0-beta.2.md");
-    let status: AnchorStatus = "skipped";
-    if (existsSync(e2e)) {
-      status = "in-sync";
-      let compared = 0;
-      for (const { label, address } of parseAddressTableByLabel(e2e)) {
-        const key = aaLabelToKey(label);
-        if (!key) continue;
-        compared++;
-        if (compareAddress(key, address, findings)) status = "drift";
-      }
-      if (compared === 0) status = "skipped";
+    let rows = latest.rows;
+    if (rows.length === 0) {
+      const e2e = join(repo, "docs", "e2e", "E2E_TESTDATA_v0.18.0-beta.2.md");
+      if (existsSync(e2e)) rows = parseAddressTableByLabel(e2e);
     }
+    let status: AnchorStatus = rows.length ? "in-sync" : "skipped";
+    let compared = 0;
+    for (const { label, address } of rows) {
+      const key = aaLabelToKey(label);
+      if (!key) continue;
+      compared++;
+      if (compareAddress(key, address, findings)) status = "drift";
+    }
+    if (compared === 0) status = "skipped";
     anchors.push({ anchor: "addresses", status, findings });
   }
 
-  // self-contradiction — does the upstream's own deployment-v0.18.md disagree
-  // with E2E_TESTDATA_v0.18.0-beta.2.md on the same contract?
+  // self-contradiction — does a SAME-VERSION upstream deployment doc disagree with
+  // the latest CHANGELOG deploy table? Only compares docs of the latest release's
+  // version (e.g. deployment-v0.19.md), so a superseded v0.18 doc no longer false-
+  // flags once the pin moves on (that stale-doc issue is filed upstream, not our drift).
   {
     const findings: string[] = [];
     let status: AnchorStatus = "skipped";
-    const e2e = join(repo, "docs", "e2e", "E2E_TESTDATA_v0.18.0-beta.2.md");
-    const dep = join(repo, "docs", "deployment-v0.18.md");
-    if (existsSync(e2e) && existsSync(dep)) {
+    const minor = latest.version?.match(/^(\d+\.\d+)/)?.[1] ?? null;
+    const dep = minor ? join(repo, "docs", `deployment-v${minor}.md`) : null;
+    if (latest.rows.length && dep && existsSync(dep)) {
       status = "in-sync";
-      const e2eMap = new Map<string, string>();
-      for (const { label, address } of parseAddressTableByLabel(e2e)) {
+      const refMap = new Map<string, string>();
+      for (const { label, address } of latest.rows) {
         const key = aaLabelToKey(label);
-        if (key) e2eMap.set(key, address.toLowerCase());
+        if (key) refMap.set(key, address.toLowerCase());
       }
       for (const { label, address } of parseAddressTableByLabel(dep)) {
         const key = aaLabelToKey(label);
         if (!key) continue;
-        const other = e2eMap.get(key);
+        const other = refMap.get(key);
         if (other && other !== address.toLowerCase()) {
           status = "drift";
           findings.push(
-            `${key}: deployment-v0.18.md ${address} != E2E_TESTDATA(beta.2) ${other} ` +
-              `(two upstream docs disagree; SDK tracks the beta.2 / E2E value)`,
+            `${key}: deployment-v${minor}.md ${address} != CHANGELOG-latest ${other} ` +
+              `(two same-version upstream docs disagree; SDK tracks the CHANGELOG value)`,
           );
         }
       }

@@ -14,6 +14,46 @@ import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { ServerConfig } from "../config";
 
 /**
+ * Raised when a DVT node (aNode YetAnotherAA-Validator ≥ v1.3.0, running with
+ * `CONFIRM_ENABLED=true`) withholds its co-signature on a high-value op pending
+ * out-of-band approval. The node returns `{ status: "pending_confirmation",
+ * userOpHash }` instead of a signature; the withheld co-sign is released by
+ * `POST /signature/confirm { userOpHash, token }` once the user approves over an
+ * independent channel (single-use token, TTL, fail-closed). The SDK surfaces this
+ * as a typed error rather than silently dropping the node so callers can drive the
+ * confirm flow. Default-off nodes never emit this (behaviour == v1.2.0).
+ */
+export class DvtPendingConfirmationError extends Error {
+  constructor(
+    public readonly userOpHash: string,
+    public readonly nodeEndpoint: string
+  ) {
+    super(
+      `DVT node ${nodeEndpoint} withheld its co-signature pending out-of-band ` +
+        `confirmation for userOpHash ${userOpHash}; release it via POST /signature/confirm.`
+    );
+    this.name = "DvtPendingConfirmationError";
+  }
+}
+
+/**
+ * Type guard for a DVT v1.3.0 `/signature/sign` response that withheld its
+ * co-signature pending out-of-band confirmation (`{ status: "pending_confirmation",
+ * userOpHash }`). Used at every sign call site so a high-value-op withhold is
+ * surfaced, not mistaken for a signature-less failure. Default-off nodes never
+ * return this shape.
+ */
+export function isPendingConfirmation(
+  data: unknown
+): data is { status: "pending_confirmation"; userOpHash?: string } {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as { status?: unknown }).status === "pending_confirmation"
+  );
+}
+
+/**
  * BLS signature service — extracted from NestJS BlsService.
  * Uses lazy initialization instead of onModuleInit.
  */
@@ -87,6 +127,13 @@ export class BLSSignatureService {
           message: userOpHash,
         });
 
+        // DVT v1.3.0: a CONFIRM_ENABLED node withholds its co-sign on a high-value
+        // op until out-of-band approval. Surface it instead of treating the
+        // signature-less response as a node failure to be skipped.
+        if (isPendingConfirmation(response.data)) {
+          throw new DvtPendingConfirmationError(response.data.userOpHash ?? userOpHash, node.apiEndpoint);
+        }
+
         const signatureForAggregation = response.data.signatureCompact || response.data.signature;
         const formatted = signatureForAggregation.startsWith("0x")
           ? signatureForAggregation
@@ -94,7 +141,8 @@ export class BLSSignatureService {
 
         signerNodeSignatures.push(formatted);
         signerNodeIds.push(response.data.nodeId);
-      } catch {
+      } catch (err) {
+        if (err instanceof DvtPendingConfirmationError) throw err;
         // Continue with other nodes
       }
     }
@@ -118,6 +166,12 @@ export class BLSSignatureService {
         `${selectedNodes[0].apiEndpoint}/signature/sign`,
         { message: userOpHash }
       );
+      if (isPendingConfirmation(singleSignResponse.data)) {
+        throw new DvtPendingConfirmationError(
+          singleSignResponse.data.userOpHash ?? userOpHash,
+          selectedNodes[0].apiEndpoint
+        );
+      }
       aggregatedSignature = singleSignResponse.data.signature.startsWith("0x")
         ? singleSignResponse.data.signature
         : `0x${singleSignResponse.data.signature}`;
