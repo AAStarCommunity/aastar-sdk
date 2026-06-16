@@ -34,6 +34,8 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",
+    // ERC-8004 agent validation registry (SP v5.4) — not yet deployed on this chain.
+    agentValidationRegistry: "0x0000000000000000000000000000000000000000",
     // --- AirAccount v0.17.2-beta.2 stack (not yet deployed on this chain) ---
     aaStarBLSAlgorithm: "0x0000000000000000000000000000000000000000",
     aaStarValidator: "0x0000000000000000000000000000000000000000",
@@ -87,9 +89,11 @@ export const CANONICAL_ADDRESSES = {
     aPNTs: "0x9f0E11e0D33Ec0a5c9608990E7B3498B5EE3210B",  // AAStar aPNTs (deployer operator)
     priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",  // Sepolia Chainlink ETH/USD
     simpleAccountFactory: "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
-    microPaymentChannel: "0xbD1807328Dd654512B13d6320C9Cc78685a405Ed",  // beta.3 (was 0x5753...)
+    microPaymentChannel: "0xfCC95340Cbd4Ca8DdbE74676e799ABFb61553082",  // SP v5.4 redeploy (was beta.3 0xbD18...)
     agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",  // ERC-8004 vanity addr (beta.3)
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
+    agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
     // --- AirAccount v0.18 stack (full redeploy 2026-06-14) ---
     // Non-upgradable account, so all 11 contracts are fresh for v0.18 (WS-A..G + #45
     // BLS↔userOpHash binding + #82 factory EIP-3860 fix). Source: AirAccount repo
@@ -143,6 +147,8 @@ export const CANONICAL_ADDRESSES = {
     microPaymentChannel: "0x0000000000000000000000000000000000000000",
     agentIdentityRegistry: "0x0000000000000000000000000000000000000000",
     agentReputationRegistry: "0x0000000000000000000000000000000000000000",
+    // ERC-8004 agent validation registry (SP v5.4) — not yet deployed on this chain.
+    agentValidationRegistry: "0x0000000000000000000000000000000000000000",
     // --- AirAccount v0.17.2-beta.2 stack (not yet deployed on this chain) ---
     aaStarBLSAlgorithm: "0x0000000000000000000000000000000000000000",
     aaStarValidator: "0x0000000000000000000000000000000000000000",

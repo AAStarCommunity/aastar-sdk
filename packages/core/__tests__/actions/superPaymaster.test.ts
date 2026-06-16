@@ -68,9 +68,13 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       await act.setTreasury({ treasury: U, account: U });
       await act.setXPNTsFactory({ factory: U, account: U });
       await act.setAPNTsToken({ token: U, account: U });
-      await act.setBLSAggregator({ aggregator: U, account: U });
       await act.withdrawProtocolRevenue({ to: U, amount: 100n, account: U });
-      expect(w.writeContract).toHaveBeenCalledTimes(6);
+      expect(w.writeContract).toHaveBeenCalledTimes(5);
+    });
+    // setBLSAggregator has no direct ABI fn (timelocked via queue/apply) — must throw.
+    it('setBLSAggregator throws NOT_IMPLEMENTED (use queue/applyBLSAggregator)', async () => {
+      await expect(superPaymasterActions(A)(w).setBLSAggregator({ aggregator: U, account: U })).rejects.toThrow('not available');
+      expect(w.writeContract).not.toHaveBeenCalled();
     });
   });
 
@@ -173,18 +177,18 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       await act.entryPoint();
       expect(p.readContract).toHaveBeenCalledTimes(7);
     });
-    it('thresholds', async () => {
-      p.readContract.mockResolvedValue(100n);
+    // These constants were removed from the SuperPaymaster ABI in v5.x — each must throw and
+    // never issue a readContract call (they would revert on-chain).
+    it('removed constants throw NOT_IMPLEMENTED', async () => {
       const act = superPaymasterActions(A)(p);
-      await act.MAX_PROTOCOL_FEE();
-      await act.MAX_ETH_USD_PRICE();
-      await act.MIN_ETH_USD_PRICE();
-      await act.PAYMASTER_DATA_OFFSET();
-      await act.PRICE_CACHE_DURATION();
-      await act.RATE_OFFSET();
-      await act.VALIDATION_BUFFER_BPS();
-      await act.BPS_DENOMINATOR();
-      expect(p.readContract).toHaveBeenCalledTimes(8);
+      for (const fn of [
+        act.MAX_PROTOCOL_FEE, act.MAX_ETH_USD_PRICE, act.MIN_ETH_USD_PRICE,
+        act.PAYMASTER_DATA_OFFSET, act.PRICE_CACHE_DURATION, act.RATE_OFFSET,
+        act.VALIDATION_BUFFER_BPS, act.BPS_DENOMINATOR,
+      ]) {
+        await expect((fn as () => Promise<bigint>)()).rejects.toThrow('was removed');
+      }
+      expect(p.readContract).not.toHaveBeenCalled();
     });
     it('ownership/version', async () => {
       p.readContract.mockResolvedValueOnce(U);

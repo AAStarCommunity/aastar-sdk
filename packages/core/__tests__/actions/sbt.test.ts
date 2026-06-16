@@ -54,9 +54,13 @@ describe('SBTActions Exhaustive Coverage', () => {
       
       p.readContract.mockResolvedValue(true); // bool
       await act.verifyCommunityMembership({ user: USER, community: ADDR });
-      await act.weeklyActivity({ tokenId: 1n, community: ADDR, week: 1n });
-      
-      expect(p.readContract).toHaveBeenCalledTimes(11);
+
+      expect(p.readContract).toHaveBeenCalledTimes(10);
+    });
+
+    // weeklyActivity removed in v5.x (MySBT no longer tracks per-week activity) — must throw.
+    it('weeklyActivity throws NOT_IMPLEMENTED', async () => {
+      await expect(sbtActions(ADDR)(p).weeklyActivity({ tokenId: 1n, community: ADDR, week: 1n })).rejects.toThrow('was removed');
     });
   });
 
@@ -246,8 +250,12 @@ describe('SBTActions Exhaustive Coverage', () => {
       await act.pause({ account: USER });
       await act.unpause({ account: USER });
       await act.setDAOMultisig({ multisig: USER, account: USER });
-      await act.setRegistry({ registry: USER, account: USER });
-      expect(w.writeContract).toHaveBeenCalledTimes(8);
+      expect(w.writeContract).toHaveBeenCalledTimes(7);
+    });
+    // setRegistry removed in v5.x (MySBT.REGISTRY immutable) — must throw.
+    it('setRegistry throws NOT_IMPLEMENTED', async () => {
+      await expect(sbtActions(ADDR)(w).setRegistry({ registry: USER, account: USER })).rejects.toThrow('was removed');
+      expect(w.writeContract).not.toHaveBeenCalled();
     });
     it('config getters', async () => {
       const act = sbtActions(ADDR)(p);
@@ -270,18 +278,17 @@ describe('SBTActions Exhaustive Coverage', () => {
       
       expect(p.readContract).toHaveBeenCalledTimes(9);
     });
-    it('ownership', async () => {
+    // MySBT is NOT Ownable in v5.x (governed by daoMultisig) — owner/transferOwnership/renounceOwnership must throw.
+    it('ownership surface throws NOT_IMPLEMENTED (MySBT is not Ownable)', async () => {
       const actP = sbtActions(ADDR)(p);
-      p.readContract.mockResolvedValue(USER);
-      await actP.owner();
-      
-      w.writeContract.mockResolvedValue('0x');
+      await expect(actP.owner()).rejects.toThrow('was removed');
+
       const actW = sbtActions(ADDR)(w);
-      await actW.transferOwnership({ newOwner: USER, account: USER });
-      await actW.renounceOwnership({ account: USER });
-      
-      expect(p.readContract).toHaveBeenCalledTimes(1);
-      expect(w.writeContract).toHaveBeenCalledTimes(2);
+      await expect(actW.transferOwnership({ newOwner: USER, account: USER })).rejects.toThrow('was removed');
+      await expect(actW.renounceOwnership({ account: USER })).rejects.toThrow('was removed');
+
+      expect(p.readContract).not.toHaveBeenCalled();
+      expect(w.writeContract).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,11 +1,12 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { DVTValidatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 export type DVTActions = {
     // Proposal Management
     createSlashProposal: (args: { operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — DVT slash signing is off-chain (BLS), there is no `signSlashProposal` in the DVTValidator ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     signSlashProposal: (args: { proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
     executeSlashWithProof: (args: { proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     markProposalExecuted: (args: { id: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -53,21 +54,19 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
         }
     },
     
-    async signSlashProposal({ proposalId, signature, account }) {
-        try {
-            validateRequired(proposalId, 'proposalId');
-            validateRequired(signature, 'signature');
-            return await (client as any).writeContract({
-                address,
-                abi: DVTValidatorABI,
-                functionName: 'signSlashProposal',
-                args: [proposalId, signature],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'signSlashProposal');
-        }
+    async signSlashProposal({ proposalId, signature }) {
+        // `signSlashProposal` was removed in the v5.x contract refactor: slash-proposal
+        // co-signing is performed OFF-CHAIN via BLS (signatures are aggregated and submitted
+        // through the BLSAggregator / executeWithProof path), so the DVTValidator ABI exposes
+        // no such function. Validate inputs then throw rather than revert on-chain.
+        validateRequired(proposalId, 'proposalId');
+        validateRequired(signature, 'signature');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'signSlashProposal was removed in the v5.x contract refactor; DVT slash signing is ' +
+            'off-chain (BLS). Aggregate signatures off-chain and submit via the BLSAggregator ' +
+            '(verifyAndExecute) or DVTValidator.executeWithProof instead.'
+        );
     },
 
     async executeSlashWithProof({ proposalId, repUsers, newScores, epoch, proof, account }) {

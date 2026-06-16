@@ -34,3 +34,11 @@ export * from './utils/userOp.js';
 export * from './utils/testScenarios.js';
 export * from './errors/decoder.js';
 
+// `PackedUserOperation` is exported by BOTH @aastar/core (decoded form: nonce/
+// preVerificationGas as bigint) and ./utils/userOp (wire form: Hex). The two
+// `export *` above made the name ambiguous (TS2308). Explicitly pin the umbrella
+// surface to the wire-form util type (the historical @aastar/sdk meaning, pre-dating
+// core's export); consumers needing the decoded action-arg type import it from
+// @aastar/core directly.
+export type { PackedUserOperation } from './utils/userOp.js';
+

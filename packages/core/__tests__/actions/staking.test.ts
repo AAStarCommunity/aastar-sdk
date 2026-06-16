@@ -24,7 +24,8 @@ describe('StakingActions Bulk Coverage', () => {
   });
 
   describe('Configuration', () => {
-    it('setRegistry', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).setRegistry({ registry: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
+    // setRegistry removed in v5.x (GTokenStaking.REGISTRY immutable) — must throw.
+    it('setRegistry throws NOT_IMPLEMENTED', async () => { await expect(stakingActions(ADDR)(w).setRegistry({ registry: USER, account: USER })).rejects.toThrow('was removed'); expect(w.writeContract).not.toHaveBeenCalled(); });
     it('setRoleExitFee', async () => { w.writeContract.mockResolvedValue('0x'); await stakingActions(ADDR)(w).setRoleExitFee({ roleId: '0x01', feePercent: 1n, minFee: 1n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 });

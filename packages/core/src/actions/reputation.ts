@@ -19,12 +19,18 @@ export type ReputationBreakdown = {
 
 export type ReputationActions = {
     // Rule Configuration
+    /** @deprecated The deployed ReputationSystem ABI has no `setReputationRule` — this wrapper now calls the ABI-confirmed `setRule(ruleId, base, bonus, max, desc)` (the {@link ReputationRule} struct is flattened). Prefer {@link setRule}. */
     setReputationRule: (args: { ruleId: Hex, rule: ReputationRule, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — no single-rule getter by ruleId. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link communityRules} (per-community) or {@link defaultRule}. */
     getReputationRule: (args: { ruleId: Hex }) => Promise<ReputationRule>;
+    /** @deprecated Removed in the v5.x contract refactor — rules have no enable/disable toggle. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     enableRule: (args: { ruleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — rules have no enable/disable toggle. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     disableRule: (args: { ruleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — no `isRuleActive(ruleId)` getter (rule activity is per-community). Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link getActiveRules}({ community }) and test membership. */
     isRuleActive: (args: { ruleId: Hex }) => Promise<boolean>;
     getActiveRules: (args: { community: Address }) => Promise<Hex[]>;
+    /** @deprecated Removed in the v5.x contract refactor — no global rule counter. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     getRuleCount: () => Promise<bigint>;
     setRule: (args: { ruleId: Hex, base: bigint, bonus: bigint, max: bigint, desc: string, account?: Account | Address }) => Promise<Hash>;
     communityRules: (args: { community: Address, ruleId: Hex }) => Promise<ReputationRule>;
@@ -63,7 +69,9 @@ export type ReputationActions = {
     entropyFactors: (args: { community: Address }) => Promise<bigint>;
     
     // Batch Operations
+    /** @deprecated Removed in the v5.x contract refactor — no `batchUpdateScores`. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link setCommunityReputation} per user or {@link syncToRegistry}. */
     batchUpdateScores: (args: { users: Address[], scores: bigint[], account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — no batch sync variant. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link syncToRegistry} (per-user, with proof). */
     batchSyncToRegistry: (args: { users: Address[], account?: Account | Address }) => Promise<Hash>;
     syncToRegistry: (args: { 
         user: Address, 
@@ -76,8 +84,10 @@ export type ReputationActions = {
     }) => Promise<Hash>;
     
     // Admin & Config
+    /** @deprecated Removed in the v5.x contract refactor — REGISTRY is immutable (no `setRegistry`). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
     setEntropyFactor: (args: { community: Address, factor: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — no no-arg `getEntropyFactor`. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link entropyFactors}({ community }). */
     getEntropyFactor: () => Promise<bigint>;
     
     // Constants
@@ -100,11 +110,13 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
         try {
             validateRequired(ruleId, 'ruleId');
             validateRequired(rule, 'rule');
+            // On-chain fn: setRule(bytes32 ruleId, uint256 base, uint256 bonus, uint256 max, string desc).
+            // The legacy struct-arg `setReputationRule` does not exist; flatten the struct.
             return await (client as any).writeContract({
                 address,
                 abi: ReputationSystemABI,
-                functionName: 'setReputationRule',
-                args: [ruleId, rule],
+                functionName: 'setRule',
+                args: [ruleId, rule.baseScore, rule.activityBonus, rule.maxBonus, rule.description],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -114,73 +126,43 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     async getReputationRule({ ruleId }) {
-        try {
-            validateRequired(ruleId, 'ruleId');
-            const result = await (client as PublicClient).readContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'getReputationRule',
-                args: [ruleId]
-            }) as any;
-
-            if (Array.isArray(result)) {
-                return {
-                    baseScore: result[0],
-                    activityBonus: result[1],
-                    maxBonus: result[2],
-                    description: result[3]
-                };
-            }
-            return result as ReputationRule;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getReputationRule');
-        }
+        // Removed in the v5.x contract refactor: there is no single-rule getter keyed solely
+        // by ruleId. Validate then throw rather than revert on-chain.
+        validateRequired(ruleId, 'ruleId');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'getReputationRule was removed in the v5.x contract refactor; rules are per-community now. ' +
+            'Use communityRules({ community, ruleId }) or defaultRule() instead.'
+        );
     },
 
-    async enableRule({ ruleId, account }) {
-        try {
-            validateRequired(ruleId, 'ruleId');
-            return await (client as any).writeContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'enableRule',
-                args: [ruleId],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'enableRule');
-        }
+    async enableRule({ ruleId }) {
+        validateRequired(ruleId, 'ruleId');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'enableRule was removed in the v5.x contract refactor; rules no longer have an ' +
+            'enable/disable toggle. Use setRule(...) to (re)define a rule.'
+        );
     },
 
-    async disableRule({ ruleId, account }) {
-        try {
-            validateRequired(ruleId, 'ruleId');
-            return await (client as any).writeContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'disableRule',
-                args: [ruleId],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'disableRule');
-        }
+    async disableRule({ ruleId }) {
+        validateRequired(ruleId, 'ruleId');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'disableRule was removed in the v5.x contract refactor; rules no longer have an ' +
+            'enable/disable toggle.'
+        );
     },
 
     async isRuleActive({ ruleId }) {
-        try {
-            validateRequired(ruleId, 'ruleId');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'isRuleActive',
-                args: [ruleId]
-            }) as boolean;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'isRuleActive');
-        }
+        // Removed in the v5.x contract refactor: rule activity is per-community, so there is
+        // no `isRuleActive(ruleId)` getter. Validate then throw rather than revert on-chain.
+        validateRequired(ruleId, 'ruleId');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'isRuleActive was removed in the v5.x contract refactor; rule activity is per-community. ' +
+            'Use getActiveRules({ community }) and check whether the ruleId is in the returned set.'
+        );
     },
 
     async getActiveRules({ community }) {
@@ -198,16 +180,11 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     async getRuleCount() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'getRuleCount',
-                args: []
-            }) as bigint;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getRuleCount');
-        }
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'getRuleCount was removed in the v5.x contract refactor; there is no global rule ' +
+            'counter. Use getActiveRules({ community }).length for a per-community count.'
+        );
     },
 
     // Score Calculation
@@ -513,37 +490,26 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     // Batch Operations
-    async batchUpdateScores({ users, scores, account }) {
-        try {
-            validateRequired(users, 'users');
-            validateRequired(scores, 'scores');
-            return await (client as any).writeContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'batchUpdateScores',
-                args: [users, scores],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'batchUpdateScores');
-        }
+    async batchUpdateScores({ users, scores }) {
+        // Removed in the v5.x contract refactor: no batch score setter on ReputationSystem.
+        validateRequired(users, 'users');
+        validateRequired(scores, 'scores');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'batchUpdateScores was removed in the v5.x contract refactor; use ' +
+            'setCommunityReputation({ community, user, score }) per user, or syncToRegistry(...).'
+        );
     },
 
-    async batchSyncToRegistry({ users, account }) {
-        try {
-            validateRequired(users, 'users');
-            return await (client as any).writeContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'batchSyncToRegistry',
-                args: [users],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'batchSyncToRegistry');
-        }
+    async batchSyncToRegistry({ users }) {
+        // Removed in the v5.x contract refactor: there is no batch sync variant. The ABI
+        // exposes only the per-user syncToRegistry(user, communities, ruleIds, activities, epoch, proof).
+        validateRequired(users, 'users');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'batchSyncToRegistry was removed in the v5.x contract refactor; use ' +
+            'syncToRegistry({ user, communities, ruleIds, activities, epoch, proof }) per user instead.'
+        );
     },
 
     async syncToRegistry({ user, communities, ruleIds, activities, epoch, proof, account }) {
@@ -568,20 +534,14 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     // Admin & Config
-    async setRegistry({ registry, account }) {
-        try {
-            validateAddress(registry, 'registry');
-            return await (client as any).writeContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'setRegistry',
-                args: [registry],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setRegistry');
-        }
+    async setRegistry({ registry }) {
+        // Removed in the v5.x contract refactor: ReputationSystem.REGISTRY is immutable.
+        validateAddress(registry, 'registry');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'setRegistry was removed in the v5.x contract refactor; ReputationSystem.REGISTRY is ' +
+            'immutable (set at construction) and cannot be changed on-chain.'
+        );
     },
 
     async setEntropyFactor({ community, factor, account }) {
@@ -602,16 +562,13 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     },
 
     async getEntropyFactor() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: ReputationSystemABI,
-                functionName: 'getEntropyFactor',
-                args: []
-            }) as bigint;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getEntropyFactor');
-        }
+        // Removed in the v5.x contract refactor: entropy factors are per-community now, so
+        // there is no no-arg `getEntropyFactor`. Throw rather than revert on-chain.
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'getEntropyFactor was removed in the v5.x contract refactor; entropy factors are ' +
+            'per-community. Use entropyFactors({ community }) instead.'
+        );
     },
 
     // Constants

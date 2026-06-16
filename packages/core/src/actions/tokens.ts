@@ -52,6 +52,7 @@ export type XPNTsTokenActions = ERC20Actions & {
     emergencyRevokePaymaster: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Constants & View
+    /** @deprecated The deployed xPNTsToken ABI renamed this constant to `MAX_SINGLE_TX_LIMIT_CAP`; this wrapper now reads that. Prefer {@link MAX_SINGLE_TX_LIMIT_CAP}. */
     MAX_SINGLE_TX_LIMIT: (args: { token: Address }) => Promise<bigint>;
     needsApproval: (args: { token: Address, owner: Address, spender: Address, amount: bigint }) => Promise<boolean>;
     
@@ -366,7 +367,8 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
         },
         async MAX_SINGLE_TX_LIMIT({ token = address } = {}) {
             validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'MAX_SINGLE_TX_LIMIT', args: [] }) as Promise<bigint>;
+            // On-chain fn: MAX_SINGLE_TX_LIMIT_CAP() — the bare MAX_SINGLE_TX_LIMIT constant was renamed.
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'MAX_SINGLE_TX_LIMIT_CAP', args: [] }) as Promise<bigint>;
         },
         async needsApproval({ token = address, owner, spender, amount }: { token?: Address, owner: Address, spender: Address, amount: bigint }) {
             validateAddress(token!, 'token');

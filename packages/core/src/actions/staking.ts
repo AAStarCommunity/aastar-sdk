@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { GTokenStakingABI } from '../abis/index.js';
 import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 export type StakingActions = {
     // Staking Operations
@@ -45,6 +45,7 @@ export type StakingActions = {
     previewExitFee: (args: { user: Address, roleId: Hex }) => Promise<{ fee: bigint; netAmount: bigint }>;
     
     // Admin Functions
+    /** @deprecated Removed in the v5.x contract refactor — `setRegistry` is absent from the deployed GTokenStaking ABI (REGISTRY is immutable, set at construction). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
     setRoleExitFee: (args: { roleId: Hex, feePercent: bigint, minFee: bigint, account?: Account | Address }) => Promise<Hash>;
     setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
@@ -88,9 +89,9 @@ export type StakingActions = {
 export const stakingActions = (address: Address) => (client: PublicClient | WalletClient): StakingActions => ({
     // Staking Operations
     /**
-     * @deprecated Calls `lockStake`, which is ABSENT from the deployed GTokenStaking
-     * ABI (replaced by `lockStakeWithTicket`) — it will revert on-chain. Use
-     * `lockStakeWithTicket` instead. Kept only to avoid breaking the type surface.
+     * @deprecated `lockStake` is ABSENT from the deployed GTokenStaking ABI; this wrapper
+     * now calls the ABI-confirmed `lockStakeWithTicket` (identical args) so it no longer
+     * reverts on-chain. Prefer {@link lockStakeWithTicket} directly.
      * @internal
      * @warning This is a low-level internal API. Use high-level clients instead.
      */
@@ -100,10 +101,11 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
             validateAddress(payer, 'payer');
             validateAmount(stakeAmount, 'stakeAmount');
             validateAmount(ticketPrice, 'ticketPrice');
+            // On-chain fn: lockStakeWithTicket(user, roleId, stakeAmount, ticketPrice, payer).
             return await (client as any).writeContract({
                 address,
                 abi: GTokenStakingABI,
-                functionName: 'lockStake',
+                functionName: 'lockStakeWithTicket',
                 args: [user, roleId, stakeAmount, ticketPrice, payer],
                 account: account as any,
                 chain: (client as any).chain
@@ -348,20 +350,16 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
     },
 
     // Admin Functions
-    async setRegistry({ registry, account }) {
-        try {
-            validateAddress(registry, 'registry');
-            return await (client as any).writeContract({
-                address,
-                abi: GTokenStakingABI,
-                functionName: 'setRegistry',
-                args: [registry],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setRegistry');
-        }
+    async setRegistry({ registry }) {
+        // `setRegistry` was removed in the v5.x contract refactor: the deployed
+        // GTokenStaking ABI has no such function (REGISTRY is immutable, fixed at
+        // construction). Validate then throw rather than issue a call that reverts on-chain.
+        validateAddress(registry, 'registry');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'setRegistry was removed in the v5.x contract refactor; GTokenStaking.REGISTRY is ' +
+            'immutable (set at construction) and cannot be changed on-chain.'
+        );
     },
 
     async setRoleExitFee({ roleId, feePercent, minFee, account }) {

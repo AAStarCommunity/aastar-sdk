@@ -14,8 +14,9 @@ describe('RegistryActions Bulk Coverage', () => {
 
   describe('Role Management (Writes)', () => {
     it('createNewRole', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).createNewRole({ roleId: '0x01', config: {} as any, roleOwner: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setRoleLockDuration', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setRoleLockDuration({ roleId: '0x01', duration: 100n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setRoleOwner', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setRoleOwner({ roleId: '0x01', newOwner: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
+    // setRoleLockDuration/setRoleOwner were removed in the v5.x refactor (now config fields set via configureRole) — must throw, not call writeContract.
+    it('setRoleLockDuration throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(w).setRoleLockDuration({ roleId: '0x01', duration: 100n, account: USER })).rejects.toThrow('was removed'); expect(w.writeContract).not.toHaveBeenCalled(); });
+    it('setRoleOwner throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(w).setRoleOwner({ roleId: '0x01', newOwner: USER, account: USER })).rejects.toThrow('was removed'); expect(w.writeContract).not.toHaveBeenCalled(); });
     it('exitRole', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).exitRole({ roleId: '0x01', account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('syncExitFees - sends tx for non-empty array', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).syncExitFees({ roles: ['0x01' as `0x${string}`], account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('syncExitFees - rejects empty array', async () => { await expect(registryActions(ADDR)(w).syncExitFees({ roles: [], account: USER })).rejects.toThrow('must not be empty'); });
@@ -28,7 +29,8 @@ describe('RegistryActions Bulk Coverage', () => {
     it('communityByENS delegates to ABI-confirmed getCommunityByENS', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).communityByENS({ ensName: 'test.eth' })).toBe(USER); expect(p.readContract.mock.calls[0][0].functionName).toBe('getCommunityByENS'); });
     it('getCreditLimit', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).getCreditLimit({ user: USER })).toBe(100n); });
     it('globalReputation', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).globalReputation({ user: USER })).toBe(100n); });
-    it('addLevelThreshold', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).addLevelThreshold({ threshold: 100n, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
+    // addLevelThreshold removed in v5.x (only replace-all setLevelThresholds remains) — must throw.
+    it('addLevelThreshold throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(w).addLevelThreshold({ threshold: 100n, account: USER })).rejects.toThrow('was removed'); expect(w.writeContract).not.toHaveBeenCalled(); });
     it('batchUpdateGlobalReputation', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).batchUpdateGlobalReputation({ proposalId: 1n, users: [USER], newScores: [100n], epoch: 1n, proof: '0x', account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
   });
 
@@ -45,23 +47,30 @@ describe('RegistryActions Bulk Coverage', () => {
     it('MYSBT', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).MYSBT()).toBe(USER); });
     it('SUPER_PAYMASTER', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).SUPER_PAYMASTER()).toBe(USER); });
     it('GTOKEN_STAKING', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).GTOKEN_STAKING()).toBe(USER); });
-    it('reputationSource', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).reputationSource()).toBe(USER); });
+    // reputationSource/lastReputationEpoch removed in v5.x — must throw (use isReputationSource for membership tests).
+    it('reputationSource throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(p).reputationSource()).rejects.toThrow('was removed'); });
     it('isReputationSource', async () => { p.readContract.mockResolvedValue(true); expect(await registryActions(ADDR)(p).isReputationSource({ source: USER })).toBe(true); });
-    it('lastReputationEpoch', async () => { p.readContract.mockResolvedValue(1n); expect(await registryActions(ADDR)(p).lastReputationEpoch({ user: USER })).toBe(1n); });
+    it('lastReputationEpoch throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(p).lastReputationEpoch({ user: USER })).rejects.toThrow('was removed'); });
   });
 
   describe('View Functions', () => {
     it('getRoleUserCount', async () => { p.readContract.mockResolvedValue(10n); expect(await registryActions(ADDR)(p).getRoleUserCount({ roleId: '0x01' })).toBe(10n); });
     // getRoleMembers is event-indexed (no on-chain getter) — covered in its own describe below.
     it('getUserRoles', async () => { p.readContract.mockResolvedValue(['0x01']); expect(await registryActions(ADDR)(p).getUserRoles({ user: USER })).toEqual(['0x01']); });
-    it('roleMembers', async () => { p.readContract.mockResolvedValue(USER); expect(await registryActions(ADDR)(p).roleMembers({ roleId: '0x01', index: 0n })).toBe(USER); });
-    it('userRoles', async () => { p.readContract.mockResolvedValue('0x01'); expect(await registryActions(ADDR)(p).userRoles({ user: USER, index: 0n })).toBe('0x01'); });
-    it('userRoleCount', async () => { p.readContract.mockResolvedValue(1n); expect(await registryActions(ADDR)(p).userRoleCount({ user: USER })).toBe(1n); });
+    // roleMembers removed in v5.x (members not enumerable by index) — must throw; use getRoleMembers.
+    it('roleMembers throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(p).roleMembers({ roleId: '0x01', index: 0n })).rejects.toThrow('was removed'); });
+    // userRoles now reads getUserRoles(user) and indexes the returned array.
+    it('userRoles reads getUserRoles and returns element at index', async () => { p.readContract.mockResolvedValue(['0xaa', '0xbb']); expect(await registryActions(ADDR)(p).userRoles({ user: USER, index: 1n })).toBe('0xbb'); expect(p.readContract.mock.calls[0][0].functionName).toBe('getUserRoles'); });
+    // userRoleCount now returns getUserRoles(user).length.
+    it('userRoleCount returns getUserRoles length', async () => { p.readContract.mockResolvedValue(['0xaa', '0xbb', '0xcc']); expect(await registryActions(ADDR)(p).userRoleCount({ user: USER })).toBe(3n); expect(p.readContract.mock.calls[0][0].functionName).toBe('getUserRoles'); });
     it('creditTierConfig', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).creditTierConfig({ tierIndex: 0n })).toBe(100n); });
     it('levelThresholds', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).levelThresholds({ levelIndex: 0n })).toBe(100n); });
-    it('calculateExitFee', async () => { p.readContract.mockResolvedValue(5n); expect(await registryActions(ADDR)(p).calculateExitFee({ roleId: '0x01', amount: 100n })).toBe(5n); });
-    it('roleStakes', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).roleStakes({ roleId: '0x01', user: USER })).toBe(100n); });
-    it('roleMetadata', async () => { p.readContract.mockResolvedValue('0x'); expect(await registryActions(ADDR)(p).roleMetadata({ roleId: '0x01', user: USER })).toBe('0x'); });
+    // calculateExitFee removed from Registry in v5.x — must throw; use GTokenStaking.previewExitFee.
+    it('calculateExitFee throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(p).calculateExitFee({ roleId: '0x01', amount: 100n })).rejects.toThrow('was removed'); });
+    // roleStakes now reads the ABI-confirmed getRoleStake.
+    it('roleStakes reads getRoleStake', async () => { p.readContract.mockResolvedValue(100n); expect(await registryActions(ADDR)(p).roleStakes({ roleId: '0x01', user: USER })).toBe(100n); expect(p.readContract.mock.calls[0][0].functionName).toBe('getRoleStake'); });
+    // roleMetadata removed in v5.x (no per-user metadata getter) — must throw.
+    it('roleMetadata throws NOT_IMPLEMENTED', async () => { await expect(registryActions(ADDR)(p).roleMetadata({ roleId: '0x01', user: USER })).rejects.toThrow('was removed'); });
   });
 
   describe('Constants (Role IDs)', () => {

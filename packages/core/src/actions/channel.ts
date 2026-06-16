@@ -43,8 +43,8 @@ export type ChannelActions = {
     /**
      * @deprecated The deployed MicroPaymentChannel ABI no longer exposes a `CLOSE_TIMEOUT`
      * constant — it was replaced by the configurable {@link closeTimeout} getter plus the
-     * {@link MIN_CLOSE_TIMEOUT}/{@link MAX_CLOSE_TIMEOUT} bounds. This wrapper will revert
-     * on-chain; use {@link closeTimeout} instead.
+     * {@link MIN_CLOSE_TIMEOUT}/{@link MAX_CLOSE_TIMEOUT} bounds. This wrapper now delegates
+     * to the on-chain `closeTimeout()` getter so it no longer reverts; use {@link closeTimeout}.
      */
     CLOSE_TIMEOUT: () => Promise<bigint>;
     /** Current configurable close-timeout (seconds, view). ABI: closeTimeout() -> uint64. */
@@ -180,9 +180,10 @@ export const channelActions = (address: Address) => (client: PublicClient | Wall
 
     async CLOSE_TIMEOUT() {
         try {
+            // On-chain fn: closeTimeout() — the legacy `CLOSE_TIMEOUT` constant was removed.
             return await (client as PublicClient).readContract({
                 address, abi: MicroPaymentChannelABI,
-                functionName: 'CLOSE_TIMEOUT'
+                functionName: 'closeTimeout'
             }) as bigint;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'CLOSE_TIMEOUT');

@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, zeroAddress } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 /**
  * ERC-4337 v0.7 PackedUserOperation tuple, matching the `struct PackedUserOperation`
@@ -113,6 +113,7 @@ export type SuperPaymasterActions = {
     setTreasury: (args: { treasury: Address, account?: Account | Address }) => Promise<Hash>;
     setXPNTsFactory: (args: { factory: Address, account?: Account | Address }) => Promise<Hash>;
     setAPNTsToken: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated The deployed SuperPaymaster ABI has no direct `setBLSAggregator` — the aggregator change is timelocked via {@link queueBLSAggregator} + {@link applyBLSAggregator}. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
     withdrawProtocolRevenue: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
 
@@ -193,13 +194,21 @@ export type SuperPaymasterActions = {
     treasury: () => Promise<Address>;
     xpntsFactory: () => Promise<Address>;
     entryPoint: () => Promise<Address>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed SuperPaymaster ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     MAX_PROTOCOL_FEE: () => Promise<bigint>;
+    /** @deprecated Removed from SuperPaymaster in the v5.x refactor (this bound belongs to the standalone Paymaster contract). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     MAX_ETH_USD_PRICE: () => Promise<bigint>;
+    /** @deprecated Removed from SuperPaymaster in the v5.x refactor (this bound belongs to the standalone Paymaster contract). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     MIN_ETH_USD_PRICE: () => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed SuperPaymaster ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     PAYMASTER_DATA_OFFSET: () => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed SuperPaymaster ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     PRICE_CACHE_DURATION: () => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed SuperPaymaster ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     RATE_OFFSET: () => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed SuperPaymaster ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     VALIDATION_BUFFER_BPS: () => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed SuperPaymaster ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     BPS_DENOMINATOR: () => Promise<bigint>;
     /** Duration (seconds) of the aPNTs-token-change timelock. */
     APNTS_TOKEN_TIMELOCK: () => Promise<bigint>;
@@ -653,20 +662,16 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         }
     },
 
-    async setBLSAggregator({ aggregator, account }) {
-        try {
-            validateAddress(aggregator, 'aggregator');
-            return await (client as any).writeContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'setBLSAggregator',
-                args: [aggregator],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setBLSAggregator');
-        }
+    async setBLSAggregator({ aggregator }) {
+        // The deployed SuperPaymaster ABI has no direct `setBLSAggregator`: the aggregator
+        // change is timelocked. Validate then throw, pointing callers at the two-step path.
+        validateAddress(aggregator, 'aggregator');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'setBLSAggregator is not available on this SuperPaymaster: the aggregator change is ' +
+            'timelocked. Use queueBLSAggregator({ aggregator }) then applyBLSAggregator() after ' +
+            'the timelock elapses.'
+        );
     },
 
     async withdrawProtocolRevenue({ to, amount, account }) {
@@ -1393,108 +1398,47 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         }
     },
 
+    // The following constants were removed from the SuperPaymaster ABI in the v5.x refactor
+    // (MAX_ETH_USD_PRICE / MIN_ETH_USD_PRICE now live only on the standalone Paymaster
+    // contract). Each throws NOT_IMPLEMENTED rather than issuing a call that reverts on-chain.
     async MAX_PROTOCOL_FEE() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'MAX_PROTOCOL_FEE',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'MAX_PROTOCOL_FEE');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'MAX_PROTOCOL_FEE was removed in the v5.x contract refactor; it is no longer exposed by SuperPaymaster.');
     },
 
     async MAX_ETH_USD_PRICE() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'MAX_ETH_USD_PRICE',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'MAX_ETH_USD_PRICE');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'MAX_ETH_USD_PRICE was removed from SuperPaymaster in the v5.x refactor; read it from the standalone Paymaster contract instead.');
     },
 
     async MIN_ETH_USD_PRICE() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'MIN_ETH_USD_PRICE',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'MIN_ETH_USD_PRICE');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'MIN_ETH_USD_PRICE was removed from SuperPaymaster in the v5.x refactor; read it from the standalone Paymaster contract instead.');
     },
 
     async PAYMASTER_DATA_OFFSET() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'PAYMASTER_DATA_OFFSET',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'PAYMASTER_DATA_OFFSET');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'PAYMASTER_DATA_OFFSET was removed in the v5.x contract refactor; it is no longer exposed by SuperPaymaster.');
     },
 
     async PRICE_CACHE_DURATION() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'PRICE_CACHE_DURATION',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'PRICE_CACHE_DURATION');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'PRICE_CACHE_DURATION was removed in the v5.x contract refactor; it is no longer exposed by SuperPaymaster.');
     },
 
     async RATE_OFFSET() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'RATE_OFFSET',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'RATE_OFFSET');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'RATE_OFFSET was removed in the v5.x contract refactor; it is no longer exposed by SuperPaymaster.');
     },
 
     async VALIDATION_BUFFER_BPS() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'VALIDATION_BUFFER_BPS',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'VALIDATION_BUFFER_BPS');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'VALIDATION_BUFFER_BPS was removed in the v5.x contract refactor; it is no longer exposed by SuperPaymaster.');
     },
 
     async BPS_DENOMINATOR() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: SuperPaymasterABI,
-                functionName: 'BPS_DENOMINATOR',
-                args: []
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'BPS_DENOMINATOR');
-        }
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED,
+            'BPS_DENOMINATOR was removed in the v5.x contract refactor; it is no longer exposed by SuperPaymaster.');
     },
 
     /** Duration (seconds) of the aPNTs-token-change timelock. */
