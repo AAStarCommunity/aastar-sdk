@@ -34,6 +34,8 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 4. **API docs** — the KMS `openapi.yaml` is the HTTP-layer contract; the coverage checker asserts every endpoint is referenced by a `kms-*` service.
 5. **DVT wire** — `dvtWire.ts` encodes the combined signature in the node/verifier's exact byte format; golden vectors assert it byte-for-byte against live on-chain txs (the node's `buildBlsComponents` + the deployed `AAStarBLSAlgorithm`).
 
+**Detecting drift:** the **upstream radar** (`scripts/upstream/upstream-radar.ts`) diffs all four anchors per upstream against the first-hand local repos and exits non-zero on any drift. Run it as `pnpm run upstream:check` (or `pnpm run upstream:rehearse` for the gate run + upgrade worklist), via the `/upstream-sync` Claude Code slash command, or automatically through the daily `.github/workflows/upstream-watch.yml`. See **[docs/UPSTREAM-SYNC.md](docs/UPSTREAM-SYNC.md)**.
+
 > ⚠️ **Every upstream release REQUIRES a sync PR** (ABIs + version pin + addresses + API docs) before this SDK can claim compatibility. This is a mandatory release step — see **[docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md)**.
 
 ---
