@@ -109,7 +109,8 @@ describe('AAStarAirAccountV7 actions', () => {
 
 describe('AAStarAirAccountFactoryV7 actions', () => {
   let p: any;
-  beforeEach(() => { resetMocks(); p = createMockPublicClient(); });
+  let w: any;
+  beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
   it('reads', async () => {
     const act = airAccountFactoryActions(ADDR)(p);
@@ -129,6 +130,41 @@ describe('AAStarAirAccountFactoryV7 actions', () => {
     await act.defaultCommunityGuardian();
     expect(p.readContract).toHaveBeenCalledTimes(6);
   });
+
+  it('agent-account reads', async () => {
+    const act = airAccountFactoryActions(ADDR)(p);
+    p.readContract.mockResolvedValueOnce(ADDR);
+    expect(await act.agentRegistry()).toBe(ADDR);
+    p.readContract.mockResolvedValueOnce(ACCT);
+    const predicted = await act.getAgentAddress({ humanOwner: OWNER, agentKey: ADDR, agentId: B32 });
+    expect(predicted).toBe(ACCT);
+    const byFn = (name: string) =>
+      p.readContract.mock.calls.map((c: any) => c[0]).find((c: any) => c.functionName === name);
+    expect(byFn('getAgentAddress').args).toEqual([OWNER, ADDR, B32]);
+    expect(p.readContract).toHaveBeenCalledTimes(2);
+  });
+
+  it('agent-account writes (exact ABI arg order)', async () => {
+    const act = airAccountFactoryActions(ADDR)(w);
+    w.writeContract.mockResolvedValue('0xhash');
+    await act.createAgentAccount({
+      agentKey: ADDR, agentId: B32, guardian2: OWNER, guardian2Sig: '0xaa',
+      agentKeySig: '0xbb', deadline: 1234n, dailyLimit: 100n, account: OWNER,
+    });
+    await act.setAgentRegistry({ agentRegistry: ACCT, account: OWNER });
+    const byFn = (name: string) =>
+      w.writeContract.mock.calls.map((c: any) => c[0]).find((c: any) => c.functionName === name);
+    // (agentKey, agentId, guardian2, guardian2Sig, agentKeySig, deadline, dailyLimit)
+    expect(byFn('createAgentAccount').args).toEqual([ADDR, B32, OWNER, '0xaa', '0xbb', 1234n, 100n]);
+    expect(byFn('setAgentRegistry').args).toEqual([ACCT]);
+    expect(w.writeContract).toHaveBeenCalledTimes(2);
+  });
+
+  it('wraps viem errors on agent-account fns', async () => {
+    const act = airAccountFactoryActions(ADDR)(p);
+    p.readContract.mockRejectedValueOnce(new Error('revert'));
+    await expect(act.getAgentAddress({ humanOwner: OWNER, agentKey: ADDR, agentId: B32 })).rejects.toThrow();
+  });
 });
 
 describe('AgentRegistry actions', () => {
@@ -136,7 +172,7 @@ describe('AgentRegistry actions', () => {
   let w: any;
   beforeEach(() => { resetMocks(); p = createMockPublicClient(); w = createMockWalletClient(); });
 
-  it('reads + writes', async () => {
+  it('base reads + writes', async () => {
     const r = agentRegistryActions(ADDR)(p);
     p.readContract.mockResolvedValueOnce(OWNER);
     await r.deployer();
@@ -149,6 +185,55 @@ describe('AgentRegistry actions', () => {
     await wAct.bindFactory({ factory: ADDR, account: OWNER });
     await wAct.markValid({ account: ACCT, signer: OWNER });
     expect(w.writeContract).toHaveBeenCalledTimes(2);
+  });
+
+  it('lifecycle reads (incl. bool, uint256 and address[])', async () => {
+    const r = agentRegistryActions(ADDR)(p);
+    p.readContract.mockResolvedValueOnce(true);
+    expect(await r.isRegisteredAgent({ agentWallet: ACCT })).toBe(true);
+    p.readContract.mockResolvedValueOnce(false);
+    expect(await r.isValidAccount({ account: ACCT })).toBe(false);
+    p.readContract.mockResolvedValueOnce(OWNER);
+    expect(await r.getHumanOwner({ agentWallet: ACCT })).toBe(OWNER);
+    p.readContract.mockResolvedValueOnce(OWNER);
+    expect(await r.agentWalletOwner({ agentWallet: ACCT })).toBe(OWNER);
+    p.readContract.mockResolvedValueOnce(3n);
+    expect(await r.getAgentCount({ owner: OWNER })).toBe(3n);
+    p.readContract.mockResolvedValueOnce([ACCT, ADDR]);
+    expect(await r.getAgents({ humanOwner: OWNER })).toEqual([ACCT, ADDR]);
+    p.readContract.mockResolvedValueOnce([ACCT]);
+    expect(await r.getAgentsPage({ owner: OWNER, start: 0n, count: 1n })).toEqual([ACCT]);
+    p.readContract.mockResolvedValueOnce(ACCT);
+    expect(await r.getAgentByIndex({ owner: OWNER, index: 0n })).toBe(ACCT);
+    p.readContract.mockResolvedValueOnce(ADDR);
+    expect(await r.ownerAgents({ owner: OWNER, index: 1n })).toBe(ADDR);
+
+    const byFn = (name: string) =>
+      p.readContract.mock.calls.map((c: any) => c[0]).find((c: any) => c.functionName === name);
+    expect(byFn('getAgentsPage').args).toEqual([OWNER, 0n, 1n]);
+    expect(byFn('getAgentByIndex').args).toEqual([OWNER, 0n]);
+    expect(byFn('ownerAgents').args).toEqual([OWNER, 1n]);
+    expect(p.readContract).toHaveBeenCalledTimes(9);
+  });
+
+  it('lifecycle writes (registerAgent bytes sig, revoke, deregister)', async () => {
+    const wAct = agentRegistryActions(ADDR)(w);
+    w.writeContract.mockResolvedValue('0xhash');
+    await wAct.registerAgent({ agentWallet: ACCT, agentWalletSig: '0xdead', account: OWNER });
+    await wAct.revokeAgent({ agentWallet: ACCT, account: OWNER });
+    await wAct.deregisterAgent({ agentWallet: ACCT, account: OWNER });
+    const byFn = (name: string) =>
+      w.writeContract.mock.calls.map((c: any) => c[0]).find((c: any) => c.functionName === name);
+    expect(byFn('registerAgent').args).toEqual([ACCT, '0xdead']);
+    expect(byFn('revokeAgent').args).toEqual([ACCT]);
+    expect(byFn('deregisterAgent').args).toEqual([ACCT]);
+    expect(w.writeContract).toHaveBeenCalledTimes(3);
+  });
+
+  it('wraps viem errors', async () => {
+    const r = agentRegistryActions(ADDR)(p);
+    p.readContract.mockRejectedValueOnce(new Error('revert'));
+    await expect(r.isRegisteredAgent({ agentWallet: ACCT })).rejects.toThrow();
   });
 });
 
