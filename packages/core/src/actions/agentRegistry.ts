@@ -29,12 +29,21 @@ export type AgentRegistryActions = {
     // ── Writes ──────────────────────────────────────────────────────────────
     bindFactory: (args: { factory: Address, account?: Account | Address }) => Promise<Hash>;
     markValid: (args: { account: Address, signer?: Account | Address }) => Promise<Hash>;
-    // registerAgent(address agentWallet, bytes agentWalletSig): caller (human owner) binds an agent wallet,
-    // proving control of the agent wallet via its signature over the registration payload.
+    // ⚠️ registerAgent / revokeAgent / deregisterAgent require `msg.sender` to be a
+    // factory-created VALID AirAccount (the contract checks `isValidAccount[msg.sender]`,
+    // else reverts `CallerNotAirAccount`). They CANNOT be called from a bare EOA. These
+    // wrappers encode the correct call, but the on-chain caller must be an agent AirAccount
+    // — route them through `airAccountActions(agentAccount).executeFromExecutor` /
+    // the account's `execute(registry, 0, calldata)` (owner-signed). The registry's
+    // "humanOwner" recorded is that AirAccount address, not the owner EOA. Verified on
+    // Sepolia (Beta4 Phase 2 E2E): register tx 0x0ee94102…, revoke tx 0x68d0c3e7…
+    //
+    // registerAgent(address agentWallet, bytes agentWalletSig): binds an agent wallet,
+    // proving control via the agent wallet's EIP-191 sig over the REGISTER_AGENT payload.
     registerAgent: (args: { agentWallet: Address, agentWalletSig: Hex, account?: Account | Address }) => Promise<Hash>;
-    // revokeAgent(address agentWallet): owner-initiated revocation of a previously registered agent wallet.
+    // revokeAgent(address agentWallet): owner-initiated revocation (see caller caveat above).
     revokeAgent: (args: { agentWallet: Address, account?: Account | Address }) => Promise<Hash>;
-    // deregisterAgent(address agentWallet): remove an agent wallet binding (alias path for revocation/cleanup).
+    // deregisterAgent(address agentWallet): remove an agent wallet binding (see caller caveat above).
     deregisterAgent: (args: { agentWallet: Address, account?: Account | Address }) => Promise<Hash>;
 };
 
