@@ -63,41 +63,44 @@ export const CANONICAL_ADDRESSES = {
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
   //                  AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md
-  // Latest sync: 2026-06-16 — SuperPaymaster v5.4.0-beta.1 + AirAccount v0.18.0-beta.2 (full redeploy).
-  //   SP proxy 0xFb09... (impl 0xE84Ae83E...), Registry 0xB5Fb... (impl 0x0B5ce703...)
-  //   v5.4 adds: x402Facilitator 0xFe95a77e..., policyRegistry 0x37e4E40e..., timelockController 0x6cEc100c...
-  //   AirAccount v0.18.0-beta.2 factory 0x1b69... (NEW ctor: impl injected as arg 1).
+  // Latest sync: 2026-06-16 — SuperPaymaster v5.4.0-beta.1-redeploy (fresh Sepolia
+  //   redeploy, deployments/config.sepolia.json updateTime 2026-06-16) + AirAccount
+  //   contracts v0.19.0-beta.2 (pin only; surface identical to v0.18.0-beta.2, same addresses).
+  //   SP proxy 0x0300... (impl 0x24a945...), Registry 0x3F92... (impl 0x177033...)
+  //   v5.4 keys: x402Facilitator 0x326Fc3..., policyRegistry 0x8c2488..., timelockController 0xB734df...
+  //   AirAccount v0.19.0-beta.2 factory 0x1b69... (NEW ctor: impl injected as arg 1).
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
   //   verify against the community's own deployment before use.
   11155111: {
-    registry: "0xB5Fb8920F7AcD8b395934bd1F21222b32A30eF1A",
-    gToken: "0x46B82966f8a40f0Bbb8C13aCfBA746631CC2ec72",
-    staking: "0x574820E26Acb7D9a1202708C6183d6A8aC957dA6",
-    sbt: "0x754CeB687aCFC72136B02a1cb7cE2F911B63F1f8",
-    reputationSystem: "0xDD4D6162F426998E8B8FC97D0a8a5912cd70e6E0",
-    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",  // proxy (impl 0xE84Ae83E...)
-    paymasterFactory: "0x60B8f728Abca14B82a4EC72f00Ff5437e0702e90",
+    registry: "0x3F920B25f8b65988359C372F66F036E48adFc556",
+    gToken: "0x20a051502a7AE6e40cfFd6EBe59057538E698984",
+    staking: "0x3B363598746Ea57314d4869B160940948c569D48",
+    sbt: "0x072A0D12f4212B6baD7c6d0A633eaffbDE9105bF",
+    reputationSystem: "0x7fEd690E1663755e24a1C9d6164336809d68a578",
+    superPaymaster: "0x030025f40d509b1a99547bAEb3795bD27F7182b7",  // proxy (impl 0x24a94572...; 2026-06-16 redeploy)
+    paymasterFactory: "0x0Aa06EA5295eeD4D48c93c594Db1CBf3626971A5",
     paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy — NOT in core config, verify separately
-    paymasterV4Impl: "0x59aEAec186a8883c165adf5C72a64df2fD9af068",
-    xPNTsFactory: "0xc312CAFcb49dFe3aB76bFB2F3e37CaEdBa65ccd9",  // beta.3 (was 0xC4f5...)
-    blsAggregator: "0x7ec72505220a13040c80EF2B895Bf3405b6ed3e9",  // SP BLSAggregator beta.3 (was 0xCDCdb8...)
+    paymasterV4Impl: "0x59DCA5861aaDA602fE1BFbfcc36DFAc36C58623d",
+    xPNTsFactory: "0xCec3655525a112882E74Fb7C26AcB267a07724cb",  // 2026-06-16 redeploy (was 0xc312...)
+    blsAggregator: "0x15387e161c1b3dAe7c66Fbd5c1F32837B58B2e79",  // SP BLSAggregator 2026-06-16 redeploy (was 0x7ec7...)
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
-    dvtValidator: "0xB60C82158734def92D0d2163C93927cf19b86a95",
+    dvtValidator: "0x19BA9829C784E4A41b68960b9c0bA55f83718997",
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
-    aPNTs: "0x9f0E11e0D33Ec0a5c9608990E7B3498B5EE3210B",  // AAStar aPNTs (deployer operator)
+    aPNTs: "0x9e66B457E0ABb1F139FD8A596d00f784eBA2873b",  // AAStar aPNTs (deployer operator)
     priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",  // Sepolia Chainlink ETH/USD
     simpleAccountFactory: "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
-    microPaymentChannel: "0xfCC95340Cbd4Ca8DdbE74676e799ABFb61553082",  // SP v5.4 redeploy (was beta.3 0xbD18...)
+    microPaymentChannel: "0x405851A141Cde827E33247d4D4089Af2814c2FF5",  // SP v5.4 2026-06-16 redeploy (was 0xfCC9...)
     agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",  // ERC-8004 vanity addr (beta.3)
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
     agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
-    // --- AirAccount v0.18.0-beta.2 stack (full redeploy 2026-06-15) ---
-    // Non-upgradable account, so all 11 contracts are fresh for v0.18 (WS-A..G + #45
-    // BLS↔userOpHash binding + #82 factory EIP-3860 fix). beta.2 redeployed ALL 11
-    // contracts on Sepolia (same code as beta.1 + full 36-scenario on-chain E2E).
+    // --- AirAccount v0.19.0-beta.2 stack ---
+    // Pin bumped to v0.19.0-beta.2: NO new Solidity logic — the contract surface is
+    // identical to v0.18.0-beta.2 and the SAME 11 addresses remain live (the beta.2
+    // full Sepolia redeploy: WS-A..G + #45 BLS↔userOpHash binding + #82 factory
+    // EIP-3860 fix, validated by the full 36-scenario on-chain E2E).
     // Source of truth: AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md.
     // NOTE: factory ctor is NEW — impl injected as arg 1.
     aaStarBLSAlgorithm: "0xA9EE4f8A59fCE1B56f9da8e153c3f5F38D3C59ED",  // v0.18.0-beta.2 (#45 on-chain hash_to_curve; Ownable2Step; aggregator() getter)
@@ -113,18 +116,18 @@ export const CANONICAL_ADDRESSES = {
     agentRegistry: "0x00D7045617b9807cE36db9591a63b5af66036192",  // v0.18.0-beta.2 (bindFactory set-once)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
-    policyRegistry: "0x37e4E40e69Fb7d5C3fbAA0F52A4002D27472Ff29",
+    policyRegistry: "0x8c2488d46d5447418558c38AA6441720df656094",
     // SP v5.4 x402 settlement facilitator (verify/settle EIP-3009 + direct xPNTs).
-    x402Facilitator: "0xFe95a77e4Db593E6EA88000Aad9cD1230BAB4512",
+    x402Facilitator: "0x326Fc3413c8A0185b0179B971C69813B6dFD971B",
     // SP v5.4 governance TimelockController (2-day minDelay; gates PolicyRegistry loosen/unfreeze).
-    timelockController: "0x6cEc100c9CDc6ee7D9EDe0533edD3554E641DdBF",
+    timelockController: "0xB734df3c0A1809bc06708512363D368Ac51dF1A2",
     // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
     // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
     // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
     // drifted from the live deployment; realigned per "Sepolia deployment is the
     // source of truth". A community-specific xPNTs belongs under its own key, not
     // the canonical base `pnts`.
-    pnts: "0x5aa8b75eF1650CF3C67b17b474677eD5C847A435",
+    pnts: "0xC687f8a115D308ECD39658a8EE33bC3c8F75EE31",
   },
 
   // --- OP Sepolia (Chain ID: 11155420) ---

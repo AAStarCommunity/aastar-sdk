@@ -8,9 +8,9 @@
 | Source | Total | Covered | Coverage % | Gaps | Exempt |
 |---|---|---|---|---|---|
 | KMS API (openapi.yaml) | 36 | 36 | 100.0% | 0 | 2 |
-| SuperPaymaster ABI | 256 | 256 | 100.0% | 0 | 3 |
+| SuperPaymaster ABI | 258 | 258 | 100.0% | 0 | 3 |
 | AirAccount ABI | 129 | 129 | 100.0% | 0 | 9 |
-| **OVERALL** | **421** | **421** | **100.0%** | **0** | — |
+| **OVERALL** | **423** | **423** | **100.0%** | **0** | — |
 
 ## Coverage definition
 
@@ -35,8 +35,8 @@
 
 ### SuperPaymaster ABI
 
-- Total (non-exempt): **256**
-- Covered: **256** (100.0%) — direct: 256, indirect/verify: 0
+- Total (non-exempt): **258**
+- Covered: **258** (100.0%) — direct: 258, indirect/verify: 0
 - Gaps: **0**
 - Exempt: 3
 

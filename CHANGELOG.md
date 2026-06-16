@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.1] - 2026-06-16
+
+Upstream sync — SuperPaymaster fresh Sepolia redeploy (17 addresses + xPNTsToken `setSpenderDailyCapFor`/`spenderDailyCapOverride`), KMS openapi 0.22.0→0.23.0, AirAccount contracts v0.18.0-beta.2→v0.19.0-beta.2 (pin only, surface identical).
+
+Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (2026-06-16 redeploy) / KMS openapi 0.23.0 / DVT v1.2.0.
+
 ## [0.20.0] - 2026-06-16
 
 > Compatible upstream versions: **AirAccount contracts v0.18.0-beta.2 · SuperPaymaster v5.4.0-beta.1 · KMS openapi 0.22.0 · DVT (YetAnotherAA-Validator) v1.2.0**.
@@ -114,8 +120,8 @@ All notable changes to this project will be documented in this file.
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.16.23] - 2026-02-24
-**SDK Code Integrity Hash**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+## [0.20.1] - 2026-06-16
+**SDK Code Integrity Hash**: `c88f9c471f1eda77f41a7878810c2bb7677ffe0e12d697fc0346dcd2ce96c56b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:

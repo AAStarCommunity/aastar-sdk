@@ -124,6 +124,11 @@ describe('TokenActions Exhaustive Coverage', () => {
         functionName: 'setSpenderDailyCap', args: [1000n],
       }));
 
+      await acts.setSpenderDailyCapFor({ token: ADDR, spender: USER, newCap: 2000n, account: USER });
+      expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
+        functionName: 'setSpenderDailyCapFor', args: [USER, 2000n],
+      }));
+
       const opHash = ('0x' + 'ab'.repeat(32)) as `0x${string}`;
       await acts.recordDebtWithOpHash({ token: ADDR, user: USER, amountAPNTs: 42n, opHash, account: USER });
       expect(w.writeContract).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -161,6 +166,9 @@ describe('TokenActions Exhaustive Coverage', () => {
 
       await acts.spenderDailyCapTokens({ token: ADDR });
       expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'spenderDailyCapTokens', args: [] }));
+
+      await acts.spenderDailyCapOverride({ token: ADDR, spender: USER });
+      expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'spenderDailyCapOverride', args: [USER] }));
 
       await acts.exchangeRateUpdatedAt({ token: ADDR });
       expect(p.readContract).toHaveBeenLastCalledWith(expect.objectContaining({ functionName: 'exchangeRateUpdatedAt', args: [] }));
