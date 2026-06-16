@@ -108,6 +108,14 @@ export const BLSHelpers = {
     },
 
     /**
+     * @deprecated SUPERSEDED by the explicit-`nodeIds` DVT wire (airaccount-contract
+     * #110, LIVE-verified). The DEPLOYED `AAStarBLSAlgorithm` verifier takes an explicit
+     * list of `bytes32` `nodeId`s, NOT a `signerMask` bitmask — `signerMask` was an early
+     * design that the landed contract did not adopt. Use
+     * {@link import('./dvtWire').encodeDVTAccountSignature} /
+     * {@link import('./dvtWire').encodeDVTVerifierProof} instead. Retained for backward
+     * compatibility with the legacy aggregator path only.
+     *
      * Build a DVT co-sign `signerMask` from registration slots (frozen DVT program
      * spec, hub YetAnotherAA-Validator#42).
      *
@@ -137,7 +145,14 @@ export const BLSHelpers = {
     },
 
     /**
-     * Encode a DVT co-sign proof (frozen DVT program spec, hub #42, decision B).
+     * @deprecated SUPERSEDED by the explicit-`nodeIds` DVT wire (airaccount-contract
+     * #110, LIVE-verified). The DEPLOYED verifier decodes an explicit `nodeIds` list +
+     * 256-byte `blsSig`, NOT this `(signerMask, sigG2)` ABI tuple. Use
+     * {@link import('./dvtWire').encodeDVTVerifierProof} (verifier-level) or
+     * {@link import('./dvtWire').encodeDVTAccountSignature} (account-level) instead.
+     * Retained for backward compatibility only.
+     *
+     * Encode a DVT co-sign proof (early `signerMask` design, hub #42, decision B).
      *
      * Under decision B the on-chain verifier recomputes `msgG2 = hashToG2(userOpHash)`
      * itself and rebuilds the aggregate public key from `signerMask` → registered

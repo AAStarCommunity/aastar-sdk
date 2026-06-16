@@ -1,5 +1,24 @@
 # DVT combined-signature wire format (aastar-sdk #63)
 
+> ⚠️ **SUPERSEDED for the account/verifier wire (Phase A, #63 / airaccount-contract #110).**
+> The DEPLOYED `AAStarBLSAlgorithm` beta.2 (`0xA9EE4f8A…`, Sepolia) verifier uses an **explicit
+> `nodeIds` list**, NOT the `signerMask` bitmask described in §2–§3 below. The LIVE-verified,
+> byte-for-byte authoritative wire is implemented in `packages/core/src/crypto/dvtWire.ts`
+> (`encodeDVTAccountSignature` / `encodeDVTVerifierProof` / `encodeG2Point`) and asserted against
+> live Sepolia txs in `packages/core/__tests__/crypto/dvtWire.test.ts`:
+>
+> ```
+> T2 (0x04): [0x04][P256 r(32)][P256 s(32)][nodeIdsLength(32)][nodeId_1(32)…nodeId_N(32)][blsSig(256)]
+> T3 (0x05): [0x05][P256(64)][nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)][guardianECDSA(65)]
+> verifier:  validate(userOpHash, [nodeIds(N×32)][blsSig(256)])   // account strips tier+P256+nodeIdsLength
+> ```
+>
+> `blsSig` = 256-byte EIP-2537 G2 (`x.c0@16 / x.c1@80 / y.c0@144 / y.c1@208`). `nodeIds` order MUST
+> match the nodes' signing/aggregation order. `messagePoint` is NOT attached (#45). The `signerMask`
+> helpers (`BLSHelpers.encodeDVTProof` / `slotsToSignerMask`) are retained `@deprecated` for the
+> legacy aggregator path only. The §1 message-binding (decision B / `(u0,u1)` golden surface) is
+> unchanged and still authoritative.
+
 > Status: aligned to the **frozen** DVT program spec (hub `AAStarCommunity/YetAnotherAA-Validator#42`).
 > Normative signature sources: SP `BLSGoldenVectors.t.sol` (golden vectors) + airaccount-contract #110 (account-side decode).
 > This doc specifies what **aastar-sdk** produces as the runtime aggregator.
