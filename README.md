@@ -16,6 +16,26 @@
 
 ---
 
+## 🔗 Integration Infrastructure & Upstream Version Pins
+
+This SDK integrates **three upstream AAStar infrastructure stacks**. Each MUST be kept in lockstep with that upstream's **latest GitHub release** — a version mismatch silently breaks on-chain calls (wrong ABI/selector) or points at stale contract addresses.
+
+| Upstream | Pinned version | Releases | Source of truth in this SDK |
+|---|---|---|---|
+| **AirAccount** (contracts) | `v0.18.0-beta.1` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
+| **SuperPaymaster** | `v5.4.0-beta.1` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
+| **KMS** | `openapi 0.22.0` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
+
+**How consistency is guaranteed — the 4 anchors:**
+1. **ABI files** — every contract ABI is vendored under `packages/core/src/abis/` (ESLint forbids inline `parseAbi`). The doc-coverage checker (`scripts/coverage/check-doc-coverage.ts`) asserts **100%** of each upstream's ABI/API surface has an SDK wrapper, and an ABI-absent-wrapper audit ensures no wrapper calls a function missing from its ABI.
+2. **Version pin** — the table above + the `addresses.ts` header comments record the exact upstream version each sync targets.
+3. **Contract addresses** — `packages/core/src/addresses.ts` (`CANONICAL_ADDRESSES`) is the single source of truth; `pnpm run check:addresses` fails if the per-network `config.*.json` drift from it.
+4. **API docs** — the KMS `openapi.yaml` is the HTTP-layer contract; the coverage checker asserts every endpoint is referenced by a `kms-*` service.
+
+> ⚠️ **Every upstream release REQUIRES a sync PR** (ABIs + version pin + addresses + API docs) before this SDK can claim compatibility. This is a mandatory release step — see **[docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md)**.
+
+---
+
 ## 📚 Contents
 
 - [Introduction](#introduction)
