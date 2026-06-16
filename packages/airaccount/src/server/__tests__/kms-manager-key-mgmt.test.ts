@@ -75,6 +75,29 @@ describe("KmsManager — P1 key management", () => {
     });
   });
 
+  describe("unfreezeKey", () => {
+    it("POSTs to /UnfreezeKey with KeyId + WebAuthn (no x-amz-target)", async () => {
+      // UnfreezeKey uses default ApiKey auth via client.post, not amzPost.
+      const postSpy = vi
+        .spyOn(m.httpClient, "post")
+        .mockResolvedValueOnce({ KeyId: "k1", LifecycleStatus: "active" } as never);
+      const params = { KeyId: "k1", WebAuthn: { challengeId: "c1", credential: {} } as never };
+      const res = await m.unfreezeKey(params);
+      expect(postSpy).toHaveBeenCalledWith("/UnfreezeKey", params);
+      expect(amzSpy).not.toHaveBeenCalled();
+      expect(res.KeyId).toBe("k1");
+      expect(res.LifecycleStatus).toBe("active");
+    });
+
+    it("forwards a KeyId-only body when no WebAuthn assertion is supplied", async () => {
+      const postSpy = vi
+        .spyOn(m.httpClient, "post")
+        .mockResolvedValueOnce({ KeyId: "k2", LifecycleStatus: "active" } as never);
+      await m.unfreezeKey({ KeyId: "k2" });
+      expect(postSpy).toHaveBeenCalledWith("/UnfreezeKey", { KeyId: "k2" });
+    });
+  });
+
   describe("sign", () => {
     it("signs a message via /Sign with TrentService.Sign", async () => {
       amzSpy.mockResolvedValueOnce({ Signature: "0xsig" } as never);
@@ -101,6 +124,7 @@ describe("KmsManager — P1 key management", () => {
       await expect(disabled.deriveAddress({ KeyId: "k1", DerivationPath: "m" })).rejects.toThrow("KMS service is not enabled");
       await expect(disabled.listKeys()).rejects.toThrow("KMS service is not enabled");
       await expect(disabled.deleteKey({ KeyId: "k1" })).rejects.toThrow("KMS service is not enabled");
+      await expect(disabled.unfreezeKey({ KeyId: "k1" })).rejects.toThrow("KMS service is not enabled");
       await expect(disabled.changePasskey({ KeyId: "k1", PasskeyPublicKey: "0x04" })).rejects.toThrow("KMS service is not enabled");
       await expect(disabled.sign({ KeyId: "k1", Message: "0x" })).rejects.toThrow("KMS service is not enabled");
     });

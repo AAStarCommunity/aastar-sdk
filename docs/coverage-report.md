@@ -7,10 +7,10 @@
 
 | Source | Total | Covered | Coverage % | Gaps | Exempt |
 |---|---|---|---|---|---|
-| KMS API (openapi.yaml) | 33 | 32 | 97.0% | 1 | 2 |
-| SuperPaymaster ABI | 256 | 236 | 92.2% | 20 | 3 |
+| KMS API (openapi.yaml) | 33 | 33 | 100.0% | 0 | 2 |
+| SuperPaymaster ABI | 256 | 256 | 100.0% | 0 | 3 |
 | AirAccount ABI | 128 | 128 | 100.0% | 0 | 9 |
-| **OVERALL** | **417** | **396** | **95.0%** | **21** | — |
+| **OVERALL** | **417** | **417** | **100.0%** | **0** | — |
 
 ## Coverage definition
 
@@ -24,13 +24,9 @@
 ### KMS API (openapi.yaml)
 
 - Total (non-exempt): **33**
-- Covered: **32** (97.0%) — direct: 32, indirect/verify: 0
-- Gaps: **1**
+- Covered: **33** (100.0%) — direct: 33, indirect/verify: 0
+- Gaps: **0**
 - Exempt: 2
-
-**Gaps (1) — no SDK wrapper found:**
-
-- `POST /UnfreezeKey`
 
 **Exempt (2):**
 
@@ -40,32 +36,9 @@
 ### SuperPaymaster ABI
 
 - Total (non-exempt): **256**
-- Covered: **236** (92.2%) — direct: 236, indirect/verify: 0
-- Gaps: **20**
+- Covered: **256** (100.0%) — direct: 256, indirect/verify: 0
+- Gaps: **0**
 - Exempt: 3
-
-**Gaps (20) — no SDK wrapper found:**
-
-- `EXCHANGE_RATE_COOLDOWN (xPNTsToken)`
-- `EXCHANGE_RATE_DELTA_BPS (xPNTsToken)`
-- `EXCHANGE_RATE_MAX (xPNTsToken)`
-- `EXCHANGE_RATE_MIN (xPNTsToken)`
-- `MAX_SINGLE_TX_LIMIT_CAP (xPNTsToken)`
-- `addApprovedFacilitator (xPNTsToken)`
-- `approvedFacilitators (xPNTsToken)`
-- `emergencyDisabled (xPNTsToken)`
-- `emergencyRevokedAddress (xPNTsToken)`
-- `exchangeRateUpdatedAt (xPNTsToken)`
-- `maxSingleTxLimit (xPNTsToken)`
-- `recordDebtWithOpHash (xPNTsToken)`
-- `removeApprovedFacilitator (xPNTsToken)`
-- `renounceFactory (xPNTsToken)`
-- `setMaxSingleTxLimit (xPNTsToken)`
-- `setSpenderDailyCap (xPNTsToken)`
-- `spenderDailyCapTokens (xPNTsToken)`
-- `spenderRateLimit (xPNTsToken)`
-- `unsetEmergencyDisabled (xPNTsToken)`
-- `usedDebtHashes (xPNTsToken)`
 
 **Exempt (3):**
 
