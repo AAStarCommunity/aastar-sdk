@@ -12,7 +12,7 @@ The SDK's compatibility is anchored to upstream by **four artifacts** — keep a
 
 ## 1. Upstream version sync — REQUIRED, do this FIRST
 
-For **each** upstream (AirAccount contracts, SuperPaymaster, KMS):
+For **each** upstream (AirAccount contracts, SuperPaymaster, KMS, **DVT validator nodes**):
 
 - [ ] **Check the upstream's latest GitHub release/tag.** Record the version + release URL.
 - [ ] **ABI files** — re-vendor any changed contract ABI into `packages/core/src/abis/`
@@ -21,6 +21,9 @@ For **each** upstream (AirAccount contracts, SuperPaymaster, KMS):
       and the per-network `config.*.json` from the upstream deploy record.
 - [ ] **API docs** — for KMS, bump the `openapi.yaml` version reference and wire any NEW
       endpoint in a `packages/airaccount/src/server/services/kms-*.ts` service.
+- [ ] **DVT wire** — if the validator/`AAStarBLSAlgorithm` changes the combined-sig
+      wire (tier/nodeIds/G2 layout), update `packages/core/src/crypto/dvtWire.ts` and
+      re-assert the golden vectors byte-for-byte against the node + a live on-chain tx.
 - [ ] **Version pin** — update the **Integration Infrastructure** table in `README.md`
       AND the `addresses.ts` header comment with the exact upstream version targeted.
 
