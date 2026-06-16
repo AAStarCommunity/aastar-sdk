@@ -119,6 +119,31 @@ export type {
 export { KmsHttpClient, DEFAULT_KMS_ENDPOINT } from "./services/kms-http-client";
 export type { KmsHttpClientOptions } from "./services/kms-http-client";
 
+// ── WebAuthn challenge-binding ceremony (#49 / Beta3) ─────────────
+export {
+  P256PasskeySigner,
+  runWebAuthnCeremony,
+  runAuthenticationCeremony,
+  runGrantSessionCeremony,
+  beginAuthenticationChallenge,
+  beginGrantSessionChallenge,
+  buildAuthenticationCredential,
+  buildClientDataJSON,
+  buildAuthenticatorData,
+  base64UrlEncode,
+  base64UrlDecode,
+  DEFAULT_RP_ID,
+  DEFAULT_ORIGIN,
+  DEFAULT_CREDENTIAL_ID,
+} from "./services/webauthn-ceremony";
+export type {
+  PasskeyCeremonySigner,
+  WebAuthnAuthenticationCredential,
+  BuildCredentialOptions,
+  BeginCeremonyResponse,
+  RunCeremonyOptions,
+} from "./services/webauthn-ceremony";
+
 // ── KMS Agent keys (TEE-JWT credentials) ──────────────────────────
 export { KmsAgentService } from "./services/kms-agent-service";
 export type {

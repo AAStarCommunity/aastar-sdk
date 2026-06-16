@@ -1,6 +1,12 @@
 import { ethers } from "ethers";
 import { ILogger } from "../interfaces/logger";
 import { KmsHttpClient } from "./kms-http-client";
+import {
+  PasskeyCeremonySigner,
+  RunCeremonyOptions,
+  runAuthenticationCeremony,
+  runGrantSessionCeremony,
+} from "./webauthn-ceremony";
 
 // ── Legacy Passkey Assertion (reusable for BLS dual-signing) ─────
 
@@ -587,6 +593,119 @@ export class KmsManager {
     this.ensureEnabled();
 
     return this.client.post<KmsSignGrantSessionResponse>("/kms/sign-p256-grant-session", params);
+  }
+
+  // ── Challenge-binding ceremonies (#49 / Beta3) ──────────────────
+  //
+  // These run the full WebAuthn challenge-binding ceremony in one call:
+  // fetch the TA one-time nonce, embed it in clientDataJSON, build + sign the
+  // assertion, then invoke the signing endpoint with the resulting
+  // `WebAuthn` / `webAuthnAssertion`. They share the
+  // {@link runAuthenticationCeremony} / {@link runGrantSessionCeremony} helper,
+  // so every path produces an identical, replay-protected assertion structure.
+
+  /**
+   * Run a generic authentication ceremony (purpose="authentication") bound to a
+   * fresh TA challenge. The returned assertion is valid for DeriveAddress / Sign
+   * / SignHash / SignTypedData / agent-key / p256-session signing.
+   */
+  async runAuthenticationCeremony(
+    keyId: string,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<WebAuthnAssertion> {
+    this.ensureEnabled();
+    return runAuthenticationCeremony(this.client, keyId, signer, options);
+  }
+
+  /**
+   * Run a grant-session ceremony (purpose="grant-session") bound to a fresh TA
+   * challenge — required by {@link signGrantSession} / {@link signP256GrantSession}
+   * (the generic 'authentication' challenge is rejected there for replay safety).
+   */
+  async runGrantSessionCeremony(
+    keyId: string,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<WebAuthnAssertion> {
+    this.ensureEnabled();
+    return runGrantSessionCeremony(this.client, keyId, signer, options);
+  }
+
+  /** Derive an address, running the challenge-binding ceremony internally. */
+  async deriveAddressWithCeremony(
+    params: { KeyId: string; DerivationPath: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsDeriveAddressResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.deriveAddress({ ...params, WebAuthn });
+  }
+
+  /**
+   * Sign a message or EIP-155 transaction, running the challenge-binding ceremony
+   * internally. `params.KeyId` is required (it identifies the wallet to challenge).
+   */
+  async signWithCeremony(
+    params: Omit<KmsSignRequest, "WebAuthn" | "Passkey"> & { KeyId: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsSignResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.sign({ ...params, WebAuthn });
+  }
+
+  /** Sign a 32-byte digest, running the challenge-binding ceremony internally. */
+  async signHashWithCeremony(
+    hash: string,
+    target: { KeyId: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsSignHashResponse> {
+    this.ensureEnabled();
+    const assertion = await this.runAuthenticationCeremony(target.KeyId, signer, options);
+    return this.signHashWithWebAuthn(hash, assertion.ChallengeId, assertion.Credential, target);
+  }
+
+  /** Sign EIP-712 typed data, running the challenge-binding ceremony internally. */
+  async signTypedDataWithCeremony(
+    params: Omit<KmsSignTypedDataRequest, "webAuthnAssertion">,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsSignTypedDataResponse> {
+    this.ensureEnabled();
+    const webAuthnAssertion = await this.runAuthenticationCeremony(params.keyId, signer, options);
+    return this.signTypedDataWithWebAuthn({ ...params, webAuthnAssertion });
+  }
+
+  /**
+   * Sign a GRANT_SESSION_V2 hash, running the grant-session ceremony internally
+   * (uses the purpose-bound `begin-grant-session-auth` challenge).
+   */
+  async signGrantSessionWithCeremony(
+    params: Omit<KmsSignGrantSessionRequest, "webAuthnAssertion">,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsSignGrantSessionResponse> {
+    this.ensureEnabled();
+    const webAuthnAssertion = await this.runGrantSessionCeremony(params.keyId, signer, options);
+    return this.signGrantSession({ ...params, webAuthnAssertion });
+  }
+
+  /**
+   * Sign a GRANT_P256_SESSION_V2 hash, running the grant-session ceremony
+   * internally (uses the purpose-bound `begin-grant-session-auth` challenge).
+   */
+  async signP256GrantSessionWithCeremony(
+    params: Omit<KmsSignP256GrantSessionRequest, "webAuthnAssertion">,
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer">
+  ): Promise<KmsSignGrantSessionResponse> {
+    this.ensureEnabled();
+    const webAuthnAssertion = await this.runGrantSessionCeremony(params.keyId, signer, options);
+    return this.signP256GrantSession({ ...params, webAuthnAssertion });
   }
 
   // ── WebAuthn Ceremonies ─────────────────────────────────────────
