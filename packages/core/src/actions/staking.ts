@@ -5,7 +5,16 @@ import { AAStarError } from '../errors/index.js';
 
 export type StakingActions = {
     // Staking Operations
+    /** @deprecated `lockStake` is absent from the deployed ABI (reverts on-chain); use {@link lockStakeWithTicket}. */
     lockStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, ticketPrice: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * Lock stake for a role and consume a ticket in one call. ABI:
+     * lockStakeWithTicket(address user, bytes32 roleId, uint256 stakeAmount, uint256 ticketPrice, address payer) -> uint256 lockId.
+     * NOTE: the deployed GTokenStaking ABI exposes ONLY this function; the bare `lockStake` getter no longer exists on-chain.
+     * This is a state-changing tx, so it resolves to the transaction `Hash` — the on-chain
+     * `uint256 lockId` return is NOT recoverable from a write; `simulateContract` the same call if you need it.
+     */
+    lockStakeWithTicket: (args: { user: Address, roleId: Hex, stakeAmount: bigint, ticketPrice: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
     topUpStake: (args: { user: Address, roleId: Hex, stakeAmount: bigint, payer: Address, account?: Account | Address }) => Promise<Hash>;
     unlockStake: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
     unlockAndTransfer: (args: { user: Address, roleId: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -72,11 +81,16 @@ export type StakingActions = {
     // Constants
     REGISTRY: () => Promise<Address>;
     GTOKEN: () => Promise<Address>;
+    /** Protocol-wide cap on total locked stake (view). ABI: MAX_TOTAL_STAKE() -> uint256. */
+    MAX_TOTAL_STAKE: () => Promise<bigint>;
 };
 
 export const stakingActions = (address: Address) => (client: PublicClient | WalletClient): StakingActions => ({
     // Staking Operations
     /**
+     * @deprecated Calls `lockStake`, which is ABSENT from the deployed GTokenStaking
+     * ABI (replaced by `lockStakeWithTicket`) — it will revert on-chain. Use
+     * `lockStakeWithTicket` instead. Kept only to avoid breaking the type surface.
      * @internal
      * @warning This is a low-level internal API. Use high-level clients instead.
      */
@@ -96,6 +110,26 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'lockStake');
+        }
+    },
+
+    async lockStakeWithTicket({ user, roleId, stakeAmount, ticketPrice, payer, account }) {
+        try {
+            validateAddress(user, 'user');
+            validateRequired(roleId, 'roleId');
+            validateAddress(payer, 'payer');
+            validateAmount(stakeAmount, 'stakeAmount');
+            validateAmount(ticketPrice, 'ticketPrice');
+            return await (client as any).writeContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'lockStakeWithTicket',
+                args: [user, roleId, stakeAmount, ticketPrice, payer],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'lockStakeWithTicket');
         }
     },
 
@@ -571,6 +605,19 @@ export const stakingActions = (address: Address) => (client: PublicClient | Wall
             }) as Promise<Address>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'GTOKEN');
+        }
+    },
+
+    async MAX_TOTAL_STAKE() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: GTokenStakingABI,
+                functionName: 'MAX_TOTAL_STAKE',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'MAX_TOTAL_STAKE');
         }
     }
 });

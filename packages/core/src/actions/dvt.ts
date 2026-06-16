@@ -15,6 +15,10 @@ export type DVTActions = {
     // Validator Management
     isValidator: (args: { user: Address }) => Promise<boolean>;
     addValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Remove a validator from the active set (owner-gated). ABI: removeValidator(address v). */
+    removeValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Prune a validator entry (cleanup of a removed/stale validator). ABI: pruneValidator(address v). */
+    pruneValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
     
     // BLS Aggregator Integration
     setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
@@ -163,6 +167,38 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'addValidator');
+        }
+    },
+
+    async removeValidator({ v, account }) {
+        try {
+            validateAddress(v, 'v');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'removeValidator',
+                args: [v],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'removeValidator');
+        }
+    },
+
+    async pruneValidator({ v, account }) {
+        try {
+            validateAddress(v, 'v');
+            return await (client as any).writeContract({
+                address,
+                abi: DVTValidatorABI,
+                functionName: 'pruneValidator',
+                args: [v],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pruneValidator');
         }
     },
 
