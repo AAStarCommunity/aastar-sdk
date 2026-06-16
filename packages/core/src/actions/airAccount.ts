@@ -69,6 +69,8 @@ export type AirAccountActions = {
     guardApproveAlgorithm: (args: { algId: number, account?: Account | Address }) => Promise<Hash>;
     guardDecreaseDailyLimit: (args: { newLimit: bigint, account?: Account | Address }) => Promise<Hash>;
     guardDecreaseTokenDailyLimit: (args: { token: Address, newLimit: bigint, account?: Account | Address }) => Promise<Hash>;
+    // v0.18.0-beta.2 (#22): toggle guard strict mode (block unconfigured tokens). Default OFF.
+    guardSetStrictMode: (args: { enabled: boolean, account?: Account | Address }) => Promise<Hash>;
 
     // --- Writes (module install timelock) ---
     proposeModuleInstall: (args: { moduleTypeId: bigint, module: Address, initData: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -326,6 +328,18 @@ export const airAccountActions = (address: Address) => (client: PublicClient | W
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'guardDecreaseTokenDailyLimit');
+        }
+    },
+
+    // v0.18.0-beta.2 (#22): enable/disable strict mode (reverts spends on unconfigured tokens).
+    async guardSetStrictMode({ enabled, account }) {
+        try {
+            return await (client as any).writeContract({
+                address, abi: ABI, functionName: 'guardSetStrictMode', args: [enabled],
+                account: account as any, chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardSetStrictMode');
         }
     },
 

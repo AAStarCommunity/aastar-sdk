@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.18.0",
+  "version": "0.20.0",
   "description": "AAStar SDK - The all-in-one package for Mycelium Network",
   "type": "module",
   "publishConfig": {

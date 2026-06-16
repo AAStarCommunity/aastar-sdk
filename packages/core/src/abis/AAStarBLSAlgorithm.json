@@ -96,30 +96,6 @@
     },
     {
       "type": "function",
-      "name": "g2Add",
-      "inputs": [
-        {
-          "name": "p1",
-          "type": "bytes",
-          "internalType": "bytes"
-        },
-        {
-          "name": "p2",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "result",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "getGasEstimate",
       "inputs": [
         {

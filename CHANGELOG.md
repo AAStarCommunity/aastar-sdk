@@ -2,7 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.20.0] - 2026-06-16
+
+> Compatible upstream versions: **AirAccount contracts v0.18.0-beta.2 · SuperPaymaster v5.4.0-beta.1 · KMS openapi 0.22.0 · DVT (YetAnotherAA-Validator) v1.2.0**.
+> (Numbered 0.20.0 — `[0.19.0]` was already used by an earlier, unreleased CHANGELOG entry below.)
+
+### Highlights this cycle
+- **100% upstream ABI/API coverage** (KMS / SuperPaymaster / AirAccount), enforced by `scripts/coverage/check-doc-coverage.ts` + an ABI-absent-wrapper audit. Closed across waves: SuperPaymaster pre-flight/price/BLS-timelock reads, the governance/admin surface (Registry/BLSAggregator/DVTValidator/GTokenStaking/MicroPaymentChannel/ReputationSystem), the full AirAccount account/factory/session/agent surface, xPNTsToken finance, KMS `/UnfreezeKey`, and the KMS TEE remote-attestation endpoints (`/attestation` + `.well-known/attestation-measurements*`, #37/#12/#87).
+- **AirAccount contracts synced to v0.18.0-beta.2** (full Sepolia redeploy — all 11 addresses updated to the E2E-verified beta.2 deployment, incl. the DVT verifier `AAStarBLSAlgorithm 0xA9EE4f8A`; re-vendored the 2 ABIs that changed: `+guardSetStrictMode` on the account, `-g2Add` on AAStarBLSAlgorithm); `microPaymentChannel` Sepolia config drift fixed.
+- **issue #30 — 65+ ABI-absent wrappers repaired**: every action wrapper that called a `functionName` absent from its ABI (v5.x removed/renamed fns; would revert on-chain) was re-verified and fixed — RENAMED where the ABI has the fn, or made to THROW `NOT_IMPLEMENTED` where genuinely removed. `x402.ts` switched to `X402FacilitatorABI`.
+- **DVT v1 client aggregation (#63)**: `dvtWire.ts` assembles the combined signature in the verifier's exact `[tier][P256][nodeIds][blsSig]` wire (byte-for-byte vs live Sepolia txs); an SDK-driven real-node E2E proves on-chain `AAStarBLSAlgorithm.validate = 0`.
+- **Beta4 — agent on-chain lifecycle**: complete viem agent surface (`agentRegistry` + `airAccountFactory`) + a Sepolia E2E with real tx hashes (createAgentAccount → registerAgent → revokeAgent).
+- **YAA #52 (Beta3.1)**: `issueXPNTs` fix, `checkResources`, batch SBT mint, registry queries + `getCommunityProfile` (event back-trace), `configureSBTRules`/`getCommunityStats`, `getMySBTId` fix; + repaired pre-existing dangling getters.
+- **WebAuthn #49 challenge-binding (#58)**: TA-nonce → `clientDataJSON` ceremony across the KMS server-side signing paths (mainnet prerequisite before `ENFORCE_TA_CHALLENGE=true`).
+- **AirAccount v0.18 + SuperPaymaster v5.4 ABI/address sync**; new `policyRegistry` / `x402Facilitator` / `timelockController` / `agentValidationRegistry` keys; `microPaymentChannel` + `pnts` realigned to the live deployments.
+- **Docs**: README "Integration Infrastructure & Upstream Version Pins" (4 stacks) + mandatory `docs/RELEASE-CHECKLIST.md`.
 
 ### SuperPaymaster v5.4.0-beta.1 sync (chore/sync-superpaymaster-v5.4)
 
