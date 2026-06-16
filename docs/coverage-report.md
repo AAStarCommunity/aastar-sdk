@@ -49,29 +49,21 @@
 ### AirAccount ABI
 
 - Total (non-exempt): **128**
-- Covered: **128** (100.0%) — direct: 92, indirect/verify: 36
+- Covered: **128** (100.0%) — direct: 102, indirect/verify: 26
 - Gaps: **0**
 - Exempt: 9
 
-**Indirect / verify (36) — only a bare `.fn(` reference, ambiguous:**
+**Indirect / verify (26) — only a bare `.fn(` reference, ambiguous:**
 
 - `APPROVAL_THRESHOLD (ForceExitModule)`
 - `MODULE_VERSION (SessionKeyValidator,ForceExitModule)`
 - `accountL2Type (ForceExitModule)`
 - `activeRecovery (AAStarAirAccountV7,AirAccountExtension)`
 - `agentExtension (AAStarAirAccountV7)`
-- `agentRegistry (AAStarAirAccountFactoryV7)`
-- `agentWalletOwner (AgentRegistry)`
 - `approvedAlgorithms (AAStarAirAccountV7,AirAccountExtension)`
 - `buildGrantHash (SessionKeyValidator)`
 - `buildP256GrantHash (SessionKeyValidator)`
 - `executeUserOp (AAStarAirAccountV7)`
-- `getAgentAddress (AAStarAirAccountFactoryV7)`
-- `getAgentByIndex (AgentRegistry)`
-- `getAgentCount (AgentRegistry)`
-- `getAgents (AgentRegistry)`
-- `getAgentsPage (AgentRegistry)`
-- `getHumanOwner (AgentRegistry)`
 - `getP256Session (SessionKeyValidator)`
 - `getPendingExit (ForceExitModule)`
 - `getSession (SessionKeyValidator)`
@@ -82,8 +74,6 @@
 - `isModuleInstalled (AAStarAirAccountV7)`
 - `isP256SessionActive (SessionKeyValidator)`
 - `isSessionActive (SessionKeyValidator)`
-- `isValidAccount (AgentRegistry)`
-- `ownerAgents (AgentRegistry)`
 - `pendingWeightChange (AAStarAirAccountV7,AirAccountExtension)`
 - `sessionStates (SessionKeyValidator)`
 - `tier1Limit (AAStarAirAccountV7,AirAccountExtension)`
