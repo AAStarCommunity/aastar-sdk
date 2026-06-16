@@ -1,38 +1,45 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther } from 'viem';
 import { xPNTsFactoryABI, PaymasterFactoryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 // xPNTs Factory Actions (基于地址调用的通用接口)
 export type XPNTsFactoryActions = {
     // Token 部署
     deployxPNTsToken: (args: { name: string, symbol: string, communityName: string, communityENS: string, exchangeRate: bigint, paymasterAOA: Address, account?: Account | Address }) => Promise<Hash>;
     createToken: (args: { name: string, symbol: string, community: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — xPNTsFactory has no `deployForCommunity` (it cannot derive token name/symbol from a community address). Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link deployxPNTsToken} with full token params. */
     deployForCommunity: (args: { community: Address, account?: Account | Address }) => Promise<Hash>;
-    
+
     // 查询
     getTokenAddress: (args: { community: Address }) => Promise<Address>;
+    /** @deprecated Removed in the v5.x contract refactor — xPNTsFactory exposes no CREATE2 address predictor. Throws {@link ErrorCode.NOT_IMPLEMENTED}; read the deployed address via {@link getTokenAddress}/{@link communityToToken} after deploy. */
     predictAddress: (args: { community: Address, salt?: bigint }) => Promise<Address>;
     hasToken: (args: { community: Address }) => Promise<boolean>;
     isTokenDeployed: (args: { community: Address }) => Promise<boolean>;
+    /** @deprecated Removed in the v5.x contract refactor — xPNTsFactory has no token->community reverse lookup (only community->token via {@link communityToToken}). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     getCommunityByToken: (args: { token: Address }) => Promise<Address>;
     getAllTokens: () => Promise<Address[]>;
     getDeployedCount: () => Promise<bigint>;
     getTokenCount: () => Promise<bigint>;
     deployedTokens: (args: { index: bigint }) => Promise<Address>;
     communityToToken: (args: { community: Address }) => Promise<Address>;
-    
+
     // 配置
+    /** @deprecated Removed in the v5.x contract refactor — xPNTsFactory.REGISTRY is immutable (no `setRegistry`). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
     setSuperPaymasterAddress: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — xPNTsFactory has no implementation setter (the token `implementation()` is fixed). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     setImplementation: (args: { impl: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Token implementation address. On-chain fn: `implementation()` (the legacy `getImplementation` getter was removed). */
     getImplementation: () => Promise<Address>;
-    
+
     // 常量
     REGISTRY: () => Promise<Address>;
     SUPERPAYMASTER: () => Promise<Address>;
     SUPER_PAYMASTER: () => Promise<Address>;
+    /** Token implementation address. On-chain fn: `implementation()` (the legacy `tokenImplementation` getter was removed). */
     tokenImplementation: () => Promise<Address>;
     
     // Ownership
@@ -71,6 +78,7 @@ export type PaymasterFactoryActions = {
     
     // Constants
     REGISTRY: () => Promise<Address>;
+    /** @deprecated Removed in the v5.x contract refactor — PaymasterFactory has no `ENTRY_POINT` constant. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     ENTRY_POINT: () => Promise<Address>;
     
     // Ownership
@@ -118,20 +126,17 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
             });
         },
 
-        async deployForCommunity({ community, account }) {
-            try {
-                validateAddress(community, 'community');
-                return await (client as any).writeContract({
-                    address,
-                    abi: xPNTsFactoryABI,
-                    functionName: 'deployForCommunity',
-                    args: [community],
-                    account: account as any,
-                    chain: (client as any).chain
-                });
-            } catch (error) {
-                throw AAStarError.fromViemError(error as Error, 'deployForCommunity');
-            }
+        async deployForCommunity({ community }) {
+            // Removed in the v5.x contract refactor: xPNTsFactory has no `deployForCommunity`.
+            // The only deploy entrypoint is deployxPNTsToken(name, symbol, communityName,
+            // communityENS, exchangeRate, paymasterAOA), which cannot be derived from just a
+            // community address. Validate then throw rather than revert on-chain.
+            validateAddress(community, 'community');
+            throw new AAStarError(
+                ErrorCode.NOT_IMPLEMENTED,
+                'deployForCommunity was removed in the v5.x contract refactor; use ' +
+                'deployxPNTsToken({ name, symbol, communityName, communityENS, exchangeRate, paymasterAOA }).'
+            );
         },
 
         async getTokenAddress({ community }) {
@@ -148,18 +153,16 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
             }
         },
 
-        async predictAddress({ community, salt }) {
-            try {
-                validateAddress(community, 'community');
-                return await (client as PublicClient).readContract({
-                    address,
-                    abi: xPNTsFactoryABI,
-                    functionName: 'predictAddress',
-                    args: salt !== undefined ? [community, salt] : [community]
-                }) as Address;
-            } catch (error) {
-                throw AAStarError.fromViemError(error as Error, 'predictAddress');
-            }
+        async predictAddress({ community }) {
+            // Removed in the v5.x contract refactor: xPNTsFactory exposes no CREATE2 address
+            // predictor. Validate then throw rather than revert on-chain.
+            validateAddress(community, 'community');
+            throw new AAStarError(
+                ErrorCode.NOT_IMPLEMENTED,
+                'predictAddress was removed in the v5.x contract refactor; xPNTsFactory has no ' +
+                'address predictor. Read the deployed token via getTokenAddress({ community }) ' +
+                'or communityToToken({ community }) after deployment.'
+            );
         },
 
         async hasToken({ community }) {
@@ -181,17 +184,16 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
         },
 
         async getCommunityByToken({ token }) {
-            try {
-                validateAddress(token, 'token');
-                return await (client as PublicClient).readContract({
-                    address,
-                    abi: xPNTsFactoryABI,
-                    functionName: 'getCommunityByToken',
-                    args: [token]
-                }) as Address;
-            } catch (error) {
-                throw AAStarError.fromViemError(error as Error, 'getCommunityByToken');
-            }
+            // Removed in the v5.x contract refactor: xPNTsFactory has no token->community
+            // reverse lookup (only the forward communityToToken/getTokenAddress mappings).
+            // NOTE: communityToToken is the INVERSE direction and is NOT a substitute here.
+            validateAddress(token, 'token');
+            throw new AAStarError(
+                ErrorCode.NOT_IMPLEMENTED,
+                'getCommunityByToken was removed in the v5.x contract refactor; xPNTsFactory only ' +
+                'maps community->token (communityToToken/getTokenAddress). Use isXPNTs(token) to ' +
+                'check whether an address is a factory-deployed token.'
+            );
         },
 
         async getAllTokens() {
@@ -251,20 +253,15 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
             }
         },
 
-        async setRegistry({ registry, account }) {
-            try {
-                validateAddress(registry, 'registry');
-                return await (client as any).writeContract({
-                    address,
-                    abi: xPNTsFactoryABI,
-                    functionName: 'setRegistry',
-                    args: [registry],
-                    account: account as any,
-                    chain: (client as any).chain
-                });
-            } catch (error) {
-                throw AAStarError.fromViemError(error as Error, 'setRegistry');
-            }
+        async setRegistry({ registry }) {
+            // Removed in the v5.x contract refactor: xPNTsFactory.REGISTRY is immutable
+            // (no `setRegistry` in the deployed ABI). Validate then throw rather than revert.
+            validateAddress(registry, 'registry');
+            throw new AAStarError(
+                ErrorCode.NOT_IMPLEMENTED,
+                'setRegistry was removed in the v5.x contract refactor; xPNTsFactory.REGISTRY is ' +
+                'immutable (set at construction) and cannot be changed on-chain.'
+            );
         },
 
         async setSuperPaymasterAddress({ paymaster, account }) {
@@ -287,28 +284,24 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
             return this.setSuperPaymasterAddress({ paymaster, account });
         },
 
-        async setImplementation({ impl, account }) {
-            try {
-                validateAddress(impl, 'impl');
-                return await (client as any).writeContract({
-                    address,
-                    abi: xPNTsFactoryABI,
-                    functionName: 'setImplementation',
-                    args: [impl],
-                    account: account as any,
-                    chain: (client as any).chain
-                });
-            } catch (error) {
-                throw AAStarError.fromViemError(error as Error, 'setImplementation');
-            }
+        async setImplementation({ impl }) {
+            // Removed in the v5.x contract refactor: xPNTsFactory has no implementation setter
+            // (the token `implementation()` is fixed). Validate then throw rather than revert.
+            validateAddress(impl, 'impl');
+            throw new AAStarError(
+                ErrorCode.NOT_IMPLEMENTED,
+                'setImplementation was removed in the v5.x contract refactor; xPNTsFactory has no ' +
+                'implementation setter (the token implementation() is fixed at deployment).'
+            );
         },
 
         async getImplementation() {
             try {
+                // On-chain fn: implementation() — the legacy `getImplementation` getter was removed.
                 return await (client as PublicClient).readContract({
                     address,
                     abi: xPNTsFactoryABI,
-                    functionName: 'getImplementation',
+                    functionName: 'implementation',
                     args: []
                 }) as Address;
             } catch (error) {
@@ -348,10 +341,11 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
 
         async tokenImplementation() {
             try {
+                // On-chain fn: implementation() — the legacy `tokenImplementation` getter was removed.
                 return await (client as PublicClient).readContract({
                     address,
                     abi: xPNTsFactoryABI,
-                    functionName: 'tokenImplementation',
+                    functionName: 'implementation',
                     args: []
                 }) as Address;
             } catch (error) {
@@ -636,10 +630,11 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
 
         async REGISTRY() {
             try {
+                // On-chain fn: registry() (lowercase) — PaymasterFactory has no `REGISTRY` constant.
                 return await (client as PublicClient).readContract({
                     address,
                     abi: PaymasterFactoryABI,
-                    functionName: 'REGISTRY',
+                    functionName: 'registry',
                     args: []
                 }) as Address;
             } catch (error) {
@@ -648,16 +643,13 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
         },
 
         async ENTRY_POINT() {
-            try {
-                return await (client as PublicClient).readContract({
-                    address,
-                    abi: PaymasterFactoryABI,
-                    functionName: 'ENTRY_POINT',
-                    args: []
-                }) as Address;
-            } catch (error) {
-                throw AAStarError.fromViemError(error as Error, 'ENTRY_POINT');
-            }
+            // Removed in the v5.x contract refactor: PaymasterFactory has no `ENTRY_POINT`
+            // constant. Throw rather than issue a call that reverts on-chain.
+            throw new AAStarError(
+                ErrorCode.NOT_IMPLEMENTED,
+                'ENTRY_POINT was removed in the v5.x contract refactor; PaymasterFactory no longer ' +
+                'exposes the EntryPoint address as a constant.'
+            );
         },
 
         async owner() {

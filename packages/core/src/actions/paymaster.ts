@@ -33,6 +33,7 @@ export type PaymasterActions = {
     // Price Management
     cachedPrice: () => Promise<{ price: bigint, updatedAt: number }>;
     updatePrice: (args: { account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated The deployed Paymaster ABI has no `getRealtimeTokenCost` — this wrapper now calls `calculateCost(gasCost, token, true)` (realtime mode). Prefer {@link calculateCost}. */
     getRealtimeTokenCost: (args: { gasCost: bigint, token: Address }) => Promise<bigint>;
     calculateCost: (args: { gasCost: bigint, token: Address, useRealtime: boolean }) => Promise<bigint>;
     
@@ -525,11 +526,13 @@ export const paymasterActions = (address: Address) => (client: PublicClient | Wa
         try {
             validateAmount(gasCost, 'gasCost');
             validateAddress(token, 'token');
+            // On-chain fn: calculateCost(gasCost, token, useRealtime). The legacy
+            // getRealtimeTokenCost is the realtime variant, i.e. useRealtime = true.
             return await (client as PublicClient).readContract({
                 address,
                 abi: PaymasterABI,
-                functionName: 'getRealtimeTokenCost',
-                args: [gasCost, token]
+                functionName: 'calculateCost',
+                args: [gasCost, token, true]
             }) as Promise<bigint>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getRealtimeTokenCost');

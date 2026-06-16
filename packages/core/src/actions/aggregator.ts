@@ -10,6 +10,7 @@ export type BLSG1Point = { x_a: Hex, x_b: Hex, y_a: Hex, y_b: Hex };
 export type AggregatorActions = {
     // BLS Public Key Management
     registerBLSPublicKey: (args: { validator: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated The deployed BLSAggregator ABI has no `blsPublicKeys` mapping getter — this wrapper now reads the ABI-confirmed `getBLSPublicKey` and projects out the slot. Prefer {@link getBLSPublicKey}. */
     blsPublicKeys: (args: { validator: Address }) => Promise<{ publicKey: Hex, isActive: boolean }>;
     /** Read a validator's registered G1 key + its registration SLOT (1-indexed) + active flag. */
     getBLSPublicKey: (args: { validator: Address }) => Promise<{ publicKey: BLSG1Point, slot: number, isActive: boolean }>;
@@ -90,13 +91,15 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
     async blsPublicKeys({ validator }) {
         try {
             validateAddress(validator, 'validator');
+            // On-chain fn: getBLSPublicKey(validator) -> (G1Point publicKey, uint8 slot, bool isActive).
+            // The legacy `blsPublicKeys` mapping getter no longer exists; isActive is at index 2 (index 1 is the slot).
             const result = await (client as PublicClient).readContract({
                 address,
                 abi: BLSAggregatorABI,
-                functionName: 'blsPublicKeys',
+                functionName: 'getBLSPublicKey',
                 args: [validator]
             }) as any;
-            return { publicKey: result[0], isActive: result[1] };
+            return { publicKey: result[0], isActive: result[2] };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'blsPublicKeys');
         }

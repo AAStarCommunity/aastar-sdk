@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, type AbiEvent, type BlockNumber, type BlockTag, keccak256, toBytes, decodeFunctionData, decodeAbiParameters } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 // ABI-parameter layout of Registry.sol CommunityRoleData, used to decode the `roleData`
 // recovered from registerRole calldata. This is an abi.encode struct (NOT a contract ABI),
@@ -141,15 +141,20 @@ export type RegistryActions = {
     // Role Management
     configureRole: (args: { roleId: Hex, config: RoleConfigDetailed, account?: Account | Address }) => Promise<Hash>;
     syncExitFees: (args: { roles: Hex[], account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated The deployed Registry ABI has no `createNewRole` — this wrapper now calls `configureRole(roleId, config)` with `roleOwner` merged into `config.owner`. Prefer {@link configureRole}. */
     createNewRole: (args: { roleId: Hex, config: RoleConfigDetailed, roleOwner: Address, account?: Account | Address }) => Promise<Hash>;
     registerRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated The deployed Registry ABI has no `registerRoleSelf` — this wrapper now calls `registerRole(roleId, <caller>, data)` deriving the caller from `account`. Prefer {@link registerRole}. */
     registerRoleSelf: (args: { roleId: Hex, data: Hex, account?: Account | Address }) => Promise<Hash>;
     safeMintForRole: (args: { roleId: Hex, user: Address, data: Hex, account?: Account | Address }) => Promise<Hash>;
     hasRole: (args: { roleId: Hex, user: Address }) => Promise<boolean>;
     getRoleConfig: (args: { roleId: Hex }) => Promise<RoleConfigDetailed>;
+    /** @deprecated Removed in the v5.x contract refactor — `roleLockDuration` is now a field of the role config. Throws {@link ErrorCode.NOT_IMPLEMENTED}; set it via {@link configureRole} (config.roleLockDuration). */
     setRoleLockDuration: (args: { roleId: Hex, duration: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — the role owner is now a field of the role config. Throws {@link ErrorCode.NOT_IMPLEMENTED}; set it via {@link configureRole} (config.owner). */
     setRoleOwner: (args: { roleId: Hex, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     exitRole: (args: { roleId: Hex, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — there is no per-user role-metadata getter. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link getCommunityProfile} (event back-trace) for a community's roleData or {@link getRoleConfig} for role config. */
     roleMetadata: (args: { roleId: Hex, user: Address }) => Promise<Hex>;
     
     // Community Management
@@ -169,6 +174,7 @@ export type RegistryActions = {
     // Credit & Reputation
     getCreditLimit: (args: { user: Address }) => Promise<bigint>;
     globalReputation: (args: { user: Address }) => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — there is no append-one `addLevelThreshold` (only the replace-all {@link setLevelThresholds}). Throws {@link ErrorCode.NOT_IMPLEMENTED}; read {@link levelThresholds}, append, and call {@link setLevelThresholds}. */
     addLevelThreshold: (args: { threshold: bigint, account?: Account | Address }) => Promise<Hash>;
     batchUpdateGlobalReputation: (args: { proposalId: bigint, users: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     /** Set the credit limit for a reputation level/tier (owner-gated). ABI: setCreditTier(uint256 level, uint256 limit). */
@@ -196,11 +202,14 @@ export type RegistryActions = {
     MYSBT: () => Promise<Address>;
     SUPER_PAYMASTER: () => Promise<Address>;
     GTOKEN_STAKING: () => Promise<Address>;
+    /** @deprecated Removed in the v5.x contract refactor — there is no single-address `reputationSource` getter (sources are now a set). Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link isReputationSource}({ source }) to test membership. */
     reputationSource: () => Promise<Address>;
     isReputationSource: (args: { source: Address }) => Promise<boolean>;
+    /** @deprecated Removed in the v5.x contract refactor — not in the deployed Registry ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     lastReputationEpoch: (args: { user: Address }) => Promise<bigint>;
-    
+
     // View Functions
+    /** @deprecated The deployed Registry ABI has no `roleConfigs` mapping getter — this wrapper now reads the ABI-confirmed `getRoleConfig(roleId)`. Prefer {@link getRoleConfig}. */
     roleConfigs: (args: { roleId: Hex }) => Promise<RoleConfigDetailed>;
     getRoleUserCount: (args: { roleId: Hex }) => Promise<bigint>;
     /**
@@ -233,12 +242,17 @@ export type RegistryActions = {
      */
     getRoleMemberCount: (args: { roleId: Hex, fromBlock?: BlockNumber | BlockTag, toBlock?: BlockNumber | BlockTag }) => Promise<number>;
     getUserRoles: (args: { user: Address }) => Promise<Hex[]>;
+    /** @deprecated Removed in the v5.x contract refactor — Registry storage was slimmed and members are not enumerable by index (no `roleMembers(roleId,index)` getter). Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link getRoleMembers} (event-derived) instead. */
     roleMembers: (args: { roleId: Hex, index: bigint }) => Promise<Address>;
+    /** @deprecated The deployed Registry ABI has no `userRoles(user,index)` indexed getter — this wrapper now reads `getUserRoles(user)` and returns the entry at `index`. Prefer {@link getUserRoles}. */
     userRoles: (args: { user: Address, index: bigint }) => Promise<Hex>;
+    /** @deprecated The deployed Registry ABI has no `userRoleCount` — this wrapper now returns `getUserRoles(user).length`. Prefer {@link getUserRoles}. (NOTE: distinct from {@link getRoleUserCount}, which counts users of a role.) */
     userRoleCount: (args: { user: Address }) => Promise<bigint>;
     creditTierConfig: (args: { tierIndex: bigint }) => Promise<bigint>;
     levelThresholds: (args: { levelIndex: bigint }) => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — Registry has no exit-fee calculator. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use the GTokenStaking `previewExitFee({ user, roleId })` action instead. */
     calculateExitFee: (args: { roleId: Hex, amount: bigint }) => Promise<bigint>;
+    /** @deprecated The deployed Registry ABI has no `roleStakes` mapping getter — this wrapper now reads the ABI-confirmed `getRoleStake(roleId, user)`. Prefer {@link getRoleStake}. */
     roleStakes: (args: { roleId: Hex, user: Address }) => Promise<bigint>;
     
     // Constants (Role IDs)
@@ -256,7 +270,9 @@ export type RegistryActions = {
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
     
     // AccessControl
+    /** @deprecated Removed in the v5.x contract refactor — the Registry dropped the OZ AccessControl surface (no `grantRole`). Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link registerRole} to add a user to a role. */
     grantRole: (args: { roleId: Hex, user: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — the Registry has no admin `revokeRole` (only the caller can self-exit). Throws {@link ErrorCode.NOT_IMPLEMENTED}; a user removes their own role via {@link exitRole}. */
     revokeRole: (args: { roleId: Hex, user: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Version
@@ -287,11 +303,14 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
             validateRequired(roleId, 'roleId');
             validateRequired(config, 'config');
             validateAddress(roleOwner, 'roleOwner');
+            // On-chain fn: configureRole(roleId, config). The legacy `createNewRole` does not
+            // exist; the separate `roleOwner` arg is now the config's `owner` field, so merge it in.
+            const mergedConfig = { ...config, owner: roleOwner };
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'createNewRole',
-                args: [roleId, config, roleOwner],
+                functionName: 'configureRole',
+                args: [roleId, mergedConfig],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -320,11 +339,19 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     async registerRoleSelf({ roleId, data, account }) {
         try {
             validateRequired(roleId, 'roleId');
+            // On-chain fn: registerRole(roleId, user, roleData). The legacy self-register
+            // entrypoint does not exist; "self" means the caller registers their own address,
+            // so resolve the caller from `account` (or the wallet client's bound account).
+            const self =
+                typeof account === 'string'
+                    ? account
+                    : (account as any)?.address ?? (client as any).account?.address;
+            validateAddress(self as Address, 'account');
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'registerRoleSelf',
-                args: [roleId, data],
+                functionName: 'registerRole',
+                args: [roleId, self, data],
                 account: account as any,
                 chain: (client as any).chain
             });
@@ -397,38 +424,28 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async setRoleLockDuration({ roleId, duration, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateRequired(duration, 'duration');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'setRoleLockDuration',
-                args: [roleId, duration],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setRoleLockDuration');
-        }
+    async setRoleLockDuration({ roleId, duration }) {
+        // Removed in the v5.x contract refactor: roleLockDuration is a field of the role config
+        // now, set atomically via configureRole. Validate then throw rather than revert on-chain.
+        validateRequired(roleId, 'roleId');
+        validateRequired(duration, 'duration');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'setRoleLockDuration was removed in the v5.x contract refactor; set ' +
+            'config.roleLockDuration via configureRole({ roleId, config }) instead.'
+        );
     },
 
-    async setRoleOwner({ roleId, newOwner, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(newOwner, 'newOwner');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'setRoleOwner',
-                args: [roleId, newOwner],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setRoleOwner');
-        }
+    async setRoleOwner({ roleId, newOwner }) {
+        // Removed in the v5.x contract refactor: the role owner is a field of the role config
+        // now, set atomically via configureRole. Validate then throw rather than revert on-chain.
+        validateRequired(roleId, 'roleId');
+        validateAddress(newOwner, 'newOwner');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'setRoleOwner was removed in the v5.x contract refactor; set config.owner via ' +
+            'configureRole({ roleId, config }) instead.'
+        );
     },
 
     async exitRole({ roleId, account }) {
@@ -465,18 +482,16 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async roleMetadata({ roleId, user }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleMetadata',
-                args: [roleId, user]
-            }) as Promise<Hex>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleMetadata');
-        }
+        // Removed in the v5.x contract refactor: there is no per-user role-metadata getter
+        // (roleData is no longer stored retrievably). Validate then throw rather than revert.
+        validateRequired(roleId, 'roleId');
+        validateAddress(user, 'user');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'roleMetadata was removed in the v5.x contract refactor; there is no per-user ' +
+            'role-metadata getter. Use getCommunityProfile({ community }) to recover a community\'s ' +
+            'roleData via event back-trace, or getRoleConfig({ roleId }) for the role config.'
+        );
     },
 
     // Community Management
@@ -694,20 +709,18 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async addLevelThreshold({ threshold, account }) {
-        try {
-            validateAmount(threshold, 'threshold');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'addLevelThreshold',
-                args: [threshold],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'addLevelThreshold');
-        }
+    async addLevelThreshold({ threshold }) {
+        // Removed in the v5.x contract refactor: there is no append-one threshold setter, only
+        // the replace-all setLevelThresholds(uint256[]). Renaming this to setLevelThresholds with
+        // a single-element array would DESTRUCTIVELY overwrite all existing thresholds, so we
+        // throw instead. Validate then throw rather than revert on-chain.
+        validateAmount(threshold, 'threshold');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'addLevelThreshold was removed in the v5.x contract refactor; the contract only exposes ' +
+            'the replace-all setLevelThresholds(uint256[]). Read levelThresholds, append your value, ' +
+            'and call setLevelThresholds({ thresholds }).'
+        );
     },
 
     async batchUpdateGlobalReputation({ proposalId, users, newScores, epoch, proof, account }) {
@@ -864,16 +877,13 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async reputationSource() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'reputationSource',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'reputationSource');
-        }
+        // Removed in the v5.x contract refactor: reputation sources are now a set, so there is
+        // no single-address `reputationSource` getter. Throw rather than revert on-chain.
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'reputationSource was removed in the v5.x contract refactor; reputation sources are now ' +
+            'a set. Use isReputationSource({ source }) to test whether an address is a source.'
+        );
     },
 
     async isReputationSource({ source }) {
@@ -891,27 +901,23 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async lastReputationEpoch({ user }) {
-        try {
-            validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'lastReputationEpoch',
-                args: [user]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'lastReputationEpoch');
-        }
+        // Removed in the v5.x contract refactor: not in the deployed Registry ABI.
+        validateAddress(user, 'user');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'lastReputationEpoch was removed in the v5.x contract refactor; it is no longer exposed by the Registry.'
+        );
     },
 
     // View Functions
     async roleConfigs({ roleId }) {
         try {
             validateRequired(roleId, 'roleId');
+            // On-chain fn: getRoleConfig(roleId) — the legacy `roleConfigs` mapping getter was removed.
             const result = await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'roleConfigs',
+                functionName: 'getRoleConfig',
                 args: [roleId]
             }) as any;
 
@@ -988,31 +994,40 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async roleMembers({ roleId, index }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateRequired(index, 'index');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'roleMembers',
-                args: [roleId, index]
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'roleMembers');
-        }
+        // Removed in the v5.x contract refactor: Registry storage was slimmed and members are
+        // NOT enumerable by index (no `roleMembers(roleId,index)` getter). Note: getRoleUserCount
+        // returns a COUNT, not the member at an index, so it is not a substitute. Validate then throw.
+        validateRequired(roleId, 'roleId');
+        validateRequired(index, 'index');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'roleMembers was removed in the v5.x contract refactor; members are not enumerable ' +
+            'on-chain. Use getRoleMembers({ roleId }) (event-derived) to list members.'
+        );
     },
 
     async userRoles({ user, index }) {
         try {
             validateAddress(user, 'user');
             validateRequired(index, 'index');
-            return await (client as PublicClient).readContract({
+            // On-chain fn: getUserRoles(user) -> bytes32[]. The legacy indexed `userRoles(user,index)`
+            // getter was removed, so read the full array and return the requested element.
+            const roles = await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'userRoles',
-                args: [user, index]
-            }) as Promise<Hex>;
+                functionName: 'getUserRoles',
+                args: [user]
+            }) as Hex[];
+            const i = Number(index);
+            if (i < 0 || i >= roles.length) {
+                throw new AAStarError(
+                    ErrorCode.INVALID_PARAMETER,
+                    `userRoles: index ${i} out of range (user has ${roles.length} role(s)).`
+                );
+            }
+            return roles[i];
         } catch (error) {
+            if (error instanceof AAStarError) throw error;
             throw AAStarError.fromViemError(error as Error, 'userRoles');
         }
     },
@@ -1020,12 +1035,16 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     async userRoleCount({ user }) {
         try {
             validateAddress(user, 'user');
-            return await (client as PublicClient).readContract({
+            // On-chain fn: getUserRoles(user) -> bytes32[]. The legacy `userRoleCount` getter was
+            // removed; this is a user's role count = getUserRoles(user).length. (Distinct from
+            // getRoleUserCount, which counts the USERS of a role.)
+            const roles = await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'userRoleCount',
+                functionName: 'getUserRoles',
                 args: [user]
-            }) as Promise<bigint>;
+            }) as Hex[];
+            return BigInt(roles.length);
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'userRoleCount');
         }
@@ -1060,28 +1079,27 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
 
     async calculateExitFee({ roleId, amount }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAmount(amount, 'amount');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'calculateExitFee',
-                args: [roleId, amount]
-            }) as Promise<bigint>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'calculateExitFee');
-        }
+        // Removed in the v5.x contract refactor: the Registry has no exit-fee calculator;
+        // exit-fee math lives in GTokenStaking (previewExitFee). The worklist-suggested
+        // `syncExitFees` is an unrelated WRITE, not a fee getter. Validate then throw.
+        validateRequired(roleId, 'roleId');
+        validateAmount(amount, 'amount');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'calculateExitFee was removed from the Registry in the v5.x contract refactor; use the ' +
+            'GTokenStaking previewExitFee({ user, roleId }) action (returns fee + net amount) instead.'
+        );
     },
 
     async roleStakes({ roleId, user }) {
         try {
             validateRequired(roleId, 'roleId');
             validateAddress(user, 'user');
+            // On-chain fn: getRoleStake(roleId, user) — the legacy `roleStakes` mapping getter was removed.
             return await (client as PublicClient).readContract({
                 address,
                 abi: RegistryABI,
-                functionName: 'roleStakes',
+                functionName: 'getRoleStake',
                 args: [roleId, user]
             }) as Promise<bigint>;
         } catch (error) {
@@ -1166,38 +1184,29 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
     },
     
     // AccessControl
-    async grantRole({ roleId, user, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(user, 'user');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'grantRole',
-                args: [roleId, user],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'grantRole');
-        }
+    async grantRole({ roleId, user }) {
+        // Removed in the v5.x contract refactor: the Registry dropped the OZ AccessControl
+        // surface. Validate then throw rather than revert on-chain.
+        validateRequired(roleId, 'roleId');
+        validateAddress(user, 'user');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'grantRole was removed in the v5.x contract refactor; use registerRole({ roleId, user, data }) ' +
+            'to add a user to a role.'
+        );
     },
 
-    async revokeRole({ roleId, user, account }) {
-        try {
-            validateRequired(roleId, 'roleId');
-            validateAddress(user, 'user');
-            return await (client as any).writeContract({
-                address,
-                abi: RegistryABI,
-                functionName: 'revokeRole',
-                args: [roleId, user],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'revokeRole');
-        }
+    async revokeRole({ roleId, user }) {
+        // Removed in the v5.x contract refactor: there is no admin role-revocation. A user can
+        // only self-exit via exitRole, so dropping the `user` arg and calling exitRole would
+        // silently change semantics (exit the CALLER's role, not `user`'s). Validate then throw.
+        validateRequired(roleId, 'roleId');
+        validateAddress(user, 'user');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'revokeRole was removed in the v5.x contract refactor; there is no admin revocation. ' +
+            'A user removes their own role via exitRole({ roleId }) (self-exit only).'
+        );
     },
 
     // Credit & Reputation (admin)

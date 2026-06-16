@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { MySBTABI } from '../abis/index.js';
 import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 export type SBTMembership = {
     community: Address;
@@ -79,6 +79,7 @@ export type SBTActions = {
     // Activity & Reputation
     recordActivity: (args: { user: Address, account?: Account | Address }) => Promise<Hash>;
     lastActivityTime: (args: { tokenId: bigint, community: Address }) => Promise<bigint>;
+    /** @deprecated Removed in the v5.x contract refactor — MySBT no longer tracks per-week activity (no `weeklyActivity` getter). Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link lastActivityTime} and compare against your week window. */
     weeklyActivity: (args: { tokenId: bigint, community: Address, week: bigint }) => Promise<boolean>;
     reputationCalculator: () => Promise<Address>;
     setReputationCalculator: (args: { calculator: Address, account?: Account | Address }) => Promise<Hash>;
@@ -97,19 +98,23 @@ export type SBTActions = {
     // DAO & Config
     daoMultisig: () => Promise<Address>;
     setDAOMultisig: (args: { multisig: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated Removed in the v5.x contract refactor — MySBT has no `setRegistry` (REGISTRY is immutable). Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     setRegistry: (args: { registry: Address, account?: Account | Address }) => Promise<Hash>;
-    
+
     // Version
     version: () => Promise<string>;
-    
+
     // Constants
     REGISTRY: () => Promise<Address>;
     GTOKEN_STAKING: () => Promise<Address>;
     GTOKEN: () => Promise<Address>;
-    
+
     // Ownership
+    /** @deprecated MySBT is not Ownable — it is governed by `daoMultisig`. The deployed ABI has no `owner`. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link daoMultisig}. */
     owner: () => Promise<Address>;
+    /** @deprecated MySBT is not Ownable — there is no `transferOwnership`. Throws {@link ErrorCode.NOT_IMPLEMENTED}; use {@link setDAOMultisig}. */
     transferOwnership: (args: { newOwner: Address, account?: Account | Address }) => Promise<Hash>;
+    /** @deprecated MySBT is not Ownable — there is no `renounceOwnership`. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     renounceOwnership: (args: { account?: Account | Address }) => Promise<Hash>;
 };
 
@@ -738,19 +743,17 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
     },
 
     async weeklyActivity({ tokenId, community, week }) {
-        try {
-            validateRequired(tokenId, 'tokenId');
-            validateAddress(community, 'community');
-            validateRequired(week, 'week');
-            return await (client as PublicClient).readContract({
-                address,
-                abi: MySBTABI,
-                functionName: 'weeklyActivity',
-                args: [tokenId, community, week]
-            }) as Promise<boolean>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'weeklyActivity');
-        }
+        // Removed in the v5.x contract refactor: MySBT no longer tracks per-week activity
+        // bitmaps (no `weeklyActivity` getter). Validate inputs then throw rather than revert.
+        validateRequired(tokenId, 'tokenId');
+        validateAddress(community, 'community');
+        validateRequired(week, 'week');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'weeklyActivity was removed in the v5.x contract refactor; MySBT no longer tracks ' +
+            'per-week activity. Use lastActivityTime({ tokenId, community }) and compare the ' +
+            'returned timestamp against your week window instead.'
+        );
     },
 
     async reputationCalculator() {
@@ -915,20 +918,15 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }
     },
 
-    async setRegistry({ registry, account }) {
-        try {
-            validateAddress(registry, 'registry');
-            return await (client as any).writeContract({
-                address,
-                abi: MySBTABI,
-                functionName: 'setRegistry',
-                args: [registry],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'setRegistry');
-        }
+    async setRegistry({ registry }) {
+        // Removed in the v5.x contract refactor: MySBT has no `setRegistry` (REGISTRY is
+        // immutable, set at construction). Validate then throw rather than revert on-chain.
+        validateAddress(registry, 'registry');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'setRegistry was removed in the v5.x contract refactor; MySBT.REGISTRY is immutable ' +
+            '(set at construction) and cannot be changed on-chain.'
+        );
     },
 
     // Version
@@ -985,48 +983,29 @@ export const sbtActions = (address: Address) => (client: PublicClient | WalletCl
         }
     },
 
-    // Ownership
+    // Ownership — MySBT is NOT Ownable; it is governed by `daoMultisig`. The OZ Ownable
+    // surface (owner/transferOwnership/renounceOwnership) was removed in the v5.x refactor.
     async owner() {
-        try {
-            return await (client as PublicClient).readContract({
-                address,
-                abi: MySBTABI,
-                functionName: 'owner',
-                args: []
-            }) as Promise<Address>;
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'owner');
-        }
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'owner was removed in the v5.x contract refactor; MySBT is not Ownable. ' +
+            'Use daoMultisig() to read the governing multisig.'
+        );
     },
 
-    async transferOwnership({ newOwner, account }) {
-        try {
-            validateAddress(newOwner, 'newOwner');
-            return await (client as any).writeContract({
-                address,
-                abi: MySBTABI,
-                functionName: 'transferOwnership',
-                args: [newOwner],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'transferOwnership');
-        }
+    async transferOwnership({ newOwner }) {
+        validateAddress(newOwner, 'newOwner');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'transferOwnership was removed in the v5.x contract refactor; MySBT is not Ownable. ' +
+            'Use setDAOMultisig({ multisig }) to rotate the governing multisig.'
+        );
     },
 
-    async renounceOwnership({ account }) {
-        try {
-            return await (client as any).writeContract({
-                address,
-                abi: MySBTABI,
-                functionName: 'renounceOwnership',
-                args: [],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
-        }
+    async renounceOwnership() {
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'renounceOwnership was removed in the v5.x contract refactor; MySBT is not Ownable.'
+        );
     }
 });

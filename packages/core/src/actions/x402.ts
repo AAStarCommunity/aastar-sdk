@@ -1,5 +1,5 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
-import { SuperPaymasterABI } from '../abis/index.js';
+import { X402FacilitatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateDeployedAddress } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
 
@@ -67,8 +67,13 @@ export type X402Actions = {
     setOperatorFacilitatorFee: (args: { operator: Address, fee: bigint, account?: Account | Address }) => Promise<Hash>;
 };
 
+/**
+ * x402 settlement actions. As of SP v5.4 these functions live on the standalone
+ * X402Facilitator contract (NOT SuperPaymaster), so `address` MUST be the deployed
+ * X402Facilitator address — passing the SuperPaymaster address will revert on-chain.
+ */
 export const x402Actions = (address: Address) => (client: PublicClient | WalletClient): X402Actions => {
-    validateDeployedAddress(address, 'SuperPaymaster');
+    validateDeployedAddress(address, 'X402Facilitator');
     return ({
     // --- Settlement ---
     async settleX402Payment({ from, to, asset, amount, validAfter, validBefore, nonce, signature, account }) {
@@ -79,7 +84,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
             validateRequired(nonce, 'nonce');
             validateRequired(signature, 'signature');
             return await (client as any).writeContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'settleX402Payment',
                 args: [from, to, asset, amount, validAfter, validBefore, nonce, signature],
                 account: account as any, chain: (client as any).chain
@@ -96,7 +101,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
             validateAddress(asset, 'asset');
             validateRequired(nonce, 'nonce');
             return await (client as any).writeContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'settleX402PaymentDirect',
                 args: [from, to, asset, amount, nonce],
                 account: account as any, chain: (client as any).chain
@@ -111,7 +116,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
         try {
             validateRequired(nonce, 'nonce');
             return await (client as PublicClient).readContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'x402SettlementNonces',
                 args: [nonce]
             }) as boolean;
@@ -123,7 +128,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
     async facilitatorFeeBPS() {
         try {
             return await (client as PublicClient).readContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'facilitatorFeeBPS'
             }) as bigint;
         } catch (error) {
@@ -136,7 +141,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
             validateAddress(operator, 'operator');
             validateAddress(asset, 'asset');
             return await (client as PublicClient).readContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'facilitatorEarnings',
                 args: [operator, asset]
             }) as bigint;
@@ -149,7 +154,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
         try {
             validateAddress(operator, 'operator');
             return await (client as PublicClient).readContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'operatorFacilitatorFees',
                 args: [operator]
             }) as bigint;
@@ -163,7 +168,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
         try {
             validateAddress(asset, 'asset');
             return await (client as any).writeContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'withdrawFacilitatorEarnings',
                 args: [asset],
                 account: account as any, chain: (client as any).chain
@@ -176,7 +181,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
     async setFacilitatorFeeBPS({ fee, account }) {
         try {
             return await (client as any).writeContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'setFacilitatorFeeBPS',
                 args: [fee],
                 account: account as any, chain: (client as any).chain
@@ -190,7 +195,7 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
         try {
             validateAddress(operator, 'operator');
             return await (client as any).writeContract({
-                address, abi: SuperPaymasterABI,
+                address, abi: X402FacilitatorABI,
                 functionName: 'setOperatorFacilitatorFee',
                 args: [operator, fee],
                 account: account as any, chain: (client as any).chain
