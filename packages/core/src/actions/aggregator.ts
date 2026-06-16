@@ -15,6 +15,12 @@ export type AggregatorActions = {
     getBLSPublicKey: (args: { validator: Address }) => Promise<{ publicKey: BLSG1Point, slot: number, isActive: boolean }>;
     /** Reverse of {@link getBLSPublicKey}: the validator address registered at a given slot. */
     validatorAtSlot: (args: { slot: number }) => Promise<Address>;
+    /** Revoke a validator's registered BLS public key (owner-gated). ABI: revokeBLSPublicKey(address validator). */
+    revokeBLSPublicKey: (args: { validator: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Toggle permissionless (self-service) BLS key registration. ABI: setPermissionlessBLSRegistration(bool enabled). */
+    setPermissionlessBLSRegistration: (args: { enabled: boolean, account?: Account | Address }) => Promise<Hash>;
+    /** Whether permissionless BLS key registration is currently enabled (view). */
+    permissionlessBLSRegistration: () => Promise<boolean>;
 
     // DVT co-sign aggregation (frozen DVT program spec, hub #42)
     /**
@@ -461,6 +467,51 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'renounceOwnership');
+        }
+    },
+
+    async revokeBLSPublicKey({ validator, account }) {
+        try {
+            validateAddress(validator, 'validator');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'revokeBLSPublicKey',
+                args: [validator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'revokeBLSPublicKey');
+        }
+    },
+
+    async setPermissionlessBLSRegistration({ enabled, account }) {
+        try {
+            validateRequired(enabled, 'enabled');
+            return await (client as any).writeContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'setPermissionlessBLSRegistration',
+                args: [enabled],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setPermissionlessBLSRegistration');
+        }
+    },
+
+    async permissionlessBLSRegistration() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'permissionlessBLSRegistration',
+                args: []
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'permissionlessBLSRegistration');
         }
     },
 
