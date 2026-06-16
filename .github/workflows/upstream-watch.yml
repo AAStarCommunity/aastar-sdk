@@ -1,0 +1,161 @@
+# Upstream Sync Watcher
+#
+# The AAStar SDK vendors 4 upstream stacks (AirAccount contracts, SuperPaymaster,
+# KMS = the AirAccount runtime repo, DVT = YetAnotherAA-Validator). When any of
+# them cuts a new release, the SDK's pinned ABIs / addresses / API references go
+# stale and on-chain calls silently break.
+#
+# This workflow is the CI half of the radar. It CANNOT run the full local radar
+# (scripts/upstream/upstream-radar.ts) because that needs the 4 upstream repos
+# checked out side-by-side on a developer machine (ABIs in out/, deployment docs,
+# the openapi.yaml). What CI *can* cheaply do is poll each upstream's latest
+# GitHub release/tag via `gh api`, compare it to the version this SDK pins in the
+# README "Integration Infrastructure" table, and open/update a tracking issue when
+# an upstream has moved ahead.
+#
+# It is ADVISORY ONLY — it never fails the build; it just notifies. A human then
+# runs the local radar (`pnpm run upstream:check` / `--rehearse`) and the sync
+# playbook in docs/UPSTREAM-SYNC.md.
+
+name: upstream-watch
+
+on:
+  schedule:
+    # Daily at 06:00 UTC. Cheap; upstream releases are infrequent.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {} # manual "check now" button
+
+permissions:
+  contents: read
+  issues: write # to open/update the tracking issue
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout SDK (for the README pins)
+        uses: actions/checkout@v4
+
+      - name: Compare upstream latest releases against SDK pins
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # repo  ->  the bolded name used in the README table's first column.
+          # Format: "<github-repo>|<readme-name>"
+          UPSTREAMS=(
+            "AAStarCommunity/airaccount-contract|AirAccount"
+            "AAStarCommunity/SuperPaymaster|SuperPaymaster"
+            "AAStarCommunity/AirAccount|KMS"
+            "AAStarCommunity/YetAnotherAA-Validator|DVT"
+          )
+
+          # Pull the pinned version for a README-table row. Rows look like:
+          #   | **AirAccount** (contracts) | `v0.18.0-beta.2` | ... |
+          # We grab the first backticked cell on the row whose bold name matches.
+          read_pin() {
+            local name="$1"
+            grep -E "^\|\s*\*\*${name}\*\*" README.md \
+              | head -1 \
+              | grep -oE '`[^`]+`' \
+              | head -1 \
+              | tr -d '`'
+          }
+
+          # Normalize a version string for comparison: drop a leading "openapi "
+          # and a leading "v".
+          norm() { sed -E 's/^openapi //I; s/^v//I' <<<"$1" | tr -d '[:space:]'; }
+
+          # Latest release tag of a repo. Prefer the published release; fall back
+          # to the most recent tag (some upstreams tag without a GitHub Release).
+          latest_tag() {
+            local repo="$1" tag
+            tag=$(gh api "repos/${repo}/releases/latest" --jq .tag_name 2>/dev/null || true)
+            if [ -z "${tag}" ] || [ "${tag}" = "null" ]; then
+              tag=$(gh api "repos/${repo}/tags?per_page=1" --jq '.[0].name' 2>/dev/null || true)
+            fi
+            echo "${tag}"
+          }
+
+          drift_lines=""
+          for entry in "${UPSTREAMS[@]}"; do
+            repo="${entry%%|*}"
+            name="${entry##*|}"
+
+            pin="$(read_pin "${name}" || true)"
+            latest="$(latest_tag "${repo}" || true)"
+
+            echo "::group::${name} (${repo})"
+            echo "  SDK pin    : ${pin:-<none>}"
+            echo "  upstream   : ${latest:-<none>}"
+
+            if [ -z "${pin}" ] || [ -z "${latest}" ] || [ "${latest}" = "null" ]; then
+              echo "  -> skipped (could not resolve pin or latest tag)"
+              echo "::endgroup::"
+              continue
+            fi
+
+            if [ "$(norm "${pin}")" != "$(norm "${latest}")" ]; then
+              echo "  -> DRIFT: pin ${pin} != upstream ${latest}"
+              drift_lines="${drift_lines}- **${name}** (\`${repo}\`): SDK pins \`${pin}\`, upstream latest is \`${latest}\`\n"
+            else
+              echo "  -> in-sync"
+            fi
+            echo "::endgroup::"
+          done
+
+          # Expose results to later steps.
+          {
+            echo "drift<<__EOF__"
+            printf '%b' "${drift_lines}"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+        id: compare
+
+      - name: Open or update the drift tracking issue
+        if: ${{ steps.compare.outputs.drift != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TITLE="upstream drift: one or more upstreams have a newer release"
+          BODY=$(cat <<EOF
+          The scheduled \`upstream-watch\` workflow detected that one or more of the
+          4 vendored upstreams has a release newer than this SDK's pinned version:
+
+          $(printf '%b' "${{ steps.compare.outputs.drift }}")
+
+          ## Next steps (advisory)
+
+          1. Pull the upstream repos locally to latest.
+          2. Run the full local radar:
+             \`\`\`bash
+             pnpm run upstream:check        # per-upstream drift report (version/ABI/addresses/API)
+             pnpm run upstream:rehearse     # + gates + concrete upgrade worklist
+             \`\`\`
+          3. Follow the sync playbook in \`docs/UPSTREAM-SYNC.md\` to update the
+             ABIs, version pins, addresses, and API references, then re-run the
+             RELEASE-CHECKLIST gates.
+
+          _This issue is auto-managed by \`.github/workflows/upstream-watch.yml\` and
+          is advisory only — it does not block CI._
+          EOF
+          )
+
+          # Find an existing open issue with this title; update it, else create.
+          existing=$(gh issue list --state open --search "in:title \"upstream drift\"" \
+            --json number,title --jq ".[] | select(.title==\"${TITLE}\") | .number" | head -1 || true)
+
+          if [ -n "${existing}" ]; then
+            echo "Updating existing tracking issue #${existing}"
+            gh issue edit "${existing}" --body "${BODY}"
+            gh issue comment "${existing}" --body "Re-detected on $(date -u +%Y-%m-%dT%H:%MZ) — see updated body."
+          else
+            echo "Opening new tracking issue"
+            gh issue create --title "${TITLE}" --body "${BODY}" --label "upstream-sync" || \
+              gh issue create --title "${TITLE}" --body "${BODY}"
+          fi
