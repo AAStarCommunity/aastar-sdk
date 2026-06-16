@@ -44,7 +44,7 @@ export type {
   EstimateGasParams,
   TransferResult,
 } from "./services/transfer-manager";
-export { BLSSignatureService } from "./services/bls-signature-service";
+export { BLSSignatureService, DvtPendingConfirmationError, isPendingConfirmation } from "./services/bls-signature-service";
 export { GuardChecker } from "./services/guard-checker";
 export { PaymasterManager, PaymasterPriceStalenessError } from "./services/paymaster-manager";
 export { ForceExitService, L2_TYPE } from "./services/force-exit-service";

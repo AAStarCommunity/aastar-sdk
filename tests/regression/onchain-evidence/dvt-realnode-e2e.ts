@@ -53,7 +53,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── Fixed, on-chain-registered inputs (verified, not assumed) ────────────────────────────────
 const AA_ACCOUNT: Address = '0x45Dfe3D5938fDf5a8D30641C3FDA9c9fb1F31ba9';
-const VERIFIER: Address = '0xA9EE4f8A59fCE1B56f9da8e153c3f5F38D3C59ED'; // AAStarBLSAlgorithm (Sepolia)
+const VERIFIER: Address = '0x68c381Ad3A2e3380F22840008027E9Ec2783F43A'; // AAStarBLSAlgorithm (Sepolia, v0.19.0-beta.2)
 const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EntryPoint v0.7
 const NODES = [
     { url: 'http://localhost:3001', nodeId: '0xb548c8e23d2df1158ebb19fe07eb1ac4d9c47f13b3c9d3aed83b206930506a6d' as Hex },

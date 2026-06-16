@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/Status-v0.20.0-green" alt="Status" style="display:inline-block;" />
+  <img src="https://img.shields.io/badge/Status-v0.20.1-green" alt="Status" style="display:inline-block;" />
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
@@ -22,10 +22,10 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 
 | Upstream | Pinned version | Releases | Source of truth in this SDK |
 |---|---|---|---|
-| **AirAccount** (contracts) | `v0.18.0-beta.2` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
-| **SuperPaymaster** | `v5.4.0-beta.1` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
-| **KMS** | `openapi 0.22.0` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
-| **DVT** (validator nodes) | `v1.2.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client; on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps) |
+| **AirAccount** (contracts) | `v0.19.0-beta.2` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
+| **SuperPaymaster** | `v5.4.0-beta.1-redeploy` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
+| **KMS** | `openapi 0.23.0` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
+| **DVT** (validator nodes) | `v1.3.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client (v1.3.0 `pending_confirmation` surfaced via `DvtPendingConfirmationError`); on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps) |
 
 **How consistency is guaranteed — the anchors:**
 1. **ABI files** — every contract ABI is vendored under `packages/core/src/abis/` (ESLint forbids inline `parseAbi`). The doc-coverage checker (`scripts/coverage/check-doc-coverage.ts`) asserts **100%** of each upstream's ABI/API surface has an SDK wrapper, and an ABI-absent-wrapper audit ensures no wrapper calls a function missing from its ABI.
@@ -33,6 +33,8 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 3. **Contract addresses** — `packages/core/src/addresses.ts` (`CANONICAL_ADDRESSES`) is the single source of truth; `pnpm run check:addresses` fails if the per-network `config.*.json` drift from it.
 4. **API docs** — the KMS `openapi.yaml` is the HTTP-layer contract; the coverage checker asserts every endpoint is referenced by a `kms-*` service.
 5. **DVT wire** — `dvtWire.ts` encodes the combined signature in the node/verifier's exact byte format; golden vectors assert it byte-for-byte against live on-chain txs (the node's `buildBlsComponents` + the deployed `AAStarBLSAlgorithm`).
+
+**Detecting drift:** the **upstream radar** (`scripts/upstream/upstream-radar.ts`) diffs all four anchors per upstream against the first-hand local repos and exits non-zero on any drift. Run it as `pnpm run upstream:check` (or `pnpm run upstream:rehearse` for the gate run + upgrade worklist), via the `/upstream-sync` Claude Code slash command, or automatically through the daily `.github/workflows/upstream-watch.yml`. See **[docs/UPSTREAM-SYNC.md](docs/UPSTREAM-SYNC.md)**.
 
 > ⚠️ **Every upstream release REQUIRES a sync PR** (ABIs + version pin + addresses + API docs) before this SDK can claim compatibility. This is a mandatory release step — see **[docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md)**.
 
@@ -271,7 +273,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.19.0)**: `b39aef2a020061c37725d0e80295774dadadc7ff964fef723287bfc71520dbb5`
+**Current Code Integrity Hash (v0.20.1)**: `c88f9c471f1eda77f41a7878810c2bb7677ffe0e12d697fc0346dcd2ce96c56b`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum

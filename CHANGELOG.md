@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.1] - 2026-06-16
+
+Upstream sync (radar-driven, detect→upgrade→test). Four upstreams moved on 2026-06-16:
+
+- **SuperPaymaster** fresh Sepolia redeploy — 17 addresses re-synced + xPNTsToken `setSpenderDailyCapFor`/`spenderDailyCapOverride` (ABI + wrappers + tests).
+- **KMS** openapi 0.22.0 → 0.23.0 (coverage already 100%; pin only).
+- **AirAccount contracts** v0.18.0-beta.2 → v0.19.0-beta.2 — **FULL Sepolia redeploy**: although v0.19 has no new Solidity logic, the `ACCOUNT_VERSION`/`FACTORY_VERSION` bump to `"0.19.0"` changed bytecode and redeployed **all 11 addresses** (factory `0x52c5190E`, impl `0x7fe62d51`, BLS verifier `AAStarBLSAlgorithm 0xA9EE4f8A`→`0x68c381Ad`, aggregator `0x77f7bf95`, validator-router, session-key/force-exit/delegate/extension/agent-registry/calldata-parser). The DVT real-node E2E verifier was repointed to the new `AAStarBLSAlgorithm`.
+- **DVT** (YetAnotherAA-Validator) v1.2.0 → v1.3.0 — new opt-in `POST /signature/sign` `{ status: "pending_confirmation", userOpHash }` response (CONFIRM_ENABLED high-value ops, released via `POST /signature/confirm`). The SDK now surfaces it as a typed `DvtPendingConfirmationError` from the co-sign assembly path instead of silently dropping the node; the full confirm-flow client remains tracked in #82.
+
+Radar fix: the AirAccount address anchor now tracks the **latest upstream CHANGELOG deploy table** (a fixed version-specific E2E doc silently false-greened the v0.19 redeploy); self-contradiction now compares same-version docs only.
+
+Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (2026-06-16 redeploy) / KMS openapi 0.23.0 / DVT v1.3.0.
+
 ## [0.20.0] - 2026-06-16
 
 > Compatible upstream versions: **AirAccount contracts v0.18.0-beta.2 · SuperPaymaster v5.4.0-beta.1 · KMS openapi 0.22.0 · DVT (YetAnotherAA-Validator) v1.2.0**.
@@ -115,7 +128,7 @@ All notable changes to this project will be documented in this file.
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
 ## [0.16.23] - 2026-02-24
-**SDK Code Integrity Hash**: `9b02e91aaae2081b68b8ddfcf4c3dd52d450b4f368a8746b5896e0024e441db7`
+**SDK Code Integrity Hash**: `c88f9c471f1eda77f41a7878810c2bb7677ffe0e12d697fc0346dcd2ce96c56b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:

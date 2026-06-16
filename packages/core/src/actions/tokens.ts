@@ -82,8 +82,12 @@ export type XPNTsTokenActions = ERC20Actions & {
     setMaxSingleTxLimit: (args: { token: Address, newLimit: bigint, account?: Account | Address }) => Promise<Hash>;
     /** Set the per-spender daily burn cap (in whole tokens). State-changing tx → resolves to a tx `Hash`. */
     setSpenderDailyCap: (args: { token: Address, newCap: bigint, account?: Account | Address }) => Promise<Hash>;
+    /** Set a per-spender daily burn-cap OVERRIDE for a specific spender (admin). State-changing tx → resolves to a tx `Hash`. */
+    setSpenderDailyCapFor: (args: { token: Address, spender: Address, newCap: bigint, account?: Account | Address }) => Promise<Hash>;
     maxSingleTxLimit: (args: { token: Address }) => Promise<bigint>;
     spenderDailyCapTokens: (args: { token: Address }) => Promise<bigint>;
+    /** Read a spender's daily-cap override (0 = no override; the global `spenderDailyCapTokens` applies). */
+    spenderDailyCapOverride: (args: { token: Address, spender: Address }) => Promise<bigint>;
     spenderRateLimit: (args: { token: Address, spender: Address }) => Promise<{ dailyBurnTotal: bigint, windowStart: bigint, reserved: bigint }>;
 
     // Debt with op-hash replay protection
@@ -507,6 +511,14 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
                 return await (client as any).writeContract({ address: token!, abi, functionName: 'setSpenderDailyCap', args: [newCap], account: account as any, chain: (client as any).chain });
             } catch (error) { throw AAStarError.fromViemError(error as Error, 'setSpenderDailyCap'); }
         },
+        async setSpenderDailyCapFor({ token = address, spender, newCap, account }: { token?: Address, spender: Address, newCap: bigint, account?: Account | Address }) {
+            try {
+                validateAddress(token!, 'token');
+                validateAddress(spender, 'spender');
+                validateAmount(newCap, 'newCap');
+                return await (client as any).writeContract({ address: token!, abi, functionName: 'setSpenderDailyCapFor', args: [spender, newCap], account: account as any, chain: (client as any).chain });
+            } catch (error) { throw AAStarError.fromViemError(error as Error, 'setSpenderDailyCapFor'); }
+        },
         async maxSingleTxLimit({ token = address } = {}) {
             validateAddress(token!, 'token');
             return (client as PublicClient).readContract({ address: token!, abi, functionName: 'maxSingleTxLimit', args: [] }) as Promise<bigint>;
@@ -514,6 +526,11 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
         async spenderDailyCapTokens({ token = address } = {}) {
             validateAddress(token!, 'token');
             return (client as PublicClient).readContract({ address: token!, abi, functionName: 'spenderDailyCapTokens', args: [] }) as Promise<bigint>;
+        },
+        async spenderDailyCapOverride({ token = address, spender }: { token?: Address, spender: Address }) {
+            validateAddress(token!, 'token');
+            validateAddress(spender, 'spender');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'spenderDailyCapOverride', args: [spender] }) as Promise<bigint>;
         },
         async spenderRateLimit({ token = address, spender }: { token?: Address, spender: Address }) {
             validateAddress(token!, 'token');
