@@ -234,3 +234,29 @@ Read wrappers hit the live SuperPaymaster proxy `0xFb090E82bD041C6e9787eDEbE1D3B
 | `pendingAPNTsTokenEta()` | `1781409784` |
 
 Verified 2026-06-14 via `eth_call` against the live contract.
+
+---
+
+## Beta4 — Agent on-chain lifecycle (Sepolia, 2026-06-16)
+
+Full agent lifecycle driven by the SDK's viem agent actions (`airAccountFactoryActions` +
+`agentRegistryActions`), captured live on Sepolia. Re-runnable:
+`pnpm exec tsx tests/regression/onchain-evidence/beta4-agent-lifecycle-e2e.ts`.
+
+Participants: humanOwner/gas = JASON `0xb5600060…`, guardian2 = ANNI `0xEcAACb91…`,
+agentKey = fresh EOA `0x6257d394…`, deployed agent AirAccount = `0xa64B983d1Ba549FBBA080619E0dB066DfEd80001`.
+
+| Step | tx hash | gasUsed |
+|---|---|---|
+| `createAgentAccount` (factory) | `0x331d5d9a331b87057bb6a6c599c34fd4f92d567c7126c14a57ddc4fb0e94331e` | 1,149,879 |
+| `registerAgent` (via agentAccount.execute) | `0x0ee94102d2f2b97679e3d1a1cef50d3475c4b3dce7f978de268d7c0d8448adf4` | 153,510 |
+| `revokeAgent` (via agentAccount.execute) | `0x68d0c3e7e61bc400a005ffb23799d3e901d8cfd8d0a2f091357c3a09cf4b95f5` | 59,597 |
+
+On-chain read assertions (all passed): `getAgentAddress` predicted == deployed (EIP-1167 clone,
+`owner()`==JASON); `isValidAccount`=true; `isRegisteredAgent`=true → `getHumanOwner`=agentAccount
+→ `getAgentCount`=1 → `getAgents`=[agentWallet]; after revoke `isRegisteredAgent`=false. ~0.00147 ETH.
+
+**Caller rule (verified):** `registerAgent`/`revokeAgent` require `msg.sender` to be a factory-created
+valid AirAccount (`CallerNotAirAccount` otherwise) — routed via the agent account's owner-signed
+`execute(registry, 0, calldata)`. Signature schemes (EIP-191): `ACCEPT_AGENT_KEY` (agentKey),
+`ACCEPT_AGENT_GUARDIAN` (guardian2), `REGISTER_AGENT` (agentWallet).
