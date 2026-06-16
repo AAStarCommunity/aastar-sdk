@@ -269,6 +269,47 @@ describe("KmsManager challenge-binding signing paths", () => {
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
     expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
   });
+
+  it("signP256GrantSessionWithCeremony: GETs begin-grant-session-auth then posts webAuthnAssertion", async () => {
+    const order: string[] = [];
+    mockGet.mockImplementationOnce(async () => {
+      order.push("begin");
+      return beginAuthResponse; // GET /kms/begin-grant-session-auth
+    });
+    mockPost.mockImplementationOnce(async () => {
+      order.push("sign");
+      return { data: { keyId: "key-1", signature: "0xsig" } };
+    });
+
+    await manager.signP256GrantSessionWithCeremony(
+      {
+        keyId: "key-1",
+        chainId: 1,
+        verifyingContract: "0x0",
+        account: "0x0",
+        keyX: "0x0",
+        keyY: "0x0",
+        expiry: 1,
+        contractScope: "0x0",
+        selectorScope: "0x0",
+        velocityLimit: 1,
+        velocityWindow: 1,
+        callTargets: [],
+        selectorAllowlist: [],
+        nonce: 0,
+      },
+      signer
+    );
+
+    expect(order).toEqual(["begin", "sign"]); // challenge fetched BEFORE signing
+    expect(mockGet).toHaveBeenCalledWith("/kms/begin-grant-session-auth", {
+      params: { keyId: "key-1" },
+    });
+    const [path, body] = mockPost.mock.calls[0];
+    expect(path).toBe("/kms/sign-p256-grant-session");
+    expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+  });
 });
 
 // ── Agent / Session service integration (mocked axios) ──────────────────
@@ -311,6 +352,60 @@ describe("Agent + Session ceremony variants", () => {
     expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/kms/create-p256-session-key");
+    expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+  });
+
+  it("refreshAgentCredentialWithCeremony: challenge bound to humanKeyId, posts webAuthnAssertion", async () => {
+    const agent = new KmsAgentService(manager.httpClient);
+    mockPost
+      .mockResolvedValueOnce(beginAuthResponse)
+      .mockResolvedValueOnce({ data: { keyId: "h:0", agentCredential: "jwt2", expiresAt: 1 } });
+
+    await agent.refreshAgentCredentialWithCeremony(
+      { keyId: "h:0" },
+      "human-1",
+      "existing-jwt",
+      signer
+    );
+
+    // begin (POST /BeginAuthentication on the HUMAN key) precedes the signing POST
+    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
+    const [path, body] = mockPost.mock.calls[1];
+    expect(path).toBe("/kms/refresh-agent-credential");
+    expect(body.keyId).toBe("h:0");
+    expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+  });
+
+  it("revokeAgentCredentialWithCeremony: challenge bound to humanKeyId, posts webAuthnAssertion", async () => {
+    const agent = new KmsAgentService(manager.httpClient);
+    mockPost
+      .mockResolvedValueOnce(beginAuthResponse)
+      .mockResolvedValueOnce({ data: { success: true, revokedAt: 1 } });
+
+    await agent.revokeAgentCredentialWithCeremony({ keyId: "h:0" }, "human-1", signer);
+
+    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
+    const [path, body] = mockPost.mock.calls[1];
+    expect(path).toBe("/kms/revoke-agent-credential");
+    expect(body.keyId).toBe("h:0");
+    expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+  });
+
+  it("revokeP256SessionKeyWithCeremony: challenge bound to humanKeyId, posts webAuthnAssertion", async () => {
+    const session = new KmsSessionService(manager.httpClient);
+    mockPost
+      .mockResolvedValueOnce(beginAuthResponse)
+      .mockResolvedValueOnce({ data: { success: true, revokedAt: 1 } });
+
+    await session.revokeP256SessionKeyWithCeremony({ keyId: "h:0" }, "human-1", signer);
+
+    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
+    const [path, body] = mockPost.mock.calls[1];
+    expect(path).toBe("/kms/revoke-p256-session-key");
+    expect(body.keyId).toBe("h:0");
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
     expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
   });
