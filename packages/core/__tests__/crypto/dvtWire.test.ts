@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { concat, type Hex } from 'viem';
+import { concat, decodeFunctionData, type Hex } from 'viem';
 import {
     DVT_TIER_T2,
     DVT_TIER_T3,
@@ -7,6 +8,28 @@ import {
     encodeDVTVerifierProof,
     encodeG2Point,
 } from '../../src/crypto/dvtWire';
+import { EntryPointABI } from '../../src/abis/index';
+
+/**
+ * Checked-in on-chain provenance for the golden vectors below. Each fixture is the RAW
+ * `handleOps` calldata (`tx.input`) of the live Sepolia tx that the C4/C5 wires were lifted
+ * from, fetched via viem `getTransaction`. Decoding the calldata and pulling out
+ * `PackedUserOperation.signature` reproduces the C4_LIVE_WIRE / C5_LIVE_WIRE literals below
+ * independently — so the literals' provenance is verifiable in-repo, not just in a comment.
+ */
+const loadFixture = (name: string): { txHash: Hex; input: Hex } =>
+    JSON.parse(readFileSync(new URL(`./fixtures/${name}-live-tx.json`, import.meta.url), 'utf8'));
+
+/** Decode a fixture's handleOps calldata and return the first op's PackedUserOperation.signature. */
+function fixtureSignature(name: string): Hex {
+    const { input } = loadFixture(name);
+    const { functionName, args } = decodeFunctionData({ abi: EntryPointABI, data: input });
+    if (functionName !== 'handleOps') {
+        throw new Error(`fixture ${name}: expected handleOps calldata, got ${functionName}`);
+    }
+    const ops = args[0] as readonly { signature: Hex }[];
+    return ops[0].signature;
+}
 
 /**
  * DVT combined-signature wire encoders — airaccount-contract #110 authoritative format.
@@ -73,6 +96,25 @@ const C5_LIVE_WIRE =
         '49a90382e61b606e0616d82c4acc26d53ce6efba9c4baa811375539b7f538e0e0665f92726788bb94ef1217efb4a71483110fca445196404c8fdfc118f2c1d1d1b') as Hex;
 
 const hexLen = (h: Hex) => (h.length - 2) / 2;
+
+describe('golden-vector provenance — C4/C5 literals are the LIVE on-chain handleOps signatures', () => {
+    it('C4_LIVE_WIRE equals the PackedUserOperation.signature decoded from the live tx fixture', () => {
+        const onChain = fixtureSignature('c4');
+        // Fixture is the byte-for-byte source of the literal — case-insensitive hex compare.
+        expect(onChain.toLowerCase()).toBe(C4_LIVE_WIRE.toLowerCase());
+        expect(loadFixture('c4').txHash.toLowerCase()).toBe(
+            '0xa73f0d5fead697226bbd6cdfdd64b20c195b6a45d6afcf0b130c5354081eb243'
+        );
+    });
+
+    it('C5_LIVE_WIRE equals the PackedUserOperation.signature decoded from the live tx fixture', () => {
+        const onChain = fixtureSignature('c5');
+        expect(onChain.toLowerCase()).toBe(C5_LIVE_WIRE.toLowerCase());
+        expect(loadFixture('c5').txHash.toLowerCase()).toBe(
+            '0x1a7e351291f1f10ad1638da77ae1a63ff7a84e6d76834b848d524a148879141b'
+        );
+    });
+});
 
 describe('encodeG2Point — EIP-2537 256-byte G2 layout (x.c0@16 / x.c1@80 / y.c0@144 / y.c1@208)', () => {
     it('passes a 256-byte EIP-2537 sig through unchanged (the node already emits this)', () => {
