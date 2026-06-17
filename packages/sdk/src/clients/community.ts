@@ -23,7 +23,9 @@ import {
     type RegistryActions,
     type SBTActions,
     CORE_ADDRESSES,
-    TEST_TOKEN_ADDRESSES
+    TEST_TOKEN_ADDRESSES,
+    getCanonicalAddresses,
+    listSupportedChainIds
 } from '@aastar/core';
 import { RoleDataFactory, RoleIds } from '../utils/roleData.js';
 
@@ -74,7 +76,16 @@ export function createCommunityClient({
     .extend(publicActions)
     .extend(walletActions);
 
-    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...addresses };
+    // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
+    // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.
+    const chainDefaults = getCanonicalAddresses(chain.id);
+    if (!chainDefaults && !addresses) {
+        throw new Error(
+            `[createCommunityClient] No canonical addresses for chainId ${chain.id}. ` +
+            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+        );
+    }
+    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...chainDefaults, ...addresses };
 
     const registryActionsObj = registryActions(usedAddresses.registry)(client as any);
     const sbtActionsObj = sbtActions(usedAddresses.mySBT)(client as any);

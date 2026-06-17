@@ -16,8 +16,10 @@ import {
     type DVTActions,
     type XPNTsFactoryActions,
     type AggregatorActions,
-    CORE_ADDRESSES, 
-    TOKEN_ADDRESSES 
+    CORE_ADDRESSES,
+    TOKEN_ADDRESSES,
+    getCanonicalAddresses,
+    listSupportedChainIds
 } from '@aastar/core';
 
 const ADDRESS_PLACEHOLDER: Address = '0x0000000000000000000000000000000000000000';
@@ -39,7 +41,16 @@ export function createAdminClient({
         .extend(publicActions)
         .extend(walletActions);
         
-    const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...addresses };
+    // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
+    // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.
+    const chainDefaults = getCanonicalAddresses(chain.id);
+    if (!chainDefaults && !addresses) {
+        throw new Error(
+            `[createAdminClient] No canonical addresses for chainId ${chain.id}. ` +
+            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+        );
+    }
+    const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...chainDefaults, ...addresses };
 
     const actions = {
         ...registryActions(usedAddresses.registry)(baseClient as any),
