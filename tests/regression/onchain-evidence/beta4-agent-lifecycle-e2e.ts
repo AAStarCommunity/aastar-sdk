@@ -51,6 +51,7 @@ import {
     AAStarAirAccountV7ABI,
 } from '../../../packages/core/src/index.js';
 import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
+import { resilientSepoliaTransport } from './_rpc.js';
 
 const SEPOLIA_CONTRACTS = CANONICAL_ADDRESSES[11155111];
 
@@ -84,15 +85,15 @@ async function main() {
     const REGISTRY = getAddress(SEPOLIA_CONTRACTS.agentRegistry);
 
     // Single wallet client extended with publicActions → reads + writes + waitForTransactionReceipt.
-    const client = createWalletClient({ account: owner, chain: sepolia, transport: http(rpc) }).extend(publicActions);
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpc) });
+    const client = createWalletClient({ account: owner, chain: sepolia, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
 
     const factory = airAccountFactoryActions(FACTORY)(client as any);
     const registryRead = agentRegistryActions(REGISTRY)(publicClient);
 
     const chainId = BigInt(sepolia.id);
 
-    console.log('🧪 Beta4 agent-lifecycle on-chain evidence (Sepolia v0.18)');
+    console.log('🧪 Beta4 agent-lifecycle on-chain evidence (Sepolia v0.19.0-beta.2)');
     console.log(`   Factory:       ${FACTORY}`);
     console.log(`   AgentRegistry: ${REGISTRY}`);
     console.log(`   Owner (JASON): ${owner.address}`);

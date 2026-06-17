@@ -121,10 +121,19 @@ export class AAStarError extends Error {
       );
     }
     
-    // Default to contract revert
+    // Default to contract revert. Preserve the underlying viem detail
+    // (shortMessage / details) in the message — otherwise a transient RPC hiccup
+    // and a genuine on-chain revert both collapse to an opaque "Contract call failed",
+    // which is impossible to debug. The original error is still attached as the cause.
+    const detail =
+      (error as { shortMessage?: string }).shortMessage ||
+      (error as { details?: string }).details ||
+      error.message;
     return new AAStarError(
       ErrorCode.CONTRACT_REVERT,
-      context ? `Contract call failed: ${context}` : error.message,
+      context
+        ? `Contract call failed: ${context}${detail && detail !== context ? ` — ${detail}` : ''}`
+        : error.message,
       error
     );
   }

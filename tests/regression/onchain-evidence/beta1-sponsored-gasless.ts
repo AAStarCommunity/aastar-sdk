@@ -27,6 +27,7 @@ import { sepolia } from 'viem/chains';
 import { UserOperationBuilder } from '../../../packages/sdk/src/index.js';
 import { PaymasterClient, PaymasterOperator } from '../../../packages/paymaster/src/V4/index.js';
 import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op.js';
+import { resilientSepoliaTransport } from './_rpc.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -90,8 +91,8 @@ async function main() {
     console.log(`   PaymasterV4: ${PAYMASTER_V4}`);
     console.log(`   Gas token:   ${GAS_TOKEN}`);
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpc) });
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(rpc) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: resilientSepoliaTransport() });
     const bundler = createPublicClient({ chain: sepolia, transport: http(bundlerUrl) });
 
     const assertOk = async (label: string, hash: Hex) => {

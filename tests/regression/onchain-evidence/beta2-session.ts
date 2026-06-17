@@ -29,6 +29,12 @@ import {
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { ethers } from 'ethers';
+import { resilientSepoliaTransport } from './_rpc.js';
+// SCENARIO-LEVEL API UNDER TEST: the session-key flows are driven through the SDK's
+// SessionKeyService (it owns the 8-field Session tuple encoding + the on-chain reads),
+// NOT hand-written ABIs. This E2E proves OUR wrapper works on-chain, not just the contract.
+import { SessionKeyService } from '../../../packages/airaccount/src/server/index.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -62,16 +68,9 @@ const FACTORY_ABI = [
 
 const OWNER_ABI = parseAbi(['function owner() external view returns (address)']);
 
-// ── SessionKeyValidator ABI — the Session TUPLE (the fix under test) ─────────
-const SKV_ABI = parseAbi([
-    'struct Session { uint48 expiry; address contractScope; bytes4 selectorScope; bool revoked; uint16 velocityLimit; uint32 velocityWindow; address[] callTargets; bytes4[] selectorAllowlist; }',
-    'function grantSessionDirect(address account, address sessionKey, Session cfg) external',
-    'function revokeSession(address account, address sessionKey) external',
-    'function isSessionActive(address account, address sessionKey) external view returns (bool)',
-    'function grantP256SessionDirect(address account, bytes32 p256KeyX, bytes32 p256KeyY, Session cfg) external',
-    'function revokeP256Session(address account, bytes32 p256KeyX, bytes32 p256KeyY) external',
-    'function isP256SessionActive(address account, bytes32 p256KeyX, bytes32 p256KeyY) external view returns (bool)',
-]);
+// NOTE: the SessionKeyValidator ABI is NO LONGER hand-written here — all session
+// operations (grant/revoke/isActive, secp256k1 + P256) go through the SDK's
+// SessionKeyService, which owns the Session-tuple ABI. That is the scenario under test.
 
 type Step = { label: string; tx?: string };
 const steps: Step[] = [];
@@ -83,8 +82,16 @@ async function main() {
     const pk = (pkRaw.startsWith('0x') ? pkRaw : `0x${pkRaw}`) as Hex;
     const owner = privateKeyToAccount(pk);
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpc) });
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(rpc) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: resilientSepoliaTransport() });
+
+    // The SDK SessionKeyService — the scenario-level API under test. It encodes the
+    // Session tuple + exposes the on-chain reads; the E2E only signs/broadcasts the bytes.
+    const sessionSvc = new SessionKeyService(
+        new ethers.JsonRpcProvider(rpc),
+        SESSION_KEY_VALIDATOR,
+        SESSION_KEY_VALIDATOR, // agent-session validator unused in this flow
+    );
 
     console.log('🧪 Beta2 — Session-key on-chain evidence (secp256k1 + P256)');
     console.log(`   Owner EOA (ANNI): ${owner.address}`);
@@ -145,8 +152,6 @@ async function main() {
         throw new Error(`account.owner() != ANNI — grantSessionDirect would revert NotAccountOwner`);
     }
 
-    const skv = getContract({ address: SESSION_KEY_VALIDATOR, abi: SKV_ABI, client: publicClient });
-
     // Session cfg: future expiry (1 day), ZeroAddress scope, 0x00000000 selector, revoked=false,
     // velocity 0, empty arrays. Must satisfy _validateCfg: 0 < expiry <= now + 7 days.
     const expiry = Math.floor(Date.now() / 1000) + 24 * 3600;
@@ -166,19 +171,24 @@ async function main() {
     const sessionKey = privateKeyToAccount(generatePrivateKey()).address;
     console.log(`   sessionKey: ${sessionKey}`);
 
-    // A.1 grantSessionDirect — Session TUPLE calldata. A flat encoding would revert here.
-    const grantData = encodeFunctionData({ abi: SKV_ABI, functionName: 'grantSessionDirect', args: [account, sessionKey, cfg as any] });
+    // A.1 grantSessionDirect — calldata + Session TUPLE encoded by the SDK SessionKeyService.
+    const grantData = sessionSvc.encodeGrantSession({
+        account, sessionKey, expiry,
+        contractScope: cfg.contractScope, selectorScope: cfg.selectorScope,
+        velocityLimit: cfg.velocityLimit, velocityWindow: cfg.velocityWindow,
+        callTargets: cfg.callTargets as string[], selectorAllowlist: cfg.selectorAllowlist as string[],
+    }) as Hex;
     await send('A.1 grantSessionDirect', grantData);
 
-    // A.2 read isSessionActive → expect true
-    const activeA1 = await skv.read.isSessionActive([account, sessionKey]) as boolean;
+    // A.2 read isSessionActive (via SDK) → expect true
+    const activeA1 = await sessionSvc.isSessionActive(account, sessionKey);
     console.log(`   A.2 isSessionActive(after grant) = ${activeA1}  (expect true)`);
     if (!activeA1) throw new Error('isSessionActive returned false after grant — tuple fix is WRONG');
 
-    // A.3 revokeSession → then read false
-    const revokeData = encodeFunctionData({ abi: SKV_ABI, functionName: 'revokeSession', args: [account, sessionKey] });
+    // A.3 revokeSession → then read false (both via SDK)
+    const revokeData = sessionSvc.encodeRevokeSession(account, sessionKey) as Hex;
     await send('A.3 revokeSession', revokeData);
-    const activeA2 = await skv.read.isSessionActive([account, sessionKey]) as boolean;
+    const activeA2 = await sessionSvc.isSessionActive(account, sessionKey);
     console.log(`   A.3 isSessionActive(after revoke) = ${activeA2}  (expect false)`);
     if (activeA2) throw new Error('isSessionActive still true after revoke');
 
@@ -190,19 +200,24 @@ async function main() {
     console.log(`   keyX: ${keyX}`);
     console.log(`   keyY: ${keyY}`);
 
-    // B.1 grantP256SessionDirect — Session TUPLE calldata.
-    const grantP256Data = encodeFunctionData({ abi: SKV_ABI, functionName: 'grantP256SessionDirect', args: [account, keyX, keyY, cfg as any] });
+    // B.1 grantP256SessionDirect — calldata + Session TUPLE encoded by the SDK SessionKeyService.
+    const grantP256Data = sessionSvc.encodeGrantP256Session({
+        account, keyX, keyY, expiry,
+        contractScope: cfg.contractScope, selectorScope: cfg.selectorScope,
+        velocityLimit: cfg.velocityLimit, velocityWindow: cfg.velocityWindow,
+        callTargets: cfg.callTargets as string[], selectorAllowlist: cfg.selectorAllowlist as string[],
+    }) as Hex;
     await send('B.1 grantP256SessionDirect', grantP256Data);
 
-    // B.2 read isP256SessionActive → expect true
-    const activeB1 = await skv.read.isP256SessionActive([account, keyX, keyY]) as boolean;
+    // B.2 read isP256SessionActive (via SDK) → expect true
+    const activeB1 = await sessionSvc.isP256SessionActive(account, keyX, keyY);
     console.log(`   B.2 isP256SessionActive(after grant) = ${activeB1}  (expect true)`);
     if (!activeB1) throw new Error('isP256SessionActive returned false after grant — tuple fix is WRONG');
 
-    // B.3 revokeP256Session → then read false
-    const revokeP256Data = encodeFunctionData({ abi: SKV_ABI, functionName: 'revokeP256Session', args: [account, keyX, keyY] });
+    // B.3 revokeP256Session → then read false (both via SDK)
+    const revokeP256Data = sessionSvc.encodeRevokeP256Session(account, keyX, keyY) as Hex;
     await send('B.3 revokeP256Session', revokeP256Data);
-    const activeB2 = await skv.read.isP256SessionActive([account, keyX, keyY]) as boolean;
+    const activeB2 = await sessionSvc.isP256SessionActive(account, keyX, keyY);
     console.log(`   B.3 isP256SessionActive(after revoke) = ${activeB2}  (expect false)`);
     if (activeB2) throw new Error('isP256SessionActive still true after revoke');
 
