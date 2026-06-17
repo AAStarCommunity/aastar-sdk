@@ -14,7 +14,7 @@ Factory `0x52c5190E…` (v0.19) · AgentRegistry `0x3895b3E6…` (v0.19) · owne
 | registerAgent | `AgentRegistryService.encodeRegisterAgentViaAccount` | [`0xeed08f22…d709ee`](https://sepolia.etherscan.io/tx/0xeed08f224961186406dacd6aa1511b295a465fea3c860459e7a3c39f60d709ee) | 153,578 |
 | revokeAgent | `AgentRegistryService.encodeRevokeAgentViaAccount` | [`0xcc46a79d…a7895e`](https://sepolia.etherscan.io/tx/0xcc46a79d3f18bd35bdbc9f5f6dc9830082817229fba1f6fdce68a5c8ffa7895e) | 59,652 |
 
-**L2/L3:** `isRegisteredAgent` true→false · `getHumanOwner`==account · `getAgentCount`==1 · `getAgents` contains the wallet.
+**L2 (on-chain, receipt-confirmed):** register & revoke each emitted their AgentRegistry event (`receipts.agent[].logs == 1`). **L3 (runner-asserted during the live run):** `isRegisteredAgent` true→false · `getHumanOwner`==account · `getAgentCount`==1 — these intermediate reads are asserted by the runner at run time, not re-read post-hoc (the account is now revoked).
 
 ## A2 · Gasless sponsorship — `beta1-sponsored-gasless.ts` ✅
 
@@ -40,10 +40,10 @@ AA account `0x45Dfe3D5…` · verifier `AAStarBLSAlgorithm 0x68c381Ad…` (v0.19
 
 | Step | Result |
 |---|---|
-| `KmsManager.createKey(passkeyPubKey)` | KeyId `54c91d0f-f370-4ebb-b206-aaeb18cf8201` (secp256k1, passkey-bound) |
-| `KmsManager.getPublicKey` → derive | address `0x346cfCED9E1875395bb45964c7D04B2958117f1E` |
+| `KmsManager.createKey(passkeyPubKey)` | KeyId `e3d3e7be-b7df-44a4-a1a8-40dfb229f2e1` (secp256k1, passkey-bound) |
+| `KmsManager.getPublicKey` → derive | address `0xD7820A319f1C1772eB2def53D0889ef0195504B2` |
 | `KmsManager.signHashWithCeremony` (software passkey) | 65-byte signature |
-| `recoverAddress(hash, sig)` | `0x346cfCED…` == TEE address ✅ |
+| `recoverAddress(hash, sig)` | `0xD7820A31…` == TEE address ✅ (see `logs/kms-run.txt`) |
 
 ## B1 · Session keys — `beta2-session.ts` ✅
 
@@ -56,7 +56,7 @@ account `0xcc5e669d…`-deployed · validator `0x655ca2e9…` · all via `Sessio
 | grantP256SessionDirect | [`0xa7a62f74…e1c04cd`](https://sepolia.etherscan.io/tx/0xa7a62f746f60fa10b1634c1f6d4c8493279b7b030cdc3254dcf071046e1c04cd) |
 | revokeP256Session | [`0xaa2885a6…6f386a`](https://sepolia.etherscan.io/tx/0xaa2885a64e64c888e0fe213306936dcc2ddd3ed6ea8127278202bf6b796f386a) |
 
-**L3:** `isSessionActive` / `isP256SessionActive` true after grant, false after revoke.
+**L2 (on-chain, receipt-confirmed):** each grant/revoke emitted its SessionKeyValidator event (`receipts.session[].logs == 1`). **L3 (runner-asserted during the live run):** `isSessionActive` / `isP256SessionActive` true after grant, false after revoke — intermediate reads asserted at run time, not re-read post-hoc.
 
 ## B2 · Social recovery — `beta2-recovery.ts` ✅ (full table: `.beta2-recovery.last.md`)
 
