@@ -52,6 +52,11 @@ import {
 } from '../../../packages/core/src/index.js';
 import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 import { resilientSepoliaTransport } from './_rpc.js';
+import { ethers } from 'ethers';
+// SCENARIO-LEVEL API UNDER TEST: register/revoke are driven through the SDK's AgentRegistryService
+// composed encoders (encodeRegisterAgentViaAccount/encodeRevokeAgentViaAccount — they encode the
+// registry call AND wrap it in the account's execute), not hand-assembled calldata.
+import { AgentRegistryService } from '../../../packages/airaccount/src/server/index.js';
 
 const SEPOLIA_CONTRACTS = CANONICAL_ADDRESSES[11155111];
 
@@ -90,6 +95,8 @@ async function main() {
 
     const factory = airAccountFactoryActions(FACTORY)(client as any);
     const registryRead = agentRegistryActions(REGISTRY)(publicClient);
+    // SDK scenario API for register/revoke (composed: registry call + account.execute wrap).
+    const agentRegistrySvc = new AgentRegistryService(new ethers.JsonRpcProvider(rpc), REGISTRY);
 
     const chainId = BigInt(sepolia.id);
 
@@ -199,16 +206,12 @@ async function main() {
         ));
         const agentWalletSig = await agentKey.signMessage({ message: { raw: regDigest } });
 
-        const registerCalldata = encodeFunctionData({
-            abi: AgentRegistryABI, functionName: 'registerAgent', args: [agentWallet, agentWalletSig],
-        });
+        // SDK scenario API: encodes registerAgent + wraps it in account.execute(registry,0,calldata).
+        const registerViaAccount = agentRegistrySvc.encodeRegisterAgentViaAccount(agentWallet, agentWalletSig) as Hex;
         try {
-            // agentAccount.execute(registry, 0, registerCalldata) — onlyOwnerOrEntryPoint; JASON is owner.
-            const execTx = await client.writeContract({
-                address: agentAccount, abi: AAStarAirAccountV7ABI, functionName: 'execute',
-                args: [REGISTRY, 0n, registerCalldata], account: owner, chain: sepolia,
-            });
-            const ok = await waitOk(execTx, 'registerAgent (via agentAccount.execute)');
+            // Submit the SDK-encoded execute calldata to the agent account (onlyOwnerOrEntryPoint; JASON is owner).
+            const execTx = await client.sendTransaction({ to: agentAccount, data: registerViaAccount, account: owner, chain: sepolia } as any);
+            const ok = await waitOk(execTx, 'registerAgent (via AgentRegistryService.encodeRegisterAgentViaAccount)');
             steps.push({ step: '2. registerAgent', actor: `agentAccount ${agentAccount} (owner JASON)`, tx: execTx, note: ok ? undefined : 'reverted' });
 
             // ── 3. on-chain reads ────────────────────────────────────────────
@@ -241,13 +244,10 @@ async function main() {
         // ── 4. revokeAgent (routed through agentAccount.execute) ─────────────
         const stillReg = await registryRead.isRegisteredAgent({ agentWallet });
         if (stillReg) {
-            const revokeCalldata = encodeFunctionData({ abi: AgentRegistryABI, functionName: 'revokeAgent', args: [agentWallet] });
+            const revokeViaAccount = agentRegistrySvc.encodeRevokeAgentViaAccount(agentWallet) as Hex;
             try {
-                const revTx = await client.writeContract({
-                    address: agentAccount, abi: AAStarAirAccountV7ABI, functionName: 'execute',
-                    args: [REGISTRY, 0n, revokeCalldata], account: owner, chain: sepolia,
-                });
-                const ok = await waitOk(revTx, 'revokeAgent (via agentAccount.execute)');
+                const revTx = await client.sendTransaction({ to: agentAccount, data: revokeViaAccount, account: owner, chain: sepolia } as any);
+                const ok = await waitOk(revTx, 'revokeAgent (via AgentRegistryService.encodeRevokeAgentViaAccount)');
                 steps.push({ step: '4. revokeAgent', actor: `agentAccount ${agentAccount} (owner JASON)`, tx: revTx, note: ok ? undefined : 'reverted' });
                 if (ok) {
                     const isRegAfter = await registryRead.isRegisteredAgent({ agentWallet });

@@ -46,6 +46,27 @@ describe("AgentRegistryService — selectors match @aastar/core JSON ABIs", () =
   });
 });
 
+describe("AgentRegistryService — register/revoke-via-account (composed scenario encoders)", () => {
+  const svc = new AgentRegistryService(ethers.getDefaultProvider(), REGISTRY);
+  const execIface = new ethers.Interface(["function execute(address dest, uint256 value, bytes func)"]);
+
+  it("encodeRegisterAgentViaAccount wraps registerAgent in account.execute(registry, 0, …)", () => {
+    const cd = svc.encodeRegisterAgentViaAccount(AGENT_WALLET, DUMMY_SIG);
+    const [dest, value, func] = execIface.decodeFunctionData("execute", cd);
+    expect((dest as string).toLowerCase()).toBe(REGISTRY.toLowerCase());
+    expect(value).toBe(0n);
+    expect(func).toBe(svc.encodeRegisterAgent(AGENT_WALLET, DUMMY_SIG)); // inner == the SDK registry encoder
+  });
+
+  it("encodeRevokeAgentViaAccount wraps revokeAgent in account.execute(registry, 0, …)", () => {
+    const cd = svc.encodeRevokeAgentViaAccount(AGENT_WALLET);
+    const [dest, value, func] = execIface.decodeFunctionData("execute", cd);
+    expect((dest as string).toLowerCase()).toBe(REGISTRY.toLowerCase());
+    expect(value).toBe(0n);
+    expect(func).toBe(svc.encodeRevokeAgent(AGENT_WALLET));
+  });
+});
+
 describe("AgentRegistryService — calldata encoders", () => {
   let svc: AgentRegistryService;
 
