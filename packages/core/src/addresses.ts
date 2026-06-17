@@ -11,6 +11,8 @@
  * source of truth — do not treat it as canonical here.
  */
 
+import type { Address } from 'viem';
+
 export const CANONICAL_ADDRESSES = {
   // --- Optimism (Chain ID: 10) ---
   10: {
@@ -180,3 +182,54 @@ export const CANONICAL_ADDRESSES = {
 
 export type CanonicalAddresses = (typeof CANONICAL_ADDRESSES)[keyof typeof CANONICAL_ADDRESSES];
 export type SupportedChainId = keyof typeof CANONICAL_ADDRESSES;
+
+/**
+ * Chain IDs that have a canonical address book in {@link CANONICAL_ADDRESSES}.
+ *
+ * @example
+ * ```ts
+ * listSupportedChainIds(); // [10, 11155111, 11155420]
+ * ```
+ */
+export function listSupportedChainIds(): number[] {
+  return Object.keys(CANONICAL_ADDRESSES).map(Number);
+}
+
+/** True if {@link CANONICAL_ADDRESSES} has an entry for `chainId`. */
+export function isSupportedChainId(chainId: number): chainId is SupportedChainId {
+  return Object.prototype.hasOwnProperty.call(CANONICAL_ADDRESSES, chainId);
+}
+
+/**
+ * Resolve the canonical contract address book for a chain, keyed by `chainId`,
+ * normalized to the key names the role-based client factories expect.
+ *
+ * The canonical table uses `staking` / `sbt`; the historical client factories
+ * (and many consumers) reference `gTokenStaking` / `mySBT`. This helper returns
+ * the canonical set plus those aliases so a single object satisfies both, which
+ * is what makes `createEndUserClient({ chain })` resolve addresses automatically
+ * — no manual `addresses` needed for any supported chain.
+ *
+ * @param chainId - EVM chain id (e.g. 10 = Optimism, 11155111 = Sepolia).
+ * @returns The normalized address record, or `undefined` if the chain has no
+ *          canonical entry (caller must then pass `addresses` explicitly).
+ *
+ * @example
+ * ```ts
+ * import { optimism } from 'viem/chains';
+ * const addrs = getCanonicalAddresses(optimism.id); // chainId 10
+ * addrs?.registry; addrs?.mySBT; // alias of `sbt`
+ * ```
+ */
+export function getCanonicalAddresses(
+  chainId: number,
+): (CanonicalAddresses & { gTokenStaking: Address; mySBT: Address }) | undefined {
+  if (!isSupportedChainId(chainId)) return undefined;
+  const a = CANONICAL_ADDRESSES[chainId];
+  return {
+    ...a,
+    // Aliases bridging the canonical table's key names to the client factories'.
+    gTokenStaking: a.staking as Address,
+    mySBT: a.sbt as Address,
+  };
+}

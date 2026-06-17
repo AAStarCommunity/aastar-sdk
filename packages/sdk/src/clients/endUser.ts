@@ -8,9 +8,11 @@ import {
     type SBTActions, 
     type SuperPaymasterActions, 
     type PaymasterActions,
-    CORE_ADDRESSES, 
+    CORE_ADDRESSES,
     TOKEN_ADDRESSES,
     TEST_ACCOUNT_ADDRESSES,
+    getCanonicalAddresses,
+    listSupportedChainIds,
     RegistryABI
 } from '@aastar/core';
 
@@ -94,9 +96,16 @@ export function createEndUserClient({
     .extend(publicActions)
     .extend(walletActions);
 
-    const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...addresses };
-    console.log('   SDK Debug: simpleAccountFactory from usedAddresses:', (usedAddresses as any).simpleAccountFactory);
-    console.log('   SDK Debug: process.env.SIMPLE_ACCOUNT_FACTORY:', process.env.SIMPLE_ACCOUNT_FACTORY);
+    // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
+    // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.
+    const chainDefaults = getCanonicalAddresses(chain.id);
+    if (!chainDefaults && !addresses) {
+        throw new Error(
+            `[createEndUserClient] No canonical addresses for chainId ${chain.id}. ` +
+            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+        );
+    }
+    const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };
 
     const actions = {
         ...registryActions(usedAddresses.registry)(client as any),

@@ -15,7 +15,9 @@ import {
     type PaymasterActions,
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES,
-    TEST_ACCOUNT_ADDRESSES
+    TEST_ACCOUNT_ADDRESSES,
+    getCanonicalAddresses,
+    listSupportedChainIds
 } from '@aastar/core';
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
@@ -74,7 +76,16 @@ export function createOperatorClient({
     .extend(publicActions)
     .extend(walletActions);
 
-    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...addresses };
+    // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
+    // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.
+    const chainDefaults = getCanonicalAddresses(chain.id);
+    if (!chainDefaults && !addresses) {
+        throw new Error(
+            `[createOperatorClient] No canonical addresses for chainId ${chain.id}. ` +
+            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+        );
+    }
+    const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };
 
     const spActions = superPaymasterActions(usedAddresses.superPaymaster)(client as any);
     const regActions = registryActions(usedAddresses.registry)(client as any);
