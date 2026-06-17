@@ -20,7 +20,7 @@
     "web3"
   ],
   "author": "AAstar Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@aastar/core": "workspace:*",
     "viem": "2.43.3"

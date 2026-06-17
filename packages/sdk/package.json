@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.20.3",
+  "version": "0.20.4",
   "description": "All-in-one TypeScript SDK for the AAStar Protocol / Mycelium Network — ERC-4337 account abstraction, gasless transactions, SuperPaymaster gas sponsorship, KMS WebAuthn passkeys, BLS aggregate signatures, multi-chain (Optimism + Ethereum) community economies & reputation. Single bundled package with subpath exports.",
   "keywords": [
     "erc-4337",
@@ -31,7 +31,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,7 +1,7 @@
 {
   "name": "@aastar/monorepo",
   "version": "0.20.1",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "workspaces": [
