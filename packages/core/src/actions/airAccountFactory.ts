@@ -9,6 +9,11 @@ export type AirAccountFactoryActions = {
     getAddressWithChainId: (args: { owner: Address, salt: bigint, config: InitConfig }) => Promise<{ account: Address, chainQualified: Hex }>;
     // CREATE2 address prediction using factory defaults (guard, validator, dailyLimit).
     getAddressWithDefaults: (args: { owner: Address, salt: bigint, guard: Address, validator: Address, dailyLimit: bigint }) => Promise<Address>;
+    // getAddress(owner, salt, config) -> CREATE2 prediction of a (non-agent) AirAccount.
+    getAddress: (args: { owner: Address, salt: bigint, config: InitConfig }) => Promise<Address>;
+    // createAccount(owner, salt, config) -> deploys a (non-agent) AirAccount and returns its address.
+    // Optional EIP-1559 fee overrides (some networks need an explicit priority tip).
+    createAccount: (args: { owner: Address, salt: bigint, config: InitConfig, account?: Account | Address, maxFeePerGas?: bigint, maxPriorityFeePerGas?: bigint }) => Promise<Hash>;
     // Chain-qualified id for an already-known account address.
     getChainQualifiedAddress: (args: { account: Address }) => Promise<Hex>;
     // Account implementation behind the factory's CREATE2 proxies.
@@ -37,6 +42,8 @@ export type AirAccountFactoryActions = {
         deadline: bigint | number,
         dailyLimit: bigint,
         account?: Account | Address,
+        maxFeePerGas?: bigint,
+        maxPriorityFeePerGas?: bigint,
     }) => Promise<Hash>;
     // setAgentRegistry(address _agentRegistry): factory-admin-only setter for the bound AgentRegistry.
     setAgentRegistry: (args: { agentRegistry: Address, account?: Account | Address }) => Promise<Hash>;
@@ -45,6 +52,31 @@ export type AirAccountFactoryActions = {
 const ABI = AAStarAirAccountFactoryV7ABI;
 
 export const airAccountFactoryActions = (address: Address) => (client: PublicClient | WalletClient): AirAccountFactoryActions => ({
+    async getAddress({ owner, salt, config }) {
+        try {
+            validateAddress(owner, 'owner');
+            validateRequired(config, 'config');
+            return await (client as PublicClient).readContract({
+                address, abi: ABI, functionName: 'getAddress', args: [owner, salt, config]
+            }) as Address;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getAddress');
+        }
+    },
+    async createAccount({ owner, salt, config, account, maxFeePerGas, maxPriorityFeePerGas }) {
+        try {
+            validateAddress(owner, 'owner');
+            validateRequired(config, 'config');
+            return await (client as WalletClient).writeContract({
+                address, abi: ABI, functionName: 'createAccount', args: [owner, salt, config],
+                account: account as any, chain: (client as any).chain,
+                ...(maxFeePerGas !== undefined ? { maxFeePerGas } : {}),
+                ...(maxPriorityFeePerGas !== undefined ? { maxPriorityFeePerGas } : {}),
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createAccount');
+        }
+    },
     async getAddressWithChainId({ owner, salt, config }) {
         try {
             validateAddress(owner, 'owner');
@@ -135,7 +167,7 @@ export const airAccountFactoryActions = (address: Address) => (client: PublicCli
         }
     },
 
-    async createAgentAccount({ agentKey, agentId, guardian2, guardian2Sig, agentKeySig, deadline, dailyLimit, account }) {
+    async createAgentAccount({ agentKey, agentId, guardian2, guardian2Sig, agentKeySig, deadline, dailyLimit, account, maxFeePerGas, maxPriorityFeePerGas }) {
         try {
             validateAddress(agentKey, 'agentKey');
             validateRequired(agentId, 'agentId');
@@ -147,7 +179,9 @@ export const airAccountFactoryActions = (address: Address) => (client: PublicCli
             return await (client as any).writeContract({
                 address, abi: ABI, functionName: 'createAgentAccount',
                 args: [agentKey, agentId, guardian2, guardian2Sig, agentKeySig, deadline, dailyLimit],
-                account: account as any, chain: (client as any).chain
+                account: account as any, chain: (client as any).chain,
+                ...(maxFeePerGas !== undefined ? { maxFeePerGas } : {}),
+                ...(maxPriorityFeePerGas !== undefined ? { maxPriorityFeePerGas } : {}),
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'createAgentAccount');

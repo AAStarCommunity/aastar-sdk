@@ -59,16 +59,20 @@ const AA_SETUP_ABI = parseAbi([
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { ethers } from 'ethers';
-import { resilientSepoliaTransport, resilientSepoliaChain } from './_rpc.js';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
 // SCENARIO-LEVEL API UNDER TEST: weighted-signature governance is driven through the SDK's
 // WeightedSignatureService — it owns the setWeightConfig/proposeWeightChange/approveWeightChange/
 // executeWeightChange encoders + the weightConfig/pendingWeightChange reads. No hand-written governance ABI.
 import { WeightedSignatureService } from '../../../packages/airaccount/src/server/index.js';
+import { publicActions } from 'viem';
+// Account creation + reads also via the SDK (airAccountFactoryActions / airAccountActions) — 100% SDK API.
+import { airAccountFactoryActions, airAccountActions } from '../../../packages/core/src/index.js';
+import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── beta.4 Sepolia addresses ────────────────────────────────────────────────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ALG_ECDSA = 2;
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 const WEIGHT_CHANGE_TIMELOCK = 2n * 24n * 60n * 60n; // 2 days
@@ -131,20 +135,22 @@ async function main() {
     const owner = privateKeyToAccount(pk.startsWith('0x') ? pk : (`0x${pk}` as Hex));
 
     const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
-    const ownerWallet = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() });
+    const ownerWallet = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const factorySvc = airAccountFactoryActions(FACTORY)(ownerWallet);
 
     console.log('🧪 Beta3 weighted-signature governance on-chain evidence (Sepolia)');
     console.log(`   Owner (BOB) EOA: ${owner.address}`);
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
 
     const steps: StepRecord[] = [];
+    const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
 
     const sendVerified = async (
         wallet: ReturnType<typeof createWalletClient>,
         to: Address, data: Hex, label: string, value = 0n,
     ): Promise<Hex> => {
-        const hash = await wallet.sendTransaction({ to, data, value } as any);
-        const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
+        const hash = await wallet.sendTransaction({ to, data, value, ...fees } as any);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 300_000 });
         if (receipt.status !== 'success') throw new Error(`${label} tx reverted: ${hash}`);
         console.log(`   ✅ ${label}: ${hash}  (status=0x1)`);
         return hash;
@@ -159,8 +165,8 @@ async function main() {
     console.log(`   Guardian g2 (slot 1): ${g2.address}`);
 
     // Fund guardians (~0.01 ETH each) sequentially from BOB (same EOA → no nonce race).
-    const fund1 = await sendVerified(ownerWallet, g1.address, '0x', 'Fund guardian g1 (0.01 ETH)', parseEther('0.01'));
-    const fund2 = await sendVerified(ownerWallet, g2.address, '0x', 'Fund guardian g2 (0.01 ETH)', parseEther('0.01'));
+    const fund1 = await sendVerified(ownerWallet, g1.address, '0x', 'Fund guardian g1 (0.02 ETH)', parseEther('0.02'));
+    const fund2 = await sendVerified(ownerWallet, g2.address, '0x', 'Fund guardian g2 (0.02 ETH)', parseEther('0.02'));
     steps.push({ step: 'Fund guardian g1 with 0.01 ETH', actor: `BOB ${owner.address}`, tx: fund1 });
     steps.push({ step: 'Fund guardian g2 with 0.01 ETH', actor: `BOB ${owner.address}`, tx: fund2 });
 
@@ -176,13 +182,17 @@ async function main() {
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique per run
     console.log(`\n   Using salt: ${salt}`);
 
-    const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const account = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    // Address prediction + deployment via the SDK factory action (v0.19 factory), not inline ABI.
+    const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`   Predicted account: ${account}`);
 
-    const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
-    const deployTx = await sendVerified(ownerWallet, FACTORY, deployData, 'Deploy beta.4 account (guardians g1,g2)');
-    steps.push({ step: `Deploy beta.4 account (salt=${salt}, guardians g1,g2)`, actor: `BOB ${owner.address}`, tx: deployTx });
+    const deployTx = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...fees });
+    {
+        const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 300_000 });
+        if (rcpt.status !== 'success') throw new Error('createAccount reverted');
+        console.log(`   ✅ Deploy account (via SDK factory): ${deployTx}`);
+    }
+    steps.push({ step: `Deploy v0.19 account (salt=${salt}, guardians g1,g2)`, actor: `BOB ${owner.address}`, tx: deployTx });
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
@@ -190,13 +200,12 @@ async function main() {
     // The SDK WeightedSignatureService — the scenario-level API under test (bound to the account).
     const weightedSvc = new WeightedSignatureService(account, new ethers.JsonRpcProvider(rpc));
 
-    // Setup-only account reads via the SDK-vendored AIRACCOUNT_ABI (not a hand-written ABI).
-    const rd = (functionName: string, args: any[] = []) =>
-        publicClient.readContract({ address: account, abi: AA_SETUP_ABI, functionName, args });
-    console.log(`   Account owner on-chain:   ${await rd('owner')}`);
-    console.log(`   guardianCount on-chain:   ${await rd('guardianCount')}`);
-    console.log(`   guardians[0] on-chain:    ${await rd('guardians', [0n])}`);
-    console.log(`   guardians[1] on-chain:    ${await rd('guardians', [1n])}`);
+    // Setup-only account reads via the SDK account action (not a hand-written ABI).
+    const acctRead = airAccountActions(account)(publicClient);
+    console.log(`   Account owner on-chain:   ${await acctRead.owner()}`);
+    console.log(`   guardianCount on-chain:   ${await acctRead.guardianCount()}`);
+    console.log(`   guardians[0] on-chain:    ${await acctRead.guardians({ index: 0n })}`);
+    console.log(`   guardians[1] on-chain:    ${await acctRead.guardians({ index: 1n })}`);
 
     // ── 2. OWNER setWeightConfig(cfg1) — first valid config ─────────────────
     // cfg1: weights all < tier1(4); tier2(5)>=tier1; tier3(6)>=tier2. Valid & non-weakening

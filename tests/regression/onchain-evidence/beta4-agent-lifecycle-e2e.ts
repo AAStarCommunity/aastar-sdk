@@ -46,12 +46,13 @@ import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import {
     airAccountFactoryActions,
+    airAccountActions,
     agentRegistryActions,
     AgentRegistryABI,
     AAStarAirAccountV7ABI,
 } from '../../../packages/core/src/index.js';
 import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
-import { resilientSepoliaTransport } from './_rpc.js';
+import { resilientSepoliaTransport, bumpedFees } from './_rpc.js';
 import { ethers } from 'ethers';
 // SCENARIO-LEVEL API UNDER TEST: register/revoke are driven through the SDK's AgentRegistryService
 // composed encoders (encodeRegisterAgentViaAccount/encodeRevokeAgentViaAccount — they encode the
@@ -92,6 +93,7 @@ async function main() {
     // Single wallet client extended with publicActions → reads + writes + waitForTransactionReceipt.
     const client = createWalletClient({ account: owner, chain: sepolia, transport: resilientSepoliaTransport() }).extend(publicActions);
     const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
 
     const factory = airAccountFactoryActions(FACTORY)(client as any);
     const registryRead = agentRegistryActions(REGISTRY)(publicClient);
@@ -171,6 +173,7 @@ async function main() {
             deadline,
             dailyLimit,
             account: owner,
+            ...fees,
         });
         const ok = await waitOk(createTx, 'createAgentAccount');
         steps.push({ step: '1. createAgentAccount', actor: `JASON ${owner.address}`, tx: createTx, note: ok ? undefined : 'reverted' });
@@ -178,7 +181,7 @@ async function main() {
             const code = await publicClient.getBytecode({ address: predicted });
             const hasCode = !!code && code !== '0x';
             console.log(`   Bytecode at predicted address: ${hasCode ? `present (${(code!.length - 2) / 2} bytes)` : 'MISSING'}`);
-            const onChainOwner = await publicClient.readContract({ address: predicted, abi: AAStarAirAccountV7ABI, functionName: 'owner', args: [] }) as Address;
+            const onChainOwner = await airAccountActions(predicted)(publicClient).owner();
             console.log(`   agentAccount.owner() = ${onChainOwner}  (expect JASON ${owner.address})`);
             if (!hasCode) throw new Error('no bytecode at predicted address after createAgentAccount');
             agentAccount = predicted;
@@ -210,7 +213,7 @@ async function main() {
         const registerViaAccount = agentRegistrySvc.encodeRegisterAgentViaAccount(agentWallet, agentWalletSig) as Hex;
         try {
             // Submit the SDK-encoded execute calldata to the agent account (onlyOwnerOrEntryPoint; JASON is owner).
-            const execTx = await client.sendTransaction({ to: agentAccount, data: registerViaAccount, account: owner, chain: sepolia } as any);
+            const execTx = await client.sendTransaction({ to: agentAccount, data: registerViaAccount, account: owner, chain: sepolia, ...fees } as any);
             const ok = await waitOk(execTx, 'registerAgent (via AgentRegistryService.encodeRegisterAgentViaAccount)');
             steps.push({ step: '2. registerAgent', actor: `agentAccount ${agentAccount} (owner JASON)`, tx: execTx, note: ok ? undefined : 'reverted' });
 
@@ -246,7 +249,7 @@ async function main() {
         if (stillReg) {
             const revokeViaAccount = agentRegistrySvc.encodeRevokeAgentViaAccount(agentWallet) as Hex;
             try {
-                const revTx = await client.sendTransaction({ to: agentAccount, data: revokeViaAccount, account: owner, chain: sepolia } as any);
+                const revTx = await client.sendTransaction({ to: agentAccount, data: revokeViaAccount, account: owner, chain: sepolia, ...fees } as any);
                 const ok = await waitOk(revTx, 'revokeAgent (via AgentRegistryService.encodeRevokeAgentViaAccount)');
                 steps.push({ step: '4. revokeAgent', actor: `agentAccount ${agentAccount} (owner JASON)`, tx: revTx, note: ok ? undefined : 'reverted' });
                 if (ok) {

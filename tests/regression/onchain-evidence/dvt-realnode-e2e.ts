@@ -47,6 +47,10 @@ import {
     BLSSigner,
     encodeDVTVerifierProof,
     encodeG2Point,
+    // Reads via the SDK actions (owner / getNonce / verifier validate) — 100% SDK API.
+    airAccountActions,
+    entryPointActions,
+    blsAlgorithmActions,
 } from '@aastar/core';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
@@ -147,11 +151,7 @@ async function main() {
 
     // ── (0) Resolve the owner signer by reading owner() on-chain ──────────────────────────────
     const owner = (await withRpcFallback((c) =>
-        c.readContract({
-            address: AA_ACCOUNT,
-            abi: [{ type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }],
-            functionName: 'owner',
-        })
+        airAccountActions(AA_ACCOUNT)(c).owner()
     )) as Address;
     console.log(`\n[0] AA account ${AA_ACCOUNT}`);
     console.log(`    owner() = ${owner}`);
@@ -175,12 +175,7 @@ async function main() {
 
     // ── (1) Build a minimal ERC-4337 v0.7 PackedUserOperation ─────────────────────────────────
     const nonce = (await withRpcFallback((c) =>
-        c.readContract({
-            address: ENTRY_POINT,
-            abi: EntryPointABI,
-            functionName: 'getNonce',
-            args: [AA_ACCOUNT, 0n],
-        })
+        entryPointActions(ENTRY_POINT)(c).getNonce({ sender: AA_ACCOUNT, key: 0n })
     )) as bigint;
     const userOp: PackedUserOp = {
         sender: AA_ACCOUNT,
@@ -253,7 +248,7 @@ async function main() {
     // ── (7) On-chain verification — the oracle ────────────────────────────────────────────────
     console.log(`\n[7] Calling AAStarBLSAlgorithm.validate(userOpHash, proof) on ${VERIFIER} …`);
     const validateResult = (await withRpcFallback((c) =>
-        c.readContract({ address: VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'validate', args: [userOpHash, proof] })
+        blsAlgorithmActions(VERIFIER)(c).validate({ userOpHash, proof })
     )) as bigint;
     const accepted = validateResult === 0n;
     console.log(`    validate() = ${validateResult}  -> ${accepted ? '0 ✅ VALID (ACCEPTED)' : '≠0 ❌ REJECTED'}`);
@@ -267,12 +262,7 @@ async function main() {
     let negReverted = false;
     try {
         negResult = (await withRpcFallback((c) =>
-            c.readContract({
-                address: VERIFIER,
-                abi: AAStarBLSAlgorithmABI,
-                functionName: 'validate',
-                args: [userOpHash, tamperedProof],
-            })
+            blsAlgorithmActions(VERIFIER)(c).validate({ userOpHash, proof: tamperedProof })
         )) as bigint;
     } catch (e) {
         negReverted = true;

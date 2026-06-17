@@ -36,8 +36,12 @@ const AA_SETUP_ABI = parseAbi([
 ]);
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { publicActions } from 'viem';
 import { ethers } from 'ethers';
-import { resilientSepoliaTransport, resilientSepoliaChain } from './_rpc.js';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
+// Account creation + owner read also via the SDK (airAccountFactoryActions / airAccountActions) — 100% SDK API.
+import { airAccountFactoryActions, airAccountActions } from '../../../packages/core/src/index.js';
+import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 // SCENARIO-LEVEL API UNDER TEST: the social-recovery flow is driven through the SDK's
 // RecoveryService (it owns the addGuardian/proposeRecovery/approveRecovery/executeRecovery
 // encoders + the activeRecovery/guardianCount reads). AIRACCOUNT_ABI (SDK-vendored) is used
@@ -47,7 +51,7 @@ import { RecoveryService } from '../../../packages/airaccount/src/server/index.j
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── beta.4 Sepolia addresses ────────────────────────────────────────────────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ALG_ECDSA = 2;
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 
@@ -89,7 +93,8 @@ async function main() {
     const owner = privateKeyToAccount(pk.startsWith('0x') ? pk : (`0x${pk}` as Hex));
 
     const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
-    const ownerWallet = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() });
+    const ownerWallet = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const factorySvc = airAccountFactoryActions(FACTORY)(ownerWallet);
 
     // The SDK RecoveryService — the scenario-level API under test (encoders + reads).
     const recoverySvc = new RecoveryService(new ethers.JsonRpcProvider(rpc));
@@ -99,13 +104,14 @@ async function main() {
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
 
     const steps: StepRecord[] = [];
+    const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
 
     // Helper: send a tx from a given wallet, wait for receipt, assert status=0x1.
     const sendVerified = async (
         wallet: ReturnType<typeof createWalletClient>,
         to: Address, data: Hex, label: string, value = 0n,
     ): Promise<Hex> => {
-        const hash = await wallet.sendTransaction({ to, data, value } as any);
+        const hash = await wallet.sendTransaction({ to, data, value, ...fees } as any);
         const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
         if (receipt.status !== 'success') throw new Error(`${label} tx reverted: ${hash}`);
         console.log(`   ✅ ${label}: ${hash}  (status=0x1)`);
@@ -143,18 +149,22 @@ async function main() {
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique per run
     console.log(`\n   Using salt: ${salt}`);
 
-    const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const account = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    // Address prediction + deployment via the SDK factory action (v0.19 factory), not inline ABI.
+    const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`   Predicted account: ${account}`);
 
-    const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
-    const deployTx = await sendVerified(ownerWallet, FACTORY, deployData, 'Deploy beta.4 account');
-    steps.push({ step: `Deploy beta.4 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
+    const deployTx = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...fees });
+    {
+        const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 180_000 });
+        if (rcpt.status !== 'success') throw new Error('createAccount reverted');
+        console.log(`   ✅ Deploy account (via SDK factory): ${deployTx}`);
+    }
+    steps.push({ step: `Deploy v0.19 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
-    const onchainOwner = await publicClient.readContract({ address: account, abi: AA_SETUP_ABI, functionName: 'owner' }) as Address;
-    console.log(`   Account owner on-chain: ${onchainOwner}`);
+    const onchainOwner = await airAccountActions(account)(publicClient).owner();
+    console.log(`   Account owner on-chain (via SDK): ${onchainOwner}`);
 
     // ── 2. OWNER addGuardian(g1), addGuardian(g2) — calldata via SDK RecoveryService ──
     const addG1 = await sendVerified(ownerWallet, account, recoverySvc.encodeAddGuardian(g1.address) as Hex, 'addGuardian(g1)');

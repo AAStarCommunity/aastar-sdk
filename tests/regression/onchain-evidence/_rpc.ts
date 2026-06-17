@@ -1,4 +1,4 @@
-import { fallback, http, type Transport, type Chain } from 'viem';
+import { fallback, http, parseGwei, type Transport, type Chain } from 'viem';
 import { sepolia } from 'viem/chains';
 
 /**
@@ -9,9 +9,31 @@ import { sepolia } from 'viem/chains';
  * EOA's nonce queue). This is upstream airaccount-contract RELEASE_CHECKLIST "Known
  * Oversight #7". 2× gives ample headroom so evidence txs confirm promptly.
  */
+/**
+ * Explicit EIP-1559 fees with a real priority tip. viem's chain-level `defaultPriorityFee`
+ * does NOT propagate to writeContract/sendTransaction in this setup (only to the
+ * estimateFeesPerGas read), so every write tx otherwise gets a ~0.001-gwei tip and sits
+ * pending. Pass these explicitly into every send: `sendTransaction({...tx, ...fees})`.
+ */
+export async function bumpedFees(
+  client: { getBlock: () => Promise<{ baseFeePerGas: bigint | null }> },
+): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
+  const block = await client.getBlock();
+  const base = block.baseFeePerGas ?? parseGwei('2');
+  const maxPriorityFeePerGas = parseGwei('3');
+  return { maxPriorityFeePerGas, maxFeePerGas: base * 3n + maxPriorityFeePerGas };
+}
+
 export const resilientSepoliaChain: Chain = {
   ...sepolia,
-  fees: { baseFeeMultiplier: 2 },
+  // Sepolia fee policy: 3× base headroom + a real 3-gwei priority tip. viem's default priority
+  // estimate is ~0.001 gwei, so txs sit pending (and stick the nonce) even when the base fee is
+  // low — a real tip is what gets them mined promptly. `defaultPriorityFee` is the viem knob for
+  // this (a custom `estimateFeesPerGas` did not take effect across the write paths).
+  fees: {
+    baseFeeMultiplier: 3,
+    defaultPriorityFee: parseGwei('3'),
+  },
 };
 
 /**

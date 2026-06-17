@@ -29,8 +29,13 @@ import {
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { publicActions } from 'viem';
 import { ethers } from 'ethers';
-import { resilientSepoliaTransport } from './_rpc.js';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
+// Account creation + owner read also go through the SDK (airAccountFactoryActions / airAccountActions),
+// not inline ABIs — so the WHOLE flow (setup + scenario) is 100% SDK API.
+import { airAccountFactoryActions, airAccountActions } from '../../../packages/core/src/index.js';
+import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 // SCENARIO-LEVEL API UNDER TEST: the session-key flows are driven through the SDK's
 // SessionKeyService (it owns the 8-field Session tuple encoding + the on-chain reads),
 // NOT hand-written ABIs. This E2E proves OUR wrapper works on-chain, not just the contract.
@@ -38,9 +43,9 @@ import { SessionKeyService } from '../../../packages/airaccount/src/server/index
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
-// ── Sepolia addresses ───────────────────────────────────────────────────────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';            // beta.4 factory
-const SESSION_KEY_VALIDATOR: Address = '0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf'; // beta.3, reused by beta.4
+// ── Sepolia addresses (v0.19 stack, from the SDK's CANONICAL source of truth) ──
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory
+const SESSION_KEY_VALIDATOR: Address = CANONICAL_ADDRESSES[11155111].sessionKeyValidator as Address; // v0.19
 const ALG_ECDSA = 2;
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 
@@ -83,7 +88,8 @@ async function main() {
     const owner = privateKeyToAccount(pk);
 
     const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: resilientSepoliaTransport() });
+    const walletClient = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const factorySvc = airAccountFactoryActions(FACTORY)(walletClient);
 
     // The SDK SessionKeyService — the scenario-level API under test. It encodes the
     // Session tuple + exposes the on-chain reads; the E2E only signs/broadcasts the bytes.
@@ -102,9 +108,10 @@ async function main() {
     // Robust to transient RPC broadcast-response timeouts: signs locally and derives the
     // tx hash up front, so a timed-out eth_sendRawTransaction (the raw tx still propagates)
     // is recovered by polling for the receipt rather than aborting the run.
+    const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
     const send = async (label: string, data: Hex, to: Address = SESSION_KEY_VALIDATOR): Promise<string> => {
         const nonce = await publicClient.getTransactionCount({ address: owner.address, blockTag: 'pending' });
-        const request = await walletClient.prepareTransactionRequest({ to, data, nonce });
+        const request = await walletClient.prepareTransactionRequest({ to, data, nonce, ...fees });
         const serialized = await walletClient.signTransaction(request as any);
         const hash = keccak256(serialized);
         try {
@@ -132,21 +139,24 @@ async function main() {
     // Unique salt per run: avoids SessionAlreadyExists and cross-run collisions.
     const salt = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
 
-    const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const account = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    // Account address prediction + deployment via the SDK factory action (not inline ABI).
+    const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`\n── Step 0: deploy beta.4 account (salt=${salt}) ──`);
     console.log(`   Predicted account: ${account}`);
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') {
-        const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
-        await send('createAccount (deploy beta.4 account)', deployData, FACTORY);
+        const deployTx = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...fees });
+        const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 180_000 });
+        console.log(`   ${rcpt.status === 'success' ? '✅' : '❌'} createAccount (deploy beta.4 account): ${deployTx}`);
+        steps.push({ label: 'createAccount (deploy beta.4 account)', tx: deployTx });
+        if (rcpt.status !== 'success') throw new Error('createAccount reverted');
     } else {
         console.log('   Account already deployed (salt reused).');
     }
 
-    // Sanity: confirm the account's owner() == ANNI (grant*Direct requires msg.sender == ownerOf).
-    const onchainOwner = await publicClient.readContract({ address: account, abi: OWNER_ABI, functionName: 'owner' }) as Address;
+    // Sanity: confirm the account's owner() == ANNI via the SDK account action (grant*Direct requires msg.sender == ownerOf).
+    const onchainOwner = await airAccountActions(account)(publicClient).owner();
     console.log(`   account.owner() = ${onchainOwner}  (expect ${owner.address})`);
     if (onchainOwner.toLowerCase() !== owner.address.toLowerCase()) {
         throw new Error(`account.owner() != ANNI — grantSessionDirect would revert NotAccountOwner`);
