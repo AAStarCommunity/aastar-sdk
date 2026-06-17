@@ -3,7 +3,10 @@ export * from '@aastar/account';
 export * from '@aastar/paymaster';
 export * from '@aastar/identity';
 export * from '@aastar/tokens';
-export * from '@aastar/dapp';
+// NOTE: @aastar/dapp (React hooks/components) is intentionally NOT re-exported here.
+// React is an OPTIONAL peer dependency — eagerly re-exporting dapp at the root barrel
+// forces every consumer (including server/Node) to install React just to `import '@aastar/sdk'`.
+// React utilities remain fully available via the dedicated subpath: `@aastar/sdk/dapp`.
 export * from '@aastar/x402';
 export * from '@aastar/channel';
 // export * from '@aastar/enduser'; // Commented to avoid CommunityClient conflict with clients/community.js
