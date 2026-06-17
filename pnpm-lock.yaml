@@ -346,6 +346,25 @@ importers:
 
   packages/sdk:
     dependencies:
+      '@simplewebauthn/browser':
+        specifier: ^13.2.2
+        version: 13.3.0
+      axios:
+        specifier: ^1.12.2
+        version: 1.13.2
+      ethers:
+        specifier: ^6.0.0
+        version: 6.16.0
+      react:
+        specifier: ^18.0.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.0.0
+        version: 18.2.0(react@18.2.0)
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
+    devDependencies:
       '@aastar/account':
         specifier: workspace:*
         version: link:../account
@@ -382,10 +401,9 @@ importers:
       '@aastar/x402':
         specifier: workspace:*
         version: link:../x402
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
-    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.6)(tsx@4.21.0)(typescript@5.7.2)(yaml@2.8.2)
       typescript:
         specifier: 5.7.2
         version: 5.7.2

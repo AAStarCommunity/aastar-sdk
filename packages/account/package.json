@@ -21,5 +21,6 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
-  }
+  },
+  "private": true
 }
