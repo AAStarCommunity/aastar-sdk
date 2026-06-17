@@ -14,32 +14,99 @@ AAstar SDK provides a complete suite of tools to interact with the AAstar Protoc
 
 AAstar SDK 提供了一套完整的工具集用于交互 AAstar 协议。它采用了 **"先检查，后执行"** 的设计理念，帮助开发者构建低错误率、健壮的去中心化应用。
 
-### Core Modules | 核心模块
+> **📦 Single-package since v0.20.x | 自 v0.20.x 起单包发布**
+> Everything ships in ONE package — `@aastar/sdk` — with **subpath exports** that preserve the
+> original module structure. The legacy split packages (`@aastar/core`, `@aastar/account`,
+> `@aastar/paymaster`, `@aastar/identity`, `@aastar/tokens`, `@aastar/dapp`, `@aastar/x402`,
+> `@aastar/channel`, `@aastar/enduser`, `@aastar/operator`, `@aastar/admin`, `@aastar/airaccount`)
+> are **deprecated on npm** and now live as subpaths of `@aastar/sdk`.
+> 所有能力合并到 **一个包** `@aastar/sdk`，通过 **子路径导出** 保留原有模块结构；上述老的分包已在 npm 上标记弃用。
 
-- **[`@aastar/community`](https://docs.aastar.io/api/@aastar/community)**: Launch & manage DAOs. (启动和管理 DAO)
-- **[`@aastar/operator`](https://docs.aastar.io/api/@aastar/operator)**: Run Paymasters & earn rewards. (运行 Paymaster 并赚取收益)
-- **[`@aastar/enduser`](https://docs.aastar.io/api/@aastar/enduser)**: Join communities & enjoy gasless txs. (加入社区并享受免 Gas 交易)
-- **[`@aastar/analytics`](https://docs.aastar.io/api/@aastar/analytics)**: Monitor ecosystem data. (监控生态系统数据)
-- **[`@aastar/tokens`](https://docs.aastar.io/api/@aastar/tokens)**: GToken & XPNTs finance tools. (GToken 和 XPNTs 金融工具)
-- **[`@aastar/identity`](https://docs.aastar.io/api/@aastar/identity)**: Reputation & SBT management. (声誉和 SBT 管理)
-- **[`@aastar/account`](https://docs.aastar.io/api/@aastar/account)**: Smart Account (ERC-4337) utilities. (智能账户工具)
-- **[`@aastar/core`](https://docs.aastar.io/api/@aastar/core)**: Shared logic, Roles, and configuration. (共享逻辑、角色和配置)
-- **[`@aastar/paymaster`](https://docs.aastar.io/api/@aastar/paymaster)**: Low-level Paymaster interactions. (低层级 Paymaster 交互)
-- **[`@aastar/dapp`](https://docs.aastar.io/api/@aastar/dapp)**: Pre-built UI components and React hooks. (预建 UI 组件和 React hooks)
-- **[`@aastar/airaccount`](https://www.npmjs.com/package/@aastar/airaccount)**: ERC-4337 smart accounts with KMS WebAuthn passkeys, BLS aggregate signatures, and tiered signature routing for AI agents & dApps. (面向 AI Agent 的 ERC-4337 智能账户，支持 KMS Passkey 认证与 BLS 聚合签名)
+### Modules (now subpaths) | 模块（现为子路径）
+
+| Import | Functionality (功能) |
+|---|---|
+| `@aastar/sdk` | Umbrella: re-exports everything + role-based client factories (总入口 + 角色客户端) |
+| `@aastar/sdk/core` | Shared logic, Roles, ABIs, **per-chain addresses** (共享逻辑、角色、ABI、多链地址) |
+| `@aastar/sdk/account` | Smart Account (ERC-4337) utilities (智能账户工具) |
+| `@aastar/sdk/paymaster` | SuperPaymaster middleware, gas sponsorship (代付中间件) |
+| `@aastar/sdk/identity` | Reputation, SBT, credit limits (声誉、SBT、信用额度) |
+| `@aastar/sdk/tokens` | GToken & xPNTs finance tools (代币金融工具) |
+| `@aastar/sdk/dapp` | React components & hooks — **requires `react` peer dep** (React 组件与 hooks) |
+| `@aastar/sdk/x402` | x402 settlement (x402 结算) |
+| `@aastar/sdk/channel` | Micro-payment channels (微支付通道) |
+| `@aastar/sdk/enduser` · `/operator` · `/admin` | Role lifecycle workflows (角色生命周期) |
+| `@aastar/sdk/airaccount` | KMS WebAuthn passkeys, BLS aggregate signatures, tiered ERC-4337 accounts (Passkey + BLS + 分层签名) |
+
+> ⚠️ **`react` / `react-dom` are optional peer deps.** They're only needed for the `@aastar/sdk/dapp`
+> subpath. The root `import '@aastar/sdk'` and all non-UI subpaths work in Node/server with no React.
+> React 是可选 peer 依赖，仅 `@aastar/sdk/dapp` 需要；root 及其它子路径在 Node/服务端无需 React。
 
 ---
 
 ## 📦 Installation | 安装
 
 ```bash
-pnpm add @aastar/sdk viem
+pnpm add @aastar/sdk viem ethers
 # or
-npm install @aastar/sdk viem
+npm install @aastar/sdk viem ethers
 
-# For AI Agent / AirAccount features
-pnpm add @aastar/airaccount
+# Only if you use the React UI subpath (@aastar/sdk/dapp):
+pnpm add react react-dom
 ```
+
+> AirAccount / KMS / BLS features are included — no separate install. Import them from `@aastar/sdk/airaccount`.
+> AirAccount / KMS / BLS 能力已内置，无需单独安装，从 `@aastar/sdk/airaccount` 导入即可。
+
+### Importing | 导入方式
+
+```typescript
+// Everything from the root barrel (no React pulled in):
+import { createEndUserClient, createOperatorClient, CANONICAL_ADDRESSES } from '@aastar/sdk';
+
+// …or cherry-pick from a subpath to keep bundles lean:
+import { registryActions } from '@aastar/sdk/core';
+import { KmsManager, P256PasskeySigner } from '@aastar/sdk/airaccount';
+import { useGasless } from '@aastar/sdk/dapp'; // requires react
+```
+
+---
+
+## 🌐 Multi-chain | 多链配置
+
+Contract addresses are keyed by **chainId** in `CANONICAL_ADDRESSES`, so switching chains means
+switching the viem `chain` + `transport` and passing the matching address set.
+合约地址在 `CANONICAL_ADDRESSES` 中按 **chainId** 分组，切链 = 切换 viem `chain` + `transport` 并传入对应链的地址集。
+
+| Network | chainId | Status |
+|---|---|---|
+| Optimism (mainnet) | `10` | ✅ deployed |
+| Sepolia (testnet) | `11155111` | ✅ deployed (primary test target) |
+| OP Sepolia (testnet) | `11155420` | ✅ deployed |
+| Ethereum mainnet | `1` | ⏳ not yet deployed |
+
+```typescript
+import { createEndUserClient, CANONICAL_ADDRESSES } from '@aastar/sdk';
+import { sepolia, optimism } from 'viem/chains';
+import { http } from 'viem';
+
+// Sepolia testnet
+const test = createEndUserClient({
+  chain: sepolia,
+  transport: http(process.env.SEPOLIA_RPC_URL),
+  addresses: CANONICAL_ADDRESSES[11155111],
+});
+
+// Optimism mainnet — same code, just swap chain + transport + address set
+const prod = createEndUserClient({
+  chain: optimism,
+  transport: http('https://mainnet.optimism.io'),
+  addresses: CANONICAL_ADDRESSES[10],
+});
+```
+
+Helpers for RPC URLs and explorer links live in `@aastar/sdk` too:
+`getNetwork(name)`, `getRpcUrl(name)`, `getChainId(name)`, `getTxUrl(name, hash)`, `getAddressUrl(name, addr)`.
 
 ---
 
@@ -61,17 +128,27 @@ pnpm add @aastar/airaccount
 ### 1. Initialize Client | 初始化客户端
 
 ```typescript
-import { createPublicClient, createWalletClient, http } from 'viem';
+import { http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { CommunityClient, OperatorClient } from '@aastar/sdk';
+import { createEndUserClient, createOperatorClient, CANONICAL_ADDRESSES } from '@aastar/sdk';
 
-// 1. Setup VIEM clients
-const publicClient = createPublicClient({ chain: sepolia, transport: http() });
-const walletClient = createWalletClient({ chain: sepolia, transport: http() });
+const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
 
-// 2. Initialize AAstar Clients
-const communityClient = new CommunityClient(publicClient, walletClient);
-const operatorClient = new OperatorClient(publicClient, walletClient);
+// Role-based clients compose viem action factories under the hood.
+const enduser = createEndUserClient({
+  chain: sepolia,
+  transport: http(process.env.SEPOLIA_RPC_URL),
+  account,
+  addresses: CANONICAL_ADDRESSES[11155111],
+});
+
+const operator = createOperatorClient({
+  chain: sepolia,
+  transport: http(process.env.SEPOLIA_RPC_URL),
+  account,
+  addresses: CANONICAL_ADDRESSES[11155111],
+});
 ```
 
 ### 2. "Pre-check" Pattern | "预检查" 模式
@@ -147,17 +224,20 @@ AAstar SDK is built on top of **viem**, ensuring lightweight and type-safe inter
 
 AAstar SDK 基于 **viem** 构建，确保轻量级和类型安全的交互。它将复杂的合约逻辑抽象为直观的业务原语。
 
-| Package | Functionality (功能) |
+All capabilities are bundled into `@aastar/sdk`; the table below maps each former package to its subpath.
+所有能力已打包进 `@aastar/sdk`，下表对应每个旧分包现在的子路径。
+
+| Subpath | Functionality (功能) |
 |---------|---------------------|
-| `@aastar/core` | Shared logic, Roles, RequirementChecker |
-| `@aastar/community` | DAO Registry, XPNTs issuance |
-| `@aastar/operator` | Paymaster ops, Staking management |
-| `@aastar/enduser` | User onboarding, SBT minting |
-| `@aastar/tokens` | Finance, Tokenomics, Approval flows |
-| `@aastar/identity` | Reputation, Credit limits, ZK Proofs |
-| `@aastar/paymaster` | EntryPoint & Paymaster low-level API |
-| `@aastar/dapp` | React Components & Integration Hooks |
-| `@aastar/airaccount` | KMS WebAuthn, BLS Signatures, ERC-4337 Tiered Accounts |
+| `@aastar/sdk/core` | Shared logic, Roles, RequirementChecker, per-chain addresses |
+| `@aastar/sdk/account` | Smart Account (ERC-4337) utilities |
+| `@aastar/sdk/operator` | Paymaster ops, Staking management |
+| `@aastar/sdk/enduser` | User onboarding, SBT minting |
+| `@aastar/sdk/tokens` | Finance, Tokenomics, Approval flows |
+| `@aastar/sdk/identity` | Reputation, Credit limits, ZK Proofs |
+| `@aastar/sdk/paymaster` | EntryPoint & Paymaster low-level API |
+| `@aastar/sdk/dapp` | React Components & Integration Hooks (needs `react`) |
+| `@aastar/sdk/airaccount` | KMS WebAuthn, BLS Signatures, ERC-4337 Tiered Accounts |
 
 ---
 
