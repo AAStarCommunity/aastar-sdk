@@ -4,7 +4,7 @@ The ultimate TypeScript SDK for the AAstar Protocol - a decentralized, community
 AAstar 协议的终极 TypeScript SDK —— 构建去中心化、社区驱动的账户抽象生态系统。
 
 [![npm version](https://img.shields.io/npm/v/@aastar/sdk.svg)](https://www.npmjs.com/package/@aastar/sdk)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ---
 
