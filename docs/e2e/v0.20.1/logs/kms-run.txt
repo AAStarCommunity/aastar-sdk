@@ -1,0 +1,27 @@
+[dotenv@17.2.3] injecting env (33) from .env.sepolia -- tip: ⚙️  enable debug logging with { debug: true }
+🧪 KMS account E2E — create→sign business flow via the SDK (KmsManager) @ https://kms.aastar.io
+   passkey pubkey (P256, uncompressed): 0x04fe9833b5741518fec43aa0…
+
+   1. createKey → KeyId=e3d3e7be-b7df-44a4-a1a8-40dfb229f2e1
+      enabled=true usage=SIGN_VERIFY
+
+   2. getPublicKey → pubkey=0x02d57c7ce9670713ef33cb43… → account address=0xD7820A319f1C1772eB2def53D0889ef0195504B2
+
+   3. signHashWithCeremony → signature=0xfdea9b28fd920b241d118e4a… (65 bytes)
+
+   4. recoverAddress(hash, signature) = 0xD7820A319f1C1772eB2def53D0889ef0195504B2
+      ✅ recovered == TEE address (MATCH)
+
+──────────────────────────── EVIDENCE (KMS create→sign) ────────────────────────────
+   endpoint  : https://kms.aastar.io
+   KeyId     : e3d3e7be-b7df-44a4-a1a8-40dfb229f2e1
+   address   : 0xD7820A319f1C1772eB2def53D0889ef0195504B2
+   message   : "aastar-sdk kms-e2e e3d3e7be-b7df-44a4-a1a8-40dfb229f2e1"
+   hash      : 0x7b462d1e86a5bb671dd6c1a52a7a720fed96b38599c0d9511812b85b0e3b4c15
+   signature : 0xfdea9b28fd920b241d118e4a636214ecc63e598f62a1a22e9e0df835bcc39a853e6d1dac86986dd0afff8aaba8a5dbb9629c836b11578df2410ea268ed05b7d21c
+   recovered : 0xD7820A319f1C1772eB2def53D0889ef0195504B2 ✅
+─────────────────────────────────────────────────────────────────────────────────────
+
+🎉 PASS — SDK-driven KMS create-account + WebAuthn-gated TEE signature verified (recovers to the TEE address).
+
+   ⚠️  deleteKey failed (test key e3d3e7be-b7df-44a4-a1a8-40dfb229f2e1 may need manual cleanup): Request failed with status code 400
