@@ -45,16 +45,34 @@ import * as path from 'path';
 import * as fs from 'fs';
 import {
     createPublicClient, createWalletClient, http, parseEther, formatEther,
-    encodeFunctionData, getContract, decodeErrorResult,
+    encodeFunctionData, getContract, decodeErrorResult, parseAbi,
     type Address, type Hex,
 } from 'viem';
+// Minimal standard account reads + the expected-revert error — NOT the governance scenario
+// ABI (that lives in the SDK WeightedSignatureService). These are test scaffolding only.
+const AA_SETUP_ABI = parseAbi([
+    'function owner() view returns (address)',
+    'function guardianCount() view returns (uint8)',
+    'function guardians(uint256) view returns (address)',
+    'error WeightChangeTimelockNotExpired()',
+]);
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { ethers } from 'ethers';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
+// SCENARIO-LEVEL API UNDER TEST: weighted-signature governance is driven through the SDK's
+// WeightedSignatureService — it owns the setWeightConfig/proposeWeightChange/approveWeightChange/
+// executeWeightChange encoders + the weightConfig/pendingWeightChange reads. No hand-written governance ABI.
+import { WeightedSignatureService } from '../../../packages/airaccount/src/server/index.js';
+import { publicActions } from 'viem';
+// Account creation + reads also via the SDK (airAccountFactoryActions / airAccountActions) — 100% SDK API.
+import { airAccountFactoryActions, airAccountActions } from '../../../packages/core/src/index.js';
+import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── beta.4 Sepolia addresses ────────────────────────────────────────────────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ALG_ECDSA = 2;
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 const WEIGHT_CHANGE_TIMELOCK = 2n * 24n * 60n * 60n; // 2 days
@@ -81,41 +99,9 @@ const FACTORY_ABI = [
       outputs: [{ type: 'address' }] },
 ] as const;
 
-// WeightConfig tuple components (canonical 10-field order from AAStarAgentStorageLayout.sol).
-const WEIGHT_CONFIG_COMPONENTS = [
-    { name: 'passkeyWeight', type: 'uint8' }, { name: 'ecdsaWeight', type: 'uint8' },
-    { name: 'blsWeight', type: 'uint8' }, { name: 'guardian0Weight', type: 'uint8' },
-    { name: 'guardian1Weight', type: 'uint8' }, { name: 'guardian2Weight', type: 'uint8' },
-    { name: '_padding', type: 'uint8' }, { name: 'tier1Threshold', type: 'uint8' },
-    { name: 'tier2Threshold', type: 'uint8' }, { name: 'tier3Threshold', type: 'uint8' },
-] as const;
-
-// Account ABI — weighted-sig governance + guardian reads + custom errors.
-const ACCOUNT_ABI = [
-    { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-    { type: 'function', name: 'guardianCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-    { type: 'function', name: 'guardians', stateMutability: 'view', inputs: [{ name: 'i', type: 'uint256' }], outputs: [{ type: 'address' }] },
-    { type: 'function', name: 'setWeightConfig', stateMutability: 'nonpayable',
-      inputs: [{ name: 'config', type: 'tuple', components: WEIGHT_CONFIG_COMPONENTS }], outputs: [] },
-    { type: 'function', name: 'proposeWeightChange', stateMutability: 'nonpayable',
-      inputs: [{ name: 'proposed', type: 'tuple', components: WEIGHT_CONFIG_COMPONENTS }], outputs: [] },
-    { type: 'function', name: 'approveWeightChange', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-    { type: 'function', name: 'executeWeightChange', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-    { type: 'function', name: 'weightConfig', stateMutability: 'view', inputs: [], outputs: WEIGHT_CONFIG_COMPONENTS },
-    { type: 'function', name: 'pendingWeightChange', stateMutability: 'view', inputs: [], outputs: [
-        { name: 'proposed', type: 'tuple', components: WEIGHT_CONFIG_COMPONENTS },
-        { name: 'proposedAt', type: 'uint256' }, { name: 'approvalBitmap', type: 'uint256' } ] },
-    // Custom errors (for decoding reverts).
-    { type: 'error', name: 'InsecureWeightConfig', inputs: [] },
-    { type: 'error', name: 'WeakeningRequiresProposal', inputs: [] },
-    { type: 'error', name: 'WeightChangePending', inputs: [] },
-    { type: 'error', name: 'NoWeightChangeProposal', inputs: [] },
-    { type: 'error', name: 'WeightChangeAlreadyApproved', inputs: [] },
-    { type: 'error', name: 'WeightChangeNotApproved', inputs: [] },
-    { type: 'error', name: 'WeightChangeTimelockNotExpired', inputs: [] },
-    { type: 'error', name: 'NotOwner', inputs: [] },
-    { type: 'error', name: 'NotGuardian', inputs: [] },
-] as const;
+// NOTE: the weighted-signature governance ABI is NO LONGER hand-written here. All
+// governance ops + reads go through the SDK WeightedSignatureService; the SDK-vendored
+// AIRACCOUNT_ABI decodes the expected revert + the setup-only account reads.
 
 function clean(v?: string): string { return (v ?? '').replace(/^['"]|['"]$/g, ''); }
 function popcount(v: bigint): number { let c = 0; while (v > 0n) { c += Number(v & 1n); v >>= 1n; } return c; }
@@ -132,6 +118,12 @@ function toWC(v: any): WC {
 }
 const fmtWC = (w: WC) =>
     `passkey=${w[0]} ecdsa=${w[1]} bls=${w[2]} g0=${w[3]} g1=${w[4]} g2=${w[5]} _pad=${w[6]} tier1=${w[7]} tier2=${w[8]} tier3=${w[9]}`;
+// WC positional tuple → the SDK WeightConfig object (the service's encoder input).
+const wcToConfig = (w: WC) => ({
+    passkeyWeight: w[0], ecdsaWeight: w[1], blsWeight: w[2],
+    guardian0Weight: w[3], guardian1Weight: w[4], guardian2Weight: w[5],
+    _padding: w[6], tier1Threshold: w[7], tier2Threshold: w[8], tier3Threshold: w[9],
+});
 
 interface StepRecord { step: string; actor: string; tx?: string; note?: string; }
 
@@ -142,21 +134,23 @@ async function main() {
     if (!pk) throw new Error('PRIVATE_KEY_BOB missing in .env.sepolia');
     const owner = privateKeyToAccount(pk.startsWith('0x') ? pk : (`0x${pk}` as Hex));
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpc) });
-    const ownerWallet = createWalletClient({ account: owner, chain: sepolia, transport: http(rpc) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const ownerWallet = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const factorySvc = airAccountFactoryActions(FACTORY)(ownerWallet);
 
     console.log('🧪 Beta3 weighted-signature governance on-chain evidence (Sepolia)');
     console.log(`   Owner (BOB) EOA: ${owner.address}`);
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
 
     const steps: StepRecord[] = [];
+    const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
 
     const sendVerified = async (
         wallet: ReturnType<typeof createWalletClient>,
         to: Address, data: Hex, label: string, value = 0n,
     ): Promise<Hex> => {
-        const hash = await wallet.sendTransaction({ to, data, value } as any);
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const hash = await wallet.sendTransaction({ to, data, value, ...fees } as any);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 300_000 });
         if (receipt.status !== 'success') throw new Error(`${label} tx reverted: ${hash}`);
         console.log(`   ✅ ${label}: ${hash}  (status=0x1)`);
         return hash;
@@ -165,14 +159,14 @@ async function main() {
     // ── Generate two FRESH guardian wallets (guardian slots 0 and 1) ────────
     const g1 = privateKeyToAccount(generatePrivateKey());
     const g2 = privateKeyToAccount(generatePrivateKey());
-    const g1Wallet = createWalletClient({ account: g1, chain: sepolia, transport: http(rpc) });
-    const g2Wallet = createWalletClient({ account: g2, chain: sepolia, transport: http(rpc) });
+    const g1Wallet = createWalletClient({ account: g1, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() });
+    const g2Wallet = createWalletClient({ account: g2, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() });
     console.log(`   Guardian g1 (slot 0): ${g1.address}`);
     console.log(`   Guardian g2 (slot 1): ${g2.address}`);
 
     // Fund guardians (~0.01 ETH each) sequentially from BOB (same EOA → no nonce race).
-    const fund1 = await sendVerified(ownerWallet, g1.address, '0x', 'Fund guardian g1 (0.01 ETH)', parseEther('0.01'));
-    const fund2 = await sendVerified(ownerWallet, g2.address, '0x', 'Fund guardian g2 (0.01 ETH)', parseEther('0.01'));
+    const fund1 = await sendVerified(ownerWallet, g1.address, '0x', 'Fund guardian g1 (0.02 ETH)', parseEther('0.02'));
+    const fund2 = await sendVerified(ownerWallet, g2.address, '0x', 'Fund guardian g2 (0.02 ETH)', parseEther('0.02'));
     steps.push({ step: 'Fund guardian g1 with 0.01 ETH', actor: `BOB ${owner.address}`, tx: fund1 });
     steps.push({ step: 'Fund guardian g2 with 0.01 ETH', actor: `BOB ${owner.address}`, tx: fund2 });
 
@@ -188,32 +182,41 @@ async function main() {
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique per run
     console.log(`\n   Using salt: ${salt}`);
 
-    const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const account = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    // Address prediction + deployment via the SDK factory action (v0.19 factory), not inline ABI.
+    const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`   Predicted account: ${account}`);
 
-    const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
-    const deployTx = await sendVerified(ownerWallet, FACTORY, deployData, 'Deploy beta.4 account (guardians g1,g2)');
-    steps.push({ step: `Deploy beta.4 account (salt=${salt}, guardians g1,g2)`, actor: `BOB ${owner.address}`, tx: deployTx });
+    const deployTx = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...fees });
+    {
+        const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 300_000 });
+        if (rcpt.status !== 'success') throw new Error('createAccount reverted');
+        console.log(`   ✅ Deploy account (via SDK factory): ${deployTx}`);
+    }
+    steps.push({ step: `Deploy v0.19 account (salt=${salt}, guardians g1,g2)`, actor: `BOB ${owner.address}`, tx: deployTx });
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
-    const acct = getContract({ address: account, abi: ACCOUNT_ABI, client: publicClient });
-    console.log(`   Account owner on-chain:   ${await acct.read.owner()}`);
-    console.log(`   guardianCount on-chain:   ${await acct.read.guardianCount()}`);
-    console.log(`   guardians[0] on-chain:    ${await acct.read.guardians([0n])}`);
-    console.log(`   guardians[1] on-chain:    ${await acct.read.guardians([1n])}`);
+
+    // The SDK WeightedSignatureService — the scenario-level API under test (bound to the account).
+    const weightedSvc = new WeightedSignatureService(account, new ethers.JsonRpcProvider(rpc));
+
+    // Setup-only account reads via the SDK account action (not a hand-written ABI).
+    const acctRead = airAccountActions(account)(publicClient);
+    console.log(`   Account owner on-chain:   ${await acctRead.owner()}`);
+    console.log(`   guardianCount on-chain:   ${await acctRead.guardianCount()}`);
+    console.log(`   guardians[0] on-chain:    ${await acctRead.guardians({ index: 0n })}`);
+    console.log(`   guardians[1] on-chain:    ${await acctRead.guardians({ index: 1n })}`);
 
     // ── 2. OWNER setWeightConfig(cfg1) — first valid config ─────────────────
     // cfg1: weights all < tier1(4); tier2(5)>=tier1; tier3(6)>=tier2. Valid & non-weakening
     // vs the all-zero initial config, so setWeightConfig (not propose) is correct.
     const cfg1: WC = [3, 2, 2, 1, 1, 1, 0, 4, 5, 6];
     console.log(`\n   cfg1 (first setWeightConfig): ${fmtWC(cfg1)}`);
-    const setData = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'setWeightConfig', args: [cfg1 as any] });
+    const setData = weightedSvc.encodeSetWeightConfig(wcToConfig(cfg1)) as Hex;
     const setTx = await sendVerified(ownerWallet, account, setData, 'OWNER setWeightConfig(cfg1)');
     steps.push({ step: 'OWNER setWeightConfig(cfg1) — first config', actor: `BOB ${owner.address}`, tx: setTx });
 
-    const wc1 = toWC(await acct.read.weightConfig());
+    const wc1 = toWC(await weightedSvc.getWeightConfig());
     console.log(`   📖 weightConfig() read: ${fmtWC(wc1)}`);
     for (let i = 0; i < 10; i++) if (wc1[i] !== cfg1[i]) throw new Error(`weightConfig field ${i} mismatch: got ${wc1[i]} expected ${cfg1[i]}`);
     console.log('   ✅ weightConfig() matches cfg1.');
@@ -222,14 +225,13 @@ async function main() {
     // cfg2 lowers tier3 from 6 → 5 (_isWeakening true). Still valid: tier3(5)>=tier2(5)>=tier1(4).
     const cfg2: WC = [3, 2, 2, 1, 1, 1, 0, 4, 5, 5];
     console.log(`\n   cfg2 (proposeWeightChange, weakens tier3 6→5): ${fmtWC(cfg2)}`);
-    const propData = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'proposeWeightChange', args: [cfg2 as any] });
+    const propData = weightedSvc.encodeProposeWeightChange(wcToConfig(cfg2)) as Hex;
     const propTx = await sendVerified(ownerWallet, account, propData, 'OWNER proposeWeightChange(cfg2)');
     steps.push({ step: 'OWNER proposeWeightChange(cfg2) — weakening (tier3 6→5)', actor: `BOB ${owner.address}`, tx: propTx });
 
     const readPending = async () => {
-        const [proposed, proposedAt, approvalBitmap] =
-            await acct.read.pendingWeightChange() as readonly [any, bigint, bigint];
-        return { proposed: toWC(proposed), proposedAt, approvalBitmap };
+        const p = await weightedSvc.getPendingWeightChange();
+        return { proposed: toWC(p.proposed), proposedAt: p.proposedAt, approvalBitmap: p.approvalBitmap };
     };
     let pend = await readPending();
     console.log('   📖 pendingWeightChange() read:');
@@ -241,9 +243,9 @@ async function main() {
     console.log('   ✅ pendingWeightChange() recorded cfg2.');
 
     // ── 4. Guardian g1 approveWeightChange() → g2 approveWeightChange() ─────
-    const ap1 = await sendVerified(g1Wallet, account, encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'approveWeightChange', args: [] }), 'g1 approveWeightChange()');
+    const ap1 = await sendVerified(g1Wallet, account, weightedSvc.encodeApproveWeightChange() as Hex, 'g1 approveWeightChange()');
     steps.push({ step: 'Guardian g1 approveWeightChange() (1st approval)', actor: `g1 ${g1.address}`, tx: ap1 });
-    const ap2 = await sendVerified(g2Wallet, account, encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'approveWeightChange', args: [] }), 'g2 approveWeightChange()');
+    const ap2 = await sendVerified(g2Wallet, account, weightedSvc.encodeApproveWeightChange() as Hex, 'g2 approveWeightChange()');
     steps.push({ step: 'Guardian g2 approveWeightChange() (reaches 2-of-3)', actor: `g2 ${g2.address}`, tx: ap2 });
 
     pend = await readPending();
@@ -267,9 +269,8 @@ async function main() {
     console.log('\n   ⏱  Attempting executeWeightChange() immediately (expect timelock revert)...');
     let timelockResult = '';
     try {
-        await publicClient.simulateContract({
-            address: account, abi: ACCOUNT_ABI, functionName: 'executeWeightChange', account: owner.address,
-        });
+        // executeWeightChange calldata encoded by the SDK service; eth_call captures the revert.
+        await publicClient.call({ to: account, data: weightedSvc.encodeExecuteWeightChange() as Hex, account: owner.address });
         throw new Error('executeWeightChange did NOT revert — timelock gate missing!');
     } catch (e: any) {
         let decoded = '';
@@ -283,7 +284,7 @@ async function main() {
             node = node.cause;
         }
         if (!decoded && rawHex) {
-            try { decoded = (decodeErrorResult({ abi: ACCOUNT_ABI, data: rawHex }) as any).errorName; } catch {}
+            try { decoded = (decodeErrorResult({ abi: AA_SETUP_ABI, data: rawHex }) as any).errorName; } catch {}
         }
         const reason = decoded || e?.cause?.shortMessage || e?.shortMessage || e?.message || '';
         if (decoded === 'WeightChangeTimelockNotExpired' || /WeightChangeTimelockNotExpired|timelock/i.test(reason)) {

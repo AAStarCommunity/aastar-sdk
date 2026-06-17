@@ -72,6 +72,7 @@ const SEPOLIA = 11155111;
 const ARGV = process.argv.slice(2);
 const JSON_OUT = ARGV.includes("--json");
 const REHEARSE = ARGV.includes("--rehearse");
+const VERSIONS_OUT = ARGV.includes("--versions");
 const UPSTREAM_FILTER = (() => {
   const i = ARGV.indexOf("--upstream");
   return i >= 0 && ARGV[i + 1] ? ARGV[i + 1].toLowerCase() : null;
@@ -877,6 +878,28 @@ function renderRehearse(): string {
 // Output + exit
 // ---------------------------------------------------------------------------
 const anyDrift = results.some(hasDrift);
+
+if (VERSIONS_OUT) {
+  // Compact, human-verifiable version table: SDK pin vs the upstream's own latest.
+  const rows = results.map((r) => {
+    const vAnchor = r.anchors.find((a) => a.anchor === "version");
+    const mark = vAnchor?.status === "in-sync" ? "✅" : vAnchor?.status === "drift" ? "⚠️ DRIFT" : "·";
+    return { name: r.name, pin: r.pinnedVersion ?? "—", up: r.upstreamVersion ?? "—", mark };
+  });
+  const w = (sel: (x: (typeof rows)[number]) => string, h: string) =>
+    Math.max(h.length, ...rows.map((x) => sel(x).length));
+  const wN = w((x) => x.name, "Upstream");
+  const wP = w((x) => x.pin, "SDK pin");
+  const wU = w((x) => x.up, "Upstream latest");
+  const pad = (s: string, n: number) => s + " ".repeat(n - s.length);
+  console.log(`\n  ${pad("Upstream", wN)}  ${pad("SDK pin", wP)}  ${pad("Upstream latest", wU)}  Match`);
+  console.log(`  ${"─".repeat(wN)}  ${"─".repeat(wP)}  ${"─".repeat(wU)}  ─────`);
+  for (const x of rows) console.log(`  ${pad(x.name, wN)}  ${pad(x.pin, wP)}  ${pad(x.up, wU)}  ${x.mark}`);
+  console.log(
+    `\n  ${anyDrift ? "⚠️  DRIFT — SDK is NOT on all upstream latest; run `pnpm run upstream:check`" : "✅ all four upstreams match their latest"}\n`,
+  );
+  process.exit(anyDrift ? 1 : 0);
+}
 
 if (JSON_OUT) {
   console.log(

@@ -28,5 +28,6 @@
   "devDependencies": {
     "typescript": "5.7.2"
   },
-  "type": "module"
+  "type": "module",
+  "private": true
 }

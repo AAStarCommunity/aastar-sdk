@@ -1,0 +1,44 @@
+[dotenv@17.2.3] injecting env (33) from .env.sepolia -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+═══════════════════════════════════════════════════════════════════════════
+ DVT real-node E2E — SDK-assembled proof vs LIVE on-chain verifier (#63 Phase B)
+═══════════════════════════════════════════════════════════════════════════
+
+[0] AA account 0x45Dfe3D5938fDf5a8D30641C3FDA9c9fb1F31ba9
+    owner() = 0xb5600060e6de5E11D3636731964218E53caadf0E
+    owner signer = PRIVATE_KEY_JASON (0xb5600060e6de5E11D3636731964218E53caadf0E) ✓ matches owner()
+
+[1] PackedUserOperation built (nonce=3, callData=0x, gas fields zero)
+
+[2] EntryPoint.getUserOpHash = 0x6c3f7e18937d0315639ef5bf096027d0ee76ad81cf51c479e352cba442f1ca82
+
+[3] ownerAuth (owner EIP-191 personal_sign) = 0xd49171658b4baa27017231a1… (65 bytes)
+
+[4] Requesting co-signatures from 2 live DVT nodes …
+    http://localhost:3001  nodeId=0xb548c8e23d2df115…  message===userOpHash ✓  sig=256B ✓
+    http://localhost:3002  nodeId=0x7f7e6290d0588435…  message===userOpHash ✓  sig=256B ✓
+
+[5] Aggregated G2 signature (256B EIP-2537) — G2-add === BLSSigner ✓
+    aggSig = 0x00000000000000000000000000000000021c26cc…188554d1
+
+[6] dvtWire.encodeDVTVerifierProof([node1,node2], aggSig) = 320 bytes
+
+[7] Calling AAStarBLSAlgorithm.validate(userOpHash, proof) on 0x68c381Ad3A2e3380F22840008027E9Ec2783F43A …
+    validate() = 0  -> 0 ✅ VALID (ACCEPTED)
+
+[8] Negative control: proof with both nodeIds but only node1's sig …
+    validate(tampered) = 1 -> ≠0 ✅ rejected
+
+┌─────────────────────────── EVIDENCE (DVT #63 Phase B) ───────────────────────────
+│ AA account     : 0x45Dfe3D5938fDf5a8D30641C3FDA9c9fb1F31ba9
+│ owner / signer : 0xb5600060e6de5E11D3636731964218E53caadf0E  (PRIVATE_KEY_JASON)
+│ verifier       : 0x68c381Ad3A2e3380F22840008027E9Ec2783F43A (Sepolia AAStarBLSAlgorithm)
+│ userOpHash     : 0x6c3f7e18937d0315639ef5bf096027d0ee76ad81cf51c479e352cba442f1ca82
+│ nodeId[0]      : 0xb548c8e23d2df1158ebb19fe07eb1ac4d9c47f13b3c9d3aed83b206930506a6d
+│ nodeId[1]      : 0x7f7e6290d0588435c6d12093b420fafc5b4c7ab23c73645ca7186189dca9537c
+│ aggregated sig : 0x00000000000000000000000000000000021c26cc21bbaaa906484732aa4efa44b10492c7328beb34ac8d309e6588fc8cfea6cbed9e72b519f202052adcfe84b20000000000000000000000000000000010d44bd544830affd357d028a1c36db8c4704a4027c6446dfa78d59159de6e02c6f45fa4996c8e15cb370eca3957ef880000000000000000000000000000000006acaae9b2bbe761b725d7781c3d530acebc6cd1d3d75bbb4d56428586603545e362c00fc68963fe1fda75f35161193200000000000000000000000000000000149d434112e4fefe1534f3c32c67eaa7f88ce4937453bbb567022b3e79756b0836a4b45f378ce4ed03099e5a188554d1
+│ proof bytes    : 320
+│ validate()     : 0  = 0 ✅ VALID
+│ neg-control    : 1  ✅ rejected
+└──────────────────────────────────────────────────────────────────────────────────
+
+🎉 PASS — SDK-assembled DVT combined signature ACCEPTED on-chain (validate = 0), negative control rejected.

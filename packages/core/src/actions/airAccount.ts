@@ -36,6 +36,9 @@ export type PendingModuleInstall = {
 
 export type AirAccountActions = {
     // --- Reads ---
+    owner: () => Promise<Address>;
+    guardianCount: () => Promise<number>;
+    guardians: (args: { index: bigint | number }) => Promise<Address>;
     accountId: () => Promise<string>;
     isValidSignature: (args: { hash: Hex, sig: Hex }) => Promise<Hex>;
     requiredTier: (args: { txValue: bigint }) => Promise<number>;
@@ -83,6 +86,21 @@ const ABI = AAStarAirAccountV7ABI;
 
 export const airAccountActions = (address: Address) => (client: PublicClient | WalletClient): AirAccountActions => ({
     // ===== Reads =====
+    async owner() {
+        try {
+            return await (client as PublicClient).readContract({ address, abi: ABI, functionName: 'owner', args: [] }) as Address;
+        } catch (error) { throw AAStarError.fromViemError(error as Error, 'owner'); }
+    },
+    async guardianCount() {
+        try {
+            return Number(await (client as PublicClient).readContract({ address, abi: ABI, functionName: 'guardianCount', args: [] }));
+        } catch (error) { throw AAStarError.fromViemError(error as Error, 'guardianCount'); }
+    },
+    async guardians({ index }) {
+        try {
+            return await (client as PublicClient).readContract({ address, abi: ABI, functionName: 'guardians', args: [BigInt(index)] }) as Address;
+        } catch (error) { throw AAStarError.fromViemError(error as Error, 'guardians'); }
+    },
     async accountId() {
         try {
             return await (client as PublicClient).readContract({

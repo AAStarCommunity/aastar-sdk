@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
+import { AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 
 // Minimal ABI covering the AAStar AgentRegistry contract (SuperPaymaster-facing).
 // Mirrors packages/core/src/abis/AgentRegistry.json. The registry maps agent wallets
@@ -72,6 +72,7 @@ export class AgentRegistryService {
   private readonly contract: ethers.Contract;
   private readonly iface: ethers.Interface;
   private readonly factoryIface: ethers.Interface;
+  private readonly accountIface: ethers.Interface;
   private readonly providerOrSigner: ethers.Provider | ethers.Signer;
 
   /**
@@ -86,6 +87,30 @@ export class AgentRegistryService {
     this.contract = new ethers.Contract(registryAddress, AGENT_REGISTRY_ABI, providerOrSigner);
     this.iface = new ethers.Interface(AGENT_REGISTRY_ABI);
     this.factoryIface = new ethers.Interface(AIRACCOUNT_FACTORY_ABI);
+    this.accountIface = new ethers.Interface(AIRACCOUNT_ABI);
+  }
+
+  // ── Composed register/revoke-via-account scenario encoders ──────────────────
+  // registerAgent/revokeAgent require msg.sender == the agent account, so they are delivered
+  // through the account's execute(registry, 0, calldata). These return the FULL execute
+  // calldata to submit TO the agent account (owner-signed) — the scenario-level entry point.
+
+  /** Encode `account.execute(registry, 0, registerAgent(agentWallet, agentWalletSig))`. */
+  encodeRegisterAgentViaAccount(agentWallet: string, agentWalletSig: string): string {
+    return this.accountIface.encodeFunctionData("execute", [
+      this.registryAddress,
+      0n,
+      this.encodeRegisterAgent(agentWallet, agentWalletSig),
+    ]);
+  }
+
+  /** Encode `account.execute(registry, 0, revokeAgent(agentWallet))`. */
+  encodeRevokeAgentViaAccount(agentWallet: string): string {
+    return this.accountIface.encodeFunctionData("execute", [
+      this.registryAddress,
+      0n,
+      this.encodeRevokeAgent(agentWallet),
+    ]);
   }
 
   // ── AgentRegistry calldata encoders ─────────────────────────────────────────

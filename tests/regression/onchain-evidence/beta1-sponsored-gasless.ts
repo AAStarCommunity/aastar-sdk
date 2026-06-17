@@ -20,18 +20,22 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {
     createPublicClient, createWalletClient, http, parseEther, formatEther, formatUnits,
-    encodeFunctionData, getContract, maxUint256, type Address, type Hex,
+    encodeFunctionData, getContract, maxUint256, publicActions, type Address, type Hex,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { UserOperationBuilder } from '../../../packages/sdk/src/index.js';
 import { PaymasterClient, PaymasterOperator } from '../../../packages/paymaster/src/V4/index.js';
 import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op.js';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
+// Account creation + ERC20/nonce reads also via the SDK — 100% SDK API.
+import { airAccountFactoryActions, tokenActions, entryPointActions } from '../../../packages/core/src/index.js';
+import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── beta.4 / PaymasterV4 Sepolia addresses (verified on-chain by the task owner) ────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EntryPoint v0.7
 const PAYMASTER_V4: Address = '0xD0c82dc12B7d65b03dF7972f67d13F1D33469a98';
 const GAS_TOKEN: Address = '0xDf669834F04988BcEE0E3B6013B6b867Bd38778d';
@@ -90,8 +94,9 @@ async function main() {
     console.log(`   PaymasterV4: ${PAYMASTER_V4}`);
     console.log(`   Gas token:   ${GAS_TOKEN}`);
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpc) });
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(rpc) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const walletClient = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const factorySvc = airAccountFactoryActions(FACTORY)(walletClient);
     const bundler = createPublicClient({ chain: sepolia, transport: http(bundlerUrl) });
 
     const assertOk = async (label: string, hash: Hex) => {
@@ -111,15 +116,13 @@ async function main() {
         initialTokenConfigs: [] as readonly { tier1Limit: bigint; tier2Limit: bigint; dailyLimit: bigint }[],
     };
     const salt = BigInt(Date.now()); // unique per run
-    const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const sender = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    const sender = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`\n[1] Smart account (sender): ${sender}  (salt=${salt})`);
 
     const deployedCode = await publicClient.getBytecode({ address: sender });
     if (!deployedCode || deployedCode === '0x') {
-        const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
-        const txHash = await walletClient.sendTransaction({ to: FACTORY, data: deployData });
-        await assertOk('account deploy', txHash);
+        const txHash = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...(await bumpedFees(publicClient)) });
+        await assertOk('account deploy (via SDK factory)', txHash);
     } else {
         console.log('   Account already deployed.');
     }
@@ -130,7 +133,7 @@ async function main() {
 
     // ── Step 2: JASON approves + deposits gas token to credit the ACCOUNT's deposit inside the paymaster. ──
     console.log(`\n[2] Crediting account's token deposit inside the paymaster (depositFor)`);
-    const allowance = await publicClient.readContract({ address: GAS_TOKEN, abi: ERC20_ABI, functionName: 'allowance', args: [owner.address, PAYMASTER_V4] }) as bigint;
+    const allowance = await tokenActions(GAS_TOKEN)(publicClient).allowance({ token: GAS_TOKEN, owner: owner.address, spender: PAYMASTER_V4 });
     if (allowance < DEPOSIT_AMOUNT) {
         const approveHash = await PaymasterClient.approveGasToken(walletClient, GAS_TOKEN, PAYMASTER_V4, maxUint256);
         await assertOk('approveGasToken', approveHash as Hex);
@@ -194,8 +197,7 @@ async function main() {
     const inner = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'execute', args: [owner.address, 0n, '0x'] });
     const callData = wrapExecuteUserOp(inner) as Hex;
 
-    const ep = getContract({ address: ENTRY_POINT, abi: EP_ABI, client: publicClient });
-    const nonce = await ep.read.getNonce([sender, 0n]) as bigint;
+    const nonce = await entryPointActions(ENTRY_POINT)(publicClient).getNonce({ sender, key: 0n });
     const gasPrice = await (bundler as any).request({ method: 'pimlico_getUserOperationGasPrice', params: [] }).catch(() => null);
     const maxFeePerGas = gasPrice ? BigInt(gasPrice.fast.maxFeePerGas) : 3000000000n;
     const maxPriorityFeePerGas = gasPrice ? BigInt(gasPrice.fast.maxPriorityFeePerGas) : 2000000000n;

@@ -25,16 +25,33 @@ import * as path from 'path';
 import * as fs from 'fs';
 import {
     createPublicClient, createWalletClient, http, parseEther, formatEther,
-    encodeFunctionData, getContract, decodeErrorResult, getAddress,
+    encodeFunctionData, getContract, decodeErrorResult, getAddress, parseAbi,
     type Address, type Hex,
 } from 'viem';
+// Minimal standard account read + the expected-revert error — NOT the recovery scenario ABI
+// (that lives in the SDK RecoveryService). Test scaffolding only.
+const AA_SETUP_ABI = parseAbi([
+    'function owner() view returns (address)',
+    'error RecoveryTimelockNotExpired()',
+]);
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { publicActions } from 'viem';
+import { ethers } from 'ethers';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
+// Account creation + owner read also via the SDK (airAccountFactoryActions / airAccountActions) — 100% SDK API.
+import { airAccountFactoryActions, airAccountActions } from '../../../packages/core/src/index.js';
+import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
+// SCENARIO-LEVEL API UNDER TEST: the social-recovery flow is driven through the SDK's
+// RecoveryService (it owns the addGuardian/proposeRecovery/approveRecovery/executeRecovery
+// encoders + the activeRecovery/guardianCount reads). AIRACCOUNT_ABI (SDK-vendored) is used
+// only to decode the expected custom-error revert. No hand-written recovery ABI.
+import { RecoveryService } from '../../../packages/airaccount/src/server/index.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── beta.4 Sepolia addresses ────────────────────────────────────────────────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ALG_ECDSA = 2;
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 
@@ -60,24 +77,9 @@ const FACTORY_ABI = [
       outputs: [{ type: 'address' }] },
 ] as const;
 
-// Account recovery + read fragments (match AAStarAirAccountBase / AAStarAgentStorageLayout).
-const ACCOUNT_ABI = [
-    { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-    { type: 'function', name: 'guardianCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-    { type: 'function', name: 'guardians', stateMutability: 'view', inputs: [{ name: 'i', type: 'uint256' }], outputs: [{ type: 'address' }] },
-    { type: 'function', name: 'addGuardian', stateMutability: 'nonpayable', inputs: [{ name: '_guardian', type: 'address' }], outputs: [] },
-    { type: 'function', name: 'proposeRecovery', stateMutability: 'nonpayable', inputs: [{ name: '_newOwner', type: 'address' }], outputs: [] },
-    { type: 'function', name: 'approveRecovery', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-    { type: 'function', name: 'executeRecovery', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-    { type: 'function', name: 'activeRecovery', stateMutability: 'view', inputs: [], outputs: [
-        { name: 'newOwner', type: 'address' }, { name: 'proposedAt', type: 'uint256' },
-        { name: 'approvalBitmap', type: 'uint256' }, { name: 'cancellationBitmap', type: 'uint256' } ] },
-    // Custom errors (for decoding the executeRecovery timelock revert).
-    { type: 'error', name: 'RecoveryTimelockNotExpired', inputs: [] },
-    { type: 'error', name: 'RecoveryNotApproved', inputs: [] },
-    { type: 'error', name: 'NoActiveRecovery', inputs: [] },
-    { type: 'error', name: 'NotGuardian', inputs: [] },
-] as const;
+// NOTE: the account recovery ABI is NO LONGER hand-written here. All recovery
+// operations + reads go through the SDK RecoveryService; the imported (SDK-vendored)
+// AIRACCOUNT_ABI is used only to decode the expected RecoveryTimelockNotExpired revert.
 
 function clean(v?: string): string { return (v ?? '').replace(/^['"]|['"]$/g, ''); }
 
@@ -90,22 +92,27 @@ async function main() {
     if (!pk) throw new Error('PRIVATE_KEY_JASON missing in .env.sepolia');
     const owner = privateKeyToAccount(pk.startsWith('0x') ? pk : (`0x${pk}` as Hex));
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(rpc) });
-    const ownerWallet = createWalletClient({ account: owner, chain: sepolia, transport: http(rpc) });
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const ownerWallet = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const factorySvc = airAccountFactoryActions(FACTORY)(ownerWallet);
+
+    // The SDK RecoveryService — the scenario-level API under test (encoders + reads).
+    const recoverySvc = new RecoveryService(new ethers.JsonRpcProvider(rpc));
 
     console.log('🧪 Beta2 social-recovery on-chain evidence (Sepolia)');
     console.log(`   Owner (JASON) EOA: ${owner.address}`);
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
 
     const steps: StepRecord[] = [];
+    const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
 
     // Helper: send a tx from a given wallet, wait for receipt, assert status=0x1.
     const sendVerified = async (
         wallet: ReturnType<typeof createWalletClient>,
         to: Address, data: Hex, label: string, value = 0n,
     ): Promise<Hex> => {
-        const hash = await wallet.sendTransaction({ to, data, value } as any);
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const hash = await wallet.sendTransaction({ to, data, value, ...fees } as any);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
         if (receipt.status !== 'success') throw new Error(`${label} tx reverted: ${hash}`);
         console.log(`   ✅ ${label}: ${hash}  (status=0x1)`);
         return hash;
@@ -116,8 +123,8 @@ async function main() {
     const g2Pk = generatePrivateKey();
     const g1 = privateKeyToAccount(g1Pk);
     const g2 = privateKeyToAccount(g2Pk);
-    const g1Wallet = createWalletClient({ account: g1, chain: sepolia, transport: http(rpc) });
-    const g2Wallet = createWalletClient({ account: g2, chain: sepolia, transport: http(rpc) });
+    const g1Wallet = createWalletClient({ account: g1, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() });
+    const g2Wallet = createWalletClient({ account: g2, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() });
     // Fresh proposed new-owner address (just needs to be non-zero, non-owner, non-guardian).
     const newOwner = privateKeyToAccount(generatePrivateKey()).address;
     console.log(`   Guardian g1: ${g1.address}`);
@@ -142,64 +149,64 @@ async function main() {
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique per run
     console.log(`\n   Using salt: ${salt}`);
 
-    const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const account = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    // Address prediction + deployment via the SDK factory action (v0.19 factory), not inline ABI.
+    const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`   Predicted account: ${account}`);
 
-    const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
-    const deployTx = await sendVerified(ownerWallet, FACTORY, deployData, 'Deploy beta.4 account');
-    steps.push({ step: `Deploy beta.4 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
+    const deployTx = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...fees });
+    {
+        const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 180_000 });
+        if (rcpt.status !== 'success') throw new Error('createAccount reverted');
+        console.log(`   ✅ Deploy account (via SDK factory): ${deployTx}`);
+    }
+    steps.push({ step: `Deploy v0.19 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
-    const acct = getContract({ address: account, abi: ACCOUNT_ABI, client: publicClient });
-    console.log(`   Account owner on-chain: ${await acct.read.owner()}`);
+    const onchainOwner = await airAccountActions(account)(publicClient).owner();
+    console.log(`   Account owner on-chain (via SDK): ${onchainOwner}`);
 
-    // ── 2. OWNER addGuardian(g1), addGuardian(g2) ───────────────────────────
-    const addG1 = await sendVerified(ownerWallet, account, encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'addGuardian', args: [g1.address] }), 'addGuardian(g1)');
-    const addG2 = await sendVerified(ownerWallet, account, encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'addGuardian', args: [g2.address] }), 'addGuardian(g2)');
+    // ── 2. OWNER addGuardian(g1), addGuardian(g2) — calldata via SDK RecoveryService ──
+    const addG1 = await sendVerified(ownerWallet, account, recoverySvc.encodeAddGuardian(g1.address) as Hex, 'addGuardian(g1)');
+    const addG2 = await sendVerified(ownerWallet, account, recoverySvc.encodeAddGuardian(g2.address) as Hex, 'addGuardian(g2)');
     steps.push({ step: 'OWNER addGuardian(g1)', actor: `JASON ${owner.address}`, tx: addG1 });
     steps.push({ step: 'OWNER addGuardian(g2)', actor: `JASON ${owner.address}`, tx: addG2 });
-    console.log(`   guardianCount on-chain: ${await acct.read.guardianCount()}`);
+    console.log(`   guardianCount on-chain (via SDK): ${await recoverySvc.getGuardianCount(account)}`);
 
-    // ── 3. Guardian g1 proposeRecovery(newOwner) ────────────────────────────
-    const proposeTx = await sendVerified(g1Wallet, account, encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'proposeRecovery', args: [newOwner] }), 'g1 proposeRecovery(newOwner)');
+    // ── 3. Guardian g1 proposeRecovery(newOwner) — via SDK RecoveryService ──
+    const proposeTx = await sendVerified(g1Wallet, account, recoverySvc.encodeProposeRecovery(newOwner) as Hex, 'g1 proposeRecovery(newOwner)');
     steps.push({ step: `Guardian g1 proposeRecovery(${newOwner})`, actor: `g1 ${g1.address}`, tx: proposeTx });
 
-    // ── 4. Guardian g2 approveRecovery() ────────────────────────────────────
-    const approveTx = await sendVerified(g2Wallet, account, encodeFunctionData({ abi: ACCOUNT_ABI, functionName: 'approveRecovery', args: [] }), 'g2 approveRecovery()');
+    // ── 4. Guardian g2 approveRecovery() — via SDK RecoveryService ──
+    const approveTx = await sendVerified(g2Wallet, account, recoverySvc.encodeApproveRecovery() as Hex, 'g2 approveRecovery()');
     steps.push({ step: 'Guardian g2 approveRecovery() (reaches 2-of-3)', actor: `g2 ${g2.address}`, tx: approveTx });
 
-    // ── 5. Read activeRecovery() ────────────────────────────────────────────
-    const [arNewOwner, proposedAt, approvalBitmap, cancellationBitmap] = await acct.read.activeRecovery() as readonly [Address, bigint, bigint, bigint];
-    const popcount = (v: bigint) => { let c = 0; while (v > 0n) { c += Number(v & 1n); v >>= 1n; } return c; };
-    const approvalCount = popcount(approvalBitmap);
-    const RECOVERY_TIMELOCK = 2n * 24n * 60n * 60n;
+    // ── 5. Read activeRecovery() — via SDK RecoveryService (decodes the struct + popcount) ──
+    const ar = await recoverySvc.getActiveRecovery(account);
     const arRead = {
-        newOwner: arNewOwner,
-        proposedAt: proposedAt.toString(),
-        approvalBitmap: `0x${approvalBitmap.toString(16)} (binary ${approvalBitmap.toString(2)}, ${approvalCount} approvals)`,
-        cancellationBitmap: `0x${cancellationBitmap.toString(16)}`,
-        executeAfter: (proposedAt + RECOVERY_TIMELOCK).toString(),
+        newOwner: ar.newOwner,
+        proposedAt: ar.proposedAt.toString(),
+        approvalBitmap: `0x${ar.approvalBitmap.toString(16)} (binary ${ar.approvalBitmap.toString(2)}, ${ar.approvalCount} approvals)`,
+        cancellationBitmap: `0x${ar.cancellationBitmap.toString(16)}`,
+        executeAfter: ar.executeAfter.toString(),
     };
-    console.log('\n   📖 activeRecovery() read:');
+    console.log('\n   📖 activeRecovery() read (via SDK):');
     console.log(`      newOwner          = ${arRead.newOwner}`);
     console.log(`      proposedAt        = ${arRead.proposedAt}`);
     console.log(`      approvalBitmap    = ${arRead.approvalBitmap}`);
     console.log(`      cancellationBitmap= ${arRead.cancellationBitmap}`);
     console.log(`      executeAfter      = ${arRead.executeAfter} (proposedAt + 2 days)`);
-    if (getAddress(arNewOwner) !== getAddress(newOwner)) throw new Error('activeRecovery.newOwner mismatch');
-    if (approvalCount !== 2) throw new Error(`expected 2 approvals, got ${approvalCount}`);
+    if (getAddress(ar.newOwner) !== getAddress(newOwner)) throw new Error('activeRecovery.newOwner mismatch');
+    if (ar.approvalCount !== 2) throw new Error(`expected 2 approvals, got ${ar.approvalCount}`);
     console.log('   ✅ Proposal recorded with 2-of-3 approvals.');
 
     // ── 6. executeRecovery() — expect RecoveryTimelockNotExpired (2-day gate) ─
     console.log('\n   ⏱  Attempting executeRecovery() immediately (expect timelock revert)...');
     let timelockResult = '';
     try {
-        // Use simulate so we capture the revert without spending gas / sending a doomed tx.
-        await publicClient.simulateContract({
-            address: account, abi: ACCOUNT_ABI, functionName: 'executeRecovery', account: owner.address,
-        });
+        // executeRecovery calldata encoded by the SDK RecoveryService; eth_call captures the
+        // revert without spending gas / sending a doomed tx.
+        await publicClient.call({ to: account, data: recoverySvc.encodeExecuteRecovery() as Hex, account: owner.address });
         throw new Error('executeRecovery did NOT revert — timelock gate missing!');
     } catch (e: any) {
         // viem surfaces the decoded custom error on a nested ContractFunctionRevertedError.
@@ -216,7 +223,7 @@ async function main() {
             node = node.cause;
         }
         if (!decoded && rawHex) {
-            try { decoded = (decodeErrorResult({ abi: ACCOUNT_ABI, data: rawHex }) as any).errorName; } catch {}
+            try { decoded = (decodeErrorResult({ abi: AA_SETUP_ABI, data: rawHex }) as any).errorName; } catch {}
         }
         const reason = decoded || e?.cause?.shortMessage || e?.shortMessage || e?.message || '';
         if (decoded === 'RecoveryTimelockNotExpired' || /RecoveryTimelockNotExpired|timelock/i.test(reason)) {

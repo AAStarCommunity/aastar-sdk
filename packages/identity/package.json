@@ -23,5 +23,6 @@
     "prebuild": "pnpm clean",
     "build": "tsc",
     "test": "vitest run"
-  }
+  },
+  "private": true
 }

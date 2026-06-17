@@ -1,18 +1,116 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.20.1",
-  "description": "AAStar SDK - The all-in-one package for Mycelium Network",
+  "version": "0.20.3",
+  "description": "All-in-one TypeScript SDK for the AAStar Protocol / Mycelium Network — ERC-4337 account abstraction, gasless transactions, SuperPaymaster gas sponsorship, KMS WebAuthn passkeys, BLS aggregate signatures, multi-chain (Optimism + Ethereum) community economies & reputation. Single bundled package with subpath exports.",
+  "keywords": [
+    "erc-4337",
+    "account-abstraction",
+    "gasless",
+    "paymaster",
+    "superpaymaster",
+    "webauthn",
+    "passkey",
+    "bls",
+    "viem",
+    "optimism",
+    "ethereum",
+    "smart-account",
+    "aastar",
+    "mycelium"
+  ],
+  "homepage": "https://github.com/AAStarCommunity/aastar-sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AAStarCommunity/aastar-sdk.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/AAStarCommunity/aastar-sdk/issues"
+  },
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "license": "MIT",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./account": {
+      "types": "./dist/account.d.ts",
+      "import": "./dist/account.js"
+    },
+    "./paymaster": {
+      "types": "./dist/paymaster.d.ts",
+      "import": "./dist/paymaster.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "import": "./dist/identity.js"
+    },
+    "./tokens": {
+      "types": "./dist/tokens.d.ts",
+      "import": "./dist/tokens.js"
+    },
+    "./dapp": {
+      "types": "./dist/dapp.d.ts",
+      "import": "./dist/dapp.js"
+    },
+    "./x402": {
+      "types": "./dist/x402.d.ts",
+      "import": "./dist/x402.js"
+    },
+    "./channel": {
+      "types": "./dist/channel.d.ts",
+      "import": "./dist/channel.js"
+    },
+    "./enduser": {
+      "types": "./dist/enduser.d.ts",
+      "import": "./dist/enduser.js"
+    },
+    "./operator": {
+      "types": "./dist/operator.d.ts",
+      "import": "./dist/operator.js"
+    },
+    "./admin": {
+      "types": "./dist/admin.d.ts",
+      "import": "./dist/admin.js"
+    },
+    "./airaccount": {
+      "types": "./dist/airaccount.d.ts",
+      "import": "./dist/airaccount.js"
+    }
+  },
   "files": [
     "dist"
   ],
   "dependencies": {
+    "viem": "2.43.3",
+    "ethers": "^6.0.0",
+    "@simplewebauthn/browser": "^13.2.2",
+    "axios": "^1.12.2"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
     "@aastar/account": "workspace:*",
     "@aastar/core": "workspace:*",
     "@aastar/dapp": "workspace:*",
@@ -25,15 +123,11 @@
     "@aastar/airaccount": "workspace:*",
     "@aastar/x402": "workspace:*",
     "@aastar/channel": "workspace:*",
-    "viem": "2.43.3"
-  },
-  "devDependencies": {
+    "tsup": "^8.0.0",
     "typescript": "5.7.2"
   },
   "scripts": {
-    "clean": "find src -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm -f",
-    "prebuild": "pnpm clean",
-    "build": "tsc",
+    "build": "tsup",
     "example:local": "tsx examples/regression_test.ts",
     "test": "vitest run"
   }
