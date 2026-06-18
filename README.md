@@ -3,7 +3,7 @@
 <p align="left">
   <img src="https://img.shields.io/npm/v/@aastar/sdk?color=blue&label=npm" alt="npm version" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/pnpm-only-orange" alt="pnpm" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" style="display:inline-block; margin-right: 5px;" />
+  <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />

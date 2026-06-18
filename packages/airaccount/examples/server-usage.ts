@@ -31,8 +31,6 @@ import type {
   LegacyPasskeyAssertion,
 } from "@aastar/airaccount/server";
 
-import { ethers } from "ethers";
-
 // ============================================
 // 1. Basic Setup — Quick Start
 // ============================================
@@ -142,7 +140,7 @@ async function kmsSetup() {
     }
   );
 
-  // KmsSigner is an ethers.AbstractSigner — use it anywhere ethers expects a Signer
+  // KmsSigner is a standalone signer (getAddress + signMessage); no ethers dependency.
   const address = await kmsSigner.getAddress();
   console.log("KMS signer address:", address);
 
@@ -160,7 +158,7 @@ async function kmsSetup() {
 
 /**
  * Implement ISignerAdapter for KMS-backed per-user signing.
- * The getSigner() method accepts an optional PasskeyAssertionContext,
+ * The signMessage() method accepts an optional PasskeyAssertionContext,
  * which carries the user's WebAuthn assertion through the signing chain.
  */
 class KmsSignerAdapter implements ISignerAdapter {
@@ -178,37 +176,36 @@ class KmsSignerAdapter implements ISignerAdapter {
     });
   }
 
-  async getAddress(userId: string): Promise<string> {
+  async getAddress(userId: string): Promise<`0x${string}`> {
     const keyInfo = this.userKeyMapping.get(userId);
     if (!keyInfo) throw new Error(`No KMS key for user ${userId}`);
-    return keyInfo.address;
+    return keyInfo.address as `0x${string}`;
   }
 
-  async getSigner(
+  async signMessage(
     userId: string,
+    message: `0x${string}` | Uint8Array,
     ctx?: PasskeyAssertionContext
-  ): Promise<ethers.Signer> {
+  ): Promise<`0x${string}`> {
     const keyInfo = this.userKeyMapping.get(userId);
     if (!keyInfo) throw new Error(`No KMS key for user ${userId}`);
 
-    return this.kmsManager.createKmsSigner(
+    const signer = this.kmsManager.createKmsSigner(
       keyInfo.keyId,
       keyInfo.address,
       async () => {
-        if (!ctx?.passkeyAssertion) {
+        if (!ctx?.assertion) {
           throw new Error("Passkey assertion required for KMS signing");
         }
-        return ctx.passkeyAssertion;
+        return ctx.assertion;
       }
     );
+    return (await signer.signMessage(message)) as `0x${string}`;
   }
 
-  async ensureSigner(
-    userId: string
-  ): Promise<{ signer: ethers.Signer; address: string }> {
+  async ensureSigner(userId: string): Promise<{ address: `0x${string}` }> {
     const address = await this.getAddress(userId);
-    const signer = await this.getSigner(userId);
-    return { signer, address };
+    return { address };
   }
 }
 
@@ -588,7 +585,7 @@ async function guardCheckerExample(client: YAAAServerClient) {
   // console.log("Daily remaining:", guardStatus.dailyRemaining);
 
   // Pre-check a transaction (determines required tier + algId)
-  // const preCheck = await guardChecker.preCheck(accountAddress, ethers.parseEther("0.5"));
+  // const preCheck = await guardChecker.preCheck(accountAddress, parseEther("0.5"));
   // console.log("OK:", preCheck.ok);
   // console.log("Required tier:", preCheck.tier);
   // console.log("AlgId:", preCheck.algId);
