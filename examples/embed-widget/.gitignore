@@ -1,6 +1,0 @@
-node_modules
-dist
-dist-embed
-.env
-.env.local
-*.local
