@@ -1,4 +1,10 @@
-import { ethers } from "ethers";
+import { zeroAddress, parseEther, type Address } from "viem";
+// AIRACCOUNT_ABI is a local human-readable signature array (not in @aastar/core);
+// parseAbi is required to feed it to viem's encodeFunctionData during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi, encodeFunctionData } from "viem";
+import { keccak256 } from "../../migration/viem/hashing";
+import { solidityPacked } from "../../migration/viem/abi-encoding";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
 import { ISignerAdapter } from "../interfaces/signer-adapter";
@@ -42,7 +48,7 @@ export class AccountManager {
 
     const factory = this.ethereum.getFactoryContract(version);
     const validatorAddress =
-      ((this.ethereum.getValidatorContract(version) as ethers.BaseContract).target as string) ||
+      (this.ethereum.getValidatorContract(version).address as string) ||
       this.ethereum.getValidatorAddress(version);
 
     // Ensure signer wallet exists
@@ -53,20 +59,24 @@ export class AccountManager {
     // When dailyLimit > 0, write it into the config so the account is guard-enabled at deployment.
     const dailyLimitValue = options?.dailyLimit ?? 0n;
     const minimalConfig = [
-      [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
+      [zeroAddress, zeroAddress, zeroAddress], // guardians (address[3])
       dailyLimitValue, // dailyLimit (0 = no guard)
       [], // approvedAlgIds
       0n, // minDailyLimit
       [], // initialTokens
       [], // initialTokenConfigs
     ];
-    const accountAddress = await factory.getFunction("getAddress")(signerAddress, salt, minimalConfig);
+    const accountAddress = (await factory.read.getAddress([
+      signerAddress,
+      salt,
+      minimalConfig,
+    ])) as string;
 
     // Check deployment status
     let deployed = false;
     try {
-      const code = await this.ethereum.getProvider().getCode(accountAddress);
-      deployed = code !== "0x";
+      const code = await this.ethereum.getProvider().getCode({ address: accountAddress as Address });
+      deployed = !!code && code !== "0x";
     } catch {
       // Assume not deployed
     }
@@ -80,7 +90,7 @@ export class AccountManager {
       deploymentTxHash: null,
       validatorAddress,
       entryPointVersion: versionStr,
-      factoryAddress: (factory.target as string) || this.ethereum.getFactoryAddress(version),
+      factoryAddress: (factory.address as string) || this.ethereum.getFactoryAddress(version),
       createdAt: new Date().toISOString(),
       // Persist dailyLimit so buildUserOperation can reconstruct identical initCode at deploy time.
       ...(dailyLimitValue > 0n ? { dailyLimit: dailyLimitValue.toString() } : {}),
@@ -124,7 +134,7 @@ export class AccountManager {
     return {
       address: account.address,
       balance,
-      balanceInWei: ethers.parseEther(balance).toString(),
+      balanceInWei: parseEther(balance).toString(),
     };
   }
 
@@ -169,10 +179,11 @@ export class AccountManager {
         `salt value ${salt} exceeds Number.MAX_SAFE_INTEGER; pass as bigint to avoid precision loss`
       );
     }
-    return ethers.keccak256(
-      ethers.solidityPacked(
+    // viem's encodePacked rejects plain `number` for uint256 — coerce to bigint.
+    return keccak256(
+      solidityPacked(
         ["string", "uint256", "address", "address", "uint256", "uint256"],
-        ["ACCEPT_GUARDIAN", chainId, factoryAddress, owner, salt, dailyLimit]
+        ["ACCEPT_GUARDIAN", BigInt(chainId), factoryAddress, owner, BigInt(salt), dailyLimit]
       )
     );
   }
@@ -194,13 +205,11 @@ export class AccountManager {
     deadline: bigint,
     guardianSigs: string[]
   ): string {
-    const iface = new ethers.Interface(AIRACCOUNT_ABI);
-    return iface.encodeFunctionData("modifyTierLimitsWithGuardians", [
-      tier1,
-      tier2,
-      deadline,
-      guardianSigs,
-    ]);
+    return encodeFunctionData({
+      abi: parseAbi(AIRACCOUNT_ABI),
+      functionName: "modifyTierLimitsWithGuardians",
+      args: [tier1, tier2, deadline, guardianSigs as `0x${string}`[]],
+    });
   }
 
   /**
@@ -251,20 +260,20 @@ export class AccountManager {
     const salt = params.salt ?? Math.floor(Math.random() * 1000000);
 
     const factory = this.ethereum.getFactoryContract(version);
-    const factoryAddress = (factory.target as string) ?? this.ethereum.getFactoryAddress(version);
+    const factoryAddress = (factory.address as string) ?? this.ethereum.getFactoryAddress(version);
 
-    const accountAddress = await factory.getFunction("getAddressWithDefaults")(
+    const accountAddress = (await factory.read.getAddressWithDefaults([
       signerAddress,
       salt,
       params.guardian1,
       params.guardian2,
-      params.dailyLimit
-    );
+      params.dailyLimit,
+    ])) as string;
 
     let deployed = false;
     try {
-      const code = await this.ethereum.getProvider().getCode(accountAddress);
-      deployed = code !== "0x";
+      const code = await this.ethereum.getProvider().getCode({ address: accountAddress as Address });
+      deployed = !!code && code !== "0x";
     } catch {
       // Assume not deployed
     }

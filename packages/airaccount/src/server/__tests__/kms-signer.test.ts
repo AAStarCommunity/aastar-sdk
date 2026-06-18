@@ -21,7 +21,6 @@ vi.mock("axios", () => ({
 }));
 
 import axios from "axios";
-import { ethers } from "ethers";
 import { KmsManager, KmsSigner, LegacyPasskeyAssertion } from "../services/kms-signer";
 import { SilentLogger } from "../interfaces/logger";
 
@@ -319,37 +318,8 @@ describe("KmsSigner", () => {
     expect(result).toBe("0x" + FAKE_SIG_HEX);
   });
 
-  it("signTypedData calls signHash with typed data hash", async () => {
-    mockPost.mockResolvedValueOnce({ data: { Signature: FAKE_SIG_HEX } });
-
-    const domain = { name: "TestApp", version: "1", chainId: 1 };
-    const types = { Message: [{ name: "content", type: "string" }] };
-    const value = { content: "hello" };
-
-    const result = await signer.signTypedData(domain, types, value);
-    expect(result).toBe("0x" + FAKE_SIG_HEX);
-    expect(mockPost).toHaveBeenCalledWith(
-      "/SignHash",
-      expect.objectContaining({
-        Address: ADDRESS,
-        Passkey: MOCK_ASSERTION,
-      }),
-      expect.any(Object)
-    );
-  });
-
-  it("signTransaction throws without provider", async () => {
-    await expect(signer.signTransaction({ to: ADDRESS, value: 0n })).rejects.toThrow(
-      "Provider is required"
-    );
-  });
-
-  it("connect returns a new KmsSigner with the given provider", () => {
-    const provider = new ethers.JsonRpcProvider("http://localhost:8545");
-    const connected = signer.connect(provider);
-
-    expect(connected).toBeInstanceOf(KmsSigner);
-    expect(connected).not.toBe(signer);
-    expect(connected.provider).toBe(provider);
-  });
+  // NOTE: signTypedData / signTransaction / connect / provider were part of the former
+  // ethers.AbstractSigner surface and were intentionally dropped in the ethers->viem
+  // migration (KmsSigner now exposes only getAddress + signMessage). Their tests were
+  // removed accordingly.
 });

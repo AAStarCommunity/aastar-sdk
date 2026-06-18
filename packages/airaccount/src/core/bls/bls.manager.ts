@@ -1,6 +1,10 @@
 import axios from "axios";
-import { ethers } from "ethers";
-import { bls12_381 as bls } from "@noble/curves/bls12-381.js";
+import {
+  packSignature as packSignatureViem,
+  packCumulativeT2Signature as packCumulativeT2SignatureViem,
+  packCumulativeT3Signature as packCumulativeT3SignatureViem,
+  generateMessagePoint as generateMessagePointViem,
+} from "../../migration/viem/bls-packing";
 import {
   BLSConfig,
   BLSNode,
@@ -60,68 +64,16 @@ export class BLSManager {
    * Format: [nodeIdsLength][nodeIds...][blsSignature][messagePoint][aaSignature][messagePointSignature]
    */
   packSignature(data: BLSSignatureData): string {
-    if (!data.nodeIds || !data.aaSignature || !data.messagePointSignature) {
-      throw new Error("Missing required signature components");
-    }
-
-    const nodeIdsLength = ethers.solidityPacked(["uint256"], [data.nodeIds.length]);
-    const nodeIdsBytes = ethers.solidityPacked(
-      Array(data.nodeIds.length).fill("bytes32"),
-      data.nodeIds
-    );
-
-    return ethers.solidityPacked(
-      ["bytes", "bytes", "bytes", "bytes", "bytes", "bytes"],
-      [
-        nodeIdsLength,
-        nodeIdsBytes,
-        data.signature,
-        data.messagePoint,
-        data.aaSignature,
-        data.messagePointSignature,
-      ]
-    );
+    // Delegates to the proven byte-exact viem implementation.
+    return packSignatureViem(data);
   }
 
   /**
    * Calculate the MessagePoint G2 point for a given message (UserOpHash)
    */
   async generateMessagePoint(message: string | Uint8Array): Promise<string> {
-    const messageBytes = typeof message === "string" ? ethers.getBytes(message) : message;
-    const DST = "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
-
-    const messagePointBLS = await bls.G2.hashToCurve(messageBytes, { DST });
-    const messageG2EIP = this.encodeG2Point(messagePointBLS);
-
-    return "0x" + Buffer.from(messageG2EIP).toString("hex");
-  }
-
-  /**
-   * Encode G2 Point to bytes for EIP-2537 format
-   */
-  private encodeG2Point(point: any): Uint8Array {
-    const result = new Uint8Array(256);
-    const affine = point.toAffine();
-
-    const x0Bytes = this.hexToBytes(affine.x.c0.toString(16).padStart(96, "0"));
-    const x1Bytes = this.hexToBytes(affine.x.c1.toString(16).padStart(96, "0"));
-    const y0Bytes = this.hexToBytes(affine.y.c0.toString(16).padStart(96, "0"));
-    const y1Bytes = this.hexToBytes(affine.y.c1.toString(16).padStart(96, "0"));
-
-    result.set(x0Bytes, 16);
-    result.set(x1Bytes, 80);
-    result.set(y0Bytes, 144);
-    result.set(y1Bytes, 208);
-    return result;
-  }
-
-  private hexToBytes(hex: string): Uint8Array {
-    if (hex.startsWith("0x")) hex = hex.slice(2);
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) {
-      bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-    }
-    return bytes;
+    // Delegates to the proven byte-exact viem implementation.
+    return generateMessagePointViem(message);
   }
 
   /**
@@ -134,24 +86,8 @@ export class BLSManager {
    *   [messagePointECDSA (65)]
    */
   packCumulativeT2Signature(data: CumulativeT2SignatureData): string {
-    const nodeIdsLength = ethers.solidityPacked(["uint256"], [data.nodeIds.length]);
-    const nodeIdsBytes = ethers.solidityPacked(
-      Array(data.nodeIds.length).fill("bytes32"),
-      data.nodeIds
-    );
-
-    return ethers.solidityPacked(
-      ["bytes1", "bytes", "bytes", "bytes", "bytes", "bytes", "bytes"],
-      [
-        "0x04",
-        data.p256Signature,
-        nodeIdsLength,
-        nodeIdsBytes,
-        data.blsSignature,
-        data.messagePoint,
-        data.messagePointSignature,
-      ]
-    );
+    // Delegates to the proven byte-exact viem implementation.
+    return packCumulativeT2SignatureViem(data);
   }
 
   /**
@@ -164,25 +100,8 @@ export class BLSManager {
    *   [messagePointECDSA (65)] [guardianECDSA (65)]
    */
   packCumulativeT3Signature(data: CumulativeT3SignatureData): string {
-    const nodeIdsLength = ethers.solidityPacked(["uint256"], [data.nodeIds.length]);
-    const nodeIdsBytes = ethers.solidityPacked(
-      Array(data.nodeIds.length).fill("bytes32"),
-      data.nodeIds
-    );
-
-    return ethers.solidityPacked(
-      ["bytes1", "bytes", "bytes", "bytes", "bytes", "bytes", "bytes", "bytes"],
-      [
-        "0x05",
-        data.p256Signature,
-        nodeIdsLength,
-        nodeIdsBytes,
-        data.blsSignature,
-        data.messagePoint,
-        data.messagePointSignature,
-        data.guardianSignature,
-      ]
-    );
+    // Delegates to the proven byte-exact viem implementation.
+    return packCumulativeT3SignatureViem(data);
   }
 
   /**

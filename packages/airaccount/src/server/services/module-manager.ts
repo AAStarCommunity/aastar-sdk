@@ -1,5 +1,20 @@
-import { ethers } from "ethers";
+import {
+  concat,
+  encodeFunctionData,
+  hexToBytes,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
+// AIRACCOUNT_ABI is a local human-readable signature array (not in @aastar/core);
+// parseAbi is required to feed it to viem's readContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { MODULE_TYPE, AIRACCOUNT_ABI, AIRACCOUNT_ADDRESSES } from "../constants/entrypoint";
+// Byte-exact viem parity helpers (proven in migration/viem/*.parity.test.ts).
+import { keccak256 } from "../../migration/viem/hashing";
+import { solidityPacked } from "../../migration/viem/abi-encoding";
+import { hashMessage } from "../../migration/viem/signatures";
 
 export type ModuleTypeId = 1 | 2 | 3 | 4; // VALIDATOR | EXECUTOR | FALLBACK | HOOK
 
@@ -43,7 +58,7 @@ export interface UninstallModuleParams {
  *
  * @example
  * const hash = buildInstallModuleHash(chainId, account, 1, moduleAddress, moduleInitData);
- * const sig = await guardian.signMessage(ethers.getBytes(hash));
+ * const sig = await guardian.signMessage(hexToBytes(hash));
  */
 export function buildInstallModuleHash(
   chainId: number,
@@ -52,14 +67,14 @@ export function buildInstallModuleHash(
   module: string,
   moduleInitData: string = "0x",
 ): string {
-  const moduleInitDataHash = ethers.keccak256(moduleInitData);
-  const raw = ethers.keccak256(
-    ethers.solidityPacked(
+  const moduleInitDataHash = keccak256(moduleInitData as Hex);
+  const raw = keccak256(
+    solidityPacked(
       ["string", "uint256", "address", "uint256", "address", "bytes32"],
-      ["INSTALL_MODULE", chainId, account, moduleTypeId, module, moduleInitDataHash],
+      ["INSTALL_MODULE", BigInt(chainId), account, BigInt(moduleTypeId), module, moduleInitDataHash],
     ),
   );
-  return ethers.hashMessage(ethers.getBytes(raw));
+  return hashMessage(hexToBytes(raw));
 }
 
 /**
@@ -71,13 +86,13 @@ export function buildUninstallModuleHash(
   moduleTypeId: ModuleTypeId,
   module: string,
 ): string {
-  const raw = ethers.keccak256(
-    ethers.solidityPacked(
+  const raw = keccak256(
+    solidityPacked(
       ["string", "uint256", "address", "uint256", "address"],
-      ["UNINSTALL_MODULE", chainId, account, moduleTypeId, module],
+      ["UNINSTALL_MODULE", BigInt(chainId), account, BigInt(moduleTypeId), module],
     ),
   );
-  return ethers.hashMessage(ethers.getBytes(raw));
+  return hashMessage(hexToBytes(raw));
 }
 
 /**
@@ -88,10 +103,10 @@ export function buildUninstallModuleHash(
  *   uninstallModule(moduleTypeId, module, guardianSig1 ‖ guardianSig2 ‖ deInitData)
  */
 export class ModuleManager {
-  private readonly provider: ethers.JsonRpcProvider;
+  private readonly provider: PublicClient;
   private readonly chainId: number;
 
-  constructor(provider: ethers.JsonRpcProvider, chainId: number) {
+  constructor(provider: PublicClient, chainId: number) {
     this.provider = provider;
     this.chainId = chainId;
   }
@@ -102,20 +117,19 @@ export class ModuleManager {
    */
   encodeInstall(params: InstallModuleParams): string {
     const sigs = params.guardianSigs ?? [];
-    const initData = params.moduleInitData ?? "0x";
+    const initData = (params.moduleInitData ?? "0x") as Hex;
 
-    // Pack: guardian sigs (65 bytes each) concatenated with module init data
-    const packed =
-      sigs.length > 0
-        ? ethers.concat([...sigs.map((s) => ethers.getBytes(s)), ethers.getBytes(initData)])
-        : ethers.getBytes(initData);
+    // Pack: guardian sigs (65 bytes each) concatenated with module init data.
+    // viem `concat` over hex strings produces the same byte layout as
+    // ethers.concat over getBytes(...) — the 0x prefixes are stripped per item.
+    const packed: Hex =
+      sigs.length > 0 ? concat([...(sigs as Hex[]), initData]) : initData;
 
-    const iface = new ethers.Interface(AIRACCOUNT_ABI);
-    return iface.encodeFunctionData("installModule", [
-      params.moduleTypeId,
-      params.module,
-      packed,
-    ]);
+    return encodeFunctionData({
+      abi: parseAbi(AIRACCOUNT_ABI as readonly string[]),
+      functionName: "installModule",
+      args: [BigInt(params.moduleTypeId), params.module as Address, packed],
+    });
   }
 
   /**
@@ -123,19 +137,18 @@ export class ModuleManager {
    * Always requires 2 guardian signatures.
    */
   encodeUninstall(params: UninstallModuleParams): string {
-    const deInitData = params.moduleDeInitData ?? "0x";
-    const packed = ethers.concat([
-      ethers.getBytes(params.guardianSig1),
-      ethers.getBytes(params.guardianSig2),
-      ethers.getBytes(deInitData),
+    const deInitData = (params.moduleDeInitData ?? "0x") as Hex;
+    const packed: Hex = concat([
+      params.guardianSig1 as Hex,
+      params.guardianSig2 as Hex,
+      deInitData,
     ]);
 
-    const iface = new ethers.Interface(AIRACCOUNT_ABI);
-    return iface.encodeFunctionData("uninstallModule", [
-      params.moduleTypeId,
-      params.module,
-      packed,
-    ]);
+    return encodeFunctionData({
+      abi: parseAbi(AIRACCOUNT_ABI as readonly string[]),
+      functionName: "uninstallModule",
+      args: [BigInt(params.moduleTypeId), params.module as Address, packed],
+    });
   }
 
   /** Check if a module is currently installed on the account. */
@@ -144,8 +157,12 @@ export class ModuleManager {
     moduleTypeId: ModuleTypeId,
     module: string,
   ): Promise<boolean> {
-    const contract = new ethers.Contract(account, AIRACCOUNT_ABI, this.provider);
-    return contract.isModuleInstalled(moduleTypeId, module, "0x") as Promise<boolean>;
+    return (await this.provider.readContract({
+      address: account as Address,
+      abi: parseAbi(AIRACCOUNT_ABI as readonly string[]),
+      functionName: "isModuleInstalled",
+      args: [BigInt(moduleTypeId), module as Address, "0x"],
+    })) as boolean;
   }
 
   /** Return the install hash for a guardian to sign (r5 format, includes moduleInitData hash). */

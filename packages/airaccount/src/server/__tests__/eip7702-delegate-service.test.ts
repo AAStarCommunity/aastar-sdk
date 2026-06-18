@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { ethers } from "ethers";
+import { describe, it, expect, beforeEach } from "vitest";
+import { parseEther } from "viem";
+import { generatePrivateKey, privateKeyToAccount, sign } from "viem/accounts";
 import {
   EIP7702DelegateService,
   AIR_ACCOUNT_DELEGATE_ADDRESS,
@@ -8,7 +9,7 @@ import {
 const EOA          = "0x1111111111111111111111111111111111111111";
 const GUARDIAN_1   = "0x2222222222222222222222222222222222222222";
 const GUARDIAN_2   = "0x3333333333333333333333333333333333333333";
-const DAILY_LIMIT  = ethers.parseEther("1");
+const DAILY_LIMIT  = parseEther("1");
 const DUMMY_SIG    = "0x" + "ab".repeat(65);
 
 describe("EIP7702DelegateService", () => {
@@ -61,7 +62,7 @@ describe("EIP7702DelegateService", () => {
       const cd2 = svc.encodeInitialize({
         guardian1: GUARDIAN_1, guardian1Sig: DUMMY_SIG,
         guardian2: GUARDIAN_2, guardian2Sig: DUMMY_SIG,
-        dailyLimit: ethers.parseEther("0.5"),
+        dailyLimit: parseEther("0.5"),
       });
       expect(cd1).not.toBe(cd2);
     });
@@ -121,24 +122,23 @@ describe("EIP7702DelegateService", () => {
   });
 
   describe("verifyAuthorization", () => {
-    it("returns true for a valid signature from the EOA", () => {
-      // Use a real wallet to produce a valid signature
-      const wallet = ethers.Wallet.createRandom();
+    it("returns true for a valid signature from the EOA", async () => {
+      // Use a real key to produce a valid raw-digest signature (R||S||V).
+      const pk = generatePrivateKey();
+      const wallet = privateKeyToAccount(pk);
       const svcLocal = new EIP7702DelegateService();
       const hash = svcLocal.buildAuthorizationHash(11155111, 0n);
-      const sig = wallet.signingKey.sign(hash);
-      const compact = ethers.Signature.from(sig).serialized;
-      expect(svcLocal.verifyAuthorization(wallet.address, 11155111, 0n, compact)).toBe(true);
+      const sig = await sign({ hash: hash as `0x${string}`, privateKey: pk, to: "hex" });
+      expect(await svcLocal.verifyAuthorization(wallet.address, 11155111, 0n, sig)).toBe(true);
     });
 
-    it("returns false for wrong EOA address", () => {
-      const wallet = ethers.Wallet.createRandom();
+    it("returns false for wrong EOA address", async () => {
+      const pk = generatePrivateKey();
       const svcLocal = new EIP7702DelegateService();
       const hash = svcLocal.buildAuthorizationHash(11155111, 0n);
-      const sig = wallet.signingKey.sign(hash);
-      const compact = ethers.Signature.from(sig).serialized;
+      const sig = await sign({ hash: hash as `0x${string}`, privateKey: pk, to: "hex" });
       // Different address → mismatch
-      expect(svcLocal.verifyAuthorization(GUARDIAN_1, 11155111, 0n, compact)).toBe(false);
+      expect(await svcLocal.verifyAuthorization(GUARDIAN_1, 11155111, 0n, sig)).toBe(false);
     });
   });
 });

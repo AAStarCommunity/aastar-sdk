@@ -13,17 +13,17 @@ const FACTORY_ADDRESS = "0xFactoryAddress00000000000000000000000001";
 
 /** Build a minimal EthereumProvider mock. */
 function makeEthereumMock(overrides: Record<string, jest.Mock> = {}) {
-  // The production code calls factory.getFunction("getAddress")(...args)
+  // The production code (viem) calls factory.read.getAddress([...args]).
   const getAddressFn = vi.fn().mockResolvedValue(ACCOUNT_ADDRESS);
   const mockFactory = {
-    getFunction: vi.fn().mockReturnValue(getAddressFn),
-    target: FACTORY_ADDRESS,
+    read: { getAddress: getAddressFn },
+    address: FACTORY_ADDRESS,
   };
 
   return {
     getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_6),
     getFactoryContract: vi.fn().mockReturnValue(mockFactory),
-    getValidatorContract: vi.fn().mockReturnValue({ target: VALIDATOR_ADDRESS }),
+    getValidatorContract: vi.fn().mockReturnValue({ address: VALIDATOR_ADDRESS }),
     getValidatorAddress: vi.fn().mockReturnValue(VALIDATOR_ADDRESS),
     getFactoryAddress: vi.fn().mockReturnValue(FACTORY_ADDRESS),
     getProvider: vi.fn().mockReturnValue({
@@ -123,14 +123,12 @@ describe("AccountManager", () => {
       await manager.createAccount("user-1", { salt: 99 });
 
       const mockFactory = ethereum.getFactoryContract.mock.results[0].value;
-      // Production code: factory.getFunction("getAddress")(signerAddress, salt, minimalConfig)
-      expect(mockFactory.getFunction).toHaveBeenCalledWith("getAddress");
-      const getAddressFn = mockFactory.getFunction.mock.results[0].value;
-      expect(getAddressFn).toHaveBeenCalledWith(
+      // Production code (viem): factory.read.getAddress([signerAddress, salt, minimalConfig])
+      expect(mockFactory.read.getAddress).toHaveBeenCalledWith([
         SIGNER_ADDRESS, // signerAddress
         99,             // salt
-        expect.any(Array) // minimalConfig
-      );
+        expect.any(Array), // minimalConfig
+      ]);
     });
   });
 
@@ -354,8 +352,12 @@ describe("AccountManager", () => {
     function makeV7Mock() {
       const getAddressWithDefaultsFn = vi.fn().mockResolvedValue(GUARDIAN_ACCOUNT);
       const mockFactory = {
-        getFunction: vi.fn().mockReturnValue(getAddressWithDefaultsFn),
-        target: FACTORY_ADDRESS,
+        // createAccount uses read.getAddress; createAccountWithGuardians uses read.getAddressWithDefaults.
+        read: {
+          getAddress: vi.fn().mockResolvedValue(GUARDIAN_ACCOUNT),
+          getAddressWithDefaults: getAddressWithDefaultsFn,
+        },
+        address: FACTORY_ADDRESS,
       };
       return makeEthereumMock({
         getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_7),

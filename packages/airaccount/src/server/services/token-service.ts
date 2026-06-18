@@ -1,6 +1,11 @@
-import { ethers } from "ethers";
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi, formatUnits, parseUnits, encodeFunctionData } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { ERC20_ABI } from "../constants/entrypoint";
+
+// ERC20_ABI is a local human-readable `string[]` of signatures (not available in
+// @aastar/core), so parseAbi is required to feed it to viem read/encode helpers.
+const ERC20_ABI_PARSED = parseAbi(ERC20_ABI);
 
 export interface TokenInfo {
   address: string;
@@ -23,30 +28,34 @@ export class TokenService {
   constructor(private readonly ethereum: EthereumProvider) {}
 
   async getTokenInfo(tokenAddress: string): Promise<TokenInfo> {
-    const provider = this.ethereum.getProvider();
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    const client = this.ethereum.getProvider();
+    const address = tokenAddress as `0x${string}`;
 
     const [name, symbol, decimals] = await Promise.all([
-      contract.name(),
-      contract.symbol(),
-      contract.decimals(),
+      client.readContract({ address, abi: ERC20_ABI_PARSED, functionName: "name" }),
+      client.readContract({ address, abi: ERC20_ABI_PARSED, functionName: "symbol" }),
+      client.readContract({ address, abi: ERC20_ABI_PARSED, functionName: "decimals" }),
     ]);
 
     return {
       address: tokenAddress.toLowerCase(),
-      name,
-      symbol,
+      name: name as string,
+      symbol: symbol as string,
       decimals: Number(decimals),
     };
   }
 
   async getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
-    const provider = this.ethereum.getProvider();
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    const client = this.ethereum.getProvider();
 
     try {
-      const balance = await contract.balanceOf(walletAddress);
-      return balance.toString();
+      const balance = await client.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: ERC20_ABI_PARSED,
+        functionName: "balanceOf",
+        args: [walletAddress as `0x${string}`],
+      });
+      return (balance as bigint).toString();
     } catch {
       return "0";
     }
@@ -58,14 +67,19 @@ export class TokenService {
   ): Promise<TokenBalance> {
     const tokenInfo = await this.getTokenInfo(tokenAddress);
     const rawBalance = await this.getTokenBalance(tokenAddress, walletAddress);
-    const formattedBalance = ethers.formatUnits(rawBalance, tokenInfo.decimals);
+    const formattedBalance = formatUnits(BigInt(rawBalance), tokenInfo.decimals);
     return { token: tokenInfo, balance: rawBalance, formattedBalance };
   }
 
   generateTransferCalldata(to: string, amount: string, decimals: number): string {
-    const contract = new ethers.Contract(ethers.ZeroAddress, ERC20_ABI);
-    const parsedAmount = ethers.parseUnits(amount, decimals);
-    return contract.interface.encodeFunctionData("transfer", [to, parsedAmount]);
+    // Calldata encoding does not depend on a contract address (the old ethers
+    // call site passed ethers.ZeroAddress only to instantiate ethers.Contract).
+    const parsedAmount = parseUnits(amount, decimals);
+    return encodeFunctionData({
+      abi: ERC20_ABI_PARSED,
+      functionName: "transfer",
+      args: [to as `0x${string}`, parsedAmount],
+    });
   }
 
   async validateToken(tokenAddress: string): Promise<{
@@ -74,13 +88,17 @@ export class TokenService {
     error?: string;
   }> {
     try {
-      const provider = this.ethereum.getProvider();
-      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+      const client = this.ethereum.getProvider();
+      const address = tokenAddress as `0x${string}`;
 
       const [name, symbol, decimals] = (await Promise.race([
-        Promise.all([contract.name(), contract.symbol(), contract.decimals()]),
+        Promise.all([
+          client.readContract({ address, abi: ERC20_ABI_PARSED, functionName: "name" }),
+          client.readContract({ address, abi: ERC20_ABI_PARSED, functionName: "symbol" }),
+          client.readContract({ address, abi: ERC20_ABI_PARSED, functionName: "decimals" }),
+        ]),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000)),
-      ])) as [string, string, bigint];
+      ])) as [string, string, number];
 
       return {
         isValid: true,

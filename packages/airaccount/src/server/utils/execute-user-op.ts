@@ -1,4 +1,6 @@
-import { ethers } from "ethers";
+import { concat, type Hex } from "viem";
+
+import { selectorFromId } from "../../migration/viem/hashing";
 
 // AAStarAirAccountV7 v0.17.2-beta.4 bundler-compat entrypoint.
 //
@@ -9,17 +11,17 @@ import { ethers } from "ethers";
 // (`AlgorithmNotApproved(0)`).
 
 /** 4-byte selector of `executeUserOp((PackedUserOperation),bytes32)`. */
-export const EXECUTE_USER_OP_SELECTOR = ethers
-  .id("executeUserOp((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),bytes32)")
-  .slice(0, 10);
+export const EXECUTE_USER_OP_SELECTOR = selectorFromId(
+  "executeUserOp((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),bytes32)"
+);
 
 /** 4-byte selector of `execute(address,uint256,bytes)`. */
-export const EXECUTE_SELECTOR = ethers.id("execute(address,uint256,bytes)").slice(0, 10);
+export const EXECUTE_SELECTOR = selectorFromId("execute(address,uint256,bytes)");
 
 /** 4-byte selector of `executeBatch(address[],uint256[],bytes[])`. */
-export const EXECUTE_BATCH_SELECTOR = ethers
-  .id("executeBatch(address[],uint256[],bytes[])")
-  .slice(0, 10);
+export const EXECUTE_BATCH_SELECTOR = selectorFromId(
+  "executeBatch(address[],uint256[],bytes[])"
+);
 
 /**
  * Wrap inner `execute()` / `executeBatch()` callData with the `executeUserOp` selector so a
@@ -46,7 +48,7 @@ export function wrapExecuteUserOp(innerCallData: string): string {
         "the account reverts UnsupportedInnerSelector otherwise"
     );
   }
-  return ethers.concat([EXECUTE_USER_OP_SELECTOR, innerCallData]);
+  return concat([EXECUTE_USER_OP_SELECTOR, innerCallData as Hex]);
 }
 
 /** True if callData is already wrapped with the executeUserOp selector. */

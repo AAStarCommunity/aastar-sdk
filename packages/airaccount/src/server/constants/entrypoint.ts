@@ -149,7 +149,9 @@ export const AIRACCOUNT_ABI = [
   "function guardians(uint256 index) external view returns (address)",
   "function p256KeyX() external view returns (bytes32)",
   "function p256KeyY() external view returns (bytes32)",
-  "function getConfigDescription() external view returns (tuple(address accountOwner, address guardAddress, uint256 dailyLimit, uint256 dailyRemaining, uint256 tier1Limit, uint256 tier2Limit, address[3] guardianAddresses, uint8 guardianCount, bool hasP256Key, bool hasValidator, bool hasAggregator, bool hasActiveRecovery))",
+  // abitype/viem human-readable ABIs use a bare parenthesised tuple `(...)`, not the
+  // ethers-style `tuple(...)` keyword (which parseAbi rejects with "Invalid ABI parameter").
+  "function getConfigDescription() external view returns ((address accountOwner, address guardAddress, uint256 dailyLimit, uint256 dailyRemaining, uint256 tier1Limit, uint256 tier2Limit, address[3] guardianAddresses, uint8 guardianCount, bool hasP256Key, bool hasValidator, bool hasAggregator, bool hasActiveRecovery))",
   // ── Owner / key management ──
   "function setValidator(address _validator) external",
   "function setP256Key(bytes32 _x, bytes32 _y) external",

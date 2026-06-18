@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ethers } from "ethers";
+import { zeroAddress, type PublicClient } from "viem";
+import { selectorFromId } from "../../migration/viem/hashing";
 import {
   RecoveryService,
   RECOVERY_THRESHOLD,
@@ -11,6 +12,21 @@ const ACCOUNT    = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const NEW_OWNER  = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const GUARDIAN_1 = "0xcccccccccccccccccccccccccccccccccccccccc";
 const GUARDIAN_2 = "0xdddddddddddddddddddddddddddddddddddddddd";
+
+/** A stub viem PublicClient whose reads are dispatched by function name + args. */
+function mockReadClient(
+  impl: (functionName: string, args?: readonly unknown[]) => unknown
+): PublicClient {
+  return {
+    readContract: vi
+      .fn()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockImplementation(async ({ functionName, args }: any) => impl(functionName, args)),
+  } as unknown as PublicClient;
+}
+
+/** Encoders are pure and never touch the client. */
+const noClient = {} as unknown as PublicClient;
 
 describe("RecoveryService — constants", () => {
   it("threshold is 2 (2-of-3)", () => {
@@ -30,7 +46,7 @@ describe("RecoveryService — calldata encoders", () => {
   let svc: RecoveryService;
 
   beforeEach(() => {
-    svc = new RecoveryService(ethers.getDefaultProvider());
+    svc = new RecoveryService(noClient);
   });
 
   describe("encodeAddGuardian", () => {
@@ -91,7 +107,7 @@ describe("RecoveryService — calldata encoders", () => {
   });
 
   describe("exact 4-byte selectors match the canonical contract signatures", () => {
-    const sel = (sig: string) => ethers.id(sig).slice(0, 10);
+    const sel = (sig: string) => selectorFromId(sig);
     it("each encoder uses the exact on-chain function signature", () => {
       expect(svc.encodeAddGuardian(GUARDIAN_1).slice(0, 10)).toBe(sel("addGuardian(address)"));
       expect(svc.encodeRemoveGuardian(0, []).slice(0, 10)).toBe(sel("removeGuardian(uint8,bytes[])"));
@@ -124,17 +140,14 @@ describe("RecoveryService — on-chain read mocks", () => {
     const approvalBitmap = 0b011n; // guardians 0 and 1 approved → count 2
     const cancellationBitmap = 0b100n; // guardian 2 voted to cancel → count 1
 
-    const mockProvider = {
-      getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-      call: vi.fn().mockResolvedValue(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          ["address", "uint256", "uint256", "uint256"],
-          [NEW_OWNER, proposedAt, approvalBitmap, cancellationBitmap]
-        )
-      ),
-    } as unknown as ethers.Provider;
+    const client = mockReadClient((functionName) => {
+      if (functionName === "activeRecovery") {
+        return [NEW_OWNER, proposedAt, approvalBitmap, cancellationBitmap];
+      }
+      throw new Error(`unexpected read: ${functionName}`);
+    });
 
-    const svc = new RecoveryService(mockProvider);
+    const svc = new RecoveryService(client);
     const result = await svc.getActiveRecovery(ACCOUNT);
 
     expect(result.newOwner.toLowerCase()).toBe(NEW_OWNER.toLowerCase());
@@ -148,17 +161,14 @@ describe("RecoveryService — on-chain read mocks", () => {
   });
 
   it("getActiveRecovery reports isActive=false when newOwner is zero", async () => {
-    const mockProvider = {
-      getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-      call: vi.fn().mockResolvedValue(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          ["address", "uint256", "uint256", "uint256"],
-          [ethers.ZeroAddress, 0n, 0n, 0n]
-        )
-      ),
-    } as unknown as ethers.Provider;
+    const client = mockReadClient((functionName) => {
+      if (functionName === "activeRecovery") {
+        return [zeroAddress, 0n, 0n, 0n];
+      }
+      throw new Error(`unexpected read: ${functionName}`);
+    });
 
-    const svc = new RecoveryService(mockProvider);
+    const svc = new RecoveryService(client);
     const result = await svc.getActiveRecovery(ACCOUNT);
 
     expect(result.isActive).toBe(false);
@@ -166,34 +176,26 @@ describe("RecoveryService — on-chain read mocks", () => {
   });
 
   it("getGuardianCount returns the guardian count as a number", async () => {
-    const mockProvider = {
-      getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-      call: vi.fn().mockResolvedValue(
-        ethers.AbiCoder.defaultAbiCoder().encode(["uint8"], [2])
-      ),
-    } as unknown as ethers.Provider;
+    const client = mockReadClient((functionName) => {
+      if (functionName === "guardianCount") return 2;
+      throw new Error(`unexpected read: ${functionName}`);
+    });
 
-    const svc = new RecoveryService(mockProvider);
+    const svc = new RecoveryService(client);
     expect(await svc.getGuardianCount(ACCOUNT)).toBe(2);
   });
 
   it("getGuardians reads guardianCount then each guardians(i), dropping zero slots", async () => {
-    const calls: string[] = [];
-    const mockProvider = {
-      getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-      call: vi.fn().mockImplementation(async (tx: { data: string }) => {
-        calls.push(tx.data.slice(0, 10));
-        // guardianCount() selector → return 2; guardians(uint256) → return G1 then G2
-        const countSel = ethers.id("guardianCount()").slice(0, 10);
-        if (tx.data.slice(0, 10) === countSel) {
-          return ethers.AbiCoder.defaultAbiCoder().encode(["uint8"], [2]);
-        }
-        const idx = Number(ethers.AbiCoder.defaultAbiCoder().decode(["uint256"], "0x" + tx.data.slice(10))[0]);
-        return ethers.AbiCoder.defaultAbiCoder().encode(["address"], [idx === 0 ? GUARDIAN_1 : GUARDIAN_2]);
-      }),
-    } as unknown as ethers.Provider;
+    const client = mockReadClient((functionName, args) => {
+      if (functionName === "guardianCount") return 2;
+      if (functionName === "guardians") {
+        const idx = Number(args?.[0]);
+        return idx === 0 ? GUARDIAN_1 : GUARDIAN_2;
+      }
+      throw new Error(`unexpected read: ${functionName}`);
+    });
 
-    const svc = new RecoveryService(mockProvider);
+    const svc = new RecoveryService(client);
     const guardians = await svc.getGuardians(ACCOUNT);
     expect(guardians.map((g) => g.toLowerCase())).toEqual([
       GUARDIAN_1.toLowerCase(),

@@ -1,4 +1,9 @@
-import { ethers } from "ethers";
+import { encodeFunctionData, type Hex, type PublicClient } from "viem";
+// The weighted-signature ABI below is a local human-readable `string[]` signature set
+// (not available in @aastar/core), so parseAbi is required to feed it to viem's
+// encodeFunctionData/readContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 
 // AAStarAirAccount weighted-signature governance ABI — minimal subset for SDK use.
 // These functions live on the ACCOUNT itself (algId 0x07 / AirAccountExtension),
@@ -24,6 +29,9 @@ const WEIGHTED_SIGNATURE_ABI = [
   "error WeightChangeNotApproved()",
   "error WeightChangeTimelockNotExpired()",
 ];
+
+// Parsed (loosely-typed `Abi`) form for viem encodeFunctionData/readContract.
+const WEIGHTED_SIGNATURE_ABI_PARSED = parseAbi(WEIGHTED_SIGNATURE_ABI as readonly string[]);
 
 /** Timelock that must elapse after a proposal before executeWeightChange() succeeds (WEIGHT_CHANGE_TIMELOCK = 2 days). */
 export const WEIGHT_CHANGE_TIMELOCK_SECONDS = 2 * 24 * 60 * 60;
@@ -95,9 +103,10 @@ function toConfigTuple(config: WeightConfig): number[] {
   return WEIGHT_CONFIG_FIELDS.map((f) => config[f]);
 }
 
-function fromConfigResult(result: ethers.Result | unknown[]): WeightConfig {
+function fromConfigResult(result: unknown): WeightConfig {
   const r = result as Record<string, unknown> & unknown[];
-  // ethers Result supports both positional indexing and named access; prefer named.
+  // viem decodes a named-component tuple into an object (named access) while a
+  // list of separate outputs decodes into an array (positional access); support both.
   const pick = (name: string, idx: number): number =>
     Number((r[name] ?? r[idx]) as number | bigint);
   return {
@@ -139,23 +148,25 @@ function fromConfigResult(result: ethers.Result | unknown[]): WeightConfig {
  * direct tx, and reads use the contract directly.
  */
 export class WeightedSignatureService {
-  private readonly contract: ethers.Contract;
-  private readonly iface: ethers.Interface;
+  private readonly address: `0x${string}`;
 
   constructor(
     private readonly accountAddress: string,
-    providerOrSigner: ethers.Provider | ethers.Signer
+    private readonly client: PublicClient
   ) {
-    this.contract = new ethers.Contract(accountAddress, WEIGHTED_SIGNATURE_ABI, providerOrSigner);
-    this.iface = new ethers.Interface(WEIGHTED_SIGNATURE_ABI);
+    this.address = accountAddress as `0x${string}`;
   }
 
   // ── On-chain reads ──────────────────────────────────────────────
 
   /** Read the account's current active WeightConfig. */
   async getWeightConfig(): Promise<WeightConfig> {
-    const result = await this.contract.weightConfig();
-    return fromConfigResult(result as ethers.Result);
+    const result = await this.client.readContract({
+      address: this.address,
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "weightConfig",
+    });
+    return fromConfigResult(result);
   }
 
   /**
@@ -163,9 +174,13 @@ export class WeightedSignatureService {
    * active proposal (the returned `proposed` config will be all zeros).
    */
   async getPendingWeightChange(): Promise<PendingWeightChange> {
-    const [proposed, proposedAt, approvalBitmap] = await this.contract.pendingWeightChange();
+    const [proposed, proposedAt, approvalBitmap] = (await this.client.readContract({
+      address: this.address,
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "pendingWeightChange",
+    })) as [unknown, bigint, bigint];
     return {
-      proposed: fromConfigResult(proposed as ethers.Result),
+      proposed: fromConfigResult(proposed),
       proposedAt: BigInt(proposedAt),
       approvalBitmap: BigInt(approvalBitmap),
     };
@@ -177,33 +192,50 @@ export class WeightedSignatureService {
    * Encode setWeightConfig calldata. OWNER only; for first-time setup or strengthening.
    * Weakening an existing config must go through encodeProposeWeightChange instead.
    */
-  encodeSetWeightConfig(config: WeightConfig): string {
-    return this.iface.encodeFunctionData("setWeightConfig", [toConfigTuple(config)]);
+  encodeSetWeightConfig(config: WeightConfig): Hex {
+    return encodeFunctionData({
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "setWeightConfig",
+      args: [toConfigTuple(config)],
+    });
   }
 
   /**
    * Encode proposeWeightChange calldata. OWNER only; opens a guardian-governed proposal
    * (required for any weakening). Subject to 2-of-3 approval + 2-day timelock before execute.
    */
-  encodeProposeWeightChange(config: WeightConfig): string {
-    return this.iface.encodeFunctionData("proposeWeightChange", [toConfigTuple(config)]);
+  encodeProposeWeightChange(config: WeightConfig): Hex {
+    return encodeFunctionData({
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "proposeWeightChange",
+      args: [toConfigTuple(config)],
+    });
   }
 
   /** Encode approveWeightChange calldata. GUARDIAN only; each guardian may approve once. */
-  encodeApproveWeightChange(): string {
-    return this.iface.encodeFunctionData("approveWeightChange", []);
+  encodeApproveWeightChange(): Hex {
+    return encodeFunctionData({
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "approveWeightChange",
+    });
   }
 
   /** Encode cancelWeightChange calldata. OWNER or any GUARDIAN may cancel a pending proposal. */
-  encodeCancelWeightChange(): string {
-    return this.iface.encodeFunctionData("cancelWeightChange", []);
+  encodeCancelWeightChange(): Hex {
+    return encodeFunctionData({
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "cancelWeightChange",
+    });
   }
 
   /**
    * Encode executeWeightChange calldata. Callable by anyone, but only succeeds once the
    * threshold (2-of-3) and timelock (2 days) are both satisfied and the proposal has not expired.
    */
-  encodeExecuteWeightChange(): string {
-    return this.iface.encodeFunctionData("executeWeightChange", []);
+  encodeExecuteWeightChange(): Hex {
+    return encodeFunctionData({
+      abi: WEIGHTED_SIGNATURE_ABI_PARSED,
+      functionName: "executeWeightChange",
+    });
   }
 }

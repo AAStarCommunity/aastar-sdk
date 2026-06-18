@@ -1,57 +1,47 @@
 /**
  * Tests for TokenService on-chain query methods.
  *
- * ethers.Contract is replaced via vi.mock so we avoid real RPC calls.
- * The mock instance is exposed via ethers.__mockContract for per-test configuration.
+ * TokenService now reads via a viem PublicClient (client.readContract). We mock
+ * EthereumProvider.getProvider() to return a stub client whose readContract
+ * dispatches by function name to per-method vi.fns (so tests can override them).
  */
 
-import { vi } from "vitest";
-
-// Singleton fn references — all MockContract instances share these.
-const _name = vi.fn().mockResolvedValue("USD Coin");
-const _symbol = vi.fn().mockResolvedValue("USDC");
-const _decimals = vi.fn().mockResolvedValue(6n);
-const _balanceOf = vi.fn().mockResolvedValue(5_000_000n);
-
-// vi.mock is hoisted to the top — factory runs before imports.
-vi.mock("ethers", async () => {
-  const actual = await vi.importActual<typeof import("ethers")>("ethers");
-
-  class MockContract {
-    interface: any;
-    name = _name;
-    symbol = _symbol;
-    decimals = _decimals;
-    balanceOf = _balanceOf;
-
-    constructor(_addr: string, abi: any) {
-      this.interface = new actual.Interface(abi);
-    }
-  }
-
-  return {
-    ...actual,
-    Contract: MockContract,
-    ethers: { ...(actual as any).ethers, Contract: MockContract },
-  };
-});
-
-import * as ethersModule from "ethers";
-import { ethers } from "ethers";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { parseEther } from "viem";
 import { TokenService } from "../services/token-service";
 
 const TOKEN_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const WALLET_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 const mockFns = {
-  name: _name,
-  symbol: _symbol,
-  decimals: _decimals,
-  balanceOf: _balanceOf,
+  name: vi.fn(),
+  symbol: vi.fn(),
+  decimals: vi.fn(),
+  balanceOf: vi.fn(),
 };
 
+/** Stub EthereumProvider whose getProvider() yields a viem client backed by mockFns. */
 function makeEthereumStub() {
-  return { getProvider: vi.fn().mockReturnValue({}) };
+  const client = {
+    readContract: vi.fn().mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async ({ functionName }: any) => {
+        switch (functionName) {
+          case "name":
+            return mockFns.name();
+          case "symbol":
+            return mockFns.symbol();
+          case "decimals":
+            return mockFns.decimals();
+          case "balanceOf":
+            return mockFns.balanceOf();
+          default:
+            throw new Error(`unexpected read: ${functionName}`);
+        }
+      }
+    ),
+  };
+  return { getProvider: vi.fn().mockReturnValue(client) };
 }
 
 describe("TokenService — on-chain queries", () => {
@@ -132,12 +122,13 @@ describe("TokenService — on-chain queries", () => {
       expect(result.token.symbol).toBe("USDC");
       expect(result.token.decimals).toBe(6);
       expect(result.balance).toBe("5000000");
-      expect(result.formattedBalance).toBe("5.0");
+      // viem's formatUnits drops the trailing ".0" that ethers emitted ("5.0").
+      expect(result.formattedBalance).toBe("5");
     });
 
     it("formats 18-decimal token balance correctly", async () => {
       mockFns.decimals.mockResolvedValue(18n);
-      mockFns.balanceOf.mockResolvedValue(ethers.parseEther("1.5"));
+      mockFns.balanceOf.mockResolvedValue(parseEther("1.5"));
       const result = await service.getFormattedTokenBalance(TOKEN_ADDRESS, WALLET_ADDRESS);
       expect(result.formattedBalance).toBe("1.5");
     });
@@ -186,7 +177,6 @@ describe("TokenService — on-chain queries", () => {
 
   describe("generateTransferCalldata — edge cases", () => {
     it("encodes a fractional amount for 6-decimal tokens", () => {
-      // Uses the real ethers.Interface from the mock Contract constructor
       const calldata = service.generateTransferCalldata(WALLET_ADDRESS, "1.5", 6);
       expect(calldata).toMatch(/^0x/);
       // 1.5 USDC = 1_500_000 raw; verify it appears in calldata

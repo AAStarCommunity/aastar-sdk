@@ -1,4 +1,7 @@
-import { ethers } from "ethers";
+// eslint-disable-next-line no-restricted-imports -- AIRACCOUNT_FACTORY_ABI is a local human-readable string[] (not in @aastar/core); parseAbi is required to feed it to viem readContract.
+import { parseAbi, type PublicClient } from "viem";
+import { keccak256 } from "../../migration/viem/hashing";
+import { solidityPacked } from "../../migration/viem/abi-encoding";
 import { AIRACCOUNT_ADDRESSES, AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
 
 /**
@@ -13,6 +16,9 @@ import { AIRACCOUNT_ADDRESSES, AIRACCOUNT_FACTORY_ABI } from "../constants/entry
  * The OAPD address is a standard AirAccount clone — it has its own guard,
  * its own daily limits, and can be funded independently.
  */
+
+// Parse the local human-readable factory ABI once so viem reads can consume it.
+const FACTORY_ABI = parseAbi(AIRACCOUNT_FACTORY_ABI);
 
 export interface OapdConfig {
   /** Account owner address */
@@ -44,8 +50,8 @@ export interface OapdConfig {
  * salt = uint256(keccak256(abi.encodePacked(owner, dappId)))
  */
 export function computeOapdSalt(owner: string, dappId: string): bigint {
-  const packed = ethers.solidityPacked(["address", "string"], [owner, dappId]);
-  return BigInt(ethers.keccak256(packed));
+  const packed = solidityPacked(["address", "string"], [owner, dappId]);
+  return BigInt(keccak256(packed));
 }
 
 /**
@@ -53,43 +59,49 @@ export function computeOapdSalt(owner: string, dappId: string): bigint {
  * Uses the factory's getAddress() view function.
  */
 export async function getOapdAddress(
-  provider: ethers.JsonRpcProvider,
+  provider: PublicClient,
   config: OapdConfig,
 ): Promise<string> {
   const factoryAddress = config.factoryAddress ?? AIRACCOUNT_ADDRESSES.sepolia.factory;
-  const factory = new ethers.Contract(factoryAddress, AIRACCOUNT_FACTORY_ABI, provider);
   const salt = computeOapdSalt(config.owner, config.dappId);
 
-  return factory.getFunction("getAddress")(config.owner, salt, config.initConfig) as Promise<string>;
+  return provider.readContract({
+    address: factoryAddress as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: "getAddress",
+    args: [config.owner as `0x${string}`, salt, config.initConfig],
+  }) as Promise<string>;
 }
 
 /**
  * Get the OAPD address and its ERC-7828 chain-qualified identifier.
  */
 export async function getOapdAddressWithChainId(
-  provider: ethers.JsonRpcProvider,
+  provider: PublicClient,
   config: OapdConfig,
 ): Promise<{ address: string; chainQualified: string }> {
   const factoryAddress = config.factoryAddress ?? AIRACCOUNT_ADDRESSES.sepolia.factory;
-  const factory = new ethers.Contract(factoryAddress, AIRACCOUNT_FACTORY_ABI, provider);
   const salt = computeOapdSalt(config.owner, config.dappId);
 
-  const result = await factory.getFunction("getAddressWithChainId")(
-    config.owner,
-    salt,
-    config.initConfig,
-  );
-  return { address: result[0] as string, chainQualified: result[1] as string };
+  const result = (await provider.readContract({
+    address: factoryAddress as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: "getAddressWithChainId",
+    args: [config.owner as `0x${string}`, salt, config.initConfig],
+  })) as readonly [string, string];
+  return { address: result[0], chainQualified: result[1] };
 }
 
 /**
  * Check if an OAPD account has been deployed yet.
  */
 export async function isOapdDeployed(
-  provider: ethers.JsonRpcProvider,
+  provider: PublicClient,
   config: OapdConfig,
 ): Promise<boolean> {
   const address = await getOapdAddress(provider, config);
-  const code = await provider.getCode(address);
-  return code !== "0x";
+  // viem getCode returns the deployed bytecode, or `undefined` when the
+  // address has no code (the ethers equivalent returned "0x").
+  const code = await provider.getCode({ address: address as `0x${string}` });
+  return code !== undefined && code !== "0x";
 }

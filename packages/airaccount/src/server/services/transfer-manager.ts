@@ -1,7 +1,20 @@
-import { ethers } from "ethers";
+import {
+  hexToBytes,
+  concat,
+  numberToHex,
+  parseEther,
+  zeroAddress,
+  type PublicClient,
+  type Address,
+  type Abi,
+} from "viem";
+// Local human-readable ABIs (not in @aastar/core); parseAbi is required to feed
+// them to viem's readContract / encodeFunctionData during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi, encodeFunctionData } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { AccountManager } from "./account-manager";
-import { BLSSignatureService } from "./bls-signature-service";
+import { BLSSignatureService, GuardianSigner } from "./bls-signature-service";
 import { GuardChecker } from "./guard-checker";
 import { wrapExecuteUserOp } from "../utils/execute-user-op";
 import { PaymasterManager } from "./paymaster-manager";
@@ -9,12 +22,32 @@ import { TokenService } from "./token-service";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
 import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
 import { LegacyPasskeyAssertion } from "./kms-signer";
-import { EntryPointVersion, ALG_ID } from "../constants/entrypoint";
+import {
+  EntryPointVersion,
+  ALG_ID,
+  AIRACCOUNT_ABI,
+  AIRACCOUNT_FACTORY_ABI,
+  FACTORY_ABI_V6,
+} from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { PaymasterPriceStalenessError } from "./paymaster-manager";
 import { UserOperation, PackedUserOperation } from "../../core/types";
 import { ERC4337Utils } from "../../core/erc4337";
 import { TierLevel } from "../../core/tier";
+
+// ── Parsed local ABIs ─────────────────────────────────────────────
+// Widened to the loose `Abi` type so encodeFunctionData accepts dynamic
+// function names + loosely-typed args (mirrors the old ethers.Interface surface).
+const AIRACCOUNT_ABI_PARSED: Abi = parseAbi(AIRACCOUNT_ABI);
+const AIRACCOUNT_FACTORY_ABI_PARSED: Abi = parseAbi(AIRACCOUNT_FACTORY_ABI);
+const FACTORY_ABI_V6_PARSED: Abi = parseAbi(FACTORY_ABI_V6);
+const VALIDATOR_GETTER_ABI: Abi = parseAbi(["function validator() view returns (address)"]);
+
+/** encodeFunctionData over a loosely-typed Abi (was `iface.encodeFunctionData`). */
+function encodeFn(abi: Abi, functionName: string, args: readonly unknown[]): `0x${string}` {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return encodeFunctionData({ abi, functionName, args } as any);
+}
 
 // ── Signature strategy detection ─────────────────────────────────
 
@@ -23,23 +56,22 @@ import { TierLevel } from "../../core/tier";
  * Exported for unit testing.
  */
 export async function detectSignatureStrategy(
-  provider: ethers.Provider,
+  provider: PublicClient,
   accountAddress: string
 ): Promise<{ useECDSA: boolean; isCompositeValidator: boolean }> {
   try {
-    const accountCode = await provider.getCode(accountAddress);
-    if (accountCode === "0x") {
+    const accountCode = await provider.getCode({ address: accountAddress as Address });
+    if (!accountCode || accountCode === "0x") {
       // AirAccount factory invariant: all counterfactual addresses are compositeValidator deployments.
       return { useECDSA: true, isCompositeValidator: true };
     }
-    const acc = new ethers.Contract(
-      accountAddress,
-      ["function validator() view returns (address)"],
-      provider
-    );
-    const v = (await acc.validator()) as string;
+    const v = (await provider.readContract({
+      address: accountAddress as Address,
+      abi: VALIDATOR_GETTER_ABI,
+      functionName: "validator",
+    })) as string;
     // validator() exists → confirmed compositeValidator account.
-    return { useECDSA: v === ethers.ZeroAddress, isCompositeValidator: true };
+    return { useECDSA: v === zeroAddress, isCompositeValidator: true };
   } catch {
     // Covers both getCode() and validator() failures (network error or non-compositeValidator account).
     // Use raw ECDSA (no algId prefix) to avoid AA24 on non-compositeValidator accounts.
@@ -64,8 +96,8 @@ export interface ExecuteTransferParams {
   passkeyAssertion?: LegacyPasskeyAssertion;
   /** P256 passkey signature (64 bytes hex). Required for AirAccount Tier 2/3. */
   p256Signature?: string;
-  /** Guardian ethers.Signer instance. Required for AirAccount Tier 3. */
-  guardianSigner?: ethers.Signer;
+  /** Guardian signer instance. Required for AirAccount Tier 3. */
+  guardianSigner?: GuardianSigner;
   /** Enable AirAccount tiered signature routing. Default: false (legacy BLS-only). */
   useAirAccountTiering?: boolean;
   /**
@@ -134,8 +166,8 @@ export class TransferManager {
     if (!account) throw new Error("User account not found");
 
     // Check deployment
-    const code = await this.ethereum.getProvider().getCode(account.address);
-    const needsDeployment = code === "0x";
+    const code = await this.ethereum.getProvider().getCode({ address: account.address as Address });
+    const needsDeployment = !code || code === "0x";
     if (needsDeployment) {
       this.logger.log("Account needs deployment, will deploy with first transaction");
     }
@@ -201,18 +233,24 @@ export class TransferManager {
     }
 
     if (useECDSA) {
-      const signer = await this.signer.getSigner(userId, assertionCtx);
-      const ecdsaSig = await signer.signMessage(ethers.getBytes(userOpHash));
+      const ecdsaSig = await this.signer.signMessage(
+        userId,
+        hexToBytes(userOpHash as `0x${string}`),
+        assertionCtx
+      );
       if (isCompositeValidator) {
         this.logger.log("ECDSA path for compositeValidator: prepending algId prefix");
-        userOp.signature = ethers.concat([ethers.toBeHex(ALG_ID.ECDSA, 1), ecdsaSig]);
+        userOp.signature = concat([
+          numberToHex(ALG_ID.ECDSA, { size: 1 }),
+          ecdsaSig as `0x${string}`,
+        ]);
       } else {
         this.logger.log("ECDSA path for non-compositeValidator: raw signature");
         userOp.signature = ecdsaSig;
       }
     } else if (params.useAirAccountTiering && this.guardChecker) {
       // AirAccount tiered signature routing
-      const transferValue = params.tokenAddress ? 0n : ethers.parseEther(params.amount);
+      const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
       const preCheck = await this.guardChecker.preCheck(account.address, transferValue);
 
       if (!preCheck.ok) {
@@ -235,7 +273,10 @@ export class TransferManager {
       // BLS accounts are always compositeValidator by design — algId prefix applied unconditionally.
       const blsData = await this.blsService.generateBLSSignature(userId, userOpHash, assertionCtx);
       const packedBls = await this.blsService.packSignature(blsData);
-      userOp.signature = ethers.concat([ethers.toBeHex(ALG_ID.BLS, 1), packedBls]);
+      userOp.signature = concat([
+        numberToHex(ALG_ID.BLS, { size: 1 }),
+        packedBls as `0x${string}`,
+      ]);
     }
 
     // Create transfer record
@@ -305,8 +346,8 @@ export class TransferManager {
       } as Partial<import("../interfaces/storage-adapter").TransferRecord>);
 
       // Update deployment status if first tx
-      const code = await this.ethereum.getProvider().getCode(from);
-      if (code !== "0x") {
+      const code = await this.ethereum.getProvider().getCode({ address: from as Address });
+      if (code && code !== "0x") {
         const account = (await this.storage.getAccounts()).find(a => a.address === from);
         if (account && !account.deployed) {
           await this.storage.updateAccount(account.userId, {
@@ -377,7 +418,9 @@ export class TransferManager {
     const gasPrices = await this.ethereum.getUserOperationGasPrice();
 
     const validatorContract = this.ethereum.getValidatorContract(version);
-    const validatorGasEstimate = await validatorContract.getGasEstimate(3);
+    // uint256 arg must be bigint for viem (a JS number would risk silent truncation
+    // outside the 53-bit safe range; the untyped contract surface won't catch it).
+    const validatorGasEstimate = (await validatorContract.read.getGasEstimate([3n])) as bigint;
 
     return {
       callGasLimit: gasEstimates.callGasLimit,
@@ -458,13 +501,12 @@ export class TransferManager {
     paymasterTokenAddress?: string,
     wrapExecuteUserOpFlag: boolean = false
   ): Promise<UserOperation | PackedUserOperation> {
-    const accountContract = this.ethereum.getAccountContract(sender);
     const nonce = await this.ethereum.getNonce(sender, 0, version);
 
     // initCode for deployment
     const provider = this.ethereum.getProvider();
-    const code = await provider.getCode(sender);
-    const needsDeployment = code === "0x";
+    const code = await provider.getCode({ address: sender as Address });
+    const needsDeployment = !code || code === "0x";
 
     let initCode = "0x";
     if (needsDeployment) {
@@ -472,7 +514,7 @@ export class TransferManager {
       const account = accounts.find(a => a.address === sender);
       if (account) {
         const factory = this.ethereum.getFactoryContract(version);
-        const factoryAddress = await factory.getAddress();
+        const factoryAddress = factory.address;
 
         let deployCalldata: string;
         if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
@@ -480,16 +522,16 @@ export class TransferManager {
           if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
             // Guardian account: use createAccountWithDefaults so the factory-computed address
             // matches the stored sender (which was predicted via getAddressWithDefaults).
-            // ethers.js v6: bytes params require 0x-prefixed hex — guard against missing prefix.
+            // bytes params require 0x-prefixed hex — guard against missing prefix.
             const sig1 = account.guardian1Sig.startsWith("0x")
               ? account.guardian1Sig
               : `0x${account.guardian1Sig}`;
             const sig2 = account.guardian2Sig.startsWith("0x")
               ? account.guardian2Sig
               : `0x${account.guardian2Sig}`;
-            deployCalldata = factory.interface.encodeFunctionData("createAccountWithDefaults", [
+            deployCalldata = encodeFn(AIRACCOUNT_FACTORY_ABI_PARSED, "createAccountWithDefaults", [
               account.signerAddress,
-              account.salt,
+              BigInt(account.salt),
               account.guardian1,
               sig1,
               account.guardian2,
@@ -499,33 +541,30 @@ export class TransferManager {
           } else {
             // Standard account: createAccount with zero guardians and stored dailyLimit.
             const minimalConfig = [
-              [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress], // guardians (address[3])
+              [zeroAddress, zeroAddress, zeroAddress], // guardians (address[3])
               storedDailyLimit,
               [], // approvedAlgIds
               0n, // minDailyLimit
               [], // initialTokens
               [], // initialTokenConfigs
             ];
-            deployCalldata = factory.interface.encodeFunctionData("createAccount", [
+            deployCalldata = encodeFn(AIRACCOUNT_FACTORY_ABI_PARSED, "createAccount", [
               account.signerAddress,
-              account.salt,
+              BigInt(account.salt),
               minimalConfig,
             ]);
           }
         } else {
-          deployCalldata = factory.interface.encodeFunctionData(
-            "createAccountWithAAStarValidator",
-            [
-              account.signerAddress,
-              account.signerAddress,
-              account.validatorAddress,
-              true,
-              account.salt,
-            ]
-          );
+          deployCalldata = encodeFn(FACTORY_ABI_V6_PARSED, "createAccountWithAAStarValidator", [
+            account.signerAddress,
+            account.signerAddress,
+            account.validatorAddress,
+            true,
+            BigInt(account.salt),
+          ]);
         }
 
-        initCode = ethers.concat([factoryAddress, deployCalldata]);
+        initCode = concat([factoryAddress as `0x${string}`, deployCalldata as `0x${string}`]);
       }
     }
 
@@ -538,17 +577,9 @@ export class TransferManager {
         amount,
         tokenInfo.decimals
       );
-      callData = accountContract.interface.encodeFunctionData("execute", [
-        tokenAddress,
-        0,
-        transferCalldata,
-      ]);
+      callData = encodeFn(AIRACCOUNT_ABI_PARSED, "execute", [tokenAddress, 0n, transferCalldata]);
     } else {
-      callData = accountContract.interface.encodeFunctionData("execute", [
-        to,
-        ethers.parseEther(amount),
-        data,
-      ]);
+      callData = encodeFn(AIRACCOUNT_ABI_PARSED, "execute", [to, parseEther(amount), data]);
     }
 
     // v0.17.2-beta.4: guard-enabled accounts must route bundler UserOps through

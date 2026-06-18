@@ -1,4 +1,13 @@
-import { ethers } from "ethers";
+import { encodeFunctionData, type Abi, type Address, type Hex, type PublicClient } from "viem";
+// DELEGATE_ABI is a local human-readable signature array (not in @aastar/core);
+// parseAbi is required to feed it to viem encodeFunctionData / readContract during
+// the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
+import {
+  buildAuthorizationHash as buildAuthorizationHashViem,
+  verifyAuthorization as verifyAuthorizationViem,
+} from "../../migration/viem/signatures";
 
 // AirAccountDelegate ABI — subset for SDK use
 const DELEGATE_ABI = [
@@ -63,25 +72,22 @@ export interface EIP7702Authorization {
  * The user's EOA address does NOT change — only its bytecode pointer changes to 0xef0100||addr.
  *
  * Usage:
- *   1. Build SET_CODE authorization payload (call signer.signAuthorization externally — viem/ethers)
+ *   1. Build SET_CODE authorization payload (call signer.signAuthorization externally — viem)
  *   2. Build initialize() calldata for the first UserOp / direct tx
  *   3. Submit both via integrator's relay
  */
 export class EIP7702DelegateService {
-  private readonly iface: ethers.Interface;
-  private readonly contract: ethers.Contract;
+  /** Parsed ABI (loose viem `Abi` shape) used for encoding calldata and on-chain reads. */
+  private readonly abi: Abi;
+  /** Optional viem read client (was `ethers.Provider | ethers.Signer`). Required only for on-chain reads. */
+  private readonly client?: PublicClient;
 
   constructor(
     private readonly delegateAddress: string = AIR_ACCOUNT_DELEGATE_ADDRESS,
-    providerOrSigner?: ethers.Provider | ethers.Signer
+    client?: PublicClient
   ) {
-    this.iface = new ethers.Interface(DELEGATE_ABI);
-    if (providerOrSigner) {
-      this.contract = new ethers.Contract(delegateAddress, DELEGATE_ABI, providerOrSigner);
-    } else {
-      // Read-only placeholder — encoding methods still work without a provider
-      this.contract = new ethers.Contract(delegateAddress, DELEGATE_ABI);
-    }
+    this.abi = parseAbi(DELEGATE_ABI);
+    this.client = client;
   }
 
   // ── Calldata encoders ─────────────────────────────────────────
@@ -92,17 +98,25 @@ export class EIP7702DelegateService {
    * Guardian acceptance sigs follow the same EIP-712 scheme as AirAccountV7 createAccount.
    */
   encodeInitialize(params: DelegateInitParams): string {
-    return this.iface.encodeFunctionData("initialize", [
-      params.guardian1,
-      params.guardian1Sig,
-      params.guardian2,
-      params.guardian2Sig,
-      params.dailyLimit,
-    ]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "initialize",
+      args: [
+        params.guardian1,
+        params.guardian1Sig,
+        params.guardian2,
+        params.guardian2Sig,
+        params.dailyLimit,
+      ],
+    });
   }
 
   encodeExecute(dest: string, value: bigint, data: string): string {
-    return this.iface.encodeFunctionData("execute", [dest, value, data]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "execute",
+      args: [dest, value, data],
+    });
   }
 
   encodeExecuteBatch(
@@ -110,7 +124,11 @@ export class EIP7702DelegateService {
     values: bigint[],
     datas: string[]
   ): string {
-    return this.iface.encodeFunctionData("executeBatch", [dests, values, datas]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "executeBatch",
+      args: [dests, values, datas],
+    });
   }
 
   // ── EIP-7702 authorization hash construction ──────────────────
@@ -122,19 +140,14 @@ export class EIP7702DelegateService {
    *
    * This is the hash the private key signs to delegate code execution to
    * AirAccountDelegate. Use this hash with your KMS sign-hash endpoint or
-   * local ethers Signer.
+   * local viem account.
    *
    * @param chainId - Target chain ID (11155111 for Sepolia)
    * @param nonce - EOA's current transaction nonce
    * @returns 32-byte hash (0x-prefixed) ready for signing
    */
   buildAuthorizationHash(chainId: number, nonce: bigint): string {
-    const encoded = ethers.encodeRlp([
-      chainId === 0 ? "0x" : ethers.toBeHex(chainId),
-      this.delegateAddress,
-      nonce === 0n ? "0x" : ethers.toBeHex(nonce),
-    ]);
-    return ethers.keccak256(ethers.concat(["0x05", encoded]));
+    return buildAuthorizationHashViem(chainId, nonce, this.delegateAddress as Address);
   }
 
   /**
@@ -161,38 +174,50 @@ export class EIP7702DelegateService {
   /**
    * Verify that a signature is a valid EIP-7702 authorization for the given EOA address.
    * Recovers the signer from the authorization hash and checks it matches `eoa`.
+   *
+   * NOTE: now async — viem's `recoverAddress` is asynchronous (ethers' was sync).
    */
   verifyAuthorization(
     eoa: string,
     chainId: number,
     nonce: bigint,
     signature: string
-  ): boolean {
-    const hash = this.buildAuthorizationHash(chainId, nonce);
-    const recovered = ethers.recoverAddress(hash, signature);
-    return recovered.toLowerCase() === eoa.toLowerCase();
+  ): Promise<boolean> {
+    return verifyAuthorizationViem(
+      eoa as Address,
+      chainId,
+      nonce,
+      signature as Hex,
+      this.delegateAddress as Address
+    );
   }
 
   // ── On-chain reads (requires provider) ───────────────────────
 
   async isInitialized(eoa: string): Promise<boolean> {
-    const provider = this.contract.runner as ethers.Provider | null;
-    if (!provider) throw new Error("EIP7702DelegateService: provider required for on-chain reads");
-    const c = new ethers.Contract(eoa, DELEGATE_ABI, provider);
-    return c.isInitialized() as Promise<boolean>;
+    if (!this.client) throw new Error("EIP7702DelegateService: provider required for on-chain reads");
+    return (await this.client.readContract({
+      address: eoa as Address,
+      abi: this.abi,
+      functionName: "isInitialized",
+    })) as boolean;
   }
 
   async getOwner(eoa: string): Promise<string> {
-    const provider = this.contract.runner as ethers.Provider | null;
-    if (!provider) throw new Error("EIP7702DelegateService: provider required for on-chain reads");
-    const c = new ethers.Contract(eoa, DELEGATE_ABI, provider);
-    return c.owner() as Promise<string>;
+    if (!this.client) throw new Error("EIP7702DelegateService: provider required for on-chain reads");
+    return (await this.client.readContract({
+      address: eoa as Address,
+      abi: this.abi,
+      functionName: "owner",
+    })) as string;
   }
 
   async getGuardians(eoa: string): Promise<[string, string, string]> {
-    const provider = this.contract.runner as ethers.Provider | null;
-    if (!provider) throw new Error("EIP7702DelegateService: provider required for on-chain reads");
-    const c = new ethers.Contract(eoa, DELEGATE_ABI, provider);
-    return c.getGuardians() as Promise<[string, string, string]>;
+    if (!this.client) throw new Error("EIP7702DelegateService: provider required for on-chain reads");
+    return (await this.client.readContract({
+      address: eoa as Address,
+      abi: this.abi,
+      functionName: "getGuardians",
+    })) as [string, string, string];
   }
 }

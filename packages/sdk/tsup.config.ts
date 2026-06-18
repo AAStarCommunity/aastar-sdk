@@ -34,7 +34,8 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   noExternal: [/^@aastar\//, /^@noble\//],
-  external: ['viem', 'ethers', '@simplewebauthn/browser', 'axios', 'react', 'react-dom'],
+  // ethers fully removed from the SDK — airaccount is now 100% viem.
+  external: ['viem', '@simplewebauthn/browser', 'axios', 'react', 'react-dom'],
   esbuildOptions(options) {
     // Resolve the `browser` export condition for bundled deps so this single
     // universal bundle never bakes in a Node-only entrypoint. Specifically,

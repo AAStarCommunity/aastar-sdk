@@ -1,4 +1,9 @@
-import { ethers } from "ethers";
+import { concat, getContract, numberToHex, zeroAddress, type Address, type Hex, type WalletClient } from "viem";
+// PAYMASTER_PRICE_ABI / the SuperPaymaster-detection ABI are local human-readable
+// signature arrays (not in @aastar/core); parseAbi is required to feed them to
+// viem's getContract / writeContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, PaymasterRecord } from "../interfaces/storage-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
@@ -22,12 +27,17 @@ export class PaymasterPriceStalenessError extends Error {
   }
 }
 
-const PAYMASTER_PRICE_ABI = [
+const PAYMASTER_PRICE_ABI = parseAbi([
   "function token() view returns (address)",
   "function cachedPriceTimestamp() view returns (uint256)",
   "function priceStalenessThreshold() view returns (uint256)",
   "function updatePrice() external",
-];
+]);
+
+const SUPER_PAYMASTER_DETECT_ABI = parseAbi([
+  "function owner() view returns (address)",
+  "function operators(address) view returns (bool,uint256,address,uint256)",
+]);
 
 /**
  * Paymaster manager — extracted from NestJS PaymasterService.
@@ -90,10 +100,14 @@ export class PaymasterManager {
     thresholdSeconds: number;
   }> {
     const provider = this.ethereum.getProvider();
-    const contract = new ethers.Contract(paymasterAddress, PAYMASTER_PRICE_ABI, provider);
+    const contract = getContract({
+      address: paymasterAddress as Address,
+      abi: PAYMASTER_PRICE_ABI,
+      client: provider,
+    });
     const [timestamp, threshold] = await Promise.all([
-      contract.cachedPriceTimestamp() as Promise<bigint>,
-      contract.priceStalenessThreshold() as Promise<bigint>,
+      contract.read.cachedPriceTimestamp() as Promise<bigint>,
+      contract.read.priceStalenessThreshold() as Promise<bigint>,
     ]);
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ageSeconds = nowSeconds - Number(timestamp);
@@ -109,14 +123,26 @@ export class PaymasterManager {
    * Call `updatePrice()` on a paymaster contract (permissionless).
    * Useful when `checkPriceFreshness()` reports stale price.
    *
-   * @param signer - An ethers Signer that will send the transaction (must have gas).
+   * @param walletClient - A viem WalletClient (with an account) that will send
+   *   the transaction (must have gas). Replaces the former ethers Signer param.
    */
-  async updatePrice(paymasterAddress: string, signer: ethers.Signer): Promise<string> {
-    const contract = new ethers.Contract(paymasterAddress, PAYMASTER_PRICE_ABI, signer);
-    const tx = await contract.updatePrice({ gasLimit: 300000 });
-    await tx.wait();
-    this.logger.log(`Paymaster ${paymasterAddress} price updated, tx: ${tx.hash}`);
-    return tx.hash as string;
+  async updatePrice(paymasterAddress: string, walletClient: WalletClient): Promise<string> {
+    const account = walletClient.account;
+    if (!account) {
+      throw new Error("updatePrice requires a WalletClient with a configured account");
+    }
+    const hash = await walletClient.writeContract({
+      address: paymasterAddress as Address,
+      abi: PAYMASTER_PRICE_ABI,
+      functionName: "updatePrice",
+      args: [],
+      gas: BigInt(300_000),
+      account,
+      chain: walletClient.chain,
+    });
+    await this.ethereum.getProvider().waitForTransactionReceipt({ hash });
+    this.logger.log(`Paymaster ${paymasterAddress} price updated, tx: ${hash}`);
+    return hash;
   }
 
   async getPaymasterData(
@@ -148,16 +174,18 @@ export class PaymasterManager {
         let isSuperPaymaster = false;
         let operatorAddress = "0x";
         try {
-          const spContract = new ethers.Contract(
-            formattedAddress,
-            [
-              "function owner() view returns (address)",
-              "function operators(address) view returns (bool,uint256,address,uint256)",
-            ],
-            provider
-          );
-          const owner = await spContract.owner();
-          const opInfo = await spContract.operators(owner);
+          const spContract = getContract({
+            address: formattedAddress as Address,
+            abi: SUPER_PAYMASTER_DETECT_ABI,
+            client: provider,
+          });
+          const owner = (await spContract.read.owner()) as Address;
+          const opInfo = (await spContract.read.operators([owner])) as readonly [
+            boolean,
+            bigint,
+            Address,
+            bigint,
+          ];
           if (opInfo && opInfo[0] === true) {
             isSuperPaymaster = true;
             operatorAddress = owner;
@@ -172,12 +200,12 @@ export class PaymasterManager {
           // recordXPNTsDebt + event emit in postOp observed ~117k gas on Sepolia; 300k gives safe headroom.
           const postGas = BigInt(300_000);
           const maxRate = (BigInt(1) << BigInt(256)) - BigInt(1);
-          return ethers.concat([
-            formattedAddress,
-            ethers.zeroPadValue(ethers.toBeHex(verGas), 16),
-            ethers.zeroPadValue(ethers.toBeHex(postGas), 16),
-            operatorAddress,
-            ethers.zeroPadValue(ethers.toBeHex(maxRate), 32),
+          return concat([
+            formattedAddress as Hex,
+            numberToHex(verGas, { size: 16 }),
+            numberToHex(postGas, { size: 16 }),
+            operatorAddress as Hex,
+            numberToHex(maxRate, { size: 32 }),
           ]);
         }
 
@@ -192,13 +220,13 @@ export class PaymasterManager {
           this.logger.log(`PaymasterV4 token from options: ${tokenAddress}`);
         } else {
           try {
-            const pmContract = new ethers.Contract(
-              formattedAddress,
-              PAYMASTER_PRICE_ABI,
-              provider
-            );
-            tokenAddress = await pmContract.token();
-            if (tokenAddress === ethers.ZeroAddress) tokenAddress = null;
+            const pmContract = getContract({
+              address: formattedAddress as Address,
+              abi: PAYMASTER_PRICE_ABI,
+              client: provider,
+            });
+            tokenAddress = (await pmContract.read.token()) as string;
+            if (tokenAddress === zeroAddress) tokenAddress = null;
             if (tokenAddress) {
               this.logger.log(`PaymasterV4 token auto-detected: ${tokenAddress}`);
             }
@@ -207,15 +235,15 @@ export class PaymasterManager {
           }
         }
 
-        const parts: string[] = [
-          formattedAddress,
-          ethers.zeroPadValue(ethers.toBeHex(paymasterVerificationGasLimit), 16),
-          ethers.zeroPadValue(ethers.toBeHex(paymasterPostOpGasLimit), 16),
+        const parts: Hex[] = [
+          formattedAddress as Hex,
+          numberToHex(paymasterVerificationGasLimit, { size: 16 }),
+          numberToHex(paymasterPostOpGasLimit, { size: 16 }),
         ];
         if (tokenAddress) {
-          parts.push(tokenAddress);
+          parts.push(tokenAddress as Hex);
         }
-        return ethers.concat(parts);
+        return concat(parts);
       }
 
       return formattedAddress;
@@ -294,17 +322,13 @@ export class PaymasterManager {
         return result.result.paymasterAndData;
       }
       if (result.result.paymaster) {
-        return ethers.concat([
-          result.result.paymaster,
-          ethers.zeroPadValue(
-            ethers.toBeHex(BigInt(result.result.paymasterVerificationGasLimit || "0x30000")),
-            16
-          ),
-          ethers.zeroPadValue(
-            ethers.toBeHex(BigInt(result.result.paymasterPostOpGasLimit || "0x30000")),
-            16
-          ),
-          result.result.paymasterData || "0x",
+        return concat([
+          result.result.paymaster as Hex,
+          numberToHex(BigInt(result.result.paymasterVerificationGasLimit || "0x30000"), {
+            size: 16,
+          }),
+          numberToHex(BigInt(result.result.paymasterPostOpGasLimit || "0x30000"), { size: 16 }),
+          (result.result.paymasterData || "0x") as Hex,
         ]);
       }
     }

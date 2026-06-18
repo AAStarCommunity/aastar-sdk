@@ -1,74 +1,74 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const { MockContract, ZERO_ADDRESS } = vi.hoisted(() => ({
-  MockContract: vi.fn(),
-  ZERO_ADDRESS: "0x0000000000000000000000000000000000000000",
-}));
-
-vi.mock("ethers", () => ({
-  ethers: {
-    ZeroAddress: "0x0000000000000000000000000000000000000000",
-    Contract: MockContract,
-  },
-  ZeroAddress: "0x0000000000000000000000000000000000000000",
-  Contract: MockContract,
-}));
-
-import { ethers } from "ethers";
-
+import { zeroAddress, type PublicClient } from "viem";
 import { GuardStateReader } from "../services/guard-state-reader";
 
 const ACCOUNT_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const GUARD_ADDR = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
-function setupContracts(guardAddress: string, guardValues: Partial<Record<string, bigint | boolean>>) {
-  const mockGuard = {
-    dailyLimit: vi.fn().mockResolvedValue(guardValues.dailyLimit ?? 1_000_000n),
-    remainingDailyAllowance: vi.fn().mockResolvedValue(guardValues.remaining ?? 600_000n),
-    todaySpent: vi.fn().mockResolvedValue(guardValues.todaySpent ?? 400_000n),
-    tier1Limit: vi.fn().mockResolvedValue(guardValues.tier1Limit ?? 500_000n),
-    tier2Limit: vi.fn().mockResolvedValue(guardValues.tier2Limit ?? 800_000n),
-    minDailyLimit: vi.fn().mockResolvedValue(guardValues.minDailyLimit ?? 0n),
-    approvedAlgorithms: vi.fn().mockResolvedValue(guardValues.approvedAlgorithms ?? true),
-  };
-
-  const mockAccount = {
-    guard: vi.fn().mockResolvedValue(guardAddress),
-    // v0.17.2-beta.4: algorithm whitelist lives on the account.
-    approvedAlgorithms: vi.fn().mockResolvedValue(guardValues.approvedAlgorithms ?? true),
-  };
-
-  MockContract.mockImplementation(function (addr: string) {
-    const obj = addr === ACCOUNT_ADDR ? mockAccount : mockGuard;
-    Object.assign(this as object, obj);
-  });
+/**
+ * Build a viem PublicClient stub whose `readContract` dispatches by address +
+ * function name. The account address resolves `guard()` / `approvedAlgorithms()`;
+ * every other address is treated as the guard contract.
+ */
+function makeClient(
+  guardAddress: string,
+  guardValues: Partial<Record<string, bigint | boolean>>
+): PublicClient {
+  return {
+    readContract: vi.fn().mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async ({ address, functionName }: any) => {
+        const isAccount = (address as string).toLowerCase() === ACCOUNT_ADDR.toLowerCase();
+        if (isAccount) {
+          if (functionName === "guard") return guardAddress;
+          if (functionName === "approvedAlgorithms") return guardValues.approvedAlgorithms ?? true;
+        }
+        switch (functionName) {
+          case "dailyLimit":
+            return guardValues.dailyLimit ?? 1_000_000n;
+          case "remainingDailyAllowance":
+            return guardValues.remaining ?? 600_000n;
+          case "todaySpent":
+            return guardValues.todaySpent ?? 400_000n;
+          case "tier1Limit":
+            return guardValues.tier1Limit ?? 500_000n;
+          case "tier2Limit":
+            return guardValues.tier2Limit ?? 800_000n;
+          case "minDailyLimit":
+            return guardValues.minDailyLimit ?? 0n;
+          case "approvedAlgorithms":
+            return guardValues.approvedAlgorithms ?? true;
+          default:
+            throw new Error(`unexpected read: ${functionName}`);
+        }
+      }
+    ),
+  } as unknown as PublicClient;
 }
 
 describe("GuardStateReader", () => {
-  const provider = {} as ethers.JsonRpcProvider;
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe("getGuardState", () => {
     it("returns null when account has no guard (ZeroAddress)", async () => {
-      setupContracts(ethers.ZeroAddress, {});
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(makeClient(zeroAddress, {}));
       const state = await reader.getGuardState(ACCOUNT_ADDR);
       expect(state).toBeNull();
     });
 
     it("returns GuardState with correct fields when guard is set", async () => {
-      setupContracts(GUARD_ADDR, {
-        dailyLimit: 1_000_000n,
-        remaining: 600_000n,
-        todaySpent: 400_000n,
-        tier1Limit: 500_000n,
-        tier2Limit: 800_000n,
-        minDailyLimit: 100_000n,
-      });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, {
+          dailyLimit: 1_000_000n,
+          remaining: 600_000n,
+          todaySpent: 400_000n,
+          tier1Limit: 500_000n,
+          tier2Limit: 800_000n,
+          minDailyLimit: 100_000n,
+        })
+      );
       const state = await reader.getGuardState(ACCOUNT_ADDR);
 
       expect(state).not.toBeNull();
@@ -81,34 +81,25 @@ describe("GuardStateReader", () => {
     });
 
     it("sets currentTier=1 when spent < tier1Limit", async () => {
-      setupContracts(GUARD_ADDR, {
-        todaySpent: 100_000n,
-        tier1Limit: 500_000n,
-        tier2Limit: 800_000n,
-      });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { todaySpent: 100_000n, tier1Limit: 500_000n, tier2Limit: 800_000n })
+      );
       const state = await reader.getGuardState(ACCOUNT_ADDR);
       expect(state!.currentTier).toBe(1);
     });
 
     it("sets currentTier=2 when tier1Limit <= spent < tier2Limit", async () => {
-      setupContracts(GUARD_ADDR, {
-        todaySpent: 600_000n,
-        tier1Limit: 500_000n,
-        tier2Limit: 800_000n,
-      });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { todaySpent: 600_000n, tier1Limit: 500_000n, tier2Limit: 800_000n })
+      );
       const state = await reader.getGuardState(ACCOUNT_ADDR);
       expect(state!.currentTier).toBe(2);
     });
 
     it("sets currentTier=3 when spent >= tier2Limit", async () => {
-      setupContracts(GUARD_ADDR, {
-        todaySpent: 900_000n,
-        tier1Limit: 500_000n,
-        tier2Limit: 800_000n,
-      });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { todaySpent: 900_000n, tier1Limit: 500_000n, tier2Limit: 800_000n })
+      );
       const state = await reader.getGuardState(ACCOUNT_ADDR);
       expect(state!.currentTier).toBe(3);
     });
@@ -116,19 +107,15 @@ describe("GuardStateReader", () => {
 
   describe("requiredTierForAmount", () => {
     it("returns tier 1 when account has no guard", async () => {
-      setupContracts(ethers.ZeroAddress, {});
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(makeClient(zeroAddress, {}));
       const tier = await reader.requiredTierForAmount(ACCOUNT_ADDR, 1_000_000n);
       expect(tier).toBe(1);
     });
 
     it("projects spend correctly for tier determination", async () => {
-      setupContracts(GUARD_ADDR, {
-        todaySpent: 400_000n,
-        tier1Limit: 500_000n,
-        tier2Limit: 800_000n,
-      });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { todaySpent: 400_000n, tier1Limit: 500_000n, tier2Limit: 800_000n })
+      );
       // 400k + 50k = 450k < tier1 → tier 1
       expect(await reader.requiredTierForAmount(ACCOUNT_ADDR, 50_000n)).toBe(1);
     });
@@ -137,15 +124,13 @@ describe("GuardStateReader", () => {
   describe("isAlgorithmApproved", () => {
     // v0.17.2-beta.4: read the whitelist from the ACCOUNT (not the guard).
     it("returns account.approvedAlgorithms = true", async () => {
-      setupContracts(GUARD_ADDR, { approvedAlgorithms: true });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(makeClient(GUARD_ADDR, { approvedAlgorithms: true }));
       const approved = await reader.isAlgorithmApproved(ACCOUNT_ADDR, 1);
       expect(approved).toBe(true);
     });
 
     it("returns account.approvedAlgorithms = false", async () => {
-      setupContracts(GUARD_ADDR, { approvedAlgorithms: false });
-      const reader = new GuardStateReader(provider);
+      const reader = new GuardStateReader(makeClient(GUARD_ADDR, { approvedAlgorithms: false }));
       const approved = await reader.isAlgorithmApproved(ACCOUNT_ADDR, 1);
       expect(approved).toBe(false);
     });

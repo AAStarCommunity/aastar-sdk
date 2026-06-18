@@ -97,23 +97,23 @@ describe("EthereumProvider", () => {
   describe("contract factories", () => {
     it("should create entry point contract with correct address", () => {
       const contract = provider.getEntryPointContract(EntryPointVersion.V0_6);
-      expect(contract.target).toBe(V06_EP);
+      expect(contract.address).toBe(V06_EP);
     });
 
     it("should create factory contract with correct address", () => {
       const contract = provider.getFactoryContract(EntryPointVersion.V0_6);
-      expect(contract.target).toBe(V06_FACTORY);
+      expect(contract.address).toBe(V06_FACTORY);
     });
 
     it("should create validator contract with correct address", () => {
       const contract = provider.getValidatorContract(EntryPointVersion.V0_6);
-      expect(contract.target).toBe(V06_VALIDATOR);
+      expect(contract.address).toBe(V06_VALIDATOR);
     });
 
     it("should create account contract with given address", () => {
       const addr = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF";
       const contract = provider.getAccountContract(addr);
-      expect(contract.target).toBe(addr);
+      expect(contract.address).toBe(addr);
     });
   });
 });

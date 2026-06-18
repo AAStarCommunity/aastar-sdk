@@ -84,9 +84,6 @@
     "ethereum",
     "web3"
   ],
-  "peerDependencies": {
-    "ethers": "^6.0.0"
-  },
   "dependencies": {
     "@noble/curves": "^2.0.1",
     "@simplewebauthn/browser": "^13.2.2",

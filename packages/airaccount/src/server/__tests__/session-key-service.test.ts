@@ -1,7 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_TYPE } from "../constants/entrypoint";
 import { SESSION_KEY_VALIDATOR_ABI, AGENT_SESSION_KEY_VALIDATOR_ABI } from "../constants/entrypoint";
-import { ethers } from "ethers";
+// eslint-disable-next-line no-restricted-imports
+import {
+  parseAbi,
+  encodeFunctionData,
+  decodeFunctionData,
+  getAbiItem,
+  toFunctionSelector,
+  zeroAddress,
+  type Abi,
+  type AbiFunction,
+} from "viem";
+import { selectorFromId } from "../../migration/viem/hashing";
 
 // ─── Test constants ─────────────────────────────────────────────────────────
 const ACCOUNT_ADDR = "0x3333333333333333333333333333333333333333";
@@ -9,20 +20,36 @@ const SESSION_KEY  = "0x4444444444444444444444444444444444444444";
 const SUB_KEY      = "0x5555555555555555555555555555555555555555";
 const PARENT_KEY   = "0x6666666666666666666666666666666666666666";
 
-// ─── Minimal stand-in for SessionKeyService (avoids ethers.Contract mocking) ─
+// ─── Minimal stand-in for SessionKeyService (avoids contract-instance mocking) ─
 // Re-implements only the methods under test using the same encode/decode logic
 // as the real service, verified against the actual ABI strings.
 // This is intentional: it tests the LOGIC CONTRACT (what the function encodes/decodes),
-// not the dependency wiring (ethers.Contract constructor).
+// not the dependency wiring.
 
-const skIface  = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
-const askIface = new ethers.Interface(AGENT_SESSION_KEY_VALIDATOR_ABI);
+const SK_ABI: Abi = parseAbi(SESSION_KEY_VALIDATOR_ABI as readonly string[]);
+const ASK_ABI: Abi = parseAbi(AGENT_SESSION_KEY_VALIDATOR_ABI as readonly string[]);
 
 // Authoritative ABI from @aastar/core — used to cross-check that the local
 // SESSION_KEY_VALIDATOR_ABI fragments encode the SAME Session tuple shape, so a
 // future flat-vs-tuple regression in the local fragments is caught here.
 import coreSessionAbi from "../../../../core/src/abis/SessionKeyValidator.json";
-const coreIface = new ethers.Interface(coreSessionAbi as ethers.InterfaceAbi);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CORE_ABI: Abi = (((coreSessionAbi as any).abi ?? coreSessionAbi) as Abi);
+
+function enc(abi: Abi, fn: string, args: readonly unknown[]): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return encodeFunctionData({ abi, functionName: fn, args } as any);
+}
+
+function selOf(abi: Abi, name: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const item = getAbiItem({ abi, name } as any) as AbiFunction;
+  return toFunctionSelector(item);
+}
+
+function decodeArgs(abi: Abi, data: string): readonly unknown[] {
+  return decodeFunctionData({ abi, data: data as `0x${string}` }).args as readonly unknown[];
+}
 
 // Build the 8-field Session tuple exactly as SessionKeyService.buildSessionStruct does.
 function sessionTuple(p: {
@@ -32,7 +59,7 @@ function sessionTuple(p: {
 }) {
   return {
     expiry: p.expiry,
-    contractScope: p.contractScope ?? ethers.ZeroAddress,
+    contractScope: p.contractScope ?? zeroAddress,
     selectorScope: p.selectorScope ?? "0x00000000",
     revoked: false,
     velocityLimit: p.velocityLimit ?? 0,
@@ -48,17 +75,13 @@ function encodeGrantSession(params: {
 }): string {
   const cfg = sessionTuple(params);
   if (params.ownerSig) {
-    return skIface.encodeFunctionData("grantSession", [
-      params.account, params.sessionKey, cfg, params.ownerSig,
-    ]);
+    return enc(SK_ABI, "grantSession", [params.account, params.sessionKey, cfg, params.ownerSig]);
   }
-  return skIface.encodeFunctionData("grantSessionDirect", [
-    params.account, params.sessionKey, cfg,
-  ]);
+  return enc(SK_ABI, "grantSessionDirect", [params.account, params.sessionKey, cfg]);
 }
 
 function encodeRevokeSession(account: string, sessionKey: string): string {
-  return skIface.encodeFunctionData("revokeSession", [account, sessionKey]);
+  return enc(SK_ABI, "revokeSession", [account, sessionKey]);
 }
 
 // ── P256 / passkey session encode (mirrors SessionKeyService P256 methods) ───
@@ -68,24 +91,20 @@ function encodeGrantP256Session(params: {
 }): string {
   const cfg = sessionTuple(params);
   if (params.ownerSig) {
-    return skIface.encodeFunctionData("grantP256Session", [
-      params.account, params.keyX, params.keyY, cfg, params.ownerSig,
-    ]);
+    return enc(SK_ABI, "grantP256Session", [params.account, params.keyX, params.keyY, cfg, params.ownerSig]);
   }
-  return skIface.encodeFunctionData("grantP256SessionDirect", [
-    params.account, params.keyX, params.keyY, cfg,
-  ]);
+  return enc(SK_ABI, "grantP256SessionDirect", [params.account, params.keyX, params.keyY, cfg]);
 }
 
 function encodeRevokeP256Session(account: string, keyX: string, keyY: string): string {
-  return skIface.encodeFunctionData("revokeP256Session", [account, keyX, keyY]);
+  return enc(SK_ABI, "revokeP256Session", [account, keyX, keyY]);
 }
 
 function encodeGrantAgentSession(sessionKey: string, cfg: {
   expiry: number; velocityLimit: number; velocityWindow: number;
   callTargets: string[]; selectorAllowlist: string[];
 }): string {
-  return askIface.encodeFunctionData("grantAgentSession", [
+  return enc(ASK_ABI, "grantAgentSession", [
     sessionKey,
     { expiry: cfg.expiry, velocityLimit: cfg.velocityLimit,
       velocityWindow: cfg.velocityWindow, revoked: false,
@@ -98,7 +117,7 @@ function encodeDelegateSession(account: string, subKey: string, subCfg: {
   expiry: number; velocityLimit: number; velocityWindow: number;
   callTargets: string[]; selectorAllowlist: string[];
 }): string {
-  return askIface.encodeFunctionData("delegateSession", [
+  return enc(ASK_ABI, "delegateSession", [
     account, subKey,
     { expiry: subCfg.expiry, velocityLimit: subCfg.velocityLimit,
       velocityWindow: subCfg.velocityWindow, revoked: false,
@@ -107,7 +126,7 @@ function encodeDelegateSession(account: string, subKey: string, subCfg: {
 }
 
 function encodeRevokeAgentSession(sessionKey: string): string {
-  return askIface.encodeFunctionData("revokeAgentSession", [sessionKey]);
+  return enc(ASK_ABI, "revokeAgentSession", [sessionKey]);
 }
 
 // Decoder logic extracted from getAgentSession — M9 6-field + 2-field layout
@@ -168,14 +187,14 @@ describe("SessionKeyService — M6 encodeGrantSession", () => {
 
   it("uses the Session TUPLE — selectors match the authoritative @aastar/core ABI", () => {
     const TUPLE = "(uint48,address,bytes4,bool,uint16,uint32,address[],bytes4[])";
-    const grantSel = ethers.id(`grantSession(address,address,${TUPLE},bytes)`).slice(0, 10);
-    const directSel = ethers.id(`grantSessionDirect(address,address,${TUPLE})`).slice(0, 10);
+    const grantSel = selectorFromId(`grantSession(address,address,${TUPLE},bytes)`);
+    const directSel = selectorFromId(`grantSessionDirect(address,address,${TUPLE})`);
 
     // tuple-based selector == core JSON ABI == local fragment ABI
-    expect(grantSel).toBe(coreIface.getFunction("grantSession")!.selector);
-    expect(directSel).toBe(coreIface.getFunction("grantSessionDirect")!.selector);
-    expect(skIface.getFunction("grantSession")!.selector).toBe(grantSel);
-    expect(skIface.getFunction("grantSessionDirect")!.selector).toBe(directSel);
+    expect(grantSel).toBe(selOf(CORE_ABI, "grantSession"));
+    expect(directSel).toBe(selOf(CORE_ABI, "grantSessionDirect"));
+    expect(selOf(SK_ABI, "grantSession")).toBe(grantSel);
+    expect(selOf(SK_ABI, "grantSessionDirect")).toBe(directSel);
 
     // emitted calldata carries the tuple selector
     const withSig = encodeGrantSession({ account: ACCOUNT_ADDR, sessionKey: SESSION_KEY, expiry: 1000, ownerSig: "0x" + "cc".repeat(65) });
@@ -184,7 +203,7 @@ describe("SessionKeyService — M6 encodeGrantSession", () => {
     expect(direct.slice(0, 10)).toBe(directSel);
 
     // REGRESSION GUARD: the old flat-param selector MUST NOT match.
-    const flatDirect = ethers.id("grantSessionDirect(address,address,uint48,address,bytes4)").slice(0, 10);
+    const flatDirect = selectorFromId("grantSessionDirect(address,address,uint48,address,bytes4)");
     expect(directSel).not.toBe(flatDirect);
   });
 
@@ -203,24 +222,18 @@ describe("SessionKeyService — P256 encodeGrantP256Session", () => {
   // Canonical signatures use the Session TUPLE as 3rd/4th arg — NOT flat params.
   // Tuple: (uint48,address,bytes4,bool,uint16,uint32,address[],bytes4[])
   const TUPLE = "(uint48,address,bytes4,bool,uint16,uint32,address[],bytes4[])";
-  const GRANT_SEL = ethers.id(
-    `grantP256Session(address,bytes32,bytes32,${TUPLE},bytes)`,
-  ).slice(0, 10);
-  const GRANT_DIRECT_SEL = ethers.id(
-    `grantP256SessionDirect(address,bytes32,bytes32,${TUPLE})`,
-  ).slice(0, 10);
-  const REVOKE_SEL = ethers.id(
-    "revokeP256Session(address,bytes32,bytes32)",
-  ).slice(0, 10);
+  const GRANT_SEL = selectorFromId(`grantP256Session(address,bytes32,bytes32,${TUPLE},bytes)`);
+  const GRANT_DIRECT_SEL = selectorFromId(`grantP256SessionDirect(address,bytes32,bytes32,${TUPLE})`);
+  const REVOKE_SEL = selectorFromId("revokeP256Session(address,bytes32,bytes32)");
 
   // Cross-check the tuple-based selectors against the authoritative core ABI JSON.
   it("selectors match the authoritative @aastar/core ABI", () => {
-    expect(GRANT_SEL).toBe(coreIface.getFunction("grantP256Session")!.selector);
-    expect(GRANT_DIRECT_SEL).toBe(coreIface.getFunction("grantP256SessionDirect")!.selector);
-    expect(REVOKE_SEL).toBe(coreIface.getFunction("revokeP256Session")!.selector);
+    expect(GRANT_SEL).toBe(selOf(CORE_ABI, "grantP256Session"));
+    expect(GRANT_DIRECT_SEL).toBe(selOf(CORE_ABI, "grantP256SessionDirect"));
+    expect(REVOKE_SEL).toBe(selOf(CORE_ABI, "revokeP256Session"));
     // And the local fragment Interface must agree with both.
-    expect(skIface.getFunction("grantP256Session")!.selector).toBe(GRANT_SEL);
-    expect(skIface.getFunction("grantP256SessionDirect")!.selector).toBe(GRANT_DIRECT_SEL);
+    expect(selOf(SK_ABI, "grantP256Session")).toBe(GRANT_SEL);
+    expect(selOf(SK_ABI, "grantP256SessionDirect")).toBe(GRANT_DIRECT_SEL);
   });
 
   it("with ownerSig → grantP256Session selector", () => {
@@ -262,14 +275,15 @@ describe("SessionKeyService — P256 encodeGrantP256Session", () => {
     const cd = encodeGrantP256Session({
       account: ACCOUNT_ADDR, keyX: KEY_X, keyY: KEY_Y, expiry: 1234, ownerSig: OWNER_SIG,
     });
-    const decoded = skIface.decodeFunctionData("grantP256Session", cd);
+    const decoded = decodeArgs(SK_ABI, cd);
     expect(decoded[0]).toBe(ACCOUNT_ADDR);
     expect(decoded[1]).toBe(KEY_X);
     expect(decoded[2]).toBe(KEY_Y);
-    // decoded[3] is the 8-field Session tuple; [0]=expiry, [3]=revoked.
-    const cfg = decoded[3];
-    expect(Number(cfg[0])).toBe(1234);
-    expect(cfg[3]).toBe(false); // revoked always false on grant
+    // decoded[3] is the named Session tuple object; viem returns named tuples as objects.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfg = decoded[3] as any;
+    expect(Number(cfg.expiry)).toBe(1234);
+    expect(cfg.revoked).toBe(false); // revoked always false on grant
     expect(decoded[4]).toBe(OWNER_SIG);
   });
 
@@ -280,15 +294,16 @@ describe("SessionKeyService — P256 encodeGrantP256Session", () => {
       velocityLimit: 7, velocityWindow: 1800,
       callTargets: [SESSION_KEY], selectorAllowlist: ["0x11223344"],
     });
-    const cfg = skIface.decodeFunctionData("grantP256SessionDirect", cd)[3];
-    expect(Number(cfg[0])).toBe(5000);
-    expect(cfg[1]).toBe(SESSION_KEY);
-    expect(cfg[2]).toBe("0xaabbccdd");
-    expect(cfg[3]).toBe(false);
-    expect(Number(cfg[4])).toBe(7);
-    expect(Number(cfg[5])).toBe(1800);
-    expect(cfg[6]).toEqual([SESSION_KEY]);
-    expect(cfg[7]).toEqual(["0x11223344"]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfg = decodeArgs(SK_ABI, cd)[3] as any;
+    expect(Number(cfg.expiry)).toBe(5000);
+    expect(cfg.contractScope).toBe(SESSION_KEY);
+    expect(cfg.selectorScope).toBe("0xaabbccdd");
+    expect(cfg.revoked).toBe(false);
+    expect(Number(cfg.velocityLimit)).toBe(7);
+    expect(Number(cfg.velocityWindow)).toBe(1800);
+    expect(cfg.callTargets).toEqual([SESSION_KEY]);
+    expect(cfg.selectorAllowlist).toEqual(["0x11223344"]);
   });
 
   it("encodeRevokeP256Session returns valid calldata with revoke selector", () => {
