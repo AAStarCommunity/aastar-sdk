@@ -26,7 +26,14 @@ export * from '@aastar/enduser';
 export * from '@aastar/operator';
 export * from '@aastar/admin';
 
-// Export AirAccount SDK (ERC-4337 + KMS + BLS)
+// KMS client surface (ERC-4337 + WebAuthn passkeys + BLS) from the main entry.
+// NOTE: this root namespace is the lightweight client/passkey/bls surface ONLY. The
+// FULL KMS API — including the server-side `KmsManager`, `RecoveryService`, etc. — is
+// exposed at the dedicated subpath `@aastar/sdk/kms` (which also bundles
+// `@aastar/airaccount/server`). Kept narrow at the root so a plain `import '@aastar/sdk'`
+// doesn't drag the server surface into every consumer.
+// `AirAccount` is a backward-compatible alias kept for one release; prefer `KMS`.
+export * as KMS from '@aastar/airaccount';
 export * as AirAccount from '@aastar/airaccount';
 
 // Export Utils & Errors

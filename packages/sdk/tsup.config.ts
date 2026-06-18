@@ -19,7 +19,8 @@ export default defineConfig({
     enduser: 'src/subpaths/enduser.ts',
     operator: 'src/subpaths/operator.ts',
     admin: 'src/subpaths/admin.ts',
-    airaccount: 'src/subpaths/airaccount.ts',
+    kms: 'src/subpaths/kms.ts',
+    airaccount: 'src/subpaths/airaccount.ts', // @deprecated alias of ./kms — kept one release
   },
   format: ['esm'],
   dts: true,

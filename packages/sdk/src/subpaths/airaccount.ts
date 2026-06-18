@@ -1,6 +1,6 @@
-// The rich AirAccount integration surface (KmsManager, SessionKeyService, RecoveryService,
-// WeightedSignatureService, AgentRegistryService, P256PasskeySigner, …) lives in the server
-// entry; the main entry adds the client/passkey/bls surface. Export both so consumers get the
-// full AirAccount API via `@aastar/sdk/airaccount`.
-export * from '@aastar/airaccount/server';
-export * from '@aastar/airaccount';
+/**
+ * @deprecated Import from `@aastar/sdk/kms` instead. This `@aastar/sdk/airaccount`
+ * subpath is a backward-compatible alias kept for ONE release; it re-exports the
+ * canonical KMS surface (`./kms`) verbatim and will be removed in a future major.
+ */
+export * from './kms.js';

@@ -4,6 +4,7 @@ import {
   getCanonicalAddresses,
   isSupportedChainId,
   listSupportedChainIds,
+  describeSupportedChains,
 } from './addresses.js';
 
 describe('canonical address resolution', () => {
@@ -46,5 +47,15 @@ describe('canonical address resolution', () => {
     const sep = getCanonicalAddresses(11155111)!;
     expect(op.registry).toBe(CANONICAL_ADDRESSES[10].registry);
     expect(op.registry).not.toBe(sep.registry);
+  });
+
+  it('describes supported chains with viem names + ids for friendly errors', () => {
+    const desc = describeSupportedChains();
+    // Every supported chainId appears, labelled (not a bare number list).
+    for (const id of listSupportedChainIds()) {
+      expect(desc).toContain(`(${id})`);
+    }
+    expect(desc).toContain('Sepolia');
+    expect(desc).toContain('11155111');
   });
 });
