@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { hashMessage } from "../../migration/viem/signatures";
 import { ILogger } from "../interfaces/logger";
 import { KmsHttpClient } from "./kms-http-client";
 import {
@@ -753,85 +753,45 @@ export class KmsManager {
   createKmsSigner(
     keyId: string,
     address: string,
-    assertionProvider: () => Promise<LegacyPasskeyAssertion>,
-    provider?: ethers.Provider
+    assertionProvider: () => Promise<LegacyPasskeyAssertion>
   ): KmsSigner {
     this.ensureEnabled();
-    return new KmsSigner(keyId, address, this, assertionProvider, provider);
+    return new KmsSigner(keyId, address, this, assertionProvider);
   }
 }
 
 /**
- * ethers.AbstractSigner backed by KMS with Passkey assertion.
+ * KMS-backed signer with Passkey assertion.
  *
  * Each signing operation calls the `assertionProvider` to obtain a Legacy
  * Passkey assertion, which is then passed to KMS SignHash. The Legacy format
  * is reusable (no challenge consumption), enabling BLS dual-signing.
+ *
+ * Narrowed during the ethers -> viem migration: only the EIP-191 personal-sign
+ * and address-read behaviour is actually consumed by the SDK, so the former
+ * ethers.AbstractSigner surface (signTransaction / signTypedData / connect /
+ * provider) has been dropped.
  */
-export class KmsSigner extends ethers.AbstractSigner {
+export class KmsSigner {
   constructor(
     private readonly keyId: string,
     private readonly _address: string,
     private readonly kmsManager: KmsManager,
-    private readonly assertionProvider: () => Promise<LegacyPasskeyAssertion>,
-    provider?: ethers.Provider
-  ) {
-    super(provider);
-  }
+    private readonly assertionProvider: () => Promise<LegacyPasskeyAssertion>
+  ) {}
 
   async getAddress(): Promise<string> {
     return this._address;
   }
 
   async signMessage(message: string | Uint8Array): Promise<string> {
-    const messageBytes = typeof message === "string" ? ethers.toUtf8Bytes(message) : message;
-    const messageHash = ethers.hashMessage(messageBytes);
+    // EIP-191 personal-sign: a string is hashed as UTF-8 text, a byte array as
+    // raw bytes — byte-identical to ethers `hashMessage(toUtf8Bytes(str) | bytes)`.
+    const messageHash = hashMessage(message);
     const assertion = await this.assertionProvider();
     const signResponse = await this.kmsManager.signHash(messageHash, assertion, {
       Address: this._address,
     });
     return "0x" + signResponse.Signature;
-  }
-
-  async signTransaction(tx: ethers.TransactionRequest): Promise<string> {
-    if (!this.provider) {
-      throw new Error("Provider is required for signing transactions");
-    }
-    const populated = await this.populateTransaction(tx);
-    const unsignedTx = ethers.Transaction.from(populated);
-    const txHash = unsignedTx.hash;
-    if (!txHash) {
-      throw new Error("Failed to compute transaction hash");
-    }
-    const assertion = await this.assertionProvider();
-    const signResponse = await this.kmsManager.signHash(txHash, assertion, {
-      Address: this._address,
-    });
-    const sig = ethers.Signature.from("0x" + signResponse.Signature);
-    unsignedTx.signature = sig;
-    return unsignedTx.serialized;
-  }
-
-  async signTypedData(
-    domain: ethers.TypedDataDomain,
-    types: Record<string, ethers.TypedDataField[]>,
-    value: Record<string, unknown>
-  ): Promise<string> {
-    const hash = ethers.TypedDataEncoder.hash(domain, types, value);
-    const assertion = await this.assertionProvider();
-    const signResponse = await this.kmsManager.signHash(hash, assertion, {
-      Address: this._address,
-    });
-    return "0x" + signResponse.Signature;
-  }
-
-  connect(provider: ethers.Provider): KmsSigner {
-    return new KmsSigner(
-      this.keyId,
-      this._address,
-      this.kmsManager,
-      this.assertionProvider,
-      provider
-    );
   }
 }

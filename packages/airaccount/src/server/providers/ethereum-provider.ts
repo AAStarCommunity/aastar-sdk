@@ -1,4 +1,17 @@
-import { ethers } from "ethers";
+import {
+  createPublicClient,
+  http,
+  getContract,
+  formatEther,
+  parseUnits,
+  type PublicClient,
+  type Address,
+  type Abi,
+} from "viem";
+// EntryPoint/AirAccount ABIs are local human-readable signatures (not in @aastar/core);
+// parseAbi is required to feed them to viem's getContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { ServerConfig, EntryPointVersionConfig } from "../config";
 import {
   EntryPointVersion,
@@ -19,28 +32,66 @@ import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { UserOperation, PackedUserOperation } from "../../core/types";
 
 /**
+ * A viem contract instance bound to a read-only PublicClient.
+ *
+ * The EntryPoint/AirAccount ABIs are loaded from human-readable signatures via
+ * `parseAbi`, which yields the loosely-typed `Abi` shape. As a result `read`/`write`
+ * method access is not statically typed per-function; callers index by name and the
+ * returned value is `unknown` (cast at the call site). This mirrors the dynamic
+ * surface that `ethers.Contract` previously exposed.
+ */
+export type ViemContractMethods = Record<string, (...args: unknown[]) => Promise<unknown>>;
+export interface ViemContract {
+  address: Address;
+  abi: Abi;
+  /** Read (view/pure) calls: `contract.read.fnName([...args])`. */
+  read: ViemContractMethods;
+  /** State-changing calls (requires a wallet client — not provided by this read-only hub). */
+  write: ViemContractMethods;
+  estimateGas: ViemContractMethods;
+  simulate: ViemContractMethods;
+  getEvents: ViemContractMethods;
+}
+
+/**
  * Unified Ethereum provider — replaces NestJS EthereumService.
- * Manages RPC + Bundler providers and contract interactions.
+ * Manages RPC + Bundler clients (viem) and contract interactions.
  */
 export class EthereumProvider {
-  private readonly provider: ethers.JsonRpcProvider;
-  private readonly bundlerProvider: ethers.JsonRpcProvider;
+  /** Main-network read client. Pass to viem getContract / readContract calls. */
+  private readonly provider: PublicClient;
+  /** Bundler client — used only for raw eth_ / pimlico_ userOp JSON-RPC. */
+  private readonly bundlerProvider: PublicClient;
   private readonly config: ServerConfig;
   private readonly logger: ILogger;
 
   constructor(config: ServerConfig) {
     this.config = config;
     this.logger = config.logger ?? new ConsoleLogger("[EthereumProvider]");
-    this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
-    this.bundlerProvider = new ethers.JsonRpcProvider(config.bundlerRpcUrl);
+    this.provider = createPublicClient({ transport: http(config.rpcUrl) });
+    this.bundlerProvider = createPublicClient({ transport: http(config.bundlerRpcUrl) });
   }
 
-  getProvider(): ethers.JsonRpcProvider {
+  /** Returns the viem PublicClient for the main network RPC. */
+  getProvider(): PublicClient {
     return this.provider;
   }
 
-  getBundlerProvider(): ethers.JsonRpcProvider {
+  /** Returns the viem PublicClient bound to the bundler RPC (raw .request only). */
+  getBundlerProvider(): PublicClient {
     return this.bundlerProvider;
+  }
+
+  /**
+   * Raw bundler JSON-RPC call. The bundler exposes non-standard methods
+   * (eth_sendUserOperation, pimlico_getUserOperationGasPrice, ...) that are not in
+   * viem's typed RPC schema, so we go through the transport's request fn untyped.
+   */
+  private async bundlerRequest<T = unknown>(method: string, params: unknown[]): Promise<T> {
+    return (await this.bundlerProvider.request({
+      method: method as never,
+      params: params as never,
+    })) as T;
   }
 
   // ── Config helpers ──────────────────────────────────────────────
@@ -79,52 +130,61 @@ export class EthereumProvider {
 
   // ── Contract factories ──────────────────────────────────────────
 
-  getFactoryContract(version: EntryPointVersion = EntryPointVersion.V0_6): ethers.Contract {
+  /** Build a read-only viem contract bound to the main-network PublicClient. */
+  private contractAt(address: string, abi: readonly string[]): ViemContract {
+    return getContract({
+      address: address as Address,
+      abi: parseAbi(abi as readonly string[]),
+      client: this.provider,
+    }) as unknown as ViemContract;
+  }
+
+  getFactoryContract(version: EntryPointVersion = EntryPointVersion.V0_6): ViemContract {
     const address = this.getFactoryAddress(version);
     const abi = version === EntryPointVersion.V0_6 ? FACTORY_ABI_V6 : AIRACCOUNT_FACTORY_ABI;
-    return new ethers.Contract(address, abi, this.provider);
+    return this.contractAt(address, abi);
   }
 
-  getEntryPointContract(version: EntryPointVersion = EntryPointVersion.V0_6): ethers.Contract {
+  getEntryPointContract(version: EntryPointVersion = EntryPointVersion.V0_6): ViemContract {
     const address = this.getEntryPointAddress(version);
     const abi = version === EntryPointVersion.V0_6 ? ENTRYPOINT_ABI_V6 : ENTRYPOINT_ABI_V7_V8;
-    return new ethers.Contract(address, abi, this.provider);
+    return this.contractAt(address, abi);
   }
 
-  getValidatorContract(version: EntryPointVersion = EntryPointVersion.V0_6): ethers.Contract {
+  getValidatorContract(version: EntryPointVersion = EntryPointVersion.V0_6): ViemContract {
     const address = this.getValidatorAddress(version);
-    return new ethers.Contract(address, VALIDATOR_ABI, this.provider);
+    return this.contractAt(address, VALIDATOR_ABI);
   }
 
-  getAccountContract(address: string): ethers.Contract {
-    return new ethers.Contract(address, AIRACCOUNT_ABI, this.provider);
+  getAccountContract(address: string): ViemContract {
+    return this.contractAt(address, AIRACCOUNT_ABI);
   }
 
   // ── M7 Module contracts ─────────────────────────────────────────
 
   // M7 r4 module helpers — addresses renamed to *M7r4 suffix in beta.3 to avoid ambiguity.
   // These methods are retained for backwards compatibility; callers should pass an explicit address.
-  getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidatorM7r4): ethers.Contract {
-    return new ethers.Contract(address, AGENT_SESSION_KEY_VALIDATOR_ABI, this.provider);
+  getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidatorM7r4): ViemContract {
+    return this.contractAt(address, AGENT_SESSION_KEY_VALIDATOR_ABI);
   }
 
-  getTierGuardHookContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.tierGuardHookM7r4): ethers.Contract {
-    return new ethers.Contract(address, TIER_GUARD_HOOK_ABI, this.provider);
+  getTierGuardHookContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.tierGuardHookM7r4): ViemContract {
+    return this.contractAt(address, TIER_GUARD_HOOK_ABI);
   }
 
-  getCompositeValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.compositeValidatorM7r4): ethers.Contract {
-    return new ethers.Contract(address, AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI, this.provider);
+  getCompositeValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.compositeValidatorM7r4): ViemContract {
+    return this.contractAt(address, AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI);
   }
 
-  getForceExitModuleContract(address: string): ethers.Contract {
-    return new ethers.Contract(address, FORCE_EXIT_MODULE_ABI, this.provider);
+  getForceExitModuleContract(address: string): ViemContract {
+    return this.contractAt(address, FORCE_EXIT_MODULE_ABI);
   }
 
   // ── On-chain queries ────────────────────────────────────────────
 
   async getBalance(address: string): Promise<string> {
-    const balance = await this.provider.getBalance(address);
-    return ethers.formatEther(balance);
+    const balance = await this.provider.getBalance({ address: address as Address });
+    return formatEther(balance);
   }
 
   async getNonce(
@@ -133,7 +193,10 @@ export class EthereumProvider {
     version: EntryPointVersion = EntryPointVersion.V0_6
   ): Promise<bigint> {
     const entryPoint = this.getEntryPointContract(version);
-    return await entryPoint.getNonce(accountAddress, key);
+    return (await (entryPoint.read as Record<string, (args: unknown[]) => Promise<unknown>>).getNonce([
+      accountAddress as Address,
+      BigInt(key),
+    ])) as bigint;
   }
 
   async getUserOpHash(
@@ -141,37 +204,39 @@ export class EthereumProvider {
     version: EntryPointVersion = EntryPointVersion.V0_6
   ): Promise<string> {
     const entryPoint = this.getEntryPointContract(version);
+    const read = entryPoint.read as Record<string, (args: unknown[]) => Promise<unknown>>;
 
     if (version === EntryPointVersion.V0_6) {
       const op = userOp as UserOperation;
+      // uint256 fields coerced to bigint for viem (byte-identical to ethers' BigNumberish handling).
       const userOpArray = [
         op.sender,
-        op.nonce,
+        BigInt(op.nonce),
         op.initCode || "0x",
         op.callData,
-        op.callGasLimit,
-        op.verificationGasLimit,
-        op.preVerificationGas,
-        op.maxFeePerGas,
-        op.maxPriorityFeePerGas,
+        BigInt(op.callGasLimit),
+        BigInt(op.verificationGasLimit),
+        BigInt(op.preVerificationGas),
+        BigInt(op.maxFeePerGas),
+        BigInt(op.maxPriorityFeePerGas),
         op.paymasterAndData || "0x",
         "0x", // Always use empty signature for hash calculation
       ];
-      return await entryPoint.getUserOpHash(userOpArray);
+      return (await read.getUserOpHash([userOpArray])) as string;
     } else {
       const packedOp = userOp as PackedUserOperation;
       const packedOpArray = [
         packedOp.sender,
-        packedOp.nonce,
+        BigInt(packedOp.nonce),
         packedOp.initCode || "0x",
         packedOp.callData,
         packedOp.accountGasLimits,
-        packedOp.preVerificationGas,
+        BigInt(packedOp.preVerificationGas),
         packedOp.gasFees,
         packedOp.paymasterAndData || "0x",
         "0x",
       ];
-      return await entryPoint.getUserOpHash(packedOpArray);
+      return (await read.getUserOpHash([packedOpArray])) as string;
     }
   }
 
@@ -182,7 +247,7 @@ export class EthereumProvider {
     version: EntryPointVersion = EntryPointVersion.V0_6
   ): Promise<{ callGasLimit: string; verificationGasLimit: string; preVerificationGas: string }> {
     try {
-      return await this.bundlerProvider.send("eth_estimateUserOperationGas", [
+      return await this.bundlerRequest("eth_estimateUserOperationGas", [
         userOp,
         this.getEntryPointAddress(version),
       ]);
@@ -199,14 +264,14 @@ export class EthereumProvider {
     userOp: unknown,
     version: EntryPointVersion = EntryPointVersion.V0_6
   ): Promise<string> {
-    return await this.bundlerProvider.send("eth_sendUserOperation", [
+    return await this.bundlerRequest("eth_sendUserOperation", [
       userOp,
       this.getEntryPointAddress(version),
     ]);
   }
 
   async getUserOperationReceipt(userOpHash: string): Promise<unknown> {
-    return await this.bundlerProvider.send("eth_getUserOperationReceipt", [userOpHash]);
+    return await this.bundlerRequest("eth_getUserOperationReceipt", [userOpHash]);
   }
 
   async waitForUserOp(userOpHash: string, maxAttempts: number = 60): Promise<string> {
@@ -238,16 +303,18 @@ export class EthereumProvider {
     maxPriorityFeePerGas: string;
   }> {
     try {
-      const gasPrice = await this.bundlerProvider.send("pimlico_getUserOperationGasPrice", []);
+      const gasPrice = await this.bundlerRequest<{
+        fast: { maxFeePerGas: string; maxPriorityFeePerGas: string };
+      }>("pimlico_getUserOperationGasPrice", []);
       return {
         maxFeePerGas: gasPrice.fast.maxFeePerGas,
         maxPriorityFeePerGas: gasPrice.fast.maxPriorityFeePerGas,
       };
     } catch {
       try {
-        const feeData = await this.provider.getFeeData();
-        const baseFee = feeData.maxFeePerGas || ethers.parseUnits("20", "gwei");
-        const priorityFee = feeData.maxPriorityFeePerGas || ethers.parseUnits("2", "gwei");
+        const feeData = await this.provider.estimateFeesPerGas();
+        const baseFee = feeData.maxFeePerGas || parseUnits("20", 9); // gwei
+        const priorityFee = feeData.maxPriorityFeePerGas || parseUnits("2", 9); // gwei
         const maxFeePerGas = (baseFee * 3n) / 2n;
         const maxPriorityFeePerGas = (priorityFee * 3n) / 2n;
         return {
@@ -256,8 +323,8 @@ export class EthereumProvider {
         };
       } catch {
         return {
-          maxFeePerGas: "0x" + ethers.parseUnits("3", "gwei").toString(16),
-          maxPriorityFeePerGas: "0x" + ethers.parseUnits("1", "gwei").toString(16),
+          maxFeePerGas: "0x" + parseUnits("3", 9).toString(16), // gwei
+          maxPriorityFeePerGas: "0x" + parseUnits("1", 9).toString(16), // gwei
         };
       }
     }

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ethers } from "ethers";
+import { getAbiItem, toFunctionSelector, type Abi, type AbiFunction, type PublicClient } from "viem";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { selectorFromId } from "../../migration/viem/hashing";
 import {
   WeightedSignatureService,
   WEIGHT_CHANGE_THRESHOLD,
@@ -13,7 +14,7 @@ const ACCOUNT = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 // Canonical WeightConfig tuple signature (field order matches AAStarAirAccountV7.json).
 const CONFIG_TUPLE = "(uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8)";
-const selector = (sig: string): string => ethers.id(sig).slice(0, 10);
+const selector = (sig: string): string => selectorFromId(sig);
 
 // Cross-check selectors against the core ABI JSON (single source of truth).
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,9 +23,20 @@ const CORE_ABI_PATH = resolve(
   "../../../../core/src/abis/AAStarAirAccountV7.json"
 );
 const coreAbiRaw = JSON.parse(readFileSync(CORE_ABI_PATH, "utf8"));
-const coreAbi = Array.isArray(coreAbiRaw) ? coreAbiRaw : coreAbiRaw.abi;
-const coreIface = new ethers.Interface(coreAbi);
-const coreSelector = (name: string): string => coreIface.getFunction(name)!.selector;
+const coreAbi = (Array.isArray(coreAbiRaw) ? coreAbiRaw : coreAbiRaw.abi) as Abi;
+const coreSelector = (name: string): string =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  toFunctionSelector(getAbiItem({ abi: coreAbi, name } as any) as AbiFunction);
+
+/** A throwaway client for encoder-only tests (encoders never touch the client). */
+const noClient = {} as unknown as PublicClient;
+
+/** A viem PublicClient stub whose read resolves to `value`. */
+function mockReadClient(value: unknown): PublicClient {
+  return {
+    readContract: vi.fn().mockResolvedValue(value),
+  } as unknown as PublicClient;
+}
 
 const SAMPLE_CONFIG: WeightConfig = {
   passkeyWeight: 1,
@@ -43,7 +55,7 @@ describe("WeightedSignatureService — calldata encoders", () => {
   let svc: WeightedSignatureService;
 
   beforeEach(() => {
-    svc = new WeightedSignatureService(ACCOUNT, ethers.getDefaultProvider());
+    svc = new WeightedSignatureService(ACCOUNT, noClient);
   });
 
   describe("encodeSetWeightConfig", () => {
@@ -129,17 +141,10 @@ describe("WeightedSignatureService — calldata encoders", () => {
 
 describe("WeightedSignatureService — on-chain read mocks", () => {
   it("getWeightConfig decodes the struct fields in canonical order", async () => {
-    const mockProvider = {
-      getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-      call: vi.fn().mockResolvedValue(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          Array(10).fill("uint8"),
-          [1, 2, 1, 1, 1, 1, 0, 3, 4, 5]
-        )
-      ),
-    } as unknown as ethers.Provider;
+    // weightConfig() returns 10 separate uint8 outputs → viem yields a positional array.
+    const client = mockReadClient([1, 2, 1, 1, 1, 1, 0, 3, 4, 5]);
 
-    const svc = new WeightedSignatureService(ACCOUNT, mockProvider);
+    const svc = new WeightedSignatureService(ACCOUNT, client);
     const cfg = await svc.getWeightConfig();
 
     expect(cfg).toEqual(SAMPLE_CONFIG);
@@ -150,17 +155,10 @@ describe("WeightedSignatureService — on-chain read mocks", () => {
   });
 
   it("getPendingWeightChange decodes proposed config + proposedAt + approvalBitmap", async () => {
-    const mockProvider = {
-      getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-      call: vi.fn().mockResolvedValue(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          [`tuple(${CONFIG_TUPLE.slice(1, -1)})`, "uint256", "uint256"],
-          [[1, 2, 1, 1, 1, 1, 0, 3, 4, 5], 1717200000n, 3n]
-        )
-      ),
-    } as unknown as ethers.Provider;
+    // pendingWeightChange() returns (tuple proposed, uint256 proposedAt, uint256 approvalBitmap).
+    const client = mockReadClient([[1, 2, 1, 1, 1, 1, 0, 3, 4, 5], 1717200000n, 3n]);
 
-    const svc = new WeightedSignatureService(ACCOUNT, mockProvider);
+    const svc = new WeightedSignatureService(ACCOUNT, client);
     const pending = await svc.getPendingWeightChange();
 
     expect(pending.proposed).toEqual(SAMPLE_CONFIG);

@@ -1,5 +1,24 @@
-import { ethers } from "ethers";
+import {
+  encodeFunctionData,
+  zeroAddress,
+  type Abi,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
+// AIRACCOUNT_ABI is a local human-readable `string[]` signature set (not available
+// in @aastar/core), so parseAbi is required to feed it to viem's encode/read calls.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { AIRACCOUNT_ABI } from "../constants/entrypoint";
+
+/**
+ * Parsed AirAccount ABI shared by the encoders and on-chain reads. Cast to the
+ * loose `Abi` type so `encodeFunctionData`/`readContract` accept dynamic
+ * function names and return `unknown` (mirrors the old `ethers.Interface` /
+ * `ethers.Contract` dynamic surface).
+ */
+const AIRACCOUNT_ABI_PARSED = parseAbi(AIRACCOUNT_ABI) as Abi;
 
 /**
  * RECOVERY_THRESHOLD — number of distinct guardian approvals required to recover
@@ -105,13 +124,12 @@ function popcount(value: bigint): number {
  * cleared via guardian `cancelRecovery()` votes before re-proposing.
  */
 export class RecoveryService {
-  private readonly iface: ethers.Interface;
-
-  constructor(
-    private readonly providerOrSigner: ethers.Provider | ethers.Signer
-  ) {
-    this.iface = new ethers.Interface(AIRACCOUNT_ABI);
-  }
+  /**
+   * @param client viem read client (was `ethers.Provider | ethers.Signer`). Only
+   *   on-chain reads are performed here; calldata encoders are pure and never
+   *   touch the client.
+   */
+  constructor(private readonly client: PublicClient) {}
 
   // ── Calldata encoders (submit TO the account address) ─────────────
 
@@ -121,7 +139,11 @@ export class RecoveryService {
    * guardian is `address(0)`, the owner, or already registered.
    */
   encodeAddGuardian(guardian: string): string {
-    return this.iface.encodeFunctionData("addGuardian", [guardian]);
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "addGuardian",
+      args: [guardian as Address],
+    });
   }
 
   /**
@@ -133,7 +155,11 @@ export class RecoveryService {
    * @param guardianSigs EIP-191 guardian signatures over the removal hash.
    */
   encodeRemoveGuardian(index: number, guardianSigs: string[]): string {
-    return this.iface.encodeFunctionData("removeGuardian", [index, guardianSigs]);
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "removeGuardian",
+      args: [index, guardianSigs as Hex[]],
+    });
   }
 
   /**
@@ -142,7 +168,11 @@ export class RecoveryService {
    * proposer's approval (1 of {@link RECOVERY_THRESHOLD}).
    */
   encodeProposeRecovery(newOwner: string): string {
-    return this.iface.encodeFunctionData("proposeRecovery", [newOwner]);
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "proposeRecovery",
+      args: [newOwner as Address],
+    });
   }
 
   /**
@@ -150,7 +180,11 @@ export class RecoveryService {
    * active proposal, setting its bit in `approvalBitmap`.
    */
   encodeApproveRecovery(): string {
-    return this.iface.encodeFunctionData("approveRecovery", []);
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "approveRecovery",
+      args: [],
+    });
   }
 
   /**
@@ -159,7 +193,11 @@ export class RecoveryService {
    * reached. The owner cannot cancel.
    */
   encodeCancelRecovery(): string {
-    return this.iface.encodeFunctionData("cancelRecovery", []);
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "cancelRecovery",
+      args: [],
+    });
   }
 
   /**
@@ -168,7 +206,11 @@ export class RecoveryService {
    * Rotates the account owner to the proposed `newOwner`.
    */
   encodeExecuteRecovery(): string {
-    return this.iface.encodeFunctionData("executeRecovery", []);
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "executeRecovery",
+      args: [],
+    });
   }
 
   // ── On-chain reads (against the account address) ──────────────────
@@ -181,9 +223,12 @@ export class RecoveryService {
    * @param account The AirAccount address to query.
    */
   async getActiveRecovery(account: string): Promise<ActiveRecovery> {
-    const contract = new ethers.Contract(account, AIRACCOUNT_ABI, this.providerOrSigner);
     const [newOwner, proposedAt, approvalBitmap, cancellationBitmap] =
-      await contract.activeRecovery();
+      (await this.client.readContract({
+        address: account as Address,
+        abi: AIRACCOUNT_ABI_PARSED,
+        functionName: "activeRecovery",
+      })) as readonly [Address, bigint, bigint, bigint];
 
     const proposedAtBn = BigInt(proposedAt);
     const approvalBitmapBn = BigInt(approvalBitmap);
@@ -197,7 +242,7 @@ export class RecoveryService {
       approvalCount: popcount(approvalBitmapBn),
       cancellationCount: popcount(cancellationBitmapBn),
       executeAfter: proposedAtBn + RECOVERY_TIMELOCK_SECONDS,
-      isActive: (newOwner as string) !== ethers.ZeroAddress,
+      isActive: (newOwner as string).toLowerCase() !== zeroAddress,
     };
   }
 
@@ -207,8 +252,12 @@ export class RecoveryService {
    * @param account The AirAccount address to query.
    */
   async getGuardianCount(account: string): Promise<number> {
-    const contract = new ethers.Contract(account, AIRACCOUNT_ABI, this.providerOrSigner);
-    return Number(await contract.guardianCount());
+    const count = (await this.client.readContract({
+      address: account as Address,
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "guardianCount",
+    })) as number | bigint;
+    return Number(count);
   }
 
   /**
@@ -222,12 +271,22 @@ export class RecoveryService {
    * @param account The AirAccount address to query.
    */
   async getGuardians(account: string): Promise<string[]> {
-    const contract = new ethers.Contract(account, AIRACCOUNT_ABI, this.providerOrSigner);
-    const count = Number(await contract.guardianCount());
+    const count = Number(
+      (await this.client.readContract({
+        address: account as Address,
+        abi: AIRACCOUNT_ABI_PARSED,
+        functionName: "guardianCount",
+      })) as number | bigint
+    );
     const guardians: string[] = [];
     for (let i = 0; i < count; i++) {
-      const g = (await contract.guardians(i)) as string;
-      if (g !== ethers.ZeroAddress) guardians.push(g);
+      const g = (await this.client.readContract({
+        address: account as Address,
+        abi: AIRACCOUNT_ABI_PARSED,
+        functionName: "guardians",
+        args: [BigInt(i)],
+      })) as string;
+      if (g.toLowerCase() !== zeroAddress) guardians.push(g);
     }
     return guardians;
   }

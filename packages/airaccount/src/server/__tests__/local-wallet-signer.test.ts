@@ -1,4 +1,5 @@
-import { ethers } from "ethers";
+import { describe, it, expect, beforeEach } from "vitest";
+import { recoverMessageAddress } from "viem";
 import { LocalWalletSigner } from "../adapters/local-wallet-signer";
 
 // Hardhat account #0
@@ -19,26 +20,20 @@ describe("LocalWalletSigner", () => {
     expect(addr2).toBe(EXPECTED_ADDRESS);
   });
 
-  it("should return an ethers Signer", async () => {
-    const s = await signer.getSigner("user-x");
-    expect(s).toBeDefined();
-    const address = await s.getAddress();
-    expect(address).toBe(EXPECTED_ADDRESS);
-  });
-
-  it("should return signer and address from ensureSigner", async () => {
+  it("should return address from ensureSigner", async () => {
     const result = await signer.ensureSigner("user-z");
     expect(result.address).toBe(EXPECTED_ADDRESS);
-    expect(result.signer).toBeDefined();
-    const signerAddr = await result.signer.getAddress();
-    expect(signerAddr).toBe(EXPECTED_ADDRESS);
   });
 
-  it("should produce a valid signature", async () => {
-    const s = (await signer.getSigner("user-a")) as ethers.Wallet;
-    const message = "hello";
-    const signature = await s.signMessage(message);
-    const recovered = ethers.verifyMessage(message, signature);
+  it("should produce a valid EIP-191 signature over raw bytes", async () => {
+    // signMessage signs the raw bytes (a 0x-hex digest), identical to
+    // ethers `wallet.signMessage(getBytes(hash))` / viem `{ raw }`.
+    const message = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" as const;
+    const signature = await signer.signMessage("user-a", message);
+    const recovered = await recoverMessageAddress({
+      message: { raw: message },
+      signature,
+    });
     expect(recovered).toBe(EXPECTED_ADDRESS);
   });
 });

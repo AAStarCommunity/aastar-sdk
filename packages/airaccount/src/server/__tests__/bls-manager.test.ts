@@ -38,6 +38,7 @@ vi.mock("axios", () => ({
 }));
 
 import axios from "axios";
+import { concat, numberToHex } from "viem";
 import { BLSManager } from "../../core/bls/bls.manager";
 import type { BLSNode } from "../../core/bls/types";
 
@@ -249,11 +250,10 @@ describe("BLSManager", () => {
       expect(packed.startsWith("0x01")).toBe(false);
     });
 
-    it("ethers.concat with ALG_ID.BLS prefix starts with 0x01 and raw BLS bytes follow", () => {
-      const { ethers } = require("ethers");
+    it("concat with ALG_ID.BLS prefix starts with 0x01 and raw BLS bytes follow", () => {
       const ALG_ID_BLS = 0x01;
       const packed = manager.packSignature(validData() as any);
-      const userOpSig = ethers.concat([ethers.toBeHex(ALG_ID_BLS, 1), packed]);
+      const userOpSig = concat([numberToHex(ALG_ID_BLS, { size: 1 }), packed as `0x${string}`]);
       // Must start with 0x01 algId
       expect(userOpSig.startsWith("0x01")).toBe(true);
       // Byte at index 1 must match the FIRST byte of packed (nodeIds length prefix, not another 0x01)

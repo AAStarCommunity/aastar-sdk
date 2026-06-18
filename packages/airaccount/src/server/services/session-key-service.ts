@@ -1,8 +1,26 @@
-import { ethers } from "ethers";
+import {
+  getContract,
+  encodeFunctionData,
+  zeroAddress,
+  type Abi,
+  type PublicClient,
+} from "viem";
+// parseAbi is required to feed the local human-readable string[] ABIs to viem's
+// getContract / encodeFunctionData during the ethers->viem migration. These
+// validator ABIs are not available in @aastar/core.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import {
   SESSION_KEY_VALIDATOR_ABI,
   AGENT_SESSION_KEY_VALIDATOR_ABI,
 } from "../constants/entrypoint";
+import { type ViemContract } from "../providers/ethereum-provider";
+
+// Parse the local human-readable ABIs once. Widened to `Abi` so viem treats the
+// call args loosely (plain address strings / numbers) — matching the previous
+// ethers.Interface ergonomics without per-call `0x${string}` casts.
+const SESSION_KEY_VALIDATOR_VIEM_ABI = parseAbi(SESSION_KEY_VALIDATOR_ABI) as Abi;
+const AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI = parseAbi(AGENT_SESSION_KEY_VALIDATOR_ABI) as Abi;
 
 // ─── M6 SessionKeyValidator ──────────────────────────────────────
 
@@ -96,7 +114,7 @@ function buildSessionStruct(params: {
 }): SessionStruct {
   return {
     expiry: params.expiry,
-    contractScope: params.contractScope ?? ethers.ZeroAddress,
+    contractScope: params.contractScope ?? zeroAddress,
     selectorScope: params.selectorScope ?? "0x00000000",
     revoked: false,
     velocityLimit: params.velocityLimit ?? 0,
@@ -107,25 +125,40 @@ function buildSessionStruct(params: {
 }
 
 /**
+ * The raw 8-field Session tuple as decoded by viem. Because the on-chain return
+ * type names every tuple component (uint48 expiry, address contractScope, ...),
+ * viem returns a NAMED object (not an array), so we read by field name. uint
+ * fields come back as `bigint`.
+ */
+interface RawSession {
+  expiry: bigint | number;
+  contractScope: string;
+  selectorScope: string;
+  revoked: boolean;
+  velocityLimit: bigint | number;
+  velocityWindow: bigint | number;
+  callTargets: readonly string[];
+  selectorAllowlist: readonly string[];
+}
+
+/**
  * Decode the 8-field Session tuple returned by getSession/getP256Session into
  * a SessionInfo, computing the derived `active` flag.
- * The contract returns the tuple positionally: ethers exposes it as an
- * indexable Result, so we read by index to match the on-chain field order.
  */
-function decodeSessionInfo(session: ethers.Result | unknown[]): SessionInfo {
-  const s = session as ArrayLike<unknown>;
-  const expiry = Number(s[0]);
+function decodeSessionInfo(session: unknown): SessionInfo {
+  const s = session as RawSession;
+  const expiry = Number(s.expiry);
   const now = Math.floor(Date.now() / 1000);
   return {
     expiry,
-    contractScope: s[1] as string,
-    selectorScope: s[2] as string,
-    revoked: s[3] as boolean,
-    velocityLimit: Number(s[4]),
-    velocityWindow: Number(s[5]),
-    callTargets: [...((s[6] as string[]) ?? [])],
-    selectorAllowlist: [...((s[7] as string[]) ?? [])],
-    active: expiry > now && !(s[3] as boolean),
+    contractScope: s.contractScope,
+    selectorScope: s.selectorScope,
+    revoked: s.revoked,
+    velocityLimit: Number(s.velocityLimit),
+    velocityWindow: Number(s.velocityWindow),
+    callTargets: [...(s.callTargets ?? [])],
+    selectorAllowlist: [...(s.selectorAllowlist ?? [])],
+    active: expiry > now && !s.revoked,
   };
 }
 
@@ -157,26 +190,24 @@ export interface AgentSessionInfo extends AgentSessionConfig {
  *   hierarchical delegation (parent → sub-agent with scope narrowing).
  */
 export class SessionKeyService {
-  private readonly provider: ethers.JsonRpcProvider;
-  private readonly skValidator: ethers.Contract;
-  private readonly askValidator: ethers.Contract;
+  private readonly skValidator: ViemContract;
+  private readonly askValidator: ViemContract;
 
   constructor(
-    provider: ethers.JsonRpcProvider,
+    provider: PublicClient,
     sessionKeyValidatorAddress: string,
     agentSessionKeyValidatorAddress: string,
   ) {
-    this.provider = provider;
-    this.skValidator = new ethers.Contract(
-      sessionKeyValidatorAddress,
-      SESSION_KEY_VALIDATOR_ABI,
-      provider,
-    );
-    this.askValidator = new ethers.Contract(
-      agentSessionKeyValidatorAddress,
-      AGENT_SESSION_KEY_VALIDATOR_ABI,
-      provider,
-    );
+    this.skValidator = getContract({
+      address: sessionKeyValidatorAddress as `0x${string}`,
+      abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+      client: provider,
+    }) as unknown as ViemContract;
+    this.askValidator = getContract({
+      address: agentSessionKeyValidatorAddress as `0x${string}`,
+      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
+      client: provider,
+    }) as unknown as ViemContract;
   }
 
   // ── M6: Basic Session Keys ────────────────────────────────────
@@ -186,22 +217,22 @@ export class SessionKeyService {
    * Use grantSession() with this sig, or grantSessionDirect() from the account itself.
    */
   async buildGrantHash(params: Omit<GrantSessionParams, "ownerSig">): Promise<string> {
-    return this.skValidator.buildGrantHash(
+    return this.skValidator.read.buildGrantHash([
       params.account,
       params.sessionKey,
       buildSessionStruct(params),
-    ) as Promise<string>;
+    ]) as Promise<string>;
   }
 
   /** Query an ECDSA session key state (decodes the 8-field Session tuple). */
   async getSession(account: string, sessionKey: string): Promise<SessionInfo> {
-    const session = await this.skValidator.getSession(account, sessionKey);
+    const session = await this.skValidator.read.getSession([account, sessionKey]);
     return decodeSessionInfo(session);
   }
 
   /** Check if an ECDSA session is currently active. */
   async isSessionActive(account: string, sessionKey: string): Promise<boolean> {
-    return this.skValidator.isSessionActive(account, sessionKey) as Promise<boolean>;
+    return this.skValidator.read.isSessionActive([account, sessionKey]) as Promise<boolean>;
   }
 
   /**
@@ -218,28 +249,29 @@ export class SessionKeyService {
    *   Do NOT encode this for a UserOp callData; the EntryPoint is not the owner EOA.
    */
   encodeGrantSession(params: GrantSessionParams): string {
-    const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
     const cfg = buildSessionStruct(params);
     if (params.ownerSig) {
-      return iface.encodeFunctionData("grantSession", [
-        params.account,
-        params.sessionKey,
-        cfg,
-        params.ownerSig,
-      ]);
+      return encodeFunctionData({
+        abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+        functionName: "grantSession",
+        args: [params.account, params.sessionKey, cfg, params.ownerSig],
+      });
     }
     // grantSessionDirect — owner EOA direct tx only (NOT for UserOp/gasless flows).
-    return iface.encodeFunctionData("grantSessionDirect", [
-      params.account,
-      params.sessionKey,
-      cfg,
-    ]);
+    return encodeFunctionData({
+      abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "grantSessionDirect",
+      args: [params.account, params.sessionKey, cfg],
+    });
   }
 
   /** Encode calldata for revokeSession(). */
   encodeRevokeSession(account: string, sessionKey: string): string {
-    const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
-    return iface.encodeFunctionData("revokeSession", [account, sessionKey]);
+    return encodeFunctionData({
+      abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "revokeSession",
+      args: [account, sessionKey],
+    });
   }
 
   // ── M6: P256 / Passkey Session Keys ───────────────────────────
@@ -252,12 +284,12 @@ export class SessionKeyService {
   async buildP256GrantHash(
     params: Omit<GrantP256SessionParams, "ownerSig">,
   ): Promise<string> {
-    return this.skValidator.buildP256GrantHash(
+    return this.skValidator.read.buildP256GrantHash([
       params.account,
       params.keyX,
       params.keyY,
       buildSessionStruct(params),
-    ) as Promise<string>;
+    ]) as Promise<string>;
   }
 
   /**
@@ -265,13 +297,13 @@ export class SessionKeyService {
    * @param keyHash The keccak256 hash of (keyX, keyY) used as the on-chain session id.
    */
   async getP256Session(account: string, keyHash: string): Promise<SessionInfo> {
-    const session = await this.skValidator.getP256Session(account, keyHash);
+    const session = await this.skValidator.read.getP256Session([account, keyHash]);
     return decodeSessionInfo(session);
   }
 
   /** Check if a P256 session is currently active. */
   async isP256SessionActive(account: string, keyX: string, keyY: string): Promise<boolean> {
-    return this.skValidator.isP256SessionActive(account, keyX, keyY) as Promise<boolean>;
+    return this.skValidator.read.isP256SessionActive([account, keyX, keyY]) as Promise<boolean>;
   }
 
   /**
@@ -288,30 +320,29 @@ export class SessionKeyService {
    *   Do NOT encode this for a UserOp callData; the EntryPoint is not the owner EOA.
    */
   encodeGrantP256Session(params: GrantP256SessionParams): string {
-    const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
     const cfg = buildSessionStruct(params);
     if (params.ownerSig) {
-      return iface.encodeFunctionData("grantP256Session", [
-        params.account,
-        params.keyX,
-        params.keyY,
-        cfg,
-        params.ownerSig,
-      ]);
+      return encodeFunctionData({
+        abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+        functionName: "grantP256Session",
+        args: [params.account, params.keyX, params.keyY, cfg, params.ownerSig],
+      });
     }
     // grantP256SessionDirect — owner EOA direct tx only (NOT for UserOp/gasless flows).
-    return iface.encodeFunctionData("grantP256SessionDirect", [
-      params.account,
-      params.keyX,
-      params.keyY,
-      cfg,
-    ]);
+    return encodeFunctionData({
+      abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "grantP256SessionDirect",
+      args: [params.account, params.keyX, params.keyY, cfg],
+    });
   }
 
   /** Encode calldata for revokeP256Session(). */
   encodeRevokeP256Session(account: string, keyX: string, keyY: string): string {
-    const iface = new ethers.Interface(SESSION_KEY_VALIDATOR_ABI);
-    return iface.encodeFunctionData("revokeP256Session", [account, keyX, keyY]);
+    return encodeFunctionData({
+      abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "revokeP256Session",
+      args: [account, keyX, keyY],
+    });
   }
 
   // ── M7: Agent Session Keys ────────────────────────────────────
@@ -322,18 +353,21 @@ export class SessionKeyService {
    * The contract uses msg.sender as the account — no account param needed.
    */
   encodeGrantAgentSession(sessionKey: string, cfg: AgentSessionConfig): string {
-    const iface = new ethers.Interface(AGENT_SESSION_KEY_VALIDATOR_ABI);
-    return iface.encodeFunctionData("grantAgentSession", [
-      sessionKey,
-      {
-        expiry: cfg.expiry,
-        velocityLimit: cfg.velocityLimit,
-        velocityWindow: cfg.velocityWindow,
-        revoked: false,
-        callTargets: cfg.callTargets,
-        selectorAllowlist: cfg.selectorAllowlist,
-      },
-    ]);
+    return encodeFunctionData({
+      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "grantAgentSession",
+      args: [
+        sessionKey,
+        {
+          expiry: cfg.expiry,
+          velocityLimit: cfg.velocityLimit,
+          velocityWindow: cfg.velocityWindow,
+          revoked: false,
+          callTargets: cfg.callTargets,
+          selectorAllowlist: cfg.selectorAllowlist,
+        },
+      ],
+    });
   }
 
   /**
@@ -343,42 +377,49 @@ export class SessionKeyService {
    * @param account The smart account under which the parent session was granted.
    */
   encodeDelegateSession(account: string, subKey: string, subCfg: AgentSessionConfig): string {
-    const iface = new ethers.Interface(AGENT_SESSION_KEY_VALIDATOR_ABI);
-    return iface.encodeFunctionData("delegateSession", [
-      account,
-      subKey,
-      {
-        expiry: subCfg.expiry,
-        velocityLimit: subCfg.velocityLimit,
-        velocityWindow: subCfg.velocityWindow,
-        revoked: false,
-        callTargets: subCfg.callTargets,
-        selectorAllowlist: subCfg.selectorAllowlist,
-      },
-    ]);
+    return encodeFunctionData({
+      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "delegateSession",
+      args: [
+        account,
+        subKey,
+        {
+          expiry: subCfg.expiry,
+          velocityLimit: subCfg.velocityLimit,
+          velocityWindow: subCfg.velocityWindow,
+          revoked: false,
+          callTargets: subCfg.callTargets,
+          selectorAllowlist: subCfg.selectorAllowlist,
+        },
+      ],
+    });
   }
 
   /** Encode calldata for revokeAgentSession(). */
   encodeRevokeAgentSession(sessionKey: string): string {
-    const iface = new ethers.Interface(AGENT_SESSION_KEY_VALIDATOR_ABI);
-    return iface.encodeFunctionData("revokeAgentSession", [sessionKey]);
+    return encodeFunctionData({
+      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
+      functionName: "revokeAgentSession",
+      args: [sessionKey],
+    });
   }
 
   /** Query agent session config + runtime state. */
   async getAgentSession(account: string, sessionKey: string): Promise<AgentSessionInfo> {
+    // Multi-output view fns are returned by viem as a positional array.
     const [expiry, velocityLimit, velocityWindow, revoked, callTargets, selectorAllowlist] =
-      await this.askValidator.agentSessions(account, sessionKey);
+      (await this.askValidator.read.agentSessions([account, sessionKey])) as readonly unknown[];
     const [callCount, windowStart] =
-      await this.askValidator.sessionStates(account, sessionKey);
+      (await this.askValidator.read.sessionStates([account, sessionKey])) as readonly unknown[];
     return {
       expiry: Number(expiry),
       velocityLimit: Number(velocityLimit),
       velocityWindow: Number(velocityWindow),
-      callTargets,
-      selectorAllowlist,
-      revoked,
-      callCount: BigInt(callCount),
-      windowStart: BigInt(windowStart),
+      callTargets: callTargets as string[],
+      selectorAllowlist: selectorAllowlist as string[],
+      revoked: revoked as boolean,
+      callCount: BigInt(callCount as bigint),
+      windowStart: BigInt(windowStart as bigint),
     };
   }
 
@@ -390,12 +431,12 @@ export class SessionKeyService {
 
   /** Return the parent account of a delegated session key. */
   async getSessionKeyOwner(sessionKey: string): Promise<string> {
-    return this.askValidator.sessionKeyOwner(sessionKey) as Promise<string>;
+    return this.askValidator.read.sessionKeyOwner([sessionKey]) as Promise<string>;
   }
 
   /** Return the parent key that delegated to subKey, or ZeroAddress if not delegated. */
   async getDelegatedBy(account: string, subKey: string): Promise<string> {
-    return this.askValidator.delegatedBy(account, subKey) as Promise<string>;
+    return this.askValidator.read.delegatedBy([account, subKey]) as Promise<string>;
   }
 }
 

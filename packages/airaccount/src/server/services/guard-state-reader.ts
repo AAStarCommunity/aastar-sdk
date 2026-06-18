@@ -1,4 +1,8 @@
-import { ethers } from "ethers";
+import { getContract, zeroAddress, type Address, type PublicClient } from "viem";
+// EntryPoint/AirAccount/Guard ABIs are local human-readable signatures (not in @aastar/core);
+// parseAbi is required to feed them to viem's getContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { AIRACCOUNT_ABI, GLOBAL_GUARD_ABI } from "../constants/entrypoint";
 
 const EXTENDED_GUARD_ABI = [
@@ -42,6 +46,9 @@ export interface TokenGuardState {
   tier2Limit: bigint;
 }
 
+/** Loosely-typed read surface for viem contracts built from human-readable ABIs. */
+type ReadMethods = Record<string, (args?: unknown[]) => Promise<unknown>>;
+
 /**
  * GuardStateReader — F6: read AAStarGlobalGuard spending state.
  *
@@ -51,10 +58,26 @@ export interface TokenGuardState {
  *   - Per-token limits and remaining allowances
  */
 export class GuardStateReader {
-  private readonly provider: ethers.JsonRpcProvider;
+  private readonly provider: PublicClient;
 
-  constructor(provider: ethers.JsonRpcProvider) {
+  constructor(provider: PublicClient) {
     this.provider = provider;
+  }
+
+  private accountContract(accountAddress: string) {
+    return getContract({
+      address: accountAddress as Address,
+      abi: parseAbi(AIRACCOUNT_ABI as readonly string[]),
+      client: this.provider,
+    });
+  }
+
+  private guardContract(guardAddress: string) {
+    return getContract({
+      address: guardAddress as Address,
+      abi: parseAbi(EXTENDED_GUARD_ABI as readonly string[]),
+      client: this.provider,
+    });
   }
 
   /**
@@ -62,29 +85,33 @@ export class GuardStateReader {
    * Returns null if the account has no guard (dailyLimit=0).
    */
   async getGuardState(accountAddress: string): Promise<GuardState | null> {
-    const account = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, this.provider);
-    const guardAddress: string = await account.guard();
-    if (guardAddress === ethers.ZeroAddress) return null;
+    const account = this.accountContract(accountAddress).read as ReadMethods;
+    const guardAddress = (await account.guard([])) as string;
+    if (guardAddress === zeroAddress) return null;
 
-    const guard = new ethers.Contract(guardAddress, EXTENDED_GUARD_ABI, this.provider);
+    const guard = this.guardContract(guardAddress).read as ReadMethods;
     const [dailyLimit, remaining, todaySpent, tier1Limit, tier2Limit, minDailyLimit] =
       await Promise.all([
-        guard.dailyLimit(),
-        guard.remainingDailyAllowance(),
-        guard.todaySpent(),
-        guard.tier1Limit().catch(() => 0n),
-        guard.tier2Limit().catch(() => 0n),
-        guard.minDailyLimit().catch(() => 0n),
+        guard.dailyLimit([]),
+        guard.remainingDailyAllowance([]),
+        guard.todaySpent([]),
+        guard.tier1Limit([]).catch(() => 0n),
+        guard.tier2Limit([]).catch(() => 0n),
+        guard.minDailyLimit([]).catch(() => 0n),
       ]);
 
     return {
-      dailyLimit: BigInt(dailyLimit),
-      todaySpent: BigInt(todaySpent),
-      remaining: BigInt(remaining),
-      currentTier: resolveTierFromSpend(BigInt(todaySpent), BigInt(tier1Limit), BigInt(tier2Limit)),
-      tier1Limit: BigInt(tier1Limit),
-      tier2Limit: BigInt(tier2Limit),
-      minDailyLimit: BigInt(minDailyLimit),
+      dailyLimit: BigInt(dailyLimit as bigint),
+      todaySpent: BigInt(todaySpent as bigint),
+      remaining: BigInt(remaining as bigint),
+      currentTier: resolveTierFromSpend(
+        BigInt(todaySpent as bigint),
+        BigInt(tier1Limit as bigint),
+        BigInt(tier2Limit as bigint),
+      ),
+      tier1Limit: BigInt(tier1Limit as bigint),
+      tier2Limit: BigInt(tier2Limit as bigint),
+      minDailyLimit: BigInt(minDailyLimit as bigint),
       guardAddress,
     };
   }
@@ -97,17 +124,17 @@ export class GuardStateReader {
     accountAddress: string,
     token: string,
   ): Promise<TokenGuardState | null> {
-    const account = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, this.provider);
-    const guardAddress: string = await account.guard();
-    if (guardAddress === ethers.ZeroAddress) return null;
+    const account = this.accountContract(accountAddress).read as ReadMethods;
+    const guardAddress = (await account.guard([])) as string;
+    if (guardAddress === zeroAddress) return null;
 
-    const guard = new ethers.Contract(guardAddress, EXTENDED_GUARD_ABI, this.provider);
+    const guard = this.guardContract(guardAddress).read as ReadMethods;
     try {
-      const todaySpent = await guard.tokenTodaySpent(token);
+      const todaySpent = await guard.tokenTodaySpent([token as Address]);
       // TokenConfig is not directly readable on-chain per token; limits are not fully implemented.
       return {
         token,
-        todaySpent: BigInt(todaySpent),
+        todaySpent: BigInt(todaySpent as bigint),
         dailyLimit: 0n, // token daily limit not directly exposed
         remaining: 0n,
         currentTier: 1 as TierLevel,
@@ -140,8 +167,9 @@ export class GuardStateReader {
   async isAlgorithmApproved(accountAddress: string, algId: number): Promise<boolean> {
     // v0.17.2-beta.4: the algorithm whitelist lives on the ACCOUNT (single source of
     // truth, enforced in validateUserOp), not the guard.
-    const account = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, this.provider);
-    return account.approvedAlgorithms(algId) as Promise<boolean>;
+    const account = this.accountContract(accountAddress).read as ReadMethods;
+    // approvedAlgorithms(uint8 algId): viem requires uint args as bigint.
+    return (await account.approvedAlgorithms([BigInt(algId)])) as boolean;
   }
 }
 

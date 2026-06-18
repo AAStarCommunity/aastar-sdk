@@ -1,6 +1,10 @@
-import { ethers } from "ethers";
+import { getContract, zeroAddress, type Address } from "viem";
+// GLOBAL_GUARD_ABI is a local human-readable signature array (not in @aastar/core);
+// parseAbi is required to feed it to viem's getContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
-import { AIRACCOUNT_ABI, GLOBAL_GUARD_ABI } from "../constants/entrypoint";
+import { GLOBAL_GUARD_ABI } from "../constants/entrypoint";
 import {
   TierConfig,
   GuardStatus,
@@ -40,17 +44,16 @@ export class GuardChecker {
    * Fetch tier limits from an AirAccount contract.
    */
   async fetchTierConfig(accountAddress: string): Promise<TierConfig> {
-    const provider = this.ethereum.getProvider();
-    const account = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, provider);
+    const account = this.ethereum.getAccountContract(accountAddress);
 
     const [tier1Limit, tier2Limit] = await Promise.all([
-      account.tier1Limit(),
-      account.tier2Limit(),
+      account.read.tier1Limit([]),
+      account.read.tier2Limit([]),
     ]);
 
     return {
-      tier1Limit: BigInt(tier1Limit),
-      tier2Limit: BigInt(tier2Limit),
+      tier1Limit: BigInt(tier1Limit as bigint),
+      tier2Limit: BigInt(tier2Limit as bigint),
     };
   }
 
@@ -58,32 +61,39 @@ export class GuardChecker {
    * Fetch guard status from the account's GlobalGuard.
    */
   async fetchGuardStatus(accountAddress: string): Promise<GuardStatus> {
-    const provider = this.ethereum.getProvider();
-    const account = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, provider);
+    const account = this.ethereum.getAccountContract(accountAddress);
 
-    const config = await account.getConfigDescription();
+    // getConfigDescription returns a single tuple struct; viem decodes it to an object
+    // with named fields (matching ethers' named-field access on the result).
+    const config = (await account.read.getConfigDescription([])) as {
+      guardAddress: Address;
+    };
     const guardAddress = config.guardAddress;
 
-    if (guardAddress === ethers.ZeroAddress) {
+    if (guardAddress === zeroAddress) {
       return {
         hasGuard: false,
-        guardAddress: ethers.ZeroAddress,
+        guardAddress: zeroAddress,
         dailyLimit: 0n,
         dailyRemaining: 0n,
       };
     }
 
-    const guard = new ethers.Contract(guardAddress, GLOBAL_GUARD_ABI, provider);
+    const guard = getContract({
+      address: guardAddress,
+      abi: parseAbi(GLOBAL_GUARD_ABI),
+      client: this.ethereum.getProvider(),
+    });
     const [dailyLimit, dailyRemaining] = await Promise.all([
-      guard.dailyLimit(),
-      guard.remainingDailyAllowance(),
+      guard.read.dailyLimit(),
+      guard.read.remainingDailyAllowance(),
     ]);
 
     return {
       hasGuard: true,
       guardAddress,
-      dailyLimit: BigInt(dailyLimit),
-      dailyRemaining: BigInt(dailyRemaining),
+      dailyLimit: BigInt(dailyLimit as bigint),
+      dailyRemaining: BigInt(dailyRemaining as bigint),
     };
   }
 
@@ -115,9 +125,8 @@ export class GuardChecker {
 
     // Check algorithm approval. v0.17.2-beta.4: the algorithm whitelist is the single
     // source of truth on the ACCOUNT (enforced in validateUserOp), not the guard.
-    const provider = this.ethereum.getProvider();
-    const accountContract = new ethers.Contract(accountAddress, AIRACCOUNT_ABI, provider);
-    const isApproved = await accountContract.approvedAlgorithms(algId);
+    const accountContract = this.ethereum.getAccountContract(accountAddress);
+    const isApproved = (await accountContract.read.approvedAlgorithms([algId])) as boolean;
 
     if (!isApproved) {
       errors.push(

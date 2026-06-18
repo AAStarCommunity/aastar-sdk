@@ -1,4 +1,9 @@
-import { ethers } from "ethers";
+import { encodeFunctionData, type Abi, type Address, type Hex, type PublicClient } from "viem";
+// The AgentRegistry / EntryPoint / AirAccount ABIs are local human-readable `string[]`
+// signatures (not available in @aastar/core), so parseAbi is required to feed them to
+// viem's encodeFunctionData / readContract during the ethers->viem migration.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 import { AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 
 // Minimal ABI covering the AAStar AgentRegistry contract (SuperPaymaster-facing).
@@ -28,6 +33,13 @@ const AGENT_REGISTRY_ABI = [
   "error NotAgentOwner()",
   "error SelfRegistrationForbidden()",
 ];
+
+// Parsed viem ABIs (loosely typed as `Abi`) used for both calldata encoding and reads.
+// Widening to `Abi` mirrors the hub's ViemContract approach: function names are indexed
+// dynamically and read return values are cast at the call site.
+const REGISTRY_ABI: Abi = parseAbi(AGENT_REGISTRY_ABI as readonly string[]);
+const FACTORY_ABI: Abi = parseAbi(AIRACCOUNT_FACTORY_ABI as readonly string[]);
+const ACCOUNT_ABI: Abi = parseAbi(AIRACCOUNT_ABI as readonly string[]);
 
 // ─── Parameter / result types ───────────────────────────────────────────────
 
@@ -66,28 +78,20 @@ export interface CreateAgentAccountParams {
  *    address before deployment.
  *
  * All `encode*` methods return ABI-encoded calldata ready for a UserOp (gasless) or a direct
- * owner transaction. Read methods require a provider (or a signer with an attached provider).
+ * owner transaction. Read methods require a viem `PublicClient`.
  */
 export class AgentRegistryService {
-  private readonly contract: ethers.Contract;
-  private readonly iface: ethers.Interface;
-  private readonly factoryIface: ethers.Interface;
-  private readonly accountIface: ethers.Interface;
-  private readonly providerOrSigner: ethers.Provider | ethers.Signer;
+  private readonly client: PublicClient;
 
   /**
-   * @param providerOrSigner ethers Provider (reads only) or Signer (reads + sends).
-   * @param registryAddress  deployed AgentRegistry contract address.
+   * @param client          viem PublicClient for on-chain reads (e.g. `ethereum.getProvider()`).
+   * @param registryAddress deployed AgentRegistry contract address.
    */
   constructor(
-    providerOrSigner: ethers.Provider | ethers.Signer,
+    client: PublicClient,
     private readonly registryAddress: string
   ) {
-    this.providerOrSigner = providerOrSigner;
-    this.contract = new ethers.Contract(registryAddress, AGENT_REGISTRY_ABI, providerOrSigner);
-    this.iface = new ethers.Interface(AGENT_REGISTRY_ABI);
-    this.factoryIface = new ethers.Interface(AIRACCOUNT_FACTORY_ABI);
-    this.accountIface = new ethers.Interface(AIRACCOUNT_ABI);
+    this.client = client;
   }
 
   // ── Composed register/revoke-via-account scenario encoders ──────────────────
@@ -97,20 +101,24 @@ export class AgentRegistryService {
 
   /** Encode `account.execute(registry, 0, registerAgent(agentWallet, agentWalletSig))`. */
   encodeRegisterAgentViaAccount(agentWallet: string, agentWalletSig: string): string {
-    return this.accountIface.encodeFunctionData("execute", [
-      this.registryAddress,
-      0n,
-      this.encodeRegisterAgent(agentWallet, agentWalletSig),
-    ]);
+    return encodeFunctionData({
+      abi: ACCOUNT_ABI,
+      functionName: "execute",
+      args: [
+        this.registryAddress as Address,
+        0n,
+        this.encodeRegisterAgent(agentWallet, agentWalletSig) as Hex,
+      ],
+    });
   }
 
   /** Encode `account.execute(registry, 0, revokeAgent(agentWallet))`. */
   encodeRevokeAgentViaAccount(agentWallet: string): string {
-    return this.accountIface.encodeFunctionData("execute", [
-      this.registryAddress,
-      0n,
-      this.encodeRevokeAgent(agentWallet),
-    ]);
+    return encodeFunctionData({
+      abi: ACCOUNT_ABI,
+      functionName: "execute",
+      args: [this.registryAddress as Address, 0n, this.encodeRevokeAgent(agentWallet) as Hex],
+    });
   }
 
   // ── AgentRegistry calldata encoders ─────────────────────────────────────────
@@ -124,7 +132,11 @@ export class AgentRegistryService {
    * if the wallet is already bound.
    */
   encodeRegisterAgent(agentWallet: string, agentWalletSig: string): string {
-    return this.iface.encodeFunctionData("registerAgent", [agentWallet, agentWalletSig]);
+    return encodeFunctionData({
+      abi: REGISTRY_ABI,
+      functionName: "registerAgent",
+      args: [agentWallet as Address, agentWalletSig as Hex],
+    });
   }
 
   /**
@@ -134,7 +146,11 @@ export class AgentRegistryService {
    * agent's human owner (else `NotAgentOwner`).
    */
   encodeRevokeAgent(agentWallet: string): string {
-    return this.iface.encodeFunctionData("revokeAgent", [agentWallet]);
+    return encodeFunctionData({
+      abi: REGISTRY_ABI,
+      functionName: "revokeAgent",
+      args: [agentWallet as Address],
+    });
   }
 
   /**
@@ -144,40 +160,76 @@ export class AgentRegistryService {
    * lighter-weight `revokeAgent`). Caller must be the agent's human owner.
    */
   encodeDeregisterAgent(agentWallet: string): string {
-    return this.iface.encodeFunctionData("deregisterAgent", [agentWallet]);
+    return encodeFunctionData({
+      abi: REGISTRY_ABI,
+      functionName: "deregisterAgent",
+      args: [agentWallet as Address],
+    });
   }
 
   // ── AgentRegistry on-chain reads ────────────────────────────────────────────
 
   /** Whether `agentWallet` is currently registered in the registry. */
   async isRegisteredAgent(agentWallet: string): Promise<boolean> {
-    return this.contract.isRegisteredAgent(agentWallet) as Promise<boolean>;
+    return (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "isRegisteredAgent",
+      args: [agentWallet as Address],
+    })) as boolean;
   }
 
   /** Whether `account` has been marked valid (e.g. an AirAccount minted by the bound factory). */
   async isValidAccount(account: string): Promise<boolean> {
-    return this.contract.isValidAccount(account) as Promise<boolean>;
+    return (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "isValidAccount",
+      args: [account as Address],
+    })) as boolean;
   }
 
   /** The human owner bound to `agentWallet` (ZeroAddress if unregistered). */
   async getHumanOwner(agentWallet: string): Promise<string> {
-    return this.contract.getHumanOwner(agentWallet) as Promise<string>;
+    return (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "getHumanOwner",
+      args: [agentWallet as Address],
+    })) as string;
   }
 
   /** Number of agents registered under `owner`. */
   async getAgentCount(owner: string): Promise<bigint> {
-    return BigInt(await this.contract.getAgentCount(owner));
+    return BigInt(
+      (await this.client.readContract({
+        address: this.registryAddress as Address,
+        abi: REGISTRY_ABI,
+        functionName: "getAgentCount",
+        args: [owner as Address],
+      })) as bigint
+    );
   }
 
   /** The agent wallet at `index` in `owner`'s agent list. */
   async getAgentByIndex(owner: string, index: bigint | number): Promise<string> {
-    return this.contract.getAgentByIndex(owner, index) as Promise<string>;
+    return (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "getAgentByIndex",
+      args: [owner as Address, BigInt(index)],
+    })) as string;
   }
 
   /** Full list of agent wallets registered under `humanOwner`. */
   async getAgents(humanOwner: string): Promise<string[]> {
-    const result = (await this.contract.getAgents(humanOwner)) as string[];
-    // Normalise the ethers Result proxy into a plain array.
+    const result = (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "getAgents",
+      args: [humanOwner as Address],
+    })) as readonly string[];
+    // Normalise the (readonly) viem result into a plain mutable array.
     return Array.from(result);
   }
 
@@ -190,18 +242,33 @@ export class AgentRegistryService {
     start: bigint | number,
     count: bigint | number
   ): Promise<string[]> {
-    const result = (await this.contract.getAgentsPage(owner, start, count)) as string[];
+    const result = (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "getAgentsPage",
+      args: [owner as Address, BigInt(start), BigInt(count)],
+    })) as readonly string[];
     return Array.from(result);
   }
 
   /** Raw `agentWalletOwner` mapping read (agentWallet → owner). */
   async agentWalletOwner(agentWallet: string): Promise<string> {
-    return this.contract.agentWalletOwner(agentWallet) as Promise<string>;
+    return (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "agentWalletOwner",
+      args: [agentWallet as Address],
+    })) as string;
   }
 
   /** Raw `ownerAgents` array read (owner, index → agentWallet). */
   async ownerAgents(owner: string, index: bigint | number): Promise<string> {
-    return this.contract.ownerAgents(owner, index) as Promise<string>;
+    return (await this.client.readContract({
+      address: this.registryAddress as Address,
+      abi: REGISTRY_ABI,
+      functionName: "ownerAgents",
+      args: [owner as Address, BigInt(index)],
+    })) as string;
   }
 
   // ── Factory agent-account helpers (AAStarAirAccountFactoryV7) ───────────────
@@ -214,22 +281,30 @@ export class AgentRegistryService {
    * calldata to the factory address (direct tx or via a relayer).
    */
   encodeCreateAgentAccount(params: CreateAgentAccountParams): string {
-    return this.factoryIface.encodeFunctionData("createAgentAccount", [
-      params.agentKey,
-      params.agentId,
-      params.guardian2,
-      params.guardian2Sig,
-      params.agentKeySig,
-      params.deadline,
-      params.dailyLimit,
-    ]);
+    return encodeFunctionData({
+      abi: FACTORY_ABI,
+      functionName: "createAgentAccount",
+      args: [
+        params.agentKey as Address,
+        params.agentId as Hex,
+        params.guardian2 as Address,
+        params.guardian2Sig as Hex,
+        params.agentKeySig as Hex,
+        BigInt(params.deadline),
+        params.dailyLimit,
+      ],
+    });
   }
 
   /**
    * Encode calldata for the factory's `setAgentRegistry(_agentRegistry)` (factory-admin only).
    */
   encodeSetAgentRegistry(agentRegistry: string): string {
-    return this.factoryIface.encodeFunctionData("setAgentRegistry", [agentRegistry]);
+    return encodeFunctionData({
+      abi: FACTORY_ABI,
+      functionName: "setAgentRegistry",
+      args: [agentRegistry as Address],
+    });
   }
 
   /**
@@ -246,21 +321,21 @@ export class AgentRegistryService {
     agentKey: string,
     agentId: string
   ): Promise<string> {
-    const factory = new ethers.Contract(
-      factoryAddress,
-      AIRACCOUNT_FACTORY_ABI,
-      this.providerOrSigner
-    );
-    return factory.getAgentAddress(humanOwner, agentKey, agentId) as Promise<string>;
+    return (await this.client.readContract({
+      address: factoryAddress as Address,
+      abi: FACTORY_ABI,
+      functionName: "getAgentAddress",
+      args: [humanOwner as Address, agentKey as Address, agentId as Hex],
+    })) as string;
   }
 
   /** Read the AgentRegistry address currently bound to the factory. */
   async getFactoryAgentRegistry(factoryAddress: string): Promise<string> {
-    const factory = new ethers.Contract(
-      factoryAddress,
-      AIRACCOUNT_FACTORY_ABI,
-      this.providerOrSigner
-    );
-    return factory.agentRegistry() as Promise<string>;
+    return (await this.client.readContract({
+      address: factoryAddress as Address,
+      abi: FACTORY_ABI,
+      functionName: "agentRegistry",
+      args: [],
+    })) as string;
   }
 }

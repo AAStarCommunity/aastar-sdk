@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { ethers } from "ethers";
+import { describe, it, expect, beforeEach } from "vitest";
+import { zeroHash } from "viem";
 import {
   ERC8004Service,
   ERC8004_ADDRESSES,
@@ -144,7 +144,7 @@ describe("ERC8004Service calldata encoders", () => {
       tag2: "",
       endpoint: "https://agent.example.com",
       feedbackURI: "ipfs://QmFeedback",
-      feedbackHash: ethers.ZeroHash,
+      feedbackHash: zeroHash,
     };
 
     it("produces valid hex calldata", () => {

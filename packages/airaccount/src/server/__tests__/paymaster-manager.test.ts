@@ -202,22 +202,23 @@ describe("PaymasterManager", () => {
       const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
       const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
-      const ownerEncoded =
-        "0x000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-      const operatorsEncoded =
-        "0x" +
-        "0000000000000000000000000000000000000000000000000000000000000001" + // bool true
-        "0000000000000000000000000000000000000000000000000000000000000000" + // uint256 0
-        "000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" + // address
-        "0000000000000000000000000000000000000000000000000000000000000000"; // uint256 0
+      const OWNER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+      // The migrated detection uses viem reads (spContract.read.owner() /
+      // .operators([owner]) → provider.readContract), so mock readContract:
+      //   owner()          → OWNER
+      //   operators(owner) → [true, 0, 0xBBBB..., 0]  (tuple[0] === true ⇒ SuperPaymaster)
       const provider = (pm as any).ethereum.getProvider();
-      vi.spyOn(provider, "call").mockImplementation(async (tx: { data?: string }) => {
-        const data = typeof tx === "object" ? tx.data ?? "" : "";
-        if (data.startsWith("0x8da5cb5b")) return ownerEncoded; // owner()
-        if (data.startsWith("0x13e7c9d8")) return operatorsEncoded; // operators(address)
-        return "0x";
-      });
+      vi.spyOn(provider, "readContract").mockImplementation(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async ({ functionName }: any) => {
+          if (functionName === "owner") return OWNER;
+          if (functionName === "operators") {
+            return [true, 0n, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 0n];
+          }
+          throw new Error(`unexpected read: ${functionName}`);
+        }
+      );
 
       // Must use "custom-user-provided" — that is the only path where SuperPaymaster
       // detection runs.  The named-paymaster branch (lines 224-228) just does a storage

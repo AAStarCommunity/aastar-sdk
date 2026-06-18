@@ -1,15 +1,21 @@
-import { ethers } from "ethers";
+import { describe, it, expect, beforeEach } from "vitest";
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi, decodeFunctionData, parseUnits, type Abi } from "viem";
 import { TokenService } from "../services/token-service";
 import { EthereumProvider } from "../providers/ethereum-provider";
+
+const TRANSFER_ABI = parseAbi([
+  "function transfer(address to, uint256 amount) returns (bool)",
+]) as Abi;
 
 describe("TokenService", () => {
   describe("generateTransferCalldata", () => {
     let tokenService: TokenService;
 
     beforeEach(() => {
-      // We only need a minimal EthereumProvider for generateTransferCalldata (no RPC calls)
+      // generateTransferCalldata makes no RPC calls; a stub EthereumProvider is enough.
       const mockProvider = {
-        getProvider: () => new ethers.JsonRpcProvider("http://localhost:8545"),
+        getProvider: () => ({}),
       } as unknown as EthereumProvider;
       tokenService = new TokenService(mockProvider);
     });
@@ -29,23 +35,25 @@ describe("TokenService", () => {
       const calldata = tokenService.generateTransferCalldata(to, "1.5", 6);
 
       // 1.5 USDC = 1_500_000 (6 decimals) = 0x16e360
-      const iface = new ethers.Interface([
-        "function transfer(address to, uint256 amount) returns (bool)",
-      ]);
-      const decoded = iface.decodeFunctionData("transfer", calldata);
-      expect(decoded[0].toLowerCase()).toBe(to.toLowerCase());
-      expect(decoded[1]).toBe(ethers.parseUnits("1.5", 6));
+      const { args } = decodeFunctionData({
+        abi: TRANSFER_ABI,
+        data: calldata as `0x${string}`,
+      });
+      const decoded = args as readonly unknown[];
+      expect((decoded[0] as string).toLowerCase()).toBe(to.toLowerCase());
+      expect(decoded[1]).toBe(parseUnits("1.5", 6));
     });
 
     it("should encode whole amounts correctly", () => {
       const to = "0x1234567890123456789012345678901234567890";
       const calldata = tokenService.generateTransferCalldata(to, "1000", 18);
 
-      const iface = new ethers.Interface([
-        "function transfer(address to, uint256 amount) returns (bool)",
-      ]);
-      const decoded = iface.decodeFunctionData("transfer", calldata);
-      expect(decoded[1]).toBe(ethers.parseUnits("1000", 18));
+      const { args } = decodeFunctionData({
+        abi: TRANSFER_ABI,
+        data: calldata as `0x${string}`,
+      });
+      const decoded = args as readonly unknown[];
+      expect(decoded[1]).toBe(parseUnits("1000", 18));
     });
   });
 });

@@ -1,5 +1,15 @@
-import { ethers } from "ethers";
+import { hexToBytes } from "viem";
+import { keccak256 } from "../../migration/viem/hashing";
 import axios from "axios";
+
+/**
+ * Minimal guardian signer surface (was `ethers.Signer`): an external signer that
+ * performs an EIP-191 personal-sign over raw bytes and returns a 0x-prefixed
+ * 65-byte hex signature. Structural — any ethers/viem signer with this method fits.
+ */
+export interface GuardianSigner {
+  signMessage(message: Uint8Array): Promise<string>;
+}
 import {
   BLSManager,
   BLSSignatureData,
@@ -186,8 +196,7 @@ export class BLSSignatureService {
       throw new Error(`User account not found for userId: ${userId}`);
     }
 
-    const wallet = await this.signer.getSigner(userId, ctx);
-    const walletAddress = await wallet.getAddress();
+    const walletAddress = await this.signer.getAddress(userId);
 
     if (walletAddress.toLowerCase() !== account.signerAddress.toLowerCase()) {
       throw new Error(
@@ -195,9 +204,17 @@ export class BLSSignatureService {
       );
     }
 
-    const aaSignature = await wallet.signMessage(ethers.getBytes(userOpHash));
-    const messagePointHash = ethers.keccak256(messagePoint);
-    const messagePointSignature = await wallet.signMessage(ethers.getBytes(messagePointHash));
+    const aaSignature = await this.signer.signMessage(
+      userId,
+      hexToBytes(userOpHash as `0x${string}`),
+      ctx
+    );
+    const messagePointHash = keccak256(messagePoint as `0x${string}`);
+    const messagePointSignature = await this.signer.signMessage(
+      userId,
+      hexToBytes(messagePointHash as `0x${string}`),
+      ctx
+    );
 
     return {
       nodeIds: signerNodeIds,
@@ -227,7 +244,7 @@ export class BLSSignatureService {
    * @param userId - User ID for account lookup
    * @param userOpHash - The UserOp hash to sign
    * @param p256Signature - P256 passkey signature (64 bytes, required for tier 2/3)
-   * @param guardianSigner - Guardian ethers.Signer (required for tier 3)
+   * @param guardianSigner - Guardian signer (required for tier 3)
    * @param ctx - Optional passkey assertion context for KMS signing
    */
   async generateTieredSignature(params: {
@@ -235,7 +252,7 @@ export class BLSSignatureService {
     userId: string;
     userOpHash: string;
     p256Signature?: string;
-    guardianSigner?: ethers.Signer;
+    guardianSigner?: GuardianSigner;
     ctx?: PasskeyAssertionContext;
   }): Promise<string> {
     const { tier, userId, userOpHash, p256Signature, guardianSigner, ctx } = params;
@@ -246,8 +263,7 @@ export class BLSSignatureService {
       const account = await this.storage.findAccountByUserId(userId);
       if (!account) throw new Error(`User account not found for userId: ${userId}`);
 
-      const wallet = await this.signer.getSigner(userId, ctx);
-      return wallet.signMessage(ethers.getBytes(userOpHash));
+      return this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
     }
 
     // Tier 2 and 3 both need BLS + P256
@@ -274,7 +290,9 @@ export class BLSSignatureService {
       throw new Error("Guardian signer required for Tier 3");
     }
 
-    const guardianSignature = await guardianSigner.signMessage(ethers.getBytes(userOpHash));
+    const guardianSignature = await guardianSigner.signMessage(
+      hexToBytes(userOpHash as `0x${string}`)
+    );
 
     const t3Data: CumulativeT3SignatureData = {
       p256Signature,

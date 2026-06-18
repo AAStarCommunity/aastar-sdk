@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
 
 /**
@@ -9,21 +9,28 @@ import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-ad
  * per-user key management (e.g., KMS, HSM, or encrypted database).
  */
 export class LocalWalletSigner implements ISignerAdapter {
-  private readonly wallet: ethers.Wallet;
+  private readonly account: PrivateKeyAccount;
 
-  constructor(privateKey: string, provider?: ethers.Provider) {
-    this.wallet = new ethers.Wallet(privateKey, provider);
+  constructor(privateKey: string) {
+    this.account = privateKeyToAccount(privateKey as `0x${string}`);
   }
 
-  async getAddress(_userId: string): Promise<string> {
-    return this.wallet.address;
+  async getAddress(_userId: string): Promise<`0x${string}`> {
+    return this.account.address;
   }
 
-  async getSigner(_userId: string, _ctx?: PasskeyAssertionContext): Promise<ethers.Signer> {
-    return this.wallet;
+  async signMessage(
+    _userId: string,
+    message: `0x${string}` | Uint8Array,
+    _ctx?: PasskeyAssertionContext
+  ): Promise<`0x${string}`> {
+    // EIP-191 personal-sign over raw bytes — identical to
+    // ethers `wallet.signMessage(bytes)`. `{ raw }` signs the bytes as-is
+    // (no UTF-8 reinterpretation of a 0x hex digest).
+    return this.account.signMessage({ message: { raw: message } });
   }
 
-  async ensureSigner(_userId: string): Promise<{ signer: ethers.Signer; address: string }> {
-    return { signer: this.wallet, address: this.wallet.address };
+  async ensureSigner(_userId: string): Promise<{ address: `0x${string}` }> {
+    return { address: this.account.address };
   }
 }

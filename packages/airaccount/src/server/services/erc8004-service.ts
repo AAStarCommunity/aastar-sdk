@@ -1,4 +1,8 @@
-import { ethers } from "ethers";
+import { encodeFunctionData, getContract, type Abi, type PublicClient } from "viem";
+// parseAbi is required: the ERC-8004 ABI is a local human-readable string[] of function
+// signatures (not available in @aastar/core), and viem needs a parsed Abi to encode/read.
+// eslint-disable-next-line no-restricted-imports
+import { parseAbi } from "viem";
 
 // Minimal ABI covering only the ERC-8004 agent functions on AAStarAirAccountV7.
 // These are routed via fallback→delegatecall to AirAccountExtension on the deployed account.
@@ -117,12 +121,28 @@ export interface AgentReputationSummary {
  * fallback delegates to AirAccountExtension for these selectors.
  */
 export class ERC8004Service {
-  private readonly iface: ethers.Interface;
-  private readonly provider?: ethers.Provider;
+  private readonly abi: Abi;
+  private readonly provider?: PublicClient;
 
-  constructor(provider?: ethers.Provider) {
-    this.iface = new ethers.Interface(ERC8004_ABI);
+  constructor(provider?: PublicClient) {
+    this.abi = parseAbi(ERC8004_ABI);
     this.provider = provider;
+  }
+
+  /**
+   * Build a read-only viem contract bound to the account address. The ABI is loaded from
+   * human-readable signatures via `parseAbi` (loose `Abi`), so `read` methods are indexed by
+   * name and return `unknown` — cast at the call site. Mirrors the dynamic surface that
+   * `ethers.Contract` previously exposed. Caller must ensure `this.provider` is set.
+   */
+  private contractAt(accountAddress: string): {
+    read: Record<string, (args: readonly unknown[]) => Promise<unknown>>;
+  } {
+    return getContract({
+      address: accountAddress as `0x${string}`,
+      abi: this.abi,
+      client: this.provider as PublicClient,
+    }) as unknown as { read: Record<string, (args: readonly unknown[]) => Promise<unknown>> };
   }
 
   // ── AAStar AgentRegistry path ─────────────────────────────────────────────
@@ -139,12 +159,11 @@ export class ERC8004Service {
    * Callable: owner EOA direct tx OR via UserOp (gasless).
    */
   encodeSetAgentWallet(params: SetAgentWalletParams): string {
-    return this.iface.encodeFunctionData("setAgentWallet", [
-      params.agentId,
-      params.agentWallet,
-      params.agentRegistry,
-      params.agentWalletSig,
-    ]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "setAgentWallet",
+      args: [params.agentId, params.agentWallet, params.agentRegistry, params.agentWalletSig],
+    });
   }
 
   // ── Official ERC-8004 identity path ──────────────────────────────────────
@@ -159,10 +178,11 @@ export class ERC8004Service {
    * Callable: owner EOA direct tx OR via UserOp (gasless).
    */
   encodeMintAgentIdentity(params: MintAgentIdentityParams): string {
-    return this.iface.encodeFunctionData("mintAgentIdentity", [
-      params.identityRegistry,
-      params.agentURI,
-    ]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "mintAgentIdentity",
+      args: [params.identityRegistry, params.agentURI],
+    });
   }
 
   /**
@@ -175,13 +195,17 @@ export class ERC8004Service {
    * Callable: owner EOA direct tx OR via UserOp (gasless).
    */
   encodeBindERC8004AgentWallet(params: BindERC8004AgentWalletParams): string {
-    return this.iface.encodeFunctionData("bindERC8004AgentWallet", [
-      params.identityRegistry,
-      params.agentId,
-      params.agentWallet,
-      params.deadline,
-      params.signature,
-    ]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "bindERC8004AgentWallet",
+      args: [
+        params.identityRegistry,
+        params.agentId,
+        params.agentWallet,
+        params.deadline,
+        params.signature,
+      ],
+    });
   }
 
   // ── Reputation ────────────────────────────────────────────────────────────
@@ -195,17 +219,21 @@ export class ERC8004Service {
    * Callable: owner EOA direct tx OR via UserOp (gasless).
    */
   encodeSubmitAgentReputation(params: SubmitAgentReputationParams): string {
-    return this.iface.encodeFunctionData("submitAgentReputation", [
-      params.reputationRegistry,
-      params.agentId,
-      params.value,
-      params.valueDecimals,
-      params.tag1,
-      params.tag2,
-      params.endpoint,
-      params.feedbackURI,
-      params.feedbackHash,
-    ]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "submitAgentReputation",
+      args: [
+        params.reputationRegistry,
+        params.agentId,
+        params.value,
+        params.valueDecimals,
+        params.tag1,
+        params.tag2,
+        params.endpoint,
+        params.feedbackURI,
+        params.feedbackHash,
+      ],
+    });
   }
 
   /**
@@ -217,14 +245,14 @@ export class ERC8004Service {
     params: QueryAgentReputationParams,
   ): Promise<AgentReputationSummary> {
     if (!this.provider) throw new Error("ERC8004Service: provider required for on-chain reads");
-    const contract = new ethers.Contract(accountAddress, ERC8004_ABI, this.provider);
-    const [count, summaryValue, summaryDecimals] = await contract.queryAgentReputation(
+    const contract = this.contractAt(accountAddress);
+    const [count, summaryValue, summaryDecimals] = (await contract.read.queryAgentReputation([
       params.reputationRegistry,
       params.agentId,
       params.clientAddresses,
       params.tag1,
       params.tag2,
-    );
+    ])) as readonly [bigint, bigint, number];
     return { count: BigInt(count), summaryValue: BigInt(summaryValue), summaryDecimals: Number(summaryDecimals) };
   }
 
@@ -232,13 +260,17 @@ export class ERC8004Service {
    * Encode calldata for `queryAgentReputation` (for static-call or eth_call without a signer).
    */
   encodeQueryAgentReputation(params: QueryAgentReputationParams): string {
-    return this.iface.encodeFunctionData("queryAgentReputation", [
-      params.reputationRegistry,
-      params.agentId,
-      params.clientAddresses,
-      params.tag1,
-      params.tag2,
-    ]);
+    return encodeFunctionData({
+      abi: this.abi,
+      functionName: "queryAgentReputation",
+      args: [
+        params.reputationRegistry,
+        params.agentId,
+        params.clientAddresses,
+        params.tag1,
+        params.tag2,
+      ],
+    });
   }
 
   /**
@@ -246,7 +278,8 @@ export class ERC8004Service {
    */
   async getAgentExtensionAddress(accountAddress: string): Promise<string> {
     if (!this.provider) throw new Error("ERC8004Service: provider required for on-chain reads");
-    const contract = new ethers.Contract(accountAddress, ERC8004_ABI, this.provider);
-    return contract.agentExtension() as Promise<string>;
+    const contract = this.contractAt(accountAddress);
+    const extension = await contract.read.agentExtension([]);
+    return extension as string;
   }
 }

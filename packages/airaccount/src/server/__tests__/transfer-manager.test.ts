@@ -1,4 +1,5 @@
-import { ethers } from "ethers";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { zeroAddress, type PublicClient } from "viem";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { TransferRecord } from "../interfaces/storage-adapter";
 import { TransferManager, detectSignatureStrategy } from "../services/transfer-manager";
@@ -129,20 +130,21 @@ describe("TransferManager", () => {
   describe("detectSignatureStrategy", () => {
     const ACCOUNT = "0x1234567890123456789012345678901234567890";
 
+    // detectSignatureStrategy now takes a viem PublicClient: getCode({address})
+    // returns the bytecode (Hex | undefined) and readContract({...}) returns the
+    // already-decoded validator() address.
     function makeProvider(opts: {
       code: string;
       validatorResult?: string;
       validatorThrows?: boolean;
-    }): ethers.Provider {
+    }): PublicClient {
       return {
         getCode: vi.fn().mockResolvedValue(opts.code),
-        call: vi.fn().mockImplementation(() => {
+        readContract: vi.fn().mockImplementation(async () => {
           if (opts.validatorThrows) throw new Error("revert");
-          // ABI-encode address return value (32-byte zero-padded)
-          return opts.validatorResult ?? ethers.zeroPadValue(ethers.ZeroAddress, 32);
+          return opts.validatorResult ?? zeroAddress;
         }),
-        getNetwork: vi.fn().mockResolvedValue({ chainId: 1n }),
-      } as unknown as ethers.Provider;
+      } as unknown as PublicClient;
     }
 
     it("undeployed account → useECDSA=true, isCompositeValidator=true", async () => {
@@ -155,7 +157,7 @@ describe("TransferManager", () => {
     it("deployed compositeValidator with no validator set → useECDSA=true, isCompositeValidator=true", async () => {
       const provider = makeProvider({
         code: "0x608060",
-        validatorResult: ethers.zeroPadValue(ethers.ZeroAddress, 32),
+        validatorResult: zeroAddress,
       });
       const result = await detectSignatureStrategy(provider, ACCOUNT);
       expect(result.useECDSA).toBe(true);
@@ -166,7 +168,7 @@ describe("TransferManager", () => {
       const validatorAddr = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
       const provider = makeProvider({
         code: "0x608060",
-        validatorResult: ethers.zeroPadValue(validatorAddr, 32),
+        validatorResult: validatorAddr,
       });
       const result = await detectSignatureStrategy(provider, ACCOUNT);
       expect(result.useECDSA).toBe(false);

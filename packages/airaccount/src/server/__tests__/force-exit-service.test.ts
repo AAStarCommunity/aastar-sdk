@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ethers } from "ethers";
-import { ForceExitService, L2_TYPE } from "../services/force-exit-service";
+import { ForceExitService, L2_TYPE, type ForceExitClient } from "../services/force-exit-service";
 
 const MODULE_ADDR = "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702";
 const ACCOUNT     = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -9,11 +8,14 @@ const GUARDIAN_1  = "0xcccccccccccccccccccccccccccccccccccccccc";
 const GUARDIAN_2  = "0xdddddddddddddddddddddddddddddddddddddddd";
 const GUARDIAN_3  = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
+/** Encoders never touch the client; a bare stub suffices. */
+const noClient = {} as unknown as ForceExitClient;
+
 describe("ForceExitService — calldata encoders", () => {
   let svc: ForceExitService;
 
   beforeEach(() => {
-    svc = new ForceExitService(MODULE_ADDR, ethers.getDefaultProvider());
+    svc = new ForceExitService(MODULE_ADDR, noClient);
   });
 
   describe("encodeOnInstall", () => {
@@ -96,25 +98,21 @@ describe("ForceExitService — calldata encoders", () => {
 
   describe("on-chain read mocks — getPendingExit", () => {
     it("returns typed PendingExit from contract result", async () => {
-      const mockProvider = {
-        getNetwork: vi.fn().mockResolvedValue({ chainId: 11155111n }),
-        call: vi.fn().mockResolvedValue(
-          ethers.AbiCoder.defaultAbiCoder().encode(
-            ["address", "uint256", "bytes", "uint256", "uint256", "address[3]"],
-            [
-              TARGET,
-              1_000_000n,
-              "0x1234",
-              1717200000n,
-              3n,
-              [GUARDIAN_1, GUARDIAN_2, GUARDIAN_3],
-            ]
-          )
-        ),
-      } as unknown as ethers.Provider;
+      // getPendingExit reads via viem's contract.read.* → client.readContract.
+      // The mock returns the already-decoded tuple in ABI output order.
+      const mockClient = {
+        readContract: vi.fn().mockResolvedValue([
+          TARGET,
+          1_000_000n,
+          "0x1234",
+          1717200000n,
+          3n,
+          [GUARDIAN_1, GUARDIAN_2, GUARDIAN_3],
+        ]),
+      } as unknown as ForceExitClient;
 
-      const svcWithProvider = new ForceExitService(MODULE_ADDR, mockProvider);
-      const result = await svcWithProvider.getPendingExit(ACCOUNT);
+      const svcWithClient = new ForceExitService(MODULE_ADDR, mockClient);
+      const result = await svcWithClient.getPendingExit(ACCOUNT);
 
       expect(result.target.toLowerCase()).toBe(TARGET.toLowerCase());
       expect(result.value).toBe(1_000_000n);

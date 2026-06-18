@@ -1,4 +1,6 @@
-import { ethers } from "ethers";
+import type { Hex } from "viem";
+import { encodeAbiParams } from "../../migration/viem/abi-encoding";
+import { keccak256 } from "../../migration/viem/hashing";
 import type { PackedUserOperation, UserOperation } from "../types";
 
 export class UserOpBuilder {
@@ -50,24 +52,24 @@ export class UserOpBuilder {
    * Hash the UserOperation for signing (ERC-4337 v0.7)
    */
   getUserOpHash(userOp: PackedUserOperation, entryPoint: string, chainId: number): string {
-    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    const encoded = encodeAbiParams(
       ["address", "uint256", "bytes32", "bytes32", "bytes32", "uint256", "bytes32", "bytes32"],
       [
         userOp.sender,
         userOp.nonce,
-        ethers.keccak256(userOp.initCode),
-        ethers.keccak256(userOp.callData),
+        keccak256(userOp.initCode as Hex),
+        keccak256(userOp.callData as Hex),
         userOp.accountGasLimits,
         userOp.preVerificationGas,
         userOp.gasFees,
-        ethers.keccak256(userOp.paymasterAndData),
+        keccak256(userOp.paymasterAndData as Hex),
       ]
     );
 
-    return ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(
+    return keccak256(
+      encodeAbiParams(
         ["bytes32", "address", "uint256"],
-        [ethers.keccak256(encoded), entryPoint, chainId]
+        [keccak256(encoded), entryPoint, BigInt(chainId)]
       )
     );
   }
