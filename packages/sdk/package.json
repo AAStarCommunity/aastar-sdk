@@ -1,6 +1,6 @@
 {
   "name": "@aastar/sdk",
-  "version": "0.20.8",
+  "version": "0.20.9",
   "description": "All-in-one TypeScript SDK for the AAStar Protocol / Mycelium Network — ERC-4337 account abstraction, gasless transactions, SuperPaymaster gas sponsorship, KMS WebAuthn passkeys, BLS aggregate signatures, multi-chain (Optimism + Ethereum) community economies & reputation. Single bundled package with subpath exports.",
   "keywords": [
     "erc-4337",
@@ -32,65 +32,65 @@
     "access": "public"
   },
   "license": "Apache-2.0",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
     },
     "./core": {
-      "types": "./dist/core.d.ts",
-      "import": "./dist/core.js"
+      "import": { "types": "./dist/core.d.ts", "default": "./dist/core.js" },
+      "require": { "types": "./dist/core.d.cts", "default": "./dist/core.cjs" }
     },
     "./account": {
-      "types": "./dist/account.d.ts",
-      "import": "./dist/account.js"
+      "import": { "types": "./dist/account.d.ts", "default": "./dist/account.js" },
+      "require": { "types": "./dist/account.d.cts", "default": "./dist/account.cjs" }
     },
     "./paymaster": {
-      "types": "./dist/paymaster.d.ts",
-      "import": "./dist/paymaster.js"
+      "import": { "types": "./dist/paymaster.d.ts", "default": "./dist/paymaster.js" },
+      "require": { "types": "./dist/paymaster.d.cts", "default": "./dist/paymaster.cjs" }
     },
     "./identity": {
-      "types": "./dist/identity.d.ts",
-      "import": "./dist/identity.js"
+      "import": { "types": "./dist/identity.d.ts", "default": "./dist/identity.js" },
+      "require": { "types": "./dist/identity.d.cts", "default": "./dist/identity.cjs" }
     },
     "./tokens": {
-      "types": "./dist/tokens.d.ts",
-      "import": "./dist/tokens.js"
+      "import": { "types": "./dist/tokens.d.ts", "default": "./dist/tokens.js" },
+      "require": { "types": "./dist/tokens.d.cts", "default": "./dist/tokens.cjs" }
     },
     "./dapp": {
-      "types": "./dist/dapp.d.ts",
-      "import": "./dist/dapp.js"
+      "import": { "types": "./dist/dapp.d.ts", "default": "./dist/dapp.js" },
+      "require": { "types": "./dist/dapp.d.cts", "default": "./dist/dapp.cjs" }
     },
     "./x402": {
-      "types": "./dist/x402.d.ts",
-      "import": "./dist/x402.js"
+      "import": { "types": "./dist/x402.d.ts", "default": "./dist/x402.js" },
+      "require": { "types": "./dist/x402.d.cts", "default": "./dist/x402.cjs" }
     },
     "./channel": {
-      "types": "./dist/channel.d.ts",
-      "import": "./dist/channel.js"
+      "import": { "types": "./dist/channel.d.ts", "default": "./dist/channel.js" },
+      "require": { "types": "./dist/channel.d.cts", "default": "./dist/channel.cjs" }
     },
     "./enduser": {
-      "types": "./dist/enduser.d.ts",
-      "import": "./dist/enduser.js"
+      "import": { "types": "./dist/enduser.d.ts", "default": "./dist/enduser.js" },
+      "require": { "types": "./dist/enduser.d.cts", "default": "./dist/enduser.cjs" }
     },
     "./operator": {
-      "types": "./dist/operator.d.ts",
-      "import": "./dist/operator.js"
+      "import": { "types": "./dist/operator.d.ts", "default": "./dist/operator.js" },
+      "require": { "types": "./dist/operator.d.cts", "default": "./dist/operator.cjs" }
     },
     "./admin": {
-      "types": "./dist/admin.d.ts",
-      "import": "./dist/admin.js"
+      "import": { "types": "./dist/admin.d.ts", "default": "./dist/admin.js" },
+      "require": { "types": "./dist/admin.d.cts", "default": "./dist/admin.cjs" }
     },
     "./kms": {
-      "types": "./dist/kms.d.ts",
-      "import": "./dist/kms.js"
+      "import": { "types": "./dist/kms.d.ts", "default": "./dist/kms.js" },
+      "require": { "types": "./dist/kms.d.cts", "default": "./dist/kms.cjs" }
     },
     "./airaccount": {
-      "types": "./dist/airaccount.d.ts",
-      "import": "./dist/airaccount.js"
+      "import": { "types": "./dist/airaccount.d.ts", "default": "./dist/airaccount.js" },
+      "require": { "types": "./dist/airaccount.d.cts", "default": "./dist/airaccount.cjs" }
     }
   },
   "files": [

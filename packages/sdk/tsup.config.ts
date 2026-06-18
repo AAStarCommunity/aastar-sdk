@@ -22,7 +22,7 @@ export default defineConfig({
     kms: 'src/subpaths/kms.ts',
     airaccount: 'src/subpaths/airaccount.ts', // @deprecated alias of ./kms — kept one release
   },
-  format: ['esm'],
+  format: ['esm', 'cjs'],
   // Inline the bundled workspace/noble types into the emitted .d.ts. Without
   // `resolve`, tsup leaves `export * from '@aastar/<pkg>'` passthroughs that an
   // external consumer can't resolve (those packages aren't shipped as deps),
