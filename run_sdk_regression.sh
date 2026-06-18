@@ -116,6 +116,15 @@ if [ "$ENV" == "anvil" ] && [ "$SKIP_DEPLOY" == "false" ]; then
     fi
     
     cd ../aastar-sdk
+
+    # Sync the freshly-deployed addresses into the SDK's config.anvil.json (the file the
+    # regression actually reads). Without this, every run deploys to a fresh anvil but the
+    # suite keeps reading STALE addresses, so all contract reads return "0x". This sync was
+    # previously disabled — it is the root cause of the empty-read failures.
+    if [ "$ENV" == "anvil" ] && [ -f ../SuperPaymaster/deployments/config.anvil.json ]; then
+        cp ../SuperPaymaster/deployments/config.anvil.json ./config.anvil.json
+        log_success "Synced fresh anvil addresses into config.anvil.json"
+    fi
 fi
 
 # ========================================
@@ -195,9 +204,13 @@ echo -e "\n${BLUE}╔═══════════════════�
 echo -e "${BLUE}║   Running L1/L2/L3 API Regression Tests       ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}\n"
 
+# Capture the suite's exit code WITHOUT letting `set -e` abort here — otherwise a failing
+# suite would skip the cleanup below (orphaning anvil) and the summary banner, and the
+# script's own exit code would be unreliable.
+set +e
 pnpm tsx tests/regression/index.ts --network=$ENV
-
 TEST_EXIT_CODE=$?
+set -e
 
 # ========================================
 # 8. Cleanup

@@ -51,13 +51,26 @@ async function main() {
     console.log('Starting Test Suite...');
     console.log('═══════════════════════════════════════════════');
 
-    // Run tests
-    await runL1Tests(config);
-    await runL2Tests(config);
-    await runL3Tests(config);
-    await runNewApiTests(config); // Execute New API Tests
+    // Run tests and AGGREGATE results — the suite must fail (non-zero exit) when any
+    // tier has failing tests. Previously these returns were ignored and the runner always
+    // exited 0, so the harness printed "PASSED" even with L1 0/11 — a false green.
+    const results = [
+        await runL1Tests(config),
+        await runL2Tests(config),
+        await runL3Tests(config),
+        await runNewApiTests(config), // Execute New API Tests
+    ];
+
+    const passed = results.reduce((sum, r) => sum + (r?.passed ?? 0), 0);
+    const total = results.reduce((sum, r) => sum + (r?.total ?? 0), 0);
+    const failed = total - passed;
 
     console.log('═══════════════════════════════════════════════');
+    console.log(`📊 OVERALL: ${passed}/${total} passed${failed > 0 ? `, ${failed} FAILED` : ''}`);
+    if (failed > 0) {
+        console.error(`❌ Regression FAILED: ${failed} test(s) did not pass`);
+        process.exit(1);
+    }
     console.log('✅ Test Suite Complete');
     console.log('═══════════════════════════════════════════════\n');
 }

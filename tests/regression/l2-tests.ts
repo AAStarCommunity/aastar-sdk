@@ -224,4 +224,5 @@ export async function runL2Tests(config: NetworkConfig) {
     }
 
     console.log(`\n📊 L2 Results: ${passedTests}/${totalTests} tests passed\n`);
+    return { passed: passedTests, total: totalTests };
 }
