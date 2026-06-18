@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import type { Address } from 'viem';
+import { isAddress, type Address } from 'viem';
 import { resolveConfig, type WidgetOptions } from './config';
 import { registerWithEmail, sendGaslessTransfer } from './lib/kms';
 import { getBalanceEth } from './lib/account';
@@ -89,8 +89,8 @@ export const AAStarWidget: React.FC<AAStarWidgetProps> = (props) => {
   }, [config, email, username, refreshBalance]);
 
   const onGasless = useCallback(async () => {
-    if (!to) {
-      setStatus({ kind: 'error', message: 'Enter a recipient address.' });
+    if (!to || !isAddress(to)) {
+      setStatus({ kind: 'error', message: 'Enter a valid recipient address.' });
       return;
     }
     setStatus({ kind: 'busy', message: 'Confirm with biometrics…' });

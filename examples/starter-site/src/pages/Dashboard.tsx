@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useCreditScore } from '@aastar/sdk/dapp';
-import { zeroAddress, type Address } from 'viem';
+import { isAddress, zeroAddress, type Address } from 'viem';
 import { brand, runtime } from '../config';
 import { useAAStar } from '../lib/AAStarProvider';
 import { getBalanceEth } from '../lib/account';
@@ -43,8 +43,8 @@ export const Dashboard: React.FC = () => {
   }, [refreshBalance]);
 
   const onGasless = useCallback(async () => {
-    if (!to) {
-      setTxStatus('Enter a recipient address.');
+    if (!to || !isAddress(to)) {
+      setTxStatus('Enter a valid recipient address.');
       return;
     }
     setTxStatus('Confirm with biometrics…');
