@@ -418,7 +418,9 @@ export class TransferManager {
     const gasPrices = await this.ethereum.getUserOperationGasPrice();
 
     const validatorContract = this.ethereum.getValidatorContract(version);
-    const validatorGasEstimate = (await validatorContract.read.getGasEstimate([3])) as bigint;
+    // uint256 arg must be bigint for viem (a JS number would risk silent truncation
+    // outside the 53-bit safe range; the untyped contract surface won't catch it).
+    const validatorGasEstimate = (await validatorContract.read.getGasEstimate([3n])) as bigint;
 
     return {
       callGasLimit: gasEstimates.callGasLimit,
