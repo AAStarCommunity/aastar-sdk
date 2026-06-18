@@ -90,7 +90,8 @@
   "dependencies": {
     "@noble/curves": "^2.0.1",
     "@simplewebauthn/browser": "^13.2.2",
-    "axios": "^1.12.2"
+    "axios": "^1.12.2",
+    "viem": "2.43.3"
   },
   "optionalDependencies": {
     "@ledgerhq/hw-app-eth": "^7.6.0",
