@@ -37,7 +37,6 @@ const AA_SETUP_ABI = parseAbi([
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { publicActions } from 'viem';
-import { ethers } from 'ethers';
 import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
 // Account creation + owner read also via the SDK (airAccountFactoryActions / airAccountActions) — 100% SDK API.
 import { airAccountFactoryActions, airAccountActions } from '../../../packages/core/src/index.js';
@@ -97,7 +96,8 @@ async function main() {
     const factorySvc = airAccountFactoryActions(FACTORY)(ownerWallet);
 
     // The SDK RecoveryService — the scenario-level API under test (encoders + reads).
-    const recoverySvc = new RecoveryService(new ethers.JsonRpcProvider(rpc));
+    // Migrated to viem: the service now takes a viem PublicClient for its on-chain reads.
+    const recoverySvc = new RecoveryService(publicClient);
 
     console.log('🧪 Beta2 social-recovery on-chain evidence (Sepolia)');
     console.log(`   Owner (JASON) EOA: ${owner.address}`);

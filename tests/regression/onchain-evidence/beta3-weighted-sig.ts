@@ -58,7 +58,6 @@ const AA_SETUP_ABI = parseAbi([
 ]);
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { ethers } from 'ethers';
 import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
 // SCENARIO-LEVEL API UNDER TEST: weighted-signature governance is driven through the SDK's
 // WeightedSignatureService — it owns the setWeightConfig/proposeWeightChange/approveWeightChange/
@@ -198,7 +197,8 @@ async function main() {
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
 
     // The SDK WeightedSignatureService — the scenario-level API under test (bound to the account).
-    const weightedSvc = new WeightedSignatureService(account, new ethers.JsonRpcProvider(rpc));
+    // Migrated to viem: the service now takes a viem PublicClient for its on-chain reads.
+    const weightedSvc = new WeightedSignatureService(account, publicClient);
 
     // Setup-only account reads via the SDK account action (not a hand-written ABI).
     const acctRead = airAccountActions(account)(publicClient);

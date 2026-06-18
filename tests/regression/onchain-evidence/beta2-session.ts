@@ -30,7 +30,6 @@ import {
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { publicActions } from 'viem';
-import { ethers } from 'ethers';
 import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
 // Account creation + owner read also go through the SDK (airAccountFactoryActions / airAccountActions),
 // not inline ABIs — so the WHOLE flow (setup + scenario) is 100% SDK API.
@@ -81,7 +80,6 @@ type Step = { label: string; tx?: string };
 const steps: Step[] = [];
 
 async function main() {
-    const rpc = (process.env.SEPOLIA_RPC_URL || process.env.RPC_URL)!.replace(/^['"]|['"]$/g, '');
     const pkRaw = (process.env.PRIVATE_KEY_ANNI)!.replace(/^['"]|['"]$/g, '');
     if (!pkRaw) throw new Error('PRIVATE_KEY_ANNI missing from .env.sepolia');
     const pk = (pkRaw.startsWith('0x') ? pkRaw : `0x${pkRaw}`) as Hex;
@@ -93,8 +91,9 @@ async function main() {
 
     // The SDK SessionKeyService — the scenario-level API under test. It encodes the
     // Session tuple + exposes the on-chain reads; the E2E only signs/broadcasts the bytes.
+    // Migrated to viem: the service now takes a viem PublicClient as its read client.
     const sessionSvc = new SessionKeyService(
-        new ethers.JsonRpcProvider(rpc),
+        publicClient,
         SESSION_KEY_VALIDATOR,
         SESSION_KEY_VALIDATOR, // agent-session validator unused in this flow
     );

@@ -53,7 +53,6 @@ import {
 } from '../../../packages/core/src/index.js';
 import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 import { resilientSepoliaTransport, bumpedFees } from './_rpc.js';
-import { ethers } from 'ethers';
 // SCENARIO-LEVEL API UNDER TEST: register/revoke are driven through the SDK's AgentRegistryService
 // composed encoders (encodeRegisterAgentViaAccount/encodeRevokeAgentViaAccount — they encode the
 // registry call AND wrap it in the account's execute), not hand-assembled calldata.
@@ -98,7 +97,8 @@ async function main() {
     const factory = airAccountFactoryActions(FACTORY)(client as any);
     const registryRead = agentRegistryActions(REGISTRY)(publicClient);
     // SDK scenario API for register/revoke (composed: registry call + account.execute wrap).
-    const agentRegistrySvc = new AgentRegistryService(new ethers.JsonRpcProvider(rpc), REGISTRY);
+    // Migrated to viem: the service now takes a viem PublicClient as its first arg.
+    const agentRegistrySvc = new AgentRegistryService(publicClient, REGISTRY);
 
     const chainId = BigInt(sepolia.id);
 
