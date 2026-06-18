@@ -138,6 +138,13 @@ if [ -f "$SDK_REPO/CHANGELOG.md" ]; then
     cp "$SDK_REPO/CHANGELOG.md" "$DOCS_REPO/changelog.md"
 fi
 
+# 7. Sanitize markdown for VitePress (escape <jwt>/<void>/<T>… pseudo-tags that
+# would otherwise break the Vue template compiler). Without this the build fails
+# on TypeDoc prose like "Authorization: Bearer <jwt>".
+echo -e "${YELLOW}🧼 Sanitizing markdown for VitePress...${NC}"
+node "$SCRIPT_DIR/sanitize-typedoc-md.cjs" \
+    "$DOCS_REPO/api" "$DOCS_REPO/guide" "$DOCS_REPO/examples" "$DOCS_REPO/zh"
+
 echo -e "${GREEN}✅ Documentation sync complete!${NC}"
 echo ""
 echo "Synced to: $DOCS_REPO"
