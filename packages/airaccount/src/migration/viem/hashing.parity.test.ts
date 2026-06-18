@@ -160,9 +160,8 @@ describe("hashing (golden): real call-site composite (account-manager buildGuard
     [1, 2n ** 256n - 1n, 2n ** 256n - 1n], // max uint256 packing
     [10, 1n, 0n],
   ];
-  for (const [chainId, salt, dailyLimit] of cases) {
+  for (const [chainId, salt, _dailyLimit] of cases) {
     it(`acceptanceHash(chain=${chainId}, salt=${salt})`, () => {
-      void dailyLimit;
       const key = `${chainId}|${salt}`;
       const packed = (GOLDEN.acceptPacked as Record<string, string>)[key] as `0x${string}`;
       const ref = (GOLDEN.acceptHash as Record<string, string>)[key];
