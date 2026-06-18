@@ -2,11 +2,15 @@
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
     "noEmit": false,
     "declaration": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@aastar/airaccount/server": ["../airaccount/src/server/index.ts"],
+      "@aastar/*": ["../*/src/index.ts"]
+    }
   },
   "include": ["src", "src/abis/*.json"]
 }

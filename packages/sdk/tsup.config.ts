@@ -23,11 +23,27 @@ export default defineConfig({
     airaccount: 'src/subpaths/airaccount.ts', // @deprecated alias of ./kms — kept one release
   },
   format: ['esm'],
-  dts: true,
+  // Inline the bundled workspace/noble types into the emitted .d.ts. Without
+  // `resolve`, tsup leaves `export * from '@aastar/<pkg>'` passthroughs that an
+  // external consumer can't resolve (those packages aren't shipped as deps),
+  // leaving the entire bundled surface untyped. Scope `resolve` to the bundled
+  // packages only — viem/react/etc. stay referenced (not inlined) as real deps.
+  dts: { resolve: [/^@aastar\//, /^@noble\//] },
   splitting: true, // shared chunks → bundled @aastar/* code is not duplicated per subpath
   sourcemap: true,
   clean: true,
   treeshake: true,
   noExternal: [/^@aastar\//, /^@noble\//],
   external: ['viem', 'ethers', '@simplewebauthn/browser', 'axios', 'react', 'react-dom'],
+  esbuildOptions(options) {
+    // Resolve the `browser` export condition for bundled deps so this single
+    // universal bundle never bakes in a Node-only entrypoint. Specifically,
+    // @aastar/core's `import`/`require` condition points at index.node (which uses
+    // `createRequire(import.meta.url)` from 'module' to auto-load a local
+    // config.<network>.json) — that pulled the node:module builtin into the bundle
+    // and broke plain browser builds. The neutral `browser` entry works in Node too;
+    // the dev-only AASTAR_LOAD_LOCAL_CONFIG loader is not meaningful for an installed
+    // npm package (its relative config path doesn't exist under node_modules).
+    options.conditions = ['browser', 'import', 'module', 'default'];
+  },
 });
