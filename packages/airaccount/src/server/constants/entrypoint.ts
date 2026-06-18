@@ -1,3 +1,11 @@
+import { CANONICAL_ADDRESSES } from "@aastar/core";
+
+// Single source of truth: derive AirAccount's CURRENT (non-deprecated) Sepolia
+// contract addresses from @aastar/core's CANONICAL_ADDRESSES. core is the
+// foundation package and never imports airaccount, so there is no circular dep.
+// See AIRACCOUNT_ADDRESSES below for the per-field key mapping.
+const CORE_SEPOLIA = CANONICAL_ADDRESSES[11155111];
+
 export enum EntryPointVersion {
   V0_6 = "0.6",
   V0_7 = "0.7",
@@ -101,23 +109,26 @@ export const AIRACCOUNT_ADDRESSES = {
     /** @deprecated */
     agentSessionKeyValidatorM7r4: "0x1F06961e133217801F92e1CF552187F594a32873",
 
-    // ── Current: v0.17.2-beta.4 (bundler-compat — algId whitelist on account + executeUserOp) ─────
-    // beta.4 upgrades the AirAccount account contracts; it REUSES the beta.3 router /
-    // sessionKey / forceExit / BLS (per the beta.4 migration notes).
-    factory: "0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071",  // beta.4
-    factoryM7: "0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071",  // beta.4
-    accountImpl: "0x0321Fa7261Ad5945e4B3f0c73aFD7D9392E39796",  // beta.4
-    validatorRouter: "0x3c2b06f50300912794f29de031b33dd37bb8d6c6",  // beta.3 (reused; M3 timelock)
-    blsAlgorithm: "0xB82127182A855B82eED05e47536FcE568b626457",
-    blsAggregator: "0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1",
-    superPaymaster: "0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a",
-    // beta.3 ERC-7579 modules (reused by beta.4)
-    sessionKeyValidator: "0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf",
-    forceExitModule: "0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702",
-    airAccountDelegate: "0x4bda4849b80cc444fb2da65beec0724005c6675c",  // beta.4
-    airAccountExtension: "0x20FB2A65a52Fc6507FdD51260f055017a2BA2860",  // beta.4
-    agentRegistry: "0xe1320c35485b4d7817866a8d0d8f77dd58202253",  // beta.4
-    calldataParserRegistry: "0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F",
+    // ── Current: derived from @aastar/core CANONICAL_ADDRESSES[11155111] ───────────
+    // SINGLE SOURCE OF TRUTH. Do NOT hand-copy hex here. core is synced on every
+    // protocol redeploy (currently AirAccount v0.19.0-beta.2, Sepolia 2026-06-16),
+    // and these fields re-derive automatically. The key mapping (airaccount field ←
+    // core key) is asserted by entrypoint.addresses.test.ts so it can't silently drift.
+    factory: CORE_SEPOLIA.airAccountFactoryV7,
+    factoryM7: CORE_SEPOLIA.airAccountFactoryV7,
+    accountImpl: CORE_SEPOLIA.airAccountV7Impl,
+    validatorRouter: CORE_SEPOLIA.aaStarValidator,
+    blsAlgorithm: CORE_SEPOLIA.aaStarBLSAlgorithm,
+    blsAggregator: CORE_SEPOLIA.aaStarBLSAggregator,
+    // SuperPaymaster proxy — same concept as core's `superPaymaster` proxy.
+    superPaymaster: CORE_SEPOLIA.superPaymaster,
+    sessionKeyValidator: CORE_SEPOLIA.sessionKeyValidator,
+    forceExitModule: CORE_SEPOLIA.forceExitModule,
+    airAccountDelegate: CORE_SEPOLIA.airAccountDelegate,
+    airAccountExtension: CORE_SEPOLIA.airAccountExtension,
+    agentRegistry: CORE_SEPOLIA.agentRegistry,
+    calldataParserRegistry: CORE_SEPOLIA.calldataParserRegistry,
+    // uniswapV3Parser is airaccount-specific (not in core) — keep hardcoded.
     uniswapV3Parser: "0x5671810ac8aa1857397870e60232579cfc519515",
   },
 };

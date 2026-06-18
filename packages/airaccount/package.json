@@ -85,6 +85,7 @@
     "web3"
   ],
   "dependencies": {
+    "@aastar/core": "workspace:*",
     "@noble/curves": "^2.0.1",
     "@simplewebauthn/browser": "^13.2.2",
     "axios": "^1.12.2",
