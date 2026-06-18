@@ -17,4 +17,4 @@ if [ -z "$NEW_VERSION" ]; then
 fi
 
 # 调用 Node.js 脚本处理实际逻辑
-node scripts/update_versions.js "$NEW_VERSION"
+node scripts/update_versions.cjs "$NEW_VERSION"
