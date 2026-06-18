@@ -46,18 +46,15 @@ config (backend URL, chain, RPC, operator) is separate and env-driven (`runtime`
 
 Same `VITE_*` variables as the embed widget — see `.env.example`.
 
-## Browser build notes (SDK packaging caveats)
+## Browser build notes
 
-Same Node-builtin shim as the embed widget (see its README): `vite.config.ts` aliases
-the `module` builtin to `src/shims/node-module.ts` and defines `process.env` to `{}`.
+Built against `@aastar/sdk@0.20.6`. As in the embed widget, the only browser accommodation
+is the standard `define: { 'process.env': '{}' }` in `vite.config.ts` (the SDK reads a few
+`process.env.*` vars at module-eval time).
 
-Additionally, `src/types/aastar-sdk-dapp.d.ts` is a small **type shim** for
-`@aastar/sdk/dapp`. In `@aastar/sdk@0.20.5` the dapp subpath's runtime bundle
-(`dist/dapp.js`) is self-contained and exports the hooks correctly, but its type
-declaration (`dist/dapp.d.ts`) is `export * from '@aastar/dapp'` — a package not shipped
-as a runtime dependency — so `tsc` sees zero exports. The shim declares the real
-`useCreditScore` / `useSuperPaymaster` signatures so type-checking matches the working
-runtime. Remove it once the SDK ships proper subpath `.d.ts` files.
+`@aastar/sdk@0.20.6` also fixed the dapp subpath's type declarations, so `useCreditScore`
+and `useSuperPaymaster` from `@aastar/sdk/dapp` are now properly typed — the previous local
+type shim has been removed.
 
 ## Security
 

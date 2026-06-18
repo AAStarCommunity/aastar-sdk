@@ -1,26 +1,17 @@
 import { defineConfig } from 'vite';
-import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 
 // Default build: the standalone demo page (index.html) that mounts <AAStarWidget />.
 // For the vanilla <script>/iframe embed bundle, see vite.embed.config.ts (pnpm run build:embed).
 //
-// `@aastar/sdk` is published as a single bundle that includes some Node-oriented code:
-// it imports `createRequire` from `module` and reads `process.env.*` for an OPT-IN local
-// config loader. None of that runs in the browser path this widget uses, but it must be
-// shimmed/defined for a browser build to succeed. The two entries below do exactly that.
-const moduleShim = fileURLToPath(new URL('./src/shims/node-module.ts', import.meta.url));
-
+// `@aastar/sdk` reads a few `process.env.*` vars at module-eval time (CHAIN_ID, test
+// addresses, …) for its optional config layer. Browsers have no `process`, so we define
+// it away — the standard Vite pattern for libraries that read env vars. (The Node-builtin
+// `createRequire`/`module` issue was fixed upstream in @aastar/sdk@0.20.6, so the previous
+// module shim is no longer needed.)
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      // Replace Node's `module` builtin with a browser-safe createRequire shim.
-      module: moduleShim,
-    },
-  },
   define: {
-    // Neutralize the SDK's `process.env.*` reads so the local-config loader is skipped.
     'process.env': '{}',
   },
 });

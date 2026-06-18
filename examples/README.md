@@ -25,7 +25,7 @@ Both call the exact same SDK APIs underneath.
 ## Running
 
 Each example is **standalone** (its own `package.json`, depends on the published
-`@aastar/sdk@0.20.5`) and is **not** part of the monorepo pnpm workspace, so install it
+`@aastar/sdk@0.20.6`) and is **not** part of the monorepo pnpm workspace, so install it
 on its own:
 
 ```bash

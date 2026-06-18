@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@aastar/sdk':
-        specifier: 0.20.5
-        version: 0.20.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
+        specifier: 0.20.6
+        version: 0.20.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -42,8 +42,8 @@ importers:
 
 packages:
 
-  '@aastar/sdk@0.20.5':
-    resolution: {integrity: sha512-K/zg2dx8v4pupebX7rPylGCX9Htu8nCZCEkNIeyAIFH0ixXApp4NVqQfDgx/gb8iaWqCHjKDRY3sYcR/Z13Fvg==}
+  '@aastar/sdk@0.20.6':
+    resolution: {integrity: sha512-qWY2DG1pVW0lH+EijJ2N47Er9g4RqCU5kTTuQOVjCEiz6bnv9YS/l0G49fP5AC9nq/Tn7UGz7+qp04P0cWIpJA==}
     peerDependencies:
       react: ^18.0.0
       react-dom: ^18.0.0
@@ -858,7 +858,7 @@ packages:
 
 snapshots:
 
-  '@aastar/sdk@0.20.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)':
+  '@aastar/sdk@0.20.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)':
     dependencies:
       '@simplewebauthn/browser': 13.3.0
       axios: 1.18.0

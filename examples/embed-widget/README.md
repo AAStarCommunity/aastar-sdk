@@ -103,18 +103,15 @@ All config comes from `VITE_*` env vars (see `.env.example`) and can be overridd
 | `VITE_RPC_URL` | JSON-RPC URL for balance reads |
 | `VITE_SP_OPERATOR` | SuperPaymaster operator that sponsors gas |
 
-## Browser build notes (SDK packaging caveats)
+## Browser build notes
 
-`@aastar/sdk@0.20.5` ships as a single bundle that includes some Node-oriented code
-(it imports `createRequire` from `module`, references `crypto`/`fs`, and reads
-`process.env.*` for an opt-in local-config loader). None of that runs in the browser
-path this widget uses, but a browser build must shim it. This example does so in
-`vite.config.ts`:
+Built against `@aastar/sdk@0.20.6`, which fixed the earlier browser-build blocker (the
+bundle no longer pulls Node's `module`/`createRequire`). The only remaining browser
+accommodation is standard Vite practice: `vite.config.ts` defines `process.env` to `{}`
+because the SDK reads a few `process.env.*` vars (CHAIN_ID, test addresses) at module-eval
+time for its optional config layer.
 
-- aliases Node's `module` builtin to `src/shims/node-module.ts` (a no-op `createRequire`);
-- defines `process.env` to `{}` so the local-config loader is skipped.
-
-Vite still prints warnings that `crypto`/`fs` named imports were externalized — those are
+Vite may still print warnings that `crypto`/`fs` named imports were externalized — those are
 the SDK's server-only paths (KMS encryption, file IO) and are not invoked by the
 register/balance/gasless-via-backend flow. The build succeeds.
 
