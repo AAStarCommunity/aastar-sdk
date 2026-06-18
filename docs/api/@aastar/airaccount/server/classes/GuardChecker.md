@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/guard-checker.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-checker.ts#L33)
+Defined in: [packages/airaccount/src/server/services/guard-checker.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-checker.ts#L39)
 
 Pre-checks transactions against GlobalGuard before submitting on-chain.
 Avoids wasted gas from predictable reverts.
@@ -9,7 +9,7 @@ Avoids wasted gas from predictable reverts.
 
 > **new GuardChecker**(`ethereum`, `logger?`): `GuardChecker`
 
-Defined in: [packages/airaccount/src/server/services/guard-checker.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-checker.ts#L36)
+Defined in: [packages/airaccount/src/server/services/guard-checker.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-checker.ts#L42)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/airaccount/src/server/services/guard-checker.ts:36](https:
 
 > **fetchGuardStatus**(`accountAddress`): `Promise`\<[`GuardStatus`](../../interfaces/GuardStatus.md)\>
 
-Defined in: [packages/airaccount/src/server/services/guard-checker.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-checker.ts#L63)
+Defined in: [packages/airaccount/src/server/services/guard-checker.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-checker.ts#L61)
 
 Fetch guard status from the account's GlobalGuard.
 
@@ -48,7 +48,7 @@ Fetch guard status from the account's GlobalGuard.
 
 > **fetchTierConfig**(`accountAddress`): `Promise`\<[`TierConfig`](../../interfaces/TierConfig.md)\>
 
-Defined in: [packages/airaccount/src/server/services/guard-checker.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-checker.ts#L46)
+Defined in: [packages/airaccount/src/server/services/guard-checker.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-checker.ts#L52)
 
 Fetch tier limits from an AirAccount contract.
 
@@ -68,7 +68,7 @@ Fetch tier limits from an AirAccount contract.
 
 > **preCheck**(`accountAddress`, `value`): `Promise`\<[`PreCheckResult`](../../interfaces/PreCheckResult.md)\>
 
-Defined in: [packages/airaccount/src/server/services/guard-checker.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-checker.ts#L104)
+Defined in: [packages/airaccount/src/server/services/guard-checker.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-checker.ts#L97)
 
 Pre-check a transaction: determine tier, check guard limits and algorithm approval.
 Returns errors array (empty = OK to proceed).

@@ -1,3 +1,3 @@
 > **REPUTATION\_SYSTEM\_ADDRESS**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/constants.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/constants.ts#L33)
+Defined in: [packages/core/src/constants.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/constants.ts#L33)

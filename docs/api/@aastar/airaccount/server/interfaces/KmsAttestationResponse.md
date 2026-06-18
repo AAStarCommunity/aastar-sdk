@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L71)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L71)
 
 `GET /attestation` evidence bound to a caller nonce (#37).
 
@@ -12,7 +12,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:71](
 
 > `optional` **attest\_pubkey\_exp**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L77)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L77)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:77](
 
 > `optional` **attest\_pubkey\_mod**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L78)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L78)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:78](
 
 > `optional` **nonce**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L73)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L73)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:73](
 
 > `optional` **ree\_time\_secs**: `number`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L80)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L80)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:80](
 
 > `optional` **schema**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L72)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L72)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:72](
 
 > `optional` **sig\_alg**: `number`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L79)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L79)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:79](
 
 > `optional` **signature**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L76)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L76)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:76](
 
 > `optional` **ta\_measurement**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L75)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L75)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:75](
 
 > `optional` **ta\_uuid**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L74)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L74)
 
 ***
 
@@ -84,4 +84,4 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:74](
 
 > `optional` **trust\_root**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L81)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L81)

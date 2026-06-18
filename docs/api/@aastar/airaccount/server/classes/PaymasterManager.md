@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L46)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L46)
 
 Paymaster manager — extracted from NestJS PaymasterService.
 Storage via IStorageAdapter instead of filesystem JSON files.
@@ -9,7 +9,7 @@ Storage via IStorageAdapter instead of filesystem JSON files.
 
 > **new PaymasterManager**(`ethereum`, `storage`, `logger?`): `PaymasterManager`
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L49)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L49)
 
 #### Parameters
 
@@ -29,7 +29,7 @@ Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:49](ht
 
 > **addCustomPaymaster**(`userId`, `name`, `address`, `type`, `apiKey?`, `endpoint?`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L68)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L68)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:68](ht
 
 > **checkPriceFreshness**(`paymasterAddress`): `Promise`\<\{ `ageSeconds`: `number`; `fresh`: `boolean`; `thresholdSeconds`: `number`; \}\>
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L97)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L97)
 
 Check whether a paymaster's on-chain price cache is still fresh.
 Returns `{ fresh, ageSeconds, thresholdSeconds }`.
@@ -74,7 +74,7 @@ Throws if the contract does not implement `cachedPriceTimestamp()` / `priceStale
 
 > **getAvailablePaymasters**(`userId`): `Promise`\<`object`[]\>
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L57)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L57)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:57](ht
 
 > **getPaymasterData**(`userId`, `paymasterName`, `userOp`, `entryPoint`, `customAddress?`, `options?`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L148)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L148)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:148](h
 
 > **removeCustomPaymaster**(`userId`, `name`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L88)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L88)
 
 #### Parameters
 
@@ -135,7 +135,7 @@ Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:88](ht
 
 > **updatePrice**(`paymasterAddress`, `walletClient`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/paymaster-manager.ts#L129)
+Defined in: [packages/airaccount/src/server/services/paymaster-manager.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/paymaster-manager.ts#L129)
 
 Call `updatePrice()` on a paymaster contract (permissionless).
 Useful when `checkPriceFreshness()` reports stale price.

@@ -10,7 +10,7 @@
  */
 
 import {
-  YAAAServerClient,
+  AirAccountServerClient,
   MemoryStorage,
   LocalWalletSigner,
   ConsoleLogger,
@@ -31,8 +31,6 @@ import type {
   LegacyPasskeyAssertion,
 } from "@aastar/airaccount/server";
 
-import { ethers } from "ethers";
-
 // ============================================
 // 1. Basic Setup — Quick Start
 // ============================================
@@ -40,7 +38,7 @@ import { ethers } from "ethers";
 async function quickStart() {
   // Minimum viable setup: MemoryStorage + LocalWalletSigner
   // Good for development, testing, and prototyping.
-  const client = new YAAAServerClient({
+  const client = new AirAccountServerClient({
     rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
     bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
     chainId: 11155111,
@@ -84,7 +82,7 @@ async function quickStart() {
  * and daily spending limits. No separate validator contract needed.
  */
 async function m4Setup() {
-  const client = new YAAAServerClient({
+  const client = new AirAccountServerClient({
     rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
     bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
     chainId: 11155111,
@@ -142,7 +140,7 @@ async function kmsSetup() {
     }
   );
 
-  // KmsSigner is an ethers.AbstractSigner — use it anywhere ethers expects a Signer
+  // KmsSigner is a standalone signer (getAddress + signMessage); no ethers dependency.
   const address = await kmsSigner.getAddress();
   console.log("KMS signer address:", address);
 
@@ -160,7 +158,7 @@ async function kmsSetup() {
 
 /**
  * Implement ISignerAdapter for KMS-backed per-user signing.
- * The getSigner() method accepts an optional PasskeyAssertionContext,
+ * The signMessage() method accepts an optional PasskeyAssertionContext,
  * which carries the user's WebAuthn assertion through the signing chain.
  */
 class KmsSignerAdapter implements ISignerAdapter {
@@ -178,37 +176,36 @@ class KmsSignerAdapter implements ISignerAdapter {
     });
   }
 
-  async getAddress(userId: string): Promise<string> {
+  async getAddress(userId: string): Promise<`0x${string}`> {
     const keyInfo = this.userKeyMapping.get(userId);
     if (!keyInfo) throw new Error(`No KMS key for user ${userId}`);
-    return keyInfo.address;
+    return keyInfo.address as `0x${string}`;
   }
 
-  async getSigner(
+  async signMessage(
     userId: string,
+    message: `0x${string}` | Uint8Array,
     ctx?: PasskeyAssertionContext
-  ): Promise<ethers.Signer> {
+  ): Promise<`0x${string}`> {
     const keyInfo = this.userKeyMapping.get(userId);
     if (!keyInfo) throw new Error(`No KMS key for user ${userId}`);
 
-    return this.kmsManager.createKmsSigner(
+    const signer = this.kmsManager.createKmsSigner(
       keyInfo.keyId,
       keyInfo.address,
       async () => {
-        if (!ctx?.passkeyAssertion) {
+        if (!ctx?.assertion) {
           throw new Error("Passkey assertion required for KMS signing");
         }
-        return ctx.passkeyAssertion;
+        return ctx.assertion;
       }
     );
+    return (await signer.signMessage(message)) as `0x${string}`;
   }
 
-  async ensureSigner(
-    userId: string
-  ): Promise<{ signer: ethers.Signer; address: string }> {
+  async ensureSigner(userId: string): Promise<{ address: `0x${string}` }> {
     const address = await this.getAddress(userId);
-    const signer = await this.getSigner(userId);
-    return { signer, address };
+    return { address };
   }
 }
 
@@ -338,7 +335,7 @@ function camelToSnake(str: string): string {
 // 6. Account Management
 // ============================================
 
-async function accountManagement(client: YAAAServerClient) {
+async function accountManagement(client: AirAccountServerClient) {
   // Create account (idempotent — returns existing if already created)
   const account = await client.accounts.createAccount("user-abc");
   console.log("Account:", account.address);
@@ -368,7 +365,7 @@ async function accountManagement(client: YAAAServerClient) {
 // 7. Token Operations
 // ============================================
 
-async function tokenOperations(client: YAAAServerClient) {
+async function tokenOperations(client: AirAccountServerClient) {
   const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
   // Query token info from chain
@@ -406,7 +403,7 @@ async function tokenOperations(client: YAAAServerClient) {
 // 8. Transfers (ETH & ERC20)
 // ============================================
 
-async function transfers(client: YAAAServerClient) {
+async function transfers(client: AirAccountServerClient) {
   const userId = "user-abc";
 
   // --- ETH transfer ---
@@ -495,7 +492,7 @@ async function transfers(client: YAAAServerClient) {
 // 9. Paymaster Management (SuperPaymaster)
 // ============================================
 
-async function paymasterManagement(client: YAAAServerClient) {
+async function paymasterManagement(client: AirAccountServerClient) {
   const userId = "user-abc";
 
   // Add a custom paymaster
@@ -536,7 +533,7 @@ async function paymasterManagement(client: YAAAServerClient) {
 // 10. BLS Signatures & Tiered Signing
 // ============================================
 
-async function blsSignatures(client: YAAAServerClient) {
+async function blsSignatures(client: AirAccountServerClient) {
   // BLS signatures require seed nodes for the gossip network.
   // Configure them in the ServerConfig.
 
@@ -574,7 +571,7 @@ async function blsSignatures(client: YAAAServerClient) {
  * GuardChecker reads tier limits and guard status from the AirAccount contract
  * to determine which signature tier is required for a transaction.
  */
-async function guardCheckerExample(client: YAAAServerClient) {
+async function guardCheckerExample(client: AirAccountServerClient) {
   const accountAddress = "0xYourSmartAccount";
 
   // Fetch tier configuration from contract
@@ -588,7 +585,7 @@ async function guardCheckerExample(client: YAAAServerClient) {
   // console.log("Daily remaining:", guardStatus.dailyRemaining);
 
   // Pre-check a transaction (determines required tier + algId)
-  // const preCheck = await guardChecker.preCheck(accountAddress, ethers.parseEther("0.5"));
+  // const preCheck = await guardChecker.preCheck(accountAddress, parseEther("0.5"));
   // console.log("OK:", preCheck.ok);
   // console.log("Required tier:", preCheck.tier);
   // console.log("AlgId:", preCheck.algId);
@@ -604,7 +601,7 @@ async function guardCheckerExample(client: YAAAServerClient) {
 // ============================================
 
 async function multiVersion() {
-  const client = new YAAAServerClient({
+  const client = new AirAccountServerClient({
     rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
     bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
     chainId: 11155111,
@@ -645,12 +642,12 @@ async function multiVersion() {
 
 /*
 import express from 'express';
-import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
 
 const app = express();
 app.use(express.json());
 
-const client = new YAAAServerClient({
+const client = new AirAccountServerClient({
   rpcUrl: process.env.RPC_URL!,
   bundlerRpcUrl: process.env.BUNDLER_RPC_URL!,
   chainId: 11155111,

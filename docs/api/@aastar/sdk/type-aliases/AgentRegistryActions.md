@@ -1,6 +1,6 @@
 > **AgentRegistryActions** = `object`
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L6)
+Defined in: [packages/core/src/actions/agentRegistry.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:6](https://github.com/AA
 
 > **agentWalletOwner**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L17)
+Defined in: [packages/core/src/actions/agentRegistry.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L17)
 
 #### Parameters
 
@@ -27,7 +27,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:17](https://github.com/A
 
 > **bindFactory**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L30)
+Defined in: [packages/core/src/actions/agentRegistry.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L30)
 
 #### Parameters
 
@@ -47,7 +47,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:30](https://github.com/A
 
 > **deployer**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L8)
+Defined in: [packages/core/src/actions/agentRegistry.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L8)
 
 #### Returns
 
@@ -59,7 +59,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:8](https://github.com/AA
 
 > **deregisterAgent**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L47)
+Defined in: [packages/core/src/actions/agentRegistry.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L47)
 
 #### Parameters
 
@@ -79,7 +79,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:47](https://github.com/A
 
 > **factory**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L9)
+Defined in: [packages/core/src/actions/agentRegistry.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L9)
 
 #### Returns
 
@@ -91,7 +91,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:9](https://github.com/AA
 
 > **getAgentByIndex**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L25)
+Defined in: [packages/core/src/actions/agentRegistry.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L25)
 
 #### Parameters
 
@@ -111,7 +111,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:25](https://github.com/A
 
 > **getAgentCount**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L19)
+Defined in: [packages/core/src/actions/agentRegistry.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L19)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:19](https://github.com/A
 
 > **getAgents**: (`args`) => `Promise`\<`Address`[]\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L21)
+Defined in: [packages/core/src/actions/agentRegistry.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L21)
 
 #### Parameters
 
@@ -149,7 +149,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:21](https://github.com/A
 
 > **getAgentsPage**: (`args`) => `Promise`\<`Address`[]\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L23)
+Defined in: [packages/core/src/actions/agentRegistry.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L23)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:23](https://github.com/A
 
 > **getHumanOwner**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L15)
+Defined in: [packages/core/src/actions/agentRegistry.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L15)
 
 #### Parameters
 
@@ -189,7 +189,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:15](https://github.com/A
 
 > **isRegisteredAgent**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L11)
+Defined in: [packages/core/src/actions/agentRegistry.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L11)
 
 #### Parameters
 
@@ -208,7 +208,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:11](https://github.com/A
 
 > **isValidAccount**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L13)
+Defined in: [packages/core/src/actions/agentRegistry.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L13)
 
 #### Parameters
 
@@ -227,7 +227,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:13](https://github.com/A
 
 > **markValid**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L31)
+Defined in: [packages/core/src/actions/agentRegistry.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L31)
 
 #### Parameters
 
@@ -247,7 +247,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:31](https://github.com/A
 
 > **ownerAgents**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L27)
+Defined in: [packages/core/src/actions/agentRegistry.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L27)
 
 #### Parameters
 
@@ -267,7 +267,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:27](https://github.com/A
 
 > **registerAgent**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L43)
+Defined in: [packages/core/src/actions/agentRegistry.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L43)
 
 #### Parameters
 
@@ -288,7 +288,7 @@ Defined in: [packages/core/src/actions/agentRegistry.ts:43](https://github.com/A
 
 > **revokeAgent**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agentRegistry.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/agentRegistry.ts#L45)
+Defined in: [packages/core/src/actions/agentRegistry.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agentRegistry.ts#L45)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/clients/ExperimentClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/sdk/src/clients/ExperimentClient.ts#L19)
+Defined in: [packages/sdk/src/clients/ExperimentClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/clients/ExperimentClient.ts#L19)
 
 ExperimentClient: Business-layer tool for measuring and recording execution metrics
 
@@ -8,7 +8,7 @@ ExperimentClient: Business-layer tool for measuring and recording execution metr
 
 > **new ExperimentClient**(`scenarioId`, `group`): `ExperimentClient`
 
-Defined in: [packages/sdk/src/clients/ExperimentClient.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/sdk/src/clients/ExperimentClient.ts#L24)
+Defined in: [packages/sdk/src/clients/ExperimentClient.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/clients/ExperimentClient.ts#L24)
 
 #### Parameters
 
@@ -27,7 +27,7 @@ Defined in: [packages/sdk/src/clients/ExperimentClient.ts:24](https://github.com
 
 > **getRecords**(): [`ExperimentRecord`](../interfaces/ExperimentRecord.md)[]
 
-Defined in: [packages/sdk/src/clients/ExperimentClient.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/sdk/src/clients/ExperimentClient.ts#L77)
+Defined in: [packages/sdk/src/clients/ExperimentClient.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/clients/ExperimentClient.ts#L77)
 
 #### Returns
 
@@ -39,7 +39,7 @@ Defined in: [packages/sdk/src/clients/ExperimentClient.ts:77](https://github.com
 
 > **measureTx**(`taskName`, `txPromise`, `publicClient`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/sdk/src/clients/ExperimentClient.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/sdk/src/clients/ExperimentClient.ts#L57)
+Defined in: [packages/sdk/src/clients/ExperimentClient.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/clients/ExperimentClient.ts#L57)
 
 Measure an async task (transaction) automatically
 
@@ -61,7 +61,7 @@ Measure an async task (transaction) automatically
 
 > **recordTx**(`txHash`, `receipt`, `status`, `meta?`): [`ExperimentRecord`](../interfaces/ExperimentRecord.md)
 
-Defined in: [packages/sdk/src/clients/ExperimentClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/sdk/src/clients/ExperimentClient.ts#L32)
+Defined in: [packages/sdk/src/clients/ExperimentClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/clients/ExperimentClient.ts#L32)
 
 Record a transaction result
 

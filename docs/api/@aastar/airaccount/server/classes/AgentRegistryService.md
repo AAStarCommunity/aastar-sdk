@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L83)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L83)
 
 AgentRegistryService — typed wrappers for the AAStar AgentRegistry contract plus the
 AAStarAirAccountFactoryV7 agent-account creation helpers.
@@ -23,7 +23,7 @@ owner transaction. Read methods require a viem `PublicClient`.
 
 > **new AgentRegistryService**(`client`, `registryAddress`): `AgentRegistryService`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L90)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L90)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:9
 
 > **agentWalletOwner**(`agentWallet`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:255](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L255)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:255](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L255)
 
 Raw `agentWalletOwner` mapping read (agentWallet → owner).
 
@@ -134,7 +134,7 @@ Raw `agentWalletOwner` mapping read (agentWallet → owner).
 
 > **encodeCreateAgentAccount**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:283](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L283)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:283](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L283)
 
 Encode calldata for the factory's `createAgentAccount(...)`.
 
@@ -158,7 +158,7 @@ calldata to the factory address (direct tx or via a relayer).
 
 > **encodeDeregisterAgent**(`agentWallet`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:162](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L162)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:162](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L162)
 
 Encode calldata for `deregisterAgent(agentWallet)`.
 
@@ -181,7 +181,7 @@ lighter-weight `revokeAgent`). Caller must be the agent's human owner.
 
 > **encodeRegisterAgent**(`agentWallet`, `agentWalletSig`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:134](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L134)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:134](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L134)
 
 Encode calldata for `registerAgent(agentWallet, agentWalletSig)`.
 
@@ -207,7 +207,7 @@ if the wallet is already bound.
 
 > **encodeRegisterAgentViaAccount**(`agentWallet`, `agentWalletSig`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L103)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L103)
 
 Encode `account.execute(registry, 0, registerAgent(agentWallet, agentWalletSig))`.
 
@@ -228,7 +228,7 @@ Encode `account.execute(registry, 0, registerAgent(agentWallet, agentWalletSig))
 
 > **encodeRevokeAgent**(`agentWallet`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L148)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L148)
 
 Encode calldata for `revokeAgent(agentWallet)`.
 
@@ -251,7 +251,7 @@ agent's human owner (else `NotAgentOwner`).
 
 > **encodeRevokeAgentViaAccount**(`agentWallet`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L116)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L116)
 
 Encode `account.execute(registry, 0, revokeAgent(agentWallet))`.
 
@@ -271,7 +271,7 @@ Encode `account.execute(registry, 0, revokeAgent(agentWallet))`.
 
 > **encodeSetAgentRegistry**(`agentRegistry`): `string`
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:302](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L302)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:302](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L302)
 
 Encode calldata for the factory's `setAgentRegistry(_agentRegistry)` (factory-admin only).
 
@@ -291,7 +291,7 @@ Encode calldata for the factory's `setAgentRegistry(_agentRegistry)` (factory-ad
 
 > **getAgentAccountAddress**(`factoryAddress`, `humanOwner`, `agentKey`, `agentId`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:318](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L318)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:318](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L318)
 
 Predict the CREATE2 address of an agent account via the factory's `getAgentAddress(...)`.
 
@@ -314,7 +314,7 @@ Predict the CREATE2 address of an agent account via the factory's `getAgentAddre
 
 > **getAgentByIndex**(`owner`, `index`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:215](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L215)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:215](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L215)
 
 The agent wallet at `index` in `owner`'s agent list.
 
@@ -335,7 +335,7 @@ The agent wallet at `index` in `owner`'s agent list.
 
 > **getAgentCount**(`owner`): `Promise`\<`bigint`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:203](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L203)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:203](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L203)
 
 Number of agents registered under `owner`.
 
@@ -355,7 +355,7 @@ Number of agents registered under `owner`.
 
 > **getAgents**(`humanOwner`): `Promise`\<`string`[]\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:225](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L225)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:225](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L225)
 
 Full list of agent wallets registered under `humanOwner`.
 
@@ -375,7 +375,7 @@ Full list of agent wallets registered under `humanOwner`.
 
 > **getAgentsPage**(`owner`, `start`, `count`): `Promise`\<`string`[]\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:240](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L240)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:240](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L240)
 
 Paginated slice of `owner`'s agent wallets: `count` entries starting at `start`.
 The contract clamps `count` to the remaining length, so the returned array may be shorter.
@@ -398,7 +398,7 @@ The contract clamps `count` to the remaining length, so the returned array may b
 
 > **getFactoryAgentRegistry**(`factoryAddress`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:333](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L333)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:333](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L333)
 
 Read the AgentRegistry address currently bound to the factory.
 
@@ -418,7 +418,7 @@ Read the AgentRegistry address currently bound to the factory.
 
 > **getHumanOwner**(`agentWallet`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L193)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L193)
 
 The human owner bound to `agentWallet` (ZeroAddress if unregistered).
 
@@ -438,7 +438,7 @@ The human owner bound to `agentWallet` (ZeroAddress if unregistered).
 
 > **isRegisteredAgent**(`agentWallet`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:173](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L173)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:173](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L173)
 
 Whether `agentWallet` is currently registered in the registry.
 
@@ -458,7 +458,7 @@ Whether `agentWallet` is currently registered in the registry.
 
 > **isValidAccount**(`account`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:183](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L183)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:183](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L183)
 
 Whether `account` has been marked valid (e.g. an AirAccount minted by the bound factory).
 
@@ -478,7 +478,7 @@ Whether `account` has been marked valid (e.g. an AirAccount minted by the bound 
 
 > **ownerAgents**(`owner`, `index`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:265](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/agent-registry-service.ts#L265)
+Defined in: [packages/airaccount/src/server/services/agent-registry-service.ts:265](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/agent-registry-service.ts#L265)
 
 Raw `ownerAgents` array read (owner, index → agentWallet).
 

@@ -1,12 +1,12 @@
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/auth/passkey/passkey.manager.ts#L13)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L51)
 
 ## Constructors
 
 ### Constructor
 
-> **new PasskeyManager**(`baseURL`, `tokenProvider?`): `PasskeyManager`
+> **new PasskeyManager**(`baseURL`, `tokenProvider?`, `routes?`): `PasskeyManager`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/auth/passkey/passkey.manager.ts#L16)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L55)
 
 #### Parameters
 
@@ -14,6 +14,7 @@ Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:16](https:/
 | ------ | ------ |
 | `baseURL` | `string` |
 | `tokenProvider?` | () => `string` \| `null` |
+| `routes?` | `Partial`\<[`PasskeyRoutes`](../interfaces/PasskeyRoutes.md)\> |
 
 #### Returns
 
@@ -25,7 +26,7 @@ Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:16](https:/
 
 > **addDevice**(`params`): `Promise`\<[`PasskeyInfo`](../interfaces/PasskeyInfo.md)\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/auth/passkey/passkey.manager.ts#L114)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L161)
 
 Add a new device (Passkey) to existing account
 
@@ -47,7 +48,7 @@ Add a new device (Passkey) to existing account
 
 > **authenticate**(`params?`): `Promise`\<\{ `token`: `string`; `user`: `any`; \}\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/auth/passkey/passkey.manager.ts#L66)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L113)
 
 Complete Passkey Login/Authentication Flow
 
@@ -67,7 +68,7 @@ Complete Passkey Login/Authentication Flow
 
 > **register**(`params`): `Promise`\<\{ `passkey`: [`PasskeyInfo`](../interfaces/PasskeyInfo.md); `token`: `string`; `user`: `any`; \}\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/auth/passkey/passkey.manager.ts#L39)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L86)
 
 Complete Passkey Registration Flow
 
@@ -87,7 +88,7 @@ Complete Passkey Registration Flow
 
 > **verifyTransaction**(`params`): `Promise`\<`any`\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/auth/passkey/passkey.manager.ts#L86)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L133)
 
 Verify a transaction (Sign UserOpHash) with Passkey
 Returns the verification credential needed for the transaction

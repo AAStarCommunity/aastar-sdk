@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L20)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L20)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:20](h
 
 > **currentTier**: `TierLevel`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L28)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L28)
 
 Current tier based on spent amount
 
@@ -16,7 +16,7 @@ Current tier based on spent amount
 
 > **dailyLimit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L22)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L22)
 
 ETH daily limit in wei
 
@@ -26,7 +26,7 @@ ETH daily limit in wei
 
 > **guardAddress**: `string`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L36)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L36)
 
 Guard contract address
 
@@ -36,7 +36,7 @@ Guard contract address
 
 > **minDailyLimit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L34)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L34)
 
 Minimum daily limit floor (cannot decrease below this)
 
@@ -46,7 +46,7 @@ Minimum daily limit floor (cannot decrease below this)
 
 > **remaining**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L26)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L26)
 
 ETH remaining for today in wei
 
@@ -56,7 +56,7 @@ ETH remaining for today in wei
 
 > **tier1Limit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L30)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L30)
 
 Tier 1 max spend threshold in wei (single sig)
 
@@ -66,7 +66,7 @@ Tier 1 max spend threshold in wei (single sig)
 
 > **tier2Limit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L32)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L32)
 
 Tier 2 max spend threshold in wei (dual sig)
 
@@ -76,6 +76,6 @@ Tier 2 max spend threshold in wei (dual sig)
 
 > **todaySpent**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L24)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L24)
 
 ETH already spent today in wei

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L43)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L43)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/module-manager.ts:43](https
 
 > **account**: `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L44)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L44)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/module-manager.ts:44](https
 
 > **guardianSig1**: `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L48)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L48)
 
 Always requires 2 guardian sigs for uninstall
 
@@ -24,7 +24,7 @@ Always requires 2 guardian sigs for uninstall
 
 > **guardianSig2**: `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L49)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L49)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/airaccount/src/server/services/module-manager.ts:49](https
 
 > **module**: `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L46)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L46)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/airaccount/src/server/services/module-manager.ts:46](https
 
 > `optional` **moduleDeInitData**: `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L51)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L51)
 
 Passed to module.onUninstall()
 
@@ -50,4 +50,4 @@ Passed to module.onUninstall()
 
 > **moduleTypeId**: [`ModuleTypeId`](../type-aliases/ModuleTypeId.md)
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L45)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L45)

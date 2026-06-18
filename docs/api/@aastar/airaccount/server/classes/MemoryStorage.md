@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L13)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L13)
 
 In-memory storage adapter — useful for testing and demos.
 All data is lost when the process exits.
@@ -23,7 +23,7 @@ All data is lost when the process exits.
 
 > **findAccountByUserId**(`userId`): `Promise`\<[`AccountRecord`](../interfaces/AccountRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L29)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L29)
 
 #### Parameters
 
@@ -45,7 +45,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:29](https
 
 > **findTransferById**(`id`): `Promise`\<[`TransferRecord`](../interfaces/TransferRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L50)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L50)
 
 #### Parameters
 
@@ -67,7 +67,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:50](https
 
 > **findTransfersByUserId**(`userId`): `Promise`\<[`TransferRecord`](../interfaces/TransferRecord.md)[]\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L46)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L46)
 
 #### Parameters
 
@@ -89,7 +89,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:46](https
 
 > **getAccounts**(): `Promise`\<[`AccountRecord`](../interfaces/AccountRecord.md)[]\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L21)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L21)
 
 #### Returns
 
@@ -105,7 +105,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:21](https
 
 > **getBlsConfig**(): `Promise`\<[`BlsConfigRecord`](../interfaces/BlsConfigRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L90)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L90)
 
 #### Returns
 
@@ -121,7 +121,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:90](https
 
 > **getPaymasters**(`userId`): `Promise`\<[`PaymasterRecord`](../interfaces/PaymasterRecord.md)[]\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L63)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L63)
 
 #### Parameters
 
@@ -143,7 +143,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:63](https
 
 > **removePaymaster**(`userId`, `name`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L78)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L78)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:78](https
 
 > **saveAccount**(`account`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L25)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L25)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:25](https
 
 > **savePaymaster**(`userId`, `paymaster`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L67)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L67)
 
 #### Parameters
 
@@ -211,7 +211,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:67](https
 
 > **saveTransfer**(`transfer`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L42)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L42)
 
 #### Parameters
 
@@ -233,7 +233,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:42](https
 
 > **updateAccount**(`userId`, `updates`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L33)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L33)
 
 #### Parameters
 
@@ -256,7 +256,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:33](https
 
 > **updateSignerNodesCache**(`nodes`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L94)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L94)
 
 #### Parameters
 
@@ -278,7 +278,7 @@ Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:94](https
 
 > **updateTransfer**(`id`, `updates`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/adapters/memory-storage.ts#L54)
+Defined in: [packages/airaccount/src/server/adapters/memory-storage.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/adapters/memory-storage.ts#L54)
 
 #### Parameters
 

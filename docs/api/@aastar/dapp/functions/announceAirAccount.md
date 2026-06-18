@@ -1,6 +1,6 @@
 > **announceAirAccount**(`provider`, `info`): () => `void`
 
-Defined in: [packages/dapp/src/eip6963.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/dapp/src/eip6963.ts#L48)
+Defined in: [packages/dapp/src/eip6963.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/dapp/src/eip6963.ts#L48)
 
 Announce AirAccount as an EIP-6963 wallet so DApps can auto-discover it.
 

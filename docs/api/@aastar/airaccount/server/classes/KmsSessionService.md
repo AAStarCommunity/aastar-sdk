@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L88)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L88)
 
 Manages the lifecycle of a P-256 session key minted under a human key for
 ERC-4337 UserOp signing (AAStar TEE KMS v0.20.0).
@@ -24,7 +24,7 @@ Wraps a shared [KmsHttpClient](KmsHttpClient.md) — pass `KmsManager.httpClient
 
 > **new KmsSessionService**(`http`): `KmsSessionService`
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L89)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:89](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L89)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:89](
 
 > **createP256SessionKey**(`params`): `Promise`\<[`CreateP256SessionKeyResponse`](../interfaces/CreateP256SessionKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L99)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:99](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L99)
 
 Create a P-256 session key under a human key (WebAuthn-gated).
 
@@ -67,7 +67,7 @@ JWT used to authenticate subsequent [signP256UserOp](#signp256userop) calls.
 
 > **createP256SessionKeyWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`CreateP256SessionKeyResponse`](../interfaces/CreateP256SessionKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:155](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L155)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:155](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L155)
 
 Create a P-256 session key, running the challenge-binding ceremony internally.
 
@@ -89,7 +89,7 @@ Create a P-256 session key, running the challenge-binding ceremony internally.
 
 > **revokeP256SessionKey**(`params`): `Promise`\<[`RevokeP256SessionKeyResponse`](../interfaces/RevokeP256SessionKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L137)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L137)
 
 Revoke a P-256 session key (WebAuthn-gated, idempotent).
 
@@ -113,7 +113,7 @@ the caller. Idempotent: revoking an already-revoked key still resolves.
 
 > **revokeP256SessionKeyWithCeremony**(`params`, `humanKeyId`, `signer`, `options?`): `Promise`\<[`RevokeP256SessionKeyResponse`](../interfaces/RevokeP256SessionKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L175)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L175)
 
 Revoke a P-256 session key, running the challenge-binding ceremony internally.
 `humanKeyId` is the owning human key challenged by the ceremony (distinct from
@@ -138,7 +138,7 @@ the session `keyId` in `params`).
 
 > **signP256UserOp**(`params`, `jwt`): `Promise`\<[`SignP256UserOpResponse`](../interfaces/SignP256UserOpResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L117)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L117)
 
 Sign an ERC-4337 UserOp hash with a P-256 session key (Bearer JWT auth).
 

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L27)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L28)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/session-key-service.ts:27](
 
 > **account**: `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L29)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L30)
 
 Account that owns the session
 
@@ -16,7 +16,7 @@ Account that owns the session
 
 > `optional` **callTargets**: `string`[]
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L43)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L44)
 
 Allowed destination addresses ([] = any). Session struct field.
 
@@ -26,7 +26,7 @@ Allowed destination addresses ([] = any). Session struct field.
 
 > `optional` **contractScope**: `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L35)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L36)
 
 address(0) = any destination allowed
 
@@ -36,7 +36,7 @@ address(0) = any destination allowed
 
 > **expiry**: `number`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L33)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L34)
 
 Expiry unix timestamp (max 7 days from now)
 
@@ -46,7 +46,7 @@ Expiry unix timestamp (max 7 days from now)
 
 > `optional` **ownerSig**: `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L47)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L48)
 
 Owner signature over buildGrantHash() — omit if calling directly from account
 
@@ -56,7 +56,7 @@ Owner signature over buildGrantHash() — omit if calling directly from account
 
 > `optional` **selectorAllowlist**: `string`[]
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L45)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L46)
 
 Allowed selectors ([] = any). Session struct field.
 
@@ -66,7 +66,7 @@ Allowed selectors ([] = any). Session struct field.
 
 > `optional` **selectorScope**: `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L37)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L38)
 
 bytes4(0) = any selector allowed
 
@@ -76,7 +76,7 @@ bytes4(0) = any selector allowed
 
 > **sessionKey**: `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L31)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L32)
 
 The session key address (ephemeral EOA)
 
@@ -86,7 +86,7 @@ The session key address (ephemeral EOA)
 
 > `optional` **velocityLimit**: `number`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L39)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L40)
 
 Max calls per velocityWindow (0 = unlimited). Session struct field.
 
@@ -96,6 +96,6 @@ Max calls per velocityWindow (0 = unlimited). Session struct field.
 
 > `optional` **velocityWindow**: `number`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L41)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L42)
 
 Velocity window in seconds (0 = no window). Session struct field.

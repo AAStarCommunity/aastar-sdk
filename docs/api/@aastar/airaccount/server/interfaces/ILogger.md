@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/interfaces/logger.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/logger.ts#L5)
+Defined in: [packages/airaccount/src/server/interfaces/logger.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/logger.ts#L5)
 
 Optional logger interface for server SDK.
 Implement this to integrate with your application's logging framework.
@@ -9,7 +9,7 @@ Implement this to integrate with your application's logging framework.
 
 > **debug**(`message`, ...`args`): `void`
 
-Defined in: [packages/airaccount/src/server/interfaces/logger.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/logger.ts#L6)
+Defined in: [packages/airaccount/src/server/interfaces/logger.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/logger.ts#L6)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/airaccount/src/server/interfaces/logger.ts:6](https://gith
 
 > **error**(`message`, ...`args`): `void`
 
-Defined in: [packages/airaccount/src/server/interfaces/logger.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/logger.ts#L9)
+Defined in: [packages/airaccount/src/server/interfaces/logger.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/logger.ts#L9)
 
 #### Parameters
 
@@ -47,7 +47,7 @@ Defined in: [packages/airaccount/src/server/interfaces/logger.ts:9](https://gith
 
 > **log**(`message`, ...`args`): `void`
 
-Defined in: [packages/airaccount/src/server/interfaces/logger.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/logger.ts#L7)
+Defined in: [packages/airaccount/src/server/interfaces/logger.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/logger.ts#L7)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [packages/airaccount/src/server/interfaces/logger.ts:7](https://gith
 
 > **warn**(`message`, ...`args`): `void`
 
-Defined in: [packages/airaccount/src/server/interfaces/logger.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/logger.ts#L8)
+Defined in: [packages/airaccount/src/server/interfaces/logger.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/logger.ts#L8)
 
 #### Parameters
 

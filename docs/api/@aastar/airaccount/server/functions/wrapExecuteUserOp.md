@@ -1,6 +1,6 @@
 > **wrapExecuteUserOp**(`innerCallData`): `string`
 
-Defined in: [packages/airaccount/src/server/utils/execute-user-op.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/utils/execute-user-op.ts#L40)
+Defined in: [packages/airaccount/src/server/utils/execute-user-op.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/utils/execute-user-op.ts#L40)
 
 Wrap inner `execute()` / `executeBatch()` callData with the `executeUserOp` selector so a
 guard-enabled (v0.17.2-beta.4) account routes the bundler UserOp through `executeUserOp`.

@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.7] - 2026-06-18
+
+**viem-only — `ethers` fully removed.** Published with deps `viem` + `@simplewebauthn/browser` + `axios` (no ethers), Apache-2.0.
+
+- **ethers → viem migration**: `@aastar/airaccount` (the last ethers consumer) migrated 100% to viem — provider hub, signer hub, all 16 services, BLS packing, signatures. Byte-for-byte equivalence proven by a differential parity layer, now ethers-free golden-fixture tests. `ethers` removed as a dependency everywhere (incl. root devDep + on-chain evidence scripts).
+- **Passkey client decoupled from the YAA backend**: `YAAAClient` → `AirAccountClient`, `YAAAServerClient` → `AirAccountServerClient` (deprecated aliases kept). Passkey routes parameterized (`DEFAULT_PASSKEY_ROUTES`, overridable); dead `api.yetanotheraa.com` default removed. Official hosted Relying-Party will be `auth.aastar.io` (served by aNode).
+- **Hardening**: typed wrappers for high-risk contract reads (gas budget, fund-custody address, guard allow/deny gates, session-key grant hashes); uint256 args enforced as `bigint`.
+- Builds on **0.20.6** (repaired published `.d.ts` types + browser-build fix) and **0.20.5** (single-package `@aastar/sdk/kms` subpath + seamless multi-chain address auto-resolution).
+- Tooling: SDK anvil business-regression harness repaired (address sync + honest pass/fail); TypeDoc API-doc generation restored.
+
+**SDK Code Integrity Hash**: `55018672abdf24b1c9a66235c8f9f72d9e0c410ea6e1e5c9701fbca17bd68d5f`
+
 ## [0.20.1] - 2026-06-16
 
 Upstream sync (radar-driven, detect→upgrade→test). Four upstreams moved on 2026-06-16:
@@ -127,8 +139,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.16.23] - 2026-02-24
-**SDK Code Integrity Hash**: `c88f9c471f1eda77f41a7878810c2bb7677ffe0e12d697fc0346dcd2ce96c56b`
+## [0.20.7] - 2026-06-18
+**SDK Code Integrity Hash**: `55018672abdf24b1c9a66235c8f9f72d9e0c410ea6e1e5c9701fbca17bd68d5f`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:

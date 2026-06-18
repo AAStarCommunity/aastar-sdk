@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:192](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L192)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:193](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L193)
 
 SessionKeyService — manage M6 (basic) and M7 (agent) session keys.
 
@@ -16,7 +16,7 @@ M7 AgentSessionKeyValidator (algId=0x09):
 
 > **new SessionKeyService**(`provider`, `sessionKeyValidatorAddress`, `agentSessionKeyValidatorAddress`): `SessionKeyService`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:196](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L196)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L197)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [packages/airaccount/src/server/services/session-key-service.ts:196]
 
 > **buildGrantHash**(`params`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:219](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L219)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:220](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L220)
 
 Build the hash that the account owner must sign to grant a session key.
 Use grantSession() with this sig, or grantSessionDirect() from the account itself.
@@ -129,7 +129,7 @@ Use grantSession() with this sig, or grantSessionDirect() from the account itsel
 
 > **buildP256GrantHash**(`params`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:284](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L284)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:286](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L286)
 
 Build the hash that the account owner must sign to grant a P256/passkey session key.
 Use grantP256Session() with this sig, or grantP256SessionDirect() from the owner EOA itself.
@@ -151,7 +151,7 @@ The owner/KMS signs this hash to authorize a gasless grantP256Session().
 
 > **encodeDelegateSession**(`account`, `subKey`, `subCfg`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:379](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L379)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:382](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L382)
 
 Encode calldata for delegateSession() — sub-agent delegation.
 The sub-agent config must be a strict subset of the parent session's scope.
@@ -175,7 +175,7 @@ Called by the parent session key (not the account owner).
 
 > **encodeGrantAgentSession**(`sessionKey`, `cfg`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:355](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L355)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:358](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L358)
 
 Encode calldata for grantAgentSession().
 Must be called from the account (via UserOp or direct execute).
@@ -198,7 +198,7 @@ The contract uses msg.sender as the account — no account param needed.
 
 > **encodeGrantP256Session**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:322](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L322)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:325](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L325)
 
 Encode calldata for a P256/passkey session grant.
 
@@ -228,7 +228,7 @@ Encode calldata for a P256/passkey session grant.
 
 > **encodeGrantSession**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:251](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L251)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:253](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L253)
 
 Encode calldata for session grant.
 
@@ -258,7 +258,7 @@ Encode calldata for session grant.
 
 > **encodeRevokeAgentSession**(`sessionKey`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:399](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L399)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:402](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L402)
 
 Encode calldata for revokeAgentSession().
 
@@ -278,7 +278,7 @@ Encode calldata for revokeAgentSession().
 
 > **encodeRevokeP256Session**(`account`, `keyX`, `keyY`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:340](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L340)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:343](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L343)
 
 Encode calldata for revokeP256Session().
 
@@ -300,7 +300,7 @@ Encode calldata for revokeP256Session().
 
 > **encodeRevokeSession**(`account`, `sessionKey`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:269](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L269)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:271](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L271)
 
 Encode calldata for revokeSession().
 
@@ -321,7 +321,7 @@ Encode calldata for revokeSession().
 
 > **getAgentSession**(`account`, `sessionKey`): `Promise`\<[`AgentSessionInfo`](../interfaces/AgentSessionInfo.md)\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:408](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L408)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:411](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L411)
 
 Query agent session config + runtime state.
 
@@ -342,7 +342,7 @@ Query agent session config + runtime state.
 
 > **getDelegatedBy**(`account`, `subKey`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:438](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L438)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:441](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L441)
 
 Return the parent key that delegated to subKey, or ZeroAddress if not delegated.
 
@@ -363,7 +363,7 @@ Return the parent key that delegated to subKey, or ZeroAddress if not delegated.
 
 > **getP256Session**(`account`, `keyHash`): `Promise`\<[`SessionInfo`](../interfaces/SessionInfo.md)\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:299](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L299)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:302](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L302)
 
 Query a P256 session key state (decodes the 8-field Session tuple).
 
@@ -384,7 +384,7 @@ Query a P256 session key state (decodes the 8-field Session tuple).
 
 > **getSession**(`account`, `sessionKey`): `Promise`\<[`SessionInfo`](../interfaces/SessionInfo.md)\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:228](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L228)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:230](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L230)
 
 Query an ECDSA session key state (decodes the 8-field Session tuple).
 
@@ -405,7 +405,7 @@ Query an ECDSA session key state (decodes the 8-field Session tuple).
 
 > **getSessionKeyOwner**(`sessionKey`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:433](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L433)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:436](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L436)
 
 Return the parent account of a delegated session key.
 
@@ -425,7 +425,7 @@ Return the parent account of a delegated session key.
 
 > **isAgentSessionActive**(`account`, `sessionKey`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:427](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L427)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:430](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L430)
 
 Check if an agent session is active (not expired, not revoked).
 
@@ -446,7 +446,7 @@ Check if an agent session is active (not expired, not revoked).
 
 > **isP256SessionActive**(`account`, `keyX`, `keyY`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:305](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L305)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:308](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L308)
 
 Check if a P256 session is currently active.
 
@@ -468,7 +468,7 @@ Check if a P256 session is currently active.
 
 > **isSessionActive**(`account`, `sessionKey`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:234](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L234)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:236](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L236)
 
 Check if an ECDSA session is currently active.
 

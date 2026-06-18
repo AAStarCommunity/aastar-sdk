@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:143](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/transfer-manager.ts#L143)
+Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:144](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/transfer-manager.ts#L144)
 
 Transfer manager — extracted from NestJS TransferService.
 No passkey verification: callers are responsible for their own auth.
@@ -9,7 +9,7 @@ No passkey verification: callers are responsible for their own auth.
 
 > **new TransferManager**(`ethereum`, `accountManager`, `blsService`, `paymasterManager`, `tokenService`, `storage`, `signer`, `logger?`, `guardChecker?`): `TransferManager`
 
-Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/transfer-manager.ts#L148)
+Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/transfer-manager.ts#L149)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:148](ht
 
 > **estimateGas**(`userId`, `params`): `Promise`\<\{ `callGasLimit`: `string`; `maxFeePerGas`: `string`; `maxPriorityFeePerGas`: `string`; `preVerificationGas`: `string`; `totalGasEstimate`: `string`; `validatorGasEstimate`: `string`; `verificationGasLimit`: `string`; \}\>
 
-Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:395](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/transfer-manager.ts#L395)
+Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:396](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/transfer-manager.ts#L396)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:395](ht
 
 > **executeTransfer**(`userId`, `params`): `Promise`\<[`TransferResult`](../interfaces/TransferResult.md)\>
 
-Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/transfer-manager.ts#L163)
+Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:164](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/transfer-manager.ts#L164)
 
 #### Parameters
 
@@ -73,7 +73,7 @@ Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:163](ht
 
 > **getTransferHistory**(`userId`, `page`, `limit`): `Promise`\<\{ `limit`: `number`; `page`: `number`; `total`: `number`; `totalPages`: `number`; `transfers`: [`TransferRecord`](../interfaces/TransferRecord.md)[]; \}\>
 
-Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:468](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/transfer-manager.ts#L468)
+Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:469](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/transfer-manager.ts#L469)
 
 #### Parameters
 
@@ -93,7 +93,7 @@ Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:468](ht
 
 > **getTransferStatus**(`userId`, `transferId`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:440](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/transfer-manager.ts#L440)
+Defined in: [packages/airaccount/src/server/services/transfer-manager.ts:441](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/transfer-manager.ts#L441)
 
 #### Parameters
 

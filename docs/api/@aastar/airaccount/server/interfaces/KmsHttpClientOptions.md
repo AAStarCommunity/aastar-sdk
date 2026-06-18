@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-http-client.ts#L10)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L10)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:10](http
 
 > `optional` **kmsApiKey**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-http-client.ts#L13)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L13)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:13](http
 
 > `optional` **kmsEnabled**: `boolean`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-http-client.ts#L12)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L12)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:12](http
 
 > `optional` **kmsEndpoint**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-http-client.ts#L11)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L11)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:11](http
 
 > `optional` **logger**: [`ILogger`](ILogger.md)
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-http-client.ts#L14)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L14)

@@ -1,6 +1,6 @@
 > **VerifyResponse** = `object`
 
-Defined in: [packages/x402/src/types.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L91)
+Defined in: [packages/x402/src/types.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L91)
 
 Facilitator verify response.
 
@@ -10,7 +10,7 @@ Facilitator verify response.
 
 > `optional` **invalidReason**: `string`
 
-Defined in: [packages/x402/src/types.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L93)
+Defined in: [packages/x402/src/types.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L93)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/x402/src/types.ts:93](https://github.com/AAStarCommunity/a
 
 > **isValid**: `boolean`
 
-Defined in: [packages/x402/src/types.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L92)
+Defined in: [packages/x402/src/types.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L92)
 
 ***
 
@@ -26,4 +26,4 @@ Defined in: [packages/x402/src/types.ts:92](https://github.com/AAStarCommunity/a
 
 > `optional` **payer**: `Address`
 
-Defined in: [packages/x402/src/types.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L94)
+Defined in: [packages/x402/src/types.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L94)

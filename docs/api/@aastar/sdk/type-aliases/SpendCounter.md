@@ -1,6 +1,6 @@
 > **SpendCounter** = `object`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L68)
+Defined in: [packages/core/src/actions/policyRegistry.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L68)
 
 Sender-keyed cumulative spend counter for one asset/target window.
 
@@ -10,7 +10,7 @@ Sender-keyed cumulative spend counter for one asset/target window.
 
 > **spentInWindow**: `bigint`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L70)
+Defined in: [packages/core/src/actions/policyRegistry.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L70)
 
 cumulative native-unit spend in the current window.
 
@@ -20,6 +20,6 @@ cumulative native-unit spend in the current window.
 
 > **windowStart**: `bigint`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L72)
+Defined in: [packages/core/src/actions/policyRegistry.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L72)
 
 unix timestamp the current window began.
