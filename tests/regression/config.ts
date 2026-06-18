@@ -190,7 +190,10 @@ export function loadNetworkConfig(network: NetworkName): NetworkConfig {
             xPNTsFactory: getContractAddress('xPNTsFactory', 'XPNTS_FACTORY_ADDRESS', 'XPNTS_FACTORY'),
             aPNTs: getContractAddress('aPNTs', 'APNTS_ADDRESS', 'APNTS_TOKEN'),
             blsAggregator: getContractAddress('blsAggregator', 'BLS_AGGREGATOR_ADDRESS', 'BLS_AGGREGATOR'),
-            blsValidator: getContractAddress('blsValidator', 'BLS_VALIDATOR_ADDRESS', 'BLS_VALIDATOR'),
+            // blsValidator is DEPRECATED (the aggregator verifies BLS inline), so recent
+            // deployments no longer emit it. Treat as optional — never hard-fail the suite
+            // on its absence. (Type is already `blsValidator?: Address`; it's unused downstream.)
+            blsValidator: (deployments['blsValidator'] as Address) || (process.env.BLS_VALIDATOR_ADDRESS as Address) || (process.env.BLS_VALIDATOR as Address) || undefined,
             dvtValidator: getContractAddress('dvtValidator', 'DVT_VALIDATOR_ADDRESS', 'DVT_VALIDATOR'),
             entryPoint: getContractAddress('entryPoint', 'ENTRY_POINT_ADDRESS'),
             paymasterV4Impl: getContractAddress('paymasterV4Impl', 'PAYMASTER_V4_IMPL', 'PAYMASTER_ADDRESS'),
