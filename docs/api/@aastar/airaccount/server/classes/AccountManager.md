@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L22)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L22)
 
 Account manager — extracted from NestJS AccountService.
 Creates and retrieves smart accounts without framework dependencies.
@@ -9,7 +9,7 @@ Creates and retrieves smart accounts without framework dependencies.
 
 > **new AccountManager**(`ethereum`, `storage`, `signer`, `logger?`): `AccountManager`
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L25)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L25)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [packages/airaccount/src/server/services/account-manager.ts:25](http
 
 > **buildGuardianAcceptanceHash**(`owner`, `salt`, `factoryAddress`, `chainId`, `dailyLimit`): `string`
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:179](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L179)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:179](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L179)
 
 Build the acceptance hash that guardian devices must sign before account creation.
 
@@ -69,7 +69,7 @@ raw hex keccak256 hash — encode this into the QR code shown to guardian device
 
 > **createAccount**(`userId`, `options?`): `Promise`\<[`AccountRecord`](../interfaces/AccountRecord.md)\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L34)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L34)
 
 #### Parameters
 
@@ -91,7 +91,7 @@ Defined in: [packages/airaccount/src/server/services/account-manager.ts:34](http
 
 > **createAccountWithGuardians**(`userId`, `params`): `Promise`\<[`AccountRecord`](../interfaces/AccountRecord.md)\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:234](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L234)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:234](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L234)
 
 Create an AirAccount with 3 on-chain guardians:
   - guardian1 and guardian2: user's own devices (passkeys on phone 1 and phone 2)
@@ -126,7 +126,7 @@ Recovery: any 2-of-3 guardians can initiate social recovery after a 48h timelock
 
 > **encodeModifyTierLimits**(`tier1`, `tier2`, `deadline`, `guardianSigs`): `string`
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:211](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L211)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:211](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L211)
 
 Encode calldata for modifyTierLimitsWithGuardians() — guardian-gated tier-limit change (PR #43).
 
@@ -152,7 +152,7 @@ Caller is responsible for building and submitting the resulting UserOp.
 
 > **getAccount**(`userId`): `Promise`\<[`AccountRecord`](../interfaces/AccountRecord.md) & `object` \| `null`\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L112)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L112)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [packages/airaccount/src/server/services/account-manager.ts:112](htt
 
 > **getAccountAddress**(`userId`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L131)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L131)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ Defined in: [packages/airaccount/src/server/services/account-manager.ts:131](htt
 
 > **getAccountBalance**(`userId`): `Promise`\<\{ `address`: `string`; `balance`: `string`; `balanceInWei`: `string`; \}\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L137)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L137)
 
 #### Parameters
 
@@ -206,7 +206,7 @@ Defined in: [packages/airaccount/src/server/services/account-manager.ts:137](htt
 
 > **getAccountByUserId**(`userId`): `Promise`\<[`AccountRecord`](../interfaces/AccountRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L157)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L157)
 
 #### Parameters
 
@@ -224,7 +224,7 @@ Defined in: [packages/airaccount/src/server/services/account-manager.ts:157](htt
 
 > **getAccountNonce**(`userId`): `Promise`\<\{ `address`: `string`; `nonce`: `string`; \}\>
 
-Defined in: [packages/airaccount/src/server/services/account-manager.ts:150](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/account-manager.ts#L150)
+Defined in: [packages/airaccount/src/server/services/account-manager.ts:150](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/account-manager.ts#L150)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/dapp/src/eip6963.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/dapp/src/eip6963.ts#L23)
+Defined in: [packages/dapp/src/eip6963.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/dapp/src/eip6963.ts#L23)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/dapp/src/eip6963.ts:23](https://github.com/AAStarCommunity
 
 > **info**: [`EIP6963ProviderInfo`](EIP6963ProviderInfo.md)
 
-Defined in: [packages/dapp/src/eip6963.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/dapp/src/eip6963.ts#L24)
+Defined in: [packages/dapp/src/eip6963.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/dapp/src/eip6963.ts#L24)
 
 ***
 
@@ -14,4 +14,4 @@ Defined in: [packages/dapp/src/eip6963.ts:24](https://github.com/AAStarCommunity
 
 > **provider**: [`AirAccountEIP1193Provider`](../classes/AirAccountEIP1193Provider.md)
 
-Defined in: [packages/dapp/src/eip6963.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/dapp/src/eip6963.ts#L25)
+Defined in: [packages/dapp/src/eip6963.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/dapp/src/eip6963.ts#L25)

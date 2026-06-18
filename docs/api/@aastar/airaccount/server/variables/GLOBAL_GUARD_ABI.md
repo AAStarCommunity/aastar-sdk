@@ -1,3 +1,3 @@
 > `const` **GLOBAL\_GUARD\_ABI**: `string`[]
 
-Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:229](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/constants/entrypoint.ts#L229)
+Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:240](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/constants/entrypoint.ts#L240)

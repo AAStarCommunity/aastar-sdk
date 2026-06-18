@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:1](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/constants/entrypoint.ts#L1)
+Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/constants/entrypoint.ts#L9)
 
 ## Enumeration Members
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:1](https://g
 
 > **V0\_6**: `"0.6"`
 
-Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/constants/entrypoint.ts#L2)
+Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/constants/entrypoint.ts#L10)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:2](https://g
 
 > **V0\_7**: `"0.7"`
 
-Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/constants/entrypoint.ts#L3)
+Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/constants/entrypoint.ts#L11)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:3](https://g
 
 > **V0\_8**: `"0.8"`
 
-Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/constants/entrypoint.ts#L4)
+Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/constants/entrypoint.ts#L12)

@@ -1,6 +1,6 @@
 > `const` **RoleDataFactory**: `object`
 
-Defined in: [packages/sdk/src/utils/roleData.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/roleData.ts#L16)
+Defined in: [packages/sdk/src/utils/roleData.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/roleData.ts#L16)
 
 ## Type Declaration
 

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L74)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L74)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:74](http
 
 > **agentId**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L77)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:77](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L77)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:77](http
 
 > **endpoint**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L82)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L82)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:82](http
 
 > **feedbackHash**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L84)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L84)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:84](http
 
 > **feedbackURI**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L83)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L83)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:83](http
 
 > **reputationRegistry**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L76)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L76)
 
 Must be the official ERC-8004 reputation registry for this chain
 
@@ -48,7 +48,7 @@ Must be the official ERC-8004 reputation registry for this chain
 
 > **tag1**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L80)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L80)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:80](http
 
 > **tag2**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L81)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L81)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:81](http
 
 > **value**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L78)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L78)
 
 ***
 
@@ -72,4 +72,4 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:78](http
 
 > **valueDecimals**: `number`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L79)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L79)

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/token-service.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L27)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L27)
 
 Token service — extracted from NestJS TokenService.
 Only on-chain queries and calldata generation (no preset token list).
@@ -9,7 +9,7 @@ Only on-chain queries and calldata generation (no preset token list).
 
 > **new TokenService**(`ethereum`): `TokenService`
 
-Defined in: [packages/airaccount/src/server/services/token-service.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L28)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L28)
 
 #### Parameters
 
@@ -27,7 +27,7 @@ Defined in: [packages/airaccount/src/server/services/token-service.ts:28](https:
 
 > **generateTransferCalldata**(`to`, `amount`, `decimals`): `string`
 
-Defined in: [packages/airaccount/src/server/services/token-service.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L74)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L74)
 
 #### Parameters
 
@@ -47,7 +47,7 @@ Defined in: [packages/airaccount/src/server/services/token-service.ts:74](https:
 
 > **getFormattedTokenBalance**(`tokenAddress`, `walletAddress`): `Promise`\<[`TokenBalance`](../interfaces/TokenBalance.md)\>
 
-Defined in: [packages/airaccount/src/server/services/token-service.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L64)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L64)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [packages/airaccount/src/server/services/token-service.ts:64](https:
 
 > **getTokenBalance**(`tokenAddress`, `walletAddress`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/token-service.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L48)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L48)
 
 #### Parameters
 
@@ -85,7 +85,7 @@ Defined in: [packages/airaccount/src/server/services/token-service.ts:48](https:
 
 > **getTokenInfo**(`tokenAddress`): `Promise`\<[`TokenInfo`](../interfaces/TokenInfo.md)\>
 
-Defined in: [packages/airaccount/src/server/services/token-service.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L30)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L30)
 
 #### Parameters
 
@@ -103,7 +103,7 @@ Defined in: [packages/airaccount/src/server/services/token-service.ts:30](https:
 
 > **validateToken**(`tokenAddress`): `Promise`\<\{ `error?`: `string`; `isValid`: `boolean`; `token?`: [`TokenInfo`](../interfaces/TokenInfo.md); \}\>
 
-Defined in: [packages/airaccount/src/server/services/token-service.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/token-service.ts#L85)
+Defined in: [packages/airaccount/src/server/services/token-service.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/token-service.ts#L85)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/client.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/client.ts#L5)
+Defined in: [packages/airaccount/src/client.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/client.ts#L5)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/client.ts:5](https://github.com/AAStarCommu
 
 > **apiURL**: `string`
 
-Defined in: [packages/airaccount/src/client.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/client.ts#L14)
+Defined in: [packages/airaccount/src/client.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/client.ts#L14)
 
 Backend RP (relying party) API URL — required, no default.
 
@@ -21,7 +21,7 @@ this at your own backend implementing the standardized passkey contract
 
 > **bls**: [`BLSConfig`](BLSConfig.md)
 
-Defined in: [packages/airaccount/src/client.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/client.ts#L26)
+Defined in: [packages/airaccount/src/client.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/client.ts#L26)
 
 BLS Configuration
 
@@ -31,7 +31,7 @@ BLS Configuration
 
 > `optional` **passkeyRoutes**: `Partial`\<[`PasskeyRoutes`](PasskeyRoutes.md)\>
 
-Defined in: [packages/airaccount/src/client.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/client.ts#L24)
+Defined in: [packages/airaccount/src/client.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/client.ts#L24)
 
 Optional overrides for the passkey backend route paths.
 
@@ -45,7 +45,7 @@ exposes different routes without changing SDK code.
 
 > `optional` **tokenProvider**: () => `string` \| `null`
 
-Defined in: [packages/airaccount/src/client.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/client.ts#L16)
+Defined in: [packages/airaccount/src/client.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/client.ts#L16)
 
 Function to get the current auth token (JWT)
 

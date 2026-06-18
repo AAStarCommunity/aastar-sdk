@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L109)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L109)
 
 Server/test [PasskeyCeremonySigner](../interfaces/PasskeyCeremonySigner.md) backed by a raw P-256 private key
 (the passkey bound to the KMS key). Mirrors `p256_helper.py`'s
@@ -14,7 +14,7 @@ Server/test [PasskeyCeremonySigner](../interfaces/PasskeyCeremonySigner.md) back
 
 > **new P256PasskeySigner**(`privateKey`, `credentialId`): `P256PasskeySigner`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L117)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L117)
 
 #### Parameters
 
@@ -33,7 +33,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:117](h
 
 > `readonly` **credentialId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:110](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L110)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:110](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L110)
 
 base64url credential id registered with the KMS for this passkey.
 
@@ -49,7 +49,7 @@ base64url credential id registered with the KMS for this passkey.
 
 > **get** **publicKeyHex**(): `string`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L127)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L127)
 
 Uncompressed (0x04…, 65-byte) P-256 public key hex. Register this with the
 KMS via CreateKey `PasskeyPublicKey` (or ChangePasskey) so the TA can verify
@@ -65,7 +65,7 @@ assertions produced by this signer.
 
 > **sign**(`message`): `Uint8Array`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L131)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L131)
 
 Sign the WebAuthn message (authenticatorData || SHA-256(clientDataJSON)).
 MUST return a DER-encoded ES256 signature (ECDSA P-256 with SHA-256 applied

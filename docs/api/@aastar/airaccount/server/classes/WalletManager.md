@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/wallet-manager.ts#L6)
+Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/wallet-manager.ts#L6)
 
 Thin wrapper around ISignerAdapter for consistent wallet access.
 
@@ -8,7 +8,7 @@ Thin wrapper around ISignerAdapter for consistent wallet access.
 
 > **new WalletManager**(`signer`): `WalletManager`
 
-Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/wallet-manager.ts#L7)
+Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/wallet-manager.ts#L7)
 
 #### Parameters
 
@@ -26,7 +26,7 @@ Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:7](https:
 
 > **ensureSigner**(`userId`): `Promise`\<\{ `address`: `` `0x${string}` ``; \}\>
 
-Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/wallet-manager.ts#L21)
+Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/wallet-manager.ts#L21)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:21](https
 
 > **getAddress**(`userId`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/wallet-manager.ts#L9)
+Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/wallet-manager.ts#L9)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:9](https:
 
 > **signMessage**(`userId`, `message`, `ctx?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/wallet-manager.ts#L13)
+Defined in: [packages/airaccount/src/server/services/wallet-manager.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/wallet-manager.ts#L13)
 
 #### Parameters
 

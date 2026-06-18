@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/clients/doc-types.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/doc-types.ts#L7)
+Defined in: [packages/core/src/clients/doc-types.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/doc-types.ts#L7)
 
 Public Client Interface
 Standardized interface for reading from the blockchain.

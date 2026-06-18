@@ -1,6 +1,6 @@
 > **buildAuthenticatorData**(`rpId`, `signCount`): `Uint8Array`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:158](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L158)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:158](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L158)
 
 Build authenticatorData = rpIdHash(32) || flags(1) || signCount(4, big-endian).
 flags = 0x05 (UP | UV). `signCount` must strictly increase across ceremonies

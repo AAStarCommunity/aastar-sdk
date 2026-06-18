@@ -1,6 +1,6 @@
 > `const` **SuperPaymasterArtifact**: `object` = `SuperPaymasterABIData`
 
-Defined in: [packages/core/src/abis/index.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/abis/index.ts#L76)
+Defined in: [packages/core/src/abis/index.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/abis/index.ts#L76)
 
 ## Type Declaration
 

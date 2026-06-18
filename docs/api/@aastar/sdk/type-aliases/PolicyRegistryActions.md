@@ -1,6 +1,6 @@
 > **PolicyRegistryActions** = `object`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L75)
+Defined in: [packages/core/src/actions/policyRegistry.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L75)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:75](https://github.com/
 
 > **checkPolicy**: (`args`) => `Promise`\<\{ `decision`: [`PolicyDecision`](../enumerations/PolicyDecision.md); `remainingDaily`: `bigint`; \}\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L83)
+Defined in: [packages/core/src/actions/policyRegistry.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L83)
 
 Validation-time policy decision for one intended action. OPT-IN, default-ALLOW:
 a sender with nothing configured for (asset, target) is UNRESTRICTED.
@@ -37,7 +37,7 @@ decision (see [PolicyDecision](../enumerations/PolicyDecision.md)) + `remainingD
 
 > **DEFAULT\_WINDOW**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:106](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L106)
+Defined in: [packages/core/src/actions/policyRegistry.ts:106](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L106)
 
 Default daily-limit window length (seconds) used when `windowSeconds == 0`.
 
@@ -51,7 +51,7 @@ Default daily-limit window length (seconds) used when `windowSeconds == 0`.
 
 > **ETH\_SENTINEL**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L108)
+Defined in: [packages/core/src/actions/policyRegistry.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L108)
 
 The ETH sentinel address used as `asset` for native ETH (address(0) is invalid).
 
@@ -65,7 +65,7 @@ The ETH sentinel address used as `asset` for native ETH (address(0) is invalid).
 
 > **freezeSender**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L129)
+Defined in: [packages/core/src/actions/policyRegistry.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L129)
 
 Immediately freeze `sender`: [checkPolicy](#checkpolicy) returns REJECT for all ops.
 `onlyGuardianOrTimelock` (guardian = AirAccount 2-of-3 RecoveryService). Lifting
@@ -89,7 +89,7 @@ the freeze is a loosening → [unfreezeSender](#unfreezesender) (timelocked).
 
 > **getAssetPolicy**: (`args`) => `Promise`\<[`AssetPolicy`](AssetPolicy.md)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L86)
+Defined in: [packages/core/src/actions/policyRegistry.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L86)
 
 #### Parameters
 
@@ -109,7 +109,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:86](https://github.com/
 
 > **getAssetSpend**: (`args`) => `Promise`\<[`SpendCounter`](SpendCounter.md)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L90)
+Defined in: [packages/core/src/actions/policyRegistry.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L90)
 
 Cumulative native-unit spend + window start for this (sender, asset).
 
@@ -131,7 +131,7 @@ Cumulative native-unit spend + window start for this (sender, asset).
 
 > **getContractScope**: (`args`) => `Promise`\<[`ContractScope`](ContractScope.md)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L87)
+Defined in: [packages/core/src/actions/policyRegistry.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L87)
 
 #### Parameters
 
@@ -151,7 +151,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:87](https://github.com/
 
 > **guardian**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L96)
+Defined in: [packages/core/src/actions/policyRegistry.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L96)
 
 AirAccount 2-of-3 RecoveryService allowed to freeze/tighten immediately.
 
@@ -165,7 +165,7 @@ AirAccount 2-of-3 RecoveryService allowed to freeze/tighten immediately.
 
 > **isAuthorizedConsumer**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L92)
+Defined in: [packages/core/src/actions/policyRegistry.ts:92](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L92)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:92](https://github.com/
 
 > **isFrozen**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L91)
+Defined in: [packages/core/src/actions/policyRegistry.ts:91](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L91)
 
 #### Parameters
 
@@ -203,7 +203,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:91](https://github.com/
 
 > **isSelectorAllowed**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L88)
+Defined in: [packages/core/src/actions/policyRegistry.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L88)
 
 #### Parameters
 
@@ -224,7 +224,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:88](https://github.com/
 
 > **setAssetPolicy**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L141)
+Defined in: [packages/core/src/actions/policyRegistry.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L141)
 
 Set a (sender, asset) policy. `onlyTimelock` — reverts unless `msg.sender ==`
 [timelock](#timelock)`()`. There is NO registry-level pending store: the 2-day delay is
@@ -254,7 +254,7 @@ surface its scheduled-operation ETA (TimelockController.getTimestamp) to callers
 
 > **setConsumerAuthorization**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L161)
+Defined in: [packages/core/src/actions/policyRegistry.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L161)
 
 Authorize / revoke a staked consumer permitted to call `recordSpend`.
 `onlyTimelock` — route through [timelock](#timelock).
@@ -278,7 +278,7 @@ Authorize / revoke a staked consumer permitted to call `recordSpend`.
 
 > **setContractScope**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L148)
+Defined in: [packages/core/src/actions/policyRegistry.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L148)
 
 Set a (sender, target) scope and ADD the listed selectors (additive union, NOT
 replace; remove via [tightenContractScope](#tightencontractscope)). `onlyTimelock` — same external
@@ -305,7 +305,7 @@ TimelockController gating as [setAssetPolicy](#setassetpolicy); calling directly
 
 > **setGuardian**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:156](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L156)
+Defined in: [packages/core/src/actions/policyRegistry.ts:156](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L156)
 
 Set the guardian. `onlyTimelock` — route through [timelock](#timelock).
 
@@ -327,7 +327,7 @@ Set the guardian. `onlyTimelock` — route through [timelock](#timelock).
 
 > **tightenAssetPolicy**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L117)
+Defined in: [packages/core/src/actions/policyRegistry.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L117)
 
 Immediately tighten a (sender, asset) policy. Reverts `NotStrictlyTighter`
 unless the new params are <= current on every dimension. Callable by the
@@ -353,7 +353,7 @@ guardian or the timelock (`onlyGuardianOrTimelock`) — NO timelock delay.
 
 > **tightenContractScope**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L123)
+Defined in: [packages/core/src/actions/policyRegistry.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L123)
 
 Immediately tighten a (sender, target) scope (disallow target, remove selectors,
 lower velocity, set requireDVTAlways). Reverts unless strictly tighter.
@@ -379,7 +379,7 @@ lower velocity, set requireDVTAlways). Reverts unless strictly tighter.
 
 > **timelock**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L104)
+Defined in: [packages/core/src/actions/policyRegistry.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L104)
 
 The OZ {TimelockController} whose `minDelay` (2 days) gates every loosening.
 It is the ONLY address allowed to call the `onlyTimelock` loosen/admin setters
@@ -397,7 +397,7 @@ controller through which loosen calls must be scheduled + executed.
 
 > **unfreezeSender**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:154](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L154)
+Defined in: [packages/core/src/actions/policyRegistry.ts:154](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L154)
 
 Lift a freeze on `sender`. Unfreeze is a loosening → `onlyTimelock`; must be
 scheduled + executed through the external [timelock](#timelock) controller (2-day delay).
@@ -421,7 +421,7 @@ Calling directly reverts `NotTimelock`.
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L109)
+Defined in: [packages/core/src/actions/policyRegistry.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L109)
 
 #### Returns
 

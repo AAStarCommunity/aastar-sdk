@@ -1,4 +1,4 @@
-Defined in: [packages/paymaster/src/PaymasterManager.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L22)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L22)
 
 Unified parameters for building `paymasterAndData`.
 
@@ -13,7 +13,7 @@ packer. Callers no longer need to know which format a given paymaster uses.
 
 > `optional` **maxRate**: `bigint`
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L46)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L46)
 
 Optional max rate commitment (rug-pull protection). 'super' only.
 
@@ -23,7 +23,7 @@ Optional max rate commitment (rug-pull protection). 'super' only.
 
 > `optional` **operator**: `` `0x${string}` ``
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L44)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L44)
 
 Operator address. Required for type 'super'.
 
@@ -33,7 +33,7 @@ Operator address. Required for type 'super'.
 
 > **paymasterAddress**: `` `0x${string}` ``
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L30)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L30)
 
 Paymaster contract address (first 20 bytes of the layout).
 
@@ -43,7 +43,7 @@ Paymaster contract address (first 20 bytes of the layout).
 
 > `optional` **postOpGasLimit**: `bigint`
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L34)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L34)
 
 Paymaster postOp gas limit (16-byte field, both layouts).
 
@@ -53,7 +53,7 @@ Paymaster postOp gas limit (16-byte field, both layouts).
 
 > `optional` **token**: `` `0x${string}` ``
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L38)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L38)
 
 Gas token address. Required for type 'v4'.
 
@@ -63,7 +63,7 @@ Gas token address. Required for type 'v4'.
 
 > `optional` **type**: [`PaymasterType`](../type-aliases/PaymasterType.md)
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L28)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L28)
 
 Explicit paymaster type. Preferred over address-based heuristics.
 If omitted, the type is resolved from `paymasterAddress` against the
@@ -75,7 +75,7 @@ manager's registered known-paymaster map (throws if unresolved).
 
 > `optional` **validityWindow**: `number`
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L40)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L40)
 
 Validity window in seconds (used to compute validUntil/validAfter). 'v4' only.
 
@@ -85,6 +85,6 @@ Validity window in seconds (used to compute validUntil/validAfter). 'v4' only.
 
 > `optional` **verificationGasLimit**: `bigint`
 
-Defined in: [packages/paymaster/src/PaymasterManager.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/PaymasterManager.ts#L32)
+Defined in: [packages/paymaster/src/PaymasterManager.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/PaymasterManager.ts#L32)
 
 Paymaster verification gas limit (16-byte field, both layouts).

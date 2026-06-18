@@ -1,4 +1,4 @@
-Defined in: [admin/src/ProtocolGovernance.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L20)
+Defined in: [admin/src/ProtocolGovernance.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L20)
 
 ProtocolGovernance - L3 Pattern
 
@@ -17,7 +17,7 @@ Responsibilities:
 
 > **new ProtocolGovernance**(`config`): `ProtocolGovernance`
 
-Defined in: [admin/src/ProtocolGovernance.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L24)
+Defined in: [admin/src/ProtocolGovernance.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L24)
 
 #### Parameters
 
@@ -51,7 +51,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:5
 
 > **entryPointAddress**: `` `0x${string}` ``
 
-Defined in: [admin/src/ProtocolGovernance.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L22)
+Defined in: [admin/src/ProtocolGovernance.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L22)
 
 #### Overrides
 
@@ -111,7 +111,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:6
 
 > **registryAddress**: `` `0x${string}` ``
 
-Defined in: [admin/src/ProtocolGovernance.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L21)
+Defined in: [admin/src/ProtocolGovernance.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L21)
 
 #### Overrides
 
@@ -123,7 +123,7 @@ Defined in: [admin/src/ProtocolGovernance.ts:21](https://github.com/AAStarCommun
 
 > **configureRole**(`params`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L95)
+Defined in: [admin/src/ProtocolGovernance.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L95)
 
 Configure a Role's parameters (Admin only).
 Reads the current on-chain config first, then merges the provided overrides
@@ -169,7 +169,7 @@ Get the account address of the connected wallet
 
 > **getProtocolParams**(): `Promise`\<[`ProtocolParams`](../interfaces/ProtocolParams.md)\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L137)
+Defined in: [admin/src/ProtocolGovernance.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L137)
 
 #### Returns
 
@@ -279,7 +279,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:21
 
 > **setStaking**(`staking`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L82)
+Defined in: [admin/src/ProtocolGovernance.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L82)
 
 Set the Staking contract address
 
@@ -300,7 +300,7 @@ Set the Staking contract address
 
 > **setSuperPaymaster**(`paymaster`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L71)
+Defined in: [admin/src/ProtocolGovernance.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L71)
 
 Approve a new SuperPaymaster contract address
 
@@ -321,7 +321,7 @@ Approve a new SuperPaymaster contract address
 
 > **setTreasury**(`treasury`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L40)
+Defined in: [admin/src/ProtocolGovernance.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L40)
 
 Update the Global Treasury Address where protocol fees are collected
 
@@ -342,7 +342,7 @@ Update the Global Treasury Address where protocol fees are collected
 
 > **transferToDAO**(`daoAddress`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L125)
+Defined in: [admin/src/ProtocolGovernance.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L125)
 
 Transfer Protocol Ownership to a DAO (Multisig/Timelock)
 This is the final step of "Protocol Admin" lifecycle.
@@ -364,7 +364,7 @@ This is the final step of "Protocol Admin" lifecycle.
 
 > **updateEntryPoint**(`entryPoint`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [admin/src/ProtocolGovernance.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L57)
+Defined in: [admin/src/ProtocolGovernance.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/admin/src/ProtocolGovernance.ts#L57)
 
 Update the supported EntryPoint address
 

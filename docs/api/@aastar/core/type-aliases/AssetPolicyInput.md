@@ -1,6 +1,6 @@
 > **AssetPolicyInput** = `object`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L35)
+Defined in: [packages/core/src/actions/policyRegistry.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L35)
 
 Input form of [AssetPolicy](AssetPolicy.md) for governance setters (no `configured` flag).
 
@@ -10,7 +10,7 @@ Input form of [AssetPolicy](AssetPolicy.md) for governance setters (no `configur
 
 > **dailyLimit**: `bigint`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L38)
+Defined in: [packages/core/src/actions/policyRegistry.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L38)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:38](https://github.com/
 
 > **dvtTriggerAmount**: `bigint`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L36)
+Defined in: [packages/core/src/actions/policyRegistry.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L36)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:36](https://github.com/
 
 > **perTxHardCap**: `bigint`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L37)
+Defined in: [packages/core/src/actions/policyRegistry.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L37)
 
 ***
 
@@ -34,6 +34,6 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:37](https://github.com/
 
 > **windowSeconds**: `bigint`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L40)
+Defined in: [packages/core/src/actions/policyRegistry.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/policyRegistry.ts#L40)
 
 0 => DEFAULT_WINDOW (1 day).

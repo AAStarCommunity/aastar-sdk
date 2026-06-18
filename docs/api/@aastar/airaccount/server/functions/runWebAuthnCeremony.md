@@ -1,6 +1,6 @@
 > **runWebAuthnCeremony**(`begin`, `options`): `Promise`\<[`WebAuthnAssertion`](../interfaces/WebAuthnAssertion.md)\>
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:238](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L238)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:238](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L238)
 
 Run a full WebAuthn challenge-binding ceremony (AirAccount #49):
   1. fetch a one-time TA challenge from the `begin` endpoint,

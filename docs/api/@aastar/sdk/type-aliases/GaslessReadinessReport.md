@@ -1,6 +1,6 @@
 > **GaslessReadinessReport** = `object`
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L10)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/V4/PaymasterUtils.ts#L10)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:10](https://github.com/
 
 > **details**: `object`
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
 
 #### ethUsdPrice
 
@@ -44,7 +44,7 @@ Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:13](https://github.com/
 
 > **isReady**: `boolean`
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
 
 ***
 
@@ -52,4 +52,4 @@ Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/
 
 > **issues**: `string`[]
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/V4/PaymasterUtils.ts#L12)

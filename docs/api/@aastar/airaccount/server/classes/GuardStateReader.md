@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L60)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/guard-state-reader.ts#L60)
 
 GuardStateReader — F6: read AAStarGlobalGuard spending state.
 
@@ -13,7 +13,7 @@ Enables UI components to show:
 
 > **new GuardStateReader**(`provider`): `GuardStateReader`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L63)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/guard-state-reader.ts#L63)
 
 #### Parameters
 
@@ -103,7 +103,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:63](h
 
 > **getGuardState**(`accountAddress`): `Promise`\<[`GuardState`](../interfaces/GuardState.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L87)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/guard-state-reader.ts#L87)
 
 Read the full ETH guard state for an account.
 Returns null if the account has no guard (dailyLimit=0).
@@ -124,7 +124,7 @@ Returns null if the account has no guard (dailyLimit=0).
 
 > **getTokenGuardState**(`accountAddress`, `token`): `Promise`\<[`TokenGuardState`](../interfaces/TokenGuardState.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L123)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/guard-state-reader.ts#L123)
 
 Read per-token guard state.
 Returns null if the token is not configured on the guard.
@@ -146,7 +146,7 @@ Returns null if the token is not configured on the guard.
 
 > **isAlgorithmApproved**(`accountAddress`, `algId`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L167)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/guard-state-reader.ts#L167)
 
 Check if a given algorithm ID is approved on the guard.
 
@@ -167,7 +167,7 @@ Check if a given algorithm ID is approved on the guard.
 
 > **requiredTierForAmount**(`accountAddress`, `amountWei`): `Promise`\<`TierLevel`\>
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L153)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/guard-state-reader.ts#L153)
 
 Determine the minimum tier required to send a given ETH amount.
 Useful for showing "this transfer needs 2 signatures" before submission.

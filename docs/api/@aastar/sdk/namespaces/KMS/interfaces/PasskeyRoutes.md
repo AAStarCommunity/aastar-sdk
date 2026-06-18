@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L21)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L21)
 
 Configurable backend routes for the passkey (WebAuthn) flows.
 
@@ -13,7 +13,7 @@ different backend can override individual paths without changing code.
 
 > **deviceBegin**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L31)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L31)
 
 POST — begin adding a new device (passkey). Default: `/auth/device/passkey/begin`
 
@@ -23,7 +23,7 @@ POST — begin adding a new device (passkey). Default: `/auth/device/passkey/beg
 
 > **deviceComplete**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L33)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L33)
 
 POST — complete adding a new device (passkey). Default: `/auth/device/passkey/complete`
 
@@ -33,7 +33,7 @@ POST — complete adding a new device (passkey). Default: `/auth/device/passkey/
 
 > **loginBegin**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L27)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L27)
 
 POST — begin passkey login/authentication. Default: `/auth/passkey/login/begin`
 
@@ -43,7 +43,7 @@ POST — begin passkey login/authentication. Default: `/auth/passkey/login/begin
 
 > **loginComplete**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L29)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L29)
 
 POST — complete passkey login/authentication. Default: `/auth/passkey/login/complete`
 
@@ -53,7 +53,7 @@ POST — complete passkey login/authentication. Default: `/auth/passkey/login/co
 
 > **registerBegin**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L23)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L23)
 
 POST — begin passkey registration. Default: `/auth/passkey/register/begin`
 
@@ -63,7 +63,7 @@ POST — begin passkey registration. Default: `/auth/passkey/register/begin`
 
 > **registerComplete**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L25)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L25)
 
 POST — complete passkey registration. Default: `/auth/passkey/register/complete`
 
@@ -73,6 +73,6 @@ POST — complete passkey registration. Default: `/auth/passkey/register/complet
 
 > **transactionVerifyBegin**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L35)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L35)
 
 POST — begin transaction verification. Default: `/auth/transaction/verify/begin`

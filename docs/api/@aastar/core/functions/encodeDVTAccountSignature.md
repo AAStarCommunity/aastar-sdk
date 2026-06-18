@@ -1,6 +1,6 @@
 > **encodeDVTAccountSignature**(`params`): `` `0x${string}` ``
 
-Defined in: [packages/core/src/crypto/dvtWire.ts:201](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/crypto/dvtWire.ts#L201)
+Defined in: [packages/core/src/crypto/dvtWire.ts:201](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/crypto/dvtWire.ts#L201)
 
 Encode the ACCOUNT-LEVEL combined signature that goes into
 `PackedUserOperation.signature`, per airaccount-contract #110:

@@ -1,6 +1,6 @@
 > **createAAStarPublicClient**(`rpcUrl`, `chain`): [`PublicClient`](../interfaces/PublicClient.md)
 
-Defined in: [packages/core/src/clients.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients.ts#L8)
+Defined in: [packages/core/src/clients.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients.ts#L8)
 
 Creates a standard AAStar public client for any given chain.
 

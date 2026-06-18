@@ -1,6 +1,6 @@
 > **PaymentRequirements** = `object`
 
-Defined in: [packages/x402/src/types.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L23)
+Defined in: [packages/x402/src/types.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L23)
 
 Payment requirements — one option in the `accepts` array.
 Matches @x402/core PaymentRequirements.
@@ -11,7 +11,7 @@ Matches @x402/core PaymentRequirements.
 
 > **amount**: `string`
 
-Defined in: [packages/x402/src/types.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L27)
+Defined in: [packages/x402/src/types.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L27)
 
 ***
 
@@ -19,7 +19,7 @@ Defined in: [packages/x402/src/types.ts:27](https://github.com/AAStarCommunity/a
 
 > **asset**: `Address`
 
-Defined in: [packages/x402/src/types.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L26)
+Defined in: [packages/x402/src/types.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L26)
 
 ***
 
@@ -27,7 +27,7 @@ Defined in: [packages/x402/src/types.ts:26](https://github.com/AAStarCommunity/a
 
 > **extra**: `object`
 
-Defined in: [packages/x402/src/types.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L30)
+Defined in: [packages/x402/src/types.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L30)
 
 #### name
 
@@ -43,7 +43,7 @@ Defined in: [packages/x402/src/types.ts:30](https://github.com/AAStarCommunity/a
 
 > **maxTimeoutSeconds**: `number`
 
-Defined in: [packages/x402/src/types.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L29)
+Defined in: [packages/x402/src/types.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L29)
 
 ***
 
@@ -51,7 +51,7 @@ Defined in: [packages/x402/src/types.ts:29](https://github.com/AAStarCommunity/a
 
 > **network**: [`NetworkId`](NetworkId.md)
 
-Defined in: [packages/x402/src/types.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L25)
+Defined in: [packages/x402/src/types.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L25)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [packages/x402/src/types.ts:25](https://github.com/AAStarCommunity/a
 
 > **payTo**: `Address`
 
-Defined in: [packages/x402/src/types.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L28)
+Defined in: [packages/x402/src/types.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L28)
 
 ***
 
@@ -67,4 +67,4 @@ Defined in: [packages/x402/src/types.ts:28](https://github.com/AAStarCommunity/a
 
 > **scheme**: `"exact"` \| `"upto"`
 
-Defined in: [packages/x402/src/types.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L24)
+Defined in: [packages/x402/src/types.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L24)

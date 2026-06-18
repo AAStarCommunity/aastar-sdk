@@ -1,6 +1,6 @@
 > `const` **BLSHelpers**: `object`
 
-Defined in: [packages/core/src/crypto/blsSigner.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/crypto/blsSigner.ts#L76)
+Defined in: [packages/core/src/crypto/blsSigner.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/crypto/blsSigner.ts#L76)
 
 Helper functions for creating BLS proofs for Registry and BLSAggregator operations
 

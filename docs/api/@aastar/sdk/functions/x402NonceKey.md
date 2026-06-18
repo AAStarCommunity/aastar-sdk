@@ -1,6 +1,6 @@
 > **x402NonceKey**(`asset`, `from`, `nonce`): `` `0x${string}` ``
 
-Defined in: [packages/core/src/actions/x402.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/x402.ts#L11)
+Defined in: [packages/core/src/actions/x402.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/x402.ts#L11)
 
 Computes the storage key for x402SettlementNonces[key].
 Mirrors SuperPaymaster.x402NonceKey: keccak256(abi.encode(asset, from, nonce)).

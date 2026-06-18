@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L56)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L56)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:56](http
 
 > **agentURI**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L60)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L60)
 
 Agent metadata URI (ERC-721 tokenURI)
 
@@ -16,6 +16,6 @@ Agent metadata URI (ERC-721 tokenURI)
 
 > **identityRegistry**: `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L58)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/erc8004-service.ts#L58)
 
 Must be the official ERC-8004 identity registry for this chain

@@ -1,6 +1,6 @@
 > **buildPaymasterData**(`paymasterAddress`, `token`, `options?`): `` `0x${string}` ``
 
-Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L58)
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:58](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/paymaster/src/V4/PaymasterUtils.ts#L58)
 
 Build paymasterAndData for gasless UserOperation.
 Layout: [Paymaster(20)] [VerificationGasLimit(16)] [PostOpGasLimit(16)] [Token(20)] [ValidUntil(6)] [ValidAfter(6)]

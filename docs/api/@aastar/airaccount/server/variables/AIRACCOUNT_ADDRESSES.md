@@ -1,6 +1,6 @@
 > `const` **AIRACCOUNT\_ADDRESSES**: `object`
 
-Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:67](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/constants/entrypoint.ts#L67)
+Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/constants/entrypoint.ts#L75)
 
 ## Type Declaration
 
@@ -10,7 +10,7 @@ Defined in: [packages/airaccount/src/server/constants/entrypoint.ts:67](https://
 
 #### sepolia.accountImpl
 
-> **accountImpl**: `string` = `"0x0321Fa7261Ad5945e4B3f0c73aFD7D9392E39796"`
+> **accountImpl**: `"0x7fe62d512f0b8238DE6Ff17175DcE40eA312bBF2"` = `CORE_SEPOLIA.airAccountV7Impl`
 
 #### sepolia.accountImplM7r4
 
@@ -28,7 +28,7 @@ Use [accountImpl](#sepolia) (r4 audit-final).
 
 #### sepolia.agentRegistry
 
-> **agentRegistry**: `string` = `"0xe1320c35485b4d7817866a8d0d8f77dd58202253"`
+> **agentRegistry**: `"0x3895b3E6fEf4e121E6289dC7881A0eEd5283C652"` = `CORE_SEPOLIA.agentRegistry`
 
 #### sepolia.agentSessionKeyValidatorM7r4
 
@@ -46,23 +46,23 @@ Use agentSessionKeyValidator (r4 audit-final).
 
 #### sepolia.airAccountDelegate
 
-> **airAccountDelegate**: `string` = `"0x4bda4849b80cc444fb2da65beec0724005c6675c"`
+> **airAccountDelegate**: `"0xA8D7f70c9D36bC4a4eb14F0dCEE19053FCB3309f"` = `CORE_SEPOLIA.airAccountDelegate`
 
 #### sepolia.airAccountExtension
 
-> **airAccountExtension**: `string` = `"0x20FB2A65a52Fc6507FdD51260f055017a2BA2860"`
+> **airAccountExtension**: `"0xD61C0F3DE6D98070E9986743d35A56d56855A249"` = `CORE_SEPOLIA.airAccountExtension`
 
 #### sepolia.blsAggregator
 
-> **blsAggregator**: `string` = `"0xBAc3f24946d0eb15189E1c01e38182e5B078Bbc1"`
+> **blsAggregator**: `"0x77f7bf95B8602b7851f392F412257539242947e0"` = `CORE_SEPOLIA.aaStarBLSAggregator`
 
 #### sepolia.blsAlgorithm
 
-> **blsAlgorithm**: `string` = `"0xB82127182A855B82eED05e47536FcE568b626457"`
+> **blsAlgorithm**: `"0x68c381Ad3A2e3380F22840008027E9Ec2783F43A"` = `CORE_SEPOLIA.aaStarBLSAlgorithm`
 
 #### sepolia.calldataParserRegistry
 
-> **calldataParserRegistry**: `string` = `"0x076EE45d2a97F70FCb2e45809DC5f9b72BB4883F"`
+> **calldataParserRegistry**: `"0xb8Af1C039dF88F6bD9fE36Ca683492a3c09e7D17"` = `CORE_SEPOLIA.calldataParserRegistry`
 
 #### sepolia.compositeValidatorM7r4
 
@@ -80,7 +80,7 @@ Use compositeValidator (r4 audit-final).
 
 #### sepolia.factory
 
-> **factory**: `string` = `"0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071"`
+> **factory**: `"0x52c5190E7308Ea9B149157FF016cC99B6C6bf984"` = `CORE_SEPOLIA.airAccountFactoryV7`
 
 #### sepolia.factoryM4
 
@@ -92,7 +92,7 @@ Use compositeValidator (r4 audit-final).
 
 #### sepolia.factoryM7
 
-> **factoryM7**: `string` = `"0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071"`
+> **factoryM7**: `"0x52c5190E7308Ea9B149157FF016cC99B6C6bf984"` = `CORE_SEPOLIA.airAccountFactoryV7`
 
 #### sepolia.factoryM7r4
 
@@ -120,15 +120,15 @@ Use [factory](#sepolia) (r4 audit-final) for new accounts.
 
 #### sepolia.forceExitModule
 
-> **forceExitModule**: `string` = `"0xdb396ca2dc279f9bcb95fa3d8275f77c9f0c8702"`
+> **forceExitModule**: `"0xd882a16Ea37Be463D1885EF4a397Dbbf157dC211"` = `CORE_SEPOLIA.forceExitModule`
 
 #### sepolia.sessionKeyValidator
 
-> **sessionKeyValidator**: `string` = `"0x655ca2e9a2d1178f7fbcea1856560d1e0c657ebf"`
+> **sessionKeyValidator**: `"0x70de2e36004d6Ddc24DEB80e1Ef76c03EdC0c2AE"` = `CORE_SEPOLIA.sessionKeyValidator`
 
 #### sepolia.superPaymaster
 
-> **superPaymaster**: `string` = `"0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a"`
+> **superPaymaster**: `"0x030025f40d509b1a99547bAEb3795bD27F7182b7"` = `CORE_SEPOLIA.superPaymaster`
 
 #### sepolia.tierGuardHookM7r4
 
@@ -150,7 +150,7 @@ Use tierGuardHook (r4 audit-final).
 
 #### sepolia.validatorRouter
 
-> **validatorRouter**: `string` = `"0x3c2b06f50300912794f29de031b33dd37bb8d6c6"`
+> **validatorRouter**: `"0xC20A986Bcd5bF5Cc2fE5fFde6b155B8419E0389e"` = `CORE_SEPOLIA.aaStarValidator`
 
 #### sepolia.validatorRouterM7r4
 

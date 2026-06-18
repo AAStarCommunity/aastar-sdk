@@ -1,6 +1,6 @@
 > **X402PaymentParams** = `object`
 
-Defined in: [packages/x402/src/types.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L126)
+Defined in: [packages/x402/src/types.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L126)
 
 Payment creation parameters (high-level SDK input)
 
@@ -10,7 +10,7 @@ Payment creation parameters (high-level SDK input)
 
 > **amount**: `bigint`
 
-Defined in: [packages/x402/src/types.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L130)
+Defined in: [packages/x402/src/types.ts:130](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L130)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/x402/src/types.ts:130](https://github.com/AAStarCommunity/
 
 > **asset**: `Address`
 
-Defined in: [packages/x402/src/types.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L129)
+Defined in: [packages/x402/src/types.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L129)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [packages/x402/src/types.ts:129](https://github.com/AAStarCommunity/
 
 > **from**: `Address`
 
-Defined in: [packages/x402/src/types.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L127)
+Defined in: [packages/x402/src/types.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L127)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [packages/x402/src/types.ts:127](https://github.com/AAStarCommunity/
 
 > `optional` **nonce**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/x402/src/types.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L133)
+Defined in: [packages/x402/src/types.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L133)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [packages/x402/src/types.ts:133](https://github.com/AAStarCommunity/
 
 > **to**: `Address`
 
-Defined in: [packages/x402/src/types.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L128)
+Defined in: [packages/x402/src/types.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L128)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [packages/x402/src/types.ts:128](https://github.com/AAStarCommunity/
 
 > `optional` **validAfter**: `bigint`
 
-Defined in: [packages/x402/src/types.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L131)
+Defined in: [packages/x402/src/types.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L131)
 
 ***
 
@@ -58,4 +58,4 @@ Defined in: [packages/x402/src/types.ts:131](https://github.com/AAStarCommunity/
 
 > `optional` **validBefore**: `bigint`
 
-Defined in: [packages/x402/src/types.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L132)
+Defined in: [packages/x402/src/types.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L132)

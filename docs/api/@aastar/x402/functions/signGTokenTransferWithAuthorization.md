@@ -1,6 +1,6 @@
 > **signGTokenTransferWithAuthorization**(`walletClient`, `params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/x402/src/eip3009.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/eip3009.ts#L95)
+Defined in: [packages/x402/src/eip3009.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/eip3009.ts#L95)
 
 Sign a TransferWithAuthorization for GTokenAuthorization (EIP-3009).
 GToken-specific wrapper: enforces MAX_AUTH_VALIDITY = 300s before signing.

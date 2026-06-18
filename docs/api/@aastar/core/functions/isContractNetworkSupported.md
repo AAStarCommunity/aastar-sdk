@@ -1,6 +1,6 @@
 > **isContractNetworkSupported**(`network`): `network is "sepolia"`
 
-Defined in: [packages/core/src/contracts.ts:310](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/contracts.ts#L310)
+Defined in: [packages/core/src/contracts.ts:310](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/contracts.ts#L310)
 
 Check if a network is supported for contracts
 

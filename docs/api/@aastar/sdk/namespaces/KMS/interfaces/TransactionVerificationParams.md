@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L11)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L11)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/auth/passkey/types.ts:11](https://github.co
 
 > `optional` **data**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L14)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L14)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/auth/passkey/types.ts:14](https://github.co
 
 > **to**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L12)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L12)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [packages/airaccount/src/auth/passkey/types.ts:12](https://github.co
 
 > `optional` **value**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L13)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L13)

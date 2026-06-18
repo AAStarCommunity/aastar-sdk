@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L51)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L51)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:51](https:/
 
 > **new PasskeyManager**(`baseURL`, `tokenProvider?`, `routes?`): `PasskeyManager`
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L55)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L55)
 
 #### Parameters
 
@@ -26,7 +26,7 @@ Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:55](https:/
 
 > **addDevice**(`params`): `Promise`\<[`PasskeyInfo`](../interfaces/PasskeyInfo.md)\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L161)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L161)
 
 Add a new device (Passkey) to existing account
 
@@ -48,7 +48,7 @@ Add a new device (Passkey) to existing account
 
 > **authenticate**(`params?`): `Promise`\<\{ `token`: `string`; `user`: `any`; \}\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L113)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L113)
 
 Complete Passkey Login/Authentication Flow
 
@@ -68,7 +68,7 @@ Complete Passkey Login/Authentication Flow
 
 > **register**(`params`): `Promise`\<\{ `passkey`: [`PasskeyInfo`](../interfaces/PasskeyInfo.md); `token`: `string`; `user`: `any`; \}\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L86)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:86](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L86)
 
 Complete Passkey Registration Flow
 
@@ -88,7 +88,7 @@ Complete Passkey Registration Flow
 
 > **verifyTransaction**(`params`): `Promise`\<`any`\>
 
-Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/passkey.manager.ts#L133)
+Defined in: [packages/airaccount/src/auth/passkey/passkey.manager.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/passkey.manager.ts#L133)
 
 Verify a transaction (Sign UserOpHash) with Passkey
 Returns the verification credential needed for the transaction

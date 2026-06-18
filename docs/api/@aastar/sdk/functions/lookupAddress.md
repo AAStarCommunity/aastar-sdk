@@ -1,6 +1,6 @@
 > **lookupAddress**(`address`, `options`): `Promise`\<`string` \| `null`\>
 
-Defined in: [packages/core/src/utils/ens.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/utils/ens.ts#L64)
+Defined in: [packages/core/src/utils/ens.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/utils/ens.ts#L64)
 
 Reverse-resolve an Ethereum address to its primary ENS name.
 Returns null if the address has no reverse record.

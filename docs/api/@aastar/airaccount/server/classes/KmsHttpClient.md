@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L29)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L29)
 
 Shared low-level HTTP transport for all KMS service classes.
 
@@ -17,7 +17,7 @@ one instance so they reuse the same connection config and auth headers.
 
 > **new KmsHttpClient**(`options`): `KmsHttpClient`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L36)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L36)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:36](http
 
 > `readonly` **enabled**: `boolean`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L31)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L31)
 
 ***
 
@@ -43,7 +43,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:31](http
 
 > `readonly` **endpoint**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L30)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L30)
 
 ***
 
@@ -51,7 +51,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:30](http
 
 > `readonly` **logger**: [`ILogger`](../interfaces/ILogger.md)
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L32)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L32)
 
 ## Methods
 
@@ -59,7 +59,7 @@ Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:32](http
 
 > **amzPost**\<`T`\>(`path`, `target`, `body`): `Promise`\<`T`\>
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L78)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:78](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L78)
 
 POST with AWS-KMS framing (x-amz-target header) — required for wallet/signing ops.
 
@@ -87,7 +87,7 @@ POST with AWS-KMS framing (x-amz-target header) — required for wallet/signing 
 
 > **ensureEnabled**(): `void`
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L51)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L51)
 
 Throw if KMS is not enabled — every operation must call this first.
 
@@ -101,7 +101,7 @@ Throw if KMS is not enabled — every operation must call this first.
 
 > **get**\<`T`\>(`path`, `config?`): `Promise`\<`T`\>
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L70)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:70](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L70)
 
 Plain JSON GET.
 
@@ -128,7 +128,7 @@ Plain JSON GET.
 
 > **post**\<`T`\>(`path`, `body?`, `config?`): `Promise`\<`T`\>
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L62)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L62)
 
 Plain JSON POST. The axios `config` arg is only forwarded when defined, so a
 config-less call results in `http.post(path, body)` (2 args) — preserving the
@@ -158,7 +158,7 @@ exact call shape the existing unit tests assert against.
 
 > **postWithBearer**\<`T`\>(`path`, `body`, `jwt`): `Promise`\<`T`\>
 
-Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-http-client.ts#L88)
+Defined in: [packages/airaccount/src/server/services/kms-http-client.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-http-client.ts#L88)
 
 POST authenticated with a TEE-issued agent/session JWT (Authorization: Bearer).
 

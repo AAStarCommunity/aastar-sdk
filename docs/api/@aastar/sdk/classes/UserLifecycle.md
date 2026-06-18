@@ -1,4 +1,4 @@
-Defined in: [packages/enduser/src/UserLifecycle.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L40)
+Defined in: [packages/enduser/src/UserLifecycle.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L40)
 
 UserLifecycle - L3 Pattern
 
@@ -17,7 +17,7 @@ Responsibilities:
 
 > **new UserLifecycle**(`config`): `UserLifecycle`
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L51)
+Defined in: [packages/enduser/src/UserLifecycle.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L51)
 
 #### Parameters
 
@@ -39,7 +39,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:51](https://github.com/AAStar
 
 > **accountAddress**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L41)
+Defined in: [packages/enduser/src/UserLifecycle.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L41)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:41](https://github.com/AAStar
 
 > **client**: [`WalletClient`](../interfaces/WalletClient.md)
 
-Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L6)
+Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L6)
 
 #### Inherited from
 
@@ -59,7 +59,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AASta
 
 > **config**: [`UserLifecycleConfig`](../interfaces/UserLifecycleConfig.md)
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L49)
+Defined in: [packages/enduser/src/UserLifecycle.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L49)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:49](https://github.com/AAStar
 
 > **entryPointAddress**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L46)
+Defined in: [packages/enduser/src/UserLifecycle.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L46)
 
 #### Overrides
 
@@ -79,7 +79,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:46](https://github.com/AAStar
 
 > `optional` **gaslessConfig**: [`GaslessConfig`](../interfaces/GaslessConfig.md)
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L47)
+Defined in: [packages/enduser/src/UserLifecycle.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L47)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:47](https://github.com/AAStar
 
 > **gTokenAddress**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L44)
+Defined in: [packages/enduser/src/UserLifecycle.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L44)
 
 #### Overrides
 
@@ -99,7 +99,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:44](https://github.com/AAStar
 
 > **gTokenStakingAddress**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L45)
+Defined in: [packages/enduser/src/UserLifecycle.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L45)
 
 #### Overrides
 
@@ -111,7 +111,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:45](https://github.com/AAStar
 
 > `protected` `optional` **paymasterFactoryAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L11)
+Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L11)
 
 #### Inherited from
 
@@ -123,7 +123,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AASt
 
 > `optional` **publicClient**: [`PublicClient`](../interfaces/PublicClient.md)
 
-Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L7)
+Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L7)
 
 #### Inherited from
 
@@ -135,7 +135,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AASta
 
 > **registryAddress**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L42)
+Defined in: [packages/enduser/src/UserLifecycle.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L42)
 
 #### Overrides
 
@@ -147,7 +147,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:42](https://github.com/AAStar
 
 > **sbtAddress**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L43)
+Defined in: [packages/enduser/src/UserLifecycle.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L43)
 
 ## Methods
 
@@ -155,7 +155,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:43](https://github.com/AAStar
 
 > **checkEligibility**(`community`): `Promise`\<`boolean`\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L71)
+Defined in: [packages/enduser/src/UserLifecycle.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L71)
 
 Check if user is eligible to join a community
 
@@ -175,7 +175,7 @@ Check if user is eligible to join a community
 
 > **claimSBT**(`roleId`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:170](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L170)
+Defined in: [packages/enduser/src/UserLifecycle.ts:170](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L170)
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:170](https://github.com/AASta
 
 > **enableGasless**(`config`): `Promise`\<`void`\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L123)
+Defined in: [packages/enduser/src/UserLifecycle.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L123)
 
 Enable or update Gasless configuration
 
@@ -214,7 +214,7 @@ Enable or update Gasless configuration
 
 > **executeGaslessTx**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:135](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L135)
+Defined in: [packages/enduser/src/UserLifecycle.ts:135](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L135)
 
 Execute a transaction effectively using Gasless configuration if available
 
@@ -238,7 +238,7 @@ Execute a transaction effectively using Gasless configuration if available
 
 > **exitRole**(`roleId`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:217](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L217)
+Defined in: [packages/enduser/src/UserLifecycle.ts:217](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L217)
 
 #### Parameters
 
@@ -257,7 +257,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:217](https://github.com/AASta
 
 > **getAddress**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L34)
+Defined in: [packages/core/src/clients/BaseClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L34)
 
 Get the account address of the connected wallet
 
@@ -275,7 +275,7 @@ Get the account address of the connected wallet
 
 > **getCreditLimit**(): `Promise`\<`bigint`\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:199](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L199)
+Defined in: [packages/enduser/src/UserLifecycle.ts:199](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L199)
 
 #### Returns
 
@@ -287,7 +287,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:199](https://github.com/AASta
 
 > **getMyReputation**(): `Promise`\<[`ReputationData`](../interfaces/ReputationData.md)\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:183](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L183)
+Defined in: [packages/enduser/src/UserLifecycle.ts:183](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L183)
 
 #### Returns
 
@@ -299,7 +299,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:183](https://github.com/AASta
 
 > **getStartPublicClient**(): [`PublicClient`](../interfaces/PublicClient.md) \| [`WalletClient`](../interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\>
 
-Defined in: [packages/core/src/clients/BaseClient.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L41)
+Defined in: [packages/core/src/clients/BaseClient.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L41)
 
 Helper to ensure public client exists or fallback to wallet client (if it supports read)
 
@@ -317,7 +317,7 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 > **leaveCommunity**(`community`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:208](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L208)
+Defined in: [packages/enduser/src/UserLifecycle.ts:208](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L208)
 
 #### Parameters
 
@@ -336,7 +336,7 @@ Defined in: [packages/enduser/src/UserLifecycle.ts:208](https://github.com/AASta
 
 > **onboard**(`community`, `stakeAmount`): `Promise`\<[`OnboardResult`](../interfaces/OnboardResult.md)\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L84)
+Defined in: [packages/enduser/src/UserLifecycle.ts:84](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L84)
 
 One-click Onboarding: Approve -> Stake -> Register -> Mint SBT
 
@@ -357,7 +357,7 @@ One-click Onboarding: Approve -> Stake -> Register -> Mint SBT
 
 > `protected` **requireEntryPoint**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L73)
+Defined in: [packages/core/src/clients/BaseClient.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L73)
 
 #### Returns
 
@@ -373,7 +373,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:73](https://github.com/AASt
 
 > `protected` **requireGToken**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L52)
+Defined in: [packages/core/src/clients/BaseClient.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L52)
 
 #### Returns
 
@@ -389,7 +389,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:52](https://github.com/AASt
 
 > `protected` **requireGTokenStaking**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L59)
+Defined in: [packages/core/src/clients/BaseClient.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L59)
 
 #### Returns
 
@@ -405,7 +405,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:59](https://github.com/AASt
 
 > `protected` **requirePaymasterFactory**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L66)
+Defined in: [packages/core/src/clients/BaseClient.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L66)
 
 #### Returns
 
@@ -421,7 +421,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:66](https://github.com/AASt
 
 > `protected` **requireRegistry**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L45)
+Defined in: [packages/core/src/clients/BaseClient.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/clients/BaseClient.ts#L45)
 
 #### Returns
 
@@ -437,7 +437,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:45](https://github.com/AASt
 
 > **unstakeAll**(`roleId`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/enduser/src/UserLifecycle.ts:226](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/UserLifecycle.ts#L226)
+Defined in: [packages/enduser/src/UserLifecycle.ts:226](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/UserLifecycle.ts#L226)
 
 #### Parameters
 

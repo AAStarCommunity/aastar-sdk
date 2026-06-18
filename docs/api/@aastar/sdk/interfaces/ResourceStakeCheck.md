@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/requirementChecker.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L33)
+Defined in: [packages/core/src/requirementChecker.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L33)
 
 Role-stake sub-check result.
 
@@ -8,7 +8,7 @@ Role-stake sub-check result.
 
 > **ok**: `boolean`
 
-Defined in: [packages/core/src/requirementChecker.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L38)
+Defined in: [packages/core/src/requirementChecker.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L38)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/requirementChecker.ts:38](https://github.com/AASt
 
 > **required**: `bigint`
 
-Defined in: [packages/core/src/requirementChecker.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L37)
+Defined in: [packages/core/src/requirementChecker.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L37)
 
 Minimum stake required for this mode.
 
@@ -26,6 +26,6 @@ Minimum stake required for this mode.
 
 > **staked**: `bigint`
 
-Defined in: [packages/core/src/requirementChecker.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L35)
+Defined in: [packages/core/src/requirementChecker.ts:35](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L35)
 
 Current on-chain role stake (`getRoleStake(roleId, operator)`).
