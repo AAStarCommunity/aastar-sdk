@@ -110,6 +110,9 @@ importers:
 
   packages/airaccount:
     dependencies:
+      '@aastar/core':
+        specifier: workspace:*
+        version: link:../core
       '@noble/curves':
         specifier: ^2.0.1
         version: 2.0.1
