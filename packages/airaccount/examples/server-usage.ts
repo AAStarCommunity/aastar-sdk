@@ -10,7 +10,7 @@
  */
 
 import {
-  YAAAServerClient,
+  AirAccountServerClient,
   MemoryStorage,
   LocalWalletSigner,
   ConsoleLogger,
@@ -38,7 +38,7 @@ import type {
 async function quickStart() {
   // Minimum viable setup: MemoryStorage + LocalWalletSigner
   // Good for development, testing, and prototyping.
-  const client = new YAAAServerClient({
+  const client = new AirAccountServerClient({
     rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
     bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
     chainId: 11155111,
@@ -82,7 +82,7 @@ async function quickStart() {
  * and daily spending limits. No separate validator contract needed.
  */
 async function m4Setup() {
-  const client = new YAAAServerClient({
+  const client = new AirAccountServerClient({
     rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
     bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
     chainId: 11155111,
@@ -335,7 +335,7 @@ function camelToSnake(str: string): string {
 // 6. Account Management
 // ============================================
 
-async function accountManagement(client: YAAAServerClient) {
+async function accountManagement(client: AirAccountServerClient) {
   // Create account (idempotent — returns existing if already created)
   const account = await client.accounts.createAccount("user-abc");
   console.log("Account:", account.address);
@@ -365,7 +365,7 @@ async function accountManagement(client: YAAAServerClient) {
 // 7. Token Operations
 // ============================================
 
-async function tokenOperations(client: YAAAServerClient) {
+async function tokenOperations(client: AirAccountServerClient) {
   const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
   // Query token info from chain
@@ -403,7 +403,7 @@ async function tokenOperations(client: YAAAServerClient) {
 // 8. Transfers (ETH & ERC20)
 // ============================================
 
-async function transfers(client: YAAAServerClient) {
+async function transfers(client: AirAccountServerClient) {
   const userId = "user-abc";
 
   // --- ETH transfer ---
@@ -492,7 +492,7 @@ async function transfers(client: YAAAServerClient) {
 // 9. Paymaster Management (SuperPaymaster)
 // ============================================
 
-async function paymasterManagement(client: YAAAServerClient) {
+async function paymasterManagement(client: AirAccountServerClient) {
   const userId = "user-abc";
 
   // Add a custom paymaster
@@ -533,7 +533,7 @@ async function paymasterManagement(client: YAAAServerClient) {
 // 10. BLS Signatures & Tiered Signing
 // ============================================
 
-async function blsSignatures(client: YAAAServerClient) {
+async function blsSignatures(client: AirAccountServerClient) {
   // BLS signatures require seed nodes for the gossip network.
   // Configure them in the ServerConfig.
 
@@ -571,7 +571,7 @@ async function blsSignatures(client: YAAAServerClient) {
  * GuardChecker reads tier limits and guard status from the AirAccount contract
  * to determine which signature tier is required for a transaction.
  */
-async function guardCheckerExample(client: YAAAServerClient) {
+async function guardCheckerExample(client: AirAccountServerClient) {
   const accountAddress = "0xYourSmartAccount";
 
   // Fetch tier configuration from contract
@@ -601,7 +601,7 @@ async function guardCheckerExample(client: YAAAServerClient) {
 // ============================================
 
 async function multiVersion() {
-  const client = new YAAAServerClient({
+  const client = new AirAccountServerClient({
     rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
     bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
     chainId: 11155111,
@@ -642,12 +642,12 @@ async function multiVersion() {
 
 /*
 import express from 'express';
-import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
 
 const app = express();
 app.use(express.json());
 
-const client = new YAAAServerClient({
+const client = new AirAccountServerClient({
   rpcUrl: process.env.RPC_URL!,
   bundlerRpcUrl: process.env.BUNDLER_RPC_URL!,
   chainId: 11155111,

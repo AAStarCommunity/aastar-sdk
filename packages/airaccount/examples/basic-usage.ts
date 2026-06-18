@@ -6,13 +6,13 @@
  * KMS-based wallet operations with ERC-4337 account abstraction.
  */
 
-import { YAAAClient } from "@aastar/airaccount";
+import { AirAccountClient } from "@aastar/airaccount";
 
 // ============================================
 // 1. Initialize the SDK Client
 // ============================================
 
-const yaaa = new YAAAClient({
+const air = new AirAccountClient({
   // Your backend API URL
   apiURL: "http://localhost:3000/api/v1",
 
@@ -45,7 +45,7 @@ async function registerWithPasskey() {
   try {
     console.log("Starting KMS-backed Passkey registration...");
 
-    const result = await yaaa.passkey.register({
+    const result = await air.passkey.register({
       email: "user@example.com",
       username: "JohnDoe",
     });
@@ -80,7 +80,7 @@ async function loginWithPasskey() {
   try {
     console.log("Starting KMS-backed Passkey login...");
 
-    const result = await yaaa.passkey.authenticate();
+    const result = await air.passkey.authenticate();
 
     console.log("Login successful!");
     console.log("User:", result.user);
@@ -114,7 +114,7 @@ async function sendTransaction() {
     console.log("Preparing transaction...");
 
     // Step 1: Verify transaction with Passkey (gets WebAuthn credential)
-    const verification = await yaaa.passkey.verifyTransaction({
+    const verification = await air.passkey.verifyTransaction({
       to: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
       value: "0.01",
       data: "0x",
@@ -161,12 +161,12 @@ async function sendTransaction() {
 async function demonstrateBLS() {
   try {
     // Get available BLS nodes from gossip network
-    const nodes = await yaaa.bls.getAvailableNodes();
+    const nodes = await air.bls.getAvailableNodes();
     console.log("Available BLS nodes:", nodes);
 
     // Generate message point for a UserOpHash
     const userOpHash = "0x1234...";
-    const messagePoint = await yaaa.bls.generateMessagePoint(userOpHash);
+    const messagePoint = await air.bls.generateMessagePoint(userOpHash);
     console.log("Message Point:", messagePoint);
 
     // Note: Actual BLS signing is handled by the backend
@@ -181,11 +181,11 @@ async function demonstrateBLS() {
 // ============================================
 
 /*
-import { YAAAClient } from '@aastar/airaccount';
+import { AirAccountClient } from '@aastar/airaccount';
 import { useState } from 'react';
 
 // Create client instance (can be shared across components)
-const yaaa = new YAAAClient({
+const air = new AirAccountClient({
   apiURL: process.env.NEXT_PUBLIC_API_URL!,
   tokenProvider: () => localStorage.getItem('token'),
   bls: {
@@ -200,7 +200,7 @@ function LoginPage() {
   const handleRegister = async () => {
     setLoading(true);
     try {
-      const result = await yaaa.passkey.register({
+      const result = await air.passkey.register({
         email: 'user@example.com',
         username: 'JohnDoe',
       });
@@ -216,7 +216,7 @@ function LoginPage() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      const result = await yaaa.passkey.authenticate();
+      const result = await air.passkey.authenticate();
       setUser(result.user);
       localStorage.setItem('token', result.token);
     } catch (error) {
@@ -245,7 +245,7 @@ function LoginPage() {
 // ============================================
 
 export {
-  yaaa,
+  air,
   registerWithPasskey,
   loginWithPasskey,
   sendTransaction,

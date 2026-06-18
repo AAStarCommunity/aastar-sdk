@@ -14,10 +14,12 @@ npm install @aastar/airaccount
 ### Browser Client Setup
 
 ```typescript
-import { YAAAClient } from "@aastar/airaccount";
+import { AirAccountClient } from "@aastar/airaccount";
 
-const yaaa = new YAAAClient({
-  apiURL: "https://api.your-backend.com/v1",
+// `apiURL` is the passkey RP backend; AAStar's official hosted RP will be
+// `https://auth.aastar.io` (served by aNode), or point at your own.
+const air = new AirAccountClient({
+  apiURL: "https://auth.aastar.io",
   tokenProvider: () => localStorage.getItem("token"),
   bls: {
     seedNodes: ["https://signer1.aastar.io"],
@@ -29,12 +31,12 @@ const yaaa = new YAAAClient({
 
 ```typescript
 import {
-  YAAAServerClient,
+  AirAccountServerClient,
   MemoryStorage,
   LocalWalletSigner,
 } from "@aastar/airaccount/server";
 
-const client = new YAAAServerClient({
+const client = new AirAccountServerClient({
   rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
   bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
   chainId: 11155111,
@@ -87,13 +89,13 @@ Demonstrates the server-side SDK:
 
 ```
 ┌─────────────┐
-│   Browser    │  @aastar/airaccount (YAAAClient)
+│   Browser    │  @aastar/airaccount (AirAccountClient)
 │   (SDK)      │  - PasskeyManager (WebAuthn)
 └──────┬───────┘  - BLSManager
        │ HTTPS
        ▼
 ┌─────────────┐
-│  Your API   │  @aastar/airaccount/server (YAAAServerClient)
+│  Your API   │  @aastar/airaccount/server (AirAccountServerClient)
 │  (Backend)  │  - AccountManager
 └──────┬───────┘  - TransferManager
        │          - BLSSignatureService
