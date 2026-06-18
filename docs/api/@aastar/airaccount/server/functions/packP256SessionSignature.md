@@ -1,6 +1,6 @@
 > **packP256SessionSignature**(`account`, `keyX`, `keyY`, `signature`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:483](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/session-key-service.ts#L483)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:486](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L486)
 
 Pack a P256 session key signature into the 149-byte UserOp.signature format.
 

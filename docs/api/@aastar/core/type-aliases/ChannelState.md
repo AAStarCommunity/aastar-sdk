@@ -1,6 +1,6 @@
 > **ChannelState** = `object`
 
-Defined in: [packages/core/src/actions/channel.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L6)
+Defined in: [packages/core/src/actions/channel.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/channel.ts:6](https://github.com/AAStarCo
 
 > **authorizedSigner**: `Address`
 
-Defined in: [packages/core/src/actions/channel.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L10)
+Defined in: [packages/core/src/actions/channel.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L10)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/channel.ts:10](https://github.com/AAStarC
 
 > **closeRequestedAt**: `bigint`
 
-Defined in: [packages/core/src/actions/channel.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L13)
+Defined in: [packages/core/src/actions/channel.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L13)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/actions/channel.ts:13](https://github.com/AAStarC
 
 > **deposit**: `bigint`
 
-Defined in: [packages/core/src/actions/channel.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L11)
+Defined in: [packages/core/src/actions/channel.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L11)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/actions/channel.ts:11](https://github.com/AAStarC
 
 > **finalized**: `boolean`
 
-Defined in: [packages/core/src/actions/channel.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L14)
+Defined in: [packages/core/src/actions/channel.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L14)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/actions/channel.ts:14](https://github.com/AAStarC
 
 > **payee**: `Address`
 
-Defined in: [packages/core/src/actions/channel.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L8)
+Defined in: [packages/core/src/actions/channel.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L8)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/actions/channel.ts:8](https://github.com/AAStarCo
 
 > **payer**: `Address`
 
-Defined in: [packages/core/src/actions/channel.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L7)
+Defined in: [packages/core/src/actions/channel.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L7)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [packages/core/src/actions/channel.ts:7](https://github.com/AAStarCo
 
 > **settled**: `bigint`
 
-Defined in: [packages/core/src/actions/channel.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L12)
+Defined in: [packages/core/src/actions/channel.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L12)
 
 ***
 
@@ -64,4 +64,4 @@ Defined in: [packages/core/src/actions/channel.ts:12](https://github.com/AAStarC
 
 > **token**: `Address`
 
-Defined in: [packages/core/src/actions/channel.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/channel.ts#L9)
+Defined in: [packages/core/src/actions/channel.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L9)

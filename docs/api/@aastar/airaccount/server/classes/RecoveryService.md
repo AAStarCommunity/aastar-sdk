@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L126)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L126)
 
 RecoveryService — typed wrappers for AirAccount's on-chain social / guardian
 recovery (capability F28). Unlike `ForceExitService` (an ERC-7579 module),
@@ -40,7 +40,7 @@ cleared via guardian `cancelRecovery()` votes before re-proposing.
 
 > **new RecoveryService**(`client`): `RecoveryService`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L132)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L132)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [packages/airaccount/src/server/services/recovery-service.ts:132](ht
 
 > **encodeAddGuardian**(`guardian`): `string`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L141)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:141](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L141)
 
 Encode `addGuardian(guardian)` calldata. **Owner only.**
 Registers a recovery guardian; reverts once 3 guardians are set, or if the
@@ -152,7 +152,7 @@ guardian is `address(0)`, the owner, or already registered.
 
 > **encodeApproveRecovery**(): `string`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:182](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L182)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:182](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L182)
 
 Encode `approveRecovery()` calldata. **Another guardian** approves the
 active proposal, setting its bit in `approvalBitmap`.
@@ -167,7 +167,7 @@ active proposal, setting its bit in `approvalBitmap`.
 
 > **encodeCancelRecovery**(): `string`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L195)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L195)
 
 Encode `cancelRecovery()` calldata. **Guardians only** — each call is one
 vote; recovery is dropped once [RECOVERY\_THRESHOLD](../variables/RECOVERY_THRESHOLD.md) cancel votes are
@@ -183,7 +183,7 @@ reached. The owner cannot cancel.
 
 > **encodeExecuteRecovery**(): `string`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:208](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L208)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:208](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L208)
 
 Encode `executeRecovery()` calldata. **Anyone** may call, but it only
 succeeds once the timelock has elapsed and the approval threshold is met.
@@ -199,7 +199,7 @@ Rotates the account owner to the proposed `newOwner`.
 
 > **encodeProposeRecovery**(`newOwner`): `string`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:170](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L170)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:170](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L170)
 
 Encode `proposeRecovery(newOwner)` calldata. **Any guardian** may call.
 Starts the [RECOVERY\_TIMELOCK\_SECONDS](../variables/RECOVERY_TIMELOCK_SECONDS.md) timelock and records the
@@ -221,7 +221,7 @@ proposer's approval (1 of [RECOVERY\_THRESHOLD](../variables/RECOVERY_THRESHOLD.
 
 > **encodeRemoveGuardian**(`index`, `guardianSigs`): `string`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L157)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L157)
 
 Encode `removeGuardian(index, guardianSigs)` calldata. **Owner only**, and
 requires >= [RECOVERY\_THRESHOLD](../variables/RECOVERY_THRESHOLD.md) guardian signatures over the removal
@@ -244,7 +244,7 @@ hash. Cannot remove while a recovery is active, nor drop below 2 guardians.
 
 > **getActiveRecovery**(`account`): `Promise`\<[`ActiveRecovery`](../interfaces/ActiveRecovery.md)\>
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:225](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L225)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:225](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L225)
 
 Read and decode the account's `activeRecovery()` struct.
 Returns derived `approvalCount`, `cancellationCount`, `executeAfter`, and
@@ -266,7 +266,7 @@ Returns derived `approvalCount`, `cancellationCount`, `executeAfter`, and
 
 > **getGuardianCount**(`account`): `Promise`\<`number`\>
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:254](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L254)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:254](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L254)
 
 Read the number of registered guardians via `guardianCount()`.
 
@@ -286,7 +286,7 @@ Read the number of registered guardians via `guardianCount()`.
 
 > **getGuardians**(`account`): `Promise`\<`string`[]\>
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:273](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/recovery-service.ts#L273)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:273](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L273)
 
 Read the full guardian address list.
 

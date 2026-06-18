@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/signer-adapter.ts#L7)
+Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/signer-adapter.ts#L7)
 
 Context for passing Passkey assertion data through the signing chain.
 Used by KMS-backed signers to authenticate signing operations.
@@ -9,4 +9,4 @@ Used by KMS-backed signers to authenticate signing operations.
 
 > **assertion**: [`LegacyPasskeyAssertion`](LegacyPasskeyAssertion.md)
 
-Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/signer-adapter.ts#L8)
+Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/signer-adapter.ts#L8)

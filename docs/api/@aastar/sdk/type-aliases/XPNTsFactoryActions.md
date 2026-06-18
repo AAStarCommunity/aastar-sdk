@@ -1,6 +1,6 @@
 > **XPNTsFactoryActions** = `object`
 
-Defined in: [packages/core/src/actions/factory.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L7)
+Defined in: [packages/core/src/actions/factory.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L7)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/factory.ts:7](https://github.com/AAStarCo
 
 > **communityToToken**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L26)
+Defined in: [packages/core/src/actions/factory.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L26)
 
 #### Parameters
 
@@ -27,7 +27,7 @@ Defined in: [packages/core/src/actions/factory.ts:26](https://github.com/AAStarC
 
 > **createToken**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L10)
+Defined in: [packages/core/src/actions/factory.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L10)
 
 #### Parameters
 
@@ -49,7 +49,7 @@ Defined in: [packages/core/src/actions/factory.ts:10](https://github.com/AAStarC
 
 > **deployedTokens**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L25)
+Defined in: [packages/core/src/actions/factory.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L25)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [packages/core/src/actions/factory.ts:25](https://github.com/AAStarC
 
 > **deployForCommunity**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L12)
+Defined in: [packages/core/src/actions/factory.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L12)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Removed in the v5.x contract refactor — xPNTsFactory has no `deployForCommunit
 
 > **deployxPNTsToken**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L9)
+Defined in: [packages/core/src/actions/factory.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L9)
 
 #### Parameters
 
@@ -117,7 +117,7 @@ Defined in: [packages/core/src/actions/factory.ts:9](https://github.com/AAStarCo
 
 > **getAllTokens**: () => `Promise`\<`Address`[]\>
 
-Defined in: [packages/core/src/actions/factory.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L22)
+Defined in: [packages/core/src/actions/factory.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L22)
 
 #### Returns
 
@@ -129,7 +129,7 @@ Defined in: [packages/core/src/actions/factory.ts:22](https://github.com/AAStarC
 
 > **getCommunityByToken**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L21)
+Defined in: [packages/core/src/actions/factory.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L21)
 
 #### Parameters
 
@@ -152,7 +152,7 @@ Removed in the v5.x contract refactor — xPNTsFactory has no token->community r
 
 > **getDeployedCount**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/factory.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L23)
+Defined in: [packages/core/src/actions/factory.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L23)
 
 #### Returns
 
@@ -164,7 +164,7 @@ Defined in: [packages/core/src/actions/factory.ts:23](https://github.com/AAStarC
 
 > **getImplementation**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L36)
+Defined in: [packages/core/src/actions/factory.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L36)
 
 Token implementation address. On-chain fn: `implementation()` (the legacy `getImplementation` getter was removed).
 
@@ -178,7 +178,7 @@ Token implementation address. On-chain fn: `implementation()` (the legacy `getIm
 
 > **getTokenAddress**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L15)
+Defined in: [packages/core/src/actions/factory.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L15)
 
 #### Parameters
 
@@ -197,7 +197,7 @@ Defined in: [packages/core/src/actions/factory.ts:15](https://github.com/AAStarC
 
 > **getTokenCount**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/factory.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L24)
+Defined in: [packages/core/src/actions/factory.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L24)
 
 #### Returns
 
@@ -209,7 +209,7 @@ Defined in: [packages/core/src/actions/factory.ts:24](https://github.com/AAStarC
 
 > **hasToken**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/factory.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L18)
+Defined in: [packages/core/src/actions/factory.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L18)
 
 #### Parameters
 
@@ -228,7 +228,7 @@ Defined in: [packages/core/src/actions/factory.ts:18](https://github.com/AAStarC
 
 > **isTokenDeployed**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/factory.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L19)
+Defined in: [packages/core/src/actions/factory.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L19)
 
 #### Parameters
 
@@ -247,7 +247,7 @@ Defined in: [packages/core/src/actions/factory.ts:19](https://github.com/AAStarC
 
 > **owner**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L46)
+Defined in: [packages/core/src/actions/factory.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L46)
 
 #### Returns
 
@@ -259,7 +259,7 @@ Defined in: [packages/core/src/actions/factory.ts:46](https://github.com/AAStarC
 
 > **predictAddress**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L17)
+Defined in: [packages/core/src/actions/factory.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L17)
 
 #### Parameters
 
@@ -283,7 +283,7 @@ Removed in the v5.x contract refactor — xPNTsFactory exposes no CREATE2 addres
 
 > **REGISTRY**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L39)
+Defined in: [packages/core/src/actions/factory.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L39)
 
 #### Returns
 
@@ -295,7 +295,7 @@ Defined in: [packages/core/src/actions/factory.ts:39](https://github.com/AAStarC
 
 > **renounceOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L48)
+Defined in: [packages/core/src/actions/factory.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L48)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [packages/core/src/actions/factory.ts:48](https://github.com/AAStarC
 
 > **setImplementation**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L34)
+Defined in: [packages/core/src/actions/factory.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L34)
 
 #### Parameters
 
@@ -338,7 +338,7 @@ Removed in the v5.x contract refactor — xPNTsFactory has no implementation set
 
 > **setRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L30)
+Defined in: [packages/core/src/actions/factory.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L30)
 
 #### Parameters
 
@@ -362,7 +362,7 @@ Removed in the v5.x contract refactor — xPNTsFactory.REGISTRY is immutable (no
 
 > **setSuperPaymaster**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L32)
+Defined in: [packages/core/src/actions/factory.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L32)
 
 #### Parameters
 
@@ -382,7 +382,7 @@ Defined in: [packages/core/src/actions/factory.ts:32](https://github.com/AAStarC
 
 > **setSuperPaymasterAddress**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L31)
+Defined in: [packages/core/src/actions/factory.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L31)
 
 #### Parameters
 
@@ -402,7 +402,7 @@ Defined in: [packages/core/src/actions/factory.ts:31](https://github.com/AAStarC
 
 > **SUPER\_PAYMASTER**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L41)
+Defined in: [packages/core/src/actions/factory.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L41)
 
 #### Returns
 
@@ -414,7 +414,7 @@ Defined in: [packages/core/src/actions/factory.ts:41](https://github.com/AAStarC
 
 > **SUPERPAYMASTER**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L40)
+Defined in: [packages/core/src/actions/factory.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L40)
 
 #### Returns
 
@@ -426,7 +426,7 @@ Defined in: [packages/core/src/actions/factory.ts:40](https://github.com/AAStarC
 
 > **tokenImplementation**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/factory.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L43)
+Defined in: [packages/core/src/actions/factory.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L43)
 
 Token implementation address. On-chain fn: `implementation()` (the legacy `tokenImplementation` getter was removed).
 
@@ -440,7 +440,7 @@ Token implementation address. On-chain fn: `implementation()` (the legacy `token
 
 > **transferOwnership**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/factory.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L47)
+Defined in: [packages/core/src/actions/factory.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L47)
 
 #### Parameters
 
@@ -460,7 +460,7 @@ Defined in: [packages/core/src/actions/factory.ts:47](https://github.com/AAStarC
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/factory.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/factory.ts#L51)
+Defined in: [packages/core/src/actions/factory.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/factory.ts#L51)
 
 #### Returns
 

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/erc4337/userop.builder.ts#L6)
+Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/erc4337/userop.builder.ts#L6)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:6](https://g
 
 > **new UserOpBuilder**(): `UserOpBuilder`
 
-Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/erc4337/userop.builder.ts#L13)
+Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/erc4337/userop.builder.ts#L13)
 
 #### Returns
 
@@ -18,7 +18,7 @@ Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:13](https://
 
 > **buildUserOp**(`params`): `Promise`\<[`UserOperation`](../interfaces/UserOperation.md)\>
 
-Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/erc4337/userop.builder.ts#L21)
+Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/erc4337/userop.builder.ts#L21)
 
 Build specific parts of a UserOperation
 Note: Full construction often requires chain interaction (nonce, gas price),
@@ -52,7 +52,7 @@ This builder focuses on formatting and structure.
 
 > **getUserOpHash**(`userOp`, `entryPoint`, `chainId`): `string`
 
-Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/erc4337/userop.builder.ts#L54)
+Defined in: [packages/airaccount/src/core/erc4337/userop.builder.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/erc4337/userop.builder.ts#L54)
 
 Hash the UserOperation for signing (ERC-4337 v0.7)
 

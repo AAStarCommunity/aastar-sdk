@@ -18,6 +18,12 @@ Re-exports [BeginTransactionVerificationResponse](../../interfaces/BeginTransact
 
 ***
 
+### DEFAULT\_PASSKEY\_ROUTES
+
+Re-exports [DEFAULT_PASSKEY_ROUTES](../../variables/DEFAULT_PASSKEY_ROUTES.md)
+
+***
+
 ### PasskeyAuthenticationParams
 
 Re-exports [PasskeyAuthenticationParams](../../interfaces/PasskeyAuthenticationParams.md)
@@ -39,6 +45,12 @@ Re-exports [PasskeyManager](../../classes/PasskeyManager.md)
 ### PasskeyRegistrationParams
 
 Re-exports [PasskeyRegistrationParams](../../interfaces/PasskeyRegistrationParams.md)
+
+***
+
+### PasskeyRoutes
+
+Re-exports [PasskeyRoutes](../../interfaces/PasskeyRoutes.md)
 
 ***
 

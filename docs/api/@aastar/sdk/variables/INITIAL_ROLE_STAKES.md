@@ -1,6 +1,6 @@
 > `const` **INITIAL\_ROLE\_STAKES**: `object`
 
-Defined in: [packages/core/src/roles.ts:172](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/roles.ts#L172)
+Defined in: [packages/core/src/roles.ts:172](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/roles.ts#L172)
 
 Exact stake requirements from Registry.sol constructor (lines 92-100)
 

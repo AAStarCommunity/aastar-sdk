@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L39)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L39)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:39](h
 
 > **currentTier**: `TierLevel`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L44)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L44)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:44](h
 
 > **dailyLimit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L42)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L42)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:42](h
 
 > **remaining**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L43)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:43](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L43)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:43](h
 
 > **tier1Limit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L45)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L45)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:45](h
 
 > **tier2Limit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L46)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L46)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:46](h
 
 > **todaySpent**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L41)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L41)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:41](h
 
 > **token**: `string`
 
-Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/guard-state-reader.ts#L40)
+Defined in: [packages/airaccount/src/server/services/guard-state-reader.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/guard-state-reader.ts#L40)

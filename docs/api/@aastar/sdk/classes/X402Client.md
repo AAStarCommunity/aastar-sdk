@@ -1,4 +1,4 @@
-Defined in: [packages/x402/src/X402Client.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L40)
+Defined in: [packages/x402/src/X402Client.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L40)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [packages/x402/src/X402Client.ts:40](https://github.com/AAStarCommun
 
 > **new X402Client**(`config`): `X402Client`
 
-Defined in: [packages/x402/src/X402Client.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L45)
+Defined in: [packages/x402/src/X402Client.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L45)
 
 #### Parameters
 
@@ -24,7 +24,7 @@ Defined in: [packages/x402/src/X402Client.ts:45](https://github.com/AAStarCommun
 
 > **checkNonce**(`nonce`): `Promise`\<`boolean`\>
 
-Defined in: [packages/x402/src/X402Client.ts:154](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L154)
+Defined in: [packages/x402/src/X402Client.ts:154](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L154)
 
 Check if a nonce has been used.
 
@@ -44,7 +44,7 @@ Check if a nonce has been used.
 
 > **createPayment**(`params`): `Promise`\<\{ `encoded`: `string`; `nonce`: `` `0x${string}` ``; `payload`: [`PaymentPayload`](../type-aliases/PaymentPayload.md); \}\>
 
-Defined in: [packages/x402/src/X402Client.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L61)
+Defined in: [packages/x402/src/X402Client.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L61)
 
 Create a signed payment payload (EIP-3009 TransferWithAuthorization).
 Returns a base64-encoded PaymentPayload ready for PAYMENT-SIGNATURE header.
@@ -65,7 +65,7 @@ Returns a base64-encoded PaymentPayload ready for PAYMENT-SIGNATURE header.
 
 > **getQuote**(): `Promise`\<\{ `feeBPS`: `bigint`; \}\>
 
-Defined in: [packages/x402/src/X402Client.ts:146](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L146)
+Defined in: [packages/x402/src/X402Client.ts:146](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L146)
 
 Get facilitator fee quote from on-chain contract.
 
@@ -79,7 +79,7 @@ Get facilitator fee quote from on-chain contract.
 
 > **settleDirectOnChain**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/x402/src/X402Client.ts:134](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L134)
+Defined in: [packages/x402/src/X402Client.ts:134](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L134)
 
 Settle payment on-chain via direct transfer (for xPNTs and pre-approved tokens).
 
@@ -104,7 +104,7 @@ Settle payment on-chain via direct transfer (for xPNTs and pre-approved tokens).
 
 > **settleOnChain**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/x402/src/X402Client.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L121)
+Defined in: [packages/x402/src/X402Client.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L121)
 
 Settle payment on-chain via SuperPaymaster (self-facilitated).
 Uses EIP-3009 transferWithAuthorization path.
@@ -133,7 +133,7 @@ Uses EIP-3009 transferWithAuthorization path.
 
 > **settleViaFacilitator**(`payload`, `requirements`): `Promise`\<[`SettleResponse`](../type-aliases/SettleResponse.md)\>
 
-Defined in: [packages/x402/src/X402Client.ts:162](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L162)
+Defined in: [packages/x402/src/X402Client.ts:162](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L162)
 
 Settle via external facilitator (Coinbase, self-hosted, etc.).
 Requires facilitator config in constructor.
@@ -155,7 +155,7 @@ Requires facilitator config in constructor.
 
 > **x402Fetch**(`url`, `init?`): `Promise`\<`Response`\>
 
-Defined in: [packages/x402/src/X402Client.ts:182](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L182)
+Defined in: [packages/x402/src/X402Client.ts:182](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L182)
 
 x402-aware fetch wrapper.
 Automatically handles 402 → sign → retry flow per x402 v2 spec.

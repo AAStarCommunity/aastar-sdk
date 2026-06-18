@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:150](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L150)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:150](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L150)
 
 WeightedSignatureService — typed wrappers for AAStarAirAccount weighted-signature
 governance (algId 0x07).
@@ -29,7 +29,7 @@ direct tx, and reads use the contract directly.
 
 > **new WeightedSignatureService**(`accountAddress`, `client`): `WeightedSignatureService`
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L153)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:153](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L153)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [packages/airaccount/src/server/services/weighted-signature-service.
 
 > **encodeApproveWeightChange**(): `` `0x${string}` ``
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:216](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L216)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:216](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L216)
 
 Encode approveWeightChange calldata. GUARDIAN only; each guardian may approve once.
 
@@ -134,7 +134,7 @@ Encode approveWeightChange calldata. GUARDIAN only; each guardian may approve on
 
 > **encodeCancelWeightChange**(): `` `0x${string}` ``
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:224](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L224)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:224](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L224)
 
 Encode cancelWeightChange calldata. OWNER or any GUARDIAN may cancel a pending proposal.
 
@@ -148,7 +148,7 @@ Encode cancelWeightChange calldata. OWNER or any GUARDIAN may cancel a pending p
 
 > **encodeExecuteWeightChange**(): `` `0x${string}` ``
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:235](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L235)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:235](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L235)
 
 Encode executeWeightChange calldata. Callable by anyone, but only succeeds once the
 threshold (2-of-3) and timelock (2 days) are both satisfied and the proposal has not expired.
@@ -163,7 +163,7 @@ threshold (2-of-3) and timelock (2 days) are both satisfied and the proposal has
 
 > **encodeProposeWeightChange**(`config`): `` `0x${string}` ``
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:207](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L207)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:207](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L207)
 
 Encode proposeWeightChange calldata. OWNER only; opens a guardian-governed proposal
 (required for any weakening). Subject to 2-of-3 approval + 2-day timelock before execute.
@@ -184,7 +184,7 @@ Encode proposeWeightChange calldata. OWNER only; opens a guardian-governed propo
 
 > **encodeSetWeightConfig**(`config`): `` `0x${string}` ``
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L195)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L195)
 
 Encode setWeightConfig calldata. OWNER only; for first-time setup or strengthening.
 Weakening an existing config must go through encodeProposeWeightChange instead.
@@ -205,7 +205,7 @@ Weakening an existing config must go through encodeProposeWeightChange instead.
 
 > **getPendingWeightChange**(): `Promise`\<[`PendingWeightChange`](../interfaces/PendingWeightChange.md)\>
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:176](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L176)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:176](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L176)
 
 Read the pending weight-change proposal. When `proposedAt === 0n` there is no
 active proposal (the returned `proposed` config will be all zeros).
@@ -220,7 +220,7 @@ active proposal (the returned `proposed` config will be all zeros).
 
 > **getWeightConfig**(): `Promise`\<[`WeightConfig`](../interfaces/WeightConfig.md)\>
 
-Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/weighted-signature-service.ts#L163)
+Defined in: [packages/airaccount/src/server/services/weighted-signature-service.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/weighted-signature-service.ts#L163)
 
 Read the account's current active WeightConfig.
 

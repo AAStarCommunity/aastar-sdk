@@ -1,6 +1,6 @@
 > **algIdForTier**(`tier`): [`AlgId`](../type-aliases/AlgId.md)
 
-Defined in: [packages/airaccount/src/core/tier/tier-router.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/tier/tier-router.ts#L33)
+Defined in: [packages/airaccount/src/core/tier/tier-router.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/tier/tier-router.ts#L33)
 
 Get the algorithm ID to use for a given tier.
 

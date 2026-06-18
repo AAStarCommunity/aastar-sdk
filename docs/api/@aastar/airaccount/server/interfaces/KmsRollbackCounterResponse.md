@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L49)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L49)
 
 RPMB anti-rollback monotonic counter (diagnostic, v0.20.0). The exact shape
 is undocumented; the known `counter` field is surfaced and all other fields
@@ -14,4 +14,4 @@ are passed through.
 
 > `optional` **counter**: `number`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-monitor-service.ts#L50)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L50)

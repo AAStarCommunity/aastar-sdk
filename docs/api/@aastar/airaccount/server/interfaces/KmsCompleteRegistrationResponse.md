@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L80)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L80)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:80](https://g
 
 > **CredentialId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L82)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L82)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:82](https://g
 
 > **KeyId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L81)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L81)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:81](https://g
 
 > **Status**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L83)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L83)

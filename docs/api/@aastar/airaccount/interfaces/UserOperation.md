@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/core/types/index.ts:1](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L1)
+Defined in: [packages/airaccount/src/core/types/index.ts:1](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L1)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:1](https://github.com/A
 
 > **callData**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L5)
+Defined in: [packages/airaccount/src/core/types/index.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L5)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:5](https://github.com/A
 
 > **callGasLimit**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L6)
+Defined in: [packages/airaccount/src/core/types/index.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L6)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:6](https://github.com/A
 
 > **initCode**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L4)
+Defined in: [packages/airaccount/src/core/types/index.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L4)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:4](https://github.com/A
 
 > **maxFeePerGas**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L9)
+Defined in: [packages/airaccount/src/core/types/index.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L9)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:9](https://github.com/A
 
 > **maxPriorityFeePerGas**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L10)
+Defined in: [packages/airaccount/src/core/types/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L10)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:10](https://github.com/
 
 > **nonce**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L3)
+Defined in: [packages/airaccount/src/core/types/index.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L3)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:3](https://github.com/A
 
 > **paymasterAndData**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L11)
+Defined in: [packages/airaccount/src/core/types/index.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L11)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:11](https://github.com/
 
 > **preVerificationGas**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L8)
+Defined in: [packages/airaccount/src/core/types/index.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L8)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:8](https://github.com/A
 
 > **sender**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L2)
+Defined in: [packages/airaccount/src/core/types/index.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L2)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:2](https://github.com/A
 
 > **signature**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L12)
+Defined in: [packages/airaccount/src/core/types/index.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L12)
 
 ***
 
@@ -86,4 +86,4 @@ Defined in: [packages/airaccount/src/core/types/index.ts:12](https://github.com/
 
 > **verificationGasLimit**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/core/types/index.ts#L7)
+Defined in: [packages/airaccount/src/core/types/index.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L7)

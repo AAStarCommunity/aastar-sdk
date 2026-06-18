@@ -1,6 +1,6 @@
 > **signVoucher**(`walletClient`, `params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/voucher.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/channel/src/voucher.ts#L19)
+Defined in: [packages/channel/src/voucher.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/voucher.ts#L19)
 
 ## Parameters
 

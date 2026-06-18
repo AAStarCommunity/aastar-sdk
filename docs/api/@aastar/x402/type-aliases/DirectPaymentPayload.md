@@ -1,6 +1,6 @@
 > **DirectPaymentPayload** = `object`
 
-Defined in: [packages/x402/src/types.ts:115](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L115)
+Defined in: [packages/x402/src/types.ts:115](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L115)
 
 Direct settlement (for xPNTs and pre-approved tokens, bypasses EIP-3009)
 
@@ -10,7 +10,7 @@ Direct settlement (for xPNTs and pre-approved tokens, bypasses EIP-3009)
 
 > **amount**: `string`
 
-Defined in: [packages/x402/src/types.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L121)
+Defined in: [packages/x402/src/types.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L121)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/x402/src/types.ts:121](https://github.com/AAStarCommunity/
 
 > **asset**: `Address`
 
-Defined in: [packages/x402/src/types.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L120)
+Defined in: [packages/x402/src/types.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L120)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [packages/x402/src/types.ts:120](https://github.com/AAStarCommunity/
 
 > **from**: `Address`
 
-Defined in: [packages/x402/src/types.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L118)
+Defined in: [packages/x402/src/types.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L118)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [packages/x402/src/types.ts:118](https://github.com/AAStarCommunity/
 
 > **nonce**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/x402/src/types.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L122)
+Defined in: [packages/x402/src/types.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L122)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [packages/x402/src/types.ts:122](https://github.com/AAStarCommunity/
 
 > **scheme**: `"direct"`
 
-Defined in: [packages/x402/src/types.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L117)
+Defined in: [packages/x402/src/types.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L117)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [packages/x402/src/types.ts:117](https://github.com/AAStarCommunity/
 
 > **to**: `Address`
 
-Defined in: [packages/x402/src/types.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L119)
+Defined in: [packages/x402/src/types.ts:119](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L119)
 
 ***
 
@@ -58,4 +58,4 @@ Defined in: [packages/x402/src/types.ts:119](https://github.com/AAStarCommunity/
 
 > **x402Version**: `2`
 
-Defined in: [packages/x402/src/types.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L116)
+Defined in: [packages/x402/src/types.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L116)

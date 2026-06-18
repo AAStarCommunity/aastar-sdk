@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L111)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:111](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L111)
 
 Agent-key lifecycle service for the AAStar TEE KMS (v0.20.0).
 
@@ -19,7 +19,7 @@ so this service reuses the same connection config and auth headers.
 
 > **new KmsAgentService**(`http`): `KmsAgentService`
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L112)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L112)
 
 #### Parameters
 
@@ -37,7 +37,7 @@ Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:112](h
 
 > **createAgentKey**(`params`): `Promise`\<[`KmsCreateAgentKeyResponse`](../interfaces/KmsCreateAgentKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L121)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:121](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L121)
 
 Mint a new agent key under an existing human key (WebAuthn-gated).
 
@@ -61,7 +61,7 @@ the caller supplies the resulting assertion in the request.
 
 > **createAgentKeyWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`KmsCreateAgentKeyResponse`](../interfaces/KmsCreateAgentKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:187](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L187)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:187](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L187)
 
 Mint an agent key, running the challenge-binding ceremony internally.
 
@@ -83,7 +83,7 @@ Mint an agent key, running the challenge-binding ceremony internally.
 
 > **refreshAgentCredential**(`params`, `jwt`): `Promise`\<[`KmsRefreshAgentCredentialResponse`](../interfaces/KmsRefreshAgentCredentialResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L148)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L148)
 
 Refresh (re-mint) an agent credential before it expires. Authenticated with
 the existing credential (`jwt`, Bearer) plus a human WebAuthn / passkey
@@ -106,7 +106,7 @@ assertion in the request.
 
 > **refreshAgentCredentialWithCeremony**(`params`, `humanKeyId`, `jwt`, `signer`, `options?`): `Promise`\<[`KmsRefreshAgentCredentialResponse`](../interfaces/KmsRefreshAgentCredentialResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:207](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L207)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:207](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L207)
 
 Refresh an agent credential, running the challenge-binding ceremony
 internally. `humanKeyId` is the owning human key challenged by the ceremony
@@ -132,7 +132,7 @@ internally. `humanKeyId` is the owning human key challenged by the ceremony
 
 > **revokeAgentCredential**(`params`): `Promise`\<[`KmsRevokeAgentCredentialResponse`](../interfaces/KmsRevokeAgentCredentialResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:168](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L168)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:168](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L168)
 
 Revoke an agent's credential (WebAuthn-gated).
 
@@ -156,7 +156,7 @@ the caller supplies the resulting assertion in the request.
 
 > **revokeAgentCredentialWithCeremony**(`params`, `humanKeyId`, `signer`, `options?`): `Promise`\<[`KmsRevokeAgentCredentialResponse`](../interfaces/KmsRevokeAgentCredentialResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:224](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L224)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:224](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L224)
 
 Revoke an agent credential, running the challenge-binding ceremony internally.
 `humanKeyId` is the owning human key challenged by the ceremony (distinct from
@@ -181,7 +181,7 @@ the agent `keyId` in `params`).
 
 > **signAgent**(`params`, `jwt`): `Promise`\<[`KmsSignAgentResponse`](../interfaces/KmsSignAgentResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:134](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-agent-service.ts#L134)
+Defined in: [packages/airaccount/src/server/services/kms-agent-service.ts:134](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-agent-service.ts#L134)
 
 Sign a userOpHash with an agent key, authenticated by the agent's TEE-JWT
 credential (`jwt`, the `agentCredential` from [createAgentKey](#createagentkey)).

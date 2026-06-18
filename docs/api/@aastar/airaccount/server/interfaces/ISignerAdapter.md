@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/signer-adapter.ts#L19)
+Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/signer-adapter.ts#L19)
 
 Pluggable signer adapter — replaces NestJS AuthService wallet management.
 Implement this to provide signing capabilities from your key management system.
@@ -13,7 +13,7 @@ signing / provider connection — that lives in the bundler/UserOp path.
 
 > **ensureSigner**(`userId`): `Promise`\<\{ `address`: `` `0x${string}` ``; \}\>
 
-Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/signer-adapter.ts#L41)
+Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/signer-adapter.ts#L41)
 
 Ensure a signer exists for the user (create on demand if needed).
 Returns the signer's address.
@@ -34,7 +34,7 @@ Returns the signer's address.
 
 > **getAddress**(`userId`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/signer-adapter.ts#L21)
+Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/signer-adapter.ts#L21)
 
 Get the EOA address for a given user.
 
@@ -54,7 +54,7 @@ Get the EOA address for a given user.
 
 > **signMessage**(`userId`, `message`, `ctx?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/signer-adapter.ts#L31)
+Defined in: [packages/airaccount/src/server/interfaces/signer-adapter.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/signer-adapter.ts#L31)
 
 Sign a message for a given user, applying EIP-191 personal-sign semantics
 (equivalent to ethers `signer.signMessage(bytes)` / viem

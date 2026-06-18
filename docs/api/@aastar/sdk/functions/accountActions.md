@@ -1,6 +1,6 @@
 > **accountActions**(`address`): (`client`) => [`AccountActions`](../type-aliases/AccountActions.md)
 
-Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/account.ts#L24)
+Defined in: [packages/core/src/actions/account.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/account.ts#L24)
 
 ## Parameters
 

@@ -1,6 +1,6 @@
 > **AirAccountVersion** = `"M5"` \| `"M7"` \| `"M7r6"`
 
-Defined in: [packages/airaccount/src/server/config.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/config.ts#L61)
+Defined in: [packages/airaccount/src/server/config.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/config.ts#L61)
 
 AirAccount contract version selection.
 - "M7"   — r4 audit-final (default). Use for all new account creation.

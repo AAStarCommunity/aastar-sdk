@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L93)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L93)
 
 Pluggable storage adapter — replaces NestJS DatabaseService.
 SDK only manages accounts, transfers, paymasters, and BLS config.
@@ -10,7 +10,7 @@ User authentication is NOT handled by the SDK.
 
 > **findAccountByUserId**(`userId`): `Promise`\<[`AccountRecord`](AccountRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L97)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:97](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L97)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:97](ht
 
 > **findTransferById**(`id`): `Promise`\<[`TransferRecord`](TransferRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L103)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:103](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L103)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:103](h
 
 > **findTransfersByUserId**(`userId`): `Promise`\<[`TransferRecord`](TransferRecord.md)[]\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:102](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L102)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:102](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L102)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:102](h
 
 > **getAccounts**(): `Promise`\<[`AccountRecord`](AccountRecord.md)[]\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L95)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L95)
 
 #### Returns
 
@@ -76,7 +76,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:95](ht
 
 > **getBlsConfig**(): `Promise`\<[`BlsConfigRecord`](BlsConfigRecord.md) \| `null`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L112)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L112)
 
 #### Returns
 
@@ -88,7 +88,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:112](h
 
 > **getPaymasters**(`userId`): `Promise`\<[`PaymasterRecord`](PaymasterRecord.md)[]\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L107)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:107](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L107)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:107](h
 
 > **removePaymaster**(`userId`, `name`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L109)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L109)
 
 #### Parameters
 
@@ -125,7 +125,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:109](h
 
 > **saveAccount**(`account`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L96)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:96](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L96)
 
 #### Parameters
 
@@ -143,7 +143,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:96](ht
 
 > **savePaymaster**(`userId`, `paymaster`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L108)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L108)
 
 #### Parameters
 
@@ -162,7 +162,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:108](h
 
 > **saveTransfer**(`transfer`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L101)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:101](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L101)
 
 #### Parameters
 
@@ -180,7 +180,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:101](h
 
 > **updateAccount**(`userId`, `updates`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L98)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L98)
 
 #### Parameters
 
@@ -199,7 +199,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:98](ht
 
 > **updateSignerNodesCache**(`nodes`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L113)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:113](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L113)
 
 #### Parameters
 
@@ -217,7 +217,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:113](h
 
 > **updateTransfer**(`id`, `updates`): `Promise`\<`void`\>
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/interfaces/storage-adapter.ts#L104)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:104](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L104)
 
 #### Parameters
 

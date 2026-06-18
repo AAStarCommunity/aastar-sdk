@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L64)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L64)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:64](
 
 > **revokedAt**: `number`
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L66)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L66)
 
 ***
 
@@ -14,4 +14,4 @@ Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:66](
 
 > **success**: `boolean`
 
-Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-session-service.ts#L65)
+Defined in: [packages/airaccount/src/server/services/kms-session-service.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-session-service.ts#L65)

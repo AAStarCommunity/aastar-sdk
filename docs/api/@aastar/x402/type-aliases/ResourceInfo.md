@@ -1,6 +1,6 @@
 > **ResourceInfo** = `object`
 
-Defined in: [packages/x402/src/types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L13)
+Defined in: [packages/x402/src/types.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L13)
 
 Resource description in 402 response
 
@@ -10,7 +10,7 @@ Resource description in 402 response
 
 > `optional` **description**: `string`
 
-Defined in: [packages/x402/src/types.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L15)
+Defined in: [packages/x402/src/types.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L15)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/x402/src/types.ts:15](https://github.com/AAStarCommunity/a
 
 > `optional` **mimeType**: `string`
 
-Defined in: [packages/x402/src/types.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L16)
+Defined in: [packages/x402/src/types.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L16)
 
 ***
 
@@ -26,4 +26,4 @@ Defined in: [packages/x402/src/types.ts:16](https://github.com/AAStarCommunity/a
 
 > **url**: `string`
 
-Defined in: [packages/x402/src/types.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/types.ts#L14)
+Defined in: [packages/x402/src/types.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L14)
