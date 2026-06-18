@@ -13,6 +13,7 @@ import {
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi, encodeFunctionData } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
+import { readValidatorGasEstimate } from "../providers/typed-reads";
 import { AccountManager } from "./account-manager";
 import { BLSSignatureService, GuardianSigner } from "./bls-signature-service";
 import { GuardChecker } from "./guard-checker";
@@ -418,9 +419,9 @@ export class TransferManager {
     const gasPrices = await this.ethereum.getUserOperationGasPrice();
 
     const validatorContract = this.ethereum.getValidatorContract(version);
-    // uint256 arg must be bigint for viem (a JS number would risk silent truncation
-    // outside the 53-bit safe range; the untyped contract surface won't catch it).
-    const validatorGasEstimate = (await validatorContract.read.getGasEstimate([3n])) as bigint;
+    // Typed wrapper enforces the uint256 `nodeCount` as bigint (a JS number would
+    // risk silent truncation outside the 53-bit safe range on the loose surface).
+    const validatorGasEstimate = await readValidatorGasEstimate(validatorContract, 3n);
 
     return {
       callGasLimit: gasEstimates.callGasLimit,

@@ -123,10 +123,12 @@ describe("AccountManager", () => {
       await manager.createAccount("user-1", { salt: 99 });
 
       const mockFactory = ethereum.getFactoryContract.mock.results[0].value;
-      // Production code (viem): factory.read.getAddress([signerAddress, salt, minimalConfig])
+      // Production code (viem): readPredictedAddress wraps factory.read.getAddress
+      // and coerces the uint256 `salt` to bigint (byte-identical encoding to the
+      // number reused in the deploy-time initCode).
       expect(mockFactory.read.getAddress).toHaveBeenCalledWith([
         SIGNER_ADDRESS, // signerAddress
-        99,             // salt
+        99n,            // salt (uint256 -> bigint)
         expect.any(Array), // minimalConfig
       ]);
     });

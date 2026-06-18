@@ -15,6 +15,7 @@ import {
   AGENT_SESSION_KEY_VALIDATOR_ABI,
 } from "../constants/entrypoint";
 import { type ViemContract } from "../providers/ethereum-provider";
+import { readBuildGrantHash, readBuildP256GrantHash } from "../providers/typed-reads";
 
 // Parse the local human-readable ABIs once. Widened to `Abi` so viem treats the
 // call args loosely (plain address strings / numbers) — matching the previous
@@ -217,11 +218,12 @@ export class SessionKeyService {
    * Use grantSession() with this sig, or grantSessionDirect() from the account itself.
    */
   async buildGrantHash(params: Omit<GrantSessionParams, "ownerSig">): Promise<string> {
-    return this.skValidator.read.buildGrantHash([
+    return readBuildGrantHash(
+      this.skValidator,
       params.account,
       params.sessionKey,
-      buildSessionStruct(params),
-    ]) as Promise<string>;
+      buildSessionStruct(params)
+    );
   }
 
   /** Query an ECDSA session key state (decodes the 8-field Session tuple). */
@@ -284,12 +286,13 @@ export class SessionKeyService {
   async buildP256GrantHash(
     params: Omit<GrantP256SessionParams, "ownerSig">,
   ): Promise<string> {
-    return this.skValidator.read.buildP256GrantHash([
+    return readBuildP256GrantHash(
+      this.skValidator,
       params.account,
       params.keyX,
       params.keyY,
-      buildSessionStruct(params),
-    ]) as Promise<string>;
+      buildSessionStruct(params)
+    );
   }
 
   /**
