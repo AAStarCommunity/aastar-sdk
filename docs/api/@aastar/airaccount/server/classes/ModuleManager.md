@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L105)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:105](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L105)
 
 ModuleManager — ERC-7579 module install/uninstall helpers.
 
@@ -12,7 +12,7 @@ Handles the guardian-sig packing required by AAStarAirAccountV7:
 
 > **new ModuleManager**(`provider`, `chainId`): `ModuleManager`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L109)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:109](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L109)
 
 #### Parameters
 
@@ -103,7 +103,7 @@ Defined in: [packages/airaccount/src/server/services/module-manager.ts:109](http
 
 > **encodeInstall**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L118)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L118)
 
 Encode calldata for installModule().
 Caller is responsible for submitting via UserOp (EntryPoint) or direct tx.
@@ -124,7 +124,7 @@ Caller is responsible for submitting via UserOp (EntryPoint) or direct tx.
 
 > **encodeInstallDefaultModules**(`account`): `object`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:186](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L186)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:186](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L186)
 
 Convenience: build install calldata for the standard M7 module set.
 Uses pre-deployed Sepolia addresses (r4 audit-final). No guardian sigs required when
@@ -157,7 +157,7 @@ addresses for accounts already deployed on r4; new accounts use SessionKeyValida
 
 > **encodeUninstall**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L139)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L139)
 
 Encode calldata for uninstallModule().
 Always requires 2 guardian signatures.
@@ -178,7 +178,7 @@ Always requires 2 guardian signatures.
 
 > **installHash**(`account`, `moduleTypeId`, `module`, `moduleInitData`): `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L169)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:169](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L169)
 
 Return the install hash for a guardian to sign (r5 format, includes moduleInitData hash).
 
@@ -201,7 +201,7 @@ Return the install hash for a guardian to sign (r5 format, includes moduleInitDa
 
 > **isInstalled**(`account`, `moduleTypeId`, `module`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:155](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L155)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:155](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L155)
 
 Check if a module is currently installed on the account.
 
@@ -223,7 +223,7 @@ Check if a module is currently installed on the account.
 
 > **uninstallHash**(`account`, `moduleTypeId`, `module`): `string`
 
-Defined in: [packages/airaccount/src/server/services/module-manager.ts:174](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/module-manager.ts#L174)
+Defined in: [packages/airaccount/src/server/services/module-manager.ts:174](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/module-manager.ts#L174)
 
 Return the uninstall hash for guardians to sign.
 

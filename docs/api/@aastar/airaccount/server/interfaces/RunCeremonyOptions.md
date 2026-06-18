@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:219](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/webauthn-ceremony.ts#L219)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:219](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L219)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:219](h
 
 > `optional` **origin**: `string`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:222](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/webauthn-ceremony.ts#L222)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:222](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L222)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:222](h
 
 > `optional` **rpId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:221](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/webauthn-ceremony.ts#L221)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:221](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L221)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:221](h
 
 > `optional` **signCount**: `number`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:223](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/webauthn-ceremony.ts#L223)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:223](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L223)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:223](h
 
 > **signer**: [`PasskeyCeremonySigner`](PasskeyCeremonySigner.md)
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:220](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/webauthn-ceremony.ts#L220)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:220](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L220)

@@ -6,6 +6,7 @@
 
 - [AccountManager](classes/AccountManager.md)
 - [AgentRegistryService](classes/AgentRegistryService.md)
+- [AirAccountServerClient](classes/AirAccountServerClient.md)
 - [BLSSignatureService](classes/BLSSignatureService.md)
 - [ConsoleLogger](classes/ConsoleLogger.md)
 - [DvtPendingConfirmationError](classes/DvtPendingConfirmationError.md)
@@ -35,7 +36,6 @@
 - [TransferManager](classes/TransferManager.md)
 - [WalletManager](classes/WalletManager.md)
 - [WeightedSignatureService](classes/WeightedSignatureService.md)
-- [YAAAServerClient](classes/YAAAServerClient.md)
 
 ## Interfaces
 
@@ -189,6 +189,7 @@
 - [WEIGHT\_CHANGE\_EXPIRY\_SECONDS](variables/WEIGHT_CHANGE_EXPIRY_SECONDS.md)
 - [WEIGHT\_CHANGE\_THRESHOLD](variables/WEIGHT_CHANGE_THRESHOLD.md)
 - [WEIGHT\_CHANGE\_TIMELOCK\_SECONDS](variables/WEIGHT_CHANGE_TIMELOCK_SECONDS.md)
+- [~~YAAAServerClient~~](variables/YAAAServerClient.md)
 
 ## Functions
 

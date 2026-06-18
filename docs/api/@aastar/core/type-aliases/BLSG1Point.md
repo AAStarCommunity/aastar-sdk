@@ -1,6 +1,6 @@
 > **BLSG1Point** = `object`
 
-Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/aggregator.ts#L8)
+Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/aggregator.ts#L8)
 
 A registered validator's on-chain BLS G1 public key point.
 
@@ -10,7 +10,7 @@ A registered validator's on-chain BLS G1 public key point.
 
 > **x\_a**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/aggregator.ts#L8)
+Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/aggregator.ts#L8)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AASta
 
 > **x\_b**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/aggregator.ts#L8)
+Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/aggregator.ts#L8)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AASta
 
 > **y\_a**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/aggregator.ts#L8)
+Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/aggregator.ts#L8)
 
 ***
 
@@ -34,4 +34,4 @@ Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AASta
 
 > **y\_b**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/aggregator.ts#L8)
+Defined in: [packages/core/src/actions/aggregator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/aggregator.ts#L8)

@@ -1,6 +1,6 @@
 > **PaymasterV4MiddlewareConfig** = `object`
 
-Defined in: [V4/PaymasterUtils.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L3)
+Defined in: [V4/PaymasterUtils.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L3)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [V4/PaymasterUtils.ts:3](https://github.com/AAStarCommunity/aastar-s
 
 > **gasToken**: `Address`
 
-Defined in: [V4/PaymasterUtils.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L5)
+Defined in: [V4/PaymasterUtils.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L5)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [V4/PaymasterUtils.ts:5](https://github.com/AAStarCommunity/aastar-s
 
 > **paymasterAddress**: `Address`
 
-Defined in: [V4/PaymasterUtils.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L4)
+Defined in: [V4/PaymasterUtils.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L4)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [V4/PaymasterUtils.ts:4](https://github.com/AAStarCommunity/aastar-s
 
 > `optional` **postOpGasLimit**: `bigint`
 
-Defined in: [V4/PaymasterUtils.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L7)
+Defined in: [V4/PaymasterUtils.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L7)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [V4/PaymasterUtils.ts:7](https://github.com/AAStarCommunity/aastar-s
 
 > `optional` **verificationGasLimit**: `bigint`
 
-Defined in: [V4/PaymasterUtils.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L6)
+Defined in: [V4/PaymasterUtils.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/paymaster/src/V4/PaymasterUtils.ts#L6)

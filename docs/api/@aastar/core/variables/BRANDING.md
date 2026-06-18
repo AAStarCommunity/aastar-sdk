@@ -1,6 +1,6 @@
 > `const` **BRANDING**: `object`
 
-Defined in: [packages/core/src/branding.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/branding.ts#L5)
+Defined in: [packages/core/src/branding.ts:5](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/branding.ts#L5)
 
 AAStar Community Branding Configuration
 

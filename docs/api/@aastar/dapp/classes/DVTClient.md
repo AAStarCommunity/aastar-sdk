@@ -1,4 +1,4 @@
-Defined in: [packages/dapp/src/ui/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/dapp/src/ui/index.ts#L10)
+Defined in: [packages/dapp/src/ui/index.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/dapp/src/ui/index.ts#L10)
 
 ## Constructors
 
@@ -16,7 +16,7 @@ Defined in: [packages/dapp/src/ui/index.ts:10](https://github.com/AAStarCommunit
 
 > `static` **registerValidator**(`wallet`, `dvtAddr`, `blsPublicKey`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/dapp/src/ui/index.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/dapp/src/ui/index.ts#L11)
+Defined in: [packages/dapp/src/ui/index.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/dapp/src/ui/index.ts#L11)
 
 #### Parameters
 

@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/actions/policyRegistry.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L14)
+Defined in: [packages/core/src/actions/policyRegistry.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L14)
 
 Tri-state result of a validation-time policy read (checkPolicy).
 Mirrors `IPolicyRegistry.PolicyDecision` (the on-chain `uint8` enum):
@@ -13,7 +13,7 @@ Mirrors `IPolicyRegistry.PolicyDecision` (the on-chain `uint8` enum):
 
 > **ALLOW**: `0`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L15)
+Defined in: [packages/core/src/actions/policyRegistry.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L15)
 
 ***
 
@@ -21,7 +21,7 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:15](https://github.com/
 
 > **REJECT**: `2`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L17)
+Defined in: [packages/core/src/actions/policyRegistry.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L17)
 
 ***
 
@@ -29,4 +29,4 @@ Defined in: [packages/core/src/actions/policyRegistry.ts:17](https://github.com/
 
 > **REQUIRE\_DVT**: `1`
 
-Defined in: [packages/core/src/actions/policyRegistry.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/policyRegistry.ts#L16)
+Defined in: [packages/core/src/actions/policyRegistry.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/policyRegistry.ts#L16)

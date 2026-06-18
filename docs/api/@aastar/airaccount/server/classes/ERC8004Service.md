@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L123)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L123)
 
 ERC8004Service — TypeScript wrappers for AirAccount's ERC-8004 "Trustless Agents" functions.
 
@@ -24,7 +24,7 @@ fallback delegates to AirAccountExtension for these selectors.
 
 > **new ERC8004Service**(`provider?`): `ERC8004Service`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L127)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L127)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:127](htt
 
 > **encodeBindERC8004AgentWallet**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L197)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L197)
 
 Encode calldata for `bindERC8004AgentWallet`.
 
@@ -140,7 +140,7 @@ Callable: owner EOA direct tx OR via UserOp (gasless).
 
 > **encodeMintAgentIdentity**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:180](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L180)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:180](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L180)
 
 Encode calldata for `mintAgentIdentity`.
 
@@ -166,7 +166,7 @@ Callable: owner EOA direct tx OR via UserOp (gasless).
 
 > **encodeQueryAgentReputation**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:262](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L262)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:262](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L262)
 
 Encode calldata for `queryAgentReputation` (for static-call or eth_call without a signer).
 
@@ -186,7 +186,7 @@ Encode calldata for `queryAgentReputation` (for static-call or eth_call without 
 
 > **encodeSetAgentWallet**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L161)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L161)
 
 Encode calldata for `setAgentWallet`.
 
@@ -214,7 +214,7 @@ Callable: owner EOA direct tx OR via UserOp (gasless).
 
 > **encodeSubmitAgentReputation**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:221](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L221)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:221](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L221)
 
 Encode calldata for `submitAgentReputation`.
 
@@ -239,7 +239,7 @@ Callable: owner EOA direct tx OR via UserOp (gasless).
 
 > **getAgentExtensionAddress**(`accountAddress`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:279](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L279)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:279](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L279)
 
 Read the agentExtension implementation address from a deployed AirAccount.
 
@@ -259,7 +259,7 @@ Read the agentExtension implementation address from a deployed AirAccount.
 
 > **queryAgentReputation**(`accountAddress`, `params`): `Promise`\<[`AgentReputationSummary`](../interfaces/AgentReputationSummary.md)\>
 
-Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:243](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/erc8004-service.ts#L243)
+Defined in: [packages/airaccount/src/server/services/erc8004-service.ts:243](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/erc8004-service.ts#L243)
 
 Query aggregated reputation for an agent from the official ERC-8004 ReputationRegistry.
 Returns `null` when no provider was supplied at construction.

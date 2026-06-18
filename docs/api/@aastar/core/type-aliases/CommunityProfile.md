@@ -1,6 +1,6 @@
 > **CommunityProfile** = `object`
 
-Defined in: [packages/core/src/actions/registry.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L123)
+Defined in: [packages/core/src/actions/registry.ts:123](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L123)
 
 Rich community metadata reconstructed from on-chain data.
 
@@ -16,7 +16,7 @@ extract the submitted `roleData` struct.
 
 > **burnAmount**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L131)
+Defined in: [packages/core/src/actions/registry.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L131)
 
 burnAmount from the RoleRegistered event.
 
@@ -26,7 +26,7 @@ burnAmount from the RoleRegistered event.
 
 > **description**: `string`
 
-Defined in: [packages/core/src/actions/registry.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L127)
+Defined in: [packages/core/src/actions/registry.ts:127](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L127)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [packages/core/src/actions/registry.ts:127](https://github.com/AASta
 
 > **ensName**: `string`
 
-Defined in: [packages/core/src/actions/registry.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L125)
+Defined in: [packages/core/src/actions/registry.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L125)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [packages/core/src/actions/registry.ts:125](https://github.com/AASta
 
 > **logoURI**: `string`
 
-Defined in: [packages/core/src/actions/registry.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L128)
+Defined in: [packages/core/src/actions/registry.ts:128](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L128)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [packages/core/src/actions/registry.ts:128](https://github.com/AASta
 
 > **name**: `string`
 
-Defined in: [packages/core/src/actions/registry.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L124)
+Defined in: [packages/core/src/actions/registry.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L124)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [packages/core/src/actions/registry.ts:124](https://github.com/AASta
 
 > **rawRoleData**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/registry.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L137)
+Defined in: [packages/core/src/actions/registry.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L137)
 
 Raw ABI-encoded roleData bytes from the registration calldata.
 
@@ -68,7 +68,7 @@ Raw ABI-encoded roleData bytes from the registration calldata.
 
 > **registeredAt**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L133)
+Defined in: [packages/core/src/actions/registry.ts:133](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L133)
 
 Block timestamp recorded in the RoleRegistered event.
 
@@ -78,7 +78,7 @@ Block timestamp recorded in the RoleRegistered event.
 
 > **stakeAmount**: `bigint`
 
-Defined in: [packages/core/src/actions/registry.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L129)
+Defined in: [packages/core/src/actions/registry.ts:129](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L129)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [packages/core/src/actions/registry.ts:129](https://github.com/AASta
 
 > **txHash**: [`Hash`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/core/src/actions/registry.ts:135](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L135)
+Defined in: [packages/core/src/actions/registry.ts:135](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L135)
 
 Transaction hash that registered the community (calldata source).
 
@@ -96,4 +96,4 @@ Transaction hash that registered the community (calldata source).
 
 > **website**: `string`
 
-Defined in: [packages/core/src/actions/registry.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/actions/registry.ts#L126)
+Defined in: [packages/core/src/actions/registry.ts:126](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/registry.ts#L126)

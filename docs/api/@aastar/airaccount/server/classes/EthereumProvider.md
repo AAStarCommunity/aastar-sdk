@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L60)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L60)
 
 Unified Ethereum provider — replaces NestJS EthereumService.
 Manages RPC + Bundler clients (viem) and contract interactions.
@@ -9,7 +9,7 @@ Manages RPC + Bundler clients (viem) and contract interactions.
 
 > **new EthereumProvider**(`config`): `EthereumProvider`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L68)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L68)
 
 #### Parameters
 
@@ -27,7 +27,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:68](h
 
 > **estimateUserOperationGas**(`userOp`, `version`): `Promise`\<\{ `callGasLimit`: `string`; `preVerificationGas`: `string`; `verificationGasLimit`: `string`; \}\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:245](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L245)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:245](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L245)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:245](
 
 > **getAccountContract**(`address`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L159)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:159](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L159)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:159](
 
 > **getAgentSessionKeyValidatorContract**(`address`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L167)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L167)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:167](
 
 > **getBalance**(`address`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:185](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L185)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:185](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L185)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:185](
 
 > **getBundlerProvider**(): `object`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L81)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L81)
 
 Returns the viem PublicClient bound to the bundler RPC (raw .request only).
 
@@ -2667,7 +2667,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > **getCompositeValidatorContract**(`address`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L175)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L175)
 
 #### Parameters
 
@@ -2685,7 +2685,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:175](
 
 > **getDefaultVersion**(): [`EntryPointVersion`](../enumerations/EntryPointVersion.md)
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L124)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L124)
 
 #### Returns
 
@@ -2697,7 +2697,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:124](
 
 > **getEntryPointAddress**(`version`): `string`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L112)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L112)
 
 #### Parameters
 
@@ -2715,7 +2715,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:112](
 
 > **getEntryPointContract**(`version`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L148)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L148)
 
 #### Parameters
 
@@ -2733,7 +2733,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:148](
 
 > **getFactoryAddress**(`version`): `string`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L116)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:116](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L116)
 
 #### Parameters
 
@@ -2751,7 +2751,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:116](
 
 > **getFactoryContract**(`version`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:142](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L142)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:142](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L142)
 
 #### Parameters
 
@@ -2769,7 +2769,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:142](
 
 > **getForceExitModuleContract**(`address`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:179](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L179)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:179](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L179)
 
 #### Parameters
 
@@ -2787,7 +2787,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:179](
 
 > **getNonce**(`accountAddress`, `key`, `version`): `Promise`\<`bigint`\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:190](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L190)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:190](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L190)
 
 #### Parameters
 
@@ -2807,7 +2807,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:190](
 
 > **getProvider**(): `object`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L76)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L76)
 
 Returns the viem PublicClient for the main network RPC.
 
@@ -5374,7 +5374,7 @@ const unwatch = await client.watchPendingTransactions({
 
 > **getTierGuardHookContract**(`address`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:171](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L171)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:171](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L171)
 
 #### Parameters
 
@@ -5392,7 +5392,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:171](
 
 > **getUserOperationGasPrice**(): `Promise`\<\{ `maxFeePerGas`: `string`; `maxPriorityFeePerGas`: `string`; \}\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:301](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L301)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:301](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L301)
 
 #### Returns
 
@@ -5404,7 +5404,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:301](
 
 > **getUserOperationReceipt**(`userOpHash`): `Promise`\<`unknown`\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:273](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L273)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:273](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L273)
 
 #### Parameters
 
@@ -5422,7 +5422,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:273](
 
 > **getUserOpHash**(`userOp`, `version`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:202](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L202)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:202](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L202)
 
 #### Parameters
 
@@ -5441,7 +5441,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:202](
 
 > **getValidatorAddress**(`version`): `string`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L120)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:120](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L120)
 
 #### Parameters
 
@@ -5459,7 +5459,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:120](
 
 > **getValidatorContract**(`version`): `ViemContract`
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:154](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L154)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:154](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L154)
 
 #### Parameters
 
@@ -5477,7 +5477,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:154](
 
 > **sendUserOperation**(`userOp`, `version`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:263](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L263)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:263](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L263)
 
 #### Parameters
 
@@ -5496,7 +5496,7 @@ Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:263](
 
 > **waitForUserOp**(`userOpHash`, `maxAttempts`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:277](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/providers/ethereum-provider.ts#L277)
+Defined in: [packages/airaccount/src/server/providers/ethereum-provider.ts:277](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/providers/ethereum-provider.ts#L277)
 
 #### Parameters
 

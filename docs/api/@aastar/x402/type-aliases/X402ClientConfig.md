@@ -1,6 +1,6 @@
 > **X402ClientConfig** = `object`
 
-Defined in: [packages/x402/src/X402Client.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L21)
+Defined in: [packages/x402/src/X402Client.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L21)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/x402/src/X402Client.ts:21](https://github.com/AAStarCommun
 
 > **chainId**: `number`
 
-Defined in: [packages/x402/src/X402Client.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L25)
+Defined in: [packages/x402/src/X402Client.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L25)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/x402/src/X402Client.ts:25](https://github.com/AAStarCommun
 
 > `optional` **facilitator**: [`FacilitatorConfig`](FacilitatorConfig.md)
 
-Defined in: [packages/x402/src/X402Client.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L27)
+Defined in: [packages/x402/src/X402Client.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L27)
 
 Facilitator endpoint (default: self-facilitated via SuperPaymaster)
 
@@ -26,7 +26,7 @@ Facilitator endpoint (default: self-facilitated via SuperPaymaster)
 
 > `optional` **maxAmountPerRequest**: `bigint`
 
-Defined in: [packages/x402/src/X402Client.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L32)
+Defined in: [packages/x402/src/X402Client.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L32)
 
 Payment policy: max amount per request (in atomic units)
 
@@ -36,7 +36,7 @@ Payment policy: max amount per request (in atomic units)
 
 > **publicClient**: [`PublicClient`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/x402/src/X402Client.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L22)
+Defined in: [packages/x402/src/X402Client.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L22)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [packages/x402/src/X402Client.ts:22](https://github.com/AAStarCommun
 
 > **superPaymasterAddress**: `Address`
 
-Defined in: [packages/x402/src/X402Client.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L24)
+Defined in: [packages/x402/src/X402Client.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L24)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [packages/x402/src/X402Client.ts:24](https://github.com/AAStarCommun
 
 > `optional` **tokenName**: `string`
 
-Defined in: [packages/x402/src/X402Client.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L29)
+Defined in: [packages/x402/src/X402Client.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L29)
 
 EIP-712 domain for asset token (defaults: USDC / version "2")
 
@@ -62,7 +62,7 @@ EIP-712 domain for asset token (defaults: USDC / version "2")
 
 > `optional` **tokenVersion**: `string`
 
-Defined in: [packages/x402/src/X402Client.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L30)
+Defined in: [packages/x402/src/X402Client.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L30)
 
 ***
 
@@ -70,4 +70,4 @@ Defined in: [packages/x402/src/X402Client.ts:30](https://github.com/AAStarCommun
 
 > **walletClient**: [`WalletClient`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/x402/src/X402Client.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/x402/src/X402Client.ts#L23)
+Defined in: [packages/x402/src/X402Client.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/X402Client.ts#L23)

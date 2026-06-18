@@ -25,10 +25,13 @@ npm install @aastar/airaccount
 ## Quick Start — Browser Client
 
 ```typescript
-import { YAAAClient } from "@aastar/airaccount";
+import { AirAccountClient } from "@aastar/airaccount";
 
-const yaaa = new YAAAClient({
-  apiURL: "https://api.your-backend.com/v1",
+// `apiURL` is the passkey RP backend. AAStar's official hosted RP will be
+// `https://auth.aastar.io` (served by aNode); you can also point at your own
+// backend implementing the standardized passkey contract.
+const air = new AirAccountClient({
+  apiURL: "https://auth.aastar.io",
   tokenProvider: () => localStorage.getItem("token"),
   bls: {
     seedNodes: ["https://signer1.aastar.io"],
@@ -36,16 +39,16 @@ const yaaa = new YAAAClient({
 });
 
 // Register with KMS-backed Passkey
-const { user, token } = await yaaa.passkey.register({
+const { user, token } = await air.passkey.register({
   email: "user@example.com",
   username: "JohnDoe",
 });
 
 // Login with Passkey
-const result = await yaaa.passkey.authenticate();
+const result = await air.passkey.authenticate();
 
 // Verify a transaction with Passkey (biometric prompt)
-const verification = await yaaa.passkey.verifyTransaction({
+const verification = await air.passkey.verifyTransaction({
   to: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   value: "0.01",
 });
@@ -55,12 +58,12 @@ const verification = await yaaa.passkey.verifyTransaction({
 
 ```typescript
 import {
-  YAAAServerClient,
+  AirAccountServerClient,
   MemoryStorage,
   LocalWalletSigner,
 } from "@aastar/airaccount/server";
 
-const client = new YAAAServerClient({
+const client = new AirAccountServerClient({
   rpcUrl: "https://sepolia.infura.io/v3/YOUR_KEY",
   bundlerRpcUrl: "https://api.pimlico.io/v2/11155111/rpc?apikey=YOUR_KEY",
   chainId: 11155111,
@@ -89,23 +92,34 @@ const result = await client.transfers.executeTransfer("user-123", {
 
 ### Browser SDK (`@aastar/airaccount`)
 
-#### YAAAClient
+#### AirAccountClient
+
+> `YAAAClient` remains as a deprecated alias of `AirAccountClient` for backward compatibility.
 
 ```typescript
-const yaaa = new YAAAClient(config: YAAAConfig);
+const air = new AirAccountClient(config: AirAccountConfig);
 ```
 
-| Property       | Type              | Description                          |
-| -------------- | ----------------- | ------------------------------------ |
-| `yaaa.passkey` | `PasskeyManager`  | WebAuthn passkey authentication      |
-| `yaaa.bls`     | `BLSManager`      | BLS node discovery & message points  |
+| Property      | Type              | Description                          |
+| ------------- | ----------------- | ------------------------------------ |
+| `air.passkey` | `PasskeyManager`  | WebAuthn passkey authentication      |
+| `air.bls`     | `BLSManager`      | BLS node discovery & message points  |
 
-#### YAAAConfig
+#### AirAccountConfig
+
+> `YAAAConfig` remains as a deprecated alias of `AirAccountConfig`.
 
 ```typescript
-interface YAAAConfig {
+interface AirAccountConfig {
+  /**
+   * Backend RP (relying party) API URL — required, no default.
+   * AAStar's official hosted RP will be `https://auth.aastar.io` (served by aNode).
+   * You can also point at your own backend implementing the standardized passkey contract.
+   */
   apiURL: string;
   tokenProvider?: () => string | null;
+  /** Optional overrides for the passkey backend route paths (defaults to `/auth/passkey/*`). */
+  passkeyRoutes?: Partial<PasskeyRoutes>;
   bls: {
     seedNodes: string[];
     discoveryTimeout?: number;
@@ -115,10 +129,12 @@ interface YAAAConfig {
 
 ### Server SDK (`@aastar/airaccount/server`)
 
-#### YAAAServerClient
+#### AirAccountServerClient
+
+> `YAAAServerClient` remains as a deprecated alias of `AirAccountServerClient`.
 
 ```typescript
-const client = new YAAAServerClient(config: ServerConfig);
+const client = new AirAccountServerClient(config: ServerConfig);
 ```
 
 | Property            | Type                  | Description                              |
@@ -291,13 +307,13 @@ See the [examples](../../_media/examples) directory for complete usage:
 
 ```
 ┌─────────────┐
-│   Browser    │  @aastar/airaccount (YAAAClient)
+│   Browser    │  @aastar/airaccount (AirAccountClient)
 │   (SDK)      │  - PasskeyManager (WebAuthn)
 └──────┬───────┘  - BLSManager
        │ HTTPS
        ▼
 ┌─────────────┐
-│  Your API   │  @aastar/airaccount/server (YAAAServerClient)
+│  Your API   │  @aastar/airaccount/server (AirAccountServerClient)
 │  (Backend)  │  - AccountManager, TransferManager
 └──────┬───────┘  - BLSSignatureService, GuardChecker
        │          - KmsManager, PaymasterManager

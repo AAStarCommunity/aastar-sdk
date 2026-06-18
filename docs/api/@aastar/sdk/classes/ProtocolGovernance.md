@@ -1,4 +1,4 @@
-Defined in: [packages/admin/src/ProtocolGovernance.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L20)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L20)
 
 ProtocolGovernance - L3 Pattern
 
@@ -17,7 +17,7 @@ Responsibilities:
 
 > **new ProtocolGovernance**(`config`): `ProtocolGovernance`
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L24)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L24)
 
 #### Parameters
 
@@ -39,7 +39,7 @@ Defined in: [packages/admin/src/ProtocolGovernance.ts:24](https://github.com/AAS
 
 > **client**: [`WalletClient`](../interfaces/WalletClient.md)
 
-Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L6)
+Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L6)
 
 #### Inherited from
 
@@ -51,7 +51,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:6](https://github.com/AASta
 
 > **entryPointAddress**: `` `0x${string}` ``
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L22)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L22)
 
 #### Overrides
 
@@ -63,7 +63,7 @@ Defined in: [packages/admin/src/ProtocolGovernance.ts:22](https://github.com/AAS
 
 > `protected` `optional` **gTokenAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L9)
+Defined in: [packages/core/src/clients/BaseClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L9)
 
 #### Inherited from
 
@@ -75,7 +75,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:9](https://github.com/AASta
 
 > `protected` `optional` **gTokenStakingAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L10)
+Defined in: [packages/core/src/clients/BaseClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L10)
 
 #### Inherited from
 
@@ -87,7 +87,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:10](https://github.com/AASt
 
 > `protected` `optional` **paymasterFactoryAddress**: `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L11)
+Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L11)
 
 #### Inherited from
 
@@ -99,7 +99,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:11](https://github.com/AASt
 
 > `optional` **publicClient**: [`PublicClient`](../interfaces/PublicClient.md)
 
-Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L7)
+Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L7)
 
 #### Inherited from
 
@@ -111,7 +111,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:7](https://github.com/AASta
 
 > **registryAddress**: `` `0x${string}` ``
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L21)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L21)
 
 #### Overrides
 
@@ -123,7 +123,7 @@ Defined in: [packages/admin/src/ProtocolGovernance.ts:21](https://github.com/AAS
 
 > **configureRole**(`params`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L95)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:95](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L95)
 
 Configure a Role's parameters (Admin only).
 Reads the current on-chain config first, then merges the provided overrides
@@ -151,7 +151,7 @@ and writes back the full struct via configureRole.
 
 > **getAddress**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L34)
+Defined in: [packages/core/src/clients/BaseClient.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L34)
 
 Get the account address of the connected wallet
 
@@ -169,7 +169,7 @@ Get the account address of the connected wallet
 
 > **getProtocolParams**(): `Promise`\<[`ProtocolParams`](../interfaces/ProtocolParams.md)\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L137)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:137](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L137)
 
 #### Returns
 
@@ -181,7 +181,7 @@ Defined in: [packages/admin/src/ProtocolGovernance.ts:137](https://github.com/AA
 
 > **getStartPublicClient**(): [`PublicClient`](../interfaces/PublicClient.md) \| [`WalletClient`](../interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\>
 
-Defined in: [packages/core/src/clients/BaseClient.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L41)
+Defined in: [packages/core/src/clients/BaseClient.ts:41](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L41)
 
 Helper to ensure public client exists or fallback to wallet client (if it supports read)
 
@@ -199,7 +199,7 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 > `protected` **requireEntryPoint**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L73)
+Defined in: [packages/core/src/clients/BaseClient.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L73)
 
 #### Returns
 
@@ -215,7 +215,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:73](https://github.com/AASt
 
 > `protected` **requireGToken**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L52)
+Defined in: [packages/core/src/clients/BaseClient.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L52)
 
 #### Returns
 
@@ -231,7 +231,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:52](https://github.com/AASt
 
 > `protected` **requireGTokenStaking**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L59)
+Defined in: [packages/core/src/clients/BaseClient.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L59)
 
 #### Returns
 
@@ -247,7 +247,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:59](https://github.com/AASt
 
 > `protected` **requirePaymasterFactory**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L66)
+Defined in: [packages/core/src/clients/BaseClient.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L66)
 
 #### Returns
 
@@ -263,7 +263,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:66](https://github.com/AASt
 
 > `protected` **requireRegistry**(): `` `0x${string}` ``
 
-Defined in: [packages/core/src/clients/BaseClient.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/core/src/clients/BaseClient.ts#L45)
+Defined in: [packages/core/src/clients/BaseClient.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/clients/BaseClient.ts#L45)
 
 #### Returns
 
@@ -279,7 +279,7 @@ Defined in: [packages/core/src/clients/BaseClient.ts:45](https://github.com/AASt
 
 > **setStaking**(`staking`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L82)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L82)
 
 Set the Staking contract address
 
@@ -300,7 +300,7 @@ Set the Staking contract address
 
 > **setSuperPaymaster**(`paymaster`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L71)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L71)
 
 Approve a new SuperPaymaster contract address
 
@@ -321,7 +321,7 @@ Approve a new SuperPaymaster contract address
 
 > **setTreasury**(`treasury`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L40)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L40)
 
 Update the Global Treasury Address where protocol fees are collected
 
@@ -342,7 +342,7 @@ Update the Global Treasury Address where protocol fees are collected
 
 > **transferToDAO**(`daoAddress`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L125)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:125](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L125)
 
 Transfer Protocol Ownership to a DAO (Multisig/Timelock)
 This is the final step of "Protocol Admin" lifecycle.
@@ -364,7 +364,7 @@ This is the final step of "Protocol Admin" lifecycle.
 
 > **updateEntryPoint**(`entryPoint`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/admin/src/ProtocolGovernance.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/admin/src/ProtocolGovernance.ts#L57)
+Defined in: [packages/admin/src/ProtocolGovernance.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/admin/src/ProtocolGovernance.ts#L57)
 
 Update the supported EntryPoint address
 

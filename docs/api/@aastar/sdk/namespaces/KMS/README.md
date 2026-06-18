@@ -1,14 +1,15 @@
 ## Classes
 
+- [AirAccountClient](classes/AirAccountClient.md)
 - [BLSManager](classes/BLSManager.md)
 - [CryptoUtil](classes/CryptoUtil.md)
 - [ERC4337Utils](classes/ERC4337Utils.md)
 - [PasskeyManager](classes/PasskeyManager.md)
 - [UserOpBuilder](classes/UserOpBuilder.md)
-- [YAAAClient](classes/YAAAClient.md)
 
 ## Interfaces
 
+- [AirAccountConfig](interfaces/AirAccountConfig.md)
 - [BeginAuthenticationResponse](interfaces/BeginAuthenticationResponse.md)
 - [BeginRegistrationResponse](interfaces/BeginRegistrationResponse.md)
 - [BeginTransactionVerificationResponse](interfaces/BeginTransactionVerificationResponse.md)
@@ -23,16 +24,17 @@
 - [PasskeyAuthenticationParams](interfaces/PasskeyAuthenticationParams.md)
 - [PasskeyInfo](interfaces/PasskeyInfo.md)
 - [PasskeyRegistrationParams](interfaces/PasskeyRegistrationParams.md)
+- [PasskeyRoutes](interfaces/PasskeyRoutes.md)
 - [PreCheckResult](interfaces/PreCheckResult.md)
 - [TierConfig](interfaces/TierConfig.md)
 - [TransactionVerificationParams](interfaces/TransactionVerificationParams.md)
 - [UserOperation](interfaces/UserOperation.md)
-- [YAAAConfig](interfaces/YAAAConfig.md)
 
 ## Type Aliases
 
 - [AlgId](type-aliases/AlgId.md)
 - [TierLevel](type-aliases/TierLevel.md)
+- [~~YAAAConfig~~](type-aliases/YAAAConfig.md)
 
 ## Variables
 
@@ -41,6 +43,8 @@
 - [ALG\_CUMULATIVE\_T3](variables/ALG_CUMULATIVE_T3.md)
 - [ALG\_ECDSA](variables/ALG_ECDSA.md)
 - [ALG\_P256](variables/ALG_P256.md)
+- [DEFAULT\_PASSKEY\_ROUTES](variables/DEFAULT_PASSKEY_ROUTES.md)
+- [~~YAAAClient~~](variables/YAAAClient.md)
 
 ## Functions
 

@@ -1,6 +1,6 @@
 {
   "name": "@aastar/x402",
-  "version": "0.20.1",
+  "version": "0.20.7",
   "publishConfig": {
     "access": "public"
   },
