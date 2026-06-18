@@ -122,6 +122,9 @@ importers:
       axios:
         specifier: ^1.12.2
         version: 1.13.2
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
     devDependencies:
       ethers:
         specifier: ^6.11.1
