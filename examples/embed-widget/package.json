@@ -1,0 +1,27 @@
+{
+  "name": "aastar-embed-widget",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Minimal drop-in AAStar account widget (email/passkey register -> smart account -> gasless tx) for any existing website.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "build:embed": "vite build --config vite.embed.config.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@aastar/sdk": "0.20.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "viem": "2.43.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  }
+}
