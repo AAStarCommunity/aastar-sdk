@@ -6,6 +6,10 @@ import { parseAbi, encodeFunctionData } from "viem";
 import { keccak256 } from "../../migration/viem/hashing";
 import { solidityPacked } from "../../migration/viem/abi-encoding";
 import { EthereumProvider } from "../providers/ethereum-provider";
+import {
+  readPredictedAddress,
+  readPredictedAddressWithDefaults,
+} from "../providers/typed-reads";
 import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
 import { ISignerAdapter } from "../interfaces/signer-adapter";
 import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
@@ -66,11 +70,16 @@ export class AccountManager {
       [], // initialTokens
       [], // initialTokenConfigs
     ];
-    const accountAddress = (await factory.read.getAddress([
+    // uint256 `salt` coerced to bigint via the typed wrapper. The predicted
+    // address is the fund-custody address; the bigint encoding is byte-identical
+    // to the JS-number `salt` reused in the deploy-time initCode, so the
+    // counterfactual address is unchanged.
+    const accountAddress = await readPredictedAddress(
+      factory,
       signerAddress,
-      salt,
-      minimalConfig,
-    ])) as string;
+      BigInt(salt),
+      minimalConfig
+    );
 
     // Check deployment status
     let deployed = false;
@@ -262,13 +271,15 @@ export class AccountManager {
     const factory = this.ethereum.getFactoryContract(version);
     const factoryAddress = (factory.address as string) ?? this.ethereum.getFactoryAddress(version);
 
-    const accountAddress = (await factory.read.getAddressWithDefaults([
+    // uint256 `salt` and `dailyLimit` are enforced as bigint by the typed wrapper.
+    const accountAddress = await readPredictedAddressWithDefaults(
+      factory,
       signerAddress,
-      salt,
+      BigInt(salt),
       params.guardian1,
       params.guardian2,
-      params.dailyLimit,
-    ])) as string;
+      params.dailyLimit
+    );
 
     let deployed = false;
     try {

@@ -1,9 +1,15 @@
-import { getContract, zeroAddress, type Address } from "viem";
+import { getContract, zeroAddress } from "viem";
 // GLOBAL_GUARD_ABI is a local human-readable signature array (not in @aastar/core);
 // parseAbi is required to feed it to viem's getContract during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi } from "viem";
-import { EthereumProvider } from "../providers/ethereum-provider";
+import { EthereumProvider, type ViemContract } from "../providers/ethereum-provider";
+import {
+  readAccountTierLimits,
+  readAccountGuardAddress,
+  readGuardDailyAllowance,
+  readAlgorithmApproved,
+} from "../providers/typed-reads";
 import { GLOBAL_GUARD_ABI } from "../constants/entrypoint";
 import {
   TierConfig,
@@ -45,16 +51,8 @@ export class GuardChecker {
    */
   async fetchTierConfig(accountAddress: string): Promise<TierConfig> {
     const account = this.ethereum.getAccountContract(accountAddress);
-
-    const [tier1Limit, tier2Limit] = await Promise.all([
-      account.read.tier1Limit([]),
-      account.read.tier2Limit([]),
-    ]);
-
-    return {
-      tier1Limit: BigInt(tier1Limit as bigint),
-      tier2Limit: BigInt(tier2Limit as bigint),
-    };
+    // Typed wrapper returns both uint256 tier limits as bigint.
+    return readAccountTierLimits(account);
   }
 
   /**
@@ -63,12 +61,9 @@ export class GuardChecker {
   async fetchGuardStatus(accountAddress: string): Promise<GuardStatus> {
     const account = this.ethereum.getAccountContract(accountAddress);
 
-    // getConfigDescription returns a single tuple struct; viem decodes it to an object
-    // with named fields (matching ethers' named-field access on the result).
-    const config = (await account.read.getConfigDescription([])) as {
-      guardAddress: Address;
-    };
-    const guardAddress = config.guardAddress;
+    // getConfigDescription returns a single tuple struct; the typed wrapper reads
+    // the `guardAddress` field that decides whether the guard is enforced at all.
+    const guardAddress = await readAccountGuardAddress(account);
 
     if (guardAddress === zeroAddress) {
       return {
@@ -83,17 +78,15 @@ export class GuardChecker {
       address: guardAddress,
       abi: parseAbi(GLOBAL_GUARD_ABI),
       client: this.ethereum.getProvider(),
-    });
-    const [dailyLimit, dailyRemaining] = await Promise.all([
-      guard.read.dailyLimit(),
-      guard.read.remainingDailyAllowance(),
-    ]);
+    }) as unknown as ViemContract;
+    // Typed wrapper returns both uint256 daily-allowance values as bigint.
+    const { dailyLimit, dailyRemaining } = await readGuardDailyAllowance(guard);
 
     return {
       hasGuard: true,
       guardAddress,
-      dailyLimit: BigInt(dailyLimit as bigint),
-      dailyRemaining: BigInt(dailyRemaining as bigint),
+      dailyLimit,
+      dailyRemaining,
     };
   }
 
@@ -126,7 +119,7 @@ export class GuardChecker {
     // Check algorithm approval. v0.17.2-beta.4: the algorithm whitelist is the single
     // source of truth on the ACCOUNT (enforced in validateUserOp), not the guard.
     const accountContract = this.ethereum.getAccountContract(accountAddress);
-    const isApproved = (await accountContract.read.approvedAlgorithms([algId])) as boolean;
+    const isApproved = await readAlgorithmApproved(accountContract, algId);
 
     if (!isApproved) {
       errors.push(
