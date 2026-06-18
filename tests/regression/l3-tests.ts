@@ -15,6 +15,7 @@ export async function runL3Tests(config: NetworkConfig) {
     
     console.log('⏭️  L3 Pattern tests temporarily disabled - patterns package pending implementation\n');
     console.log('📊 L3 Results: 0/0 tests passed (skipped)\n');
+    return { passed: 0, total: 0 };
     
     // TODO: Re-enable tests when @aastar/patterns package is implemented
     // Expected classes:

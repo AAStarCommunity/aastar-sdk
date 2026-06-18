@@ -245,4 +245,5 @@ export async function runL1Tests(config: NetworkConfig) {
     console.log('    ⏭️  Skipping (implementation pending)\n');
 
     console.log(`\n📊 L1 Results: ${passedTests}/${totalTests} tests passed\n`);
+    return { passed: passedTests, total: totalTests };
 }
