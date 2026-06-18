@@ -1,10 +1,10 @@
-Defined in: [enduser/src/UserClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L6)
+Defined in: [enduser/src/UserClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L6)
 
 Base configuration for all L2 Business Clients
 
 ## Extends
 
-- [`ClientConfig`](../../core/interfaces/ClientConfig.md)
+- [`ClientConfig`](../../sdk/interfaces/ClientConfig.md)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Base configuration for all L2 Business Clients
 
 > **accountAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L7)
+Defined in: [enduser/src/UserClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L7)
 
 ***
 
@@ -20,13 +20,13 @@ Defined in: [enduser/src/UserClient.ts:7](https://github.com/AAStarCommunity/aas
 
 > `optional` **bundlerClient**: `any`
 
-Defined in: [enduser/src/UserClient.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L14)
+Defined in: [enduser/src/UserClient.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L14)
 
 ***
 
 ### client
 
-> **client**: [`WalletClient`](../../core/interfaces/WalletClient.md)
+> **client**: [`WalletClient`](../../sdk/interfaces/WalletClient.md)
 
 Defined in: core/dist/clients/types.d.ts:11
 
@@ -35,7 +35,7 @@ Must have an account attached.
 
 #### Inherited from
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`client`](../../core/interfaces/ClientConfig.md#client)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`client`](../../sdk/interfaces/ClientConfig.md#client)
 
 ***
 
@@ -43,11 +43,11 @@ Must have an account attached.
 
 > `optional` **entryPointAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L9)
+Defined in: [enduser/src/UserClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L9)
 
 #### Overrides
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`entryPointAddress`](../../core/interfaces/ClientConfig.md#entrypointaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`entryPointAddress`](../../sdk/interfaces/ClientConfig.md#entrypointaddress)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: core/dist/clients/types.d.ts:40
 
 #### Inherited from
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`ethUsdPriceFeedAddress`](../../core/interfaces/ClientConfig.md#ethusdpricefeedaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`ethUsdPriceFeedAddress`](../../sdk/interfaces/ClientConfig.md#ethusdpricefeedaddress)
 
 ***
 
@@ -67,14 +67,14 @@ Defined in: core/dist/clients/types.d.ts:40
 
 > `optional` **gTokenAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L13)
+Defined in: [enduser/src/UserClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L13)
 
 GToken contract address.
 Required for operations involving token approvals and transfers.
 
 #### Overrides
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`gTokenAddress`](../../core/interfaces/ClientConfig.md#gtokenaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`gTokenAddress`](../../sdk/interfaces/ClientConfig.md#gtokenaddress)
 
 ***
 
@@ -82,14 +82,14 @@ Required for operations involving token approvals and transfers.
 
 > `optional` **gTokenStakingAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L11)
+Defined in: [enduser/src/UserClient.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L11)
 
 GTokenStaking contract address.
 Required for role registration that involves staking.
 
 #### Overrides
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`gTokenStakingAddress`](../../core/interfaces/ClientConfig.md#gtokenstakingaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`gTokenStakingAddress`](../../sdk/interfaces/ClientConfig.md#gtokenstakingaddress)
 
 ***
 
@@ -104,13 +104,13 @@ Required for deploying new PaymasterV4 instances.
 
 #### Inherited from
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`paymasterFactoryAddress`](../../core/interfaces/ClientConfig.md#paymasterfactoryaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`paymasterFactoryAddress`](../../sdk/interfaces/ClientConfig.md#paymasterfactoryaddress)
 
 ***
 
 ### publicClient?
 
-> `optional` **publicClient**: [`PublicClient`](../../core/interfaces/PublicClient.md)
+> `optional` **publicClient**: [`PublicClient`](../../sdk/interfaces/PublicClient.md)
 
 Defined in: core/dist/clients/types.d.ts:18
 
@@ -121,7 +121,7 @@ However, explicitly accepting PublicClient encourages separation.
 
 #### Inherited from
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`publicClient`](../../core/interfaces/ClientConfig.md#publicclient)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`publicClient`](../../sdk/interfaces/ClientConfig.md#publicclient)
 
 ***
 
@@ -129,14 +129,14 @@ However, explicitly accepting PublicClient encourages separation.
 
 > `optional` **registryAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L12)
+Defined in: [enduser/src/UserClient.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L12)
 
 Registry contract address.
 Essential for looking up other contracts if not provided explicitly.
 
 #### Overrides
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`registryAddress`](../../core/interfaces/ClientConfig.md#registryaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`registryAddress`](../../sdk/interfaces/ClientConfig.md#registryaddress)
 
 ***
 
@@ -144,7 +144,7 @@ Essential for looking up other contracts if not provided explicitly.
 
 > `optional` **sbtAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L8)
+Defined in: [enduser/src/UserClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L8)
 
 ***
 
@@ -152,7 +152,7 @@ Defined in: [enduser/src/UserClient.ts:8](https://github.com/AAStarCommunity/aas
 
 > `optional` **superPaymasterAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/UserClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/UserClient.ts#L10)
+Defined in: [enduser/src/UserClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/UserClient.ts#L10)
 
 ***
 
@@ -164,4 +164,4 @@ Defined in: core/dist/clients/types.d.ts:39
 
 #### Inherited from
 
-[`ClientConfig`](../../core/interfaces/ClientConfig.md).[`xpntsFactoryAddress`](../../core/interfaces/ClientConfig.md#xpntsfactoryaddress)
+[`ClientConfig`](../../sdk/interfaces/ClientConfig.md).[`xpntsFactoryAddress`](../../sdk/interfaces/ClientConfig.md#xpntsfactoryaddress)

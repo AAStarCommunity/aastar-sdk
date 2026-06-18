@@ -1,15 +1,21 @@
 ## Classes
 
 - [PaymasterClient](classes/PaymasterClient.md)
+- [PaymasterManager](classes/PaymasterManager.md)
 - [PaymasterOperator](classes/PaymasterOperator.md)
 - [SuperPaymasterAdminClient](classes/SuperPaymasterAdminClient.md)
 - [SuperPaymasterClient](classes/SuperPaymasterClient.md)
+
+## Interfaces
+
+- [BuildPaymasterDataParams](interfaces/BuildPaymasterDataParams.md)
 
 ## Type Aliases
 
 - [GaslessReadinessReport](type-aliases/GaslessReadinessReport.md)
 - [GaslessTransactionConfig](type-aliases/GaslessTransactionConfig.md)
 - [PaymasterConfig](type-aliases/PaymasterConfig.md)
+- [PaymasterType](type-aliases/PaymasterType.md)
 - [PaymasterV4MiddlewareConfig](type-aliases/PaymasterV4MiddlewareConfig.md)
 
 ## Functions

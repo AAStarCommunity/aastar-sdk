@@ -1,10 +1,10 @@
-Defined in: [operator/src/PaymasterOperatorClient.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L20)
+Defined in: [operator/src/PaymasterOperatorClient.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L20)
 
 Client for Paymaster Operators (ROLE_PAYMASTER_SUPER)
 
 ## Extends
 
-- [`BaseClient`](../../core/classes/BaseClient.md)
+- [`BaseClient`](../../sdk/classes/BaseClient.md)
 
 ## Extended by
 
@@ -16,7 +16,7 @@ Client for Paymaster Operators (ROLE_PAYMASTER_SUPER)
 
 > **new PaymasterOperatorClient**(`config`): `PaymasterOperatorClient`
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L26)
+Defined in: [operator/src/PaymasterOperatorClient.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L26)
 
 #### Parameters
 
@@ -30,19 +30,19 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:26](https://github.com/AASt
 
 #### Overrides
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`constructor`](../../core/classes/BaseClient.md#constructor)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`constructor`](../../sdk/classes/BaseClient.md#constructor)
 
 ## Properties
 
 ### client
 
-> **client**: [`WalletClient`](../../core/interfaces/WalletClient.md)
+> **client**: [`WalletClient`](../../sdk/interfaces/WalletClient.md)
 
 Defined in: core/dist/clients/BaseClient.d.ts:5
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`client`](../../core/classes/BaseClient.md#client)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`client`](../../sdk/classes/BaseClient.md#client)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:11
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`entryPointAddress`](../../core/classes/BaseClient.md#entrypointaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`entryPointAddress`](../../sdk/classes/BaseClient.md#entrypointaddress)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:11
 
 > **ethUsdPriceFeed**: `` `0x${string}` ``
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L23)
+Defined in: [operator/src/PaymasterOperatorClient.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L23)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:8
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`gTokenAddress`](../../core/classes/BaseClient.md#gtokenaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`gTokenAddress`](../../sdk/classes/BaseClient.md#gtokenaddress)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:9
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`gTokenStakingAddress`](../../core/classes/BaseClient.md#gtokenstakingaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`gTokenStakingAddress`](../../sdk/classes/BaseClient.md#gtokenstakingaddress)
 
 ***
 
@@ -98,19 +98,19 @@ Defined in: core/dist/clients/BaseClient.d.ts:10
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`paymasterFactoryAddress`](../../core/classes/BaseClient.md#paymasterfactoryaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`paymasterFactoryAddress`](../../sdk/classes/BaseClient.md#paymasterfactoryaddress)
 
 ***
 
 ### publicClient?
 
-> `optional` **publicClient**: [`PublicClient`](../../core/interfaces/PublicClient.md)
+> `optional` **publicClient**: [`PublicClient`](../../sdk/interfaces/PublicClient.md)
 
 Defined in: core/dist/clients/BaseClient.d.ts:6
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`publicClient`](../../core/classes/BaseClient.md#publicclient)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`publicClient`](../../sdk/classes/BaseClient.md#publicclient)
 
 ***
 
@@ -122,7 +122,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:7
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`registryAddress`](../../core/classes/BaseClient.md#registryaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`registryAddress`](../../sdk/classes/BaseClient.md#registryaddress)
 
 ***
 
@@ -130,7 +130,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:7
 
 > **superPaymasterAddress**: `` `0x${string}` ``
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L21)
+Defined in: [operator/src/PaymasterOperatorClient.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L21)
 
 ***
 
@@ -138,7 +138,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:21](https://github.com/AASt
 
 > `optional` **tokenAddress**: `` `0x${string}` ``
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L22)
+Defined in: [operator/src/PaymasterOperatorClient.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L22)
 
 ***
 
@@ -146,7 +146,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:22](https://github.com/AASt
 
 > **xpntsFactory**: `` `0x${string}` ``
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L24)
+Defined in: [operator/src/PaymasterOperatorClient.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L24)
 
 ## Methods
 
@@ -154,7 +154,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:24](https://github.com/AASt
 
 > **addGasToken**(`token`, `price`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:415](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L415)
+Defined in: [operator/src/PaymasterOperatorClient.ts:409](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L409)
 
 #### Parameters
 
@@ -162,7 +162,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:415](https://github.com/AAS
 | ------ | ------ |
 | `token` | `` `0x${string}` `` |
 | `price` | `bigint` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -172,11 +172,12 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:415](https://github.com/AAS
 
 ### configureOperator()
 
-> **configureOperator**(`xPNTsToken?`, `treasury?`, `exchangeRate?`, `options?`): `Promise`\<`` `0x${string}` ``\>
+> **configureOperator**(`xPNTsToken?`, `treasury?`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:327](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L327)
+Defined in: [operator/src/PaymasterOperatorClient.ts:324](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L324)
 
-Configure operator parameters (Token, Treasury, Exchange Rate).
+Configure operator parameters (Token, Treasury).
+Exchange rate is now read live from xPNTsToken.exchangeRate() at runtime.
 If parameters are undefined, existing values are preserved.
 
 #### Parameters
@@ -185,8 +186,7 @@ If parameters are undefined, existing values are preserved.
 | ------ | ------ |
 | `xPNTsToken?` | `` `0x${string}` `` |
 | `treasury?` | `` `0x${string}` `` |
-| `exchangeRate?` | `bigint` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -198,7 +198,7 @@ If parameters are undefined, existing values are preserved.
 
 > **deployAndRegisterPaymasterV4**(`params?`, `options?`): `Promise`\<\{ `deployHash`: `` `0x${string}` ``; `paymasterAddress`: `` `0x${string}` ``; `registerHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:142](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L142)
+Defined in: [operator/src/PaymasterOperatorClient.ts:142](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L142)
 
 Deploy a new Paymaster V4 and Register as AOA Operator (one-stop API).
 This method handles:
@@ -216,7 +216,7 @@ This method handles:
 | `params.salt?` | `bigint` | - |
 | `params.stakeAmount?` | `bigint` | - |
 | `params.version?` | `string` | - |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) | Transaction options |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) | Transaction options |
 
 #### Returns
 
@@ -230,7 +230,7 @@ Object containing new paymaster address and transaction hashes
 
 > **depositCollateral**(`amount`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:283](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L283)
+Defined in: [operator/src/PaymasterOperatorClient.ts:283](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L283)
 
 Deposit collateral (aPNTs/GToken) to SuperPaymaster.
 This is a helper method used by registerAsSuperPaymasterOperator.
@@ -240,7 +240,7 @@ This is a helper method used by registerAsSuperPaymasterOperator.
 | Parameter | Type |
 | ------ | ------ |
 | `amount` | `bigint` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -262,7 +262,7 @@ Get the account address of the connected wallet
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`getAddress`](../../core/classes/BaseClient.md#getaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`getAddress`](../../sdk/classes/BaseClient.md#getaddress)
 
 ***
 
@@ -270,7 +270,7 @@ Get the account address of the connected wallet
 
 > **getOperatorDetails**(`operator?`): `Promise`\<`any`\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:378](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L378)
+Defined in: [operator/src/PaymasterOperatorClient.ts:372](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L372)
 
 #### Parameters
 
@@ -286,7 +286,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:378](https://github.com/AAS
 
 ### getStartPublicClient()
 
-> **getStartPublicClient**(): [`PublicClient`](../../core/interfaces/PublicClient.md) \| [`WalletClient`](../../core/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\>
+> **getStartPublicClient**(): [`PublicClient`](../../sdk/interfaces/PublicClient.md) \| [`WalletClient`](../../sdk/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\>
 
 Defined in: core/dist/clients/BaseClient.d.ts:20
 
@@ -294,11 +294,11 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 #### Returns
 
-[`PublicClient`](../../core/interfaces/PublicClient.md) \| [`WalletClient`](../../core/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\>
+[`PublicClient`](../../sdk/interfaces/PublicClient.md) \| [`WalletClient`](../../sdk/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\>
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`getStartPublicClient`](../../core/classes/BaseClient.md#getstartpublicclient)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`getStartPublicClient`](../../sdk/classes/BaseClient.md#getstartpublicclient)
 
 ***
 
@@ -306,7 +306,7 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 > **getTokenPrice**(`token`): `Promise`\<`bigint`\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:428](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L428)
+Defined in: [operator/src/PaymasterOperatorClient.ts:422](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L422)
 
 #### Parameters
 
@@ -324,13 +324,13 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:428](https://github.com/AAS
 
 > **initiateExit**(`options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:388](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L388)
+Defined in: [operator/src/PaymasterOperatorClient.ts:382](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L382)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -342,7 +342,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:388](https://github.com/AAS
 
 > **isOperator**(`operator`): `Promise`\<`boolean`\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:368](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L368)
+Defined in: [operator/src/PaymasterOperatorClient.ts:362](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L362)
 
 #### Parameters
 
@@ -360,7 +360,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:368](https://github.com/AAS
 
 > **registerAsSuperPaymasterOperator**(`params?`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L50)
+Defined in: [operator/src/PaymasterOperatorClient.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L50)
 
 Register as SuperPaymaster Operator (one-stop API).
 This method handles all necessary steps:
@@ -376,7 +376,7 @@ This method handles all necessary steps:
 | `params?` | \{ `depositAmount?`: `bigint`; `stakeAmount?`: `bigint`; \} | Registration parameters |
 | `params.depositAmount?` | `bigint` | - |
 | `params.stakeAmount?` | `bigint` | - |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) | Transaction options |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) | Transaction options |
 
 #### Returns
 
@@ -398,7 +398,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:25
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireEntryPoint`](../../core/classes/BaseClient.md#requireentrypoint)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireEntryPoint`](../../sdk/classes/BaseClient.md#requireentrypoint)
 
 ***
 
@@ -414,7 +414,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:22
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireGToken`](../../core/classes/BaseClient.md#requiregtoken)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireGToken`](../../sdk/classes/BaseClient.md#requiregtoken)
 
 ***
 
@@ -430,7 +430,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:23
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireGTokenStaking`](../../core/classes/BaseClient.md#requiregtokenstaking)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireGTokenStaking`](../../sdk/classes/BaseClient.md#requiregtokenstaking)
 
 ***
 
@@ -446,7 +446,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:24
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requirePaymasterFactory`](../../core/classes/BaseClient.md#requirepaymasterfactory)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requirePaymasterFactory`](../../sdk/classes/BaseClient.md#requirepaymasterfactory)
 
 ***
 
@@ -462,7 +462,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:21
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireRegistry`](../../core/classes/BaseClient.md#requireregistry)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireRegistry`](../../sdk/classes/BaseClient.md#requireregistry)
 
 ***
 
@@ -470,7 +470,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:21
 
 > **setupPaymasterDeposit**(`params`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:437](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L437)
+Defined in: [operator/src/PaymasterOperatorClient.ts:431](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L431)
 
 #### Parameters
 
@@ -481,26 +481,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:437](https://github.com/AAS
 | `params.paymaster?` | `` `0x${string}` `` |
 | `params.token?` | `` `0x${string}` `` |
 | `params.user?` | `` `0x${string}` `` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
-
-#### Returns
-
-`Promise`\<`` `0x${string}` ``\>
-
-***
-
-### updateExchangeRate()
-
-> **updateExchangeRate**(`exchangeRate`, `options?`): `Promise`\<`` `0x${string}` ``\>
-
-Defined in: [operator/src/PaymasterOperatorClient.ts:319](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L319)
-
-#### Parameters
-
-| Parameter | Type |
-| ------ | ------ |
-| `exchangeRate` | `bigint` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -512,7 +493,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:319](https://github.com/AAS
 
 > **withdrawCollateral**(`to`, `amount`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:355](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L355)
+Defined in: [operator/src/PaymasterOperatorClient.ts:349](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L349)
 
 #### Parameters
 
@@ -520,7 +501,7 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:355](https://github.com/AAS
 | ------ | ------ |
 | `to` | `` `0x${string}` `` |
 | `amount` | `bigint` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -532,14 +513,14 @@ Defined in: [operator/src/PaymasterOperatorClient.ts:355](https://github.com/AAS
 
 > **withdrawStake**(`to`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [operator/src/PaymasterOperatorClient.ts:399](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/operator/src/PaymasterOperatorClient.ts#L399)
+Defined in: [operator/src/PaymasterOperatorClient.ts:393](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/operator/src/PaymasterOperatorClient.ts#L393)
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
 | `to` | `` `0x${string}` `` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 

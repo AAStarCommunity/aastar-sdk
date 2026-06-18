@@ -1,0 +1,25 @@
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:80](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L80)
+
+## Properties
+
+### CredentialId
+
+> **CredentialId**: `string`
+
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:82](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L82)
+
+***
+
+### KeyId
+
+> **KeyId**: `string`
+
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L81)
+
+***
+
+### Status
+
+> **Status**: `string`
+
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/airaccount/src/server/services/kms-signer.ts#L83)

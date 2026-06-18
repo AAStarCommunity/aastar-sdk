@@ -1,16 +1,19 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
+    "packages/sdk",
     "packages/core",
     "packages/account",
     "packages/paymaster",
-    "packages/tokens",
-    "packages/community",
     "packages/identity",
-    "packages/analytics",
-    "packages/enduser",
+    "packages/tokens",
     "packages/dapp",
-    "packages/operator"
+    "packages/x402",
+    "packages/channel",
+    "packages/enduser",
+    "packages/operator",
+    "packages/admin",
+    "packages/airaccount"
   ],
   "entryPointStrategy": "packages",
   "out": "docs/api",

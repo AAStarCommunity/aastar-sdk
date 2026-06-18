@@ -1,10 +1,10 @@
-Defined in: [enduser/src/CommunityClient.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L27)
+Defined in: [enduser/src/CommunityClient.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L27)
 
 Client for Community Managers (`ROLE_COMMUNITY`)
 
 ## Extends
 
-- [`BaseClient`](../../core/classes/BaseClient.md)
+- [`BaseClient`](../../sdk/classes/BaseClient.md)
 
 ## Constructors
 
@@ -12,7 +12,7 @@ Client for Community Managers (`ROLE_COMMUNITY`)
 
 > **new CommunityClient**(`config`): `CommunityClient`
 
-Defined in: [enduser/src/CommunityClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L32)
+Defined in: [enduser/src/CommunityClient.ts:32](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L32)
 
 #### Parameters
 
@@ -26,19 +26,19 @@ Defined in: [enduser/src/CommunityClient.ts:32](https://github.com/AAStarCommuni
 
 #### Overrides
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`constructor`](../../core/classes/BaseClient.md#constructor)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`constructor`](../../sdk/classes/BaseClient.md#constructor)
 
 ## Properties
 
 ### client
 
-> **client**: [`WalletClient`](../../core/interfaces/WalletClient.md)
+> **client**: [`WalletClient`](../../sdk/interfaces/WalletClient.md)
 
 Defined in: core/dist/clients/BaseClient.d.ts:5
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`client`](../../core/classes/BaseClient.md#client)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`client`](../../sdk/classes/BaseClient.md#client)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:11
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`entryPointAddress`](../../core/classes/BaseClient.md#entrypointaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`entryPointAddress`](../../sdk/classes/BaseClient.md#entrypointaddress)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:11
 
 > `optional` **factoryAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/CommunityClient.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L29)
+Defined in: [enduser/src/CommunityClient.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L29)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:8
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`gTokenAddress`](../../core/classes/BaseClient.md#gtokenaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`gTokenAddress`](../../sdk/classes/BaseClient.md#gtokenaddress)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:9
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`gTokenStakingAddress`](../../core/classes/BaseClient.md#gtokenstakingaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`gTokenStakingAddress`](../../sdk/classes/BaseClient.md#gtokenstakingaddress)
 
 ***
 
@@ -94,19 +94,19 @@ Defined in: core/dist/clients/BaseClient.d.ts:10
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`paymasterFactoryAddress`](../../core/classes/BaseClient.md#paymasterfactoryaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`paymasterFactoryAddress`](../../sdk/classes/BaseClient.md#paymasterfactoryaddress)
 
 ***
 
 ### publicClient?
 
-> `optional` **publicClient**: [`PublicClient`](../../core/interfaces/PublicClient.md)
+> `optional` **publicClient**: [`PublicClient`](../../sdk/interfaces/PublicClient.md)
 
 Defined in: core/dist/clients/BaseClient.d.ts:6
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`publicClient`](../../core/classes/BaseClient.md#publicclient)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`publicClient`](../../sdk/classes/BaseClient.md#publicclient)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:7
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`registryAddress`](../../core/classes/BaseClient.md#registryaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`registryAddress`](../../sdk/classes/BaseClient.md#registryaddress)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:7
 
 > `optional` **reputationAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/CommunityClient.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L30)
+Defined in: [enduser/src/CommunityClient.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L30)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [enduser/src/CommunityClient.ts:30](https://github.com/AAStarCommuni
 
 > `optional` **sbtAddress**: `` `0x${string}` ``
 
-Defined in: [enduser/src/CommunityClient.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L28)
+Defined in: [enduser/src/CommunityClient.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L28)
 
 ## Methods
 
@@ -142,7 +142,7 @@ Defined in: [enduser/src/CommunityClient.ts:28](https://github.com/AAStarCommuni
 
 > **airdropSBT**(`users`, `roleId`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [enduser/src/CommunityClient.ts:285](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L285)
+Defined in: [enduser/src/CommunityClient.ts:309](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L309)
 
 Airdrop SBTs to users to make them members
 
@@ -152,7 +152,7 @@ Airdrop SBTs to users to make them members
 | ------ | ------ |
 | `users` | `` `0x${string}` ``[] |
 | `roleId` | `bigint` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -164,7 +164,7 @@ Airdrop SBTs to users to make them members
 
 > **createCommunityToken**(`params`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [enduser/src/CommunityClient.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L50)
+Defined in: [enduser/src/CommunityClient.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L50)
 
 Create a new Community Token (xPNTs) and register it.
 Note: In the current architecture, creating a community often involves:
@@ -177,7 +177,7 @@ Note: In the current architecture, creating a community often involves:
 | Parameter | Type |
 | ------ | ------ |
 | `params` | [`CreateCommunityParams`](../interfaces/CreateCommunityParams.md) |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -199,7 +199,7 @@ Get the account address of the connected wallet
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`getAddress`](../../core/classes/BaseClient.md#getaddress)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`getAddress`](../../sdk/classes/BaseClient.md#getaddress)
 
 ***
 
@@ -207,7 +207,7 @@ Get the account address of the connected wallet
 
 > **getCommunityInfo**(`communityAddress?`): `Promise`\<\{ `description`: `string`; `ensName`: `string`; `logoURI`: `string`; `name`: `string`; `stakeAmount`: `bigint`; `website`: `string`; \}\>
 
-Defined in: [enduser/src/CommunityClient.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L76)
+Defined in: [enduser/src/CommunityClient.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L76)
 
 Get Community Details (Decodes Role Metadata)
 
@@ -225,7 +225,7 @@ Get Community Details (Decodes Role Metadata)
 
 ### getStartPublicClient()
 
-> **getStartPublicClient**(): [`WalletClient`](../../core/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\> \| [`PublicClient`](../../core/interfaces/PublicClient.md)
+> **getStartPublicClient**(): [`WalletClient`](../../sdk/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\> \| [`PublicClient`](../../sdk/interfaces/PublicClient.md)
 
 Defined in: core/dist/clients/BaseClient.d.ts:20
 
@@ -233,11 +233,11 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 #### Returns
 
-[`WalletClient`](../../core/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\> \| [`PublicClient`](../../core/interfaces/PublicClient.md)
+[`WalletClient`](../../sdk/interfaces/WalletClient.md)\<[`Transport`](https://viem.sh/docs/index.html), [`Chain`](https://viem.sh/docs/index.html) \| `undefined`, [`Account`](https://viem.sh/docs/index.html) \| `undefined`\> \| [`PublicClient`](../../sdk/interfaces/PublicClient.md)
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`getStartPublicClient`](../../core/classes/BaseClient.md#getstartpublicclient)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`getStartPublicClient`](../../sdk/classes/BaseClient.md#getstartpublicclient)
 
 ***
 
@@ -245,7 +245,7 @@ Helper to ensure public client exists or fallback to wallet client (if it suppor
 
 > **registerAsCommunity**(`params`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [enduser/src/CommunityClient.ts:142](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L142)
+Defined in: [enduser/src/CommunityClient.ts:166](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L166)
 
 Register self as a Community Manager.
 This method handles all necessary steps:
@@ -264,7 +264,7 @@ This method handles all necessary steps:
 | `params.name?` | `string` | - |
 | `params.stakeAmount?` | `bigint` | - |
 | `params.website?` | `string` | - |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) | Transaction options |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) | Transaction options |
 
 #### Returns
 
@@ -286,7 +286,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:25
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireEntryPoint`](../../core/classes/BaseClient.md#requireentrypoint)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireEntryPoint`](../../sdk/classes/BaseClient.md#requireentrypoint)
 
 ***
 
@@ -302,7 +302,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:22
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireGToken`](../../core/classes/BaseClient.md#requiregtoken)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireGToken`](../../sdk/classes/BaseClient.md#requiregtoken)
 
 ***
 
@@ -318,7 +318,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:23
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireGTokenStaking`](../../core/classes/BaseClient.md#requiregtokenstaking)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireGTokenStaking`](../../sdk/classes/BaseClient.md#requiregtokenstaking)
 
 ***
 
@@ -334,7 +334,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:24
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requirePaymasterFactory`](../../core/classes/BaseClient.md#requirepaymasterfactory)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requirePaymasterFactory`](../../sdk/classes/BaseClient.md#requirepaymasterfactory)
 
 ***
 
@@ -350,7 +350,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:21
 
 #### Inherited from
 
-[`BaseClient`](../../core/classes/BaseClient.md).[`requireRegistry`](../../core/classes/BaseClient.md#requireregistry)
+[`BaseClient`](../../sdk/classes/BaseClient.md).[`requireRegistry`](../../sdk/classes/BaseClient.md#requireregistry)
 
 ***
 
@@ -358,7 +358,7 @@ Defined in: core/dist/clients/BaseClient.d.ts:21
 
 > **revokeMembership**(`userAddr`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [enduser/src/CommunityClient.ts:336](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L336)
+Defined in: [enduser/src/CommunityClient.ts:360](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L360)
 
 Revoke membership (Burn SBT)
 
@@ -367,7 +367,7 @@ Revoke membership (Burn SBT)
 | Parameter | Type |
 | ------ | ------ |
 | `userAddr` | `` `0x${string}` `` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -379,7 +379,7 @@ Revoke membership (Burn SBT)
 
 > **setReputationRule**(`ruleId`, `ruleConfig`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [enduser/src/CommunityClient.ts:312](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L312)
+Defined in: [enduser/src/CommunityClient.ts:336](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L336)
 
 #### Parameters
 
@@ -387,7 +387,7 @@ Defined in: [enduser/src/CommunityClient.ts:312](https://github.com/AAStarCommun
 | ------ | ------ |
 | `ruleId` | `bigint` |
 | `ruleConfig` | `any` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -399,7 +399,7 @@ Defined in: [enduser/src/CommunityClient.ts:312](https://github.com/AAStarCommun
 
 > **setupCommunity**(`params`, `options?`): `Promise`\<\{ `hashes`: `` `0x${string}` ``[]; `tokenAddress`: `` `0x${string}` ``; \}\>
 
-Defined in: [enduser/src/CommunityClient.ts:210](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L210)
+Defined in: [enduser/src/CommunityClient.ts:234](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L234)
 
 One-click Setup: Register Community + Deploy Token
 Orchestrates the complete community initialization flow.
@@ -416,7 +416,7 @@ Orchestrates the complete community initialization flow.
 | `params.tokenName?` | `string` |
 | `params.tokenSymbol?` | `string` |
 | `params.website?` | `string` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
@@ -428,7 +428,7 @@ Orchestrates the complete community initialization flow.
 
 > **transferCommunityTokenOwnership**(`tokenAddress`, `newOwner`, `options?`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [enduser/src/CommunityClient.ts:353](https://github.com/AAStarCommunity/aastar-sdk/blob/9c654bccf291bedf59c180131227065a5460e904/packages/enduser/src/CommunityClient.ts#L353)
+Defined in: [enduser/src/CommunityClient.ts:377](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/enduser/src/CommunityClient.ts#L377)
 
 Transfer ownership of the Community Token
 
@@ -438,7 +438,7 @@ Transfer ownership of the Community Token
 | ------ | ------ |
 | `tokenAddress` | `` `0x${string}` `` |
 | `newOwner` | `` `0x${string}` `` |
-| `options?` | [`TransactionOptions`](../../core/interfaces/TransactionOptions.md) |
+| `options?` | [`TransactionOptions`](../../sdk/interfaces/TransactionOptions.md) |
 
 #### Returns
 
