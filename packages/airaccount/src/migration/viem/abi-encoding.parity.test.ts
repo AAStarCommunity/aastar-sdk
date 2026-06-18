@@ -1,8 +1,11 @@
 /**
- * Differential parity test: ethers (reference) vs viem reimplementation of the
- * ABI-encoding helpers. For each fixed/edge input we compute the reference via
- * the ethers API inline AND via our viem module, then assert byte-for-byte
- * equality.
+ * Golden-fixture test for the viem ABI-encoding helpers (encodeAbiParams /
+ * decodeAbiParams / solidityPacked) in ./abi-encoding.ts.
+ *
+ * Each locked value below is a GOLDEN value: proven byte-equal to ethers v6's
+ * AbiCoder.defaultAbiCoder().encode / .decode / solidityPacked AND accepted
+ * on-chain. They were captured from the original differential parity test
+ * (ethers reference) before ethers was removed — see git history of this file.
  *
  * Inputs combine GOLDEN vectors lifted from the real call sites
  * (userop.builder.ts, force-exit-service.ts, bls.manager.ts, oapd.ts,
@@ -11,8 +14,72 @@
  * arrays). No randomness.
  */
 import { describe, it, expect } from "vitest";
-import { ethers } from "ethers";
 import { encodeAbiParams, decodeAbiParams, solidityPacked } from "./abi-encoding";
+
+// Golden values: byte-equal to ethers v6 + accepted on-chain (captured from the
+// former differential test against ethers; see this file's git history).
+const GOLDEN = {
+  "K_0x": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+  "K_DEADBEEF": "0xd4fd4e189132273036449fc9e11198c739161b4c0116a9a2dccdfa1c492006f1",
+  "K_BEEF": "0x50cc9609ed13c878caf0b7ac27b34f56c318680963224914c6ea863d460f8a7f",
+  "encode": {
+    "golden: userOp packed fields (8-tuple)": "0x000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266000000000000000000000000000000000000000000000000000000000000002ac5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470d4fd4e189132273036449fc9e11198c739161b4c0116a9a2dccdfa1c492006f1111111111111111111111111111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000052082222222222222222222222222222222222222222222222222222222222222222c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "golden: outer hash encode (bytes32,address,uint256)": "0x50cc9609ed13c878caf0b7ac27b34f56c318680963224914c6ea863d460f8a7f0000000000000000000000000000000071727de22e5e9d8baf0edac6f37da0320000000000000000000000000000000000000000000000000000000000aa37dc",
+    "golden: force-exit uint8 OPTIMISM": "0x0000000000000000000000000000000000000000000000000000000000000001",
+    "golden: force-exit uint8 ARBITRUM": "0x0000000000000000000000000000000000000000000000000000000000000002",
+    "golden: uint256 = 5": "0x0000000000000000000000000000000000000000000000000000000000000005",
+    "golden: uint256 = 0": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "golden: single address": "0x000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "golden: single bytes32": "0xabababababababababababababababababababababababababababababababab",
+    "edge: zero address": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "edge: max uint256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edge: uint8 max (255)": "0x00000000000000000000000000000000000000000000000000000000000000ff",
+    "edge: bytes32 zero": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "edge: bytes32 max": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edge: number vs bigint (uint256 = 7)": "0x0000000000000000000000000000000000000000000000000000000000000007",
+    "edge: empty dynamic bytes": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000",
+    "edge: odd-ish dynamic bytes (3 bytes)": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003abcdef0000000000000000000000000000000000000000000000000000000000",
+    "edge: dynamic bytes 33 bytes (crosses word boundary)": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000215a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00000000000000000000000000000000000000000000000000000000000000",
+    "edge: leading-zero dynamic bytes": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020001000000000000000000000000000000000000000000000000000000000000",
+    "edge: string utf8": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000e494e5354414c4c5f4d4f44554c45000000000000000000000000000000000000",
+    "edge: empty string": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000",
+    "edge: dynamic uint256[] empty": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000",
+    "edge: dynamic uint256[] with zero/max": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edge: bytes32[] (nodeIds shape)": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003abababababababababababababababababababababababababababababababab0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edge: mixed dynamic+static (string,uint256,address,bytes)": "0x0000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000ab54a98ceb1f0ad2000000000000000000000000111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000f4143434550545f475541524449414e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003c0ffee0000000000000000000000000000000000000000000000000000000000",
+    "edge: tuple (address,uint256)": "0x000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb922660000000000000000000000000000000000000000000000000000000000000063"
+  },
+  "decodeData": {
+    "golden: uint256 (recovery idx decode)": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "golden: uint256 = 5": "0x0000000000000000000000000000000000000000000000000000000000000005",
+    "golden: address": "0x000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "golden: bytes32": "0xabababababababababababababababababababababababababababababababab",
+    "edge: max uint256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edge: zero address": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "edge: multi (address,uint256,bytes)": "0x0000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004deadbeef00000000000000000000000000000000000000000000000000000000",
+    "edge: dynamic bytes empty": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000",
+    "edge: string": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000e494e5354414c4c5f4d4f44554c45000000000000000000000000000000000000"
+  },
+  "packed": {
+    "golden: bls nodeIdsLength (uint256)": "0x0000000000000000000000000000000000000000000000000000000000000003",
+    "golden: bls nodeIdsBytes (bytes32 x3)": "0xabababababababababababababababababababababababababababababababab0000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "golden: bls packSignature (6 x bytes)": "0x01aabbccddeeff1234",
+    "golden: cumulative T2 (bytes1 + bytes...)": "0x0411111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111aabbcc",
+    "golden: oapd salt (address,string)": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb922666d792d646170702d6964",
+    "golden: install module hash preimage": "0x494e5354414c4c5f4d4f44554c450000000000000000000000000000000000000000000000000000000000aa37dc11111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000001f39fd6e51aad88f6f4ce6ab8827279cfffb92266c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "golden: uninstall module hash preimage": "0x554e494e5354414c4c5f4d4f44554c450000000000000000000000000000000000000000000000000000000000aa37dc11111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000002f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "golden: guardian acceptance hash preimage": "0x4143434550545f475541524449414e0000000000000000000000000000000000000000000000000000000000007a691111111111111111111111111111111111111111f39fd6e51aad88f6f4ce6ab8827279cfffb92266000000000000000000000000000000000000000000000000000000000000007b0000000000000000000000000000000000000000000000000de0b6b3a7640000",
+    "edge: uint256 zero packed": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "edge: uint256 max packed": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "edge: empty string packed": "0x",
+    "edge: empty bytes packed": "0x",
+    "edge: address+empty string (leading-zero addr)": "0x0000000000000000000000000000000000000000",
+    "edge: bytes1 0x00 (leading zero byte)": "0x00ff",
+    "edge: zero-length bytes32 list (only length)": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "edge: uint8 + uint16 + uint32 mixed widths": "0xffffffffffffff",
+    "edge: string with multibyte utf8": "0x68c3a96c6c6f2de4b896e7958c"
+  }
+} as const;
 
 // ── Shared golden constants ─────────────────────────────────────────────
 const ADDR_A = "0x1111111111111111111111111111111111111111";
@@ -24,10 +91,12 @@ const B32_ZERO = "0x" + "00".repeat(32);
 const B32_MAX = "0x" + "ff".repeat(32);
 const MAX_UINT256 = (1n << 256n) - 1n;
 
-const refEncode = (types: string[], values: unknown[]): string =>
-  ethers.AbiCoder.defaultAbiCoder().encode(types, values);
+// keccak256 hashes used as encode inputs (golden literals, byte-equal to ethers).
+const K_0x = GOLDEN.K_0x;
+const K_DEADBEEF = GOLDEN.K_DEADBEEF;
+const K_BEEF = GOLDEN.K_BEEF;
 
-describe("abi encoding parity: encodeAbiParams vs ethers defaultAbiCoder.encode", () => {
+describe("abi encoding (golden): encodeAbiParams matches locked ethers output", () => {
   type Case = { name: string; types: string[]; values: unknown[] };
   const cases: Case[] = [
     // ── GOLDEN: userop.builder.ts getUserOpHash inner encode ──
@@ -46,19 +115,19 @@ describe("abi encoding parity: encodeAbiParams vs ethers defaultAbiCoder.encode"
       values: [
         ADDR_B,
         42n,
-        ethers.keccak256("0x"),
-        ethers.keccak256("0xdeadbeef"),
+        K_0x,
+        K_DEADBEEF,
         "0x" + "11".repeat(32),
         21000n,
         "0x" + "22".repeat(32),
-        ethers.keccak256("0x"),
+        K_0x,
       ],
     },
     // ── GOLDEN: userop.builder.ts getUserOpHash outer encode ──
     {
       name: "golden: outer hash encode (bytes32,address,uint256)",
       types: ["bytes32", "address", "uint256"],
-      values: [ethers.keccak256("0xbeef"), ENTRYPOINT, 11155420n],
+      values: [K_BEEF, ENTRYPOINT, 11155420n],
     },
     // ── GOLDEN: force-exit-service.ts encodeOnInstall ──
     { name: "golden: force-exit uint8 OPTIMISM", types: ["uint8"], values: [1] },
@@ -114,15 +183,16 @@ describe("abi encoding parity: encodeAbiParams vs ethers defaultAbiCoder.encode"
 
   for (const c of cases) {
     it(c.name, () => {
-      const expected = refEncode(c.types, c.values);
-      const actual = encodeAbiParams(c.types, c.values);
-      expect(actual).toBe(expected);
+      const expected = (GOLDEN.encode as Record<string, string>)[c.name];
+      expect(expected).toBeTypeOf("string");
+      expect(encodeAbiParams(c.types, c.values)).toBe(expected);
     });
   }
 });
 
-describe("abi decoding parity: decodeAbiParams vs ethers defaultAbiCoder.decode", () => {
-  // Build encoded payloads with ethers, decode both ways, compare values.
+describe("abi decoding (golden): decodeAbiParams round-trips locked payloads", () => {
+  // Each `data` is the golden ethers-encoded payload for the case values;
+  // we decode with viem and assert the values round-trip element-by-element.
   type Case = { name: string; types: string[]; values: unknown[] };
   const cases: Case[] = [
     { name: "golden: uint256 (recovery idx decode)", types: ["uint256"], values: [0n] },
@@ -149,20 +219,18 @@ describe("abi decoding parity: decodeAbiParams vs ethers defaultAbiCoder.decode"
 
   for (const c of cases) {
     it(c.name, () => {
-      const data = refEncode(c.types, c.values) as `0x${string}`;
-      const refDecoded = ethers.AbiCoder.defaultAbiCoder().decode(c.types, data);
+      const data = (GOLDEN.decodeData as Record<string, string>)[c.name] as `0x${string}`;
+      expect(data).toBeTypeOf("string");
       const viemDecoded = decodeAbiParams(c.types, data);
-
-      // Compare element-by-element (ethers Result is array-like).
       expect(viemDecoded.length).toBe(c.types.length);
       for (let i = 0; i < c.types.length; i++) {
-        expect(norm(viemDecoded[i])).toEqual(norm(refDecoded[i]));
+        expect(norm(viemDecoded[i])).toEqual(norm(c.values[i]));
       }
     });
   }
 });
 
-describe("solidityPacked parity: solidityPacked vs ethers.solidityPacked", () => {
+describe("solidityPacked (golden): matches locked ethers.solidityPacked output", () => {
   type Case = { name: string; types: string[]; values: unknown[] };
   const cases: Case[] = [
     // ── GOLDEN: bls.manager.ts packSignature ──
@@ -193,7 +261,7 @@ describe("solidityPacked parity: solidityPacked vs ethers.solidityPacked", () =>
     {
       name: "golden: install module hash preimage",
       types: ["string", "uint256", "address", "uint256", "address", "bytes32"],
-      values: ["INSTALL_MODULE", 11155420n, ADDR_A, 1n, ADDR_B, ethers.keccak256("0x")],
+      values: ["INSTALL_MODULE", 11155420n, ADDR_A, 1n, ADDR_B, K_0x],
     },
     // ── GOLDEN: module-manager.ts buildUninstallModuleHash ──
     {
@@ -241,9 +309,9 @@ describe("solidityPacked parity: solidityPacked vs ethers.solidityPacked", () =>
 
   for (const c of cases) {
     it(c.name, () => {
-      const expected = ethers.solidityPacked(c.types, c.values);
-      const actual = solidityPacked(c.types, c.values);
-      expect(actual).toBe(expected);
+      const expected = (GOLDEN.packed as Record<string, string>)[c.name];
+      expect(expected).toBeTypeOf("string");
+      expect(solidityPacked(c.types, c.values)).toBe(expected);
     });
   }
 });
