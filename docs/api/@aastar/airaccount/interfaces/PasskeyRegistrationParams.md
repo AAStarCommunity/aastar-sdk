@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:1](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L1)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:1](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L1)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/auth/passkey/types.ts:1](https://github.com
 
 > **email**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L2)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:2](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L2)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/auth/passkey/types.ts:2](https://github.com
 
 > `optional` **password**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L4)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:4](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L4)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [packages/airaccount/src/auth/passkey/types.ts:4](https://github.com
 
 > **username**: `string`
 
-Defined in: [packages/airaccount/src/auth/passkey/types.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/auth/passkey/types.ts#L3)
+Defined in: [packages/airaccount/src/auth/passkey/types.ts:3](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/auth/passkey/types.ts#L3)

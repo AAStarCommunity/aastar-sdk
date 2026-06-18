@@ -1,4 +1,4 @@
-Defined in: [packages/core/src/requirementChecker.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L45)
+Defined in: [packages/core/src/requirementChecker.ts:45](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L45)
 
 Aggregated readiness report for a given [OperatorMode](../type-aliases/OperatorMode.md).
 Mirrors the structured-report style of PaymasterV4 `checkGaslessReadiness`.
@@ -9,7 +9,7 @@ Mirrors the structured-report style of PaymasterV4 `checkGaslessReadiness`.
 
 > **checks**: `object`
 
-Defined in: [packages/core/src/requirementChecker.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L50)
+Defined in: [packages/core/src/requirementChecker.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L50)
 
 Only the sub-checks relevant to the requested mode are populated.
 
@@ -37,7 +37,7 @@ Only the sub-checks relevant to the requested mode are populated.
 
 > **issues**: `string`[]
 
-Defined in: [packages/core/src/requirementChecker.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L56)
+Defined in: [packages/core/src/requirementChecker.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L56)
 
 Actionable, human-readable description of each unmet requirement.
 
@@ -47,7 +47,7 @@ Actionable, human-readable description of each unmet requirement.
 
 > **mode**: [`OperatorMode`](../type-aliases/OperatorMode.md)
 
-Defined in: [packages/core/src/requirementChecker.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L48)
+Defined in: [packages/core/src/requirementChecker.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L48)
 
 ***
 
@@ -55,6 +55,6 @@ Defined in: [packages/core/src/requirementChecker.ts:48](https://github.com/AASt
 
 > **ready**: `boolean`
 
-Defined in: [packages/core/src/requirementChecker.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/requirementChecker.ts#L47)
+Defined in: [packages/core/src/requirementChecker.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/requirementChecker.ts#L47)
 
 True when every relevant sub-check passed (`issues.length === 0`).

@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L16)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L16)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:16](https://github.
 
 > **new BLSManager**(`config`): `BLSManager`
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L19)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L19)
 
 #### Parameters
 
@@ -24,7 +24,7 @@ Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:19](https://github.
 
 > **aggregateSignatures**(`node`, `signatures`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L131)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:131](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L131)
 
 Request aggregation from a node
 
@@ -45,7 +45,7 @@ Request aggregation from a node
 
 > **generateMessagePoint**(`message`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L74)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L74)
 
 Calculate the MessagePoint G2 point for a given message (UserOpHash)
 
@@ -65,7 +65,7 @@ Calculate the MessagePoint G2 point for a given message (UserOpHash)
 
 > **getAvailableNodes**(): `Promise`\<[`BLSNode`](../interfaces/BLSNode.md)[]\>
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L26)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L26)
 
 Discover available BLS nodes from seed nodes (Gossip network)
 
@@ -79,7 +79,7 @@ Discover available BLS nodes from seed nodes (Gossip network)
 
 > **packCumulativeT2Signature**(`data`): `string`
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L88)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:88](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L88)
 
 Pack cumulative Tier 2 signature (algId 0x04): P256 + BLS.
 
@@ -105,7 +105,7 @@ Format:
 
 > **packCumulativeT3Signature**(`data`): `string`
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:102](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L102)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:102](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L102)
 
 Pack cumulative Tier 3 signature (algId 0x05): P256 + BLS + Guardian.
 
@@ -131,7 +131,7 @@ Format:
 
 > **packSignature**(`data`): `string`
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L66)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L66)
 
 Helper to pack the full signature for ERC-4337 UserOp
 Format: [nodeIdsLength][nodeIds...][blsSignature][messagePoint][aaSignature][messagePointSignature]
@@ -152,7 +152,7 @@ Format: [nodeIdsLength][nodeIds...][blsSignature][messagePoint][aaSignature][mes
 
 > **requestNodeSignature**(`node`, `message`): `Promise`\<\{ `publicKey`: `string`; `signature`: `string`; \}\>
 
-Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:110](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/bls/bls.manager.ts#L110)
+Defined in: [packages/airaccount/src/core/bls/bls.manager.ts:110](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/bls/bls.manager.ts#L110)
 
 Request signature from a single node
 

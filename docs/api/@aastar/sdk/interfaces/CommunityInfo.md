@@ -1,4 +1,4 @@
-Defined in: [packages/enduser/src/CommunityClient.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/CommunityClient.ts#L18)
+Defined in: [packages/enduser/src/CommunityClient.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/CommunityClient.ts#L18)
 
 ## Properties
 
@@ -6,4 +6,4 @@ Defined in: [packages/enduser/src/CommunityClient.ts:18](https://github.com/AASt
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [packages/enduser/src/CommunityClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/enduser/src/CommunityClient.ts#L19)
+Defined in: [packages/enduser/src/CommunityClient.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/enduser/src/CommunityClient.ts#L19)

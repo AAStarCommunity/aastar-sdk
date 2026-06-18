@@ -1,6 +1,6 @@
 > **EIP3009Authorization** = `object`
 
-Defined in: [packages/x402/src/types.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L51)
+Defined in: [packages/x402/src/types.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L51)
 
 EIP-3009 TransferWithAuthorization parameters.
 
@@ -10,7 +10,7 @@ EIP-3009 TransferWithAuthorization parameters.
 
 > **from**: `Address`
 
-Defined in: [packages/x402/src/types.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L52)
+Defined in: [packages/x402/src/types.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L52)
 
 ***
 
@@ -18,7 +18,7 @@ Defined in: [packages/x402/src/types.ts:52](https://github.com/AAStarCommunity/a
 
 > **nonce**: [`Hex`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/x402/src/types.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L57)
+Defined in: [packages/x402/src/types.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L57)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [packages/x402/src/types.ts:57](https://github.com/AAStarCommunity/a
 
 > **to**: `Address`
 
-Defined in: [packages/x402/src/types.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L53)
+Defined in: [packages/x402/src/types.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L53)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [packages/x402/src/types.ts:53](https://github.com/AAStarCommunity/a
 
 > **validAfter**: `string`
 
-Defined in: [packages/x402/src/types.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L55)
+Defined in: [packages/x402/src/types.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L55)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [packages/x402/src/types.ts:55](https://github.com/AAStarCommunity/a
 
 > **validBefore**: `string`
 
-Defined in: [packages/x402/src/types.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L56)
+Defined in: [packages/x402/src/types.ts:56](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L56)
 
 ***
 
@@ -50,4 +50,4 @@ Defined in: [packages/x402/src/types.ts:56](https://github.com/AAStarCommunity/a
 
 > **value**: `string`
 
-Defined in: [packages/x402/src/types.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/x402/src/types.ts#L54)
+Defined in: [packages/x402/src/types.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/x402/src/types.ts#L54)

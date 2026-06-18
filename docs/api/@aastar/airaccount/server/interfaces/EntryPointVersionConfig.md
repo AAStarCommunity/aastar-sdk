@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/config.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/config.ts#L9)
+Defined in: [packages/airaccount/src/server/config.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/config.ts#L9)
 
 Per-version EntryPoint configuration.
 
@@ -8,7 +8,7 @@ Per-version EntryPoint configuration.
 
 > **entryPointAddress**: `string`
 
-Defined in: [packages/airaccount/src/server/config.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/config.ts#L10)
+Defined in: [packages/airaccount/src/server/config.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/config.ts#L10)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/airaccount/src/server/config.ts:10](https://github.com/AAS
 
 > **factoryAddress**: `string`
 
-Defined in: [packages/airaccount/src/server/config.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/config.ts#L11)
+Defined in: [packages/airaccount/src/server/config.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/config.ts#L11)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [packages/airaccount/src/server/config.ts:11](https://github.com/AAS
 
 > **validatorAddress**: `string`
 
-Defined in: [packages/airaccount/src/server/config.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/config.ts#L12)
+Defined in: [packages/airaccount/src/server/config.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/config.ts#L12)

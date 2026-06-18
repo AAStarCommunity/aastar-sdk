@@ -1,4 +1,4 @@
-Defined in: [packages/channel/src/ChannelClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L13)
+Defined in: [packages/channel/src/ChannelClient.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L13)
 
 ## Constructors
 
@@ -6,7 +6,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:13](https://github.com/AAStar
 
 > **new ChannelClient**(`config`): `ChannelClient`
 
-Defined in: [packages/channel/src/ChannelClient.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L18)
+Defined in: [packages/channel/src/ChannelClient.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L18)
 
 #### Parameters
 
@@ -24,7 +24,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:18](https://github.com/AAStar
 
 > **closeChannel**(`voucher`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L59)
+Defined in: [packages/channel/src/ChannelClient.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L59)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:59](https://github.com/AAStar
 
 > **getChannelState**(`channelId`): `Promise`\<[`ChannelState`](../type-aliases/ChannelState.md)\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L90)
+Defined in: [packages/channel/src/ChannelClient.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L90)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:90](https://github.com/AAStar
 
 > **getCloseTimeout**(): `Promise`\<`bigint`\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L94)
+Defined in: [packages/channel/src/ChannelClient.ts:94](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L94)
 
 #### Returns
 
@@ -72,7 +72,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:94](https://github.com/AAStar
 
 > **getVersion**(): `Promise`\<`string`\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L98)
+Defined in: [packages/channel/src/ChannelClient.ts:98](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L98)
 
 #### Returns
 
@@ -84,7 +84,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:98](https://github.com/AAStar
 
 > **openChannel**(`channelConfig`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L28)
+Defined in: [packages/channel/src/ChannelClient.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L28)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:28](https://github.com/AAStar
 
 > **requestClose**(`channelId`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L76)
+Defined in: [packages/channel/src/ChannelClient.ts:76](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L76)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:76](https://github.com/AAStar
 
 > **settleChannel**(`voucher`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L50)
+Defined in: [packages/channel/src/ChannelClient.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L50)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:50](https://github.com/AAStar
 
 > **signVoucherOffline**(`channelId`, `cumulativeAmount`): `Promise`\<[`SignedVoucher`](../type-aliases/SignedVoucher.md)\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L39)
+Defined in: [packages/channel/src/ChannelClient.ts:39](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L39)
 
 #### Parameters
 
@@ -157,7 +157,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:39](https://github.com/AAStar
 
 > **topUpChannel**(`channelId`, `amount`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L68)
+Defined in: [packages/channel/src/ChannelClient.ts:68](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L68)
 
 #### Parameters
 
@@ -176,7 +176,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:68](https://github.com/AAStar
 
 > **withdraw**(`channelId`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/channel/src/ChannelClient.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L83)
+Defined in: [packages/channel/src/ChannelClient.ts:83](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L83)
 
 #### Parameters
 

@@ -1,6 +1,6 @@
 > **packSecp256k1SessionSignature**(`account`, `sessionKey`, `signature`): `string`
 
-Defined in: [packages/airaccount/src/server/services/session-key-service.ts:458](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/session-key-service.ts#L458)
+Defined in: [packages/airaccount/src/server/services/session-key-service.ts:458](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/session-key-service.ts#L458)
 
 Pack a secp256k1 session key signature into the 106-byte UserOp.signature format.
 

@@ -1,6 +1,6 @@
 > **ChannelActions** = `object`
 
-Defined in: [packages/core/src/actions/channel.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L17)
+Defined in: [packages/core/src/actions/channel.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L17)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/channel.ts:17](https://github.com/AAStarC
 
 > **CLOSE\_TIMEOUT**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/channel.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L49)
+Defined in: [packages/core/src/actions/channel.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L49)
 
 #### Returns
 
@@ -27,7 +27,7 @@ to the on-chain `closeTimeout()` getter so it no longer reverts; use [closeTimeo
 
 > **closeChannel**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L27)
+Defined in: [packages/core/src/actions/channel.ts:27](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L27)
 
 #### Parameters
 
@@ -49,7 +49,7 @@ Defined in: [packages/core/src/actions/channel.ts:27](https://github.com/AAStarC
 
 > **closedChannels**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/channel.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L55)
+Defined in: [packages/core/src/actions/channel.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L55)
 
 Whether a given channelId has already been closed (view). ABI: closedChannels(bytes32) -> bool.
 
@@ -70,7 +70,7 @@ Whether a given channelId has already been closed (view). ABI: closedChannels(by
 
 > **closeTimeout**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/channel.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L51)
+Defined in: [packages/core/src/actions/channel.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L51)
 
 Current configurable close-timeout (seconds, view). ABI: closeTimeout() -> uint64.
 
@@ -84,7 +84,7 @@ Current configurable close-timeout (seconds, view). ABI: closeTimeout() -> uint6
 
 > **getChannel**: (`args`) => `Promise`\<[`ChannelState`](ChannelState.md)\>
 
-Defined in: [packages/core/src/actions/channel.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L42)
+Defined in: [packages/core/src/actions/channel.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L42)
 
 #### Parameters
 
@@ -103,7 +103,7 @@ Defined in: [packages/core/src/actions/channel.ts:42](https://github.com/AAStarC
 
 > **MAX\_CLOSE\_TIMEOUT**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/channel.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L57)
+Defined in: [packages/core/src/actions/channel.ts:57](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L57)
 
 Upper bound for [setCloseTimeout](#setclosetimeout) (view). ABI: MAX_CLOSE_TIMEOUT() -> uint64.
 
@@ -117,7 +117,7 @@ Upper bound for [setCloseTimeout](#setclosetimeout) (view). ABI: MAX_CLOSE_TIMEO
 
 > **MIN\_CLOSE\_TIMEOUT**: () => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/channel.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L59)
+Defined in: [packages/core/src/actions/channel.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L59)
 
 Lower bound for [setCloseTimeout](#setclosetimeout) (view). ABI: MIN_CLOSE_TIMEOUT() -> uint64.
 
@@ -131,7 +131,7 @@ Lower bound for [setCloseTimeout](#setclosetimeout) (view). ABI: MIN_CLOSE_TIMEO
 
 > **openChannel**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L19)
+Defined in: [packages/core/src/actions/channel.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L19)
 
 #### Parameters
 
@@ -155,7 +155,7 @@ Defined in: [packages/core/src/actions/channel.ts:19](https://github.com/AAStarC
 
 > **requestCloseChannel**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L34)
+Defined in: [packages/core/src/actions/channel.ts:34](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L34)
 
 #### Parameters
 
@@ -175,7 +175,7 @@ Defined in: [packages/core/src/actions/channel.ts:34](https://github.com/AAStarC
 
 > **setCloseTimeout**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L53)
+Defined in: [packages/core/src/actions/channel.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L53)
 
 Set the configurable close-timeout window (owner-gated). ABI: setCloseTimeout(uint64 _timeout).
 
@@ -197,7 +197,7 @@ Set the configurable close-timeout window (owner-gated). ABI: setCloseTimeout(ui
 
 > **settleChannel**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L23)
+Defined in: [packages/core/src/actions/channel.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L23)
 
 #### Parameters
 
@@ -219,7 +219,7 @@ Defined in: [packages/core/src/actions/channel.ts:23](https://github.com/AAStarC
 
 > **topUpChannel**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L31)
+Defined in: [packages/core/src/actions/channel.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L31)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [packages/core/src/actions/channel.ts:31](https://github.com/AAStarC
 
 > **version**: () => `Promise`\<`string`\>
 
-Defined in: [packages/core/src/actions/channel.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L61)
+Defined in: [packages/core/src/actions/channel.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L61)
 
 #### Returns
 
@@ -252,7 +252,7 @@ Defined in: [packages/core/src/actions/channel.ts:61](https://github.com/AAStarC
 
 > **VOUCHER\_TYPEHASH**: () => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L60)
+Defined in: [packages/core/src/actions/channel.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L60)
 
 #### Returns
 
@@ -264,7 +264,7 @@ Defined in: [packages/core/src/actions/channel.ts:60](https://github.com/AAStarC
 
 > **withdrawChannel**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/channel.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/channel.ts#L37)
+Defined in: [packages/core/src/actions/channel.ts:37](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/channel.ts#L37)
 
 #### Parameters
 

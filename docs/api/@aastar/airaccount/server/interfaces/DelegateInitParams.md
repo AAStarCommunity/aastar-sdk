@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L38)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:38](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L38)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **dailyLimit**: `bigint`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L48)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L48)
 
 Daily ETH spend limit in wei
 
@@ -16,7 +16,7 @@ Daily ETH spend limit in wei
 
 > **guardian1**: `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L40)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:40](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L40)
 
 Guardian 1 address
 
@@ -26,7 +26,7 @@ Guardian 1 address
 
 > **guardian1Sig**: `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L42)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:42](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L42)
 
 EIP-712 acceptance signature from guardian 1
 
@@ -36,7 +36,7 @@ EIP-712 acceptance signature from guardian 1
 
 > **guardian2**: `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L44)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:44](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L44)
 
 Guardian 2 address
 
@@ -46,6 +46,6 @@ Guardian 2 address
 
 > **guardian2Sig**: `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L46)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:46](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L46)
 
 EIP-712 acceptance signature from guardian 2

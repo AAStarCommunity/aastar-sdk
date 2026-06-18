@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L59)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:59](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L59)
 
 Paymaster configuration record.
 
@@ -8,7 +8,7 @@ Paymaster configuration record.
 
 > **address**: `string`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L62)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:62](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L62)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:62](ht
 
 > `optional` **apiKey**: `string`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L63)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:63](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L63)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:63](ht
 
 > `optional` **createdAt**: `string`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L66)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:66](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L66)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:66](ht
 
 > `optional` **endpoint**: `string`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L65)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:65](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L65)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:65](ht
 
 > `optional` **id**: `string`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L60)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:60](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L60)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:60](ht
 
 > **name**: `string`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L61)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:61](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L61)
 
 ***
 
@@ -56,4 +56,4 @@ Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:61](ht
 
 > **type**: `"pimlico"` \| `"stackup"` \| `"alchemy"` \| `"custom"`
 
-Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/interfaces/storage-adapter.ts#L64)
+Defined in: [packages/airaccount/src/server/interfaces/storage-adapter.ts:64](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/interfaces/storage-adapter.ts#L64)

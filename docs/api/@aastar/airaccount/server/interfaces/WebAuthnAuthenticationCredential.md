@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L71)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:71](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L71)
 
 WebAuthn AuthenticationResponseJSON (the subset the KMS verifies). This is the
 value placed in `WebAuthnAssertion.Credential`.
@@ -9,7 +9,7 @@ value placed in `WebAuthnAssertion.Credential`.
 
 > `optional` **clientExtensionResults**: `Record`\<`string`, `unknown`\>
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L81)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:81](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L81)
 
 ***
 
@@ -17,7 +17,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:81](ht
 
 > **id**: `string`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L72)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:72](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L72)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:72](ht
 
 > **rawId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L73)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:73](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L73)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:73](ht
 
 > **response**: `object`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L75)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:75](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L75)
 
 #### authenticatorData
 
@@ -57,4 +57,4 @@ Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:75](ht
 
 > **type**: `"public-key"`
 
-Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/webauthn-ceremony.ts#L74)
+Defined in: [packages/airaccount/src/server/services/webauthn-ceremony.ts:74](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/webauthn-ceremony.ts#L74)

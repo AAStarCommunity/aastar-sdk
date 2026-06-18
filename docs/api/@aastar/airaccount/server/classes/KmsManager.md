@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:310](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L310)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:310](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L310)
 
 KMS service for remote key management with WebAuthn/Passkey integration.
 
@@ -15,7 +15,7 @@ payment / monitor) reuse the same client via [KmsManager.httpClient](#httpclient
 
 > **new KmsManager**(`options`): `KmsManager`
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:314](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L314)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:314](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L314)
 
 #### Parameters
 
@@ -37,7 +37,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:314](https://
 
 > `readonly` **logger**: [`ILogger`](../interfaces/ILogger.md)
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:312](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L312)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:312](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L312)
 
 ## Accessors
 
@@ -47,7 +47,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:312](https://
 
 > **get** **httpClient**(): [`KmsHttpClient`](KmsHttpClient.md)
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:329](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L329)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:329](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L329)
 
 Shared HTTP transport — pass to KmsAgentService / KmsSessionService / etc.
 
@@ -61,7 +61,7 @@ Shared HTTP transport — pass to KmsAgentService / KmsSessionService / etc.
 
 > **beginAuthentication**(`params`): `Promise`\<[`KmsBeginAuthenticationResponse`](../interfaces/KmsBeginAuthenticationResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:729](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L729)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:729](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L729)
 
 #### Parameters
 
@@ -79,7 +79,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:729](https://
 
 > **beginGrantSessionAuth**(`params`): `Promise`\<[`KmsBeginGrantSessionAuthResponse`](../interfaces/KmsBeginGrantSessionAuthResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:564](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L564)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:564](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L564)
 
 Begin a grant-session WebAuthn challenge.
 The returned challengeId can ONLY be used with sign-grant-session, not sign-typed-data.
@@ -100,7 +100,7 @@ The returned challengeId can ONLY be used with sign-grant-session, not sign-type
 
 > **beginRegistration**(`params`): `Promise`\<[`KmsBeginRegistrationResponse`](../interfaces/KmsBeginRegistrationResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:713](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L713)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:713](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L713)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:713](https://
 
 > **beginWebAuthnAuth**(`keyId`): `Promise`\<[`KmsBeginAuthenticationResponse`](../interfaces/KmsBeginAuthenticationResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:745](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L745)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:745](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L745)
 
 Begin a generic WebAuthn authentication ceremony for a key, returning a
 challenge usable for SignHash / SignTypedData (purpose="authentication").
@@ -143,7 +143,7 @@ challenge from [beginGrantSessionAuth](#begingrantsessionauth) instead.)
 
 > **changePasskey**(`params`): `Promise`\<[`KmsChangePasskeyResponse`](../interfaces/KmsChangePasskeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:431](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L431)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:431](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L431)
 
 Rotate the WebAuthn passkey bound to a key (WebAuthn-gated, RPMB-bound).
 `PasskeyPublicKey` is the NEW P-256 public key (0x04… 65-byte uncompressed).
@@ -168,7 +168,7 @@ Rotate the WebAuthn passkey bound to a key (WebAuthn-gated, RPMB-bound).
 
 > **completeRegistration**(`params`): `Promise`\<[`KmsCompleteRegistrationResponse`](../interfaces/KmsCompleteRegistrationResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:721](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L721)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:721](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L721)
 
 #### Parameters
 
@@ -186,7 +186,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:721](https://
 
 > **createKey**(`description`, `passkeyPublicKey`): `Promise`\<[`KmsCreateKeyResponse`](../interfaces/KmsCreateKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:344](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L344)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:344](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L344)
 
 #### Parameters
 
@@ -205,7 +205,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:344](https://
 
 > **createKmsSigner**(`keyId`, `address`, `assertionProvider`): [`KmsSigner`](KmsSigner.md)
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:753](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L753)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:753](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L753)
 
 #### Parameters
 
@@ -225,7 +225,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:753](https://
 
 > **deleteKey**(`params`): `Promise`\<[`KmsDeleteKeyResponse`](../interfaces/KmsDeleteKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:400](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L400)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:400](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L400)
 
 Schedule key deletion (AWS-KMS action ScheduleKeyDeletion; WebAuthn-gated).
 RPMB-bound on the TEE — requires a passkey/WebAuthn assertion on the normal path.
@@ -250,7 +250,7 @@ RPMB-bound on the TEE — requires a passkey/WebAuthn assertion on the normal pa
 
 > **deriveAddress**(`params`): `Promise`\<[`KmsDeriveAddressResponse`](../interfaces/KmsDeriveAddressResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:380](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L380)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:380](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L380)
 
 Derive an Ethereum address at a BIP-44 path (WebAuthn-gated).
 Provide a WebAuthn ceremony assertion (preferred) or a Legacy passkey assertion.
@@ -275,7 +275,7 @@ Provide a WebAuthn ceremony assertion (preferred) or a Legacy passkey assertion.
 
 > **deriveAddressWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`KmsDeriveAddressResponse`](../interfaces/KmsDeriveAddressResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:636](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L636)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:636](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L636)
 
 Derive an address, running the challenge-binding ceremony internally.
 
@@ -299,7 +299,7 @@ Derive an address, running the challenge-binding ceremony internally.
 
 > **describeKey**(`keyId`): `Promise`\<[`KmsDescribeKeyResponse`](../interfaces/KmsDescribeKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:364](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L364)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:364](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L364)
 
 #### Parameters
 
@@ -317,7 +317,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:364](https://
 
 > **getKeyStatus**(`keyId`): `Promise`\<[`KmsKeyStatusResponse`](../interfaces/KmsKeyStatusResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:356](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L356)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:356](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L356)
 
 #### Parameters
 
@@ -335,7 +335,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:356](https://
 
 > **getPublicKey**(`target`): `Promise`\<[`KmsGetPublicKeyResponse`](../interfaces/KmsGetPublicKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:371](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L371)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:371](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L371)
 
 Get a key's public key (uncompressed). Not WebAuthn-gated.
 
@@ -357,7 +357,7 @@ Get a key's public key (uncompressed). Not WebAuthn-gated.
 
 > **isKmsEnabled**(): `boolean`
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:324](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L324)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:324](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L324)
 
 #### Returns
 
@@ -369,7 +369,7 @@ Defined in: [packages/airaccount/src/server/services/kms-signer.ts:324](https://
 
 > **listKeys**(`params`): `Promise`\<[`KmsListKeysResponse`](../interfaces/KmsListKeysResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:391](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L391)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:391](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L391)
 
 List keys (paginated). Not WebAuthn-gated.
 
@@ -391,7 +391,7 @@ List keys (paginated). Not WebAuthn-gated.
 
 > **pollUntilReady**(`keyId`, `timeoutMs`, `intervalMs`): `Promise`\<[`KmsKeyStatusResponse`](../interfaces/KmsKeyStatusResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:455](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L455)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:455](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L455)
 
 Poll KeyStatus until the key is ready (address derived) or timeout.
 STM32 key derivation takes 60-75 seconds on first creation.
@@ -414,7 +414,7 @@ STM32 key derivation takes 60-75 seconds on first creation.
 
 > **runAuthenticationCeremony**(`keyId`, `signer`, `options?`): `Promise`\<[`WebAuthnAssertion`](../interfaces/WebAuthnAssertion.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:612](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L612)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:612](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L612)
 
 Run a generic authentication ceremony (purpose="authentication") bound to a
 fresh TA challenge. The returned assertion is valid for DeriveAddress / Sign
@@ -438,7 +438,7 @@ fresh TA challenge. The returned assertion is valid for DeriveAddress / Sign
 
 > **runGrantSessionCeremony**(`keyId`, `signer`, `options?`): `Promise`\<[`WebAuthnAssertion`](../interfaces/WebAuthnAssertion.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:626](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L626)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:626](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L626)
 
 Run a grant-session ceremony (purpose="grant-session") bound to a fresh TA
 challenge — required by [signGrantSession](#signgrantsession) / [signP256GrantSession](#signp256grantsession)
@@ -462,7 +462,7 @@ challenge — required by [signGrantSession](#signgrantsession) / [signP256Grant
 
 > **sign**(`params`): `Promise`\<[`KmsSignResponse`](../interfaces/KmsSignResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:446](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L446)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:446](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L446)
 
 Sign a message or an EIP-155 transaction (WebAuthn-gated).
 Provide exactly one of `Message` (hex) or `Transaction`. For a raw 32-byte
@@ -484,7 +484,7 @@ digest use [signHash](#signhash) / [signHashWithWebAuthn](#signhashwithwebauthn)
 
 > **signGrantSession**(`params`): `Promise`\<[`KmsSignGrantSessionResponse`](../interfaces/KmsSignGrantSessionResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:578](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L578)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:578](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L578)
 
 Sign a GRANT_SESSION_V2 hash off-chain inside the TEE (secp256k1 session key).
 Returns a 65-byte signature (R||S||V, V=27/28) for use in grantSessionWithSig().
@@ -505,7 +505,7 @@ Returns a 65-byte signature (R||S||V, V=27/28) for use in grantSessionWithSig().
 
 > **signGrantSessionWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`KmsSignGrantSessionResponse`](../interfaces/KmsSignGrantSessionResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:687](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L687)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:687](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L687)
 
 Sign a GRANT_SESSION_V2 hash, running the grant-session ceremony internally
 (uses the purpose-bound `begin-grant-session-auth` challenge).
@@ -528,7 +528,7 @@ Sign a GRANT_SESSION_V2 hash, running the grant-session ceremony internally
 
 > **signHash**(`hash`, `assertion`, `target`): `Promise`\<[`KmsSignHashResponse`](../interfaces/KmsSignHashResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:486](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L486)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:486](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L486)
 
 Sign a hash using Legacy Passkey assertion (reusable for BLS dual-signing).
 
@@ -552,7 +552,7 @@ Sign a hash using Legacy Passkey assertion (reusable for BLS dual-signing).
 
 > **signHashWithCeremony**(`hash`, `target`, `signer`, `options?`): `Promise`\<[`KmsSignHashResponse`](../interfaces/KmsSignHashResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:661](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L661)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:661](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L661)
 
 Sign a 32-byte digest, running the challenge-binding ceremony internally.
 
@@ -576,7 +576,7 @@ Sign a 32-byte digest, running the challenge-binding ceremony internally.
 
 > **signHashWithWebAuthn**(`hash`, `challengeId`, `credential`, `target`): `Promise`\<[`KmsSignHashResponse`](../interfaces/KmsSignHashResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:513](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L513)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:513](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L513)
 
 Sign a hash using a WebAuthn ceremony assertion (one-time use).
 
@@ -601,7 +601,7 @@ Sign a hash using a WebAuthn ceremony assertion (one-time use).
 
 > **signP256GrantSession**(`params`): `Promise`\<[`KmsSignGrantSessionResponse`](../interfaces/KmsSignGrantSessionResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:590](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L590)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:590](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L590)
 
 Sign a GRANT_P256_SESSION_V2 hash off-chain inside the TEE (P256 session key).
 Returns a 65-byte signature for use in grantP256SessionWithSig().
@@ -622,7 +622,7 @@ Returns a 65-byte signature for use in grantP256SessionWithSig().
 
 > **signP256GrantSessionWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`KmsSignGrantSessionResponse`](../interfaces/KmsSignGrantSessionResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:701](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L701)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:701](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L701)
 
 Sign a GRANT_P256_SESSION_V2 hash, running the grant-session ceremony
 internally (uses the purpose-bound `begin-grant-session-auth` challenge).
@@ -645,7 +645,7 @@ internally (uses the purpose-bound `begin-grant-session-auth` challenge).
 
 > **signTypedDataWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`KmsSignTypedDataResponse`](../interfaces/KmsSignTypedDataResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:673](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L673)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:673](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L673)
 
 Sign EIP-712 typed data, running the challenge-binding ceremony internally.
 
@@ -667,7 +667,7 @@ Sign EIP-712 typed data, running the challenge-binding ceremony internally.
 
 > **signTypedDataWithWebAuthn**(`params`): `Promise`\<[`KmsSignTypedDataResponse`](../interfaces/KmsSignTypedDataResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:550](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L550)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:550](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L550)
 
 Sign arbitrary EIP-712 typed data via `POST /kms/SignTypedData` (v0.20.0).
 
@@ -694,7 +694,7 @@ Alternatively, agents authenticate with a Bearer JWT — see KmsAgentService.
 
 > **signWithCeremony**(`params`, `signer`, `options?`): `Promise`\<[`KmsSignResponse`](../interfaces/KmsSignResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:650](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L650)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:650](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L650)
 
 Sign a message or EIP-155 transaction, running the challenge-binding ceremony
 internally. `params.KeyId` is required (it identifies the wallet to challenge).
@@ -717,7 +717,7 @@ internally. `params.KeyId` is required (it identifies the wallet to challenge).
 
 > **unfreezeKey**(`params`): `Promise`\<`KmsUnfreezeKeyResponse`\>
 
-Defined in: [packages/airaccount/src/server/services/kms-signer.ts:419](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-signer.ts#L419)
+Defined in: [packages/airaccount/src/server/services/kms-signer.ts:419](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-signer.ts#L419)
 
 Unfreeze a dormant (frozen) key (issue #42; WebAuthn-gated).
 A key auto-frozen by the dormant-key sweep rejects signing until unfrozen.

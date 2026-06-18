@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L90)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:90](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L90)
 
 ForceExitService — typed wrappers for ForceExitModule ERC-7579 emergency L2→L1 exit.
 
@@ -16,7 +16,7 @@ The module is an ERC-7579 Executor (moduleTypeId=2) — call installModule on th
 
 > **new ForceExitService**(`moduleAddress`, `client`): `ForceExitService`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L93)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:93](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L93)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:93](h
 
 > **approveForceExit**(`account`, `guardianSig`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:221](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L221)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:221](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L221)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:221](
 
 > **cancelForceExit**(`account`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L232)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:232](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L232)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:232](
 
 > **encodeApproveForceExit**(`account`, `guardianSig`): `string`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:187](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L187)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:187](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L187)
 
 Encode calldata for approveForceExit — guardian signs off on the pending proposal.
 `guardianSig` must be an EIP-191 personal_sign over the proposal hash.
@@ -94,7 +94,7 @@ Encode calldata for approveForceExit — guardian signs off on the pending propo
 
 > **encodeCancelForceExit**(`account`): `string`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:203](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L203)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:203](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L203)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:203](
 
 > **encodeExecuteForceExit**(`account`): `string`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L195)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:195](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L195)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:195](
 
 > **encodeOnInstall**(`l2Type`): `string`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:155](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L155)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:155](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L155)
 
 Encode onInstall calldata for installModule() call on the smart account.
 Must be submitted by the account owner, with moduleTypeId=2 (EXECUTOR).
@@ -158,7 +158,7 @@ const calldata = forceExit.encodeOnInstall(L2_TYPE.OPTIMISM);
 
 > **encodeOnUninstall**(): `string`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L163)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:163](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L163)
 
 #### Returns
 
@@ -170,7 +170,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:163](
 
 > **encodeProposeForceExit**(`target`, `value`, `data`): `string`
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L175)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L175)
 
 Encode calldata for proposeForceExit — the exit payload to bridge out of L2.
 `target` is the L2→L1 bridge contract; `data` is the bridge call payload.
@@ -193,7 +193,7 @@ Encode calldata for proposeForceExit — the exit payload to bridge out of L2.
 
 > **executeForceExit**(`account`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:228](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L228)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:228](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L228)
 
 #### Parameters
 
@@ -211,7 +211,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:228](
 
 > **getAccountL2Type**(`account`): `Promise`\<`number`\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L132)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L132)
 
 #### Parameters
 
@@ -229,7 +229,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:132](
 
 > **getApprovalThreshold**(): `Promise`\<`number`\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:136](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L136)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:136](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L136)
 
 #### Returns
 
@@ -241,7 +241,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:136](
 
 > **getModuleVersion**(): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:140](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L140)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:140](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L140)
 
 #### Returns
 
@@ -253,7 +253,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:140](
 
 > **getPendingExit**(`account`): `Promise`\<[`PendingExit`](../interfaces/PendingExit.md)\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L112)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L112)
 
 #### Parameters
 
@@ -271,7 +271,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:112](
 
 > **isInitialized**(`smartAccount`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L108)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:108](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L108)
 
 #### Parameters
 
@@ -289,7 +289,7 @@ Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:108](
 
 > **proposeForceExit**(`target`, `value`, `data`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:213](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/force-exit-service.ts#L213)
+Defined in: [packages/airaccount/src/server/services/force-exit-service.ts:213](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/force-exit-service.ts#L213)
 
 #### Parameters
 

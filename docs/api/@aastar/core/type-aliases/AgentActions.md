@@ -1,6 +1,6 @@
 > **AgentActions** = `object`
 
-Defined in: [packages/core/src/actions/agent.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L12)
+Defined in: [packages/core/src/actions/agent.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L12)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/agent.ts:12](https://github.com/AAStarCom
 
 > **agentIdentityRegistry**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agent.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L18)
+Defined in: [packages/core/src/actions/agent.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L18)
 
 #### Returns
 
@@ -20,7 +20,7 @@ Defined in: [packages/core/src/actions/agent.ts:18](https://github.com/AAStarCom
 
 > **agentPolicies**: (`args`) => `Promise`\<[`AgentSponsorshipPolicy`](AgentSponsorshipPolicy.md)\>
 
-Defined in: [packages/core/src/actions/agent.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L21)
+Defined in: [packages/core/src/actions/agent.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L21)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Removed in the v5.x contract refactor — per-operator agent policies are no lon
 
 > **agentReputationRegistry**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/agent.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L19)
+Defined in: [packages/core/src/actions/agent.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L19)
 
 #### Returns
 
@@ -56,7 +56,7 @@ Defined in: [packages/core/src/actions/agent.ts:19](https://github.com/AAStarCom
 
 > **getAgentSponsorshipRate**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [packages/core/src/actions/agent.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L17)
+Defined in: [packages/core/src/actions/agent.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L17)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Removed in the v5.x contract refactor — the SuperPaymaster ABI has no per-agen
 
 > **isEligibleForSponsorship**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/agent.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L15)
+Defined in: [packages/core/src/actions/agent.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L15)
 
 #### Parameters
 
@@ -99,7 +99,7 @@ Defined in: [packages/core/src/actions/agent.ts:15](https://github.com/AAStarCom
 
 > **isRegisteredAgent**: (`args`) => `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/actions/agent.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L14)
+Defined in: [packages/core/src/actions/agent.ts:14](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L14)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [packages/core/src/actions/agent.ts:14](https://github.com/AAStarCom
 
 > **setAgentPolicies**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agent.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L25)
+Defined in: [packages/core/src/actions/agent.ts:25](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L25)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Removed in the v5.x contract refactor — per-operator sponsorship policies are 
 
 > **setAgentRegistries**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/agent.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L26)
+Defined in: [packages/core/src/actions/agent.ts:26](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L26)
 
 #### Parameters
 

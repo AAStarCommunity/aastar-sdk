@@ -1,6 +1,6 @@
 > `const` **MicroPaymentChannelArtifact**: `object` = `MicroPaymentChannelABIData`
 
-Defined in: [packages/core/src/abis/index.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/abis/index.ts#L112)
+Defined in: [packages/core/src/abis/index.ts:112](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/abis/index.ts#L112)
 
 ## Type Declaration
 

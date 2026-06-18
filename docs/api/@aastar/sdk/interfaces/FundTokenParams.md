@@ -1,4 +1,4 @@
-Defined in: [packages/sdk/src/utils/funding.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L29)
+Defined in: [packages/sdk/src/utils/funding.ts:29](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L29)
 
 ERC20 充值参数
 
@@ -12,7 +12,7 @@ ERC20 充值参数
 
 > **amount**: `string`
 
-Defined in: [packages/sdk/src/utils/funding.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L33)
+Defined in: [packages/sdk/src/utils/funding.ts:33](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L33)
 
 充值金额（Token，如 '100'）
 
@@ -22,7 +22,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:33](https://github.com/AAStarComm
 
 > **chain**: [`Chain`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/sdk/src/utils/funding.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L11)
+Defined in: [packages/sdk/src/utils/funding.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L11)
 
 链配置
 
@@ -36,7 +36,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:11](https://github.com/AAStarComm
 
 > **rpcUrl**: `string`
 
-Defined in: [packages/sdk/src/utils/funding.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L9)
+Defined in: [packages/sdk/src/utils/funding.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L9)
 
 RPC URL
 
@@ -50,7 +50,7 @@ RPC URL
 
 > **supplierKey**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/funding.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L13)
+Defined in: [packages/sdk/src/utils/funding.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L13)
 
 资金提供者私钥
 
@@ -64,7 +64,7 @@ Defined in: [packages/sdk/src/utils/funding.ts:13](https://github.com/AAStarComm
 
 > **targetAddress**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/funding.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L15)
+Defined in: [packages/sdk/src/utils/funding.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L15)
 
 目标地址
 
@@ -78,6 +78,6 @@ Defined in: [packages/sdk/src/utils/funding.ts:15](https://github.com/AAStarComm
 
 > **tokenAddress**: `` `0x${string}` ``
 
-Defined in: [packages/sdk/src/utils/funding.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/sdk/src/utils/funding.ts#L31)
+Defined in: [packages/sdk/src/utils/funding.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/sdk/src/utils/funding.ts#L31)
 
 Token 合约地址

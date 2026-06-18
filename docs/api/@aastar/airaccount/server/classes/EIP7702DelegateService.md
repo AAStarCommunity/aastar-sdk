@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L79)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:79](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L79)
 
 EIP7702DelegateService — Path A: SDK payload construction for AirAccountDelegate.
 
@@ -22,7 +22,7 @@ Usage:
 
 > **new EIP7702DelegateService**(`delegateAddress`, `client?`): `EIP7702DelegateService`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L85)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:85](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L85)
 
 #### Parameters
 
@@ -113,7 +113,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **buildAuthorization**(`chainId`, `nonce`, `signature`): [`EIP7702Authorization`](../interfaces/EIP7702Authorization.md)
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L161)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:161](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L161)
 
 Build the full EIP-7702 authorization object for relay submission.
 The caller must sign `buildAuthorizationHash()` externally and pass the result here.
@@ -136,7 +136,7 @@ The caller must sign `buildAuthorizationHash()` externally and pass the result h
 
 > **buildAuthorizationHash**(`chainId`, `nonce`): `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L149)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:149](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L149)
 
 Compute the EIP-7702 SET_CODE authorization hash that the EOA must sign.
 
@@ -165,7 +165,7 @@ local viem account.
 
 > **encodeExecute**(`dest`, `value`, `data`): `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L114)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:114](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L114)
 
 #### Parameters
 
@@ -185,7 +185,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **encodeExecuteBatch**(`dests`, `values`, `datas`): `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L122)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:122](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L122)
 
 #### Parameters
 
@@ -205,7 +205,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **encodeInitialize**(`params`): `string`
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:100](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L100)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:100](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L100)
 
 Encode initialize() calldata for the first post-delegation UserOp.
 Must be the callData of a UserOp sent immediately after the SET_CODE delegation activates.
@@ -227,7 +227,7 @@ Guardian acceptance sigs follow the same EIP-712 scheme as AirAccountV7 createAc
 
 > **getGuardians**(`eoa`): `Promise`\<\[`string`, `string`, `string`\]\>
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:215](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L215)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:215](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L215)
 
 #### Parameters
 
@@ -245,7 +245,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **getOwner**(`eoa`): `Promise`\<`string`\>
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:206](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L206)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:206](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L206)
 
 #### Parameters
 
@@ -263,7 +263,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **isInitialized**(`eoa`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L197)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:197](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L197)
 
 #### Parameters
 
@@ -281,7 +281,7 @@ Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts
 
 > **verifyAuthorization**(`eoa`, `chainId`, `nonce`, `signature`): `Promise`\<`boolean`\>
 
-Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:180](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L180)
+Defined in: [packages/airaccount/src/server/services/eip7702-delegate-service.ts:180](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/eip7702-delegate-service.ts#L180)
 
 Verify that a signature is a valid EIP-7702 authorization for the given EOA address.
 Recovers the signer from the authorization hash and checks it matches `eoa`.

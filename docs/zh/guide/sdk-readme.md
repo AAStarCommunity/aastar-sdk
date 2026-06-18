@@ -1,6 +1,6 @@
 # AAStar SDK (Mycelium 网络)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
 [![Status](https://img.shields.io/badge/Status-Beta%20v2.0-green)](https://github.com/AAStarCommunity/aastar-sdk)
 
@@ -228,7 +228,7 @@ pnpm run test:full_sdk
 
 ## 许可证
 
-MIT License - 详见 [LICENSE](./LICENSE)
+Apache-2.0 License - 详见 [LICENSE](./LICENSE)
 
 ---
 

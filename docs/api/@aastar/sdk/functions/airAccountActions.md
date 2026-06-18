@@ -1,6 +1,6 @@
 > **airAccountActions**(`address`): (`client`) => [`AirAccountActions`](../type-aliases/AirAccountActions.md)
 
-Defined in: [packages/core/src/actions/airAccount.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccount.ts#L87)
+Defined in: [packages/core/src/actions/airAccount.ts:87](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccount.ts#L87)
 
 ## Parameters
 

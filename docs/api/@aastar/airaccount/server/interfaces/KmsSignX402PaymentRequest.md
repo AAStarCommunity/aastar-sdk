@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L47)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:47](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L47)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:47](h
 
 > **amount**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L53)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:53](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L53)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:53](h
 
 > **chainId**: `number`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L50)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:50](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L50)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:50](h
 
 > **deadline**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L55)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:55](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L55)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:55](h
 
 > `optional` **hdPath**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L49)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L49)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:49](h
 
 > **keyId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L48)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:48](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L48)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:48](h
 
 > **paymentId**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L52)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:52](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L52)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:52](h
 
 > **recipient**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L54)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:54](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L54)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:54](h
 
 > **verifyingContract**: `string`
 
-Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-payment-signer.ts#L51)
+Defined in: [packages/airaccount/src/server/services/kms-payment-signer.ts:51](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-payment-signer.ts#L51)

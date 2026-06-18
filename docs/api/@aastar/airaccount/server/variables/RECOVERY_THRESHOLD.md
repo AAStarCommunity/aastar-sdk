@@ -1,6 +1,6 @@
 > `const` **RECOVERY\_THRESHOLD**: `2` = `2`
 
-Defined in: [packages/airaccount/src/server/services/recovery-service.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/recovery-service.ts#L30)
+Defined in: [packages/airaccount/src/server/services/recovery-service.ts:30](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/recovery-service.ts#L30)
 
 RECOVERY_THRESHOLD — number of distinct guardian approvals required to recover
 (or to cancel a recovery). The contract hard-codes `RECOVERY_THRESHOLD = 2`

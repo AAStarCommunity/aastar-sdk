@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/core/types/index.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L15)
+Defined in: [packages/airaccount/src/core/types/index.ts:15](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L15)
 
 ## Properties
 
@@ -6,7 +6,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:15](https://github.com/
 
 > **accountGasLimits**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L20)
+Defined in: [packages/airaccount/src/core/types/index.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L20)
 
 ***
 
@@ -14,7 +14,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:20](https://github.com/
 
 > **callData**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L19)
+Defined in: [packages/airaccount/src/core/types/index.ts:19](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L19)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:19](https://github.com/
 
 > **gasFees**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L22)
+Defined in: [packages/airaccount/src/core/types/index.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L22)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:22](https://github.com/
 
 > **initCode**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L18)
+Defined in: [packages/airaccount/src/core/types/index.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L18)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:18](https://github.com/
 
 > **nonce**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L17)
+Defined in: [packages/airaccount/src/core/types/index.ts:17](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L17)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:17](https://github.com/
 
 > **paymasterAndData**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L23)
+Defined in: [packages/airaccount/src/core/types/index.ts:23](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L23)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:23](https://github.com/
 
 > **preVerificationGas**: `string` \| `bigint`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L21)
+Defined in: [packages/airaccount/src/core/types/index.ts:21](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L21)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [packages/airaccount/src/core/types/index.ts:21](https://github.com/
 
 > **sender**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L16)
+Defined in: [packages/airaccount/src/core/types/index.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L16)
 
 ***
 
@@ -70,4 +70,4 @@ Defined in: [packages/airaccount/src/core/types/index.ts:16](https://github.com/
 
 > **signature**: `string`
 
-Defined in: [packages/airaccount/src/core/types/index.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/core/types/index.ts#L24)
+Defined in: [packages/airaccount/src/core/types/index.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/core/types/index.ts#L24)

@@ -1,6 +1,6 @@
 > **ChannelClientConfig** = `object`
 
-Defined in: [packages/channel/src/ChannelClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L6)
+Defined in: [packages/channel/src/ChannelClient.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:6](https://github.com/AAStarC
 
 > **chainId**: `number`
 
-Defined in: [packages/channel/src/ChannelClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L10)
+Defined in: [packages/channel/src/ChannelClient.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L10)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:10](https://github.com/AAStar
 
 > **channelAddress**: `Address`
 
-Defined in: [packages/channel/src/ChannelClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L9)
+Defined in: [packages/channel/src/ChannelClient.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L9)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/channel/src/ChannelClient.ts:9](https://github.com/AAStarC
 
 > **publicClient**: [`PublicClient`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/channel/src/ChannelClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L7)
+Defined in: [packages/channel/src/ChannelClient.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L7)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [packages/channel/src/ChannelClient.ts:7](https://github.com/AAStarC
 
 > **walletClient**: [`WalletClient`](https://viem.sh/docs/index.html)
 
-Defined in: [packages/channel/src/ChannelClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/channel/src/ChannelClient.ts#L8)
+Defined in: [packages/channel/src/ChannelClient.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/channel/src/ChannelClient.ts#L8)

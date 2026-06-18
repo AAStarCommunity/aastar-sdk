@@ -1,6 +1,6 @@
 > **AgentSponsorshipPolicy** = `object`
 
-Defined in: [packages/core/src/actions/agent.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L6)
+Defined in: [packages/core/src/actions/agent.ts:6](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L6)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/agent.ts:6](https://github.com/AAStarComm
 
 > **maxDailyUSD**: `bigint`
 
-Defined in: [packages/core/src/actions/agent.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L9)
+Defined in: [packages/core/src/actions/agent.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L9)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/agent.ts:9](https://github.com/AAStarComm
 
 > **minReputationScore**: `bigint`
 
-Defined in: [packages/core/src/actions/agent.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L7)
+Defined in: [packages/core/src/actions/agent.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L7)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [packages/core/src/actions/agent.ts:7](https://github.com/AAStarComm
 
 > **sponsorshipBPS**: `bigint`
 
-Defined in: [packages/core/src/actions/agent.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/agent.ts#L8)
+Defined in: [packages/core/src/actions/agent.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/agent.ts#L8)

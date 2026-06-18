@@ -1,4 +1,4 @@
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L117)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:117](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L117)
 
 Infrastructure monitoring + operator admin surface for the AAStar TEE KMS
 (v0.20.0, kms.aastar.io).
@@ -13,7 +13,7 @@ feature flag is off; every other method calls `ensureEnabled()` first.
 
 > **new KmsMonitorService**(`http`): `KmsMonitorService`
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L118)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:118](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L118)
 
 #### Parameters
 
@@ -31,7 +31,7 @@ Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:118]
 
 > **adminPurgeKey**(`params`, `adminToken`): `Promise`\<[`KmsPurgeKeyResponse`](../interfaces/KmsPurgeKeyResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:198](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L198)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:198](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L198)
 
 **`Internal`**
 
@@ -64,7 +64,7 @@ once a key is purged.
 
 > **getAttestation**(`nonce`): `Promise`\<[`KmsAttestationResponse`](../interfaces/KmsAttestationResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L167)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:167](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L167)
 
 TEE remote-attestation evidence bound to a caller nonce (`GET /attestation`,
 #37). Public (no auth) — pass a fresh random `nonce` (hex, ≤64 bytes) to bind
@@ -86,7 +86,7 @@ the evidence + defeat replay, then verify the returned signed measurement.
 
 > **getAttestationMeasurements**(): `Promise`\<[`KmsAttestationManifestResponse`](../interfaces/KmsAttestationManifestResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L175)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:175](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L175)
 
 Ed25519-signed measurement manifest, version → ta_measurement
 (`GET /.well-known/attestation-measurements.json`, #12). Public.
@@ -101,7 +101,7 @@ Ed25519-signed measurement manifest, version → ta_measurement
 
 > **getAttestationMeasurementsProof**(): `Promise`\<[`KmsAttestationProofResponse`](../interfaces/KmsAttestationProofResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:183](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L183)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:183](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L183)
 
 Sigsum transparency proof sidecar for the measurement manifest
 (`GET /.well-known/attestation-measurements-proof.json`, #87). Public.
@@ -116,7 +116,7 @@ Sigsum transparency proof sidecar for the measurement manifest
 
 > **health**(): `Promise`\<[`KmsHealthResponse`](../interfaces/KmsHealthResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L124)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:124](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L124)
 
 Liveness probe (`GET /health`, no auth). Does NOT require the KMS feature
 flag to be enabled.
@@ -131,7 +131,7 @@ flag to be enabled.
 
 > **queueStatus**(): `Promise`\<[`KmsQueueStatusResponse`](../interfaces/KmsQueueStatusResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L139)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:139](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L139)
 
 Request-queue health and circuit-breaker state (`GET /QueueStatus`).
 
@@ -145,7 +145,7 @@ Request-queue health and circuit-breaker state (`GET /QueueStatus`).
 
 > **rollbackCounter**(): `Promise`\<[`KmsRollbackCounterResponse`](../interfaces/KmsRollbackCounterResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L148)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:148](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L148)
 
 RPMB anti-rollback monotonic counter (`GET /RollbackCounter`, diagnostic,
 v0.20.0).
@@ -160,7 +160,7 @@ v0.20.0).
 
 > **stats**(): `Promise`\<[`KmsStatsResponse`](../interfaces/KmsStatsResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L157)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:157](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L157)
 
 Machine-readable runtime statistics (`GET /stats`, v0.20.0) — wallets, tx,
 queue, warnings.
@@ -175,7 +175,7 @@ queue, warnings.
 
 > **version**(): `Promise`\<[`KmsVersionResponse`](../interfaces/KmsVersionResponse.md)\>
 
-Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/airaccount/src/server/services/kms-monitor-service.ts#L132)
+Defined in: [packages/airaccount/src/server/services/kms-monitor-service.ts:132](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/airaccount/src/server/services/kms-monitor-service.ts#L132)
 
 Version / capability descriptor (`GET /version`, no auth). Does NOT require
 the KMS feature flag to be enabled.

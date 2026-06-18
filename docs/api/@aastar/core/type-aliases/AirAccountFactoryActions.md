@@ -1,6 +1,6 @@
 > **AirAccountFactoryActions** = `object`
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L7)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L7)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:7](https://github.co
 
 > **agentRegistry**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L28)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:28](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L28)
 
 #### Returns
 
@@ -20,7 +20,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:28](https://github.c
 
 > **createAccount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L16)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:16](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L16)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:16](https://github.c
 
 > **createAgentAccount**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L36)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:36](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L36)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:36](https://github.c
 
 > **defaultCommunityGuardian**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L24)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:24](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L24)
 
 #### Returns
 
@@ -84,7 +84,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:24](https://github.c
 
 > **factoryAdmin**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L22)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:22](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L22)
 
 #### Returns
 
@@ -96,7 +96,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:22](https://github.c
 
 > **getAddress**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L13)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L13)
 
 #### Parameters
 
@@ -117,7 +117,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:13](https://github.c
 
 > **getAddressWithChainId**: (`args`) => `Promise`\<\{ `account`: `Address`; `chainQualified`: [`Hex`](https://viem.sh/docs/index.html); \}\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L9)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L9)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:9](https://github.co
 
 > **getAddressWithDefaults**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L11)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L11)
 
 #### Parameters
 
@@ -161,7 +161,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:11](https://github.c
 
 > **getAgentAddress**: (`args`) => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L31)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:31](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L31)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:31](https://github.c
 
 > **getChainQualifiedAddress**: (`args`) => `Promise`\<[`Hex`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L18)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:18](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L18)
 
 #### Parameters
 
@@ -201,7 +201,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:18](https://github.c
 
 > **implementation**: () => `Promise`\<`Address`\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L20)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:20](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L20)
 
 #### Returns
 
@@ -213,7 +213,7 @@ Defined in: [packages/core/src/actions/airAccountFactory.ts:20](https://github.c
 
 > **setAgentRegistry**: (`args`) => `Promise`\<[`Hash`](https://viem.sh/docs/index.html)\>
 
-Defined in: [packages/core/src/actions/airAccountFactory.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/airAccountFactory.ts#L49)
+Defined in: [packages/core/src/actions/airAccountFactory.ts:49](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/airAccountFactory.ts#L49)
 
 #### Parameters
 

@@ -1,6 +1,6 @@
 > **P256SessionState** = `object`
 
-Defined in: [packages/core/src/actions/sessionKeyValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/sessionKeyValidator.ts#L7)
+Defined in: [packages/core/src/actions/sessionKeyValidator.ts:7](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/sessionKeyValidator.ts#L7)
 
 ## Properties
 
@@ -8,7 +8,7 @@ Defined in: [packages/core/src/actions/sessionKeyValidator.ts:7](https://github.
 
 > **callCount**: `number`
 
-Defined in: [packages/core/src/actions/sessionKeyValidator.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/sessionKeyValidator.ts#L9)
+Defined in: [packages/core/src/actions/sessionKeyValidator.ts:9](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/sessionKeyValidator.ts#L9)
 
 ***
 
@@ -16,7 +16,7 @@ Defined in: [packages/core/src/actions/sessionKeyValidator.ts:9](https://github.
 
 > **prevCount**: `number`
 
-Defined in: [packages/core/src/actions/sessionKeyValidator.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/sessionKeyValidator.ts#L10)
+Defined in: [packages/core/src/actions/sessionKeyValidator.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/sessionKeyValidator.ts#L10)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [packages/core/src/actions/sessionKeyValidator.ts:10](https://github
 
 > **windowStart**: `number`
 
-Defined in: [packages/core/src/actions/sessionKeyValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/e4ea336635813250410f8608b346bd3d140d4419/packages/core/src/actions/sessionKeyValidator.ts#L8)
+Defined in: [packages/core/src/actions/sessionKeyValidator.ts:8](https://github.com/AAStarCommunity/aastar-sdk/blob/b1c03926c79511489196c99c8f8801b69566f76d/packages/core/src/actions/sessionKeyValidator.ts#L8)
