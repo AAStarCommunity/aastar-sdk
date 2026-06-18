@@ -12,7 +12,7 @@ import {
     TOKEN_ADDRESSES,
     TEST_ACCOUNT_ADDRESSES,
     getCanonicalAddresses,
-    listSupportedChainIds,
+    describeSupportedChains,
     RegistryABI
 } from '@aastar/core';
 
@@ -102,7 +102,7 @@ export function createEndUserClient({
     if (!chainDefaults && !addresses) {
         throw new Error(
             `[createEndUserClient] No canonical addresses for chainId ${chain.id}. ` +
-            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+            `Pass \`addresses\` explicitly, or use a supported chain: ${describeSupportedChains()}.`,
         );
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };

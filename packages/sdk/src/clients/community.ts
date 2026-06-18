@@ -25,7 +25,7 @@ import {
     CORE_ADDRESSES,
     TEST_TOKEN_ADDRESSES,
     getCanonicalAddresses,
-    listSupportedChainIds
+    describeSupportedChains
 } from '@aastar/core';
 import { RoleDataFactory, RoleIds } from '../utils/roleData.js';
 
@@ -82,7 +82,7 @@ export function createCommunityClient({
     if (!chainDefaults && !addresses) {
         throw new Error(
             `[createCommunityClient] No canonical addresses for chainId ${chain.id}. ` +
-            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+            `Pass \`addresses\` explicitly, or use a supported chain: ${describeSupportedChains()}.`,
         );
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...chainDefaults, ...addresses };

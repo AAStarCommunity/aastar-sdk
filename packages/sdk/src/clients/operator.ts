@@ -17,7 +17,7 @@ import {
     TEST_TOKEN_ADDRESSES,
     TEST_ACCOUNT_ADDRESSES,
     getCanonicalAddresses,
-    listSupportedChainIds
+    describeSupportedChains
 } from '@aastar/core';
 import { RoleDataFactory } from '../utils/roleData.js';
 import { decodeContractError } from '../errors/decoder.js';
@@ -82,7 +82,7 @@ export function createOperatorClient({
     if (!chainDefaults && !addresses) {
         throw new Error(
             `[createOperatorClient] No canonical addresses for chainId ${chain.id}. ` +
-            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+            `Pass \`addresses\` explicitly, or use a supported chain: ${describeSupportedChains()}.`,
         );
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TEST_TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };

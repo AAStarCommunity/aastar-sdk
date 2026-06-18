@@ -12,6 +12,7 @@
  */
 
 import type { Address } from 'viem';
+import { optimism, sepolia, optimismSepolia } from 'viem/chains';
 
 export const CANONICAL_ADDRESSES = {
   // --- Optimism (Chain ID: 10) ---
@@ -232,4 +233,23 @@ export function getCanonicalAddresses(
     gTokenStaking: a.staking as Address,
     mySBT: a.sbt as Address,
   };
+}
+
+// Human labels for the supported chains, taken verbatim from viem/chains (`.name`)
+// so the SDK stays in lockstep with viem and never invents its own chain identity.
+const SUPPORTED_CHAIN_LABELS: Record<number, string> = {
+  [optimism.id]: optimism.name,
+  [sepolia.id]: sepolia.name,
+  [optimismSepolia.id]: optimismSepolia.name,
+};
+
+/**
+ * A friendly, human-readable list of the supported chains for error messages —
+ * e.g. `"OP Mainnet (10), Sepolia (11155111), OP Sepolia (11155420)"`. Names come
+ * from viem/chains so callers recognize them by the same label viem uses.
+ */
+export function describeSupportedChains(): string {
+  return listSupportedChainIds()
+    .map((id) => `${SUPPORTED_CHAIN_LABELS[id] ?? `chainId ${id}`} (${id})`)
+    .join(', ');
 }

@@ -26,7 +26,9 @@ export * from '@aastar/enduser';
 export * from '@aastar/operator';
 export * from '@aastar/admin';
 
-// Export AirAccount SDK (ERC-4337 + KMS + BLS)
+// Export KMS SDK (ERC-4337 + WebAuthn passkeys + BLS).
+// `AirAccount` is kept as a backward-compatible alias for one release; prefer `KMS`.
+export * as KMS from '@aastar/airaccount';
 export * as AirAccount from '@aastar/airaccount';
 
 // Export Utils & Errors

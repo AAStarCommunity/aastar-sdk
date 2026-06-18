@@ -19,7 +19,7 @@ import {
     CORE_ADDRESSES,
     TOKEN_ADDRESSES,
     getCanonicalAddresses,
-    listSupportedChainIds
+    describeSupportedChains
 } from '@aastar/core';
 
 const ADDRESS_PLACEHOLDER: Address = '0x0000000000000000000000000000000000000000';
@@ -47,7 +47,7 @@ export function createAdminClient({
     if (!chainDefaults && !addresses) {
         throw new Error(
             `[createAdminClient] No canonical addresses for chainId ${chain.id}. ` +
-            `Pass \`addresses\` explicitly, or use a supported chain: ${listSupportedChainIds().join(', ')}.`,
+            `Pass \`addresses\` explicitly, or use a supported chain: ${describeSupportedChains()}.`,
         );
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...chainDefaults, ...addresses };
