@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.8] - 2026-06-18
+
+**Address bug fix (single source of truth).** `@aastar/airaccount` carried its own hardcoded copy of protocol contract addresses, stale at `v0.17.2-beta.4`, while `@aastar/core` `CANONICAL_ADDRESSES` (the authority) was at `v0.19.0-beta.2` (Sepolia full redeploy). The airaccount server used the stale copy internally.
+
+- `AIRACCOUNT_ADDRESSES` current Sepolia fields now **derive from `@aastar/core` `CANONICAL_ADDRESSES[11155111]`** — factory `0x52c5190E`, accountImpl `0x7fe62d51`, delegate/extension/agentRegistry/validatorRouter/BLS/sessionKey/forceExit/calldataParser realigned to v0.19.0-beta.2. Legacy/deprecated factory addresses retained for historical account recovery.
+- Added `@aastar/core` as an `@aastar/airaccount` dependency + an anti-drift test asserting the derived fields equal `CANONICAL_ADDRESSES` (CI fails if they ever diverge again).
+- Audit: confirmed `airaccount` was the ONLY package not sourcing addresses from `@aastar/core`; all others already do.
+
+**SDK Code Integrity Hash**: `1b43e81d4cc394b44ed39665749d678666d9e7571054619f8da09aa64b04fec1`
+
 ## [0.20.7] - 2026-06-18
 
 **viem-only — `ethers` fully removed.** Published with deps `viem` + `@simplewebauthn/browser` + `axios` (no ethers), Apache-2.0.
@@ -139,8 +149,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.20.7] - 2026-06-18
-**SDK Code Integrity Hash**: `55018672abdf24b1c9a66235c8f9f72d9e0c410ea6e1e5c9701fbca17bd68d5f`
+## [0.20.8] - 2026-06-18
+**SDK Code Integrity Hash**: `1b43e81d4cc394b44ed39665749d678666d9e7571054619f8da09aa64b04fec1`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
