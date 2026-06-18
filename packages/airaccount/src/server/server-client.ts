@@ -14,9 +14,9 @@ import { WalletManager } from "./services/wallet-manager";
  *
  * @example
  * ```ts
- * import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+ * import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
  *
- * const client = new YAAAServerClient({
+ * const client = new AirAccountServerClient({
  *   rpcUrl: 'https://sepolia.infura.io/v3/...',
  *   bundlerRpcUrl: 'https://api.pimlico.io/v2/11155111/rpc?apikey=...',
  *   chainId: 11155111,
@@ -34,7 +34,7 @@ import { WalletManager } from "./services/wallet-manager";
  * const account = await client.accounts.createAccount('user-123');
  * ```
  */
-export class YAAAServerClient {
+export class AirAccountServerClient {
   readonly ethereum: EthereumProvider;
   readonly accounts: AccountManager;
   readonly transfers: TransferManager;
@@ -75,3 +75,9 @@ export class YAAAServerClient {
     );
   }
 }
+
+/**
+ * @deprecated Renamed to {@link AirAccountServerClient}. This alias is kept for
+ * backward compatibility and will be removed in a future major version.
+ */
+export const YAAAServerClient = AirAccountServerClient;

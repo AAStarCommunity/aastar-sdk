@@ -76,7 +76,7 @@ The SDK follows a layered abstraction model to balance control and ease of use:
 *   **`CommunityClient`**: Auto-onboarding, xPNTs deployment, SBT & Reputation management.
 *   **`OperatorClient`**: SuperPaymaster registration, Staking, Pool management.
 *   **`AdminClient`**: DVT aggregations, Slashing, Global protocol parameters.
-*   **`AirAccount (YAAAClient / YAAAServerClient)`**: ERC-4337 smart accounts with KMS WebAuthn passkeys, BLS aggregate signatures, and tiered signature routing for AI agents and dApps.
+*   **`AirAccount (AirAccountClient / AirAccountServerClient)`**: ERC-4337 smart accounts with KMS WebAuthn passkeys, BLS aggregate signatures, and tiered signature routing for AI agents and dApps.
 
 ---
 
@@ -123,22 +123,24 @@ await operator.onboardOperator({
 
 ### 3. AirAccount: Smart Account with Passkey (Browser)
 ```typescript
-import { YAAAClient } from '@aastar/airaccount';
+import { AirAccountClient } from '@aastar/airaccount';
 
-const yaaa = new YAAAClient({
-  apiURL: 'https://api.your-backend.com/v1',
+// `apiURL` is the passkey RP backend. AAStar's official hosted RP will be
+// `https://auth.aastar.io` (served by aNode); you can also point at your own.
+const air = new AirAccountClient({
+  apiURL: 'https://auth.aastar.io',
   tokenProvider: () => localStorage.getItem('token'),
   bls: { seedNodes: ['https://signer1.aastar.io'] },
 });
 
 // Register with KMS-backed passkey (biometric)
-const { user, token } = await yaaa.passkey.register({
+const { user, token } = await air.passkey.register({
   email: 'user@example.com',
   username: 'JohnDoe',
 });
 
 // Verify a transaction with passkey
-const verification = await yaaa.passkey.verifyTransaction({
+const verification = await air.passkey.verifyTransaction({
   to: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
   value: '0.01',
 });
@@ -146,9 +148,9 @@ const verification = await yaaa.passkey.verifyTransaction({
 
 ### 4. AirAccount: Smart Account with Tiered Signatures (Server / AI Agent)
 ```typescript
-import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
 
-const client = new YAAAServerClient({
+const client = new AirAccountServerClient({
   rpcUrl: 'https://optimism.rpc-url',
   bundlerRpcUrl: 'https://bundler-url',
   chainId: 10,
@@ -321,7 +323,7 @@ SDK 采用分层抽象模型，平衡了控制灵活性与易用性：
 - **`CommunityClient`**: 面向社区/DAO 管理员，支持自动入驻、xPNTs 部署与身份名誉管理。
 - **`OperatorClient`**: 面向节点运营方，支持 SuperPaymaster 注册、质押与资金池管理。
 - **`AdminClient`**: 面向协议管理方，支持 DVT 聚合、罚没机制与全局参数调整。
-- **`AirAccount (YAAAClient / YAAAServerClient)`**: 面向 AI Agent 与 Web3 应用，提供 KMS WebAuthn Passkey 认证、BLS 聚合签名、分层签名路由与 ERC-4337 智能账户。
+- **`AirAccount (AirAccountClient / AirAccountServerClient)`**: 面向 AI Agent 与 Web3 应用，提供 KMS WebAuthn Passkey 认证、BLS 聚合签名、分层签名路由与 ERC-4337 智能账户。
 
 ---
 
@@ -365,22 +367,24 @@ await operator.onboardOperator({
 
 #### 3. AirAccount: Passkey 智能账户（浏览器）
 ```typescript
-import { YAAAClient } from '@aastar/airaccount';
+import { AirAccountClient } from '@aastar/airaccount';
 
-const yaaa = new YAAAClient({
-  apiURL: 'https://api.your-backend.com/v1',
+// `apiURL` 为 passkey RP 后端。AAStar 官方托管 RP 将是 `https://auth.aastar.io`
+// （由 aNode 提供）；你也可以指向自建后端。
+const air = new AirAccountClient({
+  apiURL: 'https://auth.aastar.io',
   tokenProvider: () => localStorage.getItem('token'),
   bls: { seedNodes: ['https://signer1.aastar.io'] },
 });
 
 // 使用 KMS Passkey（生物识别）注册
-const { user, token } = await yaaa.passkey.register({
+const { user, token } = await air.passkey.register({
   email: 'user@example.com',
   username: 'JohnDoe',
 });
 
 // 使用 Passkey 验证交易
-const verification = await yaaa.passkey.verifyTransaction({
+const verification = await air.passkey.verifyTransaction({
   to: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
   value: '0.01',
 });
@@ -388,9 +392,9 @@ const verification = await yaaa.passkey.verifyTransaction({
 
 #### 4. AirAccount: 分层签名智能账户（服务端 / AI Agent）
 ```typescript
-import { YAAAServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
 
-const client = new YAAAServerClient({
+const client = new AirAccountServerClient({
   rpcUrl: 'https://optimism.rpc-url',
   bundlerRpcUrl: 'https://bundler-url',
   chainId: 10,

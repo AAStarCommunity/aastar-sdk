@@ -1,5 +1,7 @@
 // ── Main facade ───────────────────────────────────────────────────
-export { YAAAServerClient } from "./server-client";
+// `AirAccountServerClient` is the current name; `YAAAServerClient` is a
+// deprecated backward-compatible alias.
+export { AirAccountServerClient, YAAAServerClient } from "./server-client";
 
 // ── Config ────────────────────────────────────────────────────────
 export { validateConfig, sepoliaV07Config } from "./config";
