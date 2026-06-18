@@ -1,0 +1,55 @@
+> **GaslessReadinessReport** = `object`
+
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:10](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L10)
+
+## Properties
+
+### details
+
+> **details**: `object`
+
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:13](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L13)
+
+#### ethUsdPrice
+
+> **ethUsdPrice**: `bigint`
+
+#### paymasterDeposit
+
+> **paymasterDeposit**: `bigint`
+
+#### paymasterStake
+
+> **paymasterStake**: `bigint`
+
+#### tokenPrice
+
+> **tokenPrice**: `bigint`
+
+#### tokenSupported
+
+> **tokenSupported**: `boolean`
+
+#### userPaymasterDeposit
+
+> **userPaymasterDeposit**: `bigint`
+
+#### userTokenBalance
+
+> **userTokenBalance**: `bigint`
+
+***
+
+### isReady
+
+> **isReady**: `boolean`
+
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:11](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L11)
+
+***
+
+### issues
+
+> **issues**: `string`[]
+
+Defined in: [packages/paymaster/src/V4/PaymasterUtils.ts:12](https://github.com/AAStarCommunity/aastar-sdk/blob/2b5b68a2b143613eff3004fddf2bff6f1eb1511f/packages/paymaster/src/V4/PaymasterUtils.ts#L12)
