@@ -444,18 +444,26 @@ export class AccountManager {
     if (existing) return existing;
 
     const { address: signerAddress } = await this.signer.ensureSigner(userId);
-    const salt = params.salt ?? Math.floor(Math.random() * 1000000);
+    // #118 M2: a JS-number salt outside the 53-bit safe range silently truncates, so the predicted
+    // and deploy-time salts would diverge -> different CREATE2 address -> stranded funds. Reject it
+    // (pass a bigint for large salts) and persist a lossless DECIMAL STRING below.
+    if (typeof params.salt === "number" && !Number.isSafeInteger(params.salt)) {
+      throw new Error(
+        `salt value ${params.salt} exceeds Number.MAX_SAFE_INTEGER; pass it as a bigint to avoid precision loss`
+      );
+    }
+    const saltBig = BigInt(params.salt ?? Math.floor(Math.random() * 1000000));
 
     const factory = this.ethereum.getFactoryContract(version);
     const factoryAddress = (factory.address as string) ?? this.ethereum.getFactoryAddress(version);
 
     // Predict via the FULL-config getAddress(owner, salt, config). The address is bound to
-    // keccak256(config), so the deploy-time initCode MUST embed the byte-identical config
-    // (transfer-manager rebuilds it from the persisted record fields below).
+    // keccak256(config), so the deploy-time initCode MUST embed the byte-identical config AND the
+    // identical salt (transfer-manager rebuilds both from the persisted record fields below).
     const accountAddress = await readPredictedAddress(
       factory,
       signerAddress,
-      BigInt(salt),
+      saltBig,
       initConfigToTuple(config)
     );
 
@@ -472,7 +480,8 @@ export class AccountManager {
       userId,
       address: accountAddress,
       signerAddress,
-      salt,
+      // Persist as a lossless decimal string (#118 M2); transfer-manager rebuilds via BigInt(account.salt).
+      salt: saltBig.toString(),
       deployed,
       deploymentTxHash: null,
       validatorAddress,

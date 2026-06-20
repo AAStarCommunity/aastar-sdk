@@ -115,7 +115,8 @@ async function main() {
     });
     const accountManager = new AccountManager(ethereum, storage, signer, new SilentLogger());
 
-    const salt = BigInt(Math.floor(Date.now() / 1000));
+    // Large (>2^53) bigint salt — exercises the #118 M2 lossless decimal-string persistence.
+    const salt = (BigInt(Math.floor(Date.now() / 1000)) << 32n) + 7n;
     const record = await accountManager.createAccountWithP256Guardians('yaa-e2e-user', {
         p256Guardians: [{ x, y }],
         dailyLimit: DAILY_LIMIT,
@@ -124,6 +125,7 @@ async function main() {
         entryPointVersion: EntryPointVersion.V0_7,
     });
     console.log(`\n   SERVER predicted account: ${record.address} (salt ${salt})`);
+    console.log(`   record.salt (persisted): ${JSON.stringify(record.salt)} (type ${typeof record.salt})`);
     console.log(`   record.guardianSpecs: ${JSON.stringify(record.guardianSpecs)}`);
     console.log(`   record.approvedAlgIds: ${JSON.stringify(record.approvedAlgIds)}  minDailyLimit: ${record.minDailyLimit}`);
 
@@ -133,6 +135,17 @@ async function main() {
     if (!record.guardianSpecs || record.guardianSpecs.length !== 1 || !('p256' in record.guardianSpecs[0])) {
         throw new Error('record did not persist the P-256 guardian spec');
     }
+    // #118 M2: salt persisted as a lossless decimal string; reconstruct the EXACT bigint for deploy.
+    if (record.salt !== salt.toString()) {
+        throw new Error(`salt not persisted losslessly: record.salt=${record.salt} != ${salt.toString()}`);
+    }
+    const deploySalt = BigInt(record.salt);
+    if (deploySalt !== salt) throw new Error(`salt round-trip lost precision: ${deploySalt} != ${salt}`);
+    // #118 H1: default approvedAlgIds must whitelist ECDSA(0x02)+P256(0x03), never BLS(0x01).
+    if (JSON.stringify(record.approvedAlgIds) !== JSON.stringify([0x02, 0x03])) {
+        throw new Error(`approvedAlgIds wrong: ${JSON.stringify(record.approvedAlgIds)} (expected [2,3])`);
+    }
+    console.log(`   🔍 salt round-trip lossless (BigInt(record.salt) == ${deploySalt}) ✅; approvedAlgIds == [0x02, 0x03] ✅`);
 
     // ── 2. Reconstruct the deploy InitConfig from the persisted record (SERVER helper) ──
     const config = initConfigFromRecord(record);
@@ -140,9 +153,9 @@ async function main() {
         throw new Error('reconstructed InitConfig lost the P-256 coords in slot 0');
     }
 
-    // ── 3. Cross-check: object-encoded getAddress == server's tuple-encoded prediction ──
+    // ── 3. Cross-check: object-encoded getAddress == server's tuple-encoded prediction (using deploySalt) ──
     const factorySvc = airAccountFactoryActions(FACTORY)(ownerWallet);
-    const coreGetAddr = await factorySvc.getAddress({ owner: owner.address, salt, config });
+    const coreGetAddr = await factorySvc.getAddress({ owner: owner.address, salt: deploySalt, config });
     if (getAddress(coreGetAddr) !== getAddress(record.address as Address)) {
         throw new Error(`encoding mismatch: core getAddress ${coreGetAddr} != server-predicted ${record.address}`);
     }
@@ -156,7 +169,7 @@ async function main() {
         steps.push({ step: `Account already deployed (salt=${salt})`, actor: `JASON ${owner.address}`, note: 'pre-existing' });
     } else {
         const fees = await bumpedFees(publicClient);
-        deployTx = await factorySvc.createAccount({ owner: owner.address, salt, config, account: owner, ...fees });
+        deployTx = await factorySvc.createAccount({ owner: owner.address, salt: deploySalt, config, account: owner, ...fees });
         const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 180_000 });
         if (rcpt.status !== 'success') throw new Error(`createAccount reverted: ${deployTx}`);
         console.log(`   ✅ DEPLOY (factory createAccount with server-built P-256 InitConfig): ${deployTx}`);

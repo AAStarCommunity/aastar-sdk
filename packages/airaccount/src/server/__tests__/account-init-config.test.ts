@@ -35,7 +35,11 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
       expect(cfg.guardianP256Y.slice(1)).toEqual([ZERO32, ZERO32]);
       // dailyLimit threaded through; approvedAlgIds default to [ECDSA, P-256] when a passkey present.
       expect(cfg.dailyLimit).toBe(DAILY);
-      expect(cfg.approvedAlgIds).toEqual([2, 1]);
+      // #118 H1: ALG_P256 == 0x03 (NOT 0x01 = BLS). Default whitelists the ECDSA owner + P-256, never BLS.
+      expect(cfg.approvedAlgIds).toEqual([0x02, 0x03]);
+      expect(cfg.approvedAlgIds).toContain(0x03);
+      expect(cfg.approvedAlgIds).toContain(0x02);
+      expect(cfg.approvedAlgIds).not.toContain(0x01);
     });
 
     it("orders ECDSA guardians first, then P-256 — deterministic slot assignment", () => {

@@ -74,23 +74,36 @@ describe("EntryPoint constants", () => {
     });
   });
 
-  // #118: the local human-readable AIRACCOUNT_FACTORY_ABI must produce the SAME 4-byte selector as
-  // the canonical JSON ABI for every InitConfig-bearing function. A type drift (e.g. declaring
-  // TokenConfig as (uint256,uint256,uint256) instead of the deployed (uint128,uint128,uint256))
-  // silently changes the selector and reverts the call on the live v0.20.0 factory.
-  describe("AIRACCOUNT_FACTORY_ABI selector parity with canonical JSON ABI", () => {
+  // #118 (M1): the local human-readable AIRACCOUNT_FACTORY_ABI must produce the EXACT 4-byte selector
+  // the DEPLOYED v0.20.0 factory exposes for every InitConfig-bearing function. The expected values are
+  // HARDCODED (not just compared between the two SDK ABI sources) so that if both SDK sources drift
+  // together — e.g. back to TokenConfig (uint256,uint256,uint256) instead of the deployed
+  // (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit) per AAStarGlobalGuard.sol — this test
+  // fails instead of silently agreeing while reverting on-chain. These selectors were confirmed against
+  // live Sepolia factory 0x99C9300d52EDD9f4B7135DEd1811fBa6FFa1DDC6 (createAccount/getAddress both mined
+  // status=0x1 in the #118 evidence run).
+  describe("AIRACCOUNT_FACTORY_ABI selector parity with the deployed v0.20.0 factory", () => {
     const parsed = parseAbi(AIRACCOUNT_FACTORY_ABI) as readonly AbiFunction[];
     const json = AAStarAirAccountFactoryV7ABI as readonly AbiFunction[];
 
-    for (const name of ["getAddress", "createAccount", "getAddressWithChainId"]) {
-      it(`${name} selector matches the deployed factory`, () => {
+    // Known-good selectors of the deployed v0.20.0 factory (InitConfig.TokenConfig = (uint128,uint128,uint256)).
+    const DEPLOYED_SELECTORS: Record<string, `0x${string}`> = {
+      getAddress: "0x3989c6b8",
+      createAccount: "0x5512953b",
+      getAddressWithChainId: "0x203df583",
+    };
+
+    for (const [name, expected] of Object.entries(DEPLOYED_SELECTORS)) {
+      it(`${name} selector == deployed factory (${expected})`, () => {
         const hr = parsed.find(a => a.type === "function" && a.name === name);
         expect(hr, `local ABI is missing ${name}`).toBeTruthy();
         const j = json.find(
           a => a.type === "function" && a.name === name && a.inputs.length === hr!.inputs.length
         );
         expect(j, `JSON ABI is missing ${name}`).toBeTruthy();
-        expect(toFunctionSelector(hr!)).toBe(toFunctionSelector(j!));
+        // Both SDK ABI sources AND the on-chain factory must agree on the pinned selector.
+        expect(toFunctionSelector(hr!)).toBe(expected);
+        expect(toFunctionSelector(j!)).toBe(expected);
       });
     }
 

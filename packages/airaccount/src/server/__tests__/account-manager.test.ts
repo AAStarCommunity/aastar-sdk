@@ -494,7 +494,7 @@ describe("AccountManager", () => {
       expect(account.address).toBe(P256_ACCOUNT);
       expect(account.dailyLimit).toBe(DAILY_LIMIT.toString());
       expect(account.guardianSpecs).toEqual([{ p256: { x: X1, y: Y1 } }]);
-      expect(account.approvedAlgIds).toEqual([2, 1]); // ECDSA + P-256 default
+      expect(account.approvedAlgIds).toEqual([0x02, 0x03]); // #118 H1: ECDSA + P-256 (0x03, NOT BLS 0x01)
       expect(account.minDailyLimit).toBe((DAILY_LIMIT / 10n).toString());
 
       // The full 8-field InitConfig tuple was passed to getAddress with P-256 coords in slot 0.
@@ -573,6 +573,40 @@ describe("AccountManager", () => {
           entryPointVersion: EntryPointVersion.V0_6,
         })
       ).rejects.toThrow(/v0\.7 or v0\.8/);
+    });
+
+    // #118 M2: a large salt (> 2^53) must round-trip losslessly — persisted as a decimal string,
+    // and the SAME bigint must be used for both the prediction and the deploy-time rebuild.
+    it("persists a large (>2^53) bigint salt losslessly as a decimal string", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const bigSalt = (1n << 64n) + 12345n; // far beyond Number.MAX_SAFE_INTEGER
+
+      const account = await mgr.createAccountWithP256Guardians("user-1", {
+        p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY_LIMIT, salt: bigSalt,
+      });
+
+      // Stored as a decimal string -> JSON-serializable and lossless.
+      expect(account.salt).toBe(bigSalt.toString());
+      expect(typeof account.salt).toBe("string");
+      expect(BigInt(account.salt)).toBe(bigSalt);
+      expect(JSON.parse(JSON.stringify({ salt: account.salt })).salt).toBe(bigSalt.toString());
+
+      // The prediction used the EXACT bigint salt (so deploy-time BigInt(account.salt) === predicted salt).
+      const factory = eth.getFactoryContract.mock.results[0].value;
+      expect(factory.read.getAddress.mock.calls[0][0][1]).toBe(bigSalt);
+    });
+
+    it("rejects an unsafe JS-number salt (> MAX_SAFE_INTEGER) to prevent truncation", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr.createAccountWithP256Guardians("user-1", {
+          p256Guardians: [{ x: X1, y: Y1 }],
+          dailyLimit: DAILY_LIMIT,
+          salt: Number.MAX_SAFE_INTEGER + 1, // 2^53 — loses precision as a JS number
+        })
+      ).rejects.toThrow(/exceeds Number\.MAX_SAFE_INTEGER/);
     });
 
     it("is idempotent for the same user+version", async () => {

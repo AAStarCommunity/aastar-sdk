@@ -23,16 +23,29 @@ deploy time (config-hash-in-salt ⇒ deployed address == predicted address).
   owner-bootstrap (no quorum, no acceptance ceremony, #110④). This differs from
   `createAccountWithGuardians()`, whose owner-only-salt `createAccountWithDefaults` path still requires
   ECDSA `ACCEPT_GUARDIAN` signatures.
-- **Fix: latent factory-ABI selector bug.** The local human-readable `AIRACCOUNT_FACTORY_ABI` declared
+- **Fix (#118 H1): wrong P-256 algId in `buildInitConfig`.** `core/actions/initConfig.ts` defined the
+  passkey constant as `0x01` (= `ALG_BLS`), so the default full-config `approvedAlgIds` for a P-256
+  account was `[0x02, 0x01]` = [ECDSA, BLS] — it wrongly whitelisted BLS and OMITTED P-256. Corrected to
+  `ALG_P256 = 0x03` (`AAStarAirAccountBase.sol:46`, route match `:604`); the default is now `[0x02, 0x03]`
+  (ECDSA owner + P-256, never BLS). Unit tests assert the default contains 0x02 & 0x03 and NOT 0x01.
+- **Fix (#118 M2): salt persisted as a lossless decimal string.** A `number | bigint` salt could
+  truncate (large JS number) or fail JSON serialization (bigint); the deploy-time `BigInt(account.salt)`
+  rebuild would then diverge from the predicted CREATE2 salt and strand funds. The P-256 path now rejects
+  an unsafe-integer number salt and persists `salt` as a decimal string, reconstructed losslessly for
+  both prediction and deploy. Round-trip unit test with a >2^53 salt; the on-chain run uses one too.
+- **Fix (#118 M1 / latent ABI selector bug).** The local human-readable `AIRACCOUNT_FACTORY_ABI` declared
   `InitConfig.TokenConfig` as `(uint256,uint256,uint256)` while the deployed v0.20.0 factory packs it as
   `(uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)` (#82). The type string feeds the 4-byte
   selector, so `getAddress`/`createAccount`/`getAddressWithChainId` reverted on the live factory (the
-  existing ECDSA `createAccount`/basic-create paths too). Corrected to the canonical JSON ABI; guarded by
-  a new selector-parity unit test.
+  existing ECDSA `createAccount`/basic-create paths too). Corrected to the canonical JSON ABI; the
+  selector-parity unit test now PINS the deployed factory's actual selectors (`getAddress 0x3989c6b8`,
+  `createAccount 0x5512953b`, `getAddressWithChainId 0x203df583`) so both SDK ABI sources drifting
+  together still fails the test.
 - **On-chain (Sepolia):** `createAccountWithP256Guardians` deployed account
-  `0x42DB96aBBb787DAC922739E6629B6632cb645814` WITH a passkey guardian (tx
-  `0x32ddae5e…abef03dd`, status 0x1); on-chain `getGuardianP256Key(0)` == the installed `(x, y)`,
-  `guardianCount() == 1`. See `docs/onchain-evidence/v0.20.0.md`.
+  `0x2727282d1E822e8Ae18750393636915ab1bbba72` WITH a passkey guardian (tx
+  `0x5e98c3fa…2308e1c8`, status 0x1) using a >2^53 salt and default `approvedAlgIds == [0x02, 0x03]`;
+  on-chain `getGuardianP256Key(0)` == the installed `(x, y)`, `guardianCount() == 1`. See
+  `docs/onchain-evidence/v0.20.0.md`.
 
 ## [0.22.0] - 2026-06-20
 

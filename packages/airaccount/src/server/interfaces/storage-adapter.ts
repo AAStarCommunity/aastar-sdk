@@ -5,7 +5,15 @@ export interface AccountRecord {
   userId: string;
   address: string;
   signerAddress: string;
-  salt: number | bigint;
+  /**
+   * CREATE2 salt. Canonically persisted as a DECIMAL STRING (lossless, like dailyLimit) — the
+   * full-config / P-256 path (#118 M2) writes it this way so a large salt (> 2^53) neither truncates
+   * as a JS number nor fails JSON serialization as a bigint. The deploy-time rebuild reconstructs it
+   * with `BigInt(account.salt)`, which MUST match the salt used to predict the address
+   * (`_getSalt(owner, salt, configHash)`) or funds sent to the predicted address are stranded.
+   * `number | bigint` retained for back-compat with the legacy create paths.
+   */
+  salt: string | number | bigint;
   deployed: boolean;
   deploymentTxHash: string | null;
   validatorAddress: string;
