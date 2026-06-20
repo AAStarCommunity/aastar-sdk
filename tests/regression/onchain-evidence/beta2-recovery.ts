@@ -52,6 +52,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 // ── beta.4 Sepolia addresses ────────────────────────────────────────────────
 const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ALG_ECDSA = 2;
+// v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
+const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 
 // Factory config tuple (matches l4-beta4-gasless.ts / on-chain factory).
@@ -59,7 +61,9 @@ const FACTORY_ABI = [
     { type: 'function', name: 'getAddress', stateMutability: 'view',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
         { name: 'config', type: 'tuple', components: [
-          { name: 'guardians', type: 'address[3]' }, { name: 'dailyLimit', type: 'uint256' },
+          { name: 'guardians', type: 'address[3]' },
+          { name: 'guardianP256X', type: 'bytes32[3]' }, { name: 'guardianP256Y', type: 'bytes32[3]' },
+          { name: 'dailyLimit', type: 'uint256' },
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
@@ -68,7 +72,9 @@ const FACTORY_ABI = [
     { type: 'function', name: 'createAccount', stateMutability: 'nonpayable',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
         { name: 'config', type: 'tuple', components: [
-          { name: 'guardians', type: 'address[3]' }, { name: 'dailyLimit', type: 'uint256' },
+          { name: 'guardians', type: 'address[3]' },
+          { name: 'guardianP256X', type: 'bytes32[3]' }, { name: 'guardianP256Y', type: 'bytes32[3]' },
+          { name: 'dailyLimit', type: 'uint256' },
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
@@ -140,6 +146,8 @@ async function main() {
     // ── 1. Deploy beta.4 account owned by JASON ─────────────────────────────
     const config = {
         guardians: ['0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000'] as readonly [Address, Address, Address],
+        guardianP256X: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
+        guardianP256Y: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
         dailyLimit: parseEther('1'),                 // dailyLimit > 0 (GUARD-enabled)
         approvedAlgIds: [ALG_ECDSA] as readonly number[],
         minDailyLimit: 0n,

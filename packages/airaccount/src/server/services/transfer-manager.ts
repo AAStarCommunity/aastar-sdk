@@ -31,6 +31,11 @@ import {
   FACTORY_ABI_V6,
 } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
+
+// v0.20.0 (#120): InitConfig gained bytes32[3] guardianP256X / guardianP256Y after `guardians`.
+// ECDSA-only deploy initCode passes three zero words for each.
+const ZERO32 = ("0x" + "0".repeat(64)) as `0x${string}`;
+const EMPTY_P256: readonly [`0x${string}`, `0x${string}`, `0x${string}`] = [ZERO32, ZERO32, ZERO32];
 import { PaymasterPriceStalenessError } from "./paymaster-manager";
 import { UserOperation, PackedUserOperation } from "../../core/types";
 import { ERC4337Utils } from "../../core/erc4337";
@@ -543,6 +548,8 @@ export class TransferManager {
             // Standard account: createAccount with zero guardians and stored dailyLimit.
             const minimalConfig = [
               [zeroAddress, zeroAddress, zeroAddress], // guardians (address[3])
+              EMPTY_P256, // guardianP256X (bytes32[3]) — v0.20.0
+              EMPTY_P256, // guardianP256Y (bytes32[3]) — v0.20.0
               storedDailyLimit,
               [], // approvedAlgIds
               0n, // minDailyLimit

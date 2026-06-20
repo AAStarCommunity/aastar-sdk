@@ -212,11 +212,14 @@ export const AIRACCOUNT_ABI = [
 ];
 
 // M7 factory ABI — ERC-7579 modules pre-installed, ERC-7828 chain-qualified addresses
-// InitConfig: (address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs)
+// v0.20.0 (#120): InitConfig inserted bytes32[3] guardianP256X, bytes32[3] guardianP256Y
+// (P-256 guardian keys) immediately after `address[3] guardians`. ECDSA-only accounts pass
+// [0x0,0x0,0x0] for both. Field ORDER is consensus-critical (CREATE2 address prediction).
+// InitConfig: (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs)
 export const AIRACCOUNT_FACTORY_ABI = [
   // Full config creation
-  "function createAccount(address owner, uint256 salt, (address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external returns (address)",
-  "function getAddress(address owner, uint256 salt, (address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external view returns (address)",
+  "function createAccount(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external returns (address)",
+  "function getAddress(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external view returns (address)",
   // Default guardian setup (requires guardian acceptance sigs — M5.3+)
   "function createAccountWithDefaults(address owner, uint256 salt, address guardian1, bytes guardian1Sig, address guardian2, bytes guardian2Sig, uint256 dailyLimit) external returns (address)",
   "function getAddressWithDefaults(address owner, uint256 salt, address guardian1, address guardian2, uint256 dailyLimit) external view returns (address)",
@@ -233,7 +236,7 @@ export const AIRACCOUNT_FACTORY_ABI = [
   "function defaultHookModule() external view returns (address)",
   // M7.4 ERC-7828 chain-qualified address helpers
   "function getChainQualifiedAddress(address account) external view returns (bytes32)",
-  "function getAddressWithChainId(address owner, uint256 salt, (address[3] guardians, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external view returns (address account, bytes32 chainQualified)",
+  "function getAddressWithChainId(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint256 tier1Limit, uint256 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config) external view returns (address account, bytes32 chainQualified)",
   // Events
   "event AccountCreated(address indexed account, address indexed owner, uint256 salt)",
 ];

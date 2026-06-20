@@ -27,12 +27,16 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
 const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EntryPoint v0.7
 const ALG_ECDSA = 2;
+// v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
+const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 
 const FACTORY_ABI = [
     { type: 'function', name: 'getAddress', stateMutability: 'view',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
         { name: 'config', type: 'tuple', components: [
-          { name: 'guardians', type: 'address[3]' }, { name: 'dailyLimit', type: 'uint256' },
+          { name: 'guardians', type: 'address[3]' },
+          { name: 'guardianP256X', type: 'bytes32[3]' }, { name: 'guardianP256Y', type: 'bytes32[3]' },
+          { name: 'dailyLimit', type: 'uint256' },
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
@@ -41,7 +45,9 @@ const FACTORY_ABI = [
     { type: 'function', name: 'createAccount', stateMutability: 'nonpayable',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
         { name: 'config', type: 'tuple', components: [
-          { name: 'guardians', type: 'address[3]' }, { name: 'dailyLimit', type: 'uint256' },
+          { name: 'guardians', type: 'address[3]' },
+          { name: 'guardianP256X', type: 'bytes32[3]' }, { name: 'guardianP256Y', type: 'bytes32[3]' },
+          { name: 'dailyLimit', type: 'uint256' },
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
@@ -75,6 +81,8 @@ async function main() {
     // GUARD-enabled config: dailyLimit > 0 + ECDSA whitelisted → exercises the executeUserOp path.
     const config = {
         guardians: ['0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000'] as readonly [Address, Address, Address],
+        guardianP256X: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
+        guardianP256Y: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
         dailyLimit: parseEther('1'),
         approvedAlgIds: [ALG_ECDSA] as readonly number[],
         minDailyLimit: 0n,

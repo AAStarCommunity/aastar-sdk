@@ -15,6 +15,11 @@ import { ISignerAdapter } from "../interfaces/signer-adapter";
 import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 
+// v0.20.0 (#120): InitConfig gained bytes32[3] guardianP256X / guardianP256Y (P-256 guardian
+// keys) right after `guardians`. ECDSA-only accounts pass three zero words for each.
+const ZERO32 = ("0x" + "0".repeat(64)) as `0x${string}`;
+const EMPTY_P256: readonly [`0x${string}`, `0x${string}`, `0x${string}`] = [ZERO32, ZERO32, ZERO32];
+
 /**
  * Account manager — extracted from NestJS AccountService.
  * Creates and retrieves smart accounts without framework dependencies.
@@ -64,6 +69,8 @@ export class AccountManager {
     const dailyLimitValue = options?.dailyLimit ?? 0n;
     const minimalConfig = [
       [zeroAddress, zeroAddress, zeroAddress], // guardians (address[3])
+      EMPTY_P256, // guardianP256X (bytes32[3]) — v0.20.0
+      EMPTY_P256, // guardianP256Y (bytes32[3]) — v0.20.0
       dailyLimitValue, // dailyLimit (0 = no guard)
       [], // approvedAlgIds
       0n, // minDailyLimit
