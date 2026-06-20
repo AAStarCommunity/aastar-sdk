@@ -30,6 +30,7 @@ import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, EntryPointABI, AAStarAirAccountV7ABI, AAStarBLSAlgorithmABI,
     encodeDVTVerifierProof, encodeBLSAccountSignature, encodeG2Point, entryPointActions,
+    getDefaultDvtNodes,
 } from '@aastar/core';
 
 const VERIFIER = getAddress(CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm);
@@ -39,11 +40,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 const SEP = 11155111;
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEP].entryPoint);
 const ACC10 = getAddress('0xA063c7B5810fc2f9f0e5198376c83b6B57c80d0c');
-const TUNNELS = [
-    'https://advisors-pumps-cheapest-municipal.trycloudflare.com',
-    'https://assumed-oil-talk-lawyer.trycloudflare.com',
-    'https://lending-configuring-shark-sept.trycloudflare.com',
-];
+// AAStar's always-on testnet DVT nodes (dvt1/2/3.aastar.io) — the SDK default config.
+const TUNNELS = getDefaultDvtNodes(SEP).map((n) => n.url);
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3]
     .map((s) => (s || '').replace(/^['"]|['"]$/g, '')).filter(Boolean) as string[];
 const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient;

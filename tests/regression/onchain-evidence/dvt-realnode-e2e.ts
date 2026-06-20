@@ -68,6 +68,7 @@ import {
     airAccountFactoryActions,
     entryPointActions,
     blsAlgorithmActions,
+    getDefaultDvtNodes,
 } from '@aastar/core';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
@@ -84,13 +85,10 @@ if (VERIFIER !== EXPECTED_VERIFIER) {
     throw new Error(`VERIFIER drift: CANONICAL_ADDRESSES[${SEPOLIA}].aaStarBLSAlgorithm=${VERIFIER} != ${EXPECTED_VERIFIER}`);
 }
 
-// DVT nodes behind Cloudflare tunnels (YetAnotherAA-Validator #93). tunnel→nodeId is resolved
-// DYNAMICALLY from each node's /signature/sign response (we do NOT assume the order).
-const TUNNELS = [
-    'https://advisors-pumps-cheapest-municipal.trycloudflare.com',
-    'https://assumed-oil-talk-lawyer.trycloudflare.com',
-    'https://lending-configuring-shark-sept.trycloudflare.com',
-];
+// AAStar's always-on testnet DVT nodes (dvt1/2/3.aastar.io) — the SDK default config
+// (YetAnotherAA-Validator #93). tunnel→nodeId is resolved DYNAMICALLY from each node's
+// /signature/sign response (we do NOT assume the order).
+const TUNNELS = getDefaultDvtNodes(SEPOLIA).map((n) => n.url);
 
 // algId constants (AAStarAirAccountBase.sol): ALG_BLS=0x01, ALG_ECDSA=0x02, ALG_P256=0x03.
 const ALG_BLS = 0x01;
