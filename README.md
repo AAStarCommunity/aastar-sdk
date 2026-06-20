@@ -24,7 +24,7 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 |---|---|---|---|
 | **AirAccount** (contracts) | `v0.20.0` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
 | **SuperPaymaster** | `v5.4.0-beta.1-redeploy` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
-| **KMS** | `openapi 0.23.1` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
+| **KMS** | `openapi 0.23.2` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
 | **DVT** (validator nodes) | `v1.4.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client (`pending_confirmation` surfaced via `DvtPendingConfirmationError`); on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps). v1.4.0 wire-format unchanged vs v1.3.0 — the per-IP rate-limit + confirm flow are server-side (tracked in #82). |
 
 **How consistency is guaranteed — the anchors:**
