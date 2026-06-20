@@ -148,16 +148,26 @@ function abiFunctionSignature(fn: any): string {
   return `${fn.name}(${params})`;
 }
 
-/** Map each function NAME -> the set of its canonical signatures (handles overloads). */
-function abiFunctionSignatures(file: string): Map<string, Set<string>> {
+/**
+ * Map each ABI member keyed as `type:name` -> the set of its canonical signatures
+ * (handles overloads). Covers functions, EVENTS, and errors — so a changed event
+ * param shape (e.g. `RecoveryProposed` gaining `uint8 guardianIdx`, which moves
+ * topic0) is caught too, not just function signatures.
+ */
+function abiMemberSignatures(file: string): Map<string, Set<string>> {
   const raw = JSON.parse(readText(file));
   const abi = Array.isArray(raw) ? raw : raw.abi;
   const map = new Map<string, Set<string>>();
   if (Array.isArray(abi)) {
     for (const item of abi) {
-      if (item && item.type === "function" && item.name) {
-        if (!map.has(item.name)) map.set(item.name, new Set());
-        map.get(item.name)!.add(abiFunctionSignature(item));
+      if (
+        item &&
+        (item.type === "function" || item.type === "event" || item.type === "error") &&
+        item.name
+      ) {
+        const key = `${item.type}:${item.name}`;
+        if (!map.has(key)) map.set(key, new Set());
+        map.get(key)!.add(abiFunctionSignature(item));
       }
     }
   }
@@ -474,18 +484,20 @@ function analyzeAbis(repo: string, sdkAbiFiles: string[]): AnchorResult {
     const added = [...upFns].filter((f) => !sdkFns.has(f)).sort(); // upstream has, SDK lacks
     const removed = [...sdkFns].filter((f) => !upFns.has(f)).sort(); // SDK has, upstream lacks
 
-    // Signature-level diff for functions present on BOTH sides: catches param/struct
-    // changes (e.g. an InitConfig tuple gaining fields) that the name-set diff misses.
-    const sdkSigs = abiFunctionSignatures(join(ABI_DIR, file));
-    const upSigs = abiFunctionSignatures(upstreamPath);
+    // Signature-level diff for members (function/event/error) present on BOTH sides:
+    // catches param/struct changes (an InitConfig tuple gaining fields, an event gaining
+    // a topic) that the name-set diff is blind to.
+    const sdkSigs = abiMemberSignatures(join(ABI_DIR, file));
+    const upSigs = abiMemberSignatures(upstreamPath);
     const sigChanged: string[] = [];
-    for (const name of [...sdkFns].filter((f) => upFns.has(f)).sort()) {
-      const s = sdkSigs.get(name) ?? new Set<string>();
-      const u = upSigs.get(name) ?? new Set<string>();
+    for (const key of [...sdkSigs.keys()].filter((k) => upSigs.has(k)).sort()) {
+      const s = sdkSigs.get(key) ?? new Set<string>();
+      const u = upSigs.get(key) ?? new Set<string>();
       const onlyUp = [...u].filter((x) => !s.has(x));
       const onlySdk = [...s].filter((x) => !u.has(x));
       if (onlyUp.length || onlySdk.length) {
-        sigChanged.push(`${name}: SDK \`${[...s].join(" | ")}\` != upstream \`${[...u].join(" | ")}\``);
+        const label = key.replace(":", " "); // "event RecoveryProposed" / "function getAddress"
+        sigChanged.push(`${label}: SDK \`${[...s].join(" | ")}\` != upstream \`${[...u].join(" | ")}\``);
       }
     }
 

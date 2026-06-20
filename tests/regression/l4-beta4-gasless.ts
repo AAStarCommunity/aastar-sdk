@@ -20,11 +20,12 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { UserOperationBuilder } from '../../packages/sdk/src/index.js';
 import { wrapExecuteUserOp } from '../../packages/airaccount/src/server/utils/execute-user-op.js';
+import { CANONICAL_ADDRESSES } from '../../packages/core/src/addresses.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
-// ── beta.4 Sepolia addresses ────────────────────────────────────────────────
-const FACTORY: Address = '0x3a9127a5f0b4ca734d54629d0c3ad9f52739c071';
+// ── Sepolia addresses (v0.20.0 canonical — single source of truth in @aastar/core) ──
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address;
 const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EntryPoint v0.7
 const ALG_ECDSA = 2;
 // v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
