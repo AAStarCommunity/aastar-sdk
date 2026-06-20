@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.24.1] - 2026-06-20
+
+**Gap B completion: one-call deploy + validator-router wiring (`deployAndWireValidator`).** 0.24.0
+shipped `ensureValidatorRouter` (the explicit post-deploy wire step); a router-delegated account
+(BLS 0x01 / cumulative / session-key) still needed a separate manual deploy + manual wire. The
+factory's lazy first-UserOp deploy can't bootstrap such an account (its own algorithm can't validate
+until the router is set), so there was no one-call path.
+
+- **`AccountManager.deployAndWireValidator(userId, { walletClient, router? })`** → `{ deployTx?, validator }`:
+  deploys via `factory.createAccount(owner, salt, config)` (config rebuilt byte-identically from the
+  persisted record ⇒ same CREATE2 address) when the account has no code, waits for the deploy receipt,
+  then `setValidator(router)` and waits for THAT receipt — so the account is on-chain-READY when the
+  call returns. No-op for inline algIds (ECDSA/P256/COMBINED_T1) or an already-wired account. Both txs
+  go through the caller-supplied owner/deployer `WalletClient`.
+- **On-chain proven (Sepolia, no DVT):** a fresh BLS-only account
+  `0x73Db0B7e932469C449E87B8B2Ab68b8c2Bfc4cdD` via ONE `deployAndWireValidator` call — deploy tx
+  `0x967e1e2a…`, setValidator tx `0x4e44181d…`, on-chain `validator() == 0xfcDfd17a…` (canonical router).
+  Helper: `tests/regression/onchain-evidence/gap-b-deploy-wire-e2e.ts`. +3 unit tests (64/64 in the
+  account-manager suite).
+
 ## [0.24.0] - 2026-06-20
 
 **DVT through-EntryPoint completion + validator-router wiring + default testnet nodes.** Closes the
@@ -288,8 +308,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.24.0] - 2026-06-20
-**SDK Code Integrity Hash**: `170b24e3477f9e79420f5e5e0c3843bf32ae758585fe410bbcfd74170d45a072`
+## [0.24.1] - 2026-06-20
+**SDK Code Integrity Hash**: `024642f426c83addcf4a1db7264a1858e89835c4752b83010ea0e5182e30bf76`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
