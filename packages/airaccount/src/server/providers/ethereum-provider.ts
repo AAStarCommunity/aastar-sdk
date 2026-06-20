@@ -82,6 +82,11 @@ export class EthereumProvider {
     return this.bundlerProvider;
   }
 
+  /** EVM chain id from the validated ServerConfig (deterministic — no RPC round-trip). */
+  getChainId(): number {
+    return this.config.chainId;
+  }
+
   /**
    * Raw bundler JSON-RPC call. The bundler exposes non-standard methods
    * (eth_sendUserOperation, pimlico_getUserOperationGasPrice, ...) that are not in
