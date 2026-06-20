@@ -86,3 +86,27 @@ Whether a UserOp needs DVT co-sign is decided by the on-chain **PolicyRegistry**
 | policy: is DVT required? | `policyRegistryActions(addr)(client).checkPolicy(...)` |
 
 **Pending (gated):** the client-direct partial-sig collection (D2, independent channel not via CA) waits on the #42 node-protocol channel definition; the owner-facing loosen flow goes through the `TimelockController` (no registry-level pending getter exists).
+
+## Default testnet DVT nodes (`DEFAULT_DVT_NODES`)
+
+`@aastar/core` ships AAStar's always-on **testnet** DVT signer nodes as a built-in default, so a
+consumer doesn't have to hardcode endpoints:
+
+```ts
+import { getDefaultDvtNodes } from '@aastar/core';
+const nodes = getDefaultDvtNodes(11155111); // Sepolia
+// → [{ url: 'https://dvt1.aastar.io', nodeId: '0x2df775b9…' }, dvt2…, dvt3…]
+```
+
+| node | endpoint | nodeId |
+|---|---|---|
+| dvt1 | `https://dvt1.aastar.io` | `0x2df775b934046ddd210828fb5096ea8a15bb18a145dae5bd94535375c319c53f` |
+| dvt2 | `https://dvt2.aastar.io` | `0xd907ad728a7091c5cc628d9c7c71ae8d69f062a39533a2890bea3c299bacd201` |
+| dvt3 | `https://dvt3.aastar.io` | `0xd4f954361cdb2b2d89a631c939b6f930de5b2c5753911d2be7fb1ecc9f17a60e` |
+
+These are AAStar's beta-test nodes with **independent production keys** (not the public `BLS_TEST`
+fixtures), each registered on the v0.20.0 validator `AAStarBLSAlgorithm`
+(`CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm = 0xAF525A…`). On-chain verified: a 3-node co-sign
+→ `validate(userOpHash, proof) === 0`, fail-closed `403` on a bad `ownerAuth`. Endpoint:
+`POST {url}/signature/sign` body `{ userOp, ownerAuth }`. Source of truth:
+`YetAnotherAA-Validator/deploy/sdk-dvt-config.testnet.json`.

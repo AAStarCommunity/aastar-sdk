@@ -23,13 +23,14 @@ import * as path from 'path';
 import { bls12_381 as noble } from '@noble/curves/bls12-381';
 import {
     createPublicClient, createWalletClient, http, concat, numberToHex, parseEther, formatEther,
-    encodeFunctionData, decodeEventLog, getAddress, type Address, type Hex, type PublicClient,
+    encodeFunctionData, decodeEventLog, getAddress, recoverMessageAddress, type Address, type Hex, type PublicClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, EntryPointABI, AAStarAirAccountV7ABI, AAStarBLSAlgorithmABI,
-    encodeDVTVerifierProof, encodeG2Point, entryPointActions,
+    encodeDVTVerifierProof, encodeBLSAccountSignature, encodeG2Point, entryPointActions,
+    getDefaultDvtNodes,
 } from '@aastar/core';
 
 const VERIFIER = getAddress(CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm);
@@ -39,12 +40,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 const SEP = 11155111;
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEP].entryPoint);
 const ACC10 = getAddress('0xA063c7B5810fc2f9f0e5198376c83b6B57c80d0c');
-const ALG_BLS = 0x01;
-const TUNNELS = [
-    'https://advisors-pumps-cheapest-municipal.trycloudflare.com',
-    'https://assumed-oil-talk-lawyer.trycloudflare.com',
-    'https://lending-configuring-shark-sept.trycloudflare.com',
-];
+// AAStar's always-on testnet DVT nodes (dvt1/2/3.aastar.io) — the SDK default config.
+const TUNNELS = getDefaultDvtNodes(SEP).map((n) => n.url);
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3]
     .map((s) => (s || '').replace(/^['"]|['"]$/g, '')).filter(Boolean) as string[];
 const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient;
@@ -102,6 +99,10 @@ async function main() {
 
     // (3) ownerAuth + DVT co-sigs.
     const ownerAuth = await wallet.signMessage({ account: owner, message: { raw: userOpHash } });
+    // DIAGNOSTIC: confirm the owner ECDSA the contract's _validateTripleSignature will recover (L935-937)
+    // resolves to owner() — isolates an owner-sig fault from a BLS fault when validateUserOp==1.
+    const recoveredOwner = await recoverMessageAddress({ message: { raw: userOpHash }, signature: ownerAuth as Hex });
+    console.log(`ownerAuth recovers to ${recoveredOwner} (owner=${owner.address}, match=${recoveredOwner.toLowerCase() === owner.address.toLowerCase()})`);
     const userOpRpc = { sender: userOp.sender, nonce: numberToHex(userOp.nonce), initCode: userOp.initCode, callData: userOp.callData, accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas), gasFees: userOp.gasFees, paymasterAndData: userOp.paymasterAndData, signature: userOp.signature };
     // Collect co-sigs, GATING on isRegistered (the verifier aggregates registeredKeys(nodeId)); a
     // zero/unregistered nodeId would corrupt the aggregate. Retry across rounds for flaky tunnels.
@@ -124,8 +125,25 @@ async function main() {
     const aggSig = encodeG2Point(`0x${agg.toHex(false)}` as Hex);
     const proof = encodeDVTVerifierProof(signed.map((s) => s.nodeId), aggSig);
 
-    // (4) algId-prefixed BLS account signature.
-    const sig = concat([numberToHex(ALG_BLS, { size: 1 }), proof]);
+    // ISOLATION: check the BLS aggregate ITSELF at the verifier BEFORE framing the account sig, so a
+    // failure is attributable — verifier==0 + account==1 ⇒ owner-ECDSA/account-format bug; verifier!=0
+    // ⇒ the collected node set's aggregate is bad (flaky tunnels), NOT my encoding.
+    let verifierResult: bigint | string;
+    try {
+        verifierResult = await rpc((c) => c.readContract({ address: VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'validate', args: [userOpHash, proof] })) as bigint;
+    } catch (e) { verifierResult = `revert: ${(e as Error).message.split('\n')[0].slice(0, 90)}`; }
+    console.log(`verifier.validate(proof) = ${verifierResult} (0 ⇒ BLS aggregate over ${signed.length} nodes is valid)`);
+
+    // (4) Account-level ALG_BLS (0x01) signature for EntryPoint.handleOps:
+    //     [0x01][nodeIdsLength(32)][nodeIds][blsSig(256)][ownerECDSA(65)].
+    //     The trailing 65 bytes are the owner's EIP-191 sig over userOpHash (ownerAuth, computed above)
+    //     — the contract's _validateTripleSignature requires recovered==owner in addition to the BLS
+    //     aggregate. (NOT [0x01]‖verifierProof, which omits the length prefix + owner sig and fails.)
+    const sig = encodeBLSAccountSignature({
+        nodeIds: signed.map((s) => s.nodeId),
+        blsSig: aggSig,
+        ownerSig: ownerAuth as Hex,
+    });
     const signedUserOp = { ...userOp, signature: sig };
 
     // (5) Pre-check validateUserOp == 0 (from EntryPoint).
@@ -135,7 +153,7 @@ async function main() {
         preValid = sim.result as bigint;
     } catch (e) { preValid = `revert: ${(e as Error).message.split('\n')[0].slice(0, 90)}`; }
     console.log(`validateUserOp pre-check = ${preValid} (0 ⇒ BLS sig accepted)`);
-    if (preValid !== 0n) throw new Error(`BLOCKER: validateUserOp pre-check = ${preValid} (BLS aggregate not accepted — insufficient healthy DVT nodes this run); aborting before wasting a reverted handleOps tx.`);
+    if (preValid !== 0n) throw new Error(`BLOCKER: validateUserOp pre-check = ${preValid} while verifier.validate = ${verifierResult}. If verifier==0 but validateUserOp!=0, the BLS aggregate is fine — the fault is account-side (e.g. validator()==0 → call setValidator; owner-ECDSA mismatch; tier gate). If verifier!=0, the collected node set's aggregate is bad (flaky tunnels). Aborting before wasting a reverted handleOps tx.`);
 
     // (6) Ensure deposit covers prefund.
     const required = (verificationGasLimit + callGasLimit + preVerificationGas) * maxFee;
