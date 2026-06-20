@@ -14,6 +14,14 @@ import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
 import { ISignerAdapter } from "../interfaces/signer-adapter";
 import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
+import {
+  buildFullInitConfig,
+  toGuardianSpecs,
+  serializeGuardianSpecs,
+  initConfigToTuple,
+  type FullConfigGuardianParams,
+  type P256GuardianKey,
+} from "./account-init-config";
 
 // v0.20.0 (#120): InitConfig gained bytes32[3] guardianP256X / guardianP256Y (P-256 guardian
 // keys) right after `guardians`. ECDSA-only accounts pass three zero words for each.
@@ -43,8 +51,35 @@ export class AccountManager {
       salt?: number | bigint;
       /** Daily transfer limit in wei. When > 0 the account is created with on-chain guard enforcement. */
       dailyLimit?: bigint;
+      /**
+       * P-256 (passkey) guardians to install at deploy time. When present, the account is created
+       * via the full-config createAccount(owner, salt, config) path (delegates to
+       * {@link createAccountWithP256Guardians}); `dailyLimit` MUST be > 0 (guardians enable the guard).
+       */
+      p256Guardians?: P256GuardianKey[];
+      /** Optional ECDSA guardians installed via the same full-config path (no acceptance sig required). */
+      ecdsaGuardians?: Address[];
+      /** Validator algorithm ids approved at init (full-config path). Defaults to ECDSA (+P-256). */
+      approvedAlgIds?: number[];
+      /** Floor the daily limit may be lowered to via the guard (full-config path). Defaults to 0. */
+      minDailyLimit?: bigint;
     }
   ): Promise<AccountRecord> {
+    // Full-config path: any passkey (P-256) guardian routes through the 8-field InitConfig builder
+    // so the deploy-time initCode can inject guardianP256X/Y (the ECDSA-only createAccountWithDefaults
+    // path cannot). See createAccountWithP256Guardians for the contract-level rationale.
+    if (options?.p256Guardians && options.p256Guardians.length > 0) {
+      return this.createAccountWithP256Guardians(userId, {
+        p256Guardians: options.p256Guardians,
+        ecdsaGuardians: options.ecdsaGuardians,
+        dailyLimit: options.dailyLimit ?? 0n,
+        approvedAlgIds: options.approvedAlgIds,
+        minDailyLimit: options.minDailyLimit,
+        salt: options.salt,
+        entryPointVersion: options.entryPointVersion,
+      });
+    }
+
     const version = options?.entryPointVersion ?? this.ethereum.getDefaultVersion();
     const versionStr = version as string;
 
@@ -320,6 +355,141 @@ export class AccountManager {
 
     await this.storage.saveAccount(account);
     this.logger.log(`[AccountManager] account created with guardians: ${accountAddress}`);
+    return account;
+  }
+
+  /**
+   * Create an AirAccount with one or more P-256 (WebAuthn passkey) guardians installed at
+   * DEPLOY time — the server-client path #118 adds for KMS-custodied / counterfactual accounts
+   * (e.g. YAA) that cannot drive the viem extension layer for account creation.
+   *
+   * Uses the factory's full-config `createAccount(owner, salt, config)` path because it is the
+   * ONLY entrypoint that accepts an 8-field `InitConfig` (and therefore `guardianP256X/Y`). The
+   * 8-field config is built by the core `buildInitConfig` (0.22.0) — never hand-rolled — and the
+   * address is predicted via the factory's full-config `getAddress(owner, salt, config)` (NOT
+   * `getAddressWithDefaults`), binding the address to `keccak256(config)`.
+   *
+   * ### Acceptance-signature semantics (verified against AAStarAirAccountFactoryV7.sol)
+   * On this path the contract performs NO guardian-acceptance signature check — for P-256 OR ECDSA
+   * guardians. Front-run protection comes from `_getSalt(owner, salt, _getConfigHash(config))`:
+   * any change to the guardian set (or any other config field) yields a different CREATE2 address,
+   * so an attacker cannot collide on the victim's counterfactual address with a weaker config.
+   * P-256 guardians are an owner-bootstrap (single guardian can't form a recovery quorum), so no
+   * acceptance ceremony exists for them by design (#110④). This is why optional ECDSA guardians may
+   * also be passed here WITHOUT signatures — distinct from createAccountWithGuardians(), which uses
+   * the owner-only-salt `createAccountWithDefaults` path and DOES require ECDSA acceptance sigs.
+   *
+   * The deploy UserOp is still signed by the existing KMS owner-key path (unchanged): this method
+   * only predicts the address and persists the full config; transfer-manager rebuilds the
+   * byte-identical initCode (via {@link initConfigFromRecord}) at first-UserOp deploy time.
+   *
+   * @throws if no P-256 guardian is supplied, dailyLimit <= 0, or EntryPoint is v0.6.
+   */
+  async createAccountWithP256Guardians(
+    userId: string,
+    params: {
+      /** P-256 (passkey) guardian public keys to install at deploy time (at least one required). */
+      p256Guardians: P256GuardianKey[];
+      /** Optional ECDSA guardians installed via the same full-config path (no acceptance sig). */
+      ecdsaGuardians?: Address[];
+      /** Daily spend limit in wei. MUST be > 0 — a guardian set enables the on-chain guard. */
+      dailyLimit: bigint;
+      /** Validator algorithm ids approved at init. Defaults to ECDSA (+P-256 when a passkey is present). */
+      approvedAlgIds?: number[];
+      /** Floor the daily limit may be lowered to via the guard. Defaults to 0. */
+      minDailyLimit?: bigint;
+      salt?: number | bigint;
+      entryPointVersion?: EntryPointVersion;
+    }
+  ): Promise<AccountRecord> {
+    if (!params.p256Guardians || params.p256Guardians.length === 0) {
+      throw new Error("createAccountWithP256Guardians requires at least one P-256 guardian");
+    }
+    if (params.dailyLimit <= 0n) {
+      throw new Error(
+        "P-256 guardian accounts require dailyLimit > 0 (a guardian set enables the on-chain guard)"
+      );
+    }
+
+    const version = params.entryPointVersion ?? this.ethereum.getDefaultVersion();
+    if (version === EntryPointVersion.V0_6) {
+      throw new Error(
+        "createAccountWithP256Guardians requires EntryPoint v0.7 or v0.8; " +
+          "the v0.6 factory does not support the full-config createAccount(InitConfig) path"
+      );
+    }
+    const versionStr = version as string;
+
+    // Build the FULL 8-field InitConfig (incl. guardianP256X/Y) via the core builder. This also
+    // validates: <= 3 guardians, P-256 coords all-or-nothing + non-zero, sentinel misuse, dailyLimit > 0.
+    const fullParams: FullConfigGuardianParams = {
+      p256Guardians: params.p256Guardians,
+      ecdsaGuardians: params.ecdsaGuardians,
+      dailyLimit: params.dailyLimit,
+      approvedAlgIds: params.approvedAlgIds,
+      minDailyLimit: params.minDailyLimit,
+    };
+    const specs = toGuardianSpecs(fullParams);
+    const config = buildFullInitConfig(fullParams);
+
+    // One full-config (P-256) account per (user, version) — idempotent like the other create paths.
+    const existingAccounts = await this.storage.getAccounts();
+    const existing = existingAccounts.find(
+      a =>
+        a.userId === userId &&
+        a.entryPointVersion === versionStr &&
+        !!a.guardianSpecs &&
+        a.guardianSpecs.length > 0
+    );
+    if (existing) return existing;
+
+    const { address: signerAddress } = await this.signer.ensureSigner(userId);
+    const salt = params.salt ?? Math.floor(Math.random() * 1000000);
+
+    const factory = this.ethereum.getFactoryContract(version);
+    const factoryAddress = (factory.address as string) ?? this.ethereum.getFactoryAddress(version);
+
+    // Predict via the FULL-config getAddress(owner, salt, config). The address is bound to
+    // keccak256(config), so the deploy-time initCode MUST embed the byte-identical config
+    // (transfer-manager rebuilds it from the persisted record fields below).
+    const accountAddress = await readPredictedAddress(
+      factory,
+      signerAddress,
+      BigInt(salt),
+      initConfigToTuple(config)
+    );
+
+    let deployed = false;
+    try {
+      const code = await this.ethereum.getProvider().getCode({ address: accountAddress as Address });
+      deployed = !!code && code !== "0x";
+    } catch {
+      // Assume not deployed
+    }
+
+    const validatorAddress = this.ethereum.getValidatorAddress(version);
+    const account: AccountRecord = {
+      userId,
+      address: accountAddress,
+      signerAddress,
+      salt,
+      deployed,
+      deploymentTxHash: null,
+      validatorAddress,
+      entryPointVersion: versionStr,
+      factoryAddress,
+      createdAt: new Date().toISOString(),
+      dailyLimit: params.dailyLimit.toString(),
+      // Persist the RESOLVED config so transfer-manager rebuilds byte-identical initCode at deploy.
+      guardianSpecs: serializeGuardianSpecs(specs),
+      approvedAlgIds: [...config.approvedAlgIds],
+      minDailyLimit: config.minDailyLimit.toString(),
+    };
+
+    await this.storage.saveAccount(account);
+    this.logger.log(
+      `[AccountManager] account created with ${params.p256Guardians.length} P-256 guardian(s): ${accountAddress}`
+    );
     return account;
   }
 }

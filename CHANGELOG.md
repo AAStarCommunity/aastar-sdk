@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.23.0] - 2026-06-20
+
+**Feature (#118): P-256 (passkey) MAIN-account creation in the server-client (the path YAA uses).**
+The server-client `AccountManager` could previously only deploy ECDSA-guardian accounts
+(`createAccountWithDefaults`), with no way to inject `InitConfig.guardianP256X/Y` — so a KMS-custodied
+/ counterfactual owner could not install a passkey guardian AT DEPLOY time. New method
+`AccountManager.createAccountWithP256Guardians(userId, { p256Guardians, ecdsaGuardians?, dailyLimit,
+approvedAlgIds?, minDailyLimit?, salt?, entryPointVersion? })` (and a `p256Guardians` option on
+`createAccount`) builds the full 8-field `InitConfig` via core `buildInitConfig` (reused, not
+hand-rolled), predicts the address via the factory's full-config `getAddress(owner, salt, config)`, and
+persists the resolved config on the account record. New shared helpers `account-init-config.ts`
+(`buildFullInitConfig`, `toGuardianSpecs`, `initConfigToTuple`, `serializeGuardianSpecs`,
+`initConfigFromRecord`) let `transfer-manager` rebuild the BYTE-IDENTICAL initCode at first-UserOp
+deploy time (config-hash-in-salt ⇒ deployed address == predicted address).
+
+- **Acceptance-hash semantics (verified vs `AAStarAirAccountFactoryV7.sol`):** the full-config
+  `createAccount` path performs NO guardian-acceptance signature check — for P-256 OR ECDSA guardians.
+  Front-run protection is the `keccak256(InitConfig)`-in-CREATE2-salt binding; P-256 guardians are an
+  owner-bootstrap (no quorum, no acceptance ceremony, #110④). This differs from
+  `createAccountWithGuardians()`, whose owner-only-salt `createAccountWithDefaults` path still requires
+  ECDSA `ACCEPT_GUARDIAN` signatures.
+- **Fix: latent factory-ABI selector bug.** The local human-readable `AIRACCOUNT_FACTORY_ABI` declared
+  `InitConfig.TokenConfig` as `(uint256,uint256,uint256)` while the deployed v0.20.0 factory packs it as
+  `(uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)` (#82). The type string feeds the 4-byte
+  selector, so `getAddress`/`createAccount`/`getAddressWithChainId` reverted on the live factory (the
+  existing ECDSA `createAccount`/basic-create paths too). Corrected to the canonical JSON ABI; guarded by
+  a new selector-parity unit test.
+- **On-chain (Sepolia):** `createAccountWithP256Guardians` deployed account
+  `0x42DB96aBBb787DAC922739E6629B6632cb645814` WITH a passkey guardian (tx
+  `0x32ddae5e…abef03dd`, status 0x1); on-chain `getGuardianP256Key(0)` == the installed `(x, y)`,
+  `guardianCount() == 1`. See `docs/onchain-evidence/v0.20.0.md`.
+
 ## [0.22.0] - 2026-06-20
 
 **Feature (#110 Batch 2): P-256 (WebAuthn passkey) guardians.** Replaces the 8 `NOT_IMPLEMENTED`
@@ -218,8 +250,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.22.0] - 2026-06-20
-**SDK Code Integrity Hash**: `42b3a7765f5bf7021f58329783e01ed7399751d86c1ded6427e021b44408d529`
+## [0.23.0] - 2026-06-20
+**SDK Code Integrity Hash**: `10c76681925b6453418bc4d90aefa678f1e90e572f671f7a88e686c2e7be9263`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:

@@ -24,6 +24,19 @@ export { EthereumProvider } from "./providers/ethereum-provider";
 
 // ── Services ──────────────────────────────────────────────────────
 export { AccountManager } from "./services/account-manager";
+// Full-config (P-256 / passkey guardian) account-creation helpers (#118).
+export {
+  buildFullInitConfig,
+  toGuardianSpecs,
+  serializeGuardianSpecs,
+  initConfigToTuple,
+  initConfigFromRecord,
+} from "./services/account-init-config";
+export type {
+  P256GuardianKey,
+  FullConfigGuardianParams,
+  SerializedGuardianSpec,
+} from "./services/account-init-config";
 export { ModuleManager } from "./services/module-manager";
 export { buildInstallModuleHash, buildUninstallModuleHash } from "./services/module-manager";
 export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";

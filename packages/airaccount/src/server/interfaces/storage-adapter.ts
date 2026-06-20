@@ -27,6 +27,24 @@ export interface AccountRecord {
   guardian1Sig?: string;
   guardian2?: string;
   guardian2Sig?: string;
+  /**
+   * Full-config (8-field InitConfig) guardian slots — each is either an ECDSA address or a
+   * P-256 (passkey) public key (x, y). Present ONLY for accounts created via
+   * createAccountWithP256Guardians() (the factory's createAccount(owner, salt, config) path).
+   * transfer-manager rebuilds the byte-identical InitConfig from these at first-UserOp deploy
+   * time so the deployed CREATE2 address matches the create-time prediction.
+   */
+  guardianSpecs?: Array<{ ecdsa: string } | { p256: { x: string; y: string } }>;
+  /**
+   * Resolved approvedAlgIds written into the init config (full-config path). Persisted so the
+   * deploy-time InitConfig is reconstructed EXACTLY (no re-defaulting). Paired with guardianSpecs.
+   */
+  approvedAlgIds?: number[];
+  /**
+   * minDailyLimit floor (wei, decimal string) written into the init config (full-config path).
+   * Paired with guardianSpecs for exact deploy-time reconstruction.
+   */
+  minDailyLimit?: string;
 }
 
 /**

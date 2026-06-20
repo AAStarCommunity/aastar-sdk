@@ -31,6 +31,7 @@ import {
   FACTORY_ABI_V6,
 } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
+import { initConfigFromRecord, initConfigToTuple } from "./account-init-config";
 
 // v0.20.0 (#120): InitConfig gained bytes32[3] guardianP256X / guardianP256Y after `guardians`.
 // ECDSA-only deploy initCode passes three zero words for each.
@@ -525,7 +526,17 @@ export class TransferManager {
         let deployCalldata: string;
         if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
           const storedDailyLimit = account.dailyLimit ? BigInt(account.dailyLimit) : 0n;
-          if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
+          if (account.guardianSpecs && account.guardianSpecs.length > 0) {
+            // Full-config (P-256 / mixed-guardian) account (#118): rebuild the BYTE-IDENTICAL
+            // 8-field InitConfig from the persisted record so the deploy CREATE2 address matches
+            // the create-time prediction (the factory binds the address to keccak256(config)).
+            const rebuilt = initConfigFromRecord(account);
+            deployCalldata = encodeFn(AIRACCOUNT_FACTORY_ABI_PARSED, "createAccount", [
+              account.signerAddress,
+              BigInt(account.salt),
+              initConfigToTuple(rebuilt),
+            ]);
+          } else if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
             // Guardian account: use createAccountWithDefaults so the factory-computed address
             // matches the stored sender (which was predicted via getAddressWithDefaults).
             // bytes params require 0x-prefixed hex — guard against missing prefix.
