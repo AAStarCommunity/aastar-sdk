@@ -679,6 +679,11 @@ export class AccountManager {
       walletClient,
       router: opts.router,
     });
+    // Wait for the setValidator tx to land so the account is on-chain-READY when this call returns
+    // (ensureValidatorRouter itself fires-and-returns the hash without waiting).
+    if (validator.set && validator.tx) {
+      await this.ethereum.getProvider().waitForTransactionReceipt({ hash: validator.tx });
+    }
     return { deployTx, validator };
   }
 }
