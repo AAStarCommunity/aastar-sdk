@@ -367,7 +367,8 @@ export class PaymasterClient {
                     validityWindow: options?.validityWindow,
                     operator: options?.operator,
                     factory: options?.factory,
-                    factoryData: options?.factoryData
+                    factoryData: options?.factoryData,
+                    airAccountSig: options?.airAccountSig // forward so internal estimate signs in the same format (#115 H-1)
                 }
             );
             gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
