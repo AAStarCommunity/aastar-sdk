@@ -75,7 +75,7 @@ Run this command in your project root / 在项目根目录运行：
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 ```
-**Expected Hash for v0.21.0**: `fe1ddda9e6158486e2a50cbdb7ad033daa86665be4bda8832b21cdece0b7fe6a`
+**Expected Hash for v0.21.1**: `5d6558019480022f7367e5d1562dea0c4c54c034b3e6e86d2c7211c2cca4e1b9`
 
 ---
 
