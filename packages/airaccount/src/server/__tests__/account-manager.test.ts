@@ -799,4 +799,90 @@ describe("AccountManager", () => {
       expect(wallet.writeContract.mock.calls[0][0].args).toEqual([override]);
     });
   });
+
+  // ── deployAndWireValidator (Gap B — one-call deploy + setValidator) ──
+  describe("deployAndWireValidator", () => {
+    const SEPOLIA = 11155111;
+    const SEPOLIA_ROUTER = "0xfcDfd17a373E037c3F9C8ffE2c781915E7Ae6e11";
+    const ZERO = "0x0000000000000000000000000000000000000000";
+    const X1 = `0x${"11".repeat(32)}`;
+    const Y1 = `0x${"22".repeat(32)}`;
+    const CODE = "0x6080604052";
+
+    /** EthereumProvider mock with the create + deploy + wire surfaces. `codeSeq` lets getCode return
+     *  "0x" (not deployed) for the deployAndWireValidator check, then bytecode for ensureValidatorRouter. */
+    function makeDeployMock(codeSeq: string[]) {
+      const getCode = vi.fn();
+      codeSeq.forEach((c) => getCode.mockResolvedValueOnce(c));
+      getCode.mockResolvedValue(codeSeq[codeSeq.length - 1]);
+      return makeEthereumMock({
+        getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_7),
+        getFactoryContract: vi.fn().mockReturnValue({
+          read: { getAddress: vi.fn().mockResolvedValue("0xRouterDelegatedAcct0000000000000000000001") },
+          address: FACTORY_ADDRESS,
+        }),
+        getChainId: vi.fn().mockReturnValue(SEPOLIA),
+        getAccountContract: vi.fn().mockReturnValue({ read: { validator: vi.fn().mockResolvedValue(ZERO) } }),
+        getProvider: vi.fn().mockReturnValue({
+          getCode,
+          waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: "success" }),
+        }),
+      });
+    }
+
+    /** A WalletClient stub whose writeContract returns a distinct hash per function (createAccount/setValidator). */
+    function makeWallet() {
+      return {
+        account: { address: SIGNER_ADDRESS },
+        chain: undefined,
+        writeContract: vi.fn().mockImplementation((c: { functionName: string }) =>
+          Promise.resolve(c.functionName === "createAccount" ? "0xDEPLOYTX" : "0xVALIDATORTX")
+        ),
+      };
+    }
+
+    async function seedBlsAccount(mgr: AccountManager) {
+      // approvedAlgIds:[0x01] (BLS) ⇒ router-delegated; persists guardianSpecs for initConfigFromRecord.
+      await mgr.createAccountWithP256Guardians("user-1", {
+        p256Guardians: [{ x: X1, y: Y1 }],
+        dailyLimit: 1000000000000000000n,
+        approvedAlgIds: [0x01],
+      });
+    }
+
+    it("throws without a walletClient", async () => {
+      const mgr = new AccountManager(makeDeployMock([CODE]) as any, storage, signer, new SilentLogger());
+      await seedBlsAccount(mgr);
+      await expect(mgr.deployAndWireValidator("user-1", {} as any)).rejects.toThrow(/walletClient/);
+    });
+
+    it("deploys (createAccount) then wires the validator in one call", async () => {
+      // getCode sequence: "0x" (seed create's deploy-status read) → "0x" (deployAndWire's deploy check,
+      // triggers createAccount) → CODE (ensureValidatorRouter's deployed check, post-deploy).
+      const mgr = new AccountManager(makeDeployMock(["0x", "0x", CODE]) as any, storage, signer, new SilentLogger());
+      await seedBlsAccount(mgr);
+      const wallet = makeWallet();
+
+      const r = await mgr.deployAndWireValidator("user-1", { walletClient: wallet as any });
+
+      expect(r.deployTx).toBe("0xDEPLOYTX");
+      expect(r.validator).toEqual({ set: true, tx: "0xVALIDATORTX", router: SEPOLIA_ROUTER });
+      // Two writes: factory.createAccount, then account.setValidator(canonical router).
+      const fns = wallet.writeContract.mock.calls.map((c: any[]) => c[0].functionName);
+      expect(fns).toEqual(["createAccount", "setValidator"]);
+    });
+
+    it("skips deploy when the account already has code, just wires the validator", async () => {
+      const mgr = new AccountManager(makeDeployMock([CODE]) as any, storage, signer, new SilentLogger());
+      await seedBlsAccount(mgr);
+      const wallet = makeWallet();
+
+      const r = await mgr.deployAndWireValidator("user-1", { walletClient: wallet as any });
+
+      expect(r.deployTx).toBeUndefined();
+      expect(r.validator.set).toBe(true);
+      const fns = wallet.writeContract.mock.calls.map((c: any[]) => c[0].functionName);
+      expect(fns).toEqual(["setValidator"]); // no createAccount
+    });
+  });
 });
