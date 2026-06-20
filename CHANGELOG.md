@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.0] - 2026-06-20
+
+**Feature (#110 Batch 2): P-256 (WebAuthn passkey) guardians.** Replaces the 8 `NOT_IMPLEMENTED`
+stubs from 0.21.0 with real implementations. New core crypto module `crypto/p256Guardian.ts`
+(re-exported by `@aastar/sdk`): `buildP256GuardianChallenge`, `encodeWebAuthnAssertion` (5-field
+abi.encode, fixed `webauthn.get` prefix, low-S), `coseToP256XY` (COSE_Key + compressed/uncompressed
+SEC1, enforced kty/crv), per-op opData builders, `signP256GuardianAssertion` (software authenticator).
+The 8 `airAccountExtension` wrappers (`addP256Guardian`, `proposeRecoveryWithSig`, …, mixed-sig) are
+real, with `getStorageAt`-based mixed-sig nonce getters. `buildInitConfig` wires P-256 guardians
+through the high-level InitConfig; passkey-guardian creation is guardian-sig-free owner bootstrap.
+All encodings byte-verified against `AirAccountExtension.sol`. **On-chain**: `proposeRecoveryWithSig`
+landed status 0x1 on Sepolia (the contract's EIP-7212 verification of the SDK challenge+assertion
+passed). Codex 2-round APPROVE. Also bumps the KMS pin `openapi 0.23.1 → 0.23.2` (api in-sync).
+
 ## [0.21.1] - 2026-06-20
 
 **Fix (#115): PaymasterClient V4 — account-type-aware UserOp signing.** V4 signed UserOps with a
@@ -204,8 +218,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.21.1] - 2026-06-20
-**SDK Code Integrity Hash**: `5d6558019480022f7367e5d1562dea0c4c54c034b3e6e86d2c7211c2cca4e1b9`
+## [0.22.0] - 2026-06-20
+**SDK Code Integrity Hash**: `42b3a7765f5bf7021f58329783e01ed7399751d86c1ded6427e021b44408d529`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
