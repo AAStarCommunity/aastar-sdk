@@ -20,6 +20,13 @@ infra pins; the P-256 / WebAuthn guardian feature itself is Batch 2 (stubbed her
     wrapper becomes ABI-absent.
   - **Events**: `RecoveryProposed` / `RecoveryApproved` / `RecoveryCancelVoted` gained a trailing
     `uint8 guardianIdx` (topic0 changed); vendored ABIs + the AirAccount event-ABI constants updated.
+  - **REMOVE_GUARDIAN signing payload (Batch-1 breaking; spec §6.4 / #120 [HIGH])**: the guardian-signed
+    `opData` is now `abi.encode(nonce, index, guardianToRemove, p256X, p256Y)` (was `(nonce, guardianToRemove)`).
+    This affects the **plain ECDSA** removal path too (extra `index` + two `bytes32(0)` key words). Added
+    `RecoveryService.buildRemoveGuardianHash(...)` (the SDK had no removal-signing helper before — only the
+    `encodeRemoveGuardian` calldata encoder, which is unaffected) returning the raw `_guardianOpHash` challenge
+    for guardians to `personal_sign`; golden-vector tests included. Source: `airaccount-contract`
+    `docs/p256-guardian-spec.md` §6.4 + `AAStarAirAccountBase.removeGuardian`.
   - **P-256 / WebAuthn guardian = Batch 2**: `getRecoveryNonce` and `getGuardianP256Key` ship as real
     view reads; `addP256Guardian`, `addP256GuardianWithMixedSigs`, `addGuardianWithMixedSigs`,
     `proposeRecoveryWithSig`, `approveRecoveryWithSig`, `cancelRecoveryWithSig`,
