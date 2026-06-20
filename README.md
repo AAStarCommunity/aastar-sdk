@@ -83,10 +83,19 @@ The SDK follows a layered abstraction model to balance control and ease of use:
 ## Installation
 
 ```bash
-pnpm install @aastar/sdk @aastar/core viem
+pnpm install @aastar/sdk viem
+```
 
-# For AI Agent / AirAccount features (browser or server)
-pnpm install @aastar/airaccount
+`@aastar/sdk` is the single published package — it bundles the whole SDK and exposes
+everything through subpaths (the per-package `@aastar/core`, `@aastar/airaccount`, … are
+`private` and NOT published separately; do not install them):
+
+```ts
+import { createEndUserClient, CANONICAL_ADDRESSES } from '@aastar/sdk';        // core + clients
+import { coseToP256XY, airAccountExtensionActions } from '@aastar/sdk';         // P-256 guardian surface
+import { AirAccountClient } from '@aastar/sdk/airaccount';                       // AirAccount client
+import { AccountManager } from '@aastar/sdk/kms';                               // KMS server-client
+// other subpaths: @aastar/sdk/core · /paymaster · /identity · /tokens · /dapp · /enduser · /operator · /admin · /x402 · /channel
 ```
 
 ---
@@ -123,7 +132,7 @@ await operator.onboardOperator({
 
 ### 3. AirAccount: Smart Account with Passkey (Browser)
 ```typescript
-import { AirAccountClient } from '@aastar/airaccount';
+import { AirAccountClient } from '@aastar/sdk/airaccount';
 
 // `apiURL` is the passkey RP backend. AAStar's official hosted RP will be
 // `https://auth.aastar.io` (served by aNode); you can also point at your own.
@@ -148,7 +157,7 @@ const verification = await air.passkey.verifyTransaction({
 
 ### 4. AirAccount: Smart Account with Tiered Signatures (Server / AI Agent)
 ```typescript
-import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/sdk/kms';
 
 const client = new AirAccountServerClient({
   rpcUrl: 'https://optimism.rpc-url',
@@ -329,11 +338,12 @@ SDK 采用分层抽象模型，平衡了控制灵活性与易用性：
 
 ### 安装
 ```bash
-pnpm install @aastar/sdk @aastar/core viem
-
-# AI Agent / AirAccount 功能（浏览器或服务端）
-pnpm install @aastar/airaccount
+pnpm install @aastar/sdk viem
 ```
+
+`@aastar/sdk` 是唯一发布的包——它打包了整个 SDK,通过子路径暴露全部能力(各子包 `@aastar/core`、
+`@aastar/airaccount`… 均为 `private`、**不单独发布,请勿安装**):`@aastar/sdk/airaccount`(AirAccount 客户端)、
+`@aastar/sdk/kms`(KMS server-client)、`@aastar/sdk/core`、`/paymaster`、`/dapp` 等。
 
 ---
 
@@ -367,7 +377,7 @@ await operator.onboardOperator({
 
 #### 3. AirAccount: Passkey 智能账户（浏览器）
 ```typescript
-import { AirAccountClient } from '@aastar/airaccount';
+import { AirAccountClient } from '@aastar/sdk/airaccount';
 
 // `apiURL` 为 passkey RP 后端。AAStar 官方托管 RP 将是 `https://auth.aastar.io`
 // （由 aNode 提供）；你也可以指向自建后端。
@@ -392,7 +402,7 @@ const verification = await air.passkey.verifyTransaction({
 
 #### 4. AirAccount: 分层签名智能账户（服务端 / AI Agent）
 ```typescript
-import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/airaccount/server';
+import { AirAccountServerClient, MemoryStorage, LocalWalletSigner } from '@aastar/sdk/kms';
 
 const client = new AirAccountServerClient({
   rpcUrl: 'https://optimism.rpc-url',
