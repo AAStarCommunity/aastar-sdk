@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/Status-v0.20.8-green" alt="Status" style="display:inline-block;" />
+  <img src="https://img.shields.io/badge/Status-v0.22.0-green" alt="Status" style="display:inline-block;" />
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
@@ -275,7 +275,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.21.1)**: `5d6558019480022f7367e5d1562dea0c4c54c034b3e6e86d2c7211c2cca4e1b9`
+**Current Code Integrity Hash (v0.22.0)**: `42b3a7765f5bf7021f58329783e01ed7399751d86c1ded6427e021b44408d529`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
