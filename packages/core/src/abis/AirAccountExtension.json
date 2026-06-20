@@ -30,6 +30,100 @@
     },
     {
       "type": "function",
+      "name": "addGuardianWithMixedSigs",
+      "inputs": [
+        {
+          "name": "_guardian",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "addP256Guardian",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "addP256GuardianWithMixedSigs",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "approveRecovery",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "approveRecoveryWithSig",
+      "inputs": [
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "approveWeightChange",
       "inputs": [],
       "outputs": [],
@@ -96,6 +190,31 @@
     },
     {
       "type": "function",
+      "name": "cancelRecovery",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "cancelRecoveryWithSig",
+      "inputs": [
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "cancelWeightChange",
       "inputs": [],
       "outputs": [],
@@ -129,10 +248,41 @@
     },
     {
       "type": "function",
+      "name": "executeRecovery",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "executeWeightChange",
       "inputs": [],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getGuardianP256Key",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -169,6 +319,39 @@
           "internalType": "uint256"
         }
       ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "modifyTierLimitsWithMixedGuardians",
+      "inputs": [
+        {
+          "name": "_tier1",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_tier2",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
       "stateMutability": "nonpayable"
     },
     {
@@ -369,6 +552,42 @@
     },
     {
       "type": "function",
+      "name": "proposeRecovery",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "proposeRecoveryWithSig",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "proposeWeightChange",
       "inputs": [
         {
@@ -480,6 +699,29 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "removeGuardianWithMixedSigs",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -850,6 +1092,44 @@
     },
     {
       "type": "event",
+      "name": "GuardianAdded",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "indexed": true,
+          "internalType": "uint8"
+        },
+        {
+          "name": "guardian",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GuardianRemoved",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "indexed": true,
+          "internalType": "uint8"
+        },
+        {
+          "name": "guardian",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "Initialized",
       "inputs": [
         {
@@ -964,6 +1244,175 @@
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OwnerChanged",
+      "inputs": [
+        {
+          "name": "oldOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "P256GuardianAdded",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "indexed": true,
+          "internalType": "uint8"
+        },
+        {
+          "name": "x",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RecoveryApproved",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "approvedBy",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "approvalCount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardianIdx",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RecoveryCancelVoted",
+      "inputs": [
+        {
+          "name": "votedBy",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "cancelCount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardianIdx",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RecoveryCancelled",
+      "inputs": [],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RecoveryExecuted",
+      "inputs": [
+        {
+          "name": "oldOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RecoveryProposed",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "proposedBy",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "guardianIdx",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TierLimitsSet",
+      "inputs": [
+        {
+          "name": "tier1",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "tier2",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1259,6 +1708,31 @@
     },
     {
       "type": "error",
+      "name": "AlreadyApproved",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AlreadyCancelVoted",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CannotIncreaseTierLimit",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DuplicateGuardianSig",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DuplicateP256GuardianKey",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "ECDSAInvalidSignature",
       "inputs": []
     },
@@ -1286,6 +1760,11 @@
     },
     {
       "type": "error",
+      "name": "GuardianAlreadySet",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "IdentityRegistrationFailed",
       "inputs": []
     },
@@ -1301,7 +1780,22 @@
     },
     {
       "type": "error",
+      "name": "InsufficientGuardianApprovals",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidAuthenticatorData",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "InvalidGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidGuardianSignature",
       "inputs": []
     },
     {
@@ -1312,6 +1806,42 @@
     {
       "type": "error",
       "name": "InvalidModuleType",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidNewOwner",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidP256GuardianKey",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidP256GuardianSignature",
+      "inputs": [
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidTierConfig",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MaxGuardiansReached",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MinGuardianRequired",
       "inputs": []
     },
     {
@@ -1377,6 +1907,11 @@
     },
     {
       "type": "error",
+      "name": "NoActiveRecovery",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "NoModuleInstallProposal",
       "inputs": []
     },
@@ -1412,7 +1947,27 @@
     },
     {
       "type": "error",
+      "name": "RecoveryAlreadyProposed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RecoveryNotApproved",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RecoveryTimelockNotExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "Reentrancy",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "TierLimitSigExpired",
       "inputs": []
     },
     {
@@ -1430,6 +1985,11 @@
           "internalType": "uint256"
         }
       ]
+    },
+    {
+      "type": "error",
+      "name": "UseGuardianConsensus",
+      "inputs": []
     },
     {
       "type": "error",

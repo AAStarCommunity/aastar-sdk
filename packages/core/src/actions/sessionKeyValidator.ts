@@ -10,6 +10,20 @@ export type P256SessionState = {
     prevCount: number;
 };
 
+// SessionKeyValidator.Session — the session-grant config tuple hashed by
+// buildGrantHash / buildP256GrantHash (the EIP-712-style digest the account
+// owner signs to authorize a session key).
+export type SessionConfig = {
+    expiry: number;
+    contractScope: Address;
+    selectorScope: Hex;
+    revoked: boolean;
+    velocityLimit: number;
+    velocityWindow: number;
+    callTargets: readonly Address[];
+    selectorAllowlist: readonly Hex[];
+};
+
 export type SessionKeyValidatorActions = {
     // checkSessionScope reverts (view) when the session may not call dest/selector.
     checkSessionScope: (args: { account: Address, sessionKeyOrHash: Hex, sessionType: number, dest: Address, selector: Hex }) => Promise<void>;
@@ -19,6 +33,10 @@ export type SessionKeyValidatorActions = {
     sessionStates_p256: (args: { account: Address, keyHash: Hex }) => Promise<P256SessionState>;
     // recordCallForVelocity advances the velocity counter (state-changing).
     recordCallForVelocity: (args: { account: Address, sessionKeyOrHash: Hex, sessionType: number, signer?: Account | Address }) => Promise<Hash>;
+    // buildGrantHash / buildP256GrantHash return the digest the account owner signs
+    // to authorize an ECDSA / P-256 session key for `cfg` (view).
+    buildGrantHash: (args: { account: Address, sessionKey: Address, cfg: SessionConfig }) => Promise<Hex>;
+    buildP256GrantHash: (args: { account: Address, p256KeyX: Hex, p256KeyY: Hex, cfg: SessionConfig }) => Promise<Hex>;
 };
 
 const ABI = SessionKeyValidatorABI;
@@ -98,6 +116,33 @@ export const sessionKeyValidatorActions = (address: Address) => (client: PublicC
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'recordCallForVelocity');
+        }
+    },
+
+    async buildGrantHash({ account, sessionKey, cfg }) {
+        try {
+            validateAddress(account, 'account');
+            validateAddress(sessionKey, 'sessionKey');
+            validateRequired(cfg, 'cfg');
+            return await (client as PublicClient).readContract({
+                address, abi: ABI, functionName: 'buildGrantHash', args: [account, sessionKey, cfg]
+            }) as Hex;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'buildGrantHash');
+        }
+    },
+
+    async buildP256GrantHash({ account, p256KeyX, p256KeyY, cfg }) {
+        try {
+            validateAddress(account, 'account');
+            validateRequired(p256KeyX, 'p256KeyX');
+            validateRequired(p256KeyY, 'p256KeyY');
+            validateRequired(cfg, 'cfg');
+            return await (client as PublicClient).readContract({
+                address, abi: ABI, functionName: 'buildP256GrantHash', args: [account, p256KeyX, p256KeyY, cfg]
+            }) as Hex;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'buildP256GrantHash');
         }
     },
 });

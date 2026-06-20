@@ -102,13 +102,6 @@
     },
     {
       "type": "function",
-      "name": "approveRecovery",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
       "name": "approvedAlgorithms",
       "inputs": [
         {
@@ -125,13 +118,6 @@
         }
       ],
       "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "cancelRecovery",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -218,13 +204,6 @@
     },
     {
       "type": "function",
-      "name": "executeRecovery",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
       "name": "executeUserOp",
       "inputs": [
         {
@@ -291,6 +270,19 @@
     {
       "type": "function",
       "name": "getDeposit",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRecoveryNonce",
       "inputs": [],
       "outputs": [
         {
@@ -463,6 +455,16 @@
               "internalType": "address[3]"
             },
             {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
               "name": "dailyLimit",
               "type": "uint256",
               "internalType": "uint256"
@@ -540,6 +542,16 @@
               "internalType": "address[3]"
             },
             {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
               "name": "dailyLimit",
               "type": "uint256",
               "internalType": "uint256"
@@ -610,6 +622,16 @@
               "name": "guardians",
               "type": "address[3]",
               "internalType": "address[3]"
+            },
+            {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
             },
             {
               "name": "dailyLimit",
@@ -941,19 +963,6 @@
         }
       ],
       "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "proposeRecovery",
-      "inputs": [
-        {
-          "name": "_newOwner",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -1554,6 +1563,31 @@
     },
     {
       "type": "event",
+      "name": "P256GuardianAdded",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "indexed": true,
+          "internalType": "uint8"
+        },
+        {
+          "name": "x",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "P256KeySet",
       "inputs": [
         {
@@ -1605,6 +1639,12 @@
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
+        },
+        {
+          "name": "guardianIdx",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
         }
       ],
       "anonymous": false
@@ -1624,6 +1664,12 @@
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
+        },
+        {
+          "name": "guardianIdx",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
         }
       ],
       "anonymous": false
@@ -1668,6 +1714,12 @@
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        },
+        {
+          "name": "guardianIdx",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
         }
       ],
       "anonymous": false
@@ -2036,6 +2088,11 @@
     },
     {
       "type": "error",
+      "name": "DuplicateP256GuardianKey",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "ECDSAInvalidSignature",
       "inputs": []
     },
@@ -2152,6 +2209,22 @@
       "type": "error",
       "name": "InvalidNewOwner",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidP256GuardianKey",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidP256GuardianSignature",
+      "inputs": [
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ]
     },
     {
       "type": "error",
@@ -2282,6 +2355,11 @@
     {
       "type": "error",
       "name": "UnsupportedInnerSelector",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "UseGuardianConsensus",
       "inputs": []
     },
     {

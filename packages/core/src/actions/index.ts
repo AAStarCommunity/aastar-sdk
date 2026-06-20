@@ -20,6 +20,7 @@ export * from './channel.js';
 export * from './gTokenAuthorization.js';
 export * from './airAccount.js';
 export * from './airAccountFactory.js';
+export * from './airAccountExtension.js';
 export * from './agentRegistry.js';
 export * from './sessionKeyValidator.js';
 export * from './forceExit.js';

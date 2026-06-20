@@ -128,6 +128,53 @@ function abiFunctionNames(file: string): Set<string> {
 }
 
 /**
+ * Canonical type string for one ABI input, with tuples expanded RECURSIVELY to
+ * `(comp,comp,...)` and the array suffix preserved (`[]`, `[3]`). This is what lets
+ * the radar see PARAM-SHAPE changes — e.g. a factory `InitConfig` tuple gaining two
+ * `bytes32[3]` fields — that a bare function-name diff is blind to (v0.20.0 lesson).
+ */
+function canonicalAbiType(input: any): string {
+  if (input && typeof input.type === "string" && input.type.startsWith("tuple")) {
+    const inner = (input.components || []).map(canonicalAbiType).join(",");
+    const suffix = input.type.slice("tuple".length); // "" | "[]" | "[3]" ...
+    return `(${inner})${suffix}`;
+  }
+  return input?.type ?? "";
+}
+
+/** Canonical signature `name(type,type,...)` with tuples fully expanded. */
+function abiFunctionSignature(fn: any): string {
+  const params = (fn.inputs || []).map(canonicalAbiType).join(",");
+  return `${fn.name}(${params})`;
+}
+
+/**
+ * Map each ABI member keyed as `type:name` -> the set of its canonical signatures
+ * (handles overloads). Covers functions, EVENTS, and errors — so a changed event
+ * param shape (e.g. `RecoveryProposed` gaining `uint8 guardianIdx`, which moves
+ * topic0) is caught too, not just function signatures.
+ */
+function abiMemberSignatures(file: string): Map<string, Set<string>> {
+  const raw = JSON.parse(readText(file));
+  const abi = Array.isArray(raw) ? raw : raw.abi;
+  const map = new Map<string, Set<string>>();
+  if (Array.isArray(abi)) {
+    for (const item of abi) {
+      if (
+        item &&
+        (item.type === "function" || item.type === "event" || item.type === "error") &&
+        item.name
+      ) {
+        const key = `${item.type}:${item.name}`;
+        if (!map.has(key)) map.set(key, new Set());
+        map.get(key)!.add(abiFunctionSignature(item));
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * Resolve an upstream ABI for a contract. Order matters: prefer a MERGED/full ABI
  * (e.g. AirAccount's `abi/<C>.full.json` flattens proxy + extension + module
  * functions into one ABI, which is exactly what the SDK vendors), then a clean
@@ -335,6 +382,39 @@ function latestAirAccountRelease(repo: string): { version: string | null; rows: 
 }
 
 /**
+ * v0.20.0+ records each release's deploy in a dedicated per-version doc
+ * `docs/DEPLOYMENT-v<version>.md` ("Core addresses" table) — the authoritative
+ * current-deploy record. This is preferred over the CHANGELOG "Deployed" tables,
+ * because a fresh release may not (re)publish a Deployed table under its own
+ * `## [vX]` heading, in which case `latestAirAccountRelease` would otherwise read
+ * an OLDER release's table and false-flag drift (the v0.20.0 anchor bug). Returns
+ * the rows of the first table under a "Core addresses" heading (or all tables in
+ * the doc if that heading is absent); `[]` when the doc does not exist.
+ */
+function airAccountDeploymentDocRows(repo: string, version: string | null): { label: string; address: string }[] {
+  if (!version) return [];
+  const dep = join(repo, "docs", `DEPLOYMENT-v${version}.md`);
+  if (!existsSync(dep)) return [];
+  const text = readText(dep);
+  const m = text.match(/^#{2,6}\s+.*core addresses.*$/im);
+  if (m && m.index !== undefined) {
+    const after = text.slice(m.index + m[0].length);
+    const block: string[] = [];
+    let started = false;
+    for (const line of after.split("\n")) {
+      if (line.includes("|")) {
+        started = true;
+        block.push(line);
+      } else if (started) {
+        break; // first contiguous table block ended
+      }
+    }
+    return parseAddressTableFromText(block.join("\n"));
+  }
+  return parseAddressTableFromText(text);
+}
+
+/**
  * Map an AirAccount deployment-doc label -> SDK canonical address key.
  * Ordered: first matching substring wins. Returns null for non-contract rows
  * (EOAs / test tokens), which are then ignored.
@@ -403,13 +483,33 @@ function analyzeAbis(repo: string, sdkAbiFiles: string[]): AnchorResult {
     const upFns = abiFunctionNames(upstreamPath);
     const added = [...upFns].filter((f) => !sdkFns.has(f)).sort(); // upstream has, SDK lacks
     const removed = [...sdkFns].filter((f) => !upFns.has(f)).sort(); // SDK has, upstream lacks
-    if (added.length || removed.length) {
+
+    // Signature-level diff for members (function/event/error) present on BOTH sides:
+    // catches param/struct changes (an InitConfig tuple gaining fields, an event gaining
+    // a topic) that the name-set diff is blind to.
+    const sdkSigs = abiMemberSignatures(join(ABI_DIR, file));
+    const upSigs = abiMemberSignatures(upstreamPath);
+    const sigChanged: string[] = [];
+    for (const key of [...sdkSigs.keys()].filter((k) => upSigs.has(k)).sort()) {
+      const s = sdkSigs.get(key) ?? new Set<string>();
+      const u = upSigs.get(key) ?? new Set<string>();
+      const onlyUp = [...u].filter((x) => !s.has(x));
+      const onlySdk = [...s].filter((x) => !u.has(x));
+      if (onlyUp.length || onlySdk.length) {
+        const label = key.replace(":", " "); // "event RecoveryProposed" / "function getAddress"
+        sigChanged.push(`${label}: SDK \`${[...s].join(" | ")}\` != upstream \`${[...u].join(" | ")}\``);
+      }
+    }
+
+    if (added.length || removed.length || sigChanged.length) {
       drift = true;
       const parts: string[] = [];
       if (added.length)
         parts.push(`+coverage-gap [${added.join(", ")}] (upstream added; SDK lacks)`);
       if (removed.length)
         parts.push(`-absent-wrapper [${removed.join(", ")}] (SDK has; upstream removed, #30 risk)`);
+      if (sigChanged.length)
+        parts.push(`~signature-changed [${sigChanged.join("; ")}] (param/tuple shape drift — would-revert on-chain, #InitConfig class)`);
       findings.push(`${contract}: ${parts.join("  ")}`);
     }
   }
@@ -477,13 +577,16 @@ function analyzeAirAccount(): UpstreamResult {
     ]),
   );
 
-  // addresses — the LATEST upstream CHANGELOG "Deployed (Sepolia ...)" table is the
-  // source of truth (a version bump redeploys the full stack to fresh addresses).
-  // Falls back to the legacy beta.2 E2E doc only if the CHANGELOG is unavailable.
+  // addresses — the dedicated per-version deployment doc `docs/DEPLOYMENT-v<latest>.md`
+  // ("Core addresses" table) is the authoritative current deploy. Prefer it over the
+  // CHANGELOG "Deployed" table (which a fresh release may not republish under its own
+  // heading, causing an OLDER table to be read — the v0.20.0 anchor bug). Falls back to
+  // the CHANGELOG table, then the legacy beta.2 E2E doc, only if the deployment doc is absent.
   const latest = latestAirAccountRelease(repo);
   {
     const findings: string[] = [];
-    let rows = latest.rows;
+    let rows = airAccountDeploymentDocRows(repo, latest.version);
+    if (rows.length === 0) rows = latest.rows;
     if (rows.length === 0) {
       const e2e = join(repo, "docs", "e2e", "E2E_TESTDATA_v0.18.0-beta.2.md");
       if (existsSync(e2e)) rows = parseAddressTableByLabel(e2e);

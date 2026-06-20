@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+**Upstream sync — v0.20.0 foundation (Batch 1; non-breaking).** Detect → upgrade → vendor the
+infra pins; the P-256 / WebAuthn guardian feature itself is Batch 2 (stubbed here).
+
+- **AirAccount contracts `v0.19.0-beta.2` → `v0.20.0`** (full Sepolia redeploy 2026-06-20).
+  - **Addresses**: all 11 AirAccount Sepolia addresses in `CANONICAL_ADDRESSES[11155111]` realigned
+    to the v0.20.0 deploy (factory `0x99C9300d…`, impl `0xd51db7eB…`, extension `0x5529f508…`),
+    sourced from `airaccount-contract/docs/DEPLOYMENT-v0.20.0.md`. OP / OP-Sepolia untouched.
+  - **ABIs**: re-vendored `AAStarAirAccountV7.json` + `AirAccountExtension.json` from the upstream
+    full ABI (diamond-lite merged surface).
+  - **#30 recovery relocation**: the 4 ECDSA recovery selectors (`proposeRecovery` / `approveRecovery`
+    / `executeRecovery` / `cancelRecovery`) are no longer on the V7 ABI — they live in
+    `AirAccountExtension`, reached via the account `fallback`→`delegatecall` (selectors + semantics
+    unchanged). The server `RecoveryService` already encodes them against the account address, so no
+    wrapper becomes ABI-absent.
+  - **Events**: `RecoveryProposed` / `RecoveryApproved` / `RecoveryCancelVoted` gained a trailing
+    `uint8 guardianIdx` (topic0 changed); vendored ABIs + the AirAccount event-ABI constants updated.
+  - **REMOVE_GUARDIAN signing payload (Batch-1 breaking; spec §6.4 / #120 [HIGH])**: the guardian-signed
+    `opData` is now `abi.encode(nonce, index, guardianToRemove, p256X, p256Y)` (was `(nonce, guardianToRemove)`).
+    This affects the **plain ECDSA** removal path too (extra `index` + two `bytes32(0)` key words). Added
+    `RecoveryService.buildRemoveGuardianHash(...)` (the SDK had no removal-signing helper before — only the
+    `encodeRemoveGuardian` calldata encoder, which is unaffected) returning the raw `_guardianOpHash` challenge
+    for guardians to `personal_sign`; golden-vector tests included. Source: `airaccount-contract`
+    `docs/p256-guardian-spec.md` §6.4 + `AAStarAirAccountBase.removeGuardian`.
+  - **P-256 / WebAuthn guardian = Batch 2**: `getRecoveryNonce` and `getGuardianP256Key` ship as real
+    view reads; `addP256Guardian`, `addP256GuardianWithMixedSigs`, `addGuardianWithMixedSigs`,
+    `proposeRecoveryWithSig`, `approveRecoveryWithSig`, `cancelRecoveryWithSig`,
+    `removeGuardianWithMixedSigs`, `modifyTierLimitsWithMixedGuardians` are `NOT_IMPLEMENTED` stubs
+    pointing at Batch 2 (`packages/core/src/actions/airAccountExtension.ts`).
+- **KMS `openapi 0.23.0` → `0.23.1`** (doc-only pin; API/wire verified in-sync).
+- **DVT `v1.3.0` → `v1.4.0`** (doc-only pin; wire-format unchanged — per-IP rate-limit + confirm flow
+  are server-side, tracked in #82).
+- **Radar fix**: the AirAccount address anchor in `scripts/upstream/upstream-radar.ts` now prefers the
+  dedicated `docs/DEPLOYMENT-v<latest>.md` "Core addresses" table over CHANGELOG "Deployed" tables, so
+  a release that does not republish a Deployed table no longer reads an older table and false-flags drift.
+- Also closed three pre-existing doc-coverage gaps surfaced by the re-vendor: `buildGrantHash` /
+  `buildP256GrantHash` (SessionKeyValidator views) and `createAccountWithDefaults` (factory write).
+
+_No package versions bumped — that is the separate release step._
+
 ## [0.20.8] - 2026-06-18
 
 **Address bug fix (single source of truth).** `@aastar/airaccount` carried its own hardcoded copy of protocol contract addresses, stale at `v0.17.2-beta.4`, while `@aastar/core` `CANONICAL_ADDRESSES` (the authority) was at `v0.19.0-beta.2` (Sepolia full redeploy). The airaccount server used the stale copy internally.

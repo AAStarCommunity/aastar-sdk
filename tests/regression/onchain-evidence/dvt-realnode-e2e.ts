@@ -55,7 +55,23 @@ import {
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
-// ── Fixed, on-chain-registered inputs (verified, not assumed) ────────────────────────────────
+// ── v0.19 coupled-snapshot guard (BEFORE any v0.19 address const) ─────────────────────────────
+// AA_ACCOUNT, VERIFIER, and the DVT nodes' on-chain-registered BLS public keys (declared below)
+// form a COUPLED v0.19.0-beta.2 snapshot. airaccount-contract v0.20.0 redeployed AAStarBLSAlgorithm
+// to CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm (0xAF525A16…); validating THIS snapshot's
+// proof against the new verifier would FAIL because the node keys are not registered there. A real
+// v0.20.0 DVT E2E needs a fresh account + BLS-key registration on the new verifier — out of Batch-1
+// (AirAccount-recovery) scope, tracked with the DVT program. Guarded HERE, before the stale consts,
+// so they are unreachable on the default path and the script can never silently hit a stale contract.
+if (process.env.DVT_V019_SNAPSHOT !== '1') {
+    console.log('⏭  dvt-realnode-e2e: v0.19.0-beta.2 coupled snapshot (account + verifier + registered BLS keys all v0.19) — skipped.');
+    console.log('   Set DVT_V019_SNAPSHOT=1 to run as-is. A v0.20.0 re-run requires re-registering the DVT nodes\' BLS keys on');
+    console.log('   aaStarBLSAlgorithm 0xAF525A161CB17e0A1b6254ef0B8d8473bdA05174 against a fresh v0.20.0 account.');
+    process.exit(0);
+}
+
+// ── Fixed, on-chain-registered inputs — v0.19.0-beta.2 snapshot (reachable only when opted in
+//    above; NOT canonical — v0.20.0 AAStarBLSAlgorithm is 0xAF525A16…) ─────────────────────────
 const AA_ACCOUNT: Address = '0x45Dfe3D5938fDf5a8D30641C3FDA9c9fb1F31ba9';
 const VERIFIER: Address = '0x68c381Ad3A2e3380F22840008027E9Ec2783F43A'; // AAStarBLSAlgorithm (Sepolia, v0.19.0-beta.2)
 const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EntryPoint v0.7

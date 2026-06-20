@@ -98,6 +98,16 @@
             "internalType": "address[3]"
           },
           {
+            "name": "guardianP256X",
+            "type": "bytes32[3]",
+            "internalType": "bytes32[3]"
+          },
+          {
+            "name": "guardianP256Y",
+            "type": "bytes32[3]",
+            "internalType": "bytes32[3]"
+          },
+          {
             "name": "dailyLimit",
             "type": "uint256",
             "internalType": "uint256"
@@ -313,6 +323,16 @@
             "internalType": "address[3]"
           },
           {
+            "name": "guardianP256X",
+            "type": "bytes32[3]",
+            "internalType": "bytes32[3]"
+          },
+          {
+            "name": "guardianP256Y",
+            "type": "bytes32[3]",
+            "internalType": "bytes32[3]"
+          },
+          {
             "name": "dailyLimit",
             "type": "uint256",
             "internalType": "uint256"
@@ -389,6 +409,16 @@
             "name": "guardians",
             "type": "address[3]",
             "internalType": "address[3]"
+          },
+          {
+            "name": "guardianP256X",
+            "type": "bytes32[3]",
+            "internalType": "bytes32[3]"
+          },
+          {
+            "name": "guardianP256Y",
+            "type": "bytes32[3]",
+            "internalType": "bytes32[3]"
           },
           {
             "name": "dailyLimit",

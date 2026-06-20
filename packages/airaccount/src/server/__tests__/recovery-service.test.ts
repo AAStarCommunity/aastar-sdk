@@ -6,6 +6,8 @@ import {
   RECOVERY_THRESHOLD,
   RECOVERY_TIMELOCK_SECONDS,
   MAX_GUARDIANS,
+  GUARDIAN_SIG_VERSION,
+  P256_GUARDIAN_SENTINEL,
 } from "../services/recovery-service";
 
 const ACCOUNT    = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -201,5 +203,66 @@ describe("RecoveryService — on-chain read mocks", () => {
       GUARDIAN_1.toLowerCase(),
       GUARDIAN_2.toLowerCase(),
     ]);
+  });
+});
+
+describe("RecoveryService — buildRemoveGuardianHash (v0.20.0 spec §6.4)", () => {
+  // The signed opData changed to abi.encode(nonce, index, guardianToRemove, p256X, p256Y)
+  // — bound to the slot index + P-256 key (#120 final-review [HIGH]). Golden vectors below
+  // were computed independently from the contract's _guardianOpHash construction.
+  const svc = new RecoveryService(noClient);
+
+  it("GUARDIAN_SIG_VERSION is 4 and sentinel is 0x..7026", () => {
+    expect(GUARDIAN_SIG_VERSION).toBe(4);
+    expect(P256_GUARDIAN_SENTINEL.toLowerCase()).toBe(
+      "0x0000000000000000000000000000000000007026"
+    );
+  });
+
+  it("ECDSA slot (p256 keys default to bytes32(0)) → golden vector", () => {
+    const h = svc.buildRemoveGuardianHash({
+      account: ACCOUNT,
+      chainId: 11155111,
+      removalNonce: 0n,
+      index: 1,
+      guardianToRemove: GUARDIAN_1,
+    });
+    expect(h).toBe(
+      "0x113805cf9aec205556719d6d874fc79f67fdb99c2577fe9dc2ee05eec40afbf2"
+    );
+  });
+
+  it("P-256 slot (sentinel + nonzero keys) → golden vector", () => {
+    const h = svc.buildRemoveGuardianHash({
+      account: ACCOUNT,
+      chainId: 11155111,
+      removalNonce: 5n,
+      index: 2,
+      guardianToRemove: P256_GUARDIAN_SENTINEL,
+      p256X: ("0x" + "11".repeat(32)) as `0x${string}`,
+      p256Y: ("0x" + "22".repeat(32)) as `0x${string}`,
+    });
+    expect(h).toBe(
+      "0xfd250bdab328fd0fb127c99b8903c8263576abd90a45d4682853f8f6d4d1f04f"
+    );
+  });
+
+  it("returns a 32-byte hash and is deterministic", () => {
+    const args = { account: ACCOUNT, chainId: 11155111, removalNonce: 3n, index: 0, guardianToRemove: GUARDIAN_2 };
+    const a = svc.buildRemoveGuardianHash(args);
+    const b = svc.buildRemoveGuardianHash(args);
+    expect(a).toMatch(/^0x[0-9a-f]{64}$/i);
+    expect(a).toBe(b);
+  });
+
+  it("binds index, nonce, guardian, account, chainId, and p256 key (no cross-slot replay)", () => {
+    const base = { account: ACCOUNT, chainId: 11155111, removalNonce: 0n, index: 0, guardianToRemove: GUARDIAN_1 } as const;
+    const h0 = svc.buildRemoveGuardianHash(base);
+    expect(svc.buildRemoveGuardianHash({ ...base, index: 1 })).not.toBe(h0);
+    expect(svc.buildRemoveGuardianHash({ ...base, removalNonce: 1n })).not.toBe(h0);
+    expect(svc.buildRemoveGuardianHash({ ...base, guardianToRemove: GUARDIAN_2 })).not.toBe(h0);
+    expect(svc.buildRemoveGuardianHash({ ...base, account: NEW_OWNER })).not.toBe(h0);
+    expect(svc.buildRemoveGuardianHash({ ...base, chainId: 1 })).not.toBe(h0);
+    expect(svc.buildRemoveGuardianHash({ ...base, p256X: ("0x" + "11".repeat(32)) as `0x${string}` })).not.toBe(h0);
   });
 });

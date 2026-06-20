@@ -16,8 +16,13 @@ export type TokenConfig = {
 };
 
 // AAStarAirAccountBase.InitConfig — account bootstrap parameters (3 guardians fixed-size).
+// v0.20.0 (#120): factory InitConfig inserted guardianP256X/guardianP256Y (bytes32[3] each)
+// immediately after `guardians`, for P-256 guardian keys. ECDSA-only accounts pass the
+// zero word [0x0,0x0,0x0] for both. Field ORDER is consensus-critical (CREATE2 prediction).
 export type InitConfig = {
     guardians: readonly [Address, Address, Address];
+    guardianP256X: readonly [Hex, Hex, Hex];
+    guardianP256Y: readonly [Hex, Hex, Hex];
     dailyLimit: bigint;
     approvedAlgIds: readonly number[];
     minDailyLimit: bigint;

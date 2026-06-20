@@ -40,6 +40,8 @@ const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // En
 const PAYMASTER_V4: Address = '0xD0c82dc12B7d65b03dF7972f67d13F1D33469a98';
 const GAS_TOKEN: Address = '0xDf669834F04988BcEE0E3B6013B6b867Bd38778d';
 const ALG_ECDSA = 2;
+// v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
+const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 
 const DEPOSIT_AMOUNT = parseEther('200'); // 200 gas-token units credited to the account inside the paymaster
 
@@ -47,7 +49,9 @@ const FACTORY_ABI = [
     { type: 'function', name: 'getAddress', stateMutability: 'view',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
         { name: 'config', type: 'tuple', components: [
-          { name: 'guardians', type: 'address[3]' }, { name: 'dailyLimit', type: 'uint256' },
+          { name: 'guardians', type: 'address[3]' },
+          { name: 'guardianP256X', type: 'bytes32[3]' }, { name: 'guardianP256Y', type: 'bytes32[3]' },
+          { name: 'dailyLimit', type: 'uint256' },
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
@@ -56,7 +60,9 @@ const FACTORY_ABI = [
     { type: 'function', name: 'createAccount', stateMutability: 'nonpayable',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
         { name: 'config', type: 'tuple', components: [
-          { name: 'guardians', type: 'address[3]' }, { name: 'dailyLimit', type: 'uint256' },
+          { name: 'guardians', type: 'address[3]' },
+          { name: 'guardianP256X', type: 'bytes32[3]' }, { name: 'guardianP256Y', type: 'bytes32[3]' },
+          { name: 'dailyLimit', type: 'uint256' },
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
@@ -109,6 +115,8 @@ async function main() {
     // ── Step 1: Deploy a beta.4 guard account, owner=JASON, dailyLimit>0, ECDSA approved. NO ETH funding. ──
     const config = {
         guardians: ['0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000'] as readonly [Address, Address, Address],
+        guardianP256X: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
+        guardianP256Y: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
         dailyLimit: parseEther('1'),
         approvedAlgIds: [ALG_ECDSA] as readonly number[],
         minDailyLimit: 0n,

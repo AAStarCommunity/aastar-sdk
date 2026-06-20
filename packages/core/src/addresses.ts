@@ -66,12 +66,12 @@ export const CANONICAL_ADDRESSES = {
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
   //                  AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md
-  // Latest sync: 2026-06-16 — SuperPaymaster v5.4.0-beta.1-redeploy (fresh Sepolia
-  //   redeploy, deployments/config.sepolia.json updateTime 2026-06-16) + AirAccount
-  //   contracts v0.19.0-beta.2 (pin only; surface identical to v0.18.0-beta.2, same addresses).
+  // Latest sync: 2026-06-20 — AirAccount contracts v0.20.0 (P-256/WebAuthn guardian + recovery
+  //   relocated to AirAccountExtension; FULL Sepolia redeploy, docs/DEPLOYMENT-v0.20.0.md).
+  //   SuperPaymaster remains v5.4.0-beta.1-redeploy (deployments/config.sepolia.json 2026-06-16).
   //   SP proxy 0x0300... (impl 0x24a945...), Registry 0x3F92... (impl 0x177033...)
   //   v5.4 keys: x402Facilitator 0x326Fc3..., policyRegistry 0x8c2488..., timelockController 0xB734df...
-  //   AirAccount v0.19.0-beta.2 factory 0x1b69... (NEW ctor: impl injected as arg 1).
+  //   AirAccount v0.20.0 factory 0x99C9300d... (NEW ctor: impl injected as arg 1).
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
@@ -99,25 +99,28 @@ export const CANONICAL_ADDRESSES = {
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
     agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
-    // --- AirAccount v0.19.0-beta.2 stack (FULL Sepolia redeploy 2026-06-16) ---
-    // v0.19 has NO new Solidity logic (feature set identical to v0.18.0-beta.2), but it
-    // bumped ACCOUNT_VERSION/FACTORY_VERSION/accountId() → "0.19.0", which changes bytecode
-    // and therefore redeployed the ENTIRE stack to fresh addresses. All 11 below moved —
-    // the v0.18.0-beta.2 addresses are now stale. Verified by the v0.19 36-scenario on-chain
-    // E2E (Safe-guardian recovery #42 + KMS contract-side #67) + DVT real-node validate=0.
-    // Source of truth: AirAccount repo CHANGELOG.md [v0.19.0-beta.2] "Deployed (Sepolia 2026-06-16)".
-    // NOTE: factory ctor is NEW — impl injected as arg 1.
-    aaStarBLSAlgorithm: "0x68c381Ad3A2e3380F22840008027E9Ec2783F43A",  // v0.19.0-beta.2 (#45 on-chain hash_to_curve; Ownable2Step; aggregator() getter)
-    aaStarValidator: "0xC20A986Bcd5bF5Cc2fE5fFde6b155B8419E0389e",  // v0.19.0-beta.2 (ValidatorRouter, set-once validator)
-    aaStarBLSAggregator: "0x77f7bf95B8602b7851f392F412257539242947e0",  // v0.19.0-beta.2 (new ctor (blsAlgorithm, entryPoint))
-    sessionKeyValidator: "0x70de2e36004d6Ddc24DEB80e1Ef76c03EdC0c2AE",  // v0.19.0-beta.2 (cap + velocity)
-    forceExitModule: "0xd882a16Ea37Be463D1885EF4a397Dbbf157dC211",  // v0.19.0-beta.2 (TOCTOU re-verify)
-    airAccountDelegate: "0xA8D7f70c9D36bC4a4eb14F0dCEE19053FCB3309f",  // v0.19.0-beta.2
-    calldataParserRegistry: "0xb8Af1C039dF88F6bD9fE36Ca683492a3c09e7D17",  // v0.19.0-beta.2
-    airAccountFactoryV7: "0x52c5190E7308Ea9B149157FF016cC99B6C6bf984",  // v0.19.0-beta.2 (NEW ctor: implementation injected as arg 1)
-    airAccountV7Impl: "0x7fe62d512f0b8238DE6Ff17175DcE40eA312bBF2",  // v0.19.0-beta.2
-    airAccountExtension: "0xD61C0F3DE6D98070E9986743d35A56d56855A249",  // v0.19.0-beta.2 (module-install timelock)
-    agentRegistry: "0x3895b3E6fEf4e121E6289dC7881A0eEd5283C652",  // v0.19.0-beta.2 (bindFactory set-once)
+    // --- AirAccount v0.20.0 stack (FULL Sepolia redeploy 2026-06-20) ---
+    // v0.20.0 ships first-class P-256/WebAuthn guardian support (#119) and a diamond-lite
+    // refactor that relocates the cold ECDSA recovery path (propose/approve/execute/cancel)
+    // into AirAccountExtension, reached via the V7 fallback→delegatecall boundary (frees the
+    // main-account runtime from 11 B → 1,258 B under EIP-170). The version bump
+    // (ACCOUNT_VERSION/FACTORY_VERSION → "0.20.0") changes bytecode and therefore redeployed
+    // the ENTIRE stack to fresh addresses — all 11 below moved; the v0.19.0-beta.2 addresses
+    // are now stale. The recovery event topic0 (RecoveryProposed/Approved/CancelVoted) also
+    // changed (trailing uint8 guardianIdx). P-256 guardian feature is Batch 2 (SDK stubbed).
+    // Source of truth: AirAccount repo docs/DEPLOYMENT-v0.20.0.md "Core addresses"
+    //   (Sepolia 2026-06-20). NOTE: factory ctor is NEW — impl injected as arg 1.
+    aaStarBLSAlgorithm: "0xAF525A161CB17e0A1b6254ef0B8d8473bdA05174",  // v0.20.0 (algId 0x01)
+    aaStarValidator: "0xfcDfd17a373E037c3F9C8ffE2c781915E7Ae6e11",  // v0.20.0 (ValidatorRouter, set-once validator)
+    aaStarBLSAggregator: "0x35775df9a4f4dB42Ea0C46118a12dDd0cEc70609",  // v0.20.0
+    sessionKeyValidator: "0x6810CfB7c72D16e044a17694fAa8076e517264D0",  // v0.20.0 (algId 0x08)
+    forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
+    airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
+    calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
+    airAccountFactoryV7: "0x99C9300d52EDD9f4B7135DEd1811fBa6FFa1DDC6",  // v0.20.0 (NEW ctor: implementation injected as arg 1)
+    airAccountV7Impl: "0xd51db7eB20FF99c8588281CBe1785681Bb17D473",  // v0.20.0
+    airAccountExtension: "0x5529f50811814E0a4966cFC21200DCeF9C3FCb5B",  // v0.20.0 (auto-deployed by impl ctor; recovery + P-256 guardian surface)
+    agentRegistry: "0xbcE1163817EEBA2E07d39424427B10937bF1D121",  // v0.20.0 (bindFactory set-once)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x8c2488d46d5447418558c38AA6441720df656094",

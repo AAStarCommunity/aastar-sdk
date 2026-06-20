@@ -18,8 +18,11 @@ const B32 = `0x${'ab'.repeat(32)}` as `0x${string}`;
 const SEL = '0xdeadbeef' as `0x${string}`;
 
 const TOKEN_CONFIG: TokenConfig = { tier1Limit: 1n, tier2Limit: 2n, dailyLimit: 3n };
+const ZERO32 = `0x${'00'.repeat(32)}` as `0x${string}`;
 const INIT_CONFIG: InitConfig = {
   guardians: [OWNER, ACCT, ADDR],
+  guardianP256X: [ZERO32, ZERO32, ZERO32],
+  guardianP256Y: [ZERO32, ZERO32, ZERO32],
   dailyLimit: 100n,
   approvedAlgIds: [1, 8],
   minDailyLimit: 10n,

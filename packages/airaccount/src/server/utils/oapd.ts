@@ -33,6 +33,10 @@ export interface OapdConfig {
    */
   initConfig: {
     guardians: [string, string, string];
+    // v0.20.0 (#120): P-256 guardian keys (bytes32[3] each), inserted after `guardians`.
+    // ECDSA-only OAPD accounts pass three zero words for each.
+    guardianP256X: [string, string, string];
+    guardianP256Y: [string, string, string];
     dailyLimit: bigint;
     approvedAlgIds: number[];
     minDailyLimit: bigint;
