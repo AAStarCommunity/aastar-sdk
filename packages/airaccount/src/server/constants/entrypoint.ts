@@ -111,7 +111,7 @@ export const AIRACCOUNT_ADDRESSES = {
 
     // ── Current: derived from @aastar/core CANONICAL_ADDRESSES[11155111] ───────────
     // SINGLE SOURCE OF TRUTH. Do NOT hand-copy hex here. core is synced on every
-    // protocol redeploy (currently AirAccount v0.19.0-beta.2, Sepolia 2026-06-16),
+    // protocol redeploy (currently AirAccount v0.20.0, Sepolia 2026-06-20),
     // and these fields re-derive automatically. The key mapping (airaccount field ←
     // core key) is asserted by entrypoint.addresses.test.ts so it can't silently drift.
     factory: CORE_SEPOLIA.airAccountFactoryV7,
