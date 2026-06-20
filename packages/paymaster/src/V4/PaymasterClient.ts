@@ -14,6 +14,25 @@ export class PaymasterClient {
      */
     private constructor() {}
 
+    /**
+     * Sign a UserOp hash for the EntryPoint.
+     *
+     * airaccount-contract v0.20.0 `_validateSignature` routes on `signature[0]` as an algId
+     * prefix BEFORE the raw-65-byte fallback. A raw 65-byte ECDSA sig whose first byte happens
+     * to equal an algId const (e.g. `0x02` = ALG_ECDSA) is misrouted → intermittent AA24.
+     * For v0.20.0 AirAccounts pass `airAccountSig: true` to emit the deterministic algId-prefixed
+     * `[0x02][r][s][v]` (66-byte) format (matches `auth/hardware/ledger.ts`). Default is the raw
+     * 65-byte form — unchanged for SimpleAccount and other account types.
+     */
+    private static async signUserOpHash(
+        wallet: any,
+        userOpHash: `0x${string}`,
+        airAccountSig?: boolean
+    ): Promise<`0x${string}`> {
+        const raw = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
+        return airAccountSig ? (`0x02${raw.slice(2)}` as `0x${string}`) : raw;
+    }
+
     private static makePlaceholderSignature(byteLength: number): `0x${string}` {
         const clamped = Math.max(0, Math.min(byteLength, 10_000));
         return (`0x${'11'.repeat(clamped)}`) as `0x${string}`;
@@ -115,6 +134,7 @@ export class PaymasterClient {
         callData: `0x${string}`,
         options?: {
             validityWindow?: number;
+            airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
             operator?: Address; // For SuperPaymaster
             factory?: Address;
             factoryData?: Hex;
@@ -246,7 +266,7 @@ export class PaymasterClient {
         partialUserOp.preVerificationGas = (PaymasterClient.estimatePreVerificationGasV07(partialUserOp) * 120n) / 100n + 5000n;
 
         const userOpHash = getUserOpHashV07(partialUserOp, entryPoint, BigInt(client.chain.id));
-        partialUserOp.signature = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
+        partialUserOp.signature = await PaymasterClient.signUserOpHash(wallet, userOpHash, options?.airAccountSig);
 
         const payload = {
             jsonrpc: '2.0',
@@ -317,6 +337,7 @@ export class PaymasterClient {
         callData: `0x${string}`,
         options?: {
             validityWindow?: number;
+            airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
             verificationGasLimit?: bigint;
             callGasLimit?: bigint;
             preVerificationGas?: bigint;
@@ -472,7 +493,7 @@ export class PaymasterClient {
 
         // 4. Final Hashing and Signing
         const userOpHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-        const signature = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
+        const signature = await PaymasterClient.signUserOpHash(wallet, userOpHash, options?.airAccountSig);
         userOp.signature = signature;
 
 
@@ -532,7 +553,7 @@ export class PaymasterClient {
 
                      // Re-Sign
                      const newHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-                     userOp.signature = (await wallet.account.signMessage({ message: { raw: newHash } })) as `0x${string}`;
+                     userOp.signature = await PaymasterClient.signUserOpHash(wallet, newHash, options?.airAccountSig);
                      
                      continue; // Retry
                 }
@@ -581,7 +602,7 @@ export class PaymasterClient {
 
                     // Re-Sign
                     const newHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-                    userOp.signature = (await wallet.account.signMessage({ message: { raw: newHash } })) as `0x${string}`;
+                    userOp.signature = await PaymasterClient.signUserOpHash(wallet, newHash, options?.airAccountSig);
                     
                     continue; // Retry
                 }
@@ -603,7 +624,7 @@ export class PaymasterClient {
                         // Update PVG and re-sign
                         userOp.preVerificationGas = bufferedPVG;
                         const newHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-                        userOp.signature = (await wallet.account.signMessage({ message: { raw: newHash } })) as `0x${string}`;
+                        userOp.signature = await PaymasterClient.signUserOpHash(wallet, newHash, options?.airAccountSig);
                         
                         continue; // Retry
                     }
