@@ -574,15 +574,10 @@ export class AccountManager {
       return { set: false, reason: `no canonical validator router for chain ${chainId}` };
     }
 
-    // (4) Read the account's current validator(). Non-zero => already wired (SET-ONCE) => no-op.
-    const current = (await this.ethereum
-      .getAccountContract(account.address)
-      .read.validator([])) as Address;
-    if (current && current.toLowerCase() !== zeroAddress) {
-      return { set: false, reason: "validator already set" };
-    }
-
-    // (5) setValidator is onlyOwner and needs deployed code — cannot precede the lazy deploy.
+    // (4) Check deployment FIRST. setValidator is onlyOwner and needs deployed code; and reading
+    //     validator() on a counterfactual (not-yet-deployed) account reverts (eth_call returns 0x),
+    //     so the deploy check MUST precede the validator() read — otherwise a pre-deploy call throws
+    //     instead of returning the clean "not deployed yet" reason.
     let deployed = false;
     try {
       const code = await this.ethereum.getProvider().getCode({ address: account.address as Address });
@@ -592,6 +587,14 @@ export class AccountManager {
     }
     if (!deployed) {
       return { set: false, reason: "account not deployed yet — call after deploy" };
+    }
+
+    // (5) Read the account's current validator(). Non-zero => already wired (SET-ONCE) => no-op.
+    const current = (await this.ethereum
+      .getAccountContract(account.address)
+      .read.validator([])) as Address;
+    if (current && current.toLowerCase() !== zeroAddress) {
+      return { set: false, reason: "validator already set" };
     }
 
     // (6) Send setValidator(router) signed by the owner. The write goes through a caller-supplied

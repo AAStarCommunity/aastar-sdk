@@ -736,6 +736,22 @@ describe("AccountManager", () => {
       expect(r).toEqual({ set: false, reason: "account not deployed yet — call after deploy" });
     });
 
+    it("checks deployment BEFORE reading validator() — a not-deployed account whose validator() reverts still returns the clean reason (locks the step order)", async () => {
+      await seedRecord([0x01]);
+      // Real on-chain behaviour: validator() reverts on an account with no code (eth_call returns 0x).
+      // The deploy check MUST run first, so validator() is never read here.
+      const validatorFn = vi.fn().mockRejectedValue(new Error('returned no data ("0x")'));
+      const eth = makeEthereumMock({
+        getChainId: vi.fn().mockReturnValue(SEPOLIA),
+        getAccountContract: vi.fn().mockReturnValue({ read: { validator: validatorFn } }),
+        getProvider: vi.fn().mockReturnValue({ getCode: vi.fn().mockResolvedValue("0x") }), // not deployed
+      });
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: "account not deployed yet — call after deploy" });
+      expect(validatorFn).not.toHaveBeenCalled(); // order fix: validator() not read pre-deploy
+    });
+
     it("returns a clear reason when no owner WalletClient is supplied", async () => {
       await seedRecord([0x01]);
       const mgr = new AccountManager(makeRouterMock() as any, storage, signer, new SilentLogger());
