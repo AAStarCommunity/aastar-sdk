@@ -43,7 +43,12 @@ const ALG_ECDSA = 2;
 // v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
 const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 
-const DEPOSIT_AMOUNT = parseEther('200'); // 200 gas-token units credited to the account inside the paymaster
+// Gas-token units credited to the account's deposit inside the paymaster. Must exceed the
+// validation-time requiredTokenAmount = PaymasterBase._calculateTokenCost(maxCost, token, false)
+// — gasUSD / tokenPriceUSD × (1 + serviceFee + validationBuffer). At ~8.5 gwei / ETH≈$1730 /
+// token=$0.02 that is ≈292 tokens, so the old 200 reverted AA33 Paymaster__InsufficientBalance
+// (PaymasterBase.sol:281). 1000 gives ~3× headroom against gas-price spikes.
+const DEPOSIT_AMOUNT = parseEther('1000');
 
 const FACTORY_ABI = [
     { type: 'function', name: 'getAddress', stateMutability: 'view',
@@ -235,9 +240,22 @@ async function main() {
         if (data) console.error('     revert data:', data);
     };
 
+    // v0.20.0 (#120): AAStarAirAccountBase._validateSignature routes on signature[0] FIRST
+    // (AAStarAirAccountBase.sol:596-647), checking the algId-prefix branches before the raw
+    // 65-byte fallback. A raw 65-byte ECDSA sig whose first byte happens to equal an algId
+    // const — e.g. r's high byte == 0x02 (ALG_ECDSA) — is MISROUTED into the explicit-ECDSA
+    // branch, which REQUIRES 66 bytes, so a 65-byte sig returns SIG_VALIDATION_FAILED → the
+    // bundler reports AA24. (Same lottery for 0x01/0x03/0x05/0x06/0x07 first bytes.) The
+    // deterministic format — also what the SDK's hardware signers emit (auth/hardware/ledger.ts)
+    // — is the explicit algId-prefixed sig [0x02][r||s||v] = 66 bytes, which routes straight to
+    // _validateECDSA and lets executeUserOp/_populateExecAlg resolve the same algId in-frame.
+    const ALG_ECDSA_PREFIX = '02';
+    const signEcdsaUserOp = async (h: Hex): Promise<Hex> =>
+        (`0x${ALG_ECDSA_PREFIX}${(await owner.signMessage({ message: { raw: h } })).slice(2)}`) as Hex;
+
     // Sign over the (pre-estimation) hash so estimation gets a recoverable sig.
     const hash0 = await UserOperationBuilder.getUserOpHash({ userOp, entryPoint: ENTRY_POINT, chainId: sepolia.id, publicClient });
-    userOp.signature = await owner.signMessage({ message: { raw: hash0 } });
+    userOp.signature = await signEcdsaUserOp(hash0);
 
     console.log('   eth_estimateUserOperationGas (with paymaster set)...');
     let est: any;
@@ -256,7 +274,7 @@ async function main() {
 
     // ── Step 5: final sign + submit. ──
     const userOpHash = await UserOperationBuilder.getUserOpHash({ userOp, entryPoint: ENTRY_POINT, chainId: sepolia.id, publicClient });
-    userOp.signature = await owner.signMessage({ message: { raw: userOpHash } });
+    userOp.signature = await signEcdsaUserOp(userOpHash);
     console.log(`\n[5] Submitting sponsored UserOp (hash ${userOpHash})`);
 
     const opHash = await (bundler as any).request({ method: 'eth_sendUserOperation', params: [UserOperationBuilder.toAlchemyUserOperation(userOp), ENTRY_POINT] })
