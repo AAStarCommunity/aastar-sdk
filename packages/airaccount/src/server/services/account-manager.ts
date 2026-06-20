@@ -3,7 +3,12 @@ import { zeroAddress, parseEther, type Address, type Hash, type WalletClient } f
 // parseAbi is required to feed it to viem's encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi, encodeFunctionData } from "viem";
-import { needsValidatorRouter, getCanonicalAddresses, airAccountActions } from "@aastar/core";
+import {
+  needsValidatorRouter,
+  getCanonicalAddresses,
+  airAccountActions,
+  airAccountFactoryActions,
+} from "@aastar/core";
 import { keccak256 } from "../../migration/viem/hashing";
 import { solidityPacked } from "../../migration/viem/abi-encoding";
 import { EthereumProvider } from "../providers/ethereum-provider";
@@ -20,6 +25,7 @@ import {
   toGuardianSpecs,
   serializeGuardianSpecs,
   initConfigToTuple,
+  initConfigFromRecord,
   type FullConfigGuardianParams,
   type P256GuardianKey,
 } from "./account-init-config";
@@ -519,8 +525,9 @@ export class AccountManager {
     if (needsValidatorRouter(config.approvedAlgIds)) {
       this.logger.log(
         `[AccountManager] account ${accountAddress} approved a router-delegated algorithm ` +
-          `(approvedAlgIds=[${config.approvedAlgIds.join(", ")}]); call ensureValidatorRouter(userId) ` +
-          `AFTER the account is deployed to wire setValidator(router) — required for those algIds to validate.`
+          `(approvedAlgIds=[${config.approvedAlgIds.join(", ")}]); use deployAndWireValidator(userId, ` +
+          `{ walletClient }) to deploy + setValidator(router) in one call (or ensureValidatorRouter(userId) ` +
+          `after a manual deploy) — required for those algIds to validate.`
       );
     }
     return account;
@@ -616,5 +623,62 @@ export class AccountManager {
       `[AccountManager] setValidator(${router}) sent for account ${account.address} (tx ${tx})`
     );
     return { set: true, tx, router };
+  }
+
+  /**
+   * Gap B (complete auto-wiring): deploy a router-delegated account AND set its validator router in
+   * ONE call, so a BLS / cumulative / session-key account is immediately functional — no separate
+   * manual `ensureValidatorRouter` step. The factory's lazy first-UserOp deploy cannot bootstrap such
+   * an account (its own algorithm can't validate until the router is wired), so this performs an
+   * explicit `factory.createAccount(owner, salt, config)` deploy (if the account has no code yet),
+   * waits for it, then wires `setValidator(router)`. Both txs go through the caller-supplied owner/
+   * deployer `WalletClient` (this manager holds no transaction signer). For inline algIds (ECDSA/P256/
+   * COMBINED_T1) the validator step is a documented no-op.
+   *
+   * @returns `{ deployTx?, validator }` — `deployTx` is undefined if the account was already deployed.
+   */
+  async deployAndWireValidator(
+    userId: string,
+    opts: { walletClient: WalletClient; router?: Address }
+  ): Promise<{ deployTx?: Hash; validator: EnsureValidatorRouterResult }> {
+    const account = await this.storage.findAccountByUserId(userId);
+    if (!account) throw new Error("Account not found");
+    const walletClient = opts.walletClient;
+    if (!walletClient || !walletClient.account) {
+      throw new Error("deployAndWireValidator: a walletClient (deployer/owner) is required");
+    }
+
+    // (1) Deploy via the FULL-config createAccount(owner, salt, config) if the account has no code yet.
+    let deployTx: Hash | undefined;
+    let code = "0x";
+    try {
+      code = (await this.ethereum.getProvider().getCode({ address: account.address as Address })) ?? "0x";
+    } catch {
+      // Treat an RPC failure as "not deployed" — the createAccount below is idempotent (CREATE2).
+    }
+    if (!code || code === "0x") {
+      // Rebuild the byte-identical InitConfig the account was predicted against (same owner/salt/config
+      // ⇒ same CREATE2 address as the persisted record).
+      const config = initConfigFromRecord(account);
+      deployTx = (await airAccountFactoryActions(account.factoryAddress as Address)(walletClient).createAccount({
+        owner: account.signerAddress as Address,
+        salt: BigInt(account.salt),
+        config,
+        account: walletClient.account,
+      })) as Hash;
+      // setValidator (step 2) is onlyOwner + needs deployed code — wait for the deploy to land first.
+      await this.ethereum.getProvider().waitForTransactionReceipt({ hash: deployTx });
+      account.deployed = true;
+      account.deploymentTxHash = deployTx;
+      await this.storage.saveAccount(account);
+      this.logger.log(`[AccountManager] deployed account ${account.address} (tx ${deployTx})`);
+    }
+
+    // (2) Wire the validator router. No-op when the account uses only inline algIds or it's already set.
+    const validator = await this.ensureValidatorRouter(userId, {
+      walletClient,
+      router: opts.router,
+    });
+    return { deployTx, validator };
   }
 }
