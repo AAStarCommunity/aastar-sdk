@@ -208,6 +208,57 @@ describe('coseToP256XY', () => {
         expect(x).toBe(toHex(pub.slice(1, 33)));
         expect(y).toBe(toHex(pub.slice(33, 65)));
     });
+
+    it('decompresses a compressed SEC1 point (M1) to the same (x, y) as uncompressed', () => {
+        const compressed = p256.getPublicKey(toBytes(PRIV), true); // 0x02|0x03 || x
+        expect([0x02, 0x03]).toContain(compressed[0]);
+        const got = coseToP256XY(compressed);
+        const uncompressed = p256.getPublicKey(toBytes(PRIV), false);
+        expect(got.x).toBe(toHex(uncompressed.slice(1, 33)));
+        expect(got.y).toBe(toHex(uncompressed.slice(33, 65)));
+    });
+
+    it('rejects a COSE key MISSING the kty (1) label even if it carries x/y (H1)', () => {
+        const pub = p256.getPublicKey(toBytes(PRIV), false);
+        const x = pub.slice(1, 33);
+        const y = pub.slice(33, 65);
+        // map(3): {-1:1, -2:x, -3:y} — NO kty(1). Must be rejected, not silently accepted.
+        const cose = new Uint8Array([
+            0xa3,
+            0x20, 0x01,
+            0x21, 0x58, 0x20, ...x,
+            0x22, 0x58, 0x20, ...y,
+        ]);
+        expect(() => coseToP256XY(cose)).toThrow(/key type \(label 1\)/);
+    });
+
+    it('rejects a COSE key MISSING the crv (-1) label (H1)', () => {
+        const pub = p256.getPublicKey(toBytes(PRIV), false);
+        const x = pub.slice(1, 33);
+        const y = pub.slice(33, 65);
+        // map(3): {1:2, -2:x, -3:y} — NO crv(-1).
+        const cose = new Uint8Array([
+            0xa3,
+            0x01, 0x02,
+            0x21, 0x58, 0x20, ...x,
+            0x22, 0x58, 0x20, ...y,
+        ]);
+        expect(() => coseToP256XY(cose)).toThrow(/curve \(label -1\)/);
+    });
+
+    it('rejects a COSE key with the WRONG curve (crv 2, not P-256) (H1)', () => {
+        const pub = p256.getPublicKey(toBytes(PRIV), false);
+        const x = pub.slice(1, 33);
+        const y = pub.slice(33, 65);
+        const cose = new Uint8Array([
+            0xa4,
+            0x01, 0x02,       // kty EC2
+            0x20, 0x02,       // crv 2 (NOT P-256)
+            0x21, 0x58, 0x20, ...x,
+            0x22, 0x58, 0x20, ...y,
+        ]);
+        expect(() => coseToP256XY(cose)).toThrow(/P-256/);
+    });
 });
 
 describe('signP256GuardianAssertion (software authenticator)', () => {

@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, numberToHex } from 'viem';
 import { AAStarAirAccountV7ABI, AirAccountExtensionABI } from '../abis/index.js';
 import { validateRequired } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
@@ -33,12 +33,47 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
  * `executeRecovery` / `cancelRecovery`) is unchanged at the byte level and is encoded by
  * the AirAccount server's `RecoveryService` against the account address — NOT re-declared here.
  */
+/**
+ * Storage slots of the mixed-sig operation nonces, taken VERBATIM from the contract's shared layout
+ * `AAStarAgentStorageLayout.sol` (forge-inspect-verified, identical for AAStarAirAccountV7 and
+ * AirAccountExtension — the parity that makes the fallback→delegatecall sharing safe). These nonces
+ * are `internal` (no public getter), so the SDK reads them via `eth_getStorageAt`.
+ *
+ *   slot 15 — `_guardianRemovalNonce`   (AAStarAgentStorageLayout.sol:118)
+ *   slot 16 — `_tierLimitNonce`         (AAStarAgentStorageLayout.sol:119)
+ *   slot 38 — `_recoveryNonce`          (AAStarAgentStorageLayout.sol:182; also the public `getRecoveryNonce()`)
+ *   slot 39 — `_guardianAdditionNonce`  (AAStarAgentStorageLayout.sol:186)
+ */
+export const GUARDIAN_REMOVAL_NONCE_SLOT = 15n;
+export const TIER_LIMIT_NONCE_SLOT = 16n;
+export const RECOVERY_NONCE_SLOT = 38n;
+export const GUARDIAN_ADDITION_NONCE_SLOT = 39n;
+
+/** Highest valid guardian slot index (the contract hard-caps the guardian set at 3: slots 0..2). */
+export const MAX_GUARDIAN_SLOT = 2;
+
 export type AirAccountExtensionActions = {
     // ── Views (real reads against the account address) ────────────────────────
     /** `getRecoveryNonce()` — monotonic nonce that domain-separates P-256 / mixed-sig recovery payloads. */
     getRecoveryNonce: () => Promise<bigint>;
     /** `getGuardianP256Key(index)` — the (x, y) secp256r1 pubkey of guardian slot `index` (zero pair ⇒ not a P-256 guardian). */
     getGuardianP256Key: (args: { index: number }) => Promise<{ x: Hex, y: Hex }>;
+    /**
+     * `_guardianAdditionNonce` — the nonce bound into ADD_GUARDIAN / ADD_P256_GUARDIAN challenges.
+     * Read from internal storage slot 39 (no public getter). MUST be re-fetched immediately before
+     * collecting guardian signatures for `add*WithMixedSigs` (any successful add increments it).
+     */
+    getGuardianAdditionNonce: () => Promise<bigint>;
+    /**
+     * `_guardianRemovalNonce` — the nonce bound into REMOVE_GUARDIAN challenges. Read from internal
+     * storage slot 15 (no public getter). Re-fetch immediately before signing `removeGuardianWithMixedSigs`.
+     */
+    getGuardianRemovalNonce: () => Promise<bigint>;
+    /**
+     * `_tierLimitNonce` — the nonce bound into MODIFY_TIER_LIMITS challenges. Read from internal
+     * storage slot 16 (no public getter). Re-fetch immediately before signing `modifyTierLimitsWithMixedGuardians`.
+     */
+    getTierLimitNonce: () => Promise<bigint>;
 
     // ── P-256 / WebAuthn guardian writes (real calldata) ──────────────────────
     /** `addP256Guardian(x, y)` — owner-only bootstrap of a passkey guardian (no guardianSig while `count < threshold`). */
@@ -70,7 +105,15 @@ function feeOverrides(maxFeePerGas?: bigint, maxPriorityFeePerGas?: bigint) {
     };
 }
 
-/** Validate that signer indices and signatures line up before a mixed-sig write. */
+/**
+ * Pre-validate mixed-sig inputs LOCALLY, mirroring the static parts of the contract's checks so a
+ * malformed call fails before wasting on-chain gas + a real guardian signature. Enforces:
+ *  - `signerIdxs.length == sigs.length`,
+ *  - `length >= RECOVERY_THRESHOLD (2)` (the contract's `InsufficientGuardianApprovals` floor),
+ *  - every index is an integer in `0..MAX_GUARDIAN_SLOT (2)` (the hard 3-guardian cap; the tighter
+ *    `< guardianCount` bound is still enforced on-chain since it needs a live read),
+ *  - no duplicate index (the contract's `DuplicateGuardianSig` bitmap check).
+ */
 function validateMixedSigs(signerIdxs: readonly number[], sigs: readonly Hex[]): void {
     validateRequired(signerIdxs, 'signerIdxs');
     validateRequired(sigs, 'sigs');
@@ -85,6 +128,32 @@ function validateMixedSigs(signerIdxs: readonly number[], sigs: readonly Hex[]):
             ErrorCode.INVALID_PARAMETER,
             `mixed-sig guardian operations require at least RECOVERY_THRESHOLD (2) signatures, got ${signerIdxs.length}`,
         );
+    }
+    const seen = new Set<number>();
+    for (const idx of signerIdxs) {
+        if (!Number.isInteger(idx) || idx < 0 || idx > MAX_GUARDIAN_SLOT) {
+            throw new AAStarError(
+                ErrorCode.INVALID_PARAMETER,
+                `signerIdxs must be integers in 0..${MAX_GUARDIAN_SLOT} (max ${MAX_GUARDIAN_SLOT + 1} guardian slots), got ${idx}`,
+            );
+        }
+        if (seen.has(idx)) {
+            throw new AAStarError(
+                ErrorCode.INVALID_PARAMETER,
+                `signerIdxs must be unique (the contract rejects a duplicate guardian slot via DuplicateGuardianSig), got repeated ${idx}`,
+            );
+        }
+        seen.add(idx);
+    }
+}
+
+/** Read a `uint256` storage slot of the account and decode it to a bigint. */
+async function readNonceSlot(client: PublicClient | WalletClient, address: Address, slot: bigint, fn: string): Promise<bigint> {
+    try {
+        const raw = await (client as PublicClient).getStorageAt({ address, slot: numberToHex(slot, { size: 32 }) });
+        return raw && raw !== '0x' ? BigInt(raw) : 0n;
+    } catch (error) {
+        throw AAStarError.fromViemError(error as Error, fn);
     }
 }
 
@@ -112,6 +181,18 @@ export const airAccountExtensionActions = (address: Address) => (client: PublicC
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getGuardianP256Key');
         }
+    },
+
+    // Internal-slot nonce reads (no public getter on-chain). Cross-validated on-chain against
+    // `getRecoveryNonce()` (slot 38) in tests/regression/onchain-evidence/p256-guardian-e2e.ts.
+    getGuardianAdditionNonce() {
+        return readNonceSlot(client, address, GUARDIAN_ADDITION_NONCE_SLOT, 'getGuardianAdditionNonce');
+    },
+    getGuardianRemovalNonce() {
+        return readNonceSlot(client, address, GUARDIAN_REMOVAL_NONCE_SLOT, 'getGuardianRemovalNonce');
+    },
+    getTierLimitNonce() {
+        return readNonceSlot(client, address, TIER_LIMIT_NONCE_SLOT, 'getTierLimitNonce');
     },
 
     // ── P-256 / WebAuthn guardian writes ───────────────────────────────────────

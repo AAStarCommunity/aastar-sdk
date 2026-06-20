@@ -382,13 +382,35 @@ export function decodeWebAuthnAssertion(sig: Hex): DecodedWebAuthnAssertion {
 /**
  * Extract `(x, y)` (each a 32-byte bytes32 hex) from a WebAuthn registration public key.
  *
- * Accepts either:
- *   - a **COSE_Key** EC2 map (the bytes in `attestedCredentialData`, kty=2/EC2, crv=1/P-256,
- *     `-2` ⇒ x, `-3` ⇒ y), or
- *   - an **uncompressed SEC1** point (`0x04 || x(32) || y(32)`, 65 bytes).
+ * Accepts:
+ *   - a **COSE_Key** EC2 map (the bytes in `attestedCredentialData`): `kty(1)` MUST be `2` (EC2)
+ *     and `crv(-1)` MUST be `1` (P-256), both PRESENT; `-2` ⇒ x, `-3` ⇒ y, or
+ *   - an **uncompressed SEC1** point (`0x04 || x(32) || y(32)`, 65 bytes), or
+ *   - a **compressed SEC1** point (`0x02|0x03 || x(32)`, 33 bytes), decompressed on the curve.
  *
- * The result feeds `addP256Guardian(x, y)` / the `InitConfig.guardianP256X/Y` slots.
+ * The result feeds `addP256Guardian(x, y)` / the `InitConfig.guardianP256X/Y` slots. A bad/foreign
+ * key (wrong curve, missing labels) is REJECTED here — installing a guardian that cannot sign would
+ * permanently break the recovery quorum on this non-upgradable account.
  */
+/** Curve-point class shape across @noble/curves versions (`Point` newer, `ProjectivePoint` older). */
+interface NoblePointClass {
+    fromHex(h: Uint8Array): { toBytes?(compressed: boolean): Uint8Array; toRawBytes?(compressed: boolean): Uint8Array };
+}
+
+/**
+ * Decompress a 33-byte compressed SEC1 point to its 65-byte uncompressed form on secp256r1,
+ * tolerant of @noble/curves API drift (`p256.Point` vs `p256.ProjectivePoint`,
+ * `toBytes(false)` vs `toRawBytes(false)`). Reverts curve-membership failures up to the caller.
+ */
+function decompressP256Point(compressed: Uint8Array): Uint8Array {
+    const lib = p256 as unknown as { Point?: NoblePointClass; ProjectivePoint?: NoblePointClass };
+    const Point = lib.Point ?? lib.ProjectivePoint;
+    if (!Point) throw new Error('coseToP256XY: @noble/curves p256 point class unavailable for decompression');
+    const pt = Point.fromHex(compressed);
+    const uncompressed = pt.toBytes ? pt.toBytes(false) : pt.toRawBytes!(false);
+    return uncompressed;
+}
+
 export function coseToP256XY(cosePublicKey: Hex | Uint8Array): { x: Hex; y: Hex } {
     const bytes = cosePublicKey instanceof Uint8Array ? cosePublicKey : toBytes(cosePublicKey);
 
@@ -397,14 +419,22 @@ export function coseToP256XY(cosePublicKey: Hex | Uint8Array): { x: Hex; y: Hex 
         return { x: toHex(bytes.slice(1, 33)), y: toHex(bytes.slice(33, 65)) };
     }
 
+    // Compressed SEC1 point: 0x02|0x03 || x(32) → decompress on secp256r1.
+    if (bytes.length === 33 && (bytes[0] === 0x02 || bytes[0] === 0x03)) {
+        const uncompressed = decompressP256Point(bytes); // 0x04 || x || y
+        return { x: toHex(uncompressed.slice(1, 33)), y: toHex(uncompressed.slice(33, 65)) };
+    }
+
     const map = decodeCoseMap(bytes);
+    // H1: kty (EC2) and crv (P-256) must both be PRESENT and correct. A COSE key that omits these
+    // labels but carries -2/-3 must NOT be silently accepted as a P-256 key.
     const kty = map.get(1);
     const crv = map.get(-1);
-    if (typeof kty === 'bigint' && kty !== 2n) {
-        throw new Error(`coseToP256XY: COSE key type ${kty} is not EC2 (2)`);
+    if (kty !== 2n) {
+        throw new Error(`coseToP256XY: COSE key type (label 1) must be present and 2 (EC2), got ${String(kty)}`);
     }
-    if (typeof crv === 'bigint' && crv !== 1n) {
-        throw new Error(`coseToP256XY: COSE curve ${crv} is not P-256 (1)`);
+    if (crv !== 1n) {
+        throw new Error(`coseToP256XY: COSE curve (label -1) must be present and 1 (P-256), got ${String(crv)}`);
     }
     const x = map.get(-2);
     const y = map.get(-3);

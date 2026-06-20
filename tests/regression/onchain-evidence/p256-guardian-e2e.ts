@@ -49,7 +49,9 @@ import {
     p256GuardianPublicKey,
     CANONICAL_ADDRESSES,
     AirAccountExtensionABI,
+    RECOVERY_NONCE_SLOT,
 } from '../../../packages/core/src/index.js';
+import { numberToHex } from 'viem';
 import { RecoveryService } from '../../../packages/airaccount/src/server/index.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
@@ -132,6 +134,18 @@ async function main() {
     const nonce = await extReader.getRecoveryNonce();
     console.log(`   📖 getGuardianP256Key(0) == registered (x, y) ✅`);
     console.log(`   📖 getRecoveryNonce() == ${nonce}`);
+
+    // Cross-validate the internal-slot read methodology (used by getGuardian{Addition,Removal}Nonce
+    // / getTierLimitNonce) against the PUBLIC getRecoveryNonce(): _recoveryNonce is slot 38, and the
+    // mixed-sig nonces sit in the same forge-inspect-verified block (slots 15/16/39). If slot 38 read
+    // == getRecoveryNonce(), the getStorageAt approach + the layout slot constants are sound.
+    const slot38 = await publicClient.getStorageAt({ address: account, slot: numberToHex(RECOVERY_NONCE_SLOT, { size: 32 }) });
+    if (BigInt(slot38 ?? '0x0') !== nonce) {
+        throw new Error(`storage-slot read mismatch: slot 38 (${slot38}) != getRecoveryNonce() (${nonce})`);
+    }
+    const additionNonce = await extReader.getGuardianAdditionNonce();
+    console.log(`   🔍 storage-slot cross-check: getStorageAt(slot 38) == getRecoveryNonce() == ${nonce} ✅`);
+    console.log(`   📖 getGuardianAdditionNonce() (slot 39) == ${additionNonce}`);
     const guardianCount = await airAccountActions(account)(publicClient).guardianCount();
     console.log(`   📖 guardianCount == ${guardianCount}`);
 
