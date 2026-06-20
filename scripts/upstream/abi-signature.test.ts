@@ -32,8 +32,8 @@ const initConfig6 = {
       name: "initialTokenConfigs",
       type: "tuple[]",
       components: [
-        { name: "tier1Limit", type: "uint256" },
-        { name: "tier2Limit", type: "uint256" },
+        { name: "tier1Limit", type: "uint128" },
+        { name: "tier2Limit", type: "uint128" },
         { name: "dailyLimit", type: "uint256" },
       ],
     },
@@ -56,8 +56,8 @@ const initConfig8 = {
       name: "initialTokenConfigs",
       type: "tuple[]",
       components: [
-        { name: "tier1Limit", type: "uint256" },
-        { name: "tier2Limit", type: "uint256" },
+        { name: "tier1Limit", type: "uint128" },
+        { name: "tier2Limit", type: "uint128" },
         { name: "dailyLimit", type: "uint256" },
       ],
     },
@@ -80,13 +80,13 @@ const getAddress8 = {
 describe("canonicalAbiType — recursive tuple expansion", () => {
   it("expands a nested tuple[] with its array suffix preserved", () => {
     expect(canonicalAbiType(initConfig6)).toBe(
-      "(address[3],uint256,uint8[],uint256,address[],(uint256,uint256,uint256)[])",
+      "(address[3],uint256,uint8[],uint256,address[],(uint128,uint128,uint256)[])",
     );
   });
 
   it("reflects the two extra bytes32[3] fields in the 8-field tuple", () => {
     expect(canonicalAbiType(initConfig8)).toBe(
-      "(address[3],bytes32[3],bytes32[3],uint256,uint8[],uint256,address[],(uint256,uint256,uint256)[])",
+      "(address[3],bytes32[3],bytes32[3],uint256,uint8[],uint256,address[],(uint128,uint128,uint256)[])",
     );
   });
 
