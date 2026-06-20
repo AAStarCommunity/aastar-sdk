@@ -46,6 +46,13 @@ export const DVT_TIER_T3 = 0x05 as const;
 /** A DVT account-signature tier byte. */
 export type DVTTier = typeof DVT_TIER_T2 | typeof DVT_TIER_T3;
 
+/**
+ * Account-signature algId byte for the `ALG_BLS` "legacy triple": a DVT BLS aggregate co-sign
+ * PLUS a trailing owner-ECDSA factor (airaccount-contract `_validateTripleSignature`). Note this
+ * is NOT a BLS-only path — the contract requires the owner signature too.
+ */
+export const ALG_BLS = 0x01 as const;
+
 /** Byte length of a BLS12-381 G2 point in EIP-2537 layout (4 × 64-byte slots). */
 const G2_EIP2537_LENGTH = 256;
 /** Byte length of a compressed (zkcrypto) BLS12-381 G2 point. */
@@ -223,4 +230,42 @@ export function encodeDVTAccountSignature(params: DVTAccountSignatureParams): He
         throw new Error('encodeDVTAccountSignature: T2 (0x04) must not carry a guardian signature — use tier 0x05 for T3');
     }
     return concat([tierByte, p256Bytes, nodeIdsLength, ...ids, sig]);
+}
+
+/** Parameters for {@link encodeBLSAccountSignature}. */
+export interface BLSAccountSignatureParams {
+    /** Explicit `bytes32` node IDs of the contributing signers, in signing/aggregation order. */
+    nodeIds: Hex[];
+    /** Aggregate BLS G2 signature (256-byte EIP-2537, or 96/192-byte zkcrypto). */
+    blsSig: Hex | Uint8Array;
+    /**
+     * The trailing 65-byte OWNER ECDSA signature over `toEthSignedMessageHash(userOpHash)`
+     * (EIP-191). The contract recovers it and requires `recovered == owner`.
+     */
+    ownerSig: Hex;
+}
+
+/**
+ * Encode the ACCOUNT-LEVEL `ALG_BLS` (0x01) signature that goes into
+ * `PackedUserOperation.signature` for an `EntryPoint.handleOps` BLS UserOp, per
+ * airaccount-contract `AAStarAirAccountBase._validateTripleSignature`:
+ * ```
+ * [0x01][nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)][ownerECDSA(65)]
+ * ```
+ * `nodeIdsLength` is a 32-byte big-endian `uint256` count. The BLS payload `[nodeIds][blsSig]`
+ * (no length prefix) is the same blob {@link encodeDVTVerifierProof} hands to the verifier's
+ * `validate(userOpHash, …)`; the account additionally binds the owner ECDSA over the
+ * eth-signed `userOpHash`. (So `ALG_BLS` is a 2-factor BLS+owner path, not BLS-only —
+ * it is distinct from the verifier-level `validate` which checks the aggregate alone.)
+ */
+export function encodeBLSAccountSignature(params: BLSAccountSignatureParams): Hex {
+    const { nodeIds, blsSig, ownerSig } = params;
+    const ids = validateNodeIds(nodeIds, 'encodeBLSAccountSignature');
+    if (!isHex(ownerSig) || size(ownerSig) !== GUARDIAN_SIG_LENGTH) {
+        throw new Error('encodeBLSAccountSignature: ownerSig must be a 65-byte ECDSA signature (r‖s‖v)');
+    }
+    const algByte = numberToHex(ALG_BLS, { size: 1 });
+    const nodeIdsLength = numberToHex(ids.length, { size: 32 });
+    const sig = encodeG2Point(blsSig);
+    return concat([algByte, nodeIdsLength, ...ids, sig, ownerSig]);
 }
