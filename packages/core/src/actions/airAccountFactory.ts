@@ -14,6 +14,21 @@ export type AirAccountFactoryActions = {
     // createAccount(owner, salt, config) -> deploys a (non-agent) AirAccount and returns its address.
     // Optional EIP-1559 fee overrides (some networks need an explicit priority tip).
     createAccount: (args: { owner: Address, salt: bigint, config: InitConfig, account?: Account | Address, maxFeePerGas?: bigint, maxPriorityFeePerGas?: bigint }) => Promise<Hash>;
+    // createAccountWithDefaults(owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit)
+    // -> deploys an AirAccount using the factory's default guard/validator with up to two ECDSA
+    // guardians (each authorizing via signature). Args forwarded in exact ABI order.
+    createAccountWithDefaults: (args: {
+        owner: Address,
+        salt: bigint,
+        guardian1: Address,
+        guardian1Sig: Hex,
+        guardian2: Address,
+        guardian2Sig: Hex,
+        dailyLimit: bigint,
+        account?: Account | Address,
+        maxFeePerGas?: bigint,
+        maxPriorityFeePerGas?: bigint,
+    }) => Promise<Hash>;
     // Chain-qualified id for an already-known account address.
     getChainQualifiedAddress: (args: { account: Address }) => Promise<Hex>;
     // Account implementation behind the factory's CREATE2 proxies.
@@ -75,6 +90,26 @@ export const airAccountFactoryActions = (address: Address) => (client: PublicCli
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'createAccount');
+        }
+    },
+    async createAccountWithDefaults({ owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit, account, maxFeePerGas, maxPriorityFeePerGas }) {
+        try {
+            validateAddress(owner, 'owner');
+            validateAddress(guardian1, 'guardian1');
+            validateRequired(guardian1Sig, 'guardian1Sig');
+            validateAddress(guardian2, 'guardian2');
+            validateRequired(guardian2Sig, 'guardian2Sig');
+            // Args forwarded in exact ABI order:
+            // (owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit)
+            return await (client as WalletClient).writeContract({
+                address, abi: ABI, functionName: 'createAccountWithDefaults',
+                args: [owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit],
+                account: account as any, chain: (client as any).chain,
+                ...(maxFeePerGas !== undefined ? { maxFeePerGas } : {}),
+                ...(maxPriorityFeePerGas !== undefined ? { maxPriorityFeePerGas } : {}),
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createAccountWithDefaults');
         }
     },
     async getAddressWithChainId({ owner, salt, config }) {

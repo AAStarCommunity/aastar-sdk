@@ -202,7 +202,12 @@ export const AIRACCOUNT_ABI = [
   "event ModuleInstalled(uint256 indexed moduleTypeId, address indexed module)",
   "event ModuleUninstalled(uint256 indexed moduleTypeId, address indexed module)",
   "event OwnerChanged(address indexed oldOwner, address indexed newOwner)",
-  "event RecoveryProposed(address indexed newOwner, address indexed proposedBy)",
+  // v0.20.0 (#120): recovery events gained a trailing `uint8 guardianIdx` naming the
+  // authorizing guardian slot (on P-256 relayer-submitted paths msg.sender is the relayer,
+  // not the guardian). topic0 of these three events changed — decoders must use the new shape.
+  "event RecoveryProposed(address indexed newOwner, address indexed proposedBy, uint8 guardianIdx)",
+  "event RecoveryApproved(address indexed newOwner, address indexed approvedBy, uint256 approvalCount, uint8 guardianIdx)",
+  "event RecoveryCancelVoted(address indexed votedBy, uint256 cancelCount, uint8 guardianIdx)",
   "event RecoveryExecuted(address indexed oldOwner, address indexed newOwner)",
 ];
 

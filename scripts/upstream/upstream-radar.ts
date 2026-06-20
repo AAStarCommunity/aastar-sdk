@@ -335,6 +335,39 @@ function latestAirAccountRelease(repo: string): { version: string | null; rows: 
 }
 
 /**
+ * v0.20.0+ records each release's deploy in a dedicated per-version doc
+ * `docs/DEPLOYMENT-v<version>.md` ("Core addresses" table) — the authoritative
+ * current-deploy record. This is preferred over the CHANGELOG "Deployed" tables,
+ * because a fresh release may not (re)publish a Deployed table under its own
+ * `## [vX]` heading, in which case `latestAirAccountRelease` would otherwise read
+ * an OLDER release's table and false-flag drift (the v0.20.0 anchor bug). Returns
+ * the rows of the first table under a "Core addresses" heading (or all tables in
+ * the doc if that heading is absent); `[]` when the doc does not exist.
+ */
+function airAccountDeploymentDocRows(repo: string, version: string | null): { label: string; address: string }[] {
+  if (!version) return [];
+  const dep = join(repo, "docs", `DEPLOYMENT-v${version}.md`);
+  if (!existsSync(dep)) return [];
+  const text = readText(dep);
+  const m = text.match(/^#{2,6}\s+.*core addresses.*$/im);
+  if (m && m.index !== undefined) {
+    const after = text.slice(m.index + m[0].length);
+    const block: string[] = [];
+    let started = false;
+    for (const line of after.split("\n")) {
+      if (line.includes("|")) {
+        started = true;
+        block.push(line);
+      } else if (started) {
+        break; // first contiguous table block ended
+      }
+    }
+    return parseAddressTableFromText(block.join("\n"));
+  }
+  return parseAddressTableFromText(text);
+}
+
+/**
  * Map an AirAccount deployment-doc label -> SDK canonical address key.
  * Ordered: first matching substring wins. Returns null for non-contract rows
  * (EOAs / test tokens), which are then ignored.
@@ -477,13 +510,16 @@ function analyzeAirAccount(): UpstreamResult {
     ]),
   );
 
-  // addresses — the LATEST upstream CHANGELOG "Deployed (Sepolia ...)" table is the
-  // source of truth (a version bump redeploys the full stack to fresh addresses).
-  // Falls back to the legacy beta.2 E2E doc only if the CHANGELOG is unavailable.
+  // addresses — the dedicated per-version deployment doc `docs/DEPLOYMENT-v<latest>.md`
+  // ("Core addresses" table) is the authoritative current deploy. Prefer it over the
+  // CHANGELOG "Deployed" table (which a fresh release may not republish under its own
+  // heading, causing an OLDER table to be read — the v0.20.0 anchor bug). Falls back to
+  // the CHANGELOG table, then the legacy beta.2 E2E doc, only if the deployment doc is absent.
   const latest = latestAirAccountRelease(repo);
   {
     const findings: string[] = [];
-    let rows = latest.rows;
+    let rows = airAccountDeploymentDocRows(repo, latest.version);
+    if (rows.length === 0) rows = latest.rows;
     if (rows.length === 0) {
       const e2e = join(repo, "docs", "e2e", "E2E_TESTDATA_v0.18.0-beta.2.md");
       if (existsSync(e2e)) rows = parseAddressTableByLabel(e2e);
