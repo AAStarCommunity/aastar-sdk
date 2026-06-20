@@ -6,7 +6,8 @@ NEW_VERSION=$1
 # 如果没有提供参数，提示输入
 if [ -z "$NEW_VERSION" ]; then
     # 读取当前版本作为参考
-    CURRENT_VERSION=$(node -p "require('./package.json').version")
+    # Authoritative published version lives in @aastar/sdk, NOT the private monorepo root.
+    CURRENT_VERSION=$(node -p "require('./packages/sdk/package.json').version")
     echo "当前版本: $CURRENT_VERSION"
     read -p "请输入新版本号: " NEW_VERSION
 fi

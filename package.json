@@ -1,6 +1,6 @@
 {
   "name": "@aastar/monorepo",
-  "version": "0.20.8",
+  "version": "0.0.0-private",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",

@@ -14,7 +14,6 @@ if (!newVersion) {
 
 const rootDir = path.resolve(__dirname, '..');
 const packagesDir = path.join(rootDir, 'packages');
-const rootPkgPath = path.join(rootDir, 'package.json');
 
 // 递归收集所有 package.json 文件路径
 function getAllPackageJson(dir, fileList = []) {
@@ -32,7 +31,11 @@ function getAllPackageJson(dir, fileList = []) {
     return fileList;
 }
 
-let pkgFiles = [rootPkgPath];
+// The root package.json (@aastar/monorepo) is private & never published — its version is
+// NOT authoritative (the published version lives in packages/sdk). We deliberately do NOT
+// bump it (kept at a static 0.0.0-private marker) so it can't drift and be mistaken for the
+// release version. Only the workspace packages under packages/* are version-bumped.
+let pkgFiles = [];
 if (fs.existsSync(packagesDir)) {
     pkgFiles = pkgFiles.concat(getAllPackageJson(packagesDir));
 }
