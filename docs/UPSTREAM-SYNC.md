@@ -105,4 +105,4 @@ local notice  ──┘
 
 | date | upstreams synced | PR | on-chain evidence |
 |---|---|---|---|
-| 2026-06-20 | AirAccount contracts **v0.20.0** (P-256 guardian, breaking) · KMS **openapi 0.23.1** · DVT **v1.4.0** · SuperPaymaster v5.4.0-beta.1-redeploy (in-sync) | #112 (sync) · #113 (process + evidence) | [`docs/onchain-evidence/v0.20.0.md`](./onchain-evidence/v0.20.0.md) — createAccount/recovery decode-verified; P-256 guardian feature deferred to Batch 2 (#110) |
+| 2026-06-20 | AirAccount contracts **v0.20.0** (P-256 guardian + 8-field `InitConfig`, breaking) · KMS **openapi 0.23.1** · DVT **v1.4.0** · SuperPaymaster v5.4.0-beta.1-redeploy (in-sync) | #112 (sync) · #113 (process + evidence) | [`docs/onchain-evidence/v0.20.0.md`](./onchain-evidence/v0.20.0.md) — **5/5 contract surfaces decode-verified** (recovery, sponsored-gasless, session, weighted-sig, agent-lifecycle); surfaced + fixed the v0.20.0 algId-prefix ECDSA UserOp-signature break (AA24). KMS create→sign BLOCKED (no `KMS_E2E_API_KEY`); DVT BLS BLOCKED (upstream #93). P-256 guardian feature deferred to Batch 2 (#110) |
