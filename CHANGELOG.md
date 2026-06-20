@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.1] - 2026-06-20
+
+**Fix (#115): PaymasterClient V4 — account-type-aware UserOp signing.** V4 signed UserOps with a
+raw 65-byte ECDSA sig; v0.20.0 AirAccount `_validateSignature` routes on `signature[0]` as an algId
+prefix, so a raw sig whose first byte == `0x02` (ALG_ECDSA) misroutes → **intermittent AA24**. A new
+`signUserOpHash` helper centralizes all 5 sign sites (incl. the internal gas-estimate pass); pass
+`airAccountSig: true` (new option on `estimateUserOperationGas` / `submitGaslessUserOperation`) to emit
+the deterministic `[0x02][r][s][v]` (66-byte) format for v0.20.0 AirAccounts. Default unchanged
+(raw-65) for SimpleAccount and other account types. Codex-reviewed (2 rounds, APPROVE).
+
 ## [0.21.0] - 2026-06-20
 
 On-chain acceptance (Sepolia): the v0.20.0 `createAccount` 8-field-`InitConfig` encoding is
@@ -194,8 +204,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.21.0] - 2026-06-20
-**SDK Code Integrity Hash**: `fe1ddda9e6158486e2a50cbdb7ad033daa86665be4bda8832b21cdece0b7fe6a`
+## [0.21.1] - 2026-06-20
+**SDK Code Integrity Hash**: `5d6558019480022f7367e5d1562dea0c4c54c034b3e6e86d2c7211c2cca4e1b9`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
