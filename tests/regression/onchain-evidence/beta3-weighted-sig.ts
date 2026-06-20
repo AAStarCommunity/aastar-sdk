@@ -89,7 +89,7 @@ const FACTORY_ABI = [
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
-            { name: 'tier1Limit', type: 'uint256' }, { name: 'tier2Limit', type: 'uint256' }, { name: 'dailyLimit', type: 'uint256' }] }] }],
+            { name: 'tier1Limit', type: 'uint128' }, { name: 'tier2Limit', type: 'uint128' }, { name: 'dailyLimit', type: 'uint256' }] }] }],
       outputs: [{ type: 'address' }] },
     { type: 'function', name: 'createAccount', stateMutability: 'nonpayable',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
@@ -100,7 +100,7 @@ const FACTORY_ABI = [
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
-            { name: 'tier1Limit', type: 'uint256' }, { name: 'tier2Limit', type: 'uint256' }, { name: 'dailyLimit', type: 'uint256' }] }] }],
+            { name: 'tier1Limit', type: 'uint128' }, { name: 'tier2Limit', type: 'uint128' }, { name: 'dailyLimit', type: 'uint256' }] }] }],
       outputs: [{ type: 'address' }] },
 ] as const;
 

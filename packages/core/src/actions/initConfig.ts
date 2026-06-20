@@ -24,8 +24,12 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address;
 const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 const P256_GUARDIAN_SENTINEL = '0x0000000000000000000000000000000000007026' as Address;
-const ALG_ECDSA = 2;
-const ALG_PASSKEY_P256 = 1;
+// AAStarAirAccountBase.sol algId constants (verified): ALG_BLS=0x01, ALG_ECDSA=0x02, ALG_P256=0x03.
+// NOTE (#118 H1 fix): the passkey/P-256 validation route matches firstByte == 0x03
+// (AAStarAirAccountBase.sol:604). A prior value of `1` here was ALG_BLS — it wrongly whitelisted BLS
+// and OMITTED P-256 from the default approvedAlgIds.
+const ALG_ECDSA = 0x02;
+const ALG_PASSKEY_P256 = 0x03;
 
 /** One guardian slot for {@link buildInitConfig}: supply EXACTLY one of `ecdsa` or `p256`. */
 export interface GuardianSpec {
@@ -42,9 +46,9 @@ export interface BuildInitConfigParams {
     /** Per-account daily spend limit (wei). Must be > 0 to enable the on-chain GUARD. */
     dailyLimit: bigint;
     /**
-     * Validator algorithm ids approved at init (e.g. 2 = ECDSA, 1 = P-256/passkey). If omitted,
-     * derived from the owner/guardian mix is NOT possible (owner alg is separate), so it defaults
-     * to `[2]` (ECDSA) plus `1` (P-256) when any P-256 guardian is present.
+     * Validator algorithm ids approved at init (0x02 = ECDSA, 0x03 = P-256/passkey). If omitted,
+     * deriving from the owner/guardian mix is NOT possible (owner alg is separate), so it defaults
+     * to `[0x02]` (ECDSA) plus `0x03` (P-256) when any P-256 guardian is present — i.e. `[0x02, 0x03]`.
      */
     approvedAlgIds?: readonly number[];
     /** Floor the daily limit can be decreased to via the guard. Defaults to 0. */

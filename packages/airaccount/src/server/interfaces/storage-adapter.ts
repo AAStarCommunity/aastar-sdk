@@ -5,7 +5,15 @@ export interface AccountRecord {
   userId: string;
   address: string;
   signerAddress: string;
-  salt: number | bigint;
+  /**
+   * CREATE2 salt. Canonically persisted as a DECIMAL STRING (lossless, like dailyLimit) — the
+   * full-config / P-256 path (#118 M2) writes it this way so a large salt (> 2^53) neither truncates
+   * as a JS number nor fails JSON serialization as a bigint. The deploy-time rebuild reconstructs it
+   * with `BigInt(account.salt)`, which MUST match the salt used to predict the address
+   * (`_getSalt(owner, salt, configHash)`) or funds sent to the predicted address are stranded.
+   * `number | bigint` retained for back-compat with the legacy create paths.
+   */
+  salt: string | number | bigint;
   deployed: boolean;
   deploymentTxHash: string | null;
   validatorAddress: string;
@@ -27,6 +35,24 @@ export interface AccountRecord {
   guardian1Sig?: string;
   guardian2?: string;
   guardian2Sig?: string;
+  /**
+   * Full-config (8-field InitConfig) guardian slots — each is either an ECDSA address or a
+   * P-256 (passkey) public key (x, y). Present ONLY for accounts created via
+   * createAccountWithP256Guardians() (the factory's createAccount(owner, salt, config) path).
+   * transfer-manager rebuilds the byte-identical InitConfig from these at first-UserOp deploy
+   * time so the deployed CREATE2 address matches the create-time prediction.
+   */
+  guardianSpecs?: Array<{ ecdsa: string } | { p256: { x: string; y: string } }>;
+  /**
+   * Resolved approvedAlgIds written into the init config (full-config path). Persisted so the
+   * deploy-time InitConfig is reconstructed EXACTLY (no re-defaulting). Paired with guardianSpecs.
+   */
+  approvedAlgIds?: number[];
+  /**
+   * minDailyLimit floor (wei, decimal string) written into the init config (full-config path).
+   * Paired with guardianSpecs for exact deploy-time reconstruction.
+   */
+  minDailyLimit?: string;
 }
 
 /**

@@ -461,4 +461,177 @@ describe("AccountManager", () => {
       expect((await storage.getAccounts()).length).toBe(2);
     });
   });
+
+  // ── createAccountWithP256Guardians (#118) ──────────────────────────
+  describe("createAccountWithP256Guardians", () => {
+    const P256_ACCOUNT = "0xP256AccountAddress00000000000000000000001";
+    const X1 = `0x${"11".repeat(32)}` as `0x${string}`;
+    const Y1 = `0x${"22".repeat(32)}` as `0x${string}`;
+    const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+    const ZERO32 = `0x${"00".repeat(32)}`;
+    const DAILY_LIMIT = 1000000000000000000n; // 1 ETH
+
+    function makeP256Mock() {
+      const getAddressFn = vi.fn().mockResolvedValue(P256_ACCOUNT);
+      const mockFactory = { read: { getAddress: getAddressFn }, address: FACTORY_ADDRESS };
+      return makeEthereumMock({
+        getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_7),
+        getFactoryContract: vi.fn().mockReturnValue(mockFactory),
+      });
+    }
+
+    it("predicts via the full-config getAddress and persists guardianSpecs/approvedAlgIds/minDailyLimit", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+
+      const account = await mgr.createAccountWithP256Guardians("user-1", {
+        p256Guardians: [{ x: X1, y: Y1 }],
+        dailyLimit: DAILY_LIMIT,
+        minDailyLimit: DAILY_LIMIT / 10n,
+        salt: 7,
+      });
+
+      expect(account.address).toBe(P256_ACCOUNT);
+      expect(account.dailyLimit).toBe(DAILY_LIMIT.toString());
+      expect(account.guardianSpecs).toEqual([{ p256: { x: X1, y: Y1 } }]);
+      expect(account.approvedAlgIds).toEqual([0x02, 0x03]); // #118 H1: ECDSA + P-256 (0x03, NOT BLS 0x01)
+      expect(account.minDailyLimit).toBe((DAILY_LIMIT / 10n).toString());
+
+      // The full 8-field InitConfig tuple was passed to getAddress with P-256 coords in slot 0.
+      const factory = eth.getFactoryContract.mock.results[0].value;
+      const [owner, salt, configTuple] = factory.read.getAddress.mock.calls[0][0];
+      expect(owner).toBe(SIGNER_ADDRESS);
+      expect(salt).toBe(7n); // uint256 -> bigint
+      expect(configTuple).toHaveLength(8);
+      expect(configTuple[0]).toEqual([ZERO_ADDR, ZERO_ADDR, ZERO_ADDR]); // guardians (ECDSA) all zero
+      expect(configTuple[1][0]).toBe(X1); // guardianP256X[0]
+      expect(configTuple[2][0]).toBe(Y1); // guardianP256Y[0]
+      expect(configTuple[1].slice(1)).toEqual([ZERO32, ZERO32]);
+      expect(configTuple[3]).toBe(DAILY_LIMIT); // dailyLimit
+    });
+
+    it("installs a mixed ECDSA + P-256 set with ECDSA in slot 0 (no acceptance sigs on this path)", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const ECDSA_G = "0x1111111111111111111111111111111111111111";
+
+      const account = await mgr.createAccountWithP256Guardians("user-1", {
+        ecdsaGuardians: [ECDSA_G],
+        p256Guardians: [{ x: X1, y: Y1 }],
+        dailyLimit: DAILY_LIMIT,
+        salt: 9,
+      });
+
+      expect(account.guardianSpecs).toEqual([{ ecdsa: ECDSA_G }, { p256: { x: X1, y: Y1 } }]);
+      const factory = eth.getFactoryContract.mock.results[0].value;
+      const [, , configTuple] = factory.read.getAddress.mock.calls[0][0];
+      expect(configTuple[0][0].toLowerCase()).toBe(ECDSA_G); // ECDSA slot 0
+      expect(configTuple[1][1]).toBe(X1); // P-256 in slot 1
+    });
+
+    it("is deterministic — same inputs predict the same address", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+
+      const a = await mgr.createAccountWithP256Guardians("user-a", {
+        p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY_LIMIT, salt: 5,
+      });
+      const b = await mgr.createAccountWithP256Guardians("user-b", {
+        p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY_LIMIT, salt: 5,
+      });
+
+      const factory = eth.getFactoryContract.mock.results[0].value;
+      // Both calls encoded the identical config tuple (=> identical CREATE2 prediction on-chain).
+      expect(factory.read.getAddress.mock.calls[0][0][2]).toEqual(
+        factory.read.getAddress.mock.calls[1][0][2]
+      );
+      expect(a.address).toBe(b.address);
+    });
+
+    it("throws when no P-256 guardian is supplied", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr.createAccountWithP256Guardians("user-1", { p256Guardians: [], dailyLimit: DAILY_LIMIT })
+      ).rejects.toThrow(/at least one P-256 guardian/);
+    });
+
+    it("throws when dailyLimit is zero (guard required)", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr.createAccountWithP256Guardians("user-1", { p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: 0n })
+      ).rejects.toThrow(/dailyLimit > 0/);
+    });
+
+    it("throws for EntryPoint v0.6 (no full-config createAccount path)", async () => {
+      // default mock returns v0.6
+      await expect(
+        manager.createAccountWithP256Guardians("user-1", {
+          p256Guardians: [{ x: X1, y: Y1 }],
+          dailyLimit: DAILY_LIMIT,
+          entryPointVersion: EntryPointVersion.V0_6,
+        })
+      ).rejects.toThrow(/v0\.7 or v0\.8/);
+    });
+
+    // #118 M2: a large salt (> 2^53) must round-trip losslessly — persisted as a decimal string,
+    // and the SAME bigint must be used for both the prediction and the deploy-time rebuild.
+    it("persists a large (>2^53) bigint salt losslessly as a decimal string", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const bigSalt = (1n << 64n) + 12345n; // far beyond Number.MAX_SAFE_INTEGER
+
+      const account = await mgr.createAccountWithP256Guardians("user-1", {
+        p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY_LIMIT, salt: bigSalt,
+      });
+
+      // Stored as a decimal string -> JSON-serializable and lossless.
+      expect(account.salt).toBe(bigSalt.toString());
+      expect(typeof account.salt).toBe("string");
+      expect(BigInt(account.salt)).toBe(bigSalt);
+      expect(JSON.parse(JSON.stringify({ salt: account.salt })).salt).toBe(bigSalt.toString());
+
+      // The prediction used the EXACT bigint salt (so deploy-time BigInt(account.salt) === predicted salt).
+      const factory = eth.getFactoryContract.mock.results[0].value;
+      expect(factory.read.getAddress.mock.calls[0][0][1]).toBe(bigSalt);
+    });
+
+    it("rejects an unsafe JS-number salt (> MAX_SAFE_INTEGER) to prevent truncation", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      await expect(
+        mgr.createAccountWithP256Guardians("user-1", {
+          p256Guardians: [{ x: X1, y: Y1 }],
+          dailyLimit: DAILY_LIMIT,
+          salt: Number.MAX_SAFE_INTEGER + 1, // 2^53 — loses precision as a JS number
+        })
+      ).rejects.toThrow(/exceeds Number\.MAX_SAFE_INTEGER/);
+    });
+
+    it("is idempotent for the same user+version", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const first = await mgr.createAccountWithP256Guardians("user-1", {
+        p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY_LIMIT,
+      });
+      const second = await mgr.createAccountWithP256Guardians("user-1", {
+        p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY_LIMIT,
+      });
+      expect(second).toEqual(first);
+      expect((await storage.getAccounts()).length).toBe(1);
+    });
+
+    it("createAccount delegates to the P-256 path when p256Guardians is provided", async () => {
+      const eth = makeP256Mock();
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const account = await mgr.createAccount("user-1", {
+        entryPointVersion: EntryPointVersion.V0_7,
+        dailyLimit: DAILY_LIMIT,
+        p256Guardians: [{ x: X1, y: Y1 }],
+        salt: 3,
+      });
+      expect(account.guardianSpecs).toEqual([{ p256: { x: X1, y: Y1 } }]);
+    });
+  });
 });

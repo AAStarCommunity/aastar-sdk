@@ -17,12 +17,15 @@ describe('buildInitConfig', () => {
         expect(cfg.approvedAlgIds).toEqual([2]);
     });
 
-    it('wires a P-256 slot as guardians[i]=address(0) + (x,y), and approves alg 1', () => {
+    it('wires a P-256 slot as guardians[i]=address(0) + (x,y), and approves ECDSA + P-256 (0x02, 0x03)', () => {
         const cfg = buildInitConfig({ guardians: [{ ecdsa: ECDSA_G }, { p256: { x: X, y: Y } }], dailyLimit: 1n });
         expect(cfg.guardians).toEqual([ECDSA_G, ZERO, ZERO]);
         expect(cfg.guardianP256X).toEqual([ZERO32, X, ZERO32]);
         expect(cfg.guardianP256Y).toEqual([ZERO32, Y, ZERO32]);
-        expect(cfg.approvedAlgIds).toEqual([2, 1]);
+        // #118 H1: ALG_P256 == 0x03 (NOT 0x01 = BLS). Default must whitelist ECDSA owner + P-256, never BLS.
+        expect(cfg.approvedAlgIds).toEqual([0x02, 0x03]);
+        expect(cfg.approvedAlgIds).toContain(0x03);
+        expect(cfg.approvedAlgIds).not.toContain(0x01);
     });
 
     it('rejects > 3 guardians', () => {
