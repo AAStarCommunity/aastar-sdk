@@ -634,4 +634,169 @@ describe("AccountManager", () => {
       expect(account.guardianSpecs).toEqual([{ p256: { x: X1, y: Y1 } }]);
     });
   });
+
+  // ── ensureValidatorRouter (Gap B) ──────────────────────────────────
+  describe("ensureValidatorRouter", () => {
+    const SEPOLIA = 11155111;
+    const OP_SEPOLIA = 11155420; // canonical aaStarValidator == zeroAddress (not deployed)
+    const SEPOLIA_ROUTER = "0xfcDfd17a373E037c3F9C8ffE2c781915E7Ae6e11"; // CANONICAL_ADDRESSES[11155111]
+    const ZERO = "0x0000000000000000000000000000000000000000";
+    const ACC = "0xAccountForRouterWiring000000000000000001";
+
+    /** Build the EthereumProvider mock surface ensureValidatorRouter reads from. */
+    function makeRouterMock(opts: { chainId?: number; validator?: string; code?: string } = {}) {
+      const validatorFn = vi.fn().mockResolvedValue(opts.validator ?? ZERO);
+      return makeEthereumMock({
+        getChainId: vi.fn().mockReturnValue(opts.chainId ?? SEPOLIA),
+        getAccountContract: vi.fn().mockReturnValue({ read: { validator: validatorFn } }),
+        getProvider: vi.fn().mockReturnValue({
+          getCode: vi.fn().mockResolvedValue(opts.code ?? "0x6080604052"), // deployed by default
+        }),
+      });
+    }
+
+    /** Persist a record with the given approvedAlgIds so the manager can resolve them. */
+    async function seedRecord(approvedAlgIds: number[] | undefined) {
+      await storage.saveAccount({
+        userId: "user-1",
+        address: ACC,
+        signerAddress: SIGNER_ADDRESS,
+        salt: "1",
+        deployed: true,
+        deploymentTxHash: null,
+        validatorAddress: VALIDATOR_ADDRESS,
+        entryPointVersion: "0.7",
+        factoryAddress: FACTORY_ADDRESS,
+        createdAt: new Date().toISOString(),
+        ...(approvedAlgIds ? { approvedAlgIds } : {}),
+      });
+    }
+
+    /** A WalletClient stub that records the setValidator write. */
+    function makeWalletStub(txHash = "0xRouterTx") {
+      return {
+        account: { address: SIGNER_ADDRESS },
+        chain: undefined,
+        writeContract: vi.fn().mockResolvedValue(txHash),
+      };
+    }
+
+    it("throws Account not found for unknown user", async () => {
+      const mgr = new AccountManager(makeRouterMock() as any, storage, signer, new SilentLogger());
+      await expect(mgr.ensureValidatorRouter("nobody")).rejects.toThrow("Account not found");
+    });
+
+    it("no-op when approvedAlgIds is absent (legacy / ECDSA-only record)", async () => {
+      await seedRecord(undefined);
+      const mgr = new AccountManager(makeRouterMock() as any, storage, signer, new SilentLogger());
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: "no approvedAlgIds / not router-delegated" });
+    });
+
+    it("no-op when all approved algIds are inline (not router-delegated)", async () => {
+      await seedRecord([0x02, 0x03]); // ECDSA + P256 — both inline
+      const mgr = new AccountManager(makeRouterMock() as any, storage, signer, new SilentLogger());
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: "no router-delegated algorithm" });
+    });
+
+    it("no-op when the chain has no canonical router (zeroAddress)", async () => {
+      await seedRecord([0x01]); // BLS — router-delegated
+      const mgr = new AccountManager(
+        makeRouterMock({ chainId: OP_SEPOLIA }) as any,
+        storage,
+        signer,
+        new SilentLogger()
+      );
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: `no canonical validator router for chain ${OP_SEPOLIA}` });
+    });
+
+    it("no-op when validator() is already set (SET-ONCE)", async () => {
+      await seedRecord([0x01]);
+      const mgr = new AccountManager(
+        makeRouterMock({ validator: SEPOLIA_ROUTER }) as any,
+        storage,
+        signer,
+        new SilentLogger()
+      );
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: "validator already set" });
+    });
+
+    it("no-op when the account is not yet deployed (no code)", async () => {
+      await seedRecord([0x01]);
+      const mgr = new AccountManager(
+        makeRouterMock({ code: "0x" }) as any,
+        storage,
+        signer,
+        new SilentLogger()
+      );
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: "account not deployed yet — call after deploy" });
+    });
+
+    it("checks deployment BEFORE reading validator() — a not-deployed account whose validator() reverts still returns the clean reason (locks the step order)", async () => {
+      await seedRecord([0x01]);
+      // Real on-chain behaviour: validator() reverts on an account with no code (eth_call returns 0x).
+      // The deploy check MUST run first, so validator() is never read here.
+      const validatorFn = vi.fn().mockRejectedValue(new Error('returned no data ("0x")'));
+      const eth = makeEthereumMock({
+        getChainId: vi.fn().mockReturnValue(SEPOLIA),
+        getAccountContract: vi.fn().mockReturnValue({ read: { validator: validatorFn } }),
+        getProvider: vi.fn().mockReturnValue({ getCode: vi.fn().mockResolvedValue("0x") }), // not deployed
+      });
+      const mgr = new AccountManager(eth as any, storage, signer, new SilentLogger());
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r).toEqual({ set: false, reason: "account not deployed yet — call after deploy" });
+      expect(validatorFn).not.toHaveBeenCalled(); // order fix: validator() not read pre-deploy
+    });
+
+    it("returns a clear reason when no owner WalletClient is supplied", async () => {
+      await seedRecord([0x01]);
+      const mgr = new AccountManager(makeRouterMock() as any, storage, signer, new SilentLogger());
+      const r = await mgr.ensureValidatorRouter("user-1");
+      expect(r.set).toBe(false);
+      expect(r.reason).toMatch(/walletClient/);
+      expect(r.router?.toLowerCase()).toBe(SEPOLIA_ROUTER.toLowerCase());
+    });
+
+    it("happy path: sends setValidator(canonical router) and returns set=true", async () => {
+      await seedRecord([0x01]); // BLS-only — needs the router
+      const mgr = new AccountManager(makeRouterMock() as any, storage, signer, new SilentLogger());
+      const wallet = makeWalletStub("0xDEADBEEF");
+
+      const r = await mgr.ensureValidatorRouter("user-1", { walletClient: wallet as any });
+
+      expect(r.set).toBe(true);
+      expect(r.tx).toBe("0xDEADBEEF");
+      expect(r.router?.toLowerCase()).toBe(SEPOLIA_ROUTER.toLowerCase());
+      // The core setValidator action routed through the supplied wallet with the canonical router.
+      expect(wallet.writeContract).toHaveBeenCalledTimes(1);
+      const callArg = wallet.writeContract.mock.calls[0][0];
+      expect(callArg.functionName).toBe("setValidator");
+      expect(callArg.args).toEqual([SEPOLIA_ROUTER]);
+    });
+
+    it("honors an explicit router override on a chain with a zero canonical router", async () => {
+      await seedRecord([0x08]); // session — router-delegated
+      const mgr = new AccountManager(
+        makeRouterMock({ chainId: OP_SEPOLIA }) as any,
+        storage,
+        signer,
+        new SilentLogger()
+      );
+      const wallet = makeWalletStub("0xABC123");
+      const override = "0x1234567890123456789012345678901234567890";
+
+      const r = await mgr.ensureValidatorRouter("user-1", {
+        router: override as any,
+        walletClient: wallet as any,
+      });
+
+      expect(r.set).toBe(true);
+      expect(r.router).toBe(override);
+      expect(wallet.writeContract.mock.calls[0][0].args).toEqual([override]);
+    });
+  });
 });

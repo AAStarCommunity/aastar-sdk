@@ -1,8 +1,9 @@
-import { zeroAddress, parseEther, type Address } from "viem";
+import { zeroAddress, parseEther, type Address, type Hash, type WalletClient } from "viem";
 // AIRACCOUNT_ABI is a local human-readable signature array (not in @aastar/core);
 // parseAbi is required to feed it to viem's encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi, encodeFunctionData } from "viem";
+import { needsValidatorRouter, getCanonicalAddresses, airAccountActions } from "@aastar/core";
 import { keccak256 } from "../../migration/viem/hashing";
 import { solidityPacked } from "../../migration/viem/abi-encoding";
 import { EthereumProvider } from "../providers/ethereum-provider";
@@ -27,6 +28,18 @@ import {
 // keys) right after `guardians`. ECDSA-only accounts pass three zero words for each.
 const ZERO32 = ("0x" + "0".repeat(64)) as `0x${string}`;
 const EMPTY_P256: readonly [`0x${string}`, `0x${string}`, `0x${string}`] = [ZERO32, ZERO32, ZERO32];
+
+/**
+ * Result of {@link AccountManager.ensureValidatorRouter}.
+ * `set: true` only when an on-chain `setValidator(router)` tx was actually sent (`tx`
+ * carries the hash). `set: false` is a no-op with a `reason` explaining the decision.
+ */
+export interface EnsureValidatorRouterResult {
+  set: boolean;
+  reason?: string;
+  tx?: Hash;
+  router?: Address;
+}
 
 /**
  * Account manager — extracted from NestJS AccountService.
@@ -499,6 +512,109 @@ export class AccountManager {
     this.logger.log(
       `[AccountManager] account created with ${params.p256Guardians.length} P-256 guardian(s): ${accountAddress}`
     );
+    // Gap B: a router-delegated algId (BLS/T2/T3/weighted/session/...) cannot validate until the
+    // account's validator router is wired via setValidator(). The factory does NOT auto-wire it, and
+    // setValidator is onlyOwner + needs deployed code — so it CANNOT run at predict-time here (the
+    // account is still counterfactual). Flag the explicit post-deploy step rather than attempting it now.
+    if (needsValidatorRouter(config.approvedAlgIds)) {
+      this.logger.log(
+        `[AccountManager] account ${accountAddress} approved a router-delegated algorithm ` +
+          `(approvedAlgIds=[${config.approvedAlgIds.join(", ")}]); call ensureValidatorRouter(userId) ` +
+          `AFTER the account is deployed to wire setValidator(router) — required for those algIds to validate.`
+      );
+    }
     return account;
+  }
+
+  /**
+   * Gap B — wire the validator router for an account that approved a ROUTER-DELEGATED signature
+   * algorithm (BLS 0x01, cumulative T2 0x04, T3 0x05, weighted 0x07, session 0x08, ...). Such an
+   * account's `_validateTripleSignature` / `_callBLSValidator` return `1` (FAIL) while
+   * `validator() == address(0)`, so the algorithm is non-functional until the owner calls
+   * `setValidator(router)` (onlyOwner, SET-ONCE). Inline algIds (ECDSA 0x02, P256 0x03, COMBINED_T1
+   * 0x06) need no router and are a no-op here.
+   *
+   * MUST be called AFTER the account is deployed (setValidator is onlyOwner and needs code) — the
+   * lazy/counterfactual deploy path cannot setValidator at predict-time. Idempotent: re-running after
+   * the validator is set is a no-op (`reason: 'validator already set'`).
+   *
+   * On-chain access matches the rest of this package: reads via the EthereumProvider's PublicClient
+   * (`getAccountContract(...).read.validator()` and `getProvider().getCode()`); the state-changing
+   * `setValidator` is sent through a caller-supplied `WalletClient` whose account is the owner —
+   * the same convention used by `PaymasterManager.updatePrice` / `ForceExitService` (this manager's
+   * narrow `ISignerAdapter` only EIP-191 personal-signs and cannot send transactions).
+   *
+   * @param userId  the account owner's user id (storage key)
+   * @param opts.router        override the router address (defaults to the chain's canonical
+   *                           `aaStarValidator`); pass to target a non-canonical router
+   * @param opts.walletClient  viem WalletClient signing as the account OWNER — REQUIRED to send the tx
+   */
+  async ensureValidatorRouter(
+    userId: string,
+    opts?: { router?: Address; walletClient?: WalletClient }
+  ): Promise<EnsureValidatorRouterResult> {
+    // (1) Load the record + resolve approvedAlgIds. Absent => ECDSA-only legacy record => no router.
+    const account = await this.storage.findAccountByUserId(userId);
+    if (!account) throw new Error("Account not found");
+    const approvedAlgIds = account.approvedAlgIds;
+    if (!approvedAlgIds || approvedAlgIds.length === 0) {
+      return { set: false, reason: "no approvedAlgIds / not router-delegated" };
+    }
+
+    // (2) All approved algIds are inline => nothing to route.
+    if (!needsValidatorRouter(approvedAlgIds)) {
+      return { set: false, reason: "no router-delegated algorithm" };
+    }
+
+    // (3) Resolve the router: explicit override, else the chain's canonical aaStarValidator.
+    const chainId = this.ethereum.getChainId();
+    const canonicalRouter = getCanonicalAddresses(chainId)?.aaStarValidator as Address | undefined;
+    const router = opts?.router ?? canonicalRouter;
+    if (!router || router.toLowerCase() === zeroAddress) {
+      return { set: false, reason: `no canonical validator router for chain ${chainId}` };
+    }
+
+    // (4) Check deployment FIRST. setValidator is onlyOwner and needs deployed code; and reading
+    //     validator() on a counterfactual (not-yet-deployed) account reverts (eth_call returns 0x),
+    //     so the deploy check MUST precede the validator() read — otherwise a pre-deploy call throws
+    //     instead of returning the clean "not deployed yet" reason.
+    let deployed = false;
+    try {
+      const code = await this.ethereum.getProvider().getCode({ address: account.address as Address });
+      deployed = !!code && code !== "0x";
+    } catch {
+      // Treat an RPC failure as "not deployed" — never attempt setValidator on an unknown-code account.
+    }
+    if (!deployed) {
+      return { set: false, reason: "account not deployed yet — call after deploy" };
+    }
+
+    // (5) Read the account's current validator(). Non-zero => already wired (SET-ONCE) => no-op.
+    const current = (await this.ethereum
+      .getAccountContract(account.address)
+      .read.validator([])) as Address;
+    if (current && current.toLowerCase() !== zeroAddress) {
+      return { set: false, reason: "validator already set" };
+    }
+
+    // (6) Send setValidator(router) signed by the owner. The write goes through a caller-supplied
+    // WalletClient (this manager has no signer that can send transactions). Use the core setValidator
+    // action so the encoding stays the single-source-of-truth ABI from @aastar/core.
+    const walletClient = opts?.walletClient;
+    if (!walletClient || !walletClient.account) {
+      return {
+        set: false,
+        reason: "walletClient (account owner) required to send setValidator",
+        router,
+      };
+    }
+    const tx = (await airAccountActions(account.address as Address)(walletClient).setValidator({
+      validator: router,
+      account: walletClient.account,
+    })) as Hash;
+    this.logger.log(
+      `[AccountManager] setValidator(${router}) sent for account ${account.address} (tx ${tx})`
+    );
+    return { set: true, tx, router };
   }
 }
