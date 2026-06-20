@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/ERC--4337-ready-brightgreen" alt="ERC-4337" style="display:inline-block; margin-right: 5px;" />
   <img src="https://img.shields.io/badge/Optimism-Mainnet-red" alt="Optimism Mainnet" style="display:inline-block; margin-right: 5px;" />
-  <img src="https://img.shields.io/badge/Status-v0.22.0-green" alt="Status" style="display:inline-block;" />
+  <img src="https://img.shields.io/badge/Status-v0.24.0-green" alt="Status" style="display:inline-block;" />
 </p>
 
 **Comprehensive Account Abstraction Infrastructure SDK - Powering the Mycelium Network**
@@ -25,7 +25,7 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 | **AirAccount** (contracts) | `v0.20.0` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
 | **SuperPaymaster** | `v5.4.0-beta.1-redeploy` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
 | **KMS** | `openapi 0.23.2` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
-| **DVT** (validator nodes) | `v1.4.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client (`pending_confirmation` surfaced via `DvtPendingConfirmationError`); on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps). v1.4.0 wire-format unchanged vs v1.3.0 — the per-IP rate-limit + confirm flow are server-side (tracked in #82). |
+| **DVT** (validator nodes) | `v1.5.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client (`pending_confirmation` surfaced via `DvtPendingConfirmationError`); on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps); default testnet nodes `DEFAULT_DVT_NODES` (`packages/core/src/crypto/dvtNodes.ts`). **v1.5.0 wire-format unchanged vs v1.4.0** (radar-verified in-sync) — v1.5.0 adds the always-on testnet nodes (dvt1/2/3.aastar.io) + clone-and-deploy package; per-IP rate-limit + confirm flow are server-side (#82). |
 
 **How consistency is guaranteed — the anchors:**
 1. **ABI files** — every contract ABI is vendored under `packages/core/src/abis/` (ESLint forbids inline `parseAbi`). The doc-coverage checker (`scripts/coverage/check-doc-coverage.ts`) asserts **100%** of each upstream's ABI/API surface has an SDK wrapper, and an ABI-absent-wrapper audit ensures no wrapper calls a function missing from its ABI.
@@ -284,7 +284,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.23.0)**: `10c76681925b6453418bc4d90aefa678f1e90e572f671f7a88e686c2e7be9263`
+**Current Code Integrity Hash (v0.24.0)**: `170b24e3477f9e79420f5e5e0c3843bf32ae758585fe410bbcfd74170d45a072`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum

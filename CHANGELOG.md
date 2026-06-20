@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.24.0] - 2026-06-20
+
+**DVT through-EntryPoint completion + validator-router wiring + default testnet nodes.** Closes the
+last open item of the v0.20.0 acceptance (the DVT BLS path proven THROUGH `EntryPoint.handleOps`,
+`UserOperationEvent success=true`) and ships the supporting SDK surface. Backward-compatible (additive).
+
+- **`encodeBLSAccountSignature` (`@aastar/core`)** — the account-level `ALG_BLS` (0x01) signature for
+  `EntryPoint.handleOps`: `[0x01][nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)][ownerECDSA(65)]` per
+  contract `_validateTripleSignature`. The trailing 65 bytes are the owner's EIP-191 sig over
+  `userOpHash` (recovered==owner), so `ALG_BLS` is BLS **+ owner co-sign**, not BLS-only. (The earlier
+  `[0x01]‖verifierProof` was missing the length prefix + owner sig.) Real on-chain handleOps proven:
+  tx `0xc01eae6f…` (`UserOperationEvent success=true`).
+- **`DEFAULT_DVT_NODES` / `getDefaultDvtNodes(chainId)` (`@aastar/core`)** — AAStar's always-on testnet
+  DVT nodes (`dvt1/2/3.aastar.io`, independent production keys, registered on `AAStarBLSAlgorithm`
+  `0xAF525A…`). Source of truth: `YetAnotherAA-Validator/deploy/sdk-dvt-config.testnet.json`.
+- **`needsValidatorRouter` (`@aastar/core`) + `AccountManager.ensureValidatorRouter(userId, { router?,
+  walletClient? })`** — router-delegated algIds (BLS 0x01, T2/T3 0x04/0x05, weighted 0x07, session 0x08)
+  require `setValidator(router)` (the factory does NOT auto-wire it; `validator()==0` ⇒ BLS validation
+  returns 1). `ensureValidatorRouter` resolves the canonical `aaStarValidator`, verifies the account is
+  deployed + `validator()==0`, and sends `setValidator` via a caller-supplied owner wallet.
+- **Upstream sync: DVT `v1.4.0` → `v1.5.0`** (radar 4/4; wire-format unchanged — v1.5.0 adds the
+  always-on testnet nodes + clone-and-deploy package).
+- Full v0.23.0/v0.20.0 business-feature acceptance recorded (`docs/onchain-evidence/v0.23.0-acceptance.md`):
+  all 10 scenario rows FEATURE-MET (decoded-revert + post-state + 2-round Codex challenge).
+
 ## [0.23.0] - 2026-06-20
 
 **Feature (#118): P-256 (passkey) MAIN-account creation in the server-client (the path YAA uses).**
@@ -263,8 +288,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.23.0] - 2026-06-20
-**SDK Code Integrity Hash**: `10c76681925b6453418bc4d90aefa678f1e90e572f671f7a88e686c2e7be9263`
+## [0.24.0] - 2026-06-20
+**SDK Code Integrity Hash**: `170b24e3477f9e79420f5e5e0c3843bf32ae758585fe410bbcfd74170d45a072`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
