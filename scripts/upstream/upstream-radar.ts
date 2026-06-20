@@ -128,6 +128,43 @@ function abiFunctionNames(file: string): Set<string> {
 }
 
 /**
+ * Canonical type string for one ABI input, with tuples expanded RECURSIVELY to
+ * `(comp,comp,...)` and the array suffix preserved (`[]`, `[3]`). This is what lets
+ * the radar see PARAM-SHAPE changes — e.g. a factory `InitConfig` tuple gaining two
+ * `bytes32[3]` fields — that a bare function-name diff is blind to (v0.20.0 lesson).
+ */
+function canonicalAbiType(input: any): string {
+  if (input && typeof input.type === "string" && input.type.startsWith("tuple")) {
+    const inner = (input.components || []).map(canonicalAbiType).join(",");
+    const suffix = input.type.slice("tuple".length); // "" | "[]" | "[3]" ...
+    return `(${inner})${suffix}`;
+  }
+  return input?.type ?? "";
+}
+
+/** Canonical signature `name(type,type,...)` with tuples fully expanded. */
+function abiFunctionSignature(fn: any): string {
+  const params = (fn.inputs || []).map(canonicalAbiType).join(",");
+  return `${fn.name}(${params})`;
+}
+
+/** Map each function NAME -> the set of its canonical signatures (handles overloads). */
+function abiFunctionSignatures(file: string): Map<string, Set<string>> {
+  const raw = JSON.parse(readText(file));
+  const abi = Array.isArray(raw) ? raw : raw.abi;
+  const map = new Map<string, Set<string>>();
+  if (Array.isArray(abi)) {
+    for (const item of abi) {
+      if (item && item.type === "function" && item.name) {
+        if (!map.has(item.name)) map.set(item.name, new Set());
+        map.get(item.name)!.add(abiFunctionSignature(item));
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * Resolve an upstream ABI for a contract. Order matters: prefer a MERGED/full ABI
  * (e.g. AirAccount's `abi/<C>.full.json` flattens proxy + extension + module
  * functions into one ABI, which is exactly what the SDK vendors), then a clean
@@ -436,13 +473,31 @@ function analyzeAbis(repo: string, sdkAbiFiles: string[]): AnchorResult {
     const upFns = abiFunctionNames(upstreamPath);
     const added = [...upFns].filter((f) => !sdkFns.has(f)).sort(); // upstream has, SDK lacks
     const removed = [...sdkFns].filter((f) => !upFns.has(f)).sort(); // SDK has, upstream lacks
-    if (added.length || removed.length) {
+
+    // Signature-level diff for functions present on BOTH sides: catches param/struct
+    // changes (e.g. an InitConfig tuple gaining fields) that the name-set diff misses.
+    const sdkSigs = abiFunctionSignatures(join(ABI_DIR, file));
+    const upSigs = abiFunctionSignatures(upstreamPath);
+    const sigChanged: string[] = [];
+    for (const name of [...sdkFns].filter((f) => upFns.has(f)).sort()) {
+      const s = sdkSigs.get(name) ?? new Set<string>();
+      const u = upSigs.get(name) ?? new Set<string>();
+      const onlyUp = [...u].filter((x) => !s.has(x));
+      const onlySdk = [...s].filter((x) => !u.has(x));
+      if (onlyUp.length || onlySdk.length) {
+        sigChanged.push(`${name}: SDK \`${[...s].join(" | ")}\` != upstream \`${[...u].join(" | ")}\``);
+      }
+    }
+
+    if (added.length || removed.length || sigChanged.length) {
       drift = true;
       const parts: string[] = [];
       if (added.length)
         parts.push(`+coverage-gap [${added.join(", ")}] (upstream added; SDK lacks)`);
       if (removed.length)
         parts.push(`-absent-wrapper [${removed.join(", ")}] (SDK has; upstream removed, #30 risk)`);
+      if (sigChanged.length)
+        parts.push(`~signature-changed [${sigChanged.join("; ")}] (param/tuple shape drift — would-revert on-chain, #InitConfig class)`);
       findings.push(`${contract}: ${parts.join("  ")}`);
     }
   }
