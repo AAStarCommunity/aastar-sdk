@@ -44,6 +44,13 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CANONICAL_ADDRESSES } from "../../packages/core/src/addresses.js";
+// Pure ABI-signature helpers live in a side-effect-free module so they can be unit-tested
+// (scripts/upstream/abi-signature.test.ts) without importing this file's top-level radar run.
+import {
+  canonicalAbiType,
+  abiFunctionSignature,
+  abiMemberSignatures,
+} from "./abi-signature.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, "..", "..");
@@ -125,53 +132,6 @@ function abiFunctionNames(file: string): Set<string> {
     }
   }
   return names;
-}
-
-/**
- * Canonical type string for one ABI input, with tuples expanded RECURSIVELY to
- * `(comp,comp,...)` and the array suffix preserved (`[]`, `[3]`). This is what lets
- * the radar see PARAM-SHAPE changes — e.g. a factory `InitConfig` tuple gaining two
- * `bytes32[3]` fields — that a bare function-name diff is blind to (v0.20.0 lesson).
- */
-function canonicalAbiType(input: any): string {
-  if (input && typeof input.type === "string" && input.type.startsWith("tuple")) {
-    const inner = (input.components || []).map(canonicalAbiType).join(",");
-    const suffix = input.type.slice("tuple".length); // "" | "[]" | "[3]" ...
-    return `(${inner})${suffix}`;
-  }
-  return input?.type ?? "";
-}
-
-/** Canonical signature `name(type,type,...)` with tuples fully expanded. */
-function abiFunctionSignature(fn: any): string {
-  const params = (fn.inputs || []).map(canonicalAbiType).join(",");
-  return `${fn.name}(${params})`;
-}
-
-/**
- * Map each ABI member keyed as `type:name` -> the set of its canonical signatures
- * (handles overloads). Covers functions, EVENTS, and errors — so a changed event
- * param shape (e.g. `RecoveryProposed` gaining `uint8 guardianIdx`, which moves
- * topic0) is caught too, not just function signatures.
- */
-function abiMemberSignatures(file: string): Map<string, Set<string>> {
-  const raw = JSON.parse(readText(file));
-  const abi = Array.isArray(raw) ? raw : raw.abi;
-  const map = new Map<string, Set<string>>();
-  if (Array.isArray(abi)) {
-    for (const item of abi) {
-      if (
-        item &&
-        (item.type === "function" || item.type === "event" || item.type === "error") &&
-        item.name
-      ) {
-        const key = `${item.type}:${item.name}`;
-        if (!map.has(key)) map.set(key, new Set());
-        map.get(key)!.add(abiFunctionSignature(item));
-      }
-    }
-  }
-  return map;
 }
 
 /**

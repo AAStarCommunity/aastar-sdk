@@ -100,3 +100,9 @@ local notice  ──┘
 - **`self-contradiction` on AirAccount docs** usually means an older `deployment-v*.md`
   lingers next to the newer `E2E_TESTDATA_*` record. The SDK tracks the E2E (latest)
   values; the stale doc should be reconciled upstream.
+
+## Sync log
+
+| date | upstreams synced | PR | on-chain evidence |
+|---|---|---|---|
+| 2026-06-20 | AirAccount contracts **v0.20.0** (P-256 guardian, breaking) · KMS **openapi 0.23.1** · DVT **v1.4.0** · SuperPaymaster v5.4.0-beta.1-redeploy (in-sync) | #112 (sync) · #113 (process + evidence) | [`docs/onchain-evidence/v0.20.0.md`](./onchain-evidence/v0.20.0.md) — createAccount/recovery decode-verified; P-256 guardian feature deferred to Batch 2 (#110) |

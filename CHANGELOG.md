@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.21.0] - 2026-06-20
+
+On-chain acceptance (Sepolia): the v0.20.0 `createAccount` 8-field-`InitConfig` encoding is
+**decode-verified** across 3 independent paths (recovery `createAccount`, `createAgentAccount`, an
+isolated gasless-config `createAccount`) — see `docs/onchain-evidence/v0.20.0.md`. Codex-reviewed (5 rounds, APPROVE).
 
 **Upstream sync — v0.20.0 foundation (Batch 1; non-breaking).** Detect → upgrade → vendor the
 infra pins; the P-256 / WebAuthn guardian feature itself is Batch 2 (stubbed here).
@@ -190,8 +194,8 @@ Compatible upstreams: AirAccount v0.19.0-beta.2 / SuperPaymaster v5.4.0-beta.1 (
 - **[ADDED]** MicroPaymentChannel ABI
 - **[ADDED]** Address constants: microPaymentChannel, agentIdentityRegistry, agentReputationRegistry (Sepolia deployed)
 
-## [0.20.8] - 2026-06-18
-**SDK Code Integrity Hash**: `1b43e81d4cc394b44ed39665749d678666d9e7571054619f8da09aa64b04fec1`
+## [0.21.0] - 2026-06-20
+**SDK Code Integrity Hash**: `fe1ddda9e6158486e2a50cbdb7ad033daa86665be4bda8832b21cdece0b7fe6a`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 ### ⛽ Gas Fee Strategy (PaymasterClient)
 - **[FIX]** **Testnet/Mainnet Split Gas Pricing**:
