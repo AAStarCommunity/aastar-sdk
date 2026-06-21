@@ -175,6 +175,16 @@
         "types": "./dist/airaccount.d.cts",
         "default": "./dist/airaccount.cjs"
       }
+    },
+    "./email": {
+      "import": {
+        "types": "./dist/email.d.ts",
+        "default": "./dist/email.js"
+      },
+      "require": {
+        "types": "./dist/email.d.cts",
+        "default": "./dist/email.cjs"
+      }
     }
   },
   "files": [
@@ -187,13 +197,17 @@
   },
   "peerDependencies": {
     "react": "^18.0.0",
-    "react-dom": "^18.0.0"
+    "react-dom": "^18.0.0",
+    "resend": "^6.12.4"
   },
   "peerDependenciesMeta": {
     "react": {
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "resend": {
       "optional": true
     }
   },
@@ -210,6 +224,7 @@
     "@aastar/airaccount": "workspace:*",
     "@aastar/x402": "workspace:*",
     "@aastar/channel": "workspace:*",
+    "@aastar/email": "workspace:*",
     "tsup": "^8.0.0",
     "typescript": "5.7.2"
   },
