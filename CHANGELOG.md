@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.24.2] - 2026-06-21
+**SDK Code Integrity Hash**: `9b41f1f3515237e9572254ebc605dbcc708b7c2c363d4e0964c085abb9dc9e52`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**`@aastar/email` onboarding + umbrella subpath.** Patch release wiring up the existing
+Resend-based email utility for first-time use and exposing it from the all-in-one package.
+
+- **[ADDED]** `packages/email/README.md` — newbie guide: get a Resend API key, set
+  `RESEND_API_KEY`, verify a sending domain (SPF/DKIM/DMARC) vs. the `onboarding@resend.dev`
+  test address, install, send the first email; full `send` / `sendBatch` / `fromEnv` API and an
+  agent idempotency-key example.
+- **[ADDED]** `@aastar/sdk/email` subpath export — `import { ResendMailer } from '@aastar/sdk/email'`.
+  Exposed as a dedicated subpath (NOT the root barrel) so `resend` stays out of every
+  `import '@aastar/sdk'` consumer's bundle, mirroring the React-only `@aastar/sdk/dapp` pattern.
+- **[ADDED]** `resend` as an **optional** `peerDependency` of `@aastar/sdk` (the direct
+  `@aastar/email` package still pulls `resend` automatically as a normal dependency).
+- **[ADDED]** `RESEND_API_KEY` to `env.template`.
+- Verified: `@aastar/email` build + 16 unit tests pass; umbrella build emits
+  `email.{js,cjs,d.ts,d.cts}`; root bundle has 0 `resend` references.
+
 ## [0.24.1] - 2026-06-20
 
 **Gap B completion: one-call deploy + validator-router wiring (`deployAndWireValidator`).** 0.24.0
