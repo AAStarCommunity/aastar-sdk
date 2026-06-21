@@ -33,6 +33,26 @@ import { WalletManager } from "./services/wallet-manager";
  *
  * const account = await client.accounts.createAccount('user-123');
  * ```
+ *
+ * @example KMS-backed signing (production) — inject {@link KmsSignerAdapter} as the
+ * `signer`. This is the wiring seam that carries a per-call WebAuthn ceremony
+ * assertion (challenge-bound, replay-safe) from `executeTransfer` through to the
+ * KMS `/SignHash`. The `userId → { keyId, address }` mapping is app-specific.
+ * ```ts
+ * import { AirAccountServerClient, KmsManager, KmsSignerAdapter } from '@aastar/airaccount/server';
+ *
+ * const kms = new KmsManager({ kmsEndpoint, kmsApiKey, kmsEnabled: true });
+ * const client = new AirAccountServerClient({
+ *   ...rest,
+ *   signer: new KmsSignerAdapter(kms, async (userId) => lookupUserKey(userId)),
+ * });
+ * // Transfer with a one-time WebAuthn assertion (frontend ceremony) on the tiered path:
+ * await client.transfers.executeTransfer(userId, {
+ *   ...params,
+ *   useAirAccountTiering: true,
+ *   webAuthnAssertion, // { ChallengeId, Credential } from BeginAuthentication
+ * });
+ * ```
  */
 export class AirAccountServerClient {
   readonly ethereum: EthereumProvider;
