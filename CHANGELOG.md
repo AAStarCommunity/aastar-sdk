@@ -2,7 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.24.2] - 2026-06-21
+## [0.25.0] - 2026-06-21
+**SDK Code Integrity Hash**: `c8ae1c0c61c29f5cbcb018198daab036d126b0cd6ca90bdcbff5496d5cbeb8be`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**KMS WebAuthn-ceremony signing (transfer/BLS) + MushroomDAO launch token sale.** Two feature
+lines, both proven on Sepolia.
+
+### KMS: transfer/BLS signing migrated off legacy raw passkey → WebAuthn ceremony
+- **[FIX]** `KmsSigner` signs via the challenge-bound WebAuthn ceremony (`signHashWithWebAuthn`)
+  instead of the legacy `signHash(Passkey)` that KMS v0.20.0+ rejects (400, "no challenge
+  binding — replayable"). This is the root-cause fix for `executeTransfer` (Tier-2 BLS) 500s.
+- **[ADDED]** `KmsSignerAdapter` (the `ISignerAdapter`↔KMS bridge), `ExecuteTransferParams.webAuthnAssertion`,
+  `SignerAuthContext` (legacy `PasskeyAssertionContext` @deprecated | `WebAuthnCeremonyContext`),
+  `KmsManager.createKmsSignerWithCeremony`, `GuardChecker` wired into `AirAccountServerClient`
+  (makes `useAirAccountTiering:true` reachable).
+- **[PERF]** BLS Tier-2/3 skip the unused owner-ECDSA over userOpHash (`aaSignature`) — one fewer
+  owner signature / ceremony gesture per tiered transfer.
+- **[ADDED]** `commitChallenge(nonce, payload)` = `SHA-256(nonce‖hash)` (WYSIWYS, AirAccount #68),
+  exported; commitment is **opt-in** (`commitPayload`, default raw nonce). Live KMS still verifies the
+  raw nonce host-side, so commitment is held until the KMS host is aligned (AirAccount #110).
+- **Proven live (kms.aastar.io):** raw-nonce ceremony SignHash returns a signature; legacy is
+  rejected (`scripts/kms_ceremony_e2e.ts`). 5-round Codex review (PR #131) + #133.
+
+### Tokens: aPoints + governance-token sale (`@aastar/tokens`)
+- **[ADDED]** `TokenSaleClient` — abstraction of the `launch.mushroom.cv/join` page: `getPrices`,
+  `quote`, `getBalances`, `getPayoutToken`, `buySelfPay`, `buyGasless` (EIP-3009 + EIP-712 BuyIntent
+  → relayer) + `usd()`. ABIs `SaleContractV2`/`APNTsSaleContract`/`BuyHelper`/`ERC20` added to
+  `@aastar/core`; `LAUNCH_SALE_ADDRESSES` (separate from `CANONICAL_ADDRESSES`).
+- **[CHANGED]** Path A: the Sepolia sale stack was redeployed bound to the **canonical** SuperPaymaster
+  GToken (`0x20a051…`) / aPNTs (`0x9e66B…`); `LAUNCH_SALE_ADDRESSES` now points to it (SaleV2
+  `0x29eE47…`, APNTsSale `0x136654…`, BuyHelper `0x0EA2AE…`). Payout token resolved on-chain — never
+  duplicated.
+- **Proven on-chain:** self-pay + gasless buys (`scripts/launch_sale_e2e.ts`).
+
+## [0.24.2] - 2026-06-20
 **SDK Code Integrity Hash**: `9b41f1f3515237e9572254ebc605dbcc708b7c2c363d4e0964c085abb9dc9e52`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
