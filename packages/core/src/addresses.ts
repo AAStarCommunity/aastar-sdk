@@ -220,11 +220,14 @@ export interface LaunchSaleAddresses {
 
 export const LAUNCH_SALE_ADDRESSES: Record<number, LaunchSaleAddresses> = {
   // --- Sepolia (Chain ID: 11155111) ---
-  // Source of truth: the LIVE launch.mushroom.cv/join page wiring (site/join.html).
+  // Path-A reconciliation (2026-06-21): the sale stack was REDEPLOYED bound to the
+  // core-canonical SuperPaymaster GToken (0x20a051…) / aPNTs (0x9e66B…) and the
+  // inventory funded from the deployer, replacing the earlier test-token-bound
+  // deployment. `getPayoutToken()` now resolves on-chain to the canonical tokens.
   11155111: {
-    saleGToken: "0x3e4e0a663682a2d58d626d0057142328ef0b626a",
-    saleAPNTs: "0xf1a5fe670dbf6c5219000b30500a98f772ef1f14",
-    buyHelper: "0x578D6f74d8bDA18Cc3b834C1bd74674c529250e7",
+    saleGToken: "0x29eE47dEBD0E60d426352415749b4899057D913F", // SaleContractV2 → canonical GToken
+    saleAPNTs: "0x136654d4141d151e9C237af65E98c03e22afc142", // APNTsSaleContract → canonical aPNTs
+    buyHelper: "0x0EA2AEd239574F4e875Ae570C67825da845E7e66", // BuyHelper → canonical tokens + new sales
     usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     usdt: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", // Aave Sepolia USDT (6-dec)
     relayerUrl: "https://mycelium-relayer.jhfnetboy.workers.dev",
