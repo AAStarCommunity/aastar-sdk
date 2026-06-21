@@ -261,3 +261,16 @@ export class FinanceClient {
         };
     }
 }
+
+// MushroomDAO launch token-sale (aPoints + governance-token) — abstraction of the
+// launch.mushroom.cv/join page. See tokenSale.ts.
+export {
+    TokenSaleClient,
+    usd,
+    type SaleTokenKind,
+    type PayToken,
+    type SalePrices,
+    type SaleBalances,
+    type BuyResult,
+    type TokenSaleClientOptions,
+} from './tokenSale.js';

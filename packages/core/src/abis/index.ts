@@ -180,6 +180,13 @@ import AAStarBLSAggregatorABIData from './AAStarBLSAggregator.json' with { type:
 import CalldataParserRegistryABIData from './CalldataParserRegistry.json' with { type: 'json' };
 import AirAccountExtensionABIData from './AirAccountExtension.json' with { type: 'json' };
 
+// Generic ERC-20 (payment tokens: USDC / USDT) + MushroomDAO launch token-sale stack
+// (aPoints + governance-token sale). Source: MushroomDAO/launch contracts/out/*.json.
+import ERC20ABIData from './ERC20.json' with { type: 'json' };
+import SaleContractV2ABIData from './SaleContractV2.json' with { type: 'json' };
+import APNTsSaleContractABIData from './APNTsSaleContract.json' with { type: 'json' };
+import BuyHelperABIData from './BuyHelper.json' with { type: 'json' };
+
 export const AAStarAirAccountFactoryV7ABI = (AAStarAirAccountFactoryV7ABIData as any).abi || AAStarAirAccountFactoryV7ABIData;
 export const AAStarAirAccountFactoryV7Artifact = AAStarAirAccountFactoryV7ABIData;
 
@@ -225,3 +232,17 @@ export const CalldataParserRegistryArtifact = CalldataParserRegistryABIData;
 // that wants to encode calls without going through the merged V7 ABI.
 export const AirAccountExtensionABI = (AirAccountExtensionABIData as any).abi || AirAccountExtensionABIData;
 export const AirAccountExtensionArtifact = AirAccountExtensionABIData;
+
+// Generic ERC-20 — used for payment-token (USDC/USDT) balance/allowance/approve in the
+// launch token-sale flow. EIP-3009 gasless transfer is signed via signTypedData (no ABI).
+export const ERC20ABI = (ERC20ABIData as any).abi || ERC20ABIData;
+
+// MushroomDAO launch token-sale stack (aPoints + governance-token sale).
+// SaleContractV2: sells the constructor-bound GToken (getCurrentPriceUSD/getTokensForUSD/buyTokens,
+//   `gToken()` immutable getter). APNTsSaleContract: sells bound aPNTs (priceUSD/getAPNTsForUSD/
+//   buyAPNTs, `aPNTs()` getter). BuyHelper: gasless EIP-3009 + EIP-712 BuyIntent entrypoint, exposes
+//   USDC/GTOKEN/APNTS/SALE_GT/SALE_AP immutables. The bound payout token is read on-chain (never
+//   duplicated in the address book). Source: MushroomDAO/launch contracts/out/*.json.
+export const SaleContractV2ABI = (SaleContractV2ABIData as any).abi || SaleContractV2ABIData;
+export const APNTsSaleContractABI = (APNTsSaleContractABIData as any).abi || APNTsSaleContractABIData;
+export const BuyHelperABI = (BuyHelperABIData as any).abi || BuyHelperABIData;

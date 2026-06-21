@@ -188,6 +188,58 @@ export type CanonicalAddresses = (typeof CANONICAL_ADDRESSES)[keyof typeof CANON
 export type SupportedChainId = keyof typeof CANONICAL_ADDRESSES;
 
 /**
+ * MushroomDAO launch token-sale stack (aPoints + governance-token sale), keyed by chainId.
+ *
+ * Kept as a SEPARATE table from {@link CANONICAL_ADDRESSES} on purpose: these are the launch
+ * app's own contracts (`MushroomDAO/launch`), not the core SuperPaymaster protocol set, so they
+ * stay out of the constants/contract-addresses/drift-check pipeline.
+ *
+ * De-dup rule: this table stores ONLY the launch-specific contracts (the two sale contracts +
+ * BuyHelper) plus the accepted payment stablecoins. It deliberately does NOT store the GToken /
+ * aPNTs *payout* token addresses — `TokenSaleClient` reads those on-chain from the sale contract's
+ * `gToken()` / `aPNTs()` immutable getters, so there is never a second copy of a token address to
+ * drift. (Background: three different GToken deployments currently exist — core canonical
+ * `0x20a051…`, the launch live `0x4e6A11…`, and the launch DEPLOYED.md "SuperPaymaster" `0xa592ec…`.
+ * The live sale is constructor-bound to `0x4e6A11…`; binding it to the core-canonical GToken is the
+ * pre-mainnet reconciliation step.)
+ */
+export interface LaunchSaleAddresses {
+  /** SaleContractV2 — sells the constructor-bound GToken (governance token). */
+  saleGToken: Address;
+  /** APNTsSaleContract — sells the constructor-bound aPNTs (aPoints). */
+  saleAPNTs: Address;
+  /** BuyHelper — gasless entrypoint (EIP-3009 transferWithAuthorization + EIP-712 BuyIntent). */
+  buyHelper: Address;
+  /** Accepted payment stablecoin: USDC (6-decimal). Also the EIP-3009 token for gasless. */
+  usdc: Address;
+  /** Accepted payment stablecoin: USDT (6-decimal). Self-pay only. */
+  usdt: Address;
+  /** Off-chain relayer that submits gasless buys (Cloudflare Worker). */
+  relayerUrl: string;
+}
+
+export const LAUNCH_SALE_ADDRESSES: Record<number, LaunchSaleAddresses> = {
+  // --- Sepolia (Chain ID: 11155111) ---
+  // Source of truth: the LIVE launch.mushroom.cv/join page wiring (site/join.html).
+  11155111: {
+    saleGToken: "0x3e4e0a663682a2d58d626d0057142328ef0b626a",
+    saleAPNTs: "0xf1a5fe670dbf6c5219000b30500a98f772ef1f14",
+    buyHelper: "0x578D6f74d8bDA18Cc3b834C1bd74674c529250e7",
+    usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    usdt: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", // Aave Sepolia USDT (6-dec)
+    relayerUrl: "https://mycelium-relayer.jhfnetboy.workers.dev",
+  },
+  // --- op-mainnet / ethereum-mainnet: reserved for the path-A reconciliation deploy ---
+  // When launch deploys to mainnet, redeploy the sale stack bound to the core-canonical
+  // SuperPaymaster GToken/aPNTs, then fill the new sale + BuyHelper addresses here.
+};
+
+/** Resolve the launch token-sale address group for a chain, or `undefined` if none. */
+export function getLaunchSaleAddresses(chainId: number): LaunchSaleAddresses | undefined {
+  return LAUNCH_SALE_ADDRESSES[chainId];
+}
+
+/**
  * Chain IDs that have a canonical address book in {@link CANONICAL_ADDRESSES}.
  *
  * @example
