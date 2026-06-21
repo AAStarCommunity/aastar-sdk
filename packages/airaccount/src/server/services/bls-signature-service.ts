@@ -19,7 +19,7 @@ import {
 import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
-import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
+import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { ServerConfig } from "../config";
 
@@ -115,7 +115,18 @@ export class BLSSignatureService {
   async generateBLSSignature(
     userId: string,
     userOpHash: string,
-    ctx?: PasskeyAssertionContext
+    ctx?: SignerAuthContext,
+    options?: {
+      /**
+       * Skip the owner ECDSA over `userOpHash` (`aaSignature`). The cumulative
+       * Tier-2 (algId 0x04) / Tier-3 (0x05) packings do NOT include it — they
+       * carry only `messagePointSignature` (owner intent comes from the P256
+       * passkey signature) — so computing it there is a wasted owner signature.
+       * Under the WebAuthn-ceremony KMS path that wasted signature is also a
+       * wasted user gesture, so tiered callers set this to `true`.
+       */
+      skipOwnerOpSignature?: boolean;
+    }
   ): Promise<BLSSignatureData> {
     const manager = await this.ensureInitialized();
 
@@ -204,11 +215,14 @@ export class BLSSignatureService {
       );
     }
 
-    const aaSignature = await this.signer.signMessage(
-      userId,
-      hexToBytes(userOpHash as `0x${string}`),
-      ctx
-    );
+    // `aaSignature` (owner ECDSA over userOpHash) is only consumed by the legacy
+    // non-tiered packSignature format; Tier-2/3 packings omit it. Skip it for
+    // tiered callers to avoid a wasted owner signature (and, under the ceremony
+    // KMS path, a wasted user gesture). Empty string is safe: the tiered packers
+    // never read it.
+    const aaSignature = options?.skipOwnerOpSignature
+      ? "0x"
+      : await this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
     const messagePointHash = keccak256(messagePoint as `0x${string}`);
     const messagePointSignature = await this.signer.signMessage(
       userId,
@@ -227,6 +241,16 @@ export class BLSSignatureService {
   }
 
   async packSignature(blsData: BLSSignatureData): Promise<string> {
+    // The legacy non-tiered format embeds the owner ECDSA over userOpHash. Reject a
+    // signature produced with `skipOwnerOpSignature` (aaSignature === "0x"), which is
+    // only valid for the Tier-2/3 packers that omit it — otherwise this would silently
+    // pack an invalid signature.
+    if (!blsData.aaSignature || blsData.aaSignature === "0x") {
+      throw new Error(
+        "packSignature requires aaSignature; this BLSSignatureData was generated with " +
+          "skipOwnerOpSignature (Tier-2/3 only). Use packCumulativeT2/T3Signature instead."
+      );
+    }
     const manager = await this.ensureInitialized();
     return manager.packSignature(blsData);
   }
@@ -253,7 +277,7 @@ export class BLSSignatureService {
     userOpHash: string;
     p256Signature?: string;
     guardianSigner?: GuardianSigner;
-    ctx?: PasskeyAssertionContext;
+    ctx?: SignerAuthContext;
   }): Promise<string> {
     const { tier, userId, userOpHash, p256Signature, guardianSigner, ctx } = params;
     const manager = await this.ensureInitialized();
@@ -271,8 +295,12 @@ export class BLSSignatureService {
       throw new Error(`P256 signature required for Tier ${tier}`);
     }
 
-    // Get BLS components (reuse existing generateBLSSignature for node signing + aggregation)
-    const blsData = await this.generateBLSSignature(userId, userOpHash, ctx);
+    // Get BLS components (reuse existing generateBLSSignature for node signing + aggregation).
+    // Tier-2/3 packings omit the owner ECDSA over userOpHash (aaSignature), so skip it —
+    // saves one owner signature (and one WebAuthn ceremony gesture under the KMS ceremony path).
+    const blsData = await this.generateBLSSignature(userId, userOpHash, ctx, {
+      skipOwnerOpSignature: true,
+    });
 
     if (tier === 2) {
       const t2Data: CumulativeT2SignatureData = {

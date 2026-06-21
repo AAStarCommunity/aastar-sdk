@@ -1,4 +1,4 @@
-import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
+import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
 
 /**
  * Thin wrapper around ISignerAdapter for consistent wallet access.
@@ -13,7 +13,7 @@ export class WalletManager {
   async signMessage(
     userId: string,
     message: `0x${string}` | Uint8Array,
-    ctx?: PasskeyAssertionContext
+    ctx?: SignerAuthContext
   ): Promise<`0x${string}`> {
     return this.signer.signMessage(userId, message, ctx);
   }

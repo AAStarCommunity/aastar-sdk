@@ -15,7 +15,12 @@ export type {
   PaymasterRecord,
   BlsConfigRecord,
 } from "./interfaces/storage-adapter";
-export type { ISignerAdapter, PasskeyAssertionContext } from "./interfaces/signer-adapter";
+export type {
+  ISignerAdapter,
+  PasskeyAssertionContext,
+  WebAuthnCeremonyContext,
+  SignerAuthContext,
+} from "./interfaces/signer-adapter";
 export type { ILogger } from "./interfaces/logger";
 export { ConsoleLogger, SilentLogger } from "./interfaces/logger";
 
@@ -101,6 +106,7 @@ export type {
   KmsSignHashResponse,
   LegacyPasskeyAssertion,
   WebAuthnAssertion,
+  KmsSignerAuth,
   KmsBeginRegistrationRequest,
   KmsBeginRegistrationResponse,
   KmsCompleteRegistrationRequest,
@@ -210,6 +216,8 @@ export type {
 // ── Adapters ──────────────────────────────────────────────────────
 export { MemoryStorage } from "./adapters/memory-storage";
 export { LocalWalletSigner } from "./adapters/local-wallet-signer";
+export { KmsSignerAdapter } from "./adapters/kms-signer-adapter";
+export type { KmsKeyResolver } from "./adapters/kms-signer-adapter";
 
 // ── Constants ─────────────────────────────────────────────────────
 export {

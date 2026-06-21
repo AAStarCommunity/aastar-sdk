@@ -318,6 +318,57 @@ describe("KmsSigner", () => {
     expect(result).toBe("0x" + FAKE_SIG_HEX);
   });
 
+  it("signMessage with a per-call WebAuthn assertion uses the WebAuthn field (not Passkey)", async () => {
+    mockPost.mockResolvedValueOnce({ data: { Signature: FAKE_SIG_HEX } });
+    const webAuthnAssertion = { ChallengeId: "chal-1", Credential: { id: "cred" } };
+
+    const result = await signer.signMessage("hello", webAuthnAssertion);
+    expect(result).toBe("0x" + FAKE_SIG_HEX);
+
+    const [path, body] = mockPost.mock.calls[0];
+    expect(path).toBe("/SignHash");
+    expect(body).toMatchObject({
+      Address: ADDRESS,
+      Hash: expect.stringMatching(/^0x[0-9a-f]{64}$/i),
+      WebAuthn: { ChallengeId: "chal-1", Credential: { id: "cred" } },
+    });
+    expect(body).not.toHaveProperty("Passkey");
+  });
+});
+
+// ── createKmsSignerWithCeremony ───────────────────────────────────────
+
+describe("createKmsSignerWithCeremony", () => {
+  it("returns a KmsSigner that signs via a fresh WebAuthn ceremony", async () => {
+    const manager = new KmsManager({
+      kmsEndpoint: ENDPOINT,
+      kmsEnabled: true,
+      logger: new SilentLogger(),
+    });
+    // Stub the ceremony so we don't need a real authenticator: each call yields a
+    // fresh one-time assertion, mirroring runAuthenticationCeremony.
+    let n = 0;
+    vi.spyOn(manager, "runAuthenticationCeremony").mockImplementation(async () => ({
+      ChallengeId: `chal-${++n}`,
+      Credential: { id: `cred-${n}` },
+    }));
+
+    const ceremonySigner = {} as any; // unused: ceremony is stubbed above
+    const signer = manager.createKmsSignerWithCeremony("key-1", ADDRESS, ceremonySigner);
+    expect(signer).toBeInstanceOf(KmsSigner);
+
+    mockPost.mockReset(); // drop any calls leaked from prior tests
+    mockPost.mockResolvedValue({ data: { Signature: FAKE_SIG_HEX } });
+    await signer.signMessage("a");
+    await signer.signMessage("b");
+
+    // Two signatures ⇒ two fresh ceremonies ⇒ two distinct one-time challenges.
+    expect(manager.runAuthenticationCeremony).toHaveBeenCalledTimes(2);
+    const challenges = mockPost.mock.calls.map((c) => (c[1] as any).WebAuthn?.ChallengeId);
+    expect(challenges).toEqual(["chal-1", "chal-2"]);
+    expect((mockPost.mock.calls[0][1] as any).Passkey).toBeUndefined();
+  });
+
   // NOTE: signTypedData / signTransaction / connect / provider were part of the former
   // ethers.AbstractSigner surface and were intentionally dropped in the ethers->viem
   // migration (KmsSigner now exposes only getAddress + signMessage). Their tests were

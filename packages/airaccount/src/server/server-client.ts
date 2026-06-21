@@ -4,6 +4,7 @@ import { EthereumProvider } from "./providers/ethereum-provider";
 import { AccountManager } from "./services/account-manager";
 import { TransferManager } from "./services/transfer-manager";
 import { BLSSignatureService } from "./services/bls-signature-service";
+import { GuardChecker } from "./services/guard-checker";
 import { PaymasterManager } from "./services/paymaster-manager";
 import { TokenService } from "./services/token-service";
 import { WalletManager } from "./services/wallet-manager";
@@ -32,6 +33,26 @@ import { WalletManager } from "./services/wallet-manager";
  * });
  *
  * const account = await client.accounts.createAccount('user-123');
+ * ```
+ *
+ * @example KMS-backed signing (production) — inject {@link KmsSignerAdapter} as the
+ * `signer`. This is the wiring seam that carries a per-call WebAuthn ceremony
+ * assertion (challenge-bound, replay-safe) from `executeTransfer` through to the
+ * KMS `/SignHash`. The `userId → { keyId, address }` mapping is app-specific.
+ * ```ts
+ * import { AirAccountServerClient, KmsManager, KmsSignerAdapter } from '@aastar/airaccount/server';
+ *
+ * const kms = new KmsManager({ kmsEndpoint, kmsApiKey, kmsEnabled: true });
+ * const client = new AirAccountServerClient({
+ *   ...rest,
+ *   signer: new KmsSignerAdapter(kms, async (userId) => lookupUserKey(userId)),
+ * });
+ * // Transfer with a one-time WebAuthn assertion (frontend ceremony) on the tiered path:
+ * await client.transfers.executeTransfer(userId, {
+ *   ...params,
+ *   useAirAccountTiering: true,
+ *   webAuthnAssertion, // { ChallengeId, Credential } from BeginAuthentication
+ * });
  * ```
  */
 export class AirAccountServerClient {
@@ -63,6 +84,11 @@ export class AirAccountServerClient {
       config.signer,
       logger
     );
+    // GuardChecker makes the AirAccount tiered-signature path reachable. Tiering is
+    // still per-call opt-in (params.useAirAccountTiering, default false), so wiring it
+    // unconditionally does not change default behaviour — it just lets a caller that
+    // passes useAirAccountTiering:true (e.g. the KMS WebAuthn-ceremony transfer) take
+    // the Tier-2/3 route instead of silently falling through to the legacy path.
     this.transfers = new TransferManager(
       this.ethereum,
       this.accounts,
@@ -71,7 +97,8 @@ export class AirAccountServerClient {
       this.tokens,
       config.storage,
       config.signer,
-      logger
+      logger,
+      new GuardChecker(this.ethereum, logger)
     );
   }
 }
