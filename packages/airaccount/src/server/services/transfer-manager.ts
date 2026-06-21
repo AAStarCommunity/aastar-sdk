@@ -21,7 +21,8 @@ import { wrapExecuteUserOp } from "../utils/execute-user-op";
 import { PaymasterManager } from "./paymaster-manager";
 import { TokenService } from "./token-service";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
-import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
+import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
+import { WebAuthnAssertion } from "./kms-signer";
 import { LegacyPasskeyAssertion } from "./kms-signer";
 import {
   EntryPointVersion,
@@ -100,7 +101,20 @@ export interface ExecuteTransferParams {
    *  the gas token address appended to paymasterData. Used when the paymaster
    *  contract does not expose a public token() getter for auto-detection. */
   paymasterTokenAddress?: string;
+  /**
+   * LEGACY raw passkey assertion for KMS signing.
+   * @deprecated KMS v0.20.0+ rejects it (replayable). Use {@link webAuthnAssertion}.
+   */
   passkeyAssertion?: LegacyPasskeyAssertion;
+  /**
+   * One-time, challenge-bound WebAuthn ceremony assertion for KMS owner signing
+   * (replay-safe; what the KMS now requires). The frontend runs the
+   * BeginAuthentication ceremony with the user's device passkey and passes the
+   * resulting `{ ChallengeId, Credential }` here. The challenge is consumed once,
+   * so this authorizes exactly ONE owner signature — use the tiered path
+   * (`useAirAccountTiering: true`), which needs a single owner signature.
+   */
+  webAuthnAssertion?: WebAuthnAssertion;
   /** P256 passkey signature (64 bytes hex). Required for AirAccount Tier 2/3. */
   p256Signature?: string;
   /** Guardian signer instance. Required for AirAccount Tier 3. */
@@ -222,10 +236,18 @@ export class TransferManager {
     // Ensure wallet exists
     await this.signer.ensureSigner(userId);
 
-    // BLS signature (pass assertion context for KMS-backed signing)
-    const assertionCtx: PasskeyAssertionContext | undefined = params.passkeyAssertion
-      ? { assertion: params.passkeyAssertion }
-      : undefined;
+    // Auth context for KMS-backed signing. Prefer the replay-safe WebAuthn ceremony
+    // assertion; fall back to the deprecated legacy raw passkey assertion.
+    if (params.webAuthnAssertion && params.passkeyAssertion) {
+      throw new Error(
+        "Provide either webAuthnAssertion (preferred) or passkeyAssertion, not both."
+      );
+    }
+    const assertionCtx: SignerAuthContext | undefined = params.webAuthnAssertion
+      ? { webAuthnAssertion: params.webAuthnAssertion }
+      : params.passkeyAssertion
+        ? { assertion: params.passkeyAssertion }
+        : undefined;
 
     // Detect whether this is a compositeValidator account (has validator() fn) or plain ECDSA.
     // Only compositeValidator accounts expect the algId prefix in the signature.
@@ -237,6 +259,23 @@ export class TransferManager {
         provider,
         account.address
       ));
+    }
+
+    // A WebAuthn ceremony assertion is ONE-TIME (the KMS consumes the challenge on
+    // first use). The legacy non-tiered BLS path performs TWO owner signatures under
+    // the same ctx, so the second SignHash would fail on a spent challenge. Fail fast
+    // and steer to the tiered path (single owner signature).
+    if (
+      assertionCtx &&
+      "webAuthnAssertion" in assertionCtx &&
+      !useECDSA &&
+      !(params.useAirAccountTiering && this.guardChecker)
+    ) {
+      throw new Error(
+        "A one-time webAuthnAssertion cannot authorize the legacy non-tiered BLS dual-sign " +
+          "(two owner signatures, one spent challenge). Use useAirAccountTiering:true " +
+          "(single owner signature), or supply two assertions via the legacy path."
+      );
     }
 
     if (useECDSA) {

@@ -19,7 +19,7 @@ import {
 import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
-import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
+import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import { ServerConfig } from "../config";
 
@@ -115,7 +115,7 @@ export class BLSSignatureService {
   async generateBLSSignature(
     userId: string,
     userOpHash: string,
-    ctx?: PasskeyAssertionContext,
+    ctx?: SignerAuthContext,
     options?: {
       /**
        * Skip the owner ECDSA over `userOpHash` (`aaSignature`). The cumulative
@@ -241,6 +241,16 @@ export class BLSSignatureService {
   }
 
   async packSignature(blsData: BLSSignatureData): Promise<string> {
+    // The legacy non-tiered format embeds the owner ECDSA over userOpHash. Reject a
+    // signature produced with `skipOwnerOpSignature` (aaSignature === "0x"), which is
+    // only valid for the Tier-2/3 packers that omit it — otherwise this would silently
+    // pack an invalid signature.
+    if (!blsData.aaSignature || blsData.aaSignature === "0x") {
+      throw new Error(
+        "packSignature requires aaSignature; this BLSSignatureData was generated with " +
+          "skipOwnerOpSignature (Tier-2/3 only). Use packCumulativeT2/T3Signature instead."
+      );
+    }
     const manager = await this.ensureInitialized();
     return manager.packSignature(blsData);
   }
@@ -267,7 +277,7 @@ export class BLSSignatureService {
     userOpHash: string;
     p256Signature?: string;
     guardianSigner?: GuardianSigner;
-    ctx?: PasskeyAssertionContext;
+    ctx?: SignerAuthContext;
   }): Promise<string> {
     const { tier, userId, userOpHash, p256Signature, guardianSigner, ctx } = params;
     const manager = await this.ensureInitialized();
