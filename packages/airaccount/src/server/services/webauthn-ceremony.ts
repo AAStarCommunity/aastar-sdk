@@ -221,6 +221,33 @@ export interface RunCeremonyOptions {
   rpId?: string;
   origin?: string;
   signCount?: number;
+  /**
+   * The 32-byte payload digest being authorized (e.g. the SignHash hash). When set,
+   * the WebAuthn challenge is bound to it as `SHA-256(nonce ‖ payload)` instead of the
+   * raw nonce — this is the "what you see is what you sign" (WYSIWYS) commitment the
+   * TA verifies (AirAccount #68). REQUIRED once the KMS runs in strict mode
+   * (`--features strict-challenge`); in the default transition mode the raw nonce is
+   * still accepted. Omit only for non-signing ceremonies (none today). Accepts a
+   * Uint8Array or a `0x` hex string.
+   */
+  payload?: Uint8Array | `0x${string}`;
+}
+
+/**
+ * Compute the WYSIWYS-bound WebAuthn challenge for a signing ceremony:
+ * `base64url( SHA-256( decode(nonce) ‖ payload ) )`.
+ *
+ * `nonce` is the base64url challenge from BeginAuthentication; `payload` is the 32-byte
+ * digest about to be signed (the SignHash hash). The KMS/TA recomputes this exact value
+ * and rejects the signature if it doesn't match (AirAccount #68). Use this in a browser
+ * frontend that builds its own WebAuthn assertion for a device passkey, so the per-call
+ * `webAuthnAssertion` it sends commits to the operation hash.
+ */
+export function commitChallenge(nonceBase64Url: string, payload: Uint8Array | `0x${string}`): string {
+  const nonce = base64UrlDecode(nonceBase64Url);
+  const payloadBytes = typeof payload === "string" ? hexToBytes(payload) : payload;
+  const committed = createHash("sha256").update(nonce).update(payloadBytes).digest();
+  return base64UrlEncode(new Uint8Array(committed));
 }
 
 /**
@@ -240,12 +267,15 @@ export async function runWebAuthnCeremony(
   options: RunCeremonyOptions
 ): Promise<WebAuthnAssertion> {
   const begun = await begin();
-  const challenge = begun?.Options?.challenge;
-  if (!begun?.ChallengeId || !challenge) {
+  const nonce = begun?.Options?.challenge;
+  if (!begun?.ChallengeId || !nonce) {
     throw new Error(
       "WebAuthn ceremony: begin endpoint did not return a ChallengeId + Options.challenge"
     );
   }
+  // WYSIWYS (#68): bind the challenge to the payload via SHA-256(nonce ‖ payload). With no
+  // payload we fall back to the raw nonce (transition mode only — not strict-safe).
+  const challenge = options.payload ? commitChallenge(nonce, options.payload) : nonce;
   const credential = await buildAuthenticationCredential({
     challenge,
     signer: options.signer,

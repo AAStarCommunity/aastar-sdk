@@ -844,6 +844,12 @@ export class KmsSigner {
    *   precedence over the signer's baked-in auth mode. Each assertion is one-time
    *   (the KMS consumes the challenge), so a caller that needs N signatures must
    *   supply N distinct assertions.
+   *
+   *   WYSIWYS (AirAccount #68): the frontend MUST build the assertion over the
+   *   payload-committed challenge `commitChallenge(nonce, hashOf(message))`, not the
+   *   raw nonce — otherwise a compromised host could swap the signed payload. The
+   *   raw-nonce assertion only works while the KMS runs in transition mode. (The
+   *   signer's own ceremony mode does this automatically.)
    */
   async signMessage(
     message: string | Uint8Array,
@@ -865,11 +871,12 @@ export class KmsSigner {
 
     // (2) Signer-held authenticator runs a fresh ceremony itself (server/agent key).
     if (this.auth.mode === "ceremony") {
-      // Fresh, one-time challenge-bound ceremony per signature (replay-safe).
+      // Fresh, one-time ceremony per signature, bound to THIS hash via
+      // SHA-256(nonce ‖ messageHash) (WYSIWYS / replay-safe; AirAccount #68).
       const assertion = await this.kmsManager.runAuthenticationCeremony(
         this.keyId,
         this.auth.ceremonySigner,
-        this.auth.ceremonyOptions
+        { ...this.auth.ceremonyOptions, payload: messageHash as `0x${string}` }
       );
       const signResponse = await this.kmsManager.signHashWithWebAuthn(
         messageHash,

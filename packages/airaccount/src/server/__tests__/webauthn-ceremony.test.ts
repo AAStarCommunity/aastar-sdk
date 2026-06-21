@@ -26,6 +26,7 @@ import {
   buildAuthenticatorData,
   buildAuthenticationCredential,
   runWebAuthnCeremony,
+  commitChallenge,
   base64UrlDecode,
   base64UrlEncode,
   DEFAULT_RP_ID,
@@ -408,5 +409,53 @@ describe("Agent + Session ceremony variants", () => {
     expect(body.keyId).toBe("h:0");
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
     expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+  });
+});
+
+// ── Issue #68: payload-committed challenge (WYSIWYS) ──────────────────────────
+describe("commitChallenge (SHA-256(nonce ‖ payload))", () => {
+  const NONCE = base64UrlEncode(new Uint8Array(32).fill(7)); // base64url of 32×0x07
+  const PAYLOAD = ("0x" + "ab".repeat(32)) as `0x${string}`;
+
+  function expected(nonceB64: string, payloadHex: string): string {
+    const nonce = base64UrlDecode(nonceB64);
+    const pay = Buffer.from(payloadHex.replace(/^0x/, ""), "hex");
+    return base64UrlEncode(new Uint8Array(createHash("sha256").update(nonce).update(pay).digest()));
+  }
+
+  it("matches an independent SHA-256(nonce ‖ payload) (hex + bytes inputs equal)", () => {
+    const got = commitChallenge(NONCE, PAYLOAD);
+    expect(got).toBe(expected(NONCE, PAYLOAD));
+    // 32-byte digest → 43-char base64url (no padding)
+    expect(base64UrlDecode(got).length).toBe(32);
+    // hex string and raw bytes produce the same commitment
+    const bytes = new Uint8Array(Buffer.from(PAYLOAD.slice(2), "hex"));
+    expect(commitChallenge(NONCE, bytes)).toBe(got);
+  });
+
+  it("binds to the payload — different payload ⇒ different challenge", () => {
+    const a = commitChallenge(NONCE, ("0x" + "11".repeat(32)) as `0x${string}`);
+    const b = commitChallenge(NONCE, ("0x" + "22".repeat(32)) as `0x${string}`);
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("runWebAuthnCeremony payload binding", () => {
+  const CRED = "cred-x";
+  const PAYLOAD = ("0x" + "cd".repeat(32)) as `0x${string}`;
+  const begin = async () => ({ ChallengeId: CHALLENGE_ID, Options: { challenge: CHALLENGE } });
+
+  it("embeds the committed challenge when a payload is given (not the raw nonce)", async () => {
+    const signer = new P256PasskeySigner(FIXTURE_PRIV, CRED);
+    const assertion = await runWebAuthnCeremony(begin, { signer, payload: PAYLOAD });
+    const embedded = decodeClientData(assertion.Credential).challenge;
+    expect(embedded).toBe(commitChallenge(CHALLENGE, PAYLOAD));
+    expect(embedded).not.toBe(CHALLENGE); // NOT the raw nonce
+  });
+
+  it("falls back to the raw nonce when no payload (transition mode)", async () => {
+    const signer = new P256PasskeySigner(FIXTURE_PRIV, CRED);
+    const assertion = await runWebAuthnCeremony(begin, { signer });
+    expect(decodeClientData(assertion.Credential).challenge).toBe(CHALLENGE);
   });
 });
