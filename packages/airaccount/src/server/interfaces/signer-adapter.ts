@@ -1,12 +1,28 @@
-import { LegacyPasskeyAssertion } from "../services/kms-signer";
+import { LegacyPasskeyAssertion, WebAuthnAssertion } from "../services/kms-signer";
 
 /**
- * Context for passing Passkey assertion data through the signing chain.
- * Used by KMS-backed signers to authenticate signing operations.
+ * Context for passing a LEGACY raw passkey assertion through the signing chain.
+ *
+ * @deprecated KMS v0.20.0+ rejects legacy raw passkey assertions for signing
+ * (no challenge binding → replayable). Prefer {@link WebAuthnCeremonyContext}.
  */
 export interface PasskeyAssertionContext {
   assertion: LegacyPasskeyAssertion;
 }
+
+/**
+ * Context carrying a one-time, challenge-bound WebAuthn ceremony assertion
+ * (the replay-safe path the KMS now requires). In server transfer flows the
+ * passkey lives on the USER's device: the frontend runs the BeginAuthentication
+ * ceremony and the backend forwards the resulting `{ ChallengeId, Credential }`.
+ * Each assertion is one-time — a flow needing N signatures supplies N of them.
+ */
+export interface WebAuthnCeremonyContext {
+  webAuthnAssertion: WebAuthnAssertion;
+}
+
+/** Either auth context accepted by a KMS-backed signer. */
+export type SignerAuthContext = PasskeyAssertionContext | WebAuthnCeremonyContext;
 
 /**
  * Pluggable signer adapter — replaces NestJS AuthService wallet management.
@@ -26,12 +42,14 @@ export interface ISignerAdapter {
    * `account.signMessage({ raw: bytes })`). A `Uint8Array` (or raw `0x` hex) is
    * signed as raw bytes — callers pass a 32-byte digest, NOT UTF-8 text.
    *
-   * @param ctx optional Passkey assertion context for KMS-backed signers.
+   * @param ctx optional auth context for KMS-backed signers — a one-time
+   *   {@link WebAuthnCeremonyContext} (preferred) or a legacy
+   *   {@link PasskeyAssertionContext}.
    */
   signMessage(
     userId: string,
     message: `0x${string}` | Uint8Array,
-    ctx?: PasskeyAssertionContext
+    ctx?: SignerAuthContext
   ): Promise<`0x${string}`>;
 
   /**

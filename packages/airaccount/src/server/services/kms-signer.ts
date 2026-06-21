@@ -750,48 +750,138 @@ export class KmsManager {
 
   // ── Factory ─────────────────────────────────────────────────────
 
+  /**
+   * Create a KMS signer that authorizes each signature with a LEGACY raw passkey
+   * assertion (reusable, no challenge consumption).
+   *
+   * @deprecated The KMS (v0.20.0+) rejects legacy raw passkey assertions for
+   * signing/mutating operations (`/SignHash` → 400, "no challenge binding —
+   * replayable"), unless `KMS_ALLOW_LEGACY_PASSKEY=1` is set on the KMS (test
+   * only). Prefer {@link createKmsSignerWithCeremony}, which runs a one-time
+   * challenge-bound WebAuthn ceremony per signature.
+   */
   createKmsSigner(
     keyId: string,
     address: string,
     assertionProvider: () => Promise<LegacyPasskeyAssertion>
   ): KmsSigner {
     this.ensureEnabled();
-    return new KmsSigner(keyId, address, this, assertionProvider);
+    return new KmsSigner(keyId, address, this, { mode: "legacy", assertionProvider });
+  }
+
+  /**
+   * Create a KMS signer that authorizes each signature with a one-time,
+   * challenge-bound WebAuthn ceremony (production-safe; replay-protected).
+   *
+   * Every `signMessage` call runs a FRESH ceremony (BeginAuthentication →
+   * authenticator assertion → `/SignHash` with the `WebAuthn` field), because the
+   * KMS consumes the challenge atomically (one challenge ⇒ one signature). A
+   * Tier-2/3 BLS transfer that needs N owner signatures therefore triggers N
+   * ceremonies — see {@link BLSSignatureService} (which now skips the unused
+   * userOpHash owner-ECDSA for tiered signatures, so Tier-2 needs only one).
+   *
+   * @param ceremonySigner authenticator that signs the WebAuthn challenge
+   *   (a browser passkey on the client, or {@link P256PasskeySigner} server-side).
+   */
+  createKmsSignerWithCeremony(
+    keyId: string,
+    address: string,
+    ceremonySigner: PasskeyCeremonySigner,
+    ceremonyOptions?: Omit<RunCeremonyOptions, "signer">
+  ): KmsSigner {
+    this.ensureEnabled();
+    return new KmsSigner(keyId, address, this, {
+      mode: "ceremony",
+      ceremonySigner,
+      ceremonyOptions,
+    });
   }
 }
 
+/** How a {@link KmsSigner} authorizes each `/SignHash` call. */
+export type KmsSignerAuth =
+  | { mode: "legacy"; assertionProvider: () => Promise<LegacyPasskeyAssertion> }
+  | {
+      mode: "ceremony";
+      ceremonySigner: PasskeyCeremonySigner;
+      ceremonyOptions?: Omit<RunCeremonyOptions, "signer">;
+    };
+
 /**
- * KMS-backed signer with Passkey assertion.
+ * KMS-backed signer (EIP-191 personal-sign over a digest).
  *
- * Each signing operation calls the `assertionProvider` to obtain a Legacy
- * Passkey assertion, which is then passed to KMS SignHash. The Legacy format
- * is reusable (no challenge consumption), enabling BLS dual-signing.
+ * Two authorization modes (see {@link KmsSignerAuth}):
+ *  - `ceremony` (preferred): each signature runs a fresh one-time WebAuthn
+ *    ceremony and calls KMS `SignHash` with the challenge-bound `WebAuthn` field
+ *    (replay-safe; what the KMS now requires).
+ *  - `legacy` (deprecated): each signature reuses a raw passkey assertion via
+ *    KMS `SignHash` `Passkey` field — rejected by KMS unless
+ *    `KMS_ALLOW_LEGACY_PASSKEY=1` (test only).
  *
  * Narrowed during the ethers -> viem migration: only the EIP-191 personal-sign
- * and address-read behaviour is actually consumed by the SDK, so the former
- * ethers.AbstractSigner surface (signTransaction / signTypedData / connect /
- * provider) has been dropped.
+ * and address-read behaviour is consumed by the SDK.
  */
 export class KmsSigner {
   constructor(
     private readonly keyId: string,
     private readonly _address: string,
     private readonly kmsManager: KmsManager,
-    private readonly assertionProvider: () => Promise<LegacyPasskeyAssertion>
+    private readonly auth: KmsSignerAuth
   ) {}
 
   async getAddress(): Promise<string> {
     return this._address;
   }
 
-  async signMessage(message: string | Uint8Array): Promise<string> {
-    // EIP-191 personal-sign: a string is hashed as UTF-8 text, a byte array as
-    // raw bytes — byte-identical to ethers `hashMessage(toUtf8Bytes(str) | bytes)`.
+  /**
+   * EIP-191 personal-sign over a digest. A string is hashed as UTF-8 text, a byte
+   * array as raw bytes — byte-identical to ethers `hashMessage`.
+   *
+   * @param webAuthnAssertion OPTIONAL pre-built, one-time ceremony assertion. Use
+   *   this in server flows where the passkey lives on the USER's device: the
+   *   frontend runs the BeginAuthentication ceremony and the backend forwards the
+   *   resulting `{ ChallengeId, Credential }` here. When supplied it takes
+   *   precedence over the signer's baked-in auth mode. Each assertion is one-time
+   *   (the KMS consumes the challenge), so a caller that needs N signatures must
+   *   supply N distinct assertions.
+   */
+  async signMessage(
+    message: string | Uint8Array,
+    webAuthnAssertion?: WebAuthnAssertion
+  ): Promise<string> {
     const messageHash = hashMessage(message);
-    const assertion = await this.assertionProvider();
-    const signResponse = await this.kmsManager.signHash(messageHash, assertion, {
-      Address: this._address,
-    });
+    const target = { Address: this._address };
+
+    // (1) Frontend-produced ceremony assertion forwarded per-call (device passkey).
+    if (webAuthnAssertion) {
+      const signResponse = await this.kmsManager.signHashWithWebAuthn(
+        messageHash,
+        webAuthnAssertion.ChallengeId,
+        webAuthnAssertion.Credential,
+        target
+      );
+      return "0x" + signResponse.Signature;
+    }
+
+    // (2) Signer-held authenticator runs a fresh ceremony itself (server/agent key).
+    if (this.auth.mode === "ceremony") {
+      // Fresh, one-time challenge-bound ceremony per signature (replay-safe).
+      const assertion = await this.kmsManager.runAuthenticationCeremony(
+        this.keyId,
+        this.auth.ceremonySigner,
+        this.auth.ceremonyOptions
+      );
+      const signResponse = await this.kmsManager.signHashWithWebAuthn(
+        messageHash,
+        assertion.ChallengeId,
+        assertion.Credential,
+        target
+      );
+      return "0x" + signResponse.Signature;
+    }
+
+    const assertion = await this.auth.assertionProvider();
+    const signResponse = await this.kmsManager.signHash(messageHash, assertion, target);
     return "0x" + signResponse.Signature;
   }
 }
