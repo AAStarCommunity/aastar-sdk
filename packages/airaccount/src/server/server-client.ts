@@ -4,6 +4,7 @@ import { EthereumProvider } from "./providers/ethereum-provider";
 import { AccountManager } from "./services/account-manager";
 import { TransferManager } from "./services/transfer-manager";
 import { BLSSignatureService } from "./services/bls-signature-service";
+import { GuardChecker } from "./services/guard-checker";
 import { PaymasterManager } from "./services/paymaster-manager";
 import { TokenService } from "./services/token-service";
 import { WalletManager } from "./services/wallet-manager";
@@ -83,6 +84,11 @@ export class AirAccountServerClient {
       config.signer,
       logger
     );
+    // GuardChecker makes the AirAccount tiered-signature path reachable. Tiering is
+    // still per-call opt-in (params.useAirAccountTiering, default false), so wiring it
+    // unconditionally does not change default behaviour — it just lets a caller that
+    // passes useAirAccountTiering:true (e.g. the KMS WebAuthn-ceremony transfer) take
+    // the Tier-2/3 route instead of silently falling through to the legacy path.
     this.transfers = new TransferManager(
       this.ethereum,
       this.accounts,
@@ -91,7 +97,8 @@ export class AirAccountServerClient {
       this.tokens,
       config.storage,
       config.signer,
-      logger
+      logger,
+      new GuardChecker(this.ethereum, logger)
     );
   }
 }
