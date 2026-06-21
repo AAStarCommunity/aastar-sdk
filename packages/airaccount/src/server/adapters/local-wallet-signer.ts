@@ -1,5 +1,5 @@
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { ISignerAdapter, PasskeyAssertionContext } from "../interfaces/signer-adapter";
+import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
 
 /**
  * Local wallet signer — backs all users with a single private key.
@@ -22,7 +22,7 @@ export class LocalWalletSigner implements ISignerAdapter {
   async signMessage(
     _userId: string,
     message: `0x${string}` | Uint8Array,
-    _ctx?: PasskeyAssertionContext
+    _ctx?: SignerAuthContext
   ): Promise<`0x${string}`> {
     // EIP-191 personal-sign over raw bytes — identical to
     // ethers `wallet.signMessage(bytes)`. `{ raw }` signs the bytes as-is

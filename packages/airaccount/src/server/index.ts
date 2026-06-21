@@ -216,6 +216,8 @@ export type {
 // ── Adapters ──────────────────────────────────────────────────────
 export { MemoryStorage } from "./adapters/memory-storage";
 export { LocalWalletSigner } from "./adapters/local-wallet-signer";
+export { KmsSignerAdapter } from "./adapters/kms-signer-adapter";
+export type { KmsKeyResolver } from "./adapters/kms-signer-adapter";
 
 // ── Constants ─────────────────────────────────────────────────────
 export {
