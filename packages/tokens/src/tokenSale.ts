@@ -216,7 +216,7 @@ export class TokenSaleClient {
    */
   async buySelfPay(params: SelfPayParams): Promise<BuyResult> {
     const wallet = this.requireWallet();
-    const account = this.requireAccount(wallet);
+    const { account: signer, address: account } = this.signer(wallet);
     const { token, usdAmount } = params;
     const payToken = params.payToken ?? 'USDC';
     const minOut = params.minOut ?? 0n;
@@ -236,7 +236,7 @@ export class TokenSaleClient {
         abi: ERC20ABI,
         functionName: 'approve',
         args: [saleAddr, usdAmount],
-        account,
+        account: signer,
         chain: (wallet as any).chain,
       } as any)) as Hash;
       const r = await this.publicClient.waitForTransactionReceipt({ hash: approveHash });
@@ -250,7 +250,7 @@ export class TokenSaleClient {
             abi: SaleContractV2ABI,
             functionName: 'buyTokens',
             args: [usdAmount, payAddr, minOut],
-            account,
+            account: signer,
             chain: (wallet as any).chain,
           }
         : ({
@@ -258,7 +258,7 @@ export class TokenSaleClient {
             abi: APNTsSaleContractABI,
             functionName: 'buyAPNTs',
             args: [usdAmount, payAddr],
-            account,
+            account: signer,
             chain: (wallet as any).chain,
           } as any),
     )) as Hash;
@@ -276,7 +276,7 @@ export class TokenSaleClient {
    */
   async buyGasless(params: GaslessParams): Promise<BuyResult> {
     const wallet = this.requireWallet();
-    const account = this.requireAccount(wallet);
+    const { account: signer, address: account } = this.signer(wallet);
     const { token, usdAmount } = params;
     const minOut = params.minOut ?? 0n;
     const recipient = params.recipient ?? account;
@@ -290,7 +290,7 @@ export class TokenSaleClient {
 
     // ① EIP-3009 USDC TransferWithAuthorization → BuyHelper
     const transferSig = await (wallet as any).signTypedData({
-      account,
+      account: signer,
       domain: { name: 'USDC', version: '2', chainId: this.chainId, verifyingContract: usdc },
       types: {
         TransferWithAuthorization: [
@@ -315,7 +315,7 @@ export class TokenSaleClient {
 
     // ② EIP-712 BuyIntent (domain MyceliumBuyHelper v1, verifyingContract = BuyHelper)
     const buyIntentSig = await (wallet as any).signTypedData({
-      account,
+      account: signer,
       domain: { name: 'MyceliumBuyHelper', version: '1', chainId: this.chainId, verifyingContract: buyHelper },
       types: {
         BuyIntent: [
@@ -384,10 +384,18 @@ export class TokenSaleClient {
     return this.walletClient;
   }
 
-  private requireAccount(wallet: WalletClient): Address {
-    const account = (wallet as any).account?.address ?? (wallet as any).account;
-    if (!account) throw new Error('TokenSaleClient: walletClient has no account');
-    return account as Address;
+  /**
+   * Resolve the signing account. Returns the viem account OBJECT (a LocalAccount, or a
+   * JsonRpcAccount for injected wallets) for the `account` field of write/sign calls, plus
+   * its address for message fields. Passing the object — not a bare address string — is what
+   * lets a local private-key account sign locally instead of routing to `eth_signTypedData_v4`
+   * on the (key-less) RPC transport.
+   */
+  private signer(wallet: WalletClient): { account: any; address: Address } {
+    const acc = (wallet as any).account;
+    const address = (acc?.address ?? acc) as Address;
+    if (!address) throw new Error('TokenSaleClient: walletClient has no account');
+    return { account: acc ?? address, address };
   }
 }
 

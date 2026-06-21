@@ -80,7 +80,7 @@ describe('getPrices / quote', () => {
     const c = new TokenSaleClient(makePublicClient(read));
     const out = await c.quote('GTOKEN', usd(5));
     expect(out).toBe(33_333333333333333333n);
-    const call = read.mock.calls.find((a: any) => a[0].functionName === 'getTokensForUSD');
+    const call = read.mock.calls.find((a: any) => a[0].functionName === 'getTokensForUSD') as any;
     expect(call[0].address.toLowerCase()).toBe(SALE_GT);
     expect(call[0].args).toEqual([5_000000n]);
   });
@@ -149,7 +149,7 @@ describe('buyGasless', () => {
     const primaries = wallet.signTypedData.mock.calls.map((a: any) => a[0].primaryType);
     expect(primaries).toEqual(['TransferWithAuthorization', 'BuyIntent']);
     // posts to /v3/relay with the resolved targetToken
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0] as any[];
     expect(url).toMatch(/\/v3\/relay$/);
     const body = JSON.parse(init.body);
     expect(body.intent.targetToken).toBe(GTOKEN_PAYOUT);
