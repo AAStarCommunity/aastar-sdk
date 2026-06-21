@@ -153,6 +153,7 @@ export {
   buildAuthenticatorData,
   base64UrlEncode,
   base64UrlDecode,
+  commitChallenge,
   DEFAULT_RP_ID,
   DEFAULT_ORIGIN,
   DEFAULT_CREDENTIAL_ID,

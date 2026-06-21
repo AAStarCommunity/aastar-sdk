@@ -787,13 +787,15 @@ export class KmsManager {
     keyId: string,
     address: string,
     ceremonySigner: PasskeyCeremonySigner,
-    ceremonyOptions?: Omit<RunCeremonyOptions, "signer">
+    ceremonyOptions?: Omit<RunCeremonyOptions, "signer">,
+    commitPayload = false
   ): KmsSigner {
     this.ensureEnabled();
     return new KmsSigner(keyId, address, this, {
       mode: "ceremony",
       ceremonySigner,
       ceremonyOptions,
+      commitPayload,
     });
   }
 }
@@ -805,6 +807,16 @@ export type KmsSignerAuth =
       mode: "ceremony";
       ceremonySigner: PasskeyCeremonySigner;
       ceremonyOptions?: Omit<RunCeremonyOptions, "signer">;
+      /**
+       * Bind each ceremony challenge to the payload via `SHA-256(nonce ‖ hash)`
+       * (WYSIWYS, AirAccount #68). DEFAULT `false` (raw nonce) because the LIVE KMS
+       * host (kms.aastar.io) still verifies the WebAuthn assertion against the raw
+       * nonce — sending the commitment is rejected with "Challenge mismatch". Enable
+       * only once the KMS host recomputes `expected = SHA-256(nonce ‖ payload)` for
+       * signing ops (tracked AirAccount-side). The commitment IS already correct vs
+       * the TA; the gap is the host verify.
+       */
+      commitPayload?: boolean;
     };
 
 /**
@@ -844,6 +856,12 @@ export class KmsSigner {
    *   precedence over the signer's baked-in auth mode. Each assertion is one-time
    *   (the KMS consumes the challenge), so a caller that needs N signatures must
    *   supply N distinct assertions.
+   *
+   *   WYSIWYS (AirAccount #68): the frontend MUST build the assertion over the
+   *   payload-committed challenge `commitChallenge(nonce, hashOf(message))`, not the
+   *   raw nonce — otherwise a compromised host could swap the signed payload. The
+   *   raw-nonce assertion only works while the KMS runs in transition mode. (The
+   *   signer's own ceremony mode does this automatically.)
    */
   async signMessage(
     message: string | Uint8Array,
@@ -865,11 +883,16 @@ export class KmsSigner {
 
     // (2) Signer-held authenticator runs a fresh ceremony itself (server/agent key).
     if (this.auth.mode === "ceremony") {
-      // Fresh, one-time challenge-bound ceremony per signature (replay-safe).
+      // Fresh one-time ceremony per signature (replay-safe). The challenge is the raw
+      // nonce by default — what the live KMS host verifies against. Opt into the
+      // SHA-256(nonce ‖ hash) payload commitment (WYSIWYS, #68) ONLY when the KMS host
+      // is updated to expect it (else "Challenge mismatch").
       const assertion = await this.kmsManager.runAuthenticationCeremony(
         this.keyId,
         this.auth.ceremonySigner,
-        this.auth.ceremonyOptions
+        this.auth.commitPayload
+          ? { ...this.auth.ceremonyOptions, payload: messageHash as `0x${string}` }
+          : this.auth.ceremonyOptions
       );
       const signResponse = await this.kmsManager.signHashWithWebAuthn(
         messageHash,
