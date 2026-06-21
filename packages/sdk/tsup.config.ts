@@ -21,6 +21,7 @@ export default defineConfig({
     admin: 'src/subpaths/admin.ts',
     kms: 'src/subpaths/kms.ts',
     airaccount: 'src/subpaths/airaccount.ts', // @deprecated alias of ./kms — kept one release
+    email: 'src/subpaths/email.ts', // server-side Resend email utility (optional `resend` peer)
   },
   format: ['esm', 'cjs'],
   // Inline the bundled workspace/noble types into the emitted .d.ts. Without
@@ -35,7 +36,7 @@ export default defineConfig({
   treeshake: true,
   noExternal: [/^@aastar\//, /^@noble\//],
   // ethers fully removed from the SDK — airaccount is now 100% viem.
-  external: ['viem', '@simplewebauthn/browser', 'axios', 'react', 'react-dom'],
+  external: ['viem', '@simplewebauthn/browser', 'axios', 'react', 'react-dom', 'resend'],
   esbuildOptions(options) {
     // Resolve the `browser` export condition for bundled deps so this single
     // universal bundle never bakes in a Node-only entrypoint. Specifically,
