@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.0] - 2026-06-22
+**SDK Code Integrity Hash**: `35c5ef1420326cac27dff6661fbee58073f75238ee4a5b88f4c24c3cfef869ed`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**KMS strict-mode readiness: WYSIWYS payload commitment over EVERY signing/mint op.** Completes
+the SDK side of the AirAccount #63 strict-challenge flip — once strict is on, the KMS hard-rejects
+any signing/mint ceremony whose WebAuthn challenge is not `SHA-256(nonce ‖ payload_digest)`. All
+four commitment families are implemented and verified (live against kms.aastar.io and/or the
+KMS-locked test vectors).
+
+- **[ADDED] commitment over all signing ops (#133/#136/#137):** `signHashWithCeremony` (payload =
+  hash) and `signTypedDataWithCeremony` (payload = EIP-712 digest via new `eip712Digest()`)
+  auto-bind the commitment; `KmsSigner` ceremony `commitPayload` defaults to `true`. The three
+  payment convenience signers bind their fixed-schema EIP-712 digest (exported
+  `micropaymentVoucherDigest` / `gTokenAuthorizationDigest` / `x402PaymentDigest`).
+- **[ADDED] grant-session commitment (#137, AirAccount #112):** `grantSessionFinalHash()` —
+  byte-identical to `SessionKeyValidator.buildGrantHash` (verified vs the LIVE contract via an E2E
+  oracle, incl. non-empty `callTargets`/`selectorAllowlist` pad-32 packing).
+- **[ADDED] mint commitment (#138, AirAccount #115):** `mintDigest()` for `create_agent_key` /
+  `create_p256_session_key` — `SHA256(tag ‖ walletId ‖ index ‖ ttlSecs ‖ SHA256(subject))`,
+  KAT-locked to the KMS vectors.
+- **[ADDED] `KmsSignerAdapter`** (the `ISignerAdapter`↔KMS bridge), `ExecuteTransferParams.webAuthnAssertion`,
+  `SignerAuthContext`, ceremony wrappers for non-signing ops (delete/unfreeze/changePasskey),
+  monotonic `signCount` (anti-clone), and `commitChallenge()` (exported; 32-byte payload enforced).
+- **Hardening:** `signWithCeremony` (/Sign) documented non-strict; `u256()` guards uint256 fields;
+  legacy raw-passkey signing is `@deprecated`/opt-in only (no silent path). 3-round Codex review on
+  the grant + mint PRs.
+
 ## [0.25.0] - 2026-06-21
 **SDK Code Integrity Hash**: `c8ae1c0c61c29f5cbcb018198daab036d126b0cd6ca90bdcbff5496d5cbeb8be`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
