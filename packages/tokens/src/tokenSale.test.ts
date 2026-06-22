@@ -184,4 +184,38 @@ describe('buyGasless', () => {
     const c = new TokenSaleClient(makePublicClient(), makeWalletClient());
     await expect(c.buyGasless({ token: 'GTOKEN', usdAmount: usd(5) })).rejects.toThrow('relayer rejected');
   });
+
+  it('fails over to the next relayer on 5xx (e.g. INFRA_NOT_READY)', async () => {
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        return { ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({ code: 'INFRA_NOT_READY', error: 'relay disabled' }) };
+      }
+      return { ok: true, json: async () => ({ txHash: '0xfa110ver', matchedRule: 'rule-1' }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const c = new TokenSaleClient(makePublicClient(), makeWalletClient());
+    const res = await c.buyGasless({ token: 'GTOKEN', usdAmount: usd(5) });
+    expect(res.txHash).toBe('0xfa110ver');
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2); // tried a second node
+  });
+
+  it('does NOT fail over on 4xx (client error is identical on every node)', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ code: 'NOT_WHITELISTED', error: 'bad token' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const c = new TokenSaleClient(makePublicClient(), makeWalletClient());
+    await expect(c.buyGasless({ token: 'GTOKEN', usdAmount: usd(5) })).rejects.toThrow(/NOT_WHITELISTED/);
+    expect(fetchMock.mock.calls.length).toBe(1); // no retry on a 4xx
+  });
+
+  it('honors an explicit relayerUrl override (no failover pool)', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ txHash: '0xabc' }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const c = new TokenSaleClient(makePublicClient(), makeWalletClient());
+    await c.buyGasless({ token: 'GTOKEN', usdAmount: usd(5), relayerUrl: 'https://my-relay.example' });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://my-relay.example/v3/relay');
+  });
 });

@@ -290,7 +290,6 @@ export class TokenSaleClient {
     const { token, usdAmount } = params;
     const minOut = params.minOut ?? 0n;
     const recipient = params.recipient ?? account;
-    const relayerBase = params.relayerUrl ?? this.addrs.relayerUrl;
     const targetToken = await this.getPayoutToken(token);
     const usdc = this.addrs.usdc;
     const buyHelper = this.addrs.buyHelper;
@@ -358,33 +357,66 @@ export class TokenSaleClient {
     let v_ = parseInt(transferSig.slice(130, 132), 16);
     if (v_ < 27) v_ += 27;
 
-    const resp = await fetch(relayerBase.replace(/\/$/, '') + '/v3/relay', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        intent: {
-          buyer: account,
-          paymentToken: usdc,
-          paymentAmount: usdAmount.toString(),
-          targetToken,
-          recipient,
-          minOut: minOut.toString(),
-          deadline: Number(deadline),
-          nonce,
-        },
-        buyIntentSig,
-        transferAuth: { validAfter: 0, v: v_, r: r_, s: s_ },
-      }),
+    const payload = JSON.stringify({
+      intent: {
+        buyer: account,
+        paymentToken: usdc,
+        paymentAmount: usdAmount.toString(),
+        targetToken,
+        recipient,
+        minOut: minOut.toString(),
+        deadline: Number(deadline),
+        nonce,
+      },
+      buyIntentSig,
+      transferAuth: { validAfter: 0, v: v_, r: r_, s: s_ },
     });
 
-    const body: any = await resp.json().catch(() => ({}));
-    if (!resp.ok || !body?.txHash) {
-      throw new Error(`relayer rejected: [${body?.code ?? resp.status}] ${body?.error ?? resp.statusText}`);
+    // Load-balance across the DVT relayer pool (random start) + fail over on 5xx / network errors.
+    // A 4xx is the request's own fault (bad sig / not whitelisted / rate-limited) — identical on
+    // every node, so don't retry it. A submitted tx that reverts on-chain is final (not retried).
+    const candidates = this.relayerCandidates(params.relayerUrl);
+    let lastErr: Error | undefined;
+    for (const base of candidates) {
+      let resp: Response;
+      try {
+        resp = await fetch(base.replace(/\/$/, '') + '/v3/relay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+        });
+      } catch (e: any) {
+        lastErr = new Error(`relayer ${base} unreachable: ${e?.message ?? e}`);
+        continue; // network/timeout → try next node
+      }
+      const body: any = await resp.json().catch(() => ({}));
+      if (resp.ok && body?.txHash) {
+        const receipt = await this.publicClient.waitForTransactionReceipt({ hash: body.txHash as Hash });
+        if (receipt.status !== 'success') throw new Error(`gasless buy reverted on-chain: ${body.txHash}`);
+        return { txHash: body.txHash as Hash, matchedRule: body.matchedRule };
+      }
+      const err = new Error(`relayer rejected: [${body?.code ?? resp.status}] ${body?.error ?? resp.statusText}`);
+      if (resp.status >= 400 && resp.status < 500) throw err; // client error — same on every node
+      lastErr = err; // 5xx (incl. INFRA_NOT_READY) → try next node
     }
+    throw lastErr ?? new Error('no relayer available');
+  }
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: body.txHash as Hash });
-    if (receipt.status !== 'success') throw new Error(`gasless buy reverted on-chain: ${body.txHash}`);
-    return { txHash: body.txHash as Hash, matchedRule: body.matchedRule };
+  /**
+   * Build the ordered relayer candidate list: an explicit override wins; otherwise load-balance
+   * across {@link LaunchSaleAddresses.relayerUrls} (random start) with {@link relayerUrl} appended
+   * as a final fallback. Pure ordering — no network. (Math.random for LB spread is fine here.)
+   */
+  private relayerCandidates(override?: string): string[] {
+    if (override) return [override];
+    const pool = [...(this.addrs.relayerUrls ?? [])];
+    if (pool.length > 1) {
+      const start = Math.floor(Math.random() * pool.length);
+      pool.push(...pool.splice(0, start)); // rotate start for round-robin-ish spread
+    }
+    if (this.addrs.relayerUrl && !pool.includes(this.addrs.relayerUrl)) pool.push(this.addrs.relayerUrl);
+    if (pool.length === 0 && this.addrs.relayerUrl) return [this.addrs.relayerUrl];
+    return pool;
   }
 
   private requireWallet(): WalletClient {
