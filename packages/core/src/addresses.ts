@@ -28,7 +28,7 @@ export const CANONICAL_ADDRESSES = {
     paymasterV4Impl: "0xc4dd13F7825409EEC13FBCBdD9D8f6d618207cca",
     // Official community PaymasterV4 instances (one per community, each backed by its own points token).
     aPNTsPaymasterV4: "0x67a70a578E142b950987081e7016906ae4F56Df4",  // AAStar community → aPNTs
-    pNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; not deployed on this chain
+    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; not deployed on this chain
     xPNTsFactory: "0x864971a26384d9DCC7115f0bBC428e2623F28b6e",
     blsAggregator: "0x1C305372ecc5a36CBef1FA371392234bCD55eB19",
     blsValidator: "0xA88ADec5A8dc422B57488272d5aD5913d728942A",
@@ -78,7 +78,7 @@ export const CANONICAL_ADDRESSES = {
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: official community PaymasterV4s below — `aPNTsPaymasterV4` (AAStar → aPNTs) and
-  //   `pNTsPaymasterV4` (Mycelian/Anni → pnts), auto-deployed by SuperPaymaster prepare-test and
+  //   `PNTsPaymasterV4` (Mycelian/Anni → pnts), auto-deployed by SuperPaymaster prepare-test and
   //   synced via config.sepolia.json. `paymasterV4` = the AAStar one (= aPNTsPaymasterV4).
   //   All verified on-chain (PaymasterFactory.getPaymasterList + isTokenSupported + owner).
   11155111: {
@@ -94,7 +94,7 @@ export const CANONICAL_ADDRESSES = {
     // Official community PaymasterV4 instances (verified on-chain). AAStar's is an ERC-1167 clone of
     // paymasterV4Impl above (version PMV4-Deposit-4.5.0), owner = SuperPaymaster owner 0xb5600060….
     aPNTsPaymasterV4: "0x957852251f44570dc2B60Dde0954f191FF3372eE",  // AAStar community → aPNTs (0x9e66B457)
-    pNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; filled by next prepare-test (on-chain candidate 0xd998013F… supports pnts)
+    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; filled by next prepare-test (on-chain candidate 0xd998013F… supports pnts)
     xPNTsFactory: "0xCec3655525a112882E74Fb7C26AcB267a07724cb",  // 2026-06-16 redeploy (was 0xc312...)
     blsAggregator: "0x15387e161c1b3dAe7c66Fbd5c1F32837B58B2e79",  // SP BLSAggregator 2026-06-16 redeploy (was 0x7ec7...)
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
@@ -159,7 +159,7 @@ export const CANONICAL_ADDRESSES = {
     paymasterV4Impl: "0x906123080207F250B1C9F299991512Cb31f35b2f",
     // Official community PaymasterV4 instances — not yet confirmed/deployed on this chain.
     aPNTsPaymasterV4: "0x0000000000000000000000000000000000000000",
-    pNTsPaymasterV4: "0x0000000000000000000000000000000000000000",
+    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",
     xPNTsFactory: "0x7792a49C9E91e0E9B631B27D885d15e971B7482A",
     blsAggregator: "0x6e06b17b1a4D2D973F7E3e026e24b4393315736c",
     blsValidator: "0x260fa905CcE1f5b29Afe9d627c01fAAE4A66A7F5",
