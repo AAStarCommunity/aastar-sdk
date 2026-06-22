@@ -173,7 +173,9 @@ export function grantSessionFinalHash(
     velocityWindow: number;
     callTargets: string[];
     selectorAllowlist: string[];
-    nonce: number;
+    // Accept bigint/string too: the grant nonce is abi-encoded as uint256 and a JS number
+    // > 2^53 would lose precision before BigInt() and diverge from the contract (#137 Low).
+    nonce: number | bigint | string;
   } & ({ sessionKey: string } | { keyX: string; keyY: string })
 ): `0x${string}` {
   const callTargetsHash = keccak256(encodePacked(["address[]"], [p.callTargets as `0x${string}`[]]));
@@ -783,8 +785,16 @@ export class KmsManager {
   }
 
   /**
-   * Sign a message or EIP-155 transaction, running the challenge-binding ceremony
-   * internally. `params.KeyId` is required (it identifies the wallet to challenge).
+   * Sign a message or EIP-155 transaction via `/Sign`, running the ceremony internally.
+   * `params.KeyId` is required.
+   *
+   * ⚠️ STRICT MODE: unlike {@link signHashWithCeremony} / {@link signTypedDataWithCeremony},
+   * this does NOT auto-bind a payload commitment, because the TA derives the signed digest
+   * from `Message` / `Transaction` host-side (EIP-191 / RLP) and the SDK can't reproduce it
+   * byte-exactly for every input. So it sends the RAW nonce by default — which the KMS will
+   * REJECT once strict mode (#63) is on. For strict-safe signing either:
+   *   - pass `options.payload` = the exact digest the TA will sign (you computed it), or
+   *   - prefer {@link signHashWithCeremony} (commits to a known 32-byte hash).
    */
   async signWithCeremony(
     params: Omit<KmsSignRequest, "WebAuthn" | "Passkey"> & { KeyId: string },
