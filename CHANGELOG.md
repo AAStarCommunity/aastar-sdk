@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.2] - 2026-06-22
+**SDK Code Integrity Hash**: `faa6e3cbe3fee53da7c584d016b9f458803d9fae0c80dfb5db1b7dd22267dd38`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Two-phase transfer for strict device-passkey signing.** `executeTransfer` is one-shot
+(build → sign → submit) and takes the assertion as input, so a browser/device-passkey frontend
+signs before the SDK knows `userOpHash` → it can only commit the raw nonce, which KMS strict mode
+rejects. New two-phase API where the SDK owns payload selection + the WYSIWYS commitment.
+
+- **[ADDED] `TransferManager.prepareTransfer(userId, params)`** → `{ transferId, challengeId,
+  publicKeyOptions, userOpHash }`: builds the UserOp, computes the EXACT digest the single owner
+  signature will sign, starts the KMS ceremony, and returns `publicKeyOptions` whose `challenge` is
+  already the commitment. The frontend just runs `navigator.credentials.get`.
+- **[ADDED] `TransferManager.submitPreparedTransfer(userId, { transferId, webAuthnAssertion })`** —
+  signs with the device-passkey assertion (the committed digest matches) + submits. Single-use record.
+- **[ADDED] `ISignerAdapter.beginCeremony` (optional)** — `KmsSignerAdapter` computes
+  `commitChallenge(nonce, hashMessage(message))`; the SDK owns the payload so the frontend never guesses.
+- **The committed payload is TIER-AWARE** (why the SDK must own it): ECDSA / Tier-1 →
+  `hashMessage(userOpHash)`; Tier-2/3 → `hashMessage(keccak256(messagePoint))` (Tier-2/3 omit the
+  userOpHash owner ECDSA — the one owner signature is the messagePoint signature). messagePoint is a
+  deterministic `hashToCurve(userOpHash)`, so the binding to the transaction is preserved (no replay).
+- **[FIX]** `transferId` now uses a CSPRNG (`randomUUID`) instead of `Math.random`.
+- Strict-mode device-passkey transfers (AirAccount #354) are now reachable; 4-round adversarial review.
+
 ## [0.26.1] - 2026-06-22
 **SDK Code Integrity Hash**: `566b37ccb8f753370c8525eeecb7f81e0b82e77013d1cc0a6d81396598033a7b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
