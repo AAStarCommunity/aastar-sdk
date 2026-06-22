@@ -184,6 +184,18 @@ async function main() {
     rec("grant final_hash matches contract buildGrantHash (oracle)", false, e?.shortMessage || e.message);
   }
 
+  // 2g. Mint commitment (v2, AirAccount#115 / KMS v0.26.0): createAgentKeyWithCeremony auto-binds
+  // challenge = SHA256(nonce ‖ mintDigest("AA-AGENT-MINT-v2" ‖ walletId ‖ SHA256(label))). A
+  // returned keyId proves the SDK's mint_digest matches the KMS (else the commitment is rejected).
+  try {
+    const { KmsAgentService } = await import("../packages/airaccount/src/server/index.js");
+    const agent = new KmsAgentService((kms as any).httpClient);
+    const r = await agent.createAgentKeyWithCeremony({ humanKeyId: keyId, label: "e2e-agent" }, signer);
+    rec("createAgentKeyWithCeremony (v2 mint commitment)", !!r.keyId, `keyId=${r.keyId} addr=${(r.agentAddress || "").slice(0, 12)}…`);
+  } catch (e: any) {
+    rec("createAgentKeyWithCeremony (v2 mint commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+
   // 3. Negative: legacy raw passkey assertion must be rejected (KMS strict-on-legacy).
   try {
     await kms.signHash(hash, { AuthenticatorData: "0x00", ClientDataHash: "0x00", Signature: "0x00" } as any, { KeyId: keyId });

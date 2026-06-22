@@ -1,5 +1,5 @@
 import { KmsHttpClient } from "./kms-http-client";
-import { WebAuthnAssertion, LegacyPasskeyAssertion } from "./kms-signer";
+import { WebAuthnAssertion, LegacyPasskeyAssertion, mintDigest } from "./kms-signer";
 import {
   PasskeyCeremonySigner,
   RunCeremonyOptions,
@@ -186,11 +186,10 @@ export class KmsAgentService {
   /**
    * Mint an agent key, running the challenge-binding ceremony internally.
    *
-   * STRICT MODE (AirAccount #115): bind the mint params by passing `options.payload =
-   * mintDigest({ kind: "agent", walletId, index, ttlSecs, subject })` — `index` is the
-   * agent_index the KMS will assign (query it first), `subject` the JWT sub (human key id),
-   * `ttlSecs` the JWT lifetime. Without a payload the ceremony sends the raw nonce, which
-   * strict mode rejects.
+   * Auto-binds the v2 mint commitment (AirAccount #115, KMS v0.26.0):
+   * `challenge = SHA-256(nonce ‖ mintDigest({ kind: "create-agent", walletId: humanKeyId, label }))`
+   * — strict mode requires it; transition mode also accepts it. Pass `options.payload` only to
+   * override. `label` defaults to "" to match the KMS server default.
    */
   async createAgentKeyWithCeremony(
     params: Omit<KmsCreateAgentKeyRequest, "webAuthnAssertion" | "passkeyAssertion">,
@@ -198,12 +197,13 @@ export class KmsAgentService {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsCreateAgentKeyResponse> {
     this.http.ensureEnabled();
-    const webAuthnAssertion = await runAuthenticationCeremony(
-      this.http,
-      params.humanKeyId,
-      signer,
-      options
-    );
+    const payload =
+      options?.payload ??
+      mintDigest({ kind: "create-agent", walletId: params.humanKeyId, label: params.label ?? "" });
+    const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.humanKeyId, signer, {
+      ...options,
+      payload,
+    });
     return this.createAgentKey({ ...params, webAuthnAssertion });
   }
 
@@ -211,6 +211,12 @@ export class KmsAgentService {
    * Refresh an agent credential, running the challenge-binding ceremony
    * internally. `humanKeyId` is the owning human key challenged by the ceremony
    * (distinct from the agent `keyId` in `params`); `jwt` is the existing credential.
+   *
+   * Auto-binds the v2 REFRESH commitment (KMS v0.26.0):
+   * `challenge = SHA-256(nonce ‖ mintDigest({ kind: "refresh-agent", walletId: humanKeyId, agentIndex }))`
+   * where `agentIndex` is parsed from `params.keyId` ("wallet_uuid:agent_index"). REFRESH uses a
+   * distinct tag from CREATE so the gesture cannot be replayed as a mint. Pass `options.payload`
+   * to override.
    */
   async refreshAgentCredentialWithCeremony(
     params: Omit<KmsRefreshAgentCredentialRequest, "webAuthnAssertion" | "passkeyAssertion">,
@@ -220,7 +226,15 @@ export class KmsAgentService {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsRefreshAgentCredentialResponse> {
     this.http.ensureEnabled();
-    const webAuthnAssertion = await runAuthenticationCeremony(this.http, humanKeyId, signer, options);
+    let payload = options?.payload;
+    if (!payload) {
+      const agentIndex = Number(params.keyId.split(":")[1]);
+      if (!Number.isInteger(agentIndex)) {
+        throw new Error(`refreshAgentCredentialWithCeremony: cannot parse agent_index from keyId "${params.keyId}"`);
+      }
+      payload = mintDigest({ kind: "refresh-agent", walletId: humanKeyId, agentIndex });
+    }
+    const webAuthnAssertion = await runAuthenticationCeremony(this.http, humanKeyId, signer, { ...options, payload });
     return this.refreshAgentCredential({ ...params, webAuthnAssertion }, jwt);
   }
 
