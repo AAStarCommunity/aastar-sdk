@@ -191,7 +191,12 @@ export type {
 } from "./services/kms-session-service";
 
 // ── KMS SuperPaymaster convenience signers (v0.20.0) ──────────────
-export { KmsPaymentSigner } from "./services/kms-payment-signer";
+export {
+  KmsPaymentSigner,
+  micropaymentVoucherDigest,
+  gTokenAuthorizationDigest,
+  x402PaymentDigest,
+} from "./services/kms-payment-signer";
 export type {
   KmsPaymentAuth,
   KmsPaymentSignatureResponse,

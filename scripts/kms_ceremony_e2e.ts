@@ -112,6 +112,29 @@ async function main() {
     rec("signTypedDataWithCeremony (EIP-712 commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
   }
 
+  // 2e. Payment convenience signers with commitment — proves the SDK's per-schema EIP-712
+  // digest matches the KMS host-side schema (else the commitment wouldn't verify).
+  const { KmsPaymentSigner } = await import("../packages/airaccount/src/server/index.js");
+  const pay = new KmsPaymentSigner((kms as any).httpClient);
+  try {
+    const r = await pay.signMicropaymentVoucherWithCeremony(
+      { keyId, chainId: 11155111, verifyingContract: ("0x" + "33".repeat(20)), channelId: ("0x" + "44".repeat(32)), cumulativeAmount: "1000000" },
+      signer
+    );
+    rec("signMicropaymentVoucherWithCeremony (commitment)", !!r.signature, `sig=${(r.signature || "").slice(0, 16)}…`);
+  } catch (e: any) {
+    rec("signMicropaymentVoucherWithCeremony (commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+  try {
+    const r = await pay.signX402PaymentWithCeremony(
+      { keyId, chainId: 11155111, verifyingContract: ("0x" + "55".repeat(20)), paymentId: ("0x" + "66".repeat(32)), amount: "2000000", recipient: ("0x" + "77".repeat(20)), deadline: "9999999999" },
+      signer
+    );
+    rec("signX402PaymentWithCeremony (commitment)", !!r.signature, `sig=${(r.signature || "").slice(0, 16)}…`);
+  } catch (e: any) {
+    rec("signX402PaymentWithCeremony (commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+
   // 3. Negative: legacy raw passkey assertion must be rejected (KMS strict-on-legacy).
   try {
     await kms.signHash(hash, { AuthenticatorData: "0x00", ClientDataHash: "0x00", Signature: "0x00" } as any, { KeyId: keyId });
