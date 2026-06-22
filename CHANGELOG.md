@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.1] - 2026-06-22
+**SDK Code Integrity Hash**: `566b37ccb8f753370c8525eeecb7f81e0b82e77013d1cc0a6d81396598033a7b`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Mint commitment v2 (label-based) — aligns KMS v0.26.0.** Corrects the mint binding from 0.26.0:
+the KMS redefined the key-mint commitment (`create_agent_key` / `create_p256_session_key` /
+`refresh_agent_credential`), so the 0.26.0 v1 digest (index/ttl/subject) is obsolete.
+
+- **[CHANGED] `mintDigest()`** → v2: `create-agent` = `SHA-256("AA-AGENT-MINT-v2" ‖ walletId[16B UUID]
+  ‖ SHA-256(label))`; `create-p256` = `SHA-256("AA-P256-SESSION-MINT-v2" ‖ walletId ‖ SHA-256(label))`;
+  `refresh-agent` = `SHA-256("AA-AGENT-REFRESH-v2" ‖ walletId ‖ agentIndex[u32 BE])`. create now binds
+  the caller's `label` (not the server-assigned index → no index race); create vs refresh use distinct
+  tags (a refresh gesture can't be replayed as a mint).
+- **[ADDED] auto-commit** in `createAgentKeyWithCeremony` / `createP256SessionKeyWithCeremony` /
+  `refreshAgentCredentialWithCeremony` (refresh parses `agentIndex` from `keyId` via an anchored
+  `<uuid>:<index>` regex). KAT-locked to the KMS vectors; live-verified vs kms.aastar.io v0.26.0 (E2E 10/10).
+- **Note:** KMS v0.26.0 also shortens `MAX_AGENT_JWT_TTL` to 24h (agent/P256 credentials now expire
+  daily) — frontends must handle re-mint + `expiresAt`. KMS proto 0.6.0→0.7.0 (label/is_refresh).
+
 ## [0.26.0] - 2026-06-22
 **SDK Code Integrity Hash**: `35c5ef1420326cac27dff6661fbee58073f75238ee4a5b88f4c24c3cfef869ed`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
