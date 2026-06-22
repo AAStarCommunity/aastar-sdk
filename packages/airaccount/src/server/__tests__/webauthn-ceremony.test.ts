@@ -15,7 +15,7 @@ vi.mock("axios", () => ({
   create: mockAxiosCreate,
 }));
 
-import { KmsManager, eip712Digest } from "../services/kms-signer";
+import { KmsManager, eip712Digest, grantSessionFinalHash } from "../services/kms-signer";
 import { KmsAgentService } from "../services/kms-agent-service";
 import { KmsSessionService } from "../services/kms-session-service";
 import { SilentLogger } from "../interfaces/logger";
@@ -257,24 +257,22 @@ describe("KmsManager challenge-binding signing paths", () => {
     mockGet.mockResolvedValueOnce(beginAuthResponse); // GET /kms/begin-grant-session-auth
     mockPost.mockResolvedValueOnce({ data: { keyId: "key-1", signature: "0xsig" } });
 
-    await manager.signGrantSessionWithCeremony(
-      {
-        keyId: "key-1",
-        chainId: 1,
-        verifyingContract: "0x0",
-        account: "0x0",
-        sessionKey: "0x0",
-        expiry: 1,
-        contractScope: "0x0",
-        selectorScope: "0x0",
-        velocityLimit: 1,
-        velocityWindow: 1,
-        callTargets: [],
-        selectorAllowlist: [],
-        nonce: 0,
-      },
-      signer
-    );
+    const grant = {
+      keyId: "key-1",
+      chainId: 1,
+      verifyingContract: ("0x" + "68".repeat(20)) as `0x${string}`,
+      account: ("0x" + "12".repeat(20)) as `0x${string}`,
+      sessionKey: ("0x" + "34".repeat(20)) as `0x${string}`,
+      expiry: 1,
+      contractScope: ("0x" + "00".repeat(20)) as `0x${string}`,
+      selectorScope: "0x00000000" as `0x${string}`,
+      velocityLimit: 1,
+      velocityWindow: 1,
+      callTargets: [] as `0x${string}`[],
+      selectorAllowlist: [] as `0x${string}`[],
+      nonce: 0,
+    };
+    await manager.signGrantSessionWithCeremony(grant as any, signer);
 
     expect(mockGet).toHaveBeenCalledWith("/kms/begin-grant-session-auth", {
       params: { keyId: "key-1" },
@@ -282,7 +280,9 @@ describe("KmsManager challenge-binding signing paths", () => {
     const [path, body] = mockPost.mock.calls[0];
     expect(path).toBe("/kms/sign-grant-session");
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+    // Grant ceremony auto-binds the final_hash commitment (#112), not the raw nonce.
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(commitChallenge(CHALLENGE, grantSessionFinalHash(grant as any)));
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).not.toBe(CHALLENGE);
   });
 
   it("signP256GrantSessionWithCeremony: GETs begin-grant-session-auth then posts webAuthnAssertion", async () => {
@@ -296,25 +296,23 @@ describe("KmsManager challenge-binding signing paths", () => {
       return { data: { keyId: "key-1", signature: "0xsig" } };
     });
 
-    await manager.signP256GrantSessionWithCeremony(
-      {
-        keyId: "key-1",
-        chainId: 1,
-        verifyingContract: "0x0",
-        account: "0x0",
-        keyX: "0x0",
-        keyY: "0x0",
-        expiry: 1,
-        contractScope: "0x0",
-        selectorScope: "0x0",
-        velocityLimit: 1,
-        velocityWindow: 1,
-        callTargets: [],
-        selectorAllowlist: [],
-        nonce: 0,
-      },
-      signer
-    );
+    const grant = {
+      keyId: "key-1",
+      chainId: 1,
+      verifyingContract: ("0x" + "68".repeat(20)) as `0x${string}`,
+      account: ("0x" + "12".repeat(20)) as `0x${string}`,
+      keyX: ("0x" + "34".repeat(32)) as `0x${string}`,
+      keyY: ("0x" + "56".repeat(32)) as `0x${string}`,
+      expiry: 1,
+      contractScope: ("0x" + "00".repeat(20)) as `0x${string}`,
+      selectorScope: "0x00000000" as `0x${string}`,
+      velocityLimit: 1,
+      velocityWindow: 1,
+      callTargets: [] as `0x${string}`[],
+      selectorAllowlist: [] as `0x${string}`[],
+      nonce: 0,
+    };
+    await manager.signP256GrantSessionWithCeremony(grant as any, signer);
 
     expect(order).toEqual(["begin", "sign"]); // challenge fetched BEFORE signing
     expect(mockGet).toHaveBeenCalledWith("/kms/begin-grant-session-auth", {
@@ -323,7 +321,7 @@ describe("KmsManager challenge-binding signing paths", () => {
     const [path, body] = mockPost.mock.calls[0];
     expect(path).toBe("/kms/sign-p256-grant-session");
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(commitChallenge(CHALLENGE, grantSessionFinalHash(grant as any)));
   });
 });
 

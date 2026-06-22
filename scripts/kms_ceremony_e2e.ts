@@ -12,9 +12,12 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { p256 } from "@noble/curves/nist.js";
+import { createPublicClient, http, hashMessage } from "viem";
+import { sepolia } from "viem/chains";
 import {
   KmsManager,
   P256PasskeySigner,
+  grantSessionFinalHash,
 } from "../packages/airaccount/src/server/index.js";
 
 function envFrom(path: string, key: string): string | undefined {
@@ -133,6 +136,47 @@ async function main() {
     rec("signX402PaymentWithCeremony (commitment)", !!r.signature, `sig=${(r.signature || "").slice(0, 16)}…`);
   } catch (e: any) {
     rec("signX402PaymentWithCeremony (commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+
+  // 2f. Grant-session final_hash ORACLE: the SDK's off-chain grantSessionFinalHash must equal
+  // toEthSignedMessageHash(contract.buildGrantHash(...)) — proves the abi.encode (incl. the
+  // tricky address[]/bytes4[] packed hashes + nonce/chainId/verifyingContract) is byte-exact
+  // vs SessionKeyValidator.sol, which the KMS TA mirrors (AirAccount#112). No KMS call needed.
+  try {
+    const VALIDATOR = "0x6810CfB7c72D16e044a17694fAa8076e517264D0"; // core sepolia sessionKeyValidator
+    const ACCT = ("0x" + "12".repeat(20)) as `0x${string}`;
+    const SK = ("0x" + "34".repeat(20)) as `0x${string}`;
+    const cfg = {
+      expiry: 9999999999, contractScope: ("0x" + "00".repeat(20)) as `0x${string}`,
+      selectorScope: "0x00000000" as `0x${string}`, revoked: false,
+      velocityLimit: 0, velocityWindow: 0, callTargets: [] as `0x${string}`[], selectorAllowlist: [] as `0x${string}`[],
+    };
+    const pc = createPublicClient({ chain: sepolia, transport: http("https://ethereum-sepolia-rpc.publicnode.com") });
+    const buildGrantHashAbi = [{
+      type: "function", name: "buildGrantHash", stateMutability: "view",
+      inputs: [
+        { name: "account", type: "address" }, { name: "sessionKey", type: "address" },
+        { name: "cfg", type: "tuple", components: [
+          { name: "expiry", type: "uint48" }, { name: "contractScope", type: "address" },
+          { name: "selectorScope", type: "bytes4" }, { name: "revoked", type: "bool" },
+          { name: "velocityLimit", type: "uint16" }, { name: "velocityWindow", type: "uint32" },
+          { name: "callTargets", type: "address[]" }, { name: "selectorAllowlist", type: "bytes4[]" },
+        ] },
+      ],
+      outputs: [{ type: "bytes32" }],
+    }] as const;
+    // SessionKeyValidator._buildGrantHash ALREADY returns inner.toEthSignedMessageHash(),
+    // so buildGrantHash() output IS the final_hash — compare directly (no extra prefix).
+    const expectedFinal = await pc.readContract({ address: VALIDATOR, abi: buildGrantHashAbi, functionName: "buildGrantHash", args: [ACCT, SK, cfg] }) as `0x${string}`;
+    const myFinal = grantSessionFinalHash({
+      chainId: 11155111, verifyingContract: VALIDATOR, account: ACCT, sessionKey: SK,
+      expiry: cfg.expiry, contractScope: cfg.contractScope, selectorScope: cfg.selectorScope,
+      velocityLimit: 0, velocityWindow: 0, callTargets: [], selectorAllowlist: [], nonce: 0,
+    });
+    rec("grant final_hash matches contract buildGrantHash (oracle)", myFinal === expectedFinal,
+      myFinal === expectedFinal ? "byte-exact" : `MISMATCH mine=${myFinal} contract=${expectedFinal}`);
+  } catch (e: any) {
+    rec("grant final_hash matches contract buildGrantHash (oracle)", false, e?.shortMessage || e.message);
   }
 
   // 3. Negative: legacy raw passkey assertion must be rejected (KMS strict-on-legacy).

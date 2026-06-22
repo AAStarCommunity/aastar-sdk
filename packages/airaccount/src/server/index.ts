@@ -99,7 +99,7 @@ export type {
 export { TokenService } from "./services/token-service";
 export type { TokenInfo, TokenBalance } from "./services/token-service";
 export { WalletManager } from "./services/wallet-manager";
-export { KmsManager, KmsSigner, eip712Digest } from "./services/kms-signer";
+export { KmsManager, KmsSigner, eip712Digest, grantSessionFinalHash } from "./services/kms-signer";
 export type {
   KmsCreateKeyRequest,
   KmsCreateKeyResponse,
