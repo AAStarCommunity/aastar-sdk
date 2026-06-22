@@ -55,6 +55,11 @@ function hexToBytes(hex: string): Uint8Array {
   if (clean.length % 2 !== 0) {
     throw new Error("hexToBytes: odd-length hex string");
   }
+  // Reject non-hex chars — `parseInt("zz",16)` is NaN → silently stored as 0, which would
+  // yield a deterministic-but-WRONG commitment (PR #137 Codex review, Medium).
+  if (clean.length > 0 && !/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error("hexToBytes: non-hex characters in input");
+  }
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) {
     out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
@@ -251,6 +256,12 @@ export interface RunCeremonyOptions {
 export function commitChallenge(nonceBase64Url: string, payload: Uint8Array | `0x${string}`): string {
   const nonce = base64UrlDecode(nonceBase64Url);
   const payloadBytes = typeof payload === "string" ? hexToBytes(payload) : payload;
+  // The payload is always a 32-byte digest (signHash hash / EIP-712 digest / grant final_hash).
+  // Reject anything else — a short/empty payload (e.g. "0x") would commit to the wrong thing
+  // and the KMS would compute a different commitment (PR #137 Codex review).
+  if (payloadBytes.length !== 32) {
+    throw new Error(`commitChallenge: payload must be a 32-byte digest, got ${payloadBytes.length} bytes`);
+  }
   const committed = createHash("sha256").update(nonce).update(payloadBytes).digest();
   return base64UrlEncode(new Uint8Array(committed));
 }

@@ -99,7 +99,7 @@ export type {
 export { TokenService } from "./services/token-service";
 export type { TokenInfo, TokenBalance } from "./services/token-service";
 export { WalletManager } from "./services/wallet-manager";
-export { KmsManager, KmsSigner, eip712Digest } from "./services/kms-signer";
+export { KmsManager, KmsSigner, eip712Digest, grantSessionFinalHash } from "./services/kms-signer";
 export type {
   KmsCreateKeyRequest,
   KmsCreateKeyResponse,
@@ -191,7 +191,12 @@ export type {
 } from "./services/kms-session-service";
 
 // ── KMS SuperPaymaster convenience signers (v0.20.0) ──────────────
-export { KmsPaymentSigner } from "./services/kms-payment-signer";
+export {
+  KmsPaymentSigner,
+  micropaymentVoucherDigest,
+  gTokenAuthorizationDigest,
+  x402PaymentDigest,
+} from "./services/kms-payment-signer";
 export type {
   KmsPaymentAuth,
   KmsPaymentSignatureResponse,

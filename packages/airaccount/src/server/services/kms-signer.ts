@@ -1,5 +1,11 @@
 import { hashMessage } from "../../migration/viem/signatures";
-import { hashTypedData } from "viem";
+import {
+  hashTypedData,
+  keccak256,
+  encodeAbiParameters,
+  encodePacked,
+  hashMessage as toEthSignedMessageHash,
+} from "viem";
 import { ILogger } from "../interfaces/logger";
 import { KmsHttpClient } from "./kms-http-client";
 import {
@@ -142,6 +148,88 @@ export function eip712Digest(params: {
     primaryType: params.primaryType,
     message: message as Record<string, unknown>,
   });
+}
+
+/**
+ * Coerce a uint256-encoded field to bigint, rejecting a JS `number` that has already lost
+ * precision (> 2^53). A silently-truncated value would diverge from the contract/TA encoding
+ * (PR #137 Codex review). Accepts bigint / decimal-or-0x string / safe-integer number.
+ */
+function u256(x: number | bigint | string): bigint {
+  if (typeof x === "number" && !Number.isSafeInteger(x)) {
+    throw new Error(`u256: number ${x} exceeds safe-integer range — pass a bigint or string`);
+  }
+  return BigInt(x);
+}
+
+/**
+ * Compute the grant-session `final_hash` — the value the TA signs and the WYSIWYS commitment
+ * payload for the grant ceremony (AirAccount #112). Equals the contract's `buildGrantHash()` /
+ * `buildP256GrantHash()` output byte-for-byte (`SessionKeyValidator._buildGrantHash` already
+ * applies `inner.toEthSignedMessageHash()`); verified against the live contract (E2E oracle).
+ * `inner = keccak256(abi.encode(domainTag, chainId,
+ * verifyingContract, account, <sessionKey | keyX,keyY>, expiry, contractScope, selectorScope,
+ * velocityLimit, velocityWindow, callTargetsHash, selectorsHash, nonce))` with
+ * `callTargetsHash = keccak256(abi.encodePacked(callTargets))`,
+ * `selectorsHash = keccak256(abi.encodePacked(selectorAllowlist))`; then EIP-191-prefixed.
+ */
+export function grantSessionFinalHash(
+  p: {
+    chainId: number;
+    verifyingContract: string;
+    account: string;
+    expiry: number;
+    contractScope: string;
+    selectorScope: string;
+    velocityLimit: number;
+    velocityWindow: number;
+    callTargets: string[];
+    selectorAllowlist: string[];
+    // Accept bigint/string too: the grant nonce is abi-encoded as uint256 and a JS number
+    // > 2^53 would lose precision before BigInt() and diverge from the contract (#137 Low).
+    nonce: number | bigint | string;
+  } & ({ sessionKey: string } | { keyX: string; keyY: string })
+): `0x${string}` {
+  const callTargetsHash = keccak256(encodePacked(["address[]"], [p.callTargets as `0x${string}`[]]));
+  const selectorsHash = keccak256(encodePacked(["bytes4[]"], [p.selectorAllowlist as `0x${string}`[]]));
+  const isP256 = "keyX" in p;
+
+  const inner = isP256
+    ? keccak256(
+        encodeAbiParameters(
+          [
+            { type: "string" }, { type: "uint256" }, { type: "address" }, { type: "address" },
+            { type: "bytes32" }, { type: "bytes32" }, { type: "uint48" }, { type: "address" },
+            { type: "bytes4" }, { type: "uint16" }, { type: "uint32" }, { type: "bytes32" },
+            { type: "bytes32" }, { type: "uint256" },
+          ],
+          [
+            "GRANT_P256_SESSION_V2", u256(p.chainId), p.verifyingContract as `0x${string}`,
+            p.account as `0x${string}`, (p as { keyX: string }).keyX as `0x${string}`,
+            (p as { keyY: string }).keyY as `0x${string}`, p.expiry, p.contractScope as `0x${string}`,
+            p.selectorScope as `0x${string}`, p.velocityLimit, p.velocityWindow, callTargetsHash,
+            selectorsHash, u256(p.nonce),
+          ]
+        )
+      )
+    : keccak256(
+        encodeAbiParameters(
+          [
+            { type: "string" }, { type: "uint256" }, { type: "address" }, { type: "address" },
+            { type: "address" }, { type: "uint48" }, { type: "address" }, { type: "bytes4" },
+            { type: "uint16" }, { type: "uint32" }, { type: "bytes32" }, { type: "bytes32" },
+            { type: "uint256" },
+          ],
+          [
+            "GRANT_SESSION_V2", u256(p.chainId), p.verifyingContract as `0x${string}`,
+            p.account as `0x${string}`, (p as { sessionKey: string }).sessionKey as `0x${string}`,
+            p.expiry, p.contractScope as `0x${string}`, p.selectorScope as `0x${string}`,
+            p.velocityLimit, p.velocityWindow, callTargetsHash, selectorsHash, u256(p.nonce),
+          ]
+        )
+      );
+
+  return toEthSignedMessageHash({ raw: inner });
 }
 
 export interface KmsSignTypedDataRequest {
@@ -709,8 +797,16 @@ export class KmsManager {
   }
 
   /**
-   * Sign a message or EIP-155 transaction, running the challenge-binding ceremony
-   * internally. `params.KeyId` is required (it identifies the wallet to challenge).
+   * Sign a message or EIP-155 transaction via `/Sign`, running the ceremony internally.
+   * `params.KeyId` is required.
+   *
+   * ⚠️ STRICT MODE: unlike {@link signHashWithCeremony} / {@link signTypedDataWithCeremony},
+   * this does NOT auto-bind a payload commitment, because the TA derives the signed digest
+   * from `Message` / `Transaction` host-side (EIP-191 / RLP) and the SDK can't reproduce it
+   * byte-exactly for every input. So it sends the RAW nonce by default — which the KMS will
+   * REJECT once strict mode (#63) is on. For strict-safe signing either:
+   *   - pass `options.payload` = the exact digest the TA will sign (you computed it), or
+   *   - prefer {@link signHashWithCeremony} (commits to a known 32-byte hash).
    */
   async signWithCeremony(
     params: Omit<KmsSignRequest, "WebAuthn" | "Passkey"> & { KeyId: string },
@@ -773,7 +869,10 @@ export class KmsManager {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsSignGrantSessionResponse> {
     this.ensureEnabled();
-    const webAuthnAssertion = await this.runGrantSessionCeremony(params.keyId, signer, options);
+    const webAuthnAssertion = await this.runGrantSessionCeremony(params.keyId, signer, {
+      ...options,
+      payload: options?.payload ?? grantSessionFinalHash(params),
+    });
     return this.signGrantSession({ ...params, webAuthnAssertion });
   }
 
@@ -787,7 +886,10 @@ export class KmsManager {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsSignGrantSessionResponse> {
     this.ensureEnabled();
-    const webAuthnAssertion = await this.runGrantSessionCeremony(params.keyId, signer, options);
+    const webAuthnAssertion = await this.runGrantSessionCeremony(params.keyId, signer, {
+      ...options,
+      payload: options?.payload ?? grantSessionFinalHash(params),
+    });
     return this.signP256GrantSession({ ...params, webAuthnAssertion });
   }
 
