@@ -165,14 +165,15 @@ export class KmsSessionService {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<CreateP256SessionKeyResponse> {
     this.http.ensureEnabled();
+    // Normalize label once so the committed value equals the sent value (#141 Codex Low).
+    const label = params.label ?? "";
     const payload =
-      options?.payload ??
-      mintDigest({ kind: "create-p256", walletId: params.humanKeyId, label: params.label ?? "" });
+      options?.payload ?? mintDigest({ kind: "create-p256", walletId: params.humanKeyId, label });
     const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.humanKeyId, signer, {
       ...options,
       payload,
     });
-    return this.createP256SessionKey({ ...params, webAuthnAssertion });
+    return this.createP256SessionKey({ ...params, label, webAuthnAssertion });
   }
 
   /**

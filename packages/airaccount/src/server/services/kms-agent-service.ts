@@ -197,14 +197,15 @@ export class KmsAgentService {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsCreateAgentKeyResponse> {
     this.http.ensureEnabled();
+    // Normalize label once so the value we COMMIT to is the exact value we SEND (#141 Codex Low).
+    const label = params.label ?? "";
     const payload =
-      options?.payload ??
-      mintDigest({ kind: "create-agent", walletId: params.humanKeyId, label: params.label ?? "" });
+      options?.payload ?? mintDigest({ kind: "create-agent", walletId: params.humanKeyId, label });
     const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.humanKeyId, signer, {
       ...options,
       payload,
     });
-    return this.createAgentKey({ ...params, webAuthnAssertion });
+    return this.createAgentKey({ ...params, label, webAuthnAssertion });
   }
 
   /**
@@ -228,11 +229,13 @@ export class KmsAgentService {
     this.http.ensureEnabled();
     let payload = options?.payload;
     if (!payload) {
-      const agentIndex = Number(params.keyId.split(":")[1]);
-      if (!Number.isInteger(agentIndex)) {
-        throw new Error(`refreshAgentCredentialWithCeremony: cannot parse agent_index from keyId "${params.keyId}"`);
+      // keyId is exactly "<uuid>:<index>" — a loose split would let "uuid:" or "uuid:0:x"
+      // silently resolve to agent_index 0 and commit to the WRONG agent (#141 Codex Medium).
+      const match = /^([0-9a-fA-F-]{36}):(\d+)$/.exec(params.keyId);
+      if (!match) {
+        throw new Error(`refreshAgentCredentialWithCeremony: invalid keyId "${params.keyId}" (expected "<uuid>:<index>")`);
       }
-      payload = mintDigest({ kind: "refresh-agent", walletId: humanKeyId, agentIndex });
+      payload = mintDigest({ kind: "refresh-agent", walletId: humanKeyId, agentIndex: Number(match[2]) });
     }
     const webAuthnAssertion = await runAuthenticationCeremony(this.http, humanKeyId, signer, { ...options, payload });
     return this.refreshAgentCredential({ ...params, webAuthnAssertion }, jwt);
