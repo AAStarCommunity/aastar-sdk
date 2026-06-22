@@ -156,11 +156,16 @@ export function buildClientDataJSON(challenge: string, origin: string = DEFAULT_
  * signs should pass an incrementing value.
  */
 export function buildAuthenticatorData(rpId: string = DEFAULT_RP_ID, signCount: number = 1): Uint8Array {
+  // Validate up front (PR #136 NEW-4): a non-integer / out-of-u32 value would silently wrap
+  // via `>>> 0` and could produce a counter ≤ the stored one (fail-closed reject at the KMS).
+  if (!Number.isInteger(signCount) || signCount < 0 || signCount > 0xffffffff) {
+    throw new Error(`buildAuthenticatorData: signCount must be a uint32 (0..2^32-1), got ${signCount}`);
+  }
   const rpIdHash = createHash("sha256").update(rpId).digest();
   const out = new Uint8Array(37);
   out.set(rpIdHash, 0);
   out[32] = 0x05; // UP | UV
-  new DataView(out.buffer).setUint32(33, signCount >>> 0, false);
+  new DataView(out.buffer).setUint32(33, signCount, false);
   return out;
 }
 
@@ -281,9 +286,28 @@ export async function runWebAuthnCeremony(
     signer: options.signer,
     rpId: options.rpId,
     origin: options.origin,
-    signCount: options.signCount,
+    // The KMS enforces a strictly-increasing authenticator signCount (anti-clone). A
+    // server-held signer (P256PasskeySigner) has no native counter, so default to a
+    // monotonic value — else a second signature on the same key fails
+    // "signCount not incremented". A real device passkey passes its own counter.
+    signCount: options.signCount ?? nextSignCount(),
   });
   return { ChallengeId: begun.ChallengeId, Credential: credential };
+}
+
+// Monotonic signCount for server-held ceremonies. Seeded from wall-clock seconds so it
+// stays ahead of any previously-stored counter across process restarts (u32, ok until
+// 2106), and increments per ceremony within a process.
+//
+// ⚠️ Single-process only (PR #136 NEW-2): the counter lives in this module's memory, so two
+// workers signing for the SAME key can emit out-of-order signCounts → the lower one is
+// fail-closed-rejected by the KMS ("signCount not incremented"; availability only, no forgery,
+// retryable). MULTI-WORKER deployments must pass an explicit, shared/persisted, strictly
+// increasing `options.signCount` (e.g. from Redis/DB) instead of relying on this default.
+let _signCountCounter = Math.floor(Date.now() / 1000);
+function nextSignCount(): number {
+  _signCountCounter = (_signCountCounter + 1) >>> 0;
+  return _signCountCounter;
 }
 
 // ── Begin-endpoint fetchers (shared by KmsManager + the agent/session services) ──

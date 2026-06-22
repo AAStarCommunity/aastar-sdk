@@ -15,7 +15,7 @@ vi.mock("axios", () => ({
   create: mockAxiosCreate,
 }));
 
-import { KmsManager } from "../services/kms-signer";
+import { KmsManager, eip712Digest } from "../services/kms-signer";
 import { KmsAgentService } from "../services/kms-agent-service";
 import { KmsSessionService } from "../services/kms-session-service";
 import { SilentLogger } from "../interfaces/logger";
@@ -215,28 +215,42 @@ describe("KmsManager challenge-binding signing paths", () => {
       .mockResolvedValueOnce(beginAuthResponse)
       .mockResolvedValueOnce({ data: { Signature: "0xsig" } });
 
-    await manager.signHashWithCeremony("0x" + "ab".repeat(32), { KeyId: "key-1" }, signer);
+    const hash = "0x" + "ab".repeat(32);
+    await manager.signHashWithCeremony(hash, { KeyId: "key-1" }, signer);
 
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/SignHash");
     expect(body.WebAuthn.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.WebAuthn.Credential).challenge).toBe(CHALLENGE);
+    // signHashWithCeremony now auto-binds the payload commitment (WYSIWYS, #68):
+    // the embedded challenge is SHA-256(nonce ‖ hash), not the raw nonce.
+    expect(decodeClientData(body.WebAuthn.Credential).challenge).toBe(commitChallenge(CHALLENGE, hash as `0x${string}`));
+    expect(decodeClientData(body.WebAuthn.Credential).challenge).not.toBe(CHALLENGE);
   });
 
-  it("signTypedDataWithCeremony: sends webAuthnAssertion on /kms/SignTypedData", async () => {
+  it("signTypedDataWithCeremony: posts assertion with EIP-712 payload commitment", async () => {
     mockPost
       .mockResolvedValueOnce(beginAuthResponse)
       .mockResolvedValueOnce({ data: { keyId: "key-1", signature: "0xsig" } });
 
-    await manager.signTypedDataWithCeremony(
-      { keyId: "key-1", domain: {}, primaryType: "Mail", types: [], message: [] },
-      signer
-    );
+    const td = {
+      keyId: "key-1",
+      domain: { name: "Mail", version: "1", chainId: 11155111, verifyingContract: "0x" + "11".repeat(20) },
+      primaryType: "Mail",
+      types: [
+        { name: "Mail", fields: [{ name: "from", type: "address" }, { name: "amount", type: "uint256" }] },
+      ],
+      message: [{ name: "from", value: "0x" + "22".repeat(20) }, { name: "amount", value: "1000" }],
+    };
+
+    await manager.signTypedDataWithCeremony(td as any, signer);
 
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/kms/SignTypedData");
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+    // Challenge auto-bound to the EIP-712 digest (WYSIWYS, #68), NOT the raw nonce.
+    const digest = eip712Digest(td as any);
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(commitChallenge(CHALLENGE, digest));
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).not.toBe(CHALLENGE);
   });
 
   it("signGrantSessionWithCeremony: GETs begin-grant-session-auth then posts webAuthnAssertion", async () => {

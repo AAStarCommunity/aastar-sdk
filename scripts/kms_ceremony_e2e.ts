@@ -74,11 +74,42 @@ async function main() {
   // current KMS because the HOST verify (api_server.rs:1697) still checks the raw nonce, not the
   // commitment — host/TA disagreement; strict is unreachable until the KMS host is fixed.
   try {
+    // signCount defaults to a monotonic value (anti-clone) — don't hardcode it.
     const assertion = await kms.runAuthenticationCeremony(keyId, signer, { payload: hash as `0x${string}` });
     const res = await kms.signHashWithWebAuthn(hash, assertion.ChallengeId, assertion.Credential, { KeyId: keyId });
     rec("ceremony COMMITMENT SignHash (#133)", !!res.Signature, `sig=${(res.Signature || "").slice(0, 24)}…`);
   } catch (e: any) {
     rec("ceremony COMMITMENT SignHash (#133)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+
+  // 2c. signHashWithCeremony TWICE on the same key (Phase 1: auto-commit + monotonic signCount).
+  // Both must succeed — proves commitment is auto-bound and signCount strictly increases
+  // (no "signCount not incremented" anti-clone reject between two server-held signatures).
+  try {
+    const h1 = ("0x" + "1a".repeat(32)) as `0x${string}`;
+    const h2 = ("0x" + "2b".repeat(32)) as `0x${string}`;
+    const r1 = await kms.signHashWithCeremony(h1, { KeyId: keyId }, signer);
+    const r2 = await kms.signHashWithCeremony(h2, { KeyId: keyId }, signer);
+    rec("signHashWithCeremony ×2 (auto-commit + monotonic signCount)", !!r1.Signature && !!r2.Signature,
+      `sig1=${(r1.Signature || "").slice(0, 12)}… sig2=${(r2.Signature || "").slice(0, 12)}…`);
+  } catch (e: any) {
+    rec("signHashWithCeremony ×2 (auto-commit + monotonic signCount)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+
+  // 2d. signTypedDataWithCeremony — proves the SDK's EIP-712 digest matches the KMS host-side
+  // digest (else the commitment SHA256(nonce‖digest) wouldn't verify). A signature back = match.
+  try {
+    const td = {
+      keyId,
+      domain: { name: "Mail", version: "1", chainId: 11155111, verifyingContract: ("0x" + "11".repeat(20)) },
+      primaryType: "Mail",
+      types: [{ name: "Mail", fields: [{ name: "from", type: "address" }, { name: "amount", type: "uint256" }] }],
+      message: [{ name: "from", value: ("0x" + "22".repeat(20)) }, { name: "amount", value: "1000" }],
+    };
+    const res = await kms.signTypedDataWithCeremony(td as any, signer);
+    rec("signTypedDataWithCeremony (EIP-712 commitment)", !!res.signature, `sig=${(res.signature || "").slice(0, 16)}…`);
+  } catch (e: any) {
+    rec("signTypedDataWithCeremony (EIP-712 commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
   }
 
   // 3. Negative: legacy raw passkey assertion must be rejected (KMS strict-on-legacy).

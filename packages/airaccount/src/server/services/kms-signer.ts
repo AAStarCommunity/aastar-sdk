@@ -1,4 +1,5 @@
 import { hashMessage } from "../../migration/viem/signatures";
+import { hashTypedData } from "viem";
 import { ILogger } from "../interfaces/logger";
 import { KmsHttpClient } from "./kms-http-client";
 import {
@@ -116,6 +117,31 @@ export interface KmsEip712TypeDef {
 export interface KmsEip712FieldValue {
   name: string;
   value: unknown;
+}
+
+/**
+ * Compute the standard EIP-712 digest for a KMS typed-data request — the same value the
+ * KMS hashes host-side, and the payload to commit to in the WebAuthn ceremony (WYSIWYS,
+ * AirAccount #68). Converts the KMS wire format (`types` = array of struct defs, `message`
+ * = array of `{name,value}`) into viem's `hashTypedData` input. `EIP712Domain` is dropped
+ * from `types` (viem derives it from `domain`).
+ */
+export function eip712Digest(params: {
+  domain: KmsEip712Domain;
+  primaryType: string;
+  types: KmsEip712TypeDef[];
+  message: KmsEip712FieldValue[];
+}): `0x${string}` {
+  const types = Object.fromEntries(
+    params.types.filter((t) => t.name !== "EIP712Domain").map((t) => [t.name, t.fields])
+  );
+  const message = Object.fromEntries(params.message.map((f) => [f.name, f.value]));
+  return hashTypedData({
+    domain: params.domain as Record<string, unknown>,
+    types: types as Record<string, ReadonlyArray<{ name: string; type: string }>>,
+    primaryType: params.primaryType,
+    message: message as Record<string, unknown>,
+  });
 }
 
 export interface KmsSignTypedDataRequest {
@@ -438,6 +464,45 @@ export class KmsManager {
     return this.amzPost("/ChangePasskey", "TrentService.ChangePasskey", params);
   }
 
+  // ── Ceremony wrappers for non-signing passkey ops (strict-readiness #135 item 2) ──
+  // These are NON-signing ops, so the challenge is the raw nonce (no payload commitment),
+  // but they MUST go through the ceremony (clientDataJSON present) — strict mode hard-rejects
+  // any assertion without clientDataJSON. Run the ceremony internally so callers never reach
+  // for the deprecated legacy `Passkey` field.
+
+  /** Schedule key deletion, running the WebAuthn ceremony internally (raw-nonce). */
+  async deleteKeyWithCeremony(
+    params: { KeyId: string; PendingWindowInDays?: number },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer" | "payload">
+  ): Promise<KmsDeleteKeyResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.deleteKey({ ...params, WebAuthn });
+  }
+
+  /** Unfreeze a dormant key, running the WebAuthn ceremony internally (raw-nonce). */
+  async unfreezeKeyWithCeremony(
+    params: { KeyId: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer" | "payload">
+  ): Promise<KmsUnfreezeKeyResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.unfreezeKey({ ...params, WebAuthn });
+  }
+
+  /** Rotate the bound passkey, running the WebAuthn ceremony internally (raw-nonce). */
+  async changePasskeyWithCeremony(
+    params: { KeyId: string; PasskeyPublicKey: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer" | "payload">
+  ): Promise<KmsChangePasskeyResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.changePasskey({ ...params, WebAuthn });
+  }
+
   /**
    * Sign a message or an EIP-155 transaction (WebAuthn-gated).
    * Provide exactly one of `Message` (hex) or `Transaction`. For a raw 32-byte
@@ -657,7 +722,11 @@ export class KmsManager {
     return this.sign({ ...params, WebAuthn });
   }
 
-  /** Sign a 32-byte digest, running the challenge-binding ceremony internally. */
+  /**
+   * Sign a 32-byte digest, running the challenge-binding ceremony internally.
+   * Binds the challenge to `hash` (WYSIWYS commitment, #68) by default — pass an
+   * explicit `options.payload` only to override.
+   */
   async signHashWithCeremony(
     hash: string,
     target: { KeyId: string },
@@ -665,18 +734,32 @@ export class KmsManager {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsSignHashResponse> {
     this.ensureEnabled();
-    const assertion = await this.runAuthenticationCeremony(target.KeyId, signer, options);
+    const assertion = await this.runAuthenticationCeremony(target.KeyId, signer, {
+      ...options,
+      payload: options?.payload ?? (hash as `0x${string}`),
+    });
     return this.signHashWithWebAuthn(hash, assertion.ChallengeId, assertion.Credential, target);
   }
 
-  /** Sign EIP-712 typed data, running the challenge-binding ceremony internally. */
+  /**
+   * Sign EIP-712 typed data, running the challenge-binding ceremony internally.
+   * Auto-binds the WYSIWYS commitment (#68): the ceremony challenge is
+   * `SHA-256(nonce ‖ eip712Digest)`, where `eip712Digest` is the standard EIP-712
+   * digest the KMS hashes host-side — computed here via {@link eip712Digest} so the
+   * user's signature commits to the exact typed-data payload. Pass an explicit
+   * `options.payload` only to override.
+   */
   async signTypedDataWithCeremony(
     params: Omit<KmsSignTypedDataRequest, "webAuthnAssertion">,
     signer: PasskeyCeremonySigner,
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsSignTypedDataResponse> {
     this.ensureEnabled();
-    const webAuthnAssertion = await this.runAuthenticationCeremony(params.keyId, signer, options);
+    const payload = options?.payload ?? eip712Digest(params);
+    const webAuthnAssertion = await this.runAuthenticationCeremony(params.keyId, signer, {
+      ...options,
+      payload,
+    });
     return this.signTypedDataWithWebAuthn({ ...params, webAuthnAssertion });
   }
 
@@ -788,7 +871,7 @@ export class KmsManager {
     address: string,
     ceremonySigner: PasskeyCeremonySigner,
     ceremonyOptions?: Omit<RunCeremonyOptions, "signer">,
-    commitPayload = false
+    commitPayload = true
   ): KmsSigner {
     this.ensureEnabled();
     return new KmsSigner(keyId, address, this, {
@@ -809,12 +892,10 @@ export type KmsSignerAuth =
       ceremonyOptions?: Omit<RunCeremonyOptions, "signer">;
       /**
        * Bind each ceremony challenge to the payload via `SHA-256(nonce ‖ hash)`
-       * (WYSIWYS, AirAccount #68). DEFAULT `false` (raw nonce) because the LIVE KMS
-       * host (kms.aastar.io) still verifies the WebAuthn assertion against the raw
-       * nonce — sending the commitment is rejected with "Challenge mismatch". Enable
-       * only once the KMS host recomputes `expected = SHA-256(nonce ‖ payload)` for
-       * signing ops (tracked AirAccount-side). The commitment IS already correct vs
-       * the TA; the gap is the host verify.
+       * (WYSIWYS, AirAccount #68). DEFAULT `true` — verified end-to-end against the live
+       * KMS (kms.aastar.io) once AirAccount#110 (host/TA challenge alignment) shipped; the
+       * KMS transition mode accepts it now and strict mode (#63) will REQUIRE it. Set
+       * `false` only to force the legacy raw-nonce challenge (not strict-safe).
        */
       commitPayload?: boolean;
     };
