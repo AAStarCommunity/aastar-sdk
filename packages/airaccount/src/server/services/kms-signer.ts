@@ -195,6 +195,15 @@ export function mintDigest(p: {
   if (!Number.isInteger(p.index) || p.index < 0 || p.index > 0xffffffff) {
     throw new Error(`mintDigest: index must be a uint32, got ${p.index}`);
   }
+  // ttlSecs is encoded as a SIGNED i64 BE — guard it: a non-integer number rounds before
+  // BigInt, and setBigInt64 silently mod-truncates an out-of-range BigInt (#138 Codex M1).
+  if (typeof p.ttlSecs === "number" && !Number.isInteger(p.ttlSecs)) {
+    throw new Error(`mintDigest: ttlSecs must be an integer, got ${p.ttlSecs}`);
+  }
+  const ttlBig = BigInt(p.ttlSecs);
+  if (ttlBig < -(1n << 63n) || ttlBig > (1n << 63n) - 1n) {
+    throw new Error(`mintDigest: ttlSecs out of int64 range: ${ttlBig}`);
+  }
   const sha256 = (b: Uint8Array): Uint8Array => new Uint8Array(createHash("sha256").update(b).digest());
   const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
   const walletBytes = new Uint8Array(16);
@@ -202,7 +211,7 @@ export function mintDigest(p: {
   const idx = new Uint8Array(4);
   new DataView(idx.buffer).setUint32(0, p.index, false); // u32 big-endian
   const ttl = new Uint8Array(8);
-  new DataView(ttl.buffer).setBigInt64(0, BigInt(p.ttlSecs), false); // i64 big-endian (signed)
+  new DataView(ttl.buffer).setBigInt64(0, ttlBig, false); // i64 big-endian (signed)
 
   const parts = [utf8(MINT_TAGS[p.kind]), walletBytes, idx, ttl, sha256(utf8(p.subject))];
   const total = parts.reduce((n, a) => n + a.length, 0);
