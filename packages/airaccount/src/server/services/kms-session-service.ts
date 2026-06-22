@@ -151,7 +151,15 @@ export class KmsSessionService {
   // to the HUMAN key. These helpers run the full ceremony (begin → clientDataJSON
   // → assertion) via the shared {@link runAuthenticationCeremony} helper.
 
-  /** Create a P-256 session key, running the challenge-binding ceremony internally. */
+  /**
+   * Create a P-256 session key, running the challenge-binding ceremony internally.
+   *
+   * STRICT MODE (AirAccount #115): bind the mint params by passing `options.payload =
+   * mintDigest({ kind: "p256", walletId, index, ttlSecs, subject })` — `index` is the
+   * session_index the KMS will assign (query it first), `subject` the JWT sub (human key
+   * id), `ttlSecs` the JWT lifetime. Without a payload the ceremony sends the raw nonce,
+   * which strict mode rejects.
+   */
   async createP256SessionKeyWithCeremony(
     params: Omit<CreateP256SessionKeyRequest, "webAuthnAssertion">,
     signer: PasskeyCeremonySigner,
