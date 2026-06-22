@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { hashMessage } from "../../migration/viem/signatures";
 import {
   hashTypedData,
@@ -160,6 +161,58 @@ function u256(x: number | bigint | string): bigint {
     throw new Error(`u256: number ${x} exceeds safe-integer range — pass a bigint or string`);
   }
   return BigInt(x);
+}
+
+const MINT_TAGS = { agent: "AA-AGENT-MINT-v1", p256: "AA-P256-SESSION-MINT-v1" } as const;
+
+/**
+ * Compute the KMS "mint" digest — the WYSIWYS commitment payload for the key-minting
+ * ceremonies (AirAccount #115): `create_agent_key` (`agent`) / `create_p256_session_key`
+ * (`p256`). Mirrors the TA byte-for-byte (`ta/src/main.rs` agent_mint_digest /
+ * p256_session_mint_digest), verified against the locked test vectors on aastar-sdk#135:
+ *
+ *   mint_digest = SHA-256( tag ‖ walletId[16B UUID] ‖ index[u32 BE] ‖ ttlSecs[i64 BE] ‖ SHA-256(subject) )
+ *
+ * Pass the result as the ceremony `payload` (the ceremony binds `challenge =
+ * SHA-256(nonce ‖ mint_digest)` via {@link commitChallenge}).
+ *
+ * NOTE on `index`: the agent/session index is allocated server-side
+ * (`next_agent_index_for_wallet`), so the caller must supply the index the KMS will assign
+ * (e.g. the current count for a new key) — a mismatch fails closed under strict mode.
+ * `subject` is the JWT `sub` (typically the human key id); `ttlSecs` the JWT lifetime.
+ */
+export function mintDigest(p: {
+  kind: "agent" | "p256";
+  walletId: string; // UUID string
+  index: number; // u32 — server-assigned agent_index / session_index
+  ttlSecs: number | bigint; // i64
+  subject: string;
+}): `0x${string}` {
+  const hex = p.walletId.replace(/-/g, "");
+  if (hex.length !== 32 || !/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error("mintDigest: walletId must be a 16-byte UUID");
+  }
+  if (!Number.isInteger(p.index) || p.index < 0 || p.index > 0xffffffff) {
+    throw new Error(`mintDigest: index must be a uint32, got ${p.index}`);
+  }
+  const sha256 = (b: Uint8Array): Uint8Array => new Uint8Array(createHash("sha256").update(b).digest());
+  const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
+  const walletBytes = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) walletBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  const idx = new Uint8Array(4);
+  new DataView(idx.buffer).setUint32(0, p.index, false); // u32 big-endian
+  const ttl = new Uint8Array(8);
+  new DataView(ttl.buffer).setBigInt64(0, BigInt(p.ttlSecs), false); // i64 big-endian (signed)
+
+  const parts = [utf8(MINT_TAGS[p.kind]), walletBytes, idx, ttl, sha256(utf8(p.subject))];
+  const total = parts.reduce((n, a) => n + a.length, 0);
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const a of parts) {
+    buf.set(a, off);
+    off += a.length;
+  }
+  return ("0x" + Buffer.from(sha256(buf)).toString("hex")) as `0x${string}`;
 }
 
 /**

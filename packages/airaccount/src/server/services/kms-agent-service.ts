@@ -183,7 +183,15 @@ export class KmsAgentService {
   // (begin → clientDataJSON → assertion) via the shared
   // {@link runAuthenticationCeremony} helper, then invoke the endpoint.
 
-  /** Mint an agent key, running the challenge-binding ceremony internally. */
+  /**
+   * Mint an agent key, running the challenge-binding ceremony internally.
+   *
+   * STRICT MODE (AirAccount #115): bind the mint params by passing `options.payload =
+   * mintDigest({ kind: "agent", walletId, index, ttlSecs, subject })` — `index` is the
+   * agent_index the KMS will assign (query it first), `subject` the JWT sub (human key id),
+   * `ttlSecs` the JWT lifetime. Without a payload the ceremony sends the raw nonce, which
+   * strict mode rejects.
+   */
   async createAgentKeyWithCeremony(
     params: Omit<KmsCreateAgentKeyRequest, "webAuthnAssertion" | "passkeyAssertion">,
     signer: PasskeyCeremonySigner,
