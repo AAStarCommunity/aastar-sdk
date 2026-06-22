@@ -215,12 +215,16 @@ describe("KmsManager challenge-binding signing paths", () => {
       .mockResolvedValueOnce(beginAuthResponse)
       .mockResolvedValueOnce({ data: { Signature: "0xsig" } });
 
-    await manager.signHashWithCeremony("0x" + "ab".repeat(32), { KeyId: "key-1" }, signer);
+    const hash = "0x" + "ab".repeat(32);
+    await manager.signHashWithCeremony(hash, { KeyId: "key-1" }, signer);
 
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/SignHash");
     expect(body.WebAuthn.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.WebAuthn.Credential).challenge).toBe(CHALLENGE);
+    // signHashWithCeremony now auto-binds the payload commitment (WYSIWYS, #68):
+    // the embedded challenge is SHA-256(nonce ‖ hash), not the raw nonce.
+    expect(decodeClientData(body.WebAuthn.Credential).challenge).toBe(commitChallenge(CHALLENGE, hash as `0x${string}`));
+    expect(decodeClientData(body.WebAuthn.Credential).challenge).not.toBe(CHALLENGE);
   });
 
   it("signTypedDataWithCeremony: sends webAuthnAssertion on /kms/SignTypedData", async () => {

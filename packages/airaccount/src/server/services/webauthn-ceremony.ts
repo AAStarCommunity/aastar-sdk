@@ -281,9 +281,22 @@ export async function runWebAuthnCeremony(
     signer: options.signer,
     rpId: options.rpId,
     origin: options.origin,
-    signCount: options.signCount,
+    // The KMS enforces a strictly-increasing authenticator signCount (anti-clone). A
+    // server-held signer (P256PasskeySigner) has no native counter, so default to a
+    // monotonic value — else a second signature on the same key fails
+    // "signCount not incremented". A real device passkey passes its own counter.
+    signCount: options.signCount ?? nextSignCount(),
   });
   return { ChallengeId: begun.ChallengeId, Credential: credential };
+}
+
+// Monotonic signCount for server-held ceremonies. Seeded from wall-clock seconds so it
+// stays ahead of any previously-stored counter across process restarts (u32, ok until
+// 2106), and increments per ceremony within a process.
+let _signCountCounter = Math.floor(Date.now() / 1000);
+function nextSignCount(): number {
+  _signCountCounter = (_signCountCounter + 1) >>> 0;
+  return _signCountCounter;
 }
 
 // ── Begin-endpoint fetchers (shared by KmsManager + the agent/session services) ──

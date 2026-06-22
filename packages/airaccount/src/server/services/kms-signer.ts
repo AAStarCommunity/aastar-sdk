@@ -438,6 +438,45 @@ export class KmsManager {
     return this.amzPost("/ChangePasskey", "TrentService.ChangePasskey", params);
   }
 
+  // ── Ceremony wrappers for non-signing passkey ops (strict-readiness #135 item 2) ──
+  // These are NON-signing ops, so the challenge is the raw nonce (no payload commitment),
+  // but they MUST go through the ceremony (clientDataJSON present) — strict mode hard-rejects
+  // any assertion without clientDataJSON. Run the ceremony internally so callers never reach
+  // for the deprecated legacy `Passkey` field.
+
+  /** Schedule key deletion, running the WebAuthn ceremony internally (raw-nonce). */
+  async deleteKeyWithCeremony(
+    params: { KeyId: string; PendingWindowInDays?: number },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer" | "payload">
+  ): Promise<KmsDeleteKeyResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.deleteKey({ ...params, WebAuthn });
+  }
+
+  /** Unfreeze a dormant key, running the WebAuthn ceremony internally (raw-nonce). */
+  async unfreezeKeyWithCeremony(
+    params: { KeyId: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer" | "payload">
+  ): Promise<KmsUnfreezeKeyResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.unfreezeKey({ ...params, WebAuthn });
+  }
+
+  /** Rotate the bound passkey, running the WebAuthn ceremony internally (raw-nonce). */
+  async changePasskeyWithCeremony(
+    params: { KeyId: string; PasskeyPublicKey: string },
+    signer: PasskeyCeremonySigner,
+    options?: Omit<RunCeremonyOptions, "signer" | "payload">
+  ): Promise<KmsChangePasskeyResponse> {
+    this.ensureEnabled();
+    const WebAuthn = await this.runAuthenticationCeremony(params.KeyId, signer, options);
+    return this.changePasskey({ ...params, WebAuthn });
+  }
+
   /**
    * Sign a message or an EIP-155 transaction (WebAuthn-gated).
    * Provide exactly one of `Message` (hex) or `Transaction`. For a raw 32-byte
@@ -657,7 +696,11 @@ export class KmsManager {
     return this.sign({ ...params, WebAuthn });
   }
 
-  /** Sign a 32-byte digest, running the challenge-binding ceremony internally. */
+  /**
+   * Sign a 32-byte digest, running the challenge-binding ceremony internally.
+   * Binds the challenge to `hash` (WYSIWYS commitment, #68) by default — pass an
+   * explicit `options.payload` only to override.
+   */
   async signHashWithCeremony(
     hash: string,
     target: { KeyId: string },
@@ -665,7 +708,10 @@ export class KmsManager {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsSignHashResponse> {
     this.ensureEnabled();
-    const assertion = await this.runAuthenticationCeremony(target.KeyId, signer, options);
+    const assertion = await this.runAuthenticationCeremony(target.KeyId, signer, {
+      ...options,
+      payload: options?.payload ?? (hash as `0x${string}`),
+    });
     return this.signHashWithWebAuthn(hash, assertion.ChallengeId, assertion.Credential, target);
   }
 
@@ -788,7 +834,7 @@ export class KmsManager {
     address: string,
     ceremonySigner: PasskeyCeremonySigner,
     ceremonyOptions?: Omit<RunCeremonyOptions, "signer">,
-    commitPayload = false
+    commitPayload = true
   ): KmsSigner {
     this.ensureEnabled();
     return new KmsSigner(keyId, address, this, {
@@ -809,12 +855,10 @@ export type KmsSignerAuth =
       ceremonyOptions?: Omit<RunCeremonyOptions, "signer">;
       /**
        * Bind each ceremony challenge to the payload via `SHA-256(nonce ‖ hash)`
-       * (WYSIWYS, AirAccount #68). DEFAULT `false` (raw nonce) because the LIVE KMS
-       * host (kms.aastar.io) still verifies the WebAuthn assertion against the raw
-       * nonce — sending the commitment is rejected with "Challenge mismatch". Enable
-       * only once the KMS host recomputes `expected = SHA-256(nonce ‖ payload)` for
-       * signing ops (tracked AirAccount-side). The commitment IS already correct vs
-       * the TA; the gap is the host verify.
+       * (WYSIWYS, AirAccount #68). DEFAULT `true` — verified end-to-end against the live
+       * KMS (kms.aastar.io) once AirAccount#110 (host/TA challenge alignment) shipped; the
+       * KMS transition mode accepts it now and strict mode (#63) will REQUIRE it. Set
+       * `false` only to force the legacy raw-nonce challenge (not strict-safe).
        */
       commitPayload?: boolean;
     };
