@@ -290,7 +290,8 @@ export class TransferManager {
         ? { assertion: params.passkeyAssertion }
         : undefined;
 
-    await this.applySignature(userId, userOp, userOpHash, version, account.address, params, assertionCtx);
+    const strategy = await this.resolveSignStrategy(account.address, version, params);
+    await this.applySignature(userId, userOp, userOpHash, params, assertionCtx, strategy);
 
     return this.finalizeAndSubmit(userId, account.address, version, userOp, userOpHash, params);
   }
@@ -345,10 +346,12 @@ export class TransferManager {
 
     // The exact message the SINGLE owner signature will sign (the adapter then applies EIP-191
     // + commitChallenge). Tier-dependent — this is precisely the logic the SDK must own.
-    const message = await this.ownerCeremonyMessage(account.address, userOpHash, version, params);
+    const strategy = await this.resolveSignStrategy(account.address, version, params);
+    const message = await this.ownerMessageForStrategy(strategy, userOpHash);
     const { challengeId, publicKeyOptions } = await this.signer.beginCeremony(userId, message);
 
-    // Opportunistically evict stale prepared entries (no background timer).
+    // Opportunistically evict stale prepared entries (O(entries) — fine for typical prepare
+    // volumes; a high-throughput deployment should move to an expiry queue / shared store).
     const now = Date.now();
     for (const [id, e] of this.prepared) {
       if (now - e.createdAt > PREPARED_TTL_MS) this.prepared.delete(id);
@@ -385,12 +388,12 @@ export class TransferManager {
       this.prepared.delete(params.transferId);
       throw new Error("submitPreparedTransfer: prepared transfer expired; call prepareTransfer again.");
     }
-    // Tier-drift guard: the committed challenge was bound to the prepare-time payload. If the
-    // signing tier/state changed, the digest no longer matches — fail fast with a clear error
-    // BEFORE consuming the assertion, instead of letting the KMS reject opaquely (#143 Codex).
-    const currentMessage = bytesToHex(
-      await this.ownerCeremonyMessage(prep.accountAddress, prep.userOpHash, prep.version, prep.params)
-    );
+    // Tier-drift guard: the committed challenge was bound to the prepare-time payload. Resolve the
+    // strategy ONCE and reuse it for BOTH the comparison and the signing, so submit signs exactly
+    // the committed payload (#143 Codex). If the tier/state changed, fail fast with a clear error
+    // BEFORE consuming the assertion, instead of letting the KMS reject opaquely.
+    const strategy = await this.resolveSignStrategy(prep.accountAddress, prep.version, prep.params);
+    const currentMessage = bytesToHex(await this.ownerMessageForStrategy(strategy, prep.userOpHash));
     if (currentMessage !== prep.ownerMessageHex) {
       this.prepared.delete(params.transferId);
       throw new Error(
@@ -404,10 +407,9 @@ export class TransferManager {
       userId,
       prep.userOp,
       prep.userOpHash,
-      prep.version,
-      prep.accountAddress,
       prep.params,
-      { webAuthnAssertion: params.webAuthnAssertion }
+      { webAuthnAssertion: params.webAuthnAssertion },
+      strategy
     );
     return this.finalizeAndSubmit(
       userId,
@@ -421,53 +423,16 @@ export class TransferManager {
   }
 
   /**
-   * The exact message the single owner signature will sign (before the adapter's EIP-191 wrap),
-   * so prepareTransfer can bind the commitment to it. Tier-aware:
-   *  - ECDSA / Tier-1: the userOpHash.
-   *  - Tier-2/3: `keccak256(messagePoint)` — Tier-2/3 omit the owner ECDSA over userOpHash, so the
-   *    one owner signature is the messagePoint signature (mirrors BLSSignatureService).
+   * Resolve the signature strategy ONCE (account detection + tier pre-check) so the committed
+   * payload and the signed payload derive from the SAME decision — no re-derivation drift between
+   * prepareTransfer's commitment and submitPreparedTransfer's signing (#143 Codex).
+   * `tier === null` means "not the AirAccount tiered path" (ECDSA or legacy BLS).
    */
-  private async ownerCeremonyMessage(
+  private async resolveSignStrategy(
     accountAddress: string,
-    userOpHash: string,
     version: EntryPointVersion,
     params: ExecuteTransferParams
-  ): Promise<Uint8Array> {
-    let useECDSA = false;
-    if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-      ({ useECDSA } = await detectSignatureStrategy(this.ethereum.getProvider(), accountAddress));
-    }
-    if (useECDSA) return hexToBytes(userOpHash as `0x${string}`);
-
-    if (params.useAirAccountTiering && this.guardChecker) {
-      const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
-      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
-      if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
-      if (preCheck.tier === 1) return hexToBytes(userOpHash as `0x${string}`);
-      const messagePoint = await generateMessagePoint(userOpHash);
-      return hexToBytes(keccak256(messagePoint as `0x${string}`));
-    }
-
-    throw new Error(
-      "prepareTransfer: the non-tiered BLS path needs two owner signatures and can't be prepared " +
-        "with a single device-passkey assertion. Use useAirAccountTiering:true (single signature)."
-    );
-  }
-
-  /**
-   * Detect the signature strategy and set `userOp.signature` (ECDSA / AirAccount tiered / legacy
-   * BLS). Shared by executeTransfer and submitPreparedTransfer so the signing logic never drifts.
-   */
-  private async applySignature(
-    userId: string,
-    userOp: UserOperation | PackedUserOperation,
-    userOpHash: string,
-    version: EntryPointVersion,
-    accountAddress: string,
-    params: ExecuteTransferParams,
-    assertionCtx: SignerAuthContext | undefined
-  ): Promise<void> {
-    // Only compositeValidator accounts expect the algId prefix in the signature.
+  ): Promise<{ useECDSA: boolean; isCompositeValidator: boolean; tier: number | null }> {
     let useECDSA = false;
     let isCompositeValidator = false;
     if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
@@ -476,14 +441,58 @@ export class TransferManager {
         accountAddress
       ));
     }
+    let tier: number | null = null;
+    if (!useECDSA && params.useAirAccountTiering && this.guardChecker) {
+      const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
+      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
+      if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
+      tier = preCheck.tier;
+    }
+    return { useECDSA, isCompositeValidator, tier };
+  }
 
+  /**
+   * The exact message the single owner signature will sign (before the adapter's EIP-191 wrap),
+   * for a resolved strategy — so prepareTransfer binds the commitment to the value submit signs:
+   *  - ECDSA / Tier-1: the userOpHash.
+   *  - Tier-2/3: `keccak256(messagePoint)` — Tier-2/3 omit the owner ECDSA over userOpHash, so the
+   *    one owner signature is the messagePoint signature (mirrors BLSSignatureService).
+   */
+  private async ownerMessageForStrategy(
+    strategy: { useECDSA: boolean; tier: number | null },
+    userOpHash: string
+  ): Promise<Uint8Array> {
+    if (strategy.useECDSA || strategy.tier === 1) return hexToBytes(userOpHash as `0x${string}`);
+    if (strategy.tier != null) {
+      const messagePoint = await generateMessagePoint(userOpHash);
+      return hexToBytes(keccak256(messagePoint as `0x${string}`));
+    }
+    throw new Error(
+      "prepareTransfer: the non-tiered BLS path needs two owner signatures and can't be prepared " +
+        "with a single device-passkey assertion. Use useAirAccountTiering:true (single signature)."
+    );
+  }
+
+  /**
+   * Set `userOp.signature` for an ALREADY-RESOLVED strategy (ECDSA / AirAccount tiered / legacy
+   * BLS). Shared by executeTransfer and submitPreparedTransfer so the signing logic never drifts;
+   * taking the resolved strategy (not re-detecting) means submit signs exactly the committed payload.
+   */
+  private async applySignature(
+    userId: string,
+    userOp: UserOperation | PackedUserOperation,
+    userOpHash: string,
+    params: ExecuteTransferParams,
+    assertionCtx: SignerAuthContext | undefined,
+    strategy: { useECDSA: boolean; isCompositeValidator: boolean; tier: number | null }
+  ): Promise<void> {
     // A WebAuthn ceremony assertion is ONE-TIME; the legacy non-tiered BLS path needs TWO owner
     // signatures under the same ctx (second SignHash hits a spent challenge). Fail fast.
     if (
       assertionCtx &&
       "webAuthnAssertion" in assertionCtx &&
-      !useECDSA &&
-      !(params.useAirAccountTiering && this.guardChecker)
+      !strategy.useECDSA &&
+      strategy.tier == null
     ) {
       throw new Error(
         "A one-time webAuthnAssertion cannot authorize the legacy non-tiered BLS dual-sign " +
@@ -492,28 +501,23 @@ export class TransferManager {
       );
     }
 
-    if (useECDSA) {
+    if (strategy.useECDSA) {
       const ecdsaSig = await this.signer.signMessage(
         userId,
         hexToBytes(userOpHash as `0x${string}`),
         assertionCtx
       );
-      if (isCompositeValidator) {
+      if (strategy.isCompositeValidator) {
         this.logger.log("ECDSA path for compositeValidator: prepending algId prefix");
         userOp.signature = concat([numberToHex(ALG_ID.ECDSA, { size: 1 }), ecdsaSig as `0x${string}`]);
       } else {
         this.logger.log("ECDSA path for non-compositeValidator: raw signature");
         userOp.signature = ecdsaSig;
       }
-    } else if (params.useAirAccountTiering && this.guardChecker) {
-      const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
-      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
-      if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
-      this.logger.log(
-        `Tier ${preCheck.tier} selected (algId=0x${preCheck.algId.toString(16).padStart(2, "0")})`
-      );
+    } else if (strategy.tier != null) {
+      this.logger.log(`Tier ${strategy.tier} selected`);
       userOp.signature = await this.blsService.generateTieredSignature({
-        tier: preCheck.tier as TierLevel,
+        tier: strategy.tier as TierLevel,
         userId,
         userOpHash,
         p256Signature: params.p256Signature,
