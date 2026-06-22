@@ -3,11 +3,13 @@ import {
   concat,
   numberToHex,
   parseEther,
+  keccak256,
   zeroAddress,
   type PublicClient,
   type Address,
   type Abi,
 } from "viem";
+import { generateMessagePoint } from "../../migration/viem/bls-packing";
 // Local human-readable ABIs (not in @aastar/core); parseAbi is required to feed
 // them to viem's readContract / encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
@@ -150,6 +152,21 @@ export interface TransferResult {
   amount: string;
 }
 
+/** Phase-1 output of {@link TransferManager.prepareTransfer} (the strict device-passkey flow). */
+export interface PreparedTransfer {
+  /** Opaque handle to pass back to {@link TransferManager.submitPreparedTransfer}. */
+  transferId: string;
+  /** KMS BeginAuthentication ChallengeId — pair it with the credential as the webAuthnAssertion. */
+  challengeId: string;
+  /**
+   * Credential-request options to feed `navigator.credentials.get` / `startAuthentication`.
+   * Its `challenge` is ALREADY the WYSIWYS commitment over the correct payload (SDK-computed).
+   */
+  publicKeyOptions: PublicKeyCredentialRequestOptions;
+  /** The UserOp hash (informational; the frontend does not need to sign it directly). */
+  userOpHash: string;
+}
+
 // ── Helper to generate UUID-like IDs without external dependency ──
 
 function generateId(): string {
@@ -165,6 +182,24 @@ export class TransferManager {
   private readonly logger: ILogger;
 
   private readonly guardChecker: GuardChecker | null;
+
+  /**
+   * In-memory store for two-phase transfers between prepareTransfer and submitPreparedTransfer.
+   * Single-process only — a multi-worker deployment must back this with a shared store (the
+   * prepared UserOp + its committed challenge must be retrievable by whichever worker submits).
+   */
+  private readonly prepared = new Map<
+    string,
+    {
+      userId: string;
+      userOp: UserOperation | PackedUserOperation;
+      userOpHash: string;
+      version: EntryPointVersion;
+      accountAddress: string;
+      params: ExecuteTransferParams;
+      createdAt: number;
+    }
+  >();
 
   constructor(
     private readonly ethereum: EthereumProvider,
@@ -249,22 +284,171 @@ export class TransferManager {
         ? { assertion: params.passkeyAssertion }
         : undefined;
 
-    // Detect whether this is a compositeValidator account (has validator() fn) or plain ECDSA.
+    await this.applySignature(userId, userOp, userOpHash, version, account.address, params, assertionCtx);
+
+    return this.finalizeAndSubmit(userId, account.address, version, userOp, userOpHash, params);
+  }
+
+  // ── Two-phase transfer (strict device-passkey / "case B", AirAccount #354) ───────────────
+  //
+  // executeTransfer is one-shot (build → sign → submit) and takes the assertion as INPUT, so a
+  // device-passkey frontend can only sign the raw nonce → rejected under KMS strict mode (the
+  // challenge must commit to the payload). prepareTransfer/submitPreparedTransfer split it:
+  //   1. prepareTransfer  — SDK builds the UserOp, computes the EXACT digest the owner signature
+  //      will sign (tier-aware, EIP-191), starts the KMS ceremony, and returns options whose
+  //      `challenge` is the WYSIWYS commitment. The SDK owns the payload; the frontend never guesses.
+  //   2. (frontend) navigator.credentials.get(publicKeyOptions) with the user's device passkey.
+  //   3. submitPreparedTransfer — SDK signs with that assertion (the committed digest matches) + submits.
+
+  /**
+   * Phase 1: build the UserOp + bind the WYSIWYS commitment, returning everything the frontend
+   * ceremony needs. Requires a signer adapter implementing {@link ISignerAdapter.beginCeremony}
+   * (e.g. {@link KmsSignerAdapter}) and the tiered path (`useAirAccountTiering: true`) or a plain
+   * ECDSA account — the legacy non-tiered BLS path needs two owner signatures and can't be
+   * single-assertion prepared.
+   *
+   * NOTE: the prepared UserOp is held in-memory keyed by `transferId` until
+   * {@link submitPreparedTransfer} (single-process; a multi-worker deployment needs a shared store).
+   */
+  async prepareTransfer(userId: string, params: ExecuteTransferParams): Promise<PreparedTransfer> {
+    if (!this.signer.beginCeremony) {
+      throw new Error(
+        "prepareTransfer needs a signer adapter that implements beginCeremony (e.g. KmsSignerAdapter)."
+      );
+    }
+    const account = await this.accountManager.getAccountByUserId(userId);
+    if (!account) throw new Error("User account not found");
+
+    const version = (account.entryPointVersion || "0.6") as unknown as EntryPointVersion;
+    const userOp = await this.buildUserOperation(
+      userId,
+      account.address,
+      params.to,
+      params.amount,
+      params.data || "0x",
+      params.usePaymaster,
+      params.paymasterAddress,
+      params.paymasterData,
+      params.tokenAddress,
+      version,
+      params.paymasterTokenAddress,
+      params.wrapExecuteUserOp ?? false
+    );
+    const userOpHash = await this.ethereum.getUserOpHash(userOp, version);
+    await this.signer.ensureSigner(userId);
+
+    // The exact message the SINGLE owner signature will sign (the adapter then applies EIP-191
+    // + commitChallenge). Tier-dependent — this is precisely the logic the SDK must own.
+    const message = await this.ownerCeremonyMessage(account.address, userOpHash, version, params);
+    const { challengeId, publicKeyOptions } = await this.signer.beginCeremony(userId, message);
+
+    const transferId = generateId();
+    this.prepared.set(transferId, {
+      userId,
+      userOp,
+      userOpHash,
+      version,
+      accountAddress: account.address,
+      params,
+      createdAt: Date.now(),
+    });
+    return { transferId, challengeId, publicKeyOptions, userOpHash };
+  }
+
+  /**
+   * Phase 3: finish a {@link prepareTransfer} with the frontend's device-passkey assertion.
+   * The committed digest matches what prepareTransfer bound, so the KMS accepts it under strict.
+   * The prepared record is consumed (single-use).
+   */
+  async submitPreparedTransfer(
+    userId: string,
+    params: { transferId: string; webAuthnAssertion: WebAuthnAssertion }
+  ): Promise<TransferResult> {
+    const prep = this.prepared.get(params.transferId);
+    if (!prep || prep.userId !== userId) {
+      throw new Error("submitPreparedTransfer: no matching prepared transfer (unknown id, wrong user, or expired).");
+    }
+    this.prepared.delete(params.transferId); // one-time (the assertion's challenge is also one-time)
+
+    await this.applySignature(
+      userId,
+      prep.userOp,
+      prep.userOpHash,
+      prep.version,
+      prep.accountAddress,
+      prep.params,
+      { webAuthnAssertion: params.webAuthnAssertion }
+    );
+    return this.finalizeAndSubmit(
+      userId,
+      prep.accountAddress,
+      prep.version,
+      prep.userOp,
+      prep.userOpHash,
+      prep.params,
+      params.transferId
+    );
+  }
+
+  /**
+   * The exact message the single owner signature will sign (before the adapter's EIP-191 wrap),
+   * so prepareTransfer can bind the commitment to it. Tier-aware:
+   *  - ECDSA / Tier-1: the userOpHash.
+   *  - Tier-2/3: `keccak256(messagePoint)` — Tier-2/3 omit the owner ECDSA over userOpHash, so the
+   *    one owner signature is the messagePoint signature (mirrors BLSSignatureService).
+   */
+  private async ownerCeremonyMessage(
+    accountAddress: string,
+    userOpHash: string,
+    version: EntryPointVersion,
+    params: ExecuteTransferParams
+  ): Promise<Uint8Array> {
+    let useECDSA = false;
+    if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
+      ({ useECDSA } = await detectSignatureStrategy(this.ethereum.getProvider(), accountAddress));
+    }
+    if (useECDSA) return hexToBytes(userOpHash as `0x${string}`);
+
+    if (params.useAirAccountTiering && this.guardChecker) {
+      const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
+      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
+      if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
+      if (preCheck.tier === 1) return hexToBytes(userOpHash as `0x${string}`);
+      const messagePoint = await generateMessagePoint(userOpHash);
+      return hexToBytes(keccak256(messagePoint as `0x${string}`));
+    }
+
+    throw new Error(
+      "prepareTransfer: the non-tiered BLS path needs two owner signatures and can't be prepared " +
+        "with a single device-passkey assertion. Use useAirAccountTiering:true (single signature)."
+    );
+  }
+
+  /**
+   * Detect the signature strategy and set `userOp.signature` (ECDSA / AirAccount tiered / legacy
+   * BLS). Shared by executeTransfer and submitPreparedTransfer so the signing logic never drifts.
+   */
+  private async applySignature(
+    userId: string,
+    userOp: UserOperation | PackedUserOperation,
+    userOpHash: string,
+    version: EntryPointVersion,
+    accountAddress: string,
+    params: ExecuteTransferParams,
+    assertionCtx: SignerAuthContext | undefined
+  ): Promise<void> {
     // Only compositeValidator accounts expect the algId prefix in the signature.
     let useECDSA = false;
     let isCompositeValidator = false;
     if (version === EntryPointVersion.V0_7 || version === EntryPointVersion.V0_8) {
-      const provider = this.ethereum.getProvider();
       ({ useECDSA, isCompositeValidator } = await detectSignatureStrategy(
-        provider,
-        account.address
+        this.ethereum.getProvider(),
+        accountAddress
       ));
     }
 
-    // A WebAuthn ceremony assertion is ONE-TIME (the KMS consumes the challenge on
-    // first use). The legacy non-tiered BLS path performs TWO owner signatures under
-    // the same ctx, so the second SignHash would fail on a spent challenge. Fail fast
-    // and steer to the tiered path (single owner signature).
+    // A WebAuthn ceremony assertion is ONE-TIME; the legacy non-tiered BLS path needs TWO owner
+    // signatures under the same ctx (second SignHash hits a spent challenge). Fail fast.
     if (
       assertionCtx &&
       "webAuthnAssertion" in assertionCtx &&
@@ -286,27 +470,18 @@ export class TransferManager {
       );
       if (isCompositeValidator) {
         this.logger.log("ECDSA path for compositeValidator: prepending algId prefix");
-        userOp.signature = concat([
-          numberToHex(ALG_ID.ECDSA, { size: 1 }),
-          ecdsaSig as `0x${string}`,
-        ]);
+        userOp.signature = concat([numberToHex(ALG_ID.ECDSA, { size: 1 }), ecdsaSig as `0x${string}`]);
       } else {
         this.logger.log("ECDSA path for non-compositeValidator: raw signature");
         userOp.signature = ecdsaSig;
       }
     } else if (params.useAirAccountTiering && this.guardChecker) {
-      // AirAccount tiered signature routing
       const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
-      const preCheck = await this.guardChecker.preCheck(account.address, transferValue);
-
-      if (!preCheck.ok) {
-        throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
-      }
-
+      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
+      if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
       this.logger.log(
         `Tier ${preCheck.tier} selected (algId=0x${preCheck.algId.toString(16).padStart(2, "0")})`
       );
-
       userOp.signature = await this.blsService.generateTieredSignature({
         tier: preCheck.tier as TierLevel,
         userId,
@@ -319,14 +494,20 @@ export class TransferManager {
       // BLS accounts are always compositeValidator by design — algId prefix applied unconditionally.
       const blsData = await this.blsService.generateBLSSignature(userId, userOpHash, assertionCtx);
       const packedBls = await this.blsService.packSignature(blsData);
-      userOp.signature = concat([
-        numberToHex(ALG_ID.BLS, { size: 1 }),
-        packedBls as `0x${string}`,
-      ]);
+      userOp.signature = concat([numberToHex(ALG_ID.BLS, { size: 1 }), packedBls as `0x${string}`]);
     }
+  }
 
-    // Create transfer record
-    const transferId = generateId();
+  /** Persist the transfer record and submit it to the bundler asynchronously. */
+  private async finalizeAndSubmit(
+    userId: string,
+    accountAddress: string,
+    version: EntryPointVersion,
+    userOp: UserOperation | PackedUserOperation,
+    userOpHash: string,
+    params: ExecuteTransferParams,
+    transferId: string = generateId()
+  ): Promise<TransferResult> {
     let tokenSymbol = "ETH";
     if (params.tokenAddress) {
       try {
@@ -340,7 +521,7 @@ export class TransferManager {
     await this.storage.saveTransfer({
       id: transferId,
       userId,
-      from: account.address,
+      from: accountAddress,
       to: params.to,
       amount: params.amount,
       data: params.data,
@@ -352,8 +533,7 @@ export class TransferManager {
       tokenSymbol,
     });
 
-    // Process asynchronously
-    this.processTransferAsync(transferId, userOp, account.address, version);
+    this.processTransferAsync(transferId, userOp, accountAddress, version);
 
     return {
       success: true,
@@ -361,7 +541,7 @@ export class TransferManager {
       userOpHash,
       status: "pending",
       message: "Transfer submitted successfully. Use transferId to check status.",
-      from: account.address,
+      from: accountAddress,
       to: params.to,
       amount: params.amount,
     };

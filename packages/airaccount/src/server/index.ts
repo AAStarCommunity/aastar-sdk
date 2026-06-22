@@ -63,6 +63,7 @@ export type {
   ExecuteTransferParams,
   EstimateGasParams,
   TransferResult,
+  PreparedTransfer,
 } from "./services/transfer-manager";
 export { BLSSignatureService, DvtPendingConfirmationError, isPendingConfirmation } from "./services/bls-signature-service";
 export { GuardChecker } from "./services/guard-checker";

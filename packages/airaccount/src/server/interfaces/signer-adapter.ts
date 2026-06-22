@@ -57,4 +57,24 @@ export interface ISignerAdapter {
    * Returns the signer's address.
    */
   ensureSigner(userId: string): Promise<{ address: `0x${string}` }>;
+
+  /**
+   * Begin a challenge-bound ceremony for a payload the FRONTEND will sign with the
+   * user's device passkey (the two-phase / "case B" strict path). The adapter:
+   *   1. starts a KMS BeginAuthentication ceremony for the user's key,
+   *   2. computes the WYSIWYS commitment `challenge = SHA-256(nonce ‖ sign-digest(message))`
+   *      — the SAME digest {@link signMessage} would sign — so the SDK owns the payload and
+   *      the frontend never guesses it,
+   *   3. returns the credential-request options with `challenge` already set to that commitment.
+   *
+   * The frontend runs `navigator.credentials.get(publicKeyOptions)`; the resulting assertion is
+   * passed back via {@link WebAuthnCeremonyContext} to {@link signMessage} (whose digest matches
+   * the committed one, so the KMS accepts it under strict mode).
+   *
+   * Optional: only KMS-backed adapters that support the strict device-passkey path implement it.
+   */
+  beginCeremony?(
+    userId: string,
+    message: `0x${string}` | Uint8Array
+  ): Promise<{ challengeId: string; publicKeyOptions: PublicKeyCredentialRequestOptions }>;
 }

@@ -4,6 +4,7 @@ import {
   SignerAuthContext,
 } from "../interfaces/signer-adapter";
 import { KmsManager } from "../services/kms-signer";
+import { commitChallenge } from "../services/webauthn-ceremony";
 
 /** Resolves an app user id to its KMS key + EOA address. App-specific mapping. */
 export type KmsKeyResolver = (
@@ -68,5 +69,29 @@ export class KmsSignerAdapter implements ISignerAdapter {
       "KmsSignerAdapter: KMS signing requires an auth context — pass a one-time " +
         "WebAuthnCeremonyContext { webAuthnAssertion } (preferred)."
     );
+  }
+
+  /**
+   * Strict device-passkey path (two-phase transfer): start a KMS BeginAuthentication ceremony
+   * and return options whose `challenge` is the WYSIWYS commitment over the EXACT digest
+   * {@link signMessage} will sign — `SHA-256(nonce ‖ hashMessage(message))`. The SDK owns the
+   * payload + commitChallenge; the frontend just runs `navigator.credentials.get`.
+   */
+  async beginCeremony(
+    userId: string,
+    message: `0x${string}` | Uint8Array
+  ): Promise<{ challengeId: string; publicKeyOptions: PublicKeyCredentialRequestOptions }> {
+    const { keyId } = await this.resolveKey(userId);
+    // hashMessage(message) is exactly what signMessage() forwards to KMS /SignHash, so the
+    // commitment must bind to THAT (the EIP-191 digest), not the raw message.
+    const signDigest = hashMessage(message);
+    const { ChallengeId, Options } = await this.kms.beginAuthentication({ KeyId: keyId });
+    // Options.challenge is the raw nonce (base64url) from the KMS; replace it with the commitment.
+    const nonce = (Options as unknown as { challenge: string }).challenge;
+    const committed = commitChallenge(nonce, signDigest);
+    return {
+      challengeId: ChallengeId,
+      publicKeyOptions: { ...Options, challenge: committed } as unknown as PublicKeyCredentialRequestOptions,
+    };
   }
 }

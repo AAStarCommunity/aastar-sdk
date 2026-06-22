@@ -1,13 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
 import { KmsSignerAdapter } from "../adapters/kms-signer-adapter";
+import { commitChallenge } from "../services/webauthn-ceremony";
+import { hashMessage } from "../../migration/viem/signatures";
 
 const ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as const;
 const SIG = "deadbeef";
+const NONCE = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"; // base64url, 32 bytes 0x42
 
 function makeKms() {
   return {
     signHashWithWebAuthn: vi.fn(async () => ({ Signature: SIG })),
     signHash: vi.fn(async () => ({ Signature: SIG })),
+    beginAuthentication: vi.fn(async () => ({
+      ChallengeId: "chal-9",
+      Options: { challenge: NONCE, rpId: "example.com", timeout: 60000 },
+    })),
   } as any;
 }
 const resolver = async () => ({ keyId: "key-1", address: ADDRESS });
@@ -54,5 +61,22 @@ describe("KmsSignerAdapter", () => {
   it("throws when no auth context is supplied", async () => {
     const a = new KmsSignerAdapter(makeKms(), resolver);
     await expect(a.signMessage("u1", "hello")).rejects.toThrow("requires an auth context");
+  });
+
+  it("beginCeremony binds the challenge to the EXACT digest signMessage will sign (WYSIWYS)", async () => {
+    const kms = makeKms();
+    const a = new KmsSignerAdapter(kms, resolver);
+    const message = ("0x" + "ab".repeat(32)) as `0x${string}`; // e.g. a userOpHash
+
+    const { challengeId, publicKeyOptions } = await a.beginCeremony("u1", message);
+
+    expect(kms.beginAuthentication).toHaveBeenCalledWith({ KeyId: "key-1" });
+    expect(challengeId).toBe("chal-9");
+    // challenge = SHA256(nonce ‖ hashMessage(message)) — the SDK-owned commitment, NOT the raw nonce
+    const expected = commitChallenge(NONCE, hashMessage(message));
+    expect((publicKeyOptions as any).challenge).toBe(expected);
+    expect((publicKeyOptions as any).challenge).not.toBe(NONCE);
+    // other ceremony options are preserved
+    expect((publicKeyOptions as any).rpId).toBe("example.com");
   });
 });
