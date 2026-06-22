@@ -1,4 +1,5 @@
 import { hashMessage } from "../../migration/viem/signatures";
+import { hashTypedData } from "viem";
 import { ILogger } from "../interfaces/logger";
 import { KmsHttpClient } from "./kms-http-client";
 import {
@@ -116,6 +117,31 @@ export interface KmsEip712TypeDef {
 export interface KmsEip712FieldValue {
   name: string;
   value: unknown;
+}
+
+/**
+ * Compute the standard EIP-712 digest for a KMS typed-data request — the same value the
+ * KMS hashes host-side, and the payload to commit to in the WebAuthn ceremony (WYSIWYS,
+ * AirAccount #68). Converts the KMS wire format (`types` = array of struct defs, `message`
+ * = array of `{name,value}`) into viem's `hashTypedData` input. `EIP712Domain` is dropped
+ * from `types` (viem derives it from `domain`).
+ */
+export function eip712Digest(params: {
+  domain: KmsEip712Domain;
+  primaryType: string;
+  types: KmsEip712TypeDef[];
+  message: KmsEip712FieldValue[];
+}): `0x${string}` {
+  const types = Object.fromEntries(
+    params.types.filter((t) => t.name !== "EIP712Domain").map((t) => [t.name, t.fields])
+  );
+  const message = Object.fromEntries(params.message.map((f) => [f.name, f.value]));
+  return hashTypedData({
+    domain: params.domain as Record<string, unknown>,
+    types: types as Record<string, ReadonlyArray<{ name: string; type: string }>>,
+    primaryType: params.primaryType,
+    message: message as Record<string, unknown>,
+  });
 }
 
 export interface KmsSignTypedDataRequest {
@@ -715,14 +741,25 @@ export class KmsManager {
     return this.signHashWithWebAuthn(hash, assertion.ChallengeId, assertion.Credential, target);
   }
 
-  /** Sign EIP-712 typed data, running the challenge-binding ceremony internally. */
+  /**
+   * Sign EIP-712 typed data, running the challenge-binding ceremony internally.
+   * Auto-binds the WYSIWYS commitment (#68): the ceremony challenge is
+   * `SHA-256(nonce ‖ eip712Digest)`, where `eip712Digest` is the standard EIP-712
+   * digest the KMS hashes host-side — computed here via {@link eip712Digest} so the
+   * user's signature commits to the exact typed-data payload. Pass an explicit
+   * `options.payload` only to override.
+   */
   async signTypedDataWithCeremony(
     params: Omit<KmsSignTypedDataRequest, "webAuthnAssertion">,
     signer: PasskeyCeremonySigner,
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<KmsSignTypedDataResponse> {
     this.ensureEnabled();
-    const webAuthnAssertion = await this.runAuthenticationCeremony(params.keyId, signer, options);
+    const payload = options?.payload ?? eip712Digest(params);
+    const webAuthnAssertion = await this.runAuthenticationCeremony(params.keyId, signer, {
+      ...options,
+      payload,
+    });
     return this.signTypedDataWithWebAuthn({ ...params, webAuthnAssertion });
   }
 

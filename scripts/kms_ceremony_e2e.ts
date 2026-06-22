@@ -96,6 +96,22 @@ async function main() {
     rec("signHashWithCeremony ×2 (auto-commit + monotonic signCount)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
   }
 
+  // 2d. signTypedDataWithCeremony — proves the SDK's EIP-712 digest matches the KMS host-side
+  // digest (else the commitment SHA256(nonce‖digest) wouldn't verify). A signature back = match.
+  try {
+    const td = {
+      keyId,
+      domain: { name: "Mail", version: "1", chainId: 11155111, verifyingContract: ("0x" + "11".repeat(20)) },
+      primaryType: "Mail",
+      types: [{ name: "Mail", fields: [{ name: "from", type: "address" }, { name: "amount", type: "uint256" }] }],
+      message: [{ name: "from", value: ("0x" + "22".repeat(20)) }, { name: "amount", value: "1000" }],
+    };
+    const res = await kms.signTypedDataWithCeremony(td as any, signer);
+    rec("signTypedDataWithCeremony (EIP-712 commitment)", !!res.signature, `sig=${(res.signature || "").slice(0, 16)}…`);
+  } catch (e: any) {
+    rec("signTypedDataWithCeremony (EIP-712 commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+  }
+
   // 3. Negative: legacy raw passkey assertion must be rejected (KMS strict-on-legacy).
   try {
     await kms.signHash(hash, { AuthenticatorData: "0x00", ClientDataHash: "0x00", Signature: "0x00" } as any, { KeyId: keyId });
