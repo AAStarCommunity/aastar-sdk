@@ -146,10 +146,15 @@ async function main() {
     const VALIDATOR = "0x6810CfB7c72D16e044a17694fAa8076e517264D0"; // core sepolia sessionKeyValidator
     const ACCT = ("0x" + "12".repeat(20)) as `0x${string}`;
     const SK = ("0x" + "34".repeat(20)) as `0x${string}`;
+    // NON-EMPTY arrays — the empty-array case masked the three-way packing bug (#137 review).
+    // Proves SDK grantSessionFinalHash == contract buildGrantHash even with populated
+    // callTargets/selectorAllowlist (viem encodePacked pads address[]/bytes4[] to 32, = Solidity).
     const cfg = {
       expiry: 9999999999, contractScope: ("0x" + "00".repeat(20)) as `0x${string}`,
       selectorScope: "0x00000000" as `0x${string}`, revoked: false,
-      velocityLimit: 0, velocityWindow: 0, callTargets: [] as `0x${string}`[], selectorAllowlist: [] as `0x${string}`[],
+      velocityLimit: 0, velocityWindow: 0,
+      callTargets: [("0x" + "aa".repeat(20)), ("0x" + "bb".repeat(20))] as `0x${string}`[],
+      selectorAllowlist: ["0xdeadbeef", "0x12345678"] as `0x${string}`[],
     };
     const pc = createPublicClient({ chain: sepolia, transport: http("https://ethereum-sepolia-rpc.publicnode.com") });
     const buildGrantHashAbi = [{
@@ -171,7 +176,7 @@ async function main() {
     const myFinal = grantSessionFinalHash({
       chainId: 11155111, verifyingContract: VALIDATOR, account: ACCT, sessionKey: SK,
       expiry: cfg.expiry, contractScope: cfg.contractScope, selectorScope: cfg.selectorScope,
-      velocityLimit: 0, velocityWindow: 0, callTargets: [], selectorAllowlist: [], nonce: 0,
+      velocityLimit: 0, velocityWindow: 0, callTargets: cfg.callTargets, selectorAllowlist: cfg.selectorAllowlist, nonce: 0,
     });
     rec("grant final_hash matches contract buildGrantHash (oracle)", myFinal === expectedFinal,
       myFinal === expectedFinal ? "byte-exact" : `MISMATCH mine=${myFinal} contract=${expectedFinal}`);

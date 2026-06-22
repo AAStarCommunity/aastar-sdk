@@ -45,4 +45,25 @@ describe("grantSessionFinalHash", () => {
     const n1 = grantSessionFinalHash({ ...base, sessionKey: ("0x" + "34".repeat(20)) as `0x${string}`, nonce: 1 });
     expect(n0).not.toBe(n1);
   });
+
+  // #137 regression: NON-EMPTY callTargets/selectorAllowlist. The empty-array case masked a
+  // three-way packing divergence (contract/SDK pad address[]/bytes4[] to 32 bytes; the KMS TA
+  // tight-packed to 20). These snapshots are the PAD-32 values, verified byte-exact against the
+  // live contract buildGrantHash (E2E oracle). A regression to tight-pack would change them.
+  const scoped = {
+    ...base,
+    verifyingContract: "0x6810CfB7c72D16e044a17694fAa8076e517264D0" as `0x${string}`,
+    callTargets: [("0x" + "aa".repeat(20)) as `0x${string}`, ("0x" + "bb".repeat(20)) as `0x${string}`],
+    selectorAllowlist: ["0xdeadbeef" as `0x${string}`, "0x12345678" as `0x${string}`],
+  };
+
+  it("non-empty arrays use pad-32 packing (matches contract; #137 regression lock)", () => {
+    const k1 = grantSessionFinalHash({ ...scoped, sessionKey: ("0x" + "34".repeat(20)) as `0x${string}` });
+    const p256 = grantSessionFinalHash({ ...scoped, keyX: ("0x" + "34".repeat(32)) as `0x${string}`, keyY: ("0x" + "56".repeat(32)) as `0x${string}` });
+    expect(k1).toMatchInlineSnapshot(`"0x578ce6da8e25bb3423b2dcfe73771af540f5de8b62432a68b660b09fad76c17d"`);
+    expect(p256).toMatchInlineSnapshot(`"0x6b9815da68d2a3b212592f5c76aa54215c6712f72fda153e55d870ce6df95bf9"`);
+    // populated arrays must change the hash vs empty (proves they're actually folded in)
+    const empty = grantSessionFinalHash({ ...scoped, callTargets: [], selectorAllowlist: [], sessionKey: ("0x" + "34".repeat(20)) as `0x${string}` });
+    expect(k1).not.toBe(empty);
+  });
 });
