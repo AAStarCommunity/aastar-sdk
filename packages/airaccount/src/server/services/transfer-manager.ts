@@ -1,5 +1,6 @@
 import {
   hexToBytes,
+  bytesToHex,
   concat,
   numberToHex,
   parseEther,
@@ -167,6 +168,9 @@ export interface PreparedTransfer {
   userOpHash: string;
 }
 
+/** How long a prepareTransfer record lives before it's evicted (the WebAuthn challenge is short-lived). */
+const PREPARED_TTL_MS = 10 * 60_000;
+
 // ── Helper to generate UUID-like IDs without external dependency ──
 
 function generateId(): string {
@@ -197,6 +201,8 @@ export class TransferManager {
       version: EntryPointVersion;
       accountAddress: string;
       params: ExecuteTransferParams;
+      /** The owner-ceremony message the commitment was bound to — re-checked at submit (tier drift). */
+      ownerMessageHex: `0x${string}`;
       createdAt: number;
     }
   >();
@@ -342,6 +348,12 @@ export class TransferManager {
     const message = await this.ownerCeremonyMessage(account.address, userOpHash, version, params);
     const { challengeId, publicKeyOptions } = await this.signer.beginCeremony(userId, message);
 
+    // Opportunistically evict stale prepared entries (no background timer).
+    const now = Date.now();
+    for (const [id, e] of this.prepared) {
+      if (now - e.createdAt > PREPARED_TTL_MS) this.prepared.delete(id);
+    }
+
     const transferId = generateId();
     this.prepared.set(transferId, {
       userId,
@@ -350,7 +362,8 @@ export class TransferManager {
       version,
       accountAddress: account.address,
       params,
-      createdAt: Date.now(),
+      ownerMessageHex: bytesToHex(message),
+      createdAt: now,
     });
     return { transferId, challengeId, publicKeyOptions, userOpHash };
   }
@@ -367,6 +380,23 @@ export class TransferManager {
     const prep = this.prepared.get(params.transferId);
     if (!prep || prep.userId !== userId) {
       throw new Error("submitPreparedTransfer: no matching prepared transfer (unknown id, wrong user, or expired).");
+    }
+    if (Date.now() - prep.createdAt > PREPARED_TTL_MS) {
+      this.prepared.delete(params.transferId);
+      throw new Error("submitPreparedTransfer: prepared transfer expired; call prepareTransfer again.");
+    }
+    // Tier-drift guard: the committed challenge was bound to the prepare-time payload. If the
+    // signing tier/state changed, the digest no longer matches — fail fast with a clear error
+    // BEFORE consuming the assertion, instead of letting the KMS reject opaquely (#143 Codex).
+    const currentMessage = bytesToHex(
+      await this.ownerCeremonyMessage(prep.accountAddress, prep.userOpHash, prep.version, prep.params)
+    );
+    if (currentMessage !== prep.ownerMessageHex) {
+      this.prepared.delete(params.transferId);
+      throw new Error(
+        "submitPreparedTransfer: signing tier/state changed since prepareTransfer (the committed " +
+          "challenge no longer matches the payload); call prepareTransfer again."
+      );
     }
     this.prepared.delete(params.transferId); // one-time (the assertion's challenge is also one-time)
 

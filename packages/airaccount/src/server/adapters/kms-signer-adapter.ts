@@ -4,7 +4,7 @@ import {
   SignerAuthContext,
 } from "../interfaces/signer-adapter";
 import { KmsManager } from "../services/kms-signer";
-import { commitChallenge } from "../services/webauthn-ceremony";
+import { commitChallenge, base64UrlEncode } from "../services/webauthn-ceremony";
 
 /** Resolves an app user id to its KMS key + EOA address. App-specific mapping. */
 export type KmsKeyResolver = (
@@ -86,8 +86,18 @@ export class KmsSignerAdapter implements ISignerAdapter {
     // commitment must bind to THAT (the EIP-191 digest), not the raw message.
     const signDigest = hashMessage(message);
     const { ChallengeId, Options } = await this.kms.beginAuthentication({ KeyId: keyId });
-    // Options.challenge is the raw nonce (base64url) from the KMS; replace it with the commitment.
-    const nonce = (Options as unknown as { challenge: string }).challenge;
+    // Options.challenge is the raw nonce; replace it with the commitment. The KMS wire format
+    // is a base64url string, but normalize a native BufferSource too so a non-JSON Options
+    // can't be silently mis-encoded (#143 Codex HIGH).
+    const raw = (Options as unknown as { challenge: string | BufferSource }).challenge;
+    const nonce =
+      typeof raw === "string"
+        ? raw
+        : base64UrlEncode(
+            ArrayBuffer.isView(raw)
+              ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+              : new Uint8Array(raw)
+          );
     const committed = commitChallenge(nonce, signDigest);
     return {
       challengeId: ChallengeId,
