@@ -256,6 +256,12 @@ export interface RunCeremonyOptions {
 export function commitChallenge(nonceBase64Url: string, payload: Uint8Array | `0x${string}`): string {
   const nonce = base64UrlDecode(nonceBase64Url);
   const payloadBytes = typeof payload === "string" ? hexToBytes(payload) : payload;
+  // The payload is always a 32-byte digest (signHash hash / EIP-712 digest / grant final_hash).
+  // Reject anything else — a short/empty payload (e.g. "0x") would commit to the wrong thing
+  // and the KMS would compute a different commitment (PR #137 Codex review).
+  if (payloadBytes.length !== 32) {
+    throw new Error(`commitChallenge: payload must be a 32-byte digest, got ${payloadBytes.length} bytes`);
+  }
   const committed = createHash("sha256").update(nonce).update(payloadBytes).digest();
   return base64UrlEncode(new Uint8Array(committed));
 }

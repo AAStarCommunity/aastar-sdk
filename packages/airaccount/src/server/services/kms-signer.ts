@@ -151,6 +151,18 @@ export function eip712Digest(params: {
 }
 
 /**
+ * Coerce a uint256-encoded field to bigint, rejecting a JS `number` that has already lost
+ * precision (> 2^53). A silently-truncated value would diverge from the contract/TA encoding
+ * (PR #137 Codex review). Accepts bigint / decimal-or-0x string / safe-integer number.
+ */
+function u256(x: number | bigint | string): bigint {
+  if (typeof x === "number" && !Number.isSafeInteger(x)) {
+    throw new Error(`u256: number ${x} exceeds safe-integer range — pass a bigint or string`);
+  }
+  return BigInt(x);
+}
+
+/**
  * Compute the grant-session `final_hash` — the value the TA signs and the WYSIWYS commitment
  * payload for the grant ceremony (AirAccount #112). Equals the contract's `buildGrantHash()` /
  * `buildP256GrantHash()` output byte-for-byte (`SessionKeyValidator._buildGrantHash` already
@@ -192,11 +204,11 @@ export function grantSessionFinalHash(
             { type: "bytes32" }, { type: "uint256" },
           ],
           [
-            "GRANT_P256_SESSION_V2", BigInt(p.chainId), p.verifyingContract as `0x${string}`,
+            "GRANT_P256_SESSION_V2", u256(p.chainId), p.verifyingContract as `0x${string}`,
             p.account as `0x${string}`, (p as { keyX: string }).keyX as `0x${string}`,
             (p as { keyY: string }).keyY as `0x${string}`, p.expiry, p.contractScope as `0x${string}`,
             p.selectorScope as `0x${string}`, p.velocityLimit, p.velocityWindow, callTargetsHash,
-            selectorsHash, BigInt(p.nonce),
+            selectorsHash, u256(p.nonce),
           ]
         )
       )
@@ -209,10 +221,10 @@ export function grantSessionFinalHash(
             { type: "uint256" },
           ],
           [
-            "GRANT_SESSION_V2", BigInt(p.chainId), p.verifyingContract as `0x${string}`,
+            "GRANT_SESSION_V2", u256(p.chainId), p.verifyingContract as `0x${string}`,
             p.account as `0x${string}`, (p as { sessionKey: string }).sessionKey as `0x${string}`,
             p.expiry, p.contractScope as `0x${string}`, p.selectorScope as `0x${string}`,
-            p.velocityLimit, p.velocityWindow, callTargetsHash, selectorsHash, BigInt(p.nonce),
+            p.velocityLimit, p.velocityWindow, callTargetsHash, selectorsHash, u256(p.nonce),
           ]
         )
       );
