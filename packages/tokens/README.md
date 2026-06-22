@@ -60,11 +60,16 @@ await sale.buyGasless({ token: 'APNTS', usdAmount: usd(10), recipient: friendAdd
 - 金额一律用 6-dec 基本单位(`usd()` 帮你转)。`token`:`'GTOKEN'` \| `'APNTS'`;`payToken`:`'USDC'` \| `'USDT'`(gasless 仅 USDC)。
 - 写操作需要传 `walletClient`;只读(价/余额/quote)只需 `publicClient`。
 
-### ⚠️ 关于权威地址(Sepolia 现状)
+### 权威地址(Sepolia,Path A 已完成)
 
-当前线上 sale 合约在部署时把 token **焊死**在 launch 的测试 GToken/aPNTs(`0x4e6A…`/`0x4C4E…`),与 core 的权威 SuperPaymaster GToken/aPNTs(`0x20a05…`/`0x9e66B…`)**不是同一个**。所以现在买到的是 launch 测试币。
+Sepolia 的 sale 栈已按 **path A** 重部署并绑定到 core 的**权威** SuperPaymaster GToken / aPNTs,`getPayoutToken()` 链上读出的就是权威地址(已上链核对):
 
-> 上主网前会做收敛(path A):在 launch repo 把 sale stack 重新绑定到权威 GToken/aPNTs 并重部署,届时 `getPayoutToken()` 会自动读出权威地址,SDK 这边只需更新 `LAUNCH_SALE_ADDRESSES` 的 3 个合约地址。
+| token | sale 合约(`LAUNCH_SALE_ADDRESSES`) | 链上 payout(`getPayoutToken`)= 权威币 |
+|------|------|------|
+| GToken | `0x29eE47…` | `0x20a051502a7AE6e40cfFd6EBe59057538E698984` |
+| aPNTs  | `0x136654…` | `0x9e66B457E0ABb1F139FD8A596d00f784eBA2873b` |
+
+即:在 Sepolia 用 `TokenSaleClient` 买到的就是**权威 GToken/aPNTs**(不再是 launch 测试币)。换链卖时,把那条链的 sale 栈部署好并在 `LAUNCH_SALE_ADDRESSES` 加一组地址即可;payout token 始终由客户端链上解析,不会漂移。
 
 ### 测试
 
