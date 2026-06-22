@@ -74,8 +74,10 @@ export const CANONICAL_ADDRESSES = {
   //   AirAccount v0.20.0 factory 0x99C9300d... (NEW ctor: impl injected as arg 1).
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
-  //   NOTE: `paymasterV4` below is a per-community AOA proxy (not in core config);
-  //   verify against the community's own deployment before use.
+  //   NOTE: `paymasterV4` below = the AAStar community PaymasterV4 instance bound to the canonical
+  //   aPNTs (0x9e66B457) as its gas token — verified on-chain via PaymasterFactory.getPaymasterList
+  //   + Paymaster.isTokenSupported(aPNTs)=true / getSupportedTokens=[0x9e66B457] (owner 0xb5600060…).
+  //   (The earlier value 0x1f0D4eF was a different community's proxy bound to a non-aPNTs token.)
   11155111: {
     registry: "0x3F920B25f8b65988359C372F66F036E48adFc556",
     gToken: "0x20a051502a7AE6e40cfFd6EBe59057538E698984",
@@ -84,7 +86,7 @@ export const CANONICAL_ADDRESSES = {
     reputationSystem: "0x7fEd690E1663755e24a1C9d6164336809d68a578",
     superPaymaster: "0x030025f40d509b1a99547bAEb3795bD27F7182b7",  // proxy (impl 0x24a94572...; 2026-06-16 redeploy)
     paymasterFactory: "0x0Aa06EA5295eeD4D48c93c594Db1CBf3626971A5",
-    paymasterV4: "0x1f0D4eF151a79948070D387BaC43b1321F0c41e3",  // Anni's V4 proxy — NOT in core config, verify separately
+    paymasterV4: "0x957852251f44570dc2B60Dde0954f191FF3372eE",  // AAStar Community PaymasterV4 (gas token = canonical aPNTs 0x9e66B457; owner 0xb5600060…)
     paymasterV4Impl: "0x59DCA5861aaDA602fE1BFbfcc36DFAc36C58623d",
     xPNTsFactory: "0xCec3655525a112882E74Fb7C26AcB267a07724cb",  // 2026-06-16 redeploy (was 0xc312...)
     blsAggregator: "0x15387e161c1b3dAe7c66Fbd5c1F32837B58B2e79",  // SP BLSAggregator 2026-06-16 redeploy (was 0x7ec7...)
