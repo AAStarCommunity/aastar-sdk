@@ -7,6 +7,7 @@
 export * from './branding.js';
 export * from './contract-addresses.js'; // Single source of truth for all contract addresses
 export * from './addresses.js'; // Canonical per-chainId address book + getCanonicalAddresses() resolver
+export * from './dvt.js'; // DVT node config (environments schema) + connectivity self-test (#153)
 export * from './contracts.js';
 export * from './contract-versions.js';
 export * from './networks.js';
