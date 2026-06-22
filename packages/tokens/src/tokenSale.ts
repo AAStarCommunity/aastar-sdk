@@ -4,6 +4,7 @@ import {
   SaleContractV2ABI,
   APNTsSaleContractABI,
   getLaunchSaleAddresses,
+  getDvtRelayerUrlsForChain,
   type LaunchSaleAddresses,
   type PublicClient,
   type WalletClient,
@@ -404,12 +405,13 @@ export class TokenSaleClient {
 
   /**
    * Build the ordered relayer candidate list: an explicit override wins; otherwise load-balance
-   * across {@link LaunchSaleAddresses.relayerUrls} (random start) with {@link relayerUrl} appended
-   * as a final fallback. Pure ordering — no network. (Math.random for LB spread is fine here.)
+   * across the DVT relay pool — the SINGLE source of truth `getDvtRelayerUrlsForChain(chainId)`
+   * (random start) — with the legacy `relayerUrl` (Cloudflare Worker) appended as a final fallback.
+   * Pure ordering — no network. (Math.random for LB spread is fine here.)
    */
   private relayerCandidates(override?: string): string[] {
     if (override) return [override];
-    const pool = [...(this.addrs.relayerUrls ?? [])];
+    const pool = [...getDvtRelayerUrlsForChain(this.chainId)];
     if (pool.length > 1) {
       const start = Math.floor(Math.random() * pool.length);
       pool.push(...pool.splice(0, start)); // rotate start for round-robin-ish spread
