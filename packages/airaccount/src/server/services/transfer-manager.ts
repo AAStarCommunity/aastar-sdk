@@ -10,6 +10,7 @@ import {
   type Address,
   type Abi,
 } from "viem";
+import { randomUUID } from "node:crypto";
 import { generateMessagePoint } from "../../migration/viem/bls-packing";
 // Local human-readable ABIs (not in @aastar/core); parseAbi is required to feed
 // them to viem's readContract / encodeFunctionData during the ethers->viem migration.
@@ -171,11 +172,12 @@ export interface PreparedTransfer {
 /** How long a prepareTransfer record lives before it's evicted (the WebAuthn challenge is short-lived). */
 const PREPARED_TTL_MS = 10 * 60_000;
 
-// ── Helper to generate UUID-like IDs without external dependency ──
+// ── Helper to generate collision-resistant IDs (CSPRNG, not Math.random) ──
+// transferIds double as the prepareTransfer lookup handle, so use a cryptographically
+// random UUID (#143 Codex NEW-5) — Math.random is not collision-safe and is a code smell here.
 
 function generateId(): string {
-  const hex = () => Math.random().toString(16).slice(2, 10);
-  return `${hex()}${hex()}-${hex()}-${hex()}-${hex()}-${hex()}${hex()}${hex()}`;
+  return randomUUID();
 }
 
 /**
