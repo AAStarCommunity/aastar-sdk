@@ -1,5 +1,5 @@
 import { KmsHttpClient } from "./kms-http-client";
-import { WebAuthnAssertion } from "./kms-signer";
+import { WebAuthnAssertion, mintDigest } from "./kms-signer";
 import {
   PasskeyCeremonySigner,
   RunCeremonyOptions,
@@ -154,11 +154,10 @@ export class KmsSessionService {
   /**
    * Create a P-256 session key, running the challenge-binding ceremony internally.
    *
-   * STRICT MODE (AirAccount #115): bind the mint params by passing `options.payload =
-   * mintDigest({ kind: "p256", walletId, index, ttlSecs, subject })` — `index` is the
-   * session_index the KMS will assign (query it first), `subject` the JWT sub (human key
-   * id), `ttlSecs` the JWT lifetime. Without a payload the ceremony sends the raw nonce,
-   * which strict mode rejects.
+   * Auto-binds the v2 mint commitment (AirAccount #115, KMS v0.26.0):
+   * `challenge = SHA-256(nonce ‖ mintDigest({ kind: "create-p256", walletId: humanKeyId, label }))`
+   * — strict mode requires it; transition mode also accepts it. Pass `options.payload` only to
+   * override. `label` defaults to "" to match the KMS server default.
    */
   async createP256SessionKeyWithCeremony(
     params: Omit<CreateP256SessionKeyRequest, "webAuthnAssertion">,
@@ -166,13 +165,15 @@ export class KmsSessionService {
     options?: Omit<RunCeremonyOptions, "signer">
   ): Promise<CreateP256SessionKeyResponse> {
     this.http.ensureEnabled();
-    const webAuthnAssertion = await runAuthenticationCeremony(
-      this.http,
-      params.humanKeyId,
-      signer,
-      options
-    );
-    return this.createP256SessionKey({ ...params, webAuthnAssertion });
+    // Normalize label once so the committed value equals the sent value (#141 Codex Low).
+    const label = params.label ?? "";
+    const payload =
+      options?.payload ?? mintDigest({ kind: "create-p256", walletId: params.humanKeyId, label });
+    const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.humanKeyId, signer, {
+      ...options,
+      payload,
+    });
+    return this.createP256SessionKey({ ...params, label, webAuthnAssertion });
   }
 
   /**

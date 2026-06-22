@@ -15,7 +15,7 @@ vi.mock("axios", () => ({
   create: mockAxiosCreate,
 }));
 
-import { KmsManager, eip712Digest, grantSessionFinalHash } from "../services/kms-signer";
+import { KmsManager, eip712Digest, grantSessionFinalHash, mintDigest } from "../services/kms-signer";
 import { KmsAgentService } from "../services/kms-agent-service";
 import { KmsSessionService } from "../services/kms-session-service";
 import { SilentLogger } from "../interfaces/logger";
@@ -39,6 +39,7 @@ const ENDPOINT = "https://kms.test.example";
 const FIXTURE_PRIV = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 const CHALLENGE = "dGVzdC1jaGFsbGVuZ2U"; // base64url("test-challenge")
 const CHALLENGE_ID = "challenge-id-123";
+const HUMAN_UUID = "495c2e73-b688-46de-bab2-1af39ac0802c"; // human key id (must parse as UUID for mint commitment)
 const CRED_ID = "Y3JlZC1pZA"; // base64url("cred-id")
 
 /** Decode the base64url clientDataJSON of an assertion's credential into an object. */
@@ -344,14 +345,18 @@ describe("Agent + Session ceremony variants", () => {
       .mockResolvedValueOnce(beginAuthResponse)
       .mockResolvedValueOnce({ data: { keyId: "h:0", agentCredential: "jwt" } });
 
-    await agent.createAgentKeyWithCeremony({ humanKeyId: "human-1", label: "x" }, signer);
+    await agent.createAgentKeyWithCeremony({ humanKeyId: HUMAN_UUID, label: "x" }, signer);
 
-    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
+    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: HUMAN_UUID }]);
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/kms/create-agent-key");
-    expect(body.humanKeyId).toBe("human-1");
+    expect(body.humanKeyId).toBe(HUMAN_UUID);
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+    // v2 mint commitment auto-bound: challenge = SHA256(nonce ‖ create-agent mintDigest)
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(
+      commitChallenge(CHALLENGE, mintDigest({ kind: "create-agent", walletId: HUMAN_UUID, label: "x" }))
+    );
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).not.toBe(CHALLENGE);
   });
 
   it("createP256SessionKeyWithCeremony: posts webAuthnAssertion with clientDataJSON", async () => {
@@ -360,13 +365,17 @@ describe("Agent + Session ceremony variants", () => {
       .mockResolvedValueOnce(beginAuthResponse)
       .mockResolvedValueOnce({ data: { keyId: "h:0", agentCredential: "jwt" } });
 
-    await session.createP256SessionKeyWithCeremony({ humanKeyId: "human-1" }, signer);
+    await session.createP256SessionKeyWithCeremony({ humanKeyId: HUMAN_UUID }, signer);
 
-    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
+    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: HUMAN_UUID }]);
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/kms/create-p256-session-key");
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+    // v2 mint commitment auto-bound (no label → ""), matching the KMS server default
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(
+      commitChallenge(CHALLENGE, mintDigest({ kind: "create-p256", walletId: HUMAN_UUID, label: "" }))
+    );
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).not.toBe(CHALLENGE);
   });
 
   it("refreshAgentCredentialWithCeremony: challenge bound to humanKeyId, posts webAuthnAssertion", async () => {
@@ -376,19 +385,23 @@ describe("Agent + Session ceremony variants", () => {
       .mockResolvedValueOnce({ data: { keyId: "h:0", agentCredential: "jwt2", expiresAt: 1 } });
 
     await agent.refreshAgentCredentialWithCeremony(
-      { keyId: "h:0" },
-      "human-1",
+      { keyId: `${HUMAN_UUID}:0` },
+      HUMAN_UUID,
       "existing-jwt",
       signer
     );
 
     // begin (POST /BeginAuthentication on the HUMAN key) precedes the signing POST
-    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: "human-1" }]);
+    expect(mockPost.mock.calls[0]).toEqual(["/BeginAuthentication", { KeyId: HUMAN_UUID }]);
     const [path, body] = mockPost.mock.calls[1];
     expect(path).toBe("/kms/refresh-agent-credential");
-    expect(body.keyId).toBe("h:0");
+    expect(body.keyId).toBe(`${HUMAN_UUID}:0`);
     expect(body.webAuthnAssertion.ChallengeId).toBe(CHALLENGE_ID);
-    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(CHALLENGE);
+    // v2 REFRESH commitment auto-bound (agent_index=0 parsed from keyId), distinct tag from create
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).toBe(
+      commitChallenge(CHALLENGE, mintDigest({ kind: "refresh-agent", walletId: HUMAN_UUID, agentIndex: 0 }))
+    );
+    expect(decodeClientData(body.webAuthnAssertion.Credential).challenge).not.toBe(CHALLENGE);
   });
 
   it("revokeAgentCredentialWithCeremony: challenge bound to humanKeyId, posts webAuthnAssertion", async () => {

@@ -163,57 +163,59 @@ function u256(x: number | bigint | string): bigint {
   return BigInt(x);
 }
 
-const MINT_TAGS = { agent: "AA-AGENT-MINT-v1", p256: "AA-P256-SESSION-MINT-v1" } as const;
+const MINT_TAGS = {
+  "create-agent": "AA-AGENT-MINT-v2",
+  "create-p256": "AA-P256-SESSION-MINT-v2",
+  "refresh-agent": "AA-AGENT-REFRESH-v2",
+} as const;
 
-/**
- * Compute the KMS "mint" digest — the WYSIWYS commitment payload for the key-minting
- * ceremonies (AirAccount #115): `create_agent_key` (`agent`) / `create_p256_session_key`
- * (`p256`). Mirrors the TA byte-for-byte (`ta/src/main.rs` agent_mint_digest /
- * p256_session_mint_digest), verified against the locked test vectors on aastar-sdk#135:
- *
- *   mint_digest = SHA-256( tag ‖ walletId[16B UUID] ‖ index[u32 BE] ‖ ttlSecs[i64 BE] ‖ SHA-256(subject) )
- *
- * Pass the result as the ceremony `payload` (the ceremony binds `challenge =
- * SHA-256(nonce ‖ mint_digest)` via {@link commitChallenge}).
- *
- * NOTE on `index`: the agent/session index is allocated server-side
- * (`next_agent_index_for_wallet`), so the caller must supply the index the KMS will assign
- * (e.g. the current count for a new key) — a mismatch fails closed under strict mode.
- * `subject` is the JWT `sub` (typically the human key id); `ttlSecs` the JWT lifetime.
- */
-export function mintDigest(p: {
-  kind: "agent" | "p256";
-  walletId: string; // UUID string
-  index: number; // u32 — server-assigned agent_index / session_index
-  ttlSecs: number | bigint; // i64
-  subject: string;
-}): `0x${string}` {
-  const hex = p.walletId.replace(/-/g, "");
+/** Parse a UUID string into its 16 raw bytes (big-endian, = Rust `Uuid::as_bytes()`). */
+function uuidBytes16(walletId: string): Uint8Array {
+  const hex = walletId.replace(/-/g, "");
   if (hex.length !== 32 || !/^[0-9a-fA-F]+$/.test(hex)) {
     throw new Error("mintDigest: walletId must be a 16-byte UUID");
   }
-  if (!Number.isInteger(p.index) || p.index < 0 || p.index > 0xffffffff) {
-    throw new Error(`mintDigest: index must be a uint32, got ${p.index}`);
-  }
-  // ttlSecs is encoded as a SIGNED i64 BE — guard it: a non-integer number rounds before
-  // BigInt, and setBigInt64 silently mod-truncates an out-of-range BigInt (#138 Codex M1).
-  if (typeof p.ttlSecs === "number" && !Number.isInteger(p.ttlSecs)) {
-    throw new Error(`mintDigest: ttlSecs must be an integer, got ${p.ttlSecs}`);
-  }
-  const ttlBig = BigInt(p.ttlSecs);
-  if (ttlBig < -(1n << 63n) || ttlBig > (1n << 63n) - 1n) {
-    throw new Error(`mintDigest: ttlSecs out of int64 range: ${ttlBig}`);
-  }
+  const out = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+/**
+ * Compute the KMS "mint" digest (v2) — the WYSIWYS commitment payload for the key-minting
+ * ceremonies (AirAccount #115, KMS v0.26.0). Mirrors the TA byte-for-byte; verified against
+ * the locked test vectors on aastar-sdk#135 (`kms/docs/test-vectors/compute_vectors.py`):
+ *
+ *   create-agent : SHA-256("AA-AGENT-MINT-v2"        ‖ walletId[16B] ‖ SHA-256(label))
+ *   create-p256  : SHA-256("AA-P256-SESSION-MINT-v2" ‖ walletId[16B] ‖ SHA-256(label))
+ *   refresh-agent: SHA-256("AA-AGENT-REFRESH-v2"     ‖ walletId[16B] ‖ agentIndex[u32 BE])
+ *
+ * `walletId[16]` = the human key id parsed as a UUID (`Uuid::as_bytes()`). `label` is the
+ * caller-supplied create label (so create no longer depends on the server-assigned index).
+ * create vs refresh use DIFFERENT tags and are not interchangeable (a refresh gesture cannot
+ * be replayed as a create). Pass the result as the ceremony `payload` — the ceremony binds
+ * `challenge = SHA-256(nonce ‖ mint_digest)` via {@link commitChallenge}.
+ */
+export function mintDigest(
+  p:
+    | { kind: "create-agent" | "create-p256"; walletId: string; label: string }
+    | { kind: "refresh-agent"; walletId: string; agentIndex: number }
+): `0x${string}` {
   const sha256 = (b: Uint8Array): Uint8Array => new Uint8Array(createHash("sha256").update(b).digest());
   const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
-  const walletBytes = new Uint8Array(16);
-  for (let i = 0; i < 16; i++) walletBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  const idx = new Uint8Array(4);
-  new DataView(idx.buffer).setUint32(0, p.index, false); // u32 big-endian
-  const ttl = new Uint8Array(8);
-  new DataView(ttl.buffer).setBigInt64(0, ttlBig, false); // i64 big-endian (signed)
+  const walletBytes = uuidBytes16(p.walletId);
 
-  const parts = [utf8(MINT_TAGS[p.kind]), walletBytes, idx, ttl, sha256(utf8(p.subject))];
+  let tail: Uint8Array;
+  if (p.kind === "refresh-agent") {
+    if (!Number.isInteger(p.agentIndex) || p.agentIndex < 0 || p.agentIndex > 0xffffffff) {
+      throw new Error(`mintDigest: agentIndex must be a uint32, got ${p.agentIndex}`);
+    }
+    tail = new Uint8Array(4);
+    new DataView(tail.buffer).setUint32(0, p.agentIndex, false); // u32 big-endian
+  } else {
+    tail = sha256(utf8(p.label)); // SHA-256(label)
+  }
+
+  const parts = [utf8(MINT_TAGS[p.kind]), walletBytes, tail];
   const total = parts.reduce((n, a) => n + a.length, 0);
   const buf = new Uint8Array(total);
   let off = 0;

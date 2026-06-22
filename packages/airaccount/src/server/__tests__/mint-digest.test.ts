@@ -2,49 +2,49 @@ import { describe, it, expect } from "vitest";
 import { mintDigest } from "../services/kms-signer";
 import { commitChallenge, base64UrlEncode } from "../services/webauthn-ceremony";
 
-// Locked test vectors from the KMS (aastar-sdk#135) — mintDigest MUST stay byte-identical
-// to the TA's agent_mint_digest / p256_session_mint_digest (ta/src/main.rs):
-//   mint_digest = SHA256( tag ‖ walletId[16B UUID] ‖ index[u32 BE] ‖ ttlSecs[i64 BE] ‖ SHA256(subject) )
-//   challenge   = base64url_nopad( SHA256( nonce ‖ mint_digest ) )
-const VEC = {
-  walletId: "495c2e73-b688-46de-bab2-1af39ac0802c",
-  index: 0,
-  ttlSecs: 259200,
-  subject: "test-wallet-id",
-} as const;
+// Locked test vectors from the KMS (aastar-sdk#135, KMS v0.26.0 — "v2 label" mint binding).
+// mintDigest MUST stay byte-identical to the TA; authority is AirAccount
+// kms/docs/test-vectors/compute_vectors.py:
+//   create-agent : SHA256("AA-AGENT-MINT-v2"        ‖ walletId[16] ‖ SHA256(label))
+//   create-p256  : SHA256("AA-P256-SESSION-MINT-v2" ‖ walletId[16] ‖ SHA256(label))
+//   refresh-agent: SHA256("AA-AGENT-REFRESH-v2"     ‖ walletId[16] ‖ agentIndex[u32 BE])
+//   challenge    = base64url_nopad( SHA256( nonce ‖ mint_digest ) )
+const WALLET = "495c2e73-b688-46de-bab2-1af39ac0802c";
 // nonce = 32 × 0x42
 const NONCE_B64 = base64UrlEncode(new Uint8Array(32).fill(0x42));
 
-describe("mintDigest (KMS #115 locked vectors)", () => {
-  it("agent (AA-AGENT-MINT-v1) digest + commitment match the locked vector", () => {
-    const digest = mintDigest({ kind: "agent", ...VEC });
-    expect(digest).toBe("0x94ce635e81b92c07c323c9b6d2c1a0d739aa1d75d9f03f4be9d251aa9136e895");
-    // commitment(hex) = 50abfb4f...
-    const commitB64 = commitChallenge(NONCE_B64, digest);
-    expect(Buffer.from(commitB64, "base64url").toString("hex")).toBe(
-      "50abfb4fcedcd299b1822f31fbb9162ecf42e3d0b6ebdd52f5347c3b30bf79a6"
+describe("mintDigest v2 (KMS #135 locked vectors)", () => {
+  it("create-agent (AA-AGENT-MINT-v2) digest + commitment match the locked vector", () => {
+    const digest = mintDigest({ kind: "create-agent", walletId: WALLET, label: "my-agent" });
+    expect(digest).toBe("0x96ef1919c2daf5f019d612a4ffd6c9afbe893994bd4069f5bfb7a84cbb9a59ad");
+    expect(commitChallenge(NONCE_B64, digest)).toBe("vfFryvH9S58RQI-XmcBeocd1mhNWSYP3z5p6B3M7rgc");
+  });
+
+  it("create-p256 (AA-P256-SESSION-MINT-v2) digest + commitment match the locked vector", () => {
+    const digest = mintDigest({ kind: "create-p256", walletId: WALLET, label: "my-session" });
+    expect(digest).toBe("0x9a3d0109308632dc28c28a773bcfb2dd4f3a72372b7c5b6d5bc8595d1f1b623e");
+    expect(commitChallenge(NONCE_B64, digest)).toBe("JDwM5V4rmHTPvvhdBt0GB0OwtuCoPemVbTkw04EmkJE");
+  });
+
+  it("refresh-agent (AA-AGENT-REFRESH-v2) digest + commitment match the locked vector", () => {
+    const digest = mintDigest({ kind: "refresh-agent", walletId: WALLET, agentIndex: 0 });
+    expect(digest).toBe("0xb691fbf5c2999e32b5f5c1f16038600e91d6e7db67dc3b069c257e957280217d");
+    expect(commitChallenge(NONCE_B64, digest)).toBe("Kv6zy_gztqOYGD3NMI118EOavjjlWaMakD3uxoseiZU");
+  });
+
+  it("binds each field: agent≠p256, create≠refresh, label and agentIndex change the digest", () => {
+    const agent = mintDigest({ kind: "create-agent", walletId: WALLET, label: "my-agent" });
+    expect(mintDigest({ kind: "create-p256", walletId: WALLET, label: "my-agent" })).not.toBe(agent);
+    // CREATE and REFRESH tags must not collide (refresh gesture can't be replayed as a mint)
+    expect(mintDigest({ kind: "refresh-agent", walletId: WALLET, agentIndex: 0 })).not.toBe(agent);
+    expect(mintDigest({ kind: "create-agent", walletId: WALLET, label: "other" })).not.toBe(agent);
+    expect(mintDigest({ kind: "refresh-agent", walletId: WALLET, agentIndex: 1 })).not.toBe(
+      mintDigest({ kind: "refresh-agent", walletId: WALLET, agentIndex: 0 })
     );
   });
 
-  it("p256 (AA-P256-SESSION-MINT-v1) digest + commitment match the locked vector", () => {
-    const digest = mintDigest({ kind: "p256", ...VEC });
-    expect(digest).toBe("0xc7e22dd175107e93dce31db68e64a56823f5c895d93647e9ce1a9af0ae8a063b");
-    const commitB64 = commitChallenge(NONCE_B64, digest);
-    expect(Buffer.from(commitB64, "base64url").toString("hex")).toBe(
-      "e3c80677c5c7554e4c64c85fc574c13f95b1a6377374cd37850b097ca0246ad6"
-    );
-  });
-
-  it("binds each field (agent≠p256, index, ttl, subject all change the digest)", () => {
-    const base = mintDigest({ kind: "agent", ...VEC });
-    expect(mintDigest({ kind: "p256", ...VEC })).not.toBe(base);
-    expect(mintDigest({ kind: "agent", ...VEC, index: 1 })).not.toBe(base);
-    expect(mintDigest({ kind: "agent", ...VEC, ttlSecs: 1 })).not.toBe(base);
-    expect(mintDigest({ kind: "agent", ...VEC, subject: "other" })).not.toBe(base);
-  });
-
-  it("rejects a non-UUID walletId and out-of-range index", () => {
-    expect(() => mintDigest({ kind: "agent", ...VEC, walletId: "nope" })).toThrow(/UUID/);
-    expect(() => mintDigest({ kind: "agent", ...VEC, index: -1 })).toThrow(/uint32/);
+  it("rejects a non-UUID walletId and out-of-range agentIndex", () => {
+    expect(() => mintDigest({ kind: "create-agent", walletId: "nope", label: "x" })).toThrow(/UUID/);
+    expect(() => mintDigest({ kind: "refresh-agent", walletId: WALLET, agentIndex: -1 })).toThrow(/uint32/);
   });
 });
