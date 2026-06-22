@@ -198,10 +198,11 @@ export type SupportedChainId = keyof typeof CANONICAL_ADDRESSES;
  * BuyHelper) plus the accepted payment stablecoins. It deliberately does NOT store the GToken /
  * aPNTs *payout* token addresses — `TokenSaleClient` reads those on-chain from the sale contract's
  * `gToken()` / `aPNTs()` immutable getters, so there is never a second copy of a token address to
- * drift. (Background: three different GToken deployments currently exist — core canonical
- * `0x20a051…`, the launch live `0x4e6A11…`, and the launch DEPLOYED.md "SuperPaymaster" `0xa592ec…`.
- * The live sale is constructor-bound to `0x4e6A11…`; binding it to the core-canonical GToken is the
- * pre-mainnet reconciliation step.)
+ * drift. (Background: multiple GToken deployments have existed — core canonical `0x20a051…`, an
+ * earlier launch test GToken `0x4e6A11…`, and the launch DEPLOYED.md "SuperPaymaster" `0xa592ec…`.
+ * The earlier Sepolia sale was constructor-bound to the test token; the Path-A redeploy
+ * (2026-06-21, below) rebound it to the core-canonical GToken/aPNTs, so `getPayoutToken()` now
+ * resolves on-chain to `0x20a051…` / `0x9e66B…`.)
  */
 export interface LaunchSaleAddresses {
   /** SaleContractV2 — sells the constructor-bound GToken (governance token). */
