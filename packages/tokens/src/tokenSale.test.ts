@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TokenSaleClient, usd } from './tokenSale.js';
 
 const SEPOLIA = 11155111;
-const SALE_GT = '0x3e4e0a663682a2d58d626d0057142328ef0b626a';
-const SALE_AP = '0xf1a5fe670dbf6c5219000b30500a98f772ef1f14';
-const BUY_HELPER = '0x578D6f74d8bDA18Cc3b834C1bd74674c529250e7';
+// Path-A canonical-bound Sepolia sale stack (matches @aastar/core LAUNCH_SALE_ADDRESSES).
+const SALE_GT = '0x29ee47debd0e60d426352415749b4899057d913f';
+const SALE_AP = '0x136654d4141d151e9c237af65e98c03e22afc142';
+const BUY_HELPER = '0x0EA2AEd239574F4e875Ae570C67825da845E7e66';
 const USDC = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
 const GTOKEN_PAYOUT = '0x4e6A1125B8619d6D05c99AB2F30BDFc96C843B67';
 const APNTS_PAYOUT = '0x4C4EC2e866f0c43DCA4670A6033e962a05B4C772';
@@ -123,6 +124,23 @@ describe('buySelfPay', () => {
   it('throws without a wallet client', async () => {
     const c = new TokenSaleClient(makePublicClient());
     await expect(c.buySelfPay({ token: 'GTOKEN', usdAmount: usd(1) })).rejects.toThrow('walletClient is required');
+  });
+
+  it('rejects minOut for aPNTs self-pay (buyAPNTs has no slippage param)', async () => {
+    const wallet = makeWalletClient();
+    const c = new TokenSaleClient(makePublicClient(makeReadContract({ allowance: 10_000000n })), wallet);
+    await expect(
+      c.buySelfPay({ token: 'APNTS', usdAmount: usd(5), minOut: 1n }),
+    ).rejects.toThrow(/aPNTs self-pay does not support minOut/);
+    // no on-chain write attempted
+    expect(wallet.writeContract).not.toHaveBeenCalled();
+  });
+
+  it('allows aPNTs self-pay with minOut omitted / zero', async () => {
+    const wallet = makeWalletClient();
+    const c = new TokenSaleClient(makePublicClient(makeReadContract({ allowance: 10_000000n })), wallet);
+    await c.buySelfPay({ token: 'APNTS', usdAmount: usd(5) }); // minOut defaults to 0n
+    expect(wallet.writeContract.mock.calls.map((a: any) => a[0].functionName)).toEqual(['buyAPNTs']);
   });
 });
 

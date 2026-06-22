@@ -220,6 +220,16 @@ export class TokenSaleClient {
     const { token, usdAmount } = params;
     const payToken = params.payToken ?? 'USDC';
     const minOut = params.minOut ?? 0n;
+    // aPNTs self-pay has NO slippage param on-chain (`APNTsSaleContract.buyAPNTs(usdAmount,
+    // paymentToken)`), so a caller-supplied minOut could NOT be enforced. Fail closed rather than
+    // silently dropping it (which would give a false sense of protection). GToken self-pay and the
+    // gasless path (BuyIntent.minOut) do enforce minOut.
+    if (token === 'APNTS' && minOut > 0n) {
+      throw new Error(
+        'buySelfPay: aPNTs self-pay does not support minOut (APNTsSaleContract.buyAPNTs has no ' +
+          'slippage param). Use buyGasless for aPNTs slippage protection, or omit minOut.'
+      );
+    }
     const payAddr = payToken === 'USDC' ? this.addrs.usdc : this.addrs.usdt;
     const saleAddr = this.saleFor(token);
 
