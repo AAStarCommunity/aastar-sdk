@@ -216,6 +216,6 @@ describe('buyGasless', () => {
     vi.stubGlobal('fetch', fetchMock);
     const c = new TokenSaleClient(makePublicClient(), makeWalletClient());
     await c.buyGasless({ token: 'GTOKEN', usdAmount: usd(5), relayerUrl: 'https://my-relay.example' });
-    expect(fetchMock.mock.calls[0][0]).toBe('https://my-relay.example/v3/relay');
+    expect((fetchMock.mock.calls[0] as any[])[0]).toBe('https://my-relay.example/v3/relay');
   });
 });

@@ -53,9 +53,14 @@ export const DVT_CONFIG: DvtConfig = {
   },
 };
 
-/** Resolve the active (or named) DVT environment. Throws if that environment isn't configured. */
+/**
+ * Resolve the active (or named) DVT environment. Throws if that environment isn't configured.
+ * Precedence: explicit `active` arg > `AASTAR_DVT_ENV` env var > `DVT_CONFIG.active` default.
+ * The env var makes switching the DEFAULT a zero-release change (no need to pass `active` everywhere).
+ */
 export function getDvtConfig(active?: string): DvtEnvironment {
-  const key = active ?? DVT_CONFIG.active;
+  const envOverride = typeof process !== 'undefined' ? process.env?.AASTAR_DVT_ENV : undefined;
+  const key = active ?? envOverride ?? DVT_CONFIG.active;
   const env = DVT_CONFIG.environments[key];
   if (!env) throw new Error(`DVT config: environment "${key}" is not configured`);
   return env;
@@ -64,6 +69,20 @@ export function getDvtConfig(active?: string): DvtEnvironment {
 /** Convenience: the relay base URLs for the active (or named) environment. */
 export function getDvtRelayerUrls(active?: string): string[] {
   return getDvtConfig(active).dvtNodes.map((n) => n.url);
+}
+
+/**
+ * Relay base URLs for a specific chainId (the relay-capable DVT environment matching it).
+ * Single source of truth for the gasless-relay pool — `TokenSaleClient` reads this instead of
+ * duplicating URLs. Returns `[]` if no relay-capable environment matches the chain.
+ */
+export function getDvtRelayerUrlsForChain(chainId: number): string[] {
+  for (const env of Object.values(DVT_CONFIG.environments)) {
+    if (env && env.chainId === chainId && env.capabilities.relay) {
+      return env.dvtNodes.map((n) => n.url);
+    }
+  }
+  return [];
 }
 
 /** Per-node result of {@link checkDvtConnectivity}. */

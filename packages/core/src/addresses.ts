@@ -228,16 +228,12 @@ export interface LaunchSaleAddresses {
   /** Accepted payment stablecoin: USDT (6-decimal). Self-pay only. */
   usdt: Address;
   /**
-   * Primary off-chain relayer base URL for gasless buys (legacy single value / final fallback).
-   * The SDK appends `/v3/relay`. Prefer {@link relayerUrls} for the failover pool.
+   * Legacy single relayer base URL (Cloudflare Worker) — kept as the FINAL fallback. The SDK
+   * appends `/v3/relay`. The primary gasless-relay pool now lives in the single-source DVT config
+   * (`getDvtRelayerUrlsForChain`, AirAccount #98 / aastar-sdk #148/#153); `TokenSaleClient`
+   * load-balances across it and only falls back here.
    */
   relayerUrl: string;
-  /**
-   * Relayer failover pool (decentralized DVT nodes, AirAccount #98 / aastar-sdk #148). Each entry
-   * is an independent relayer base URL; the SDK load-balances (random start) + fails over on
-   * 5xx/timeout. Falls back to {@link relayerUrl} if empty. Health: `GET {base}/relay/health`.
-   */
-  relayerUrls?: string[];
 }
 
 export const LAUNCH_SALE_ADDRESSES: Record<number, LaunchSaleAddresses> = {
@@ -252,14 +248,8 @@ export const LAUNCH_SALE_ADDRESSES: Record<number, LaunchSaleAddresses> = {
     buyHelper: "0x0EA2AEd239574F4e875Ae570C67825da845E7e66", // BuyHelper → canonical tokens + new sales
     usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     usdt: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", // Aave Sepolia USDT (6-dec)
-    // Decentralized DVT relayer pool (3 independent nodes, AirAccount#98 / PR#99). SDK LBs across
-    // them + fails over. The Cloudflare Worker is kept as the LAST fallback during rollout (the DVT
-    // nodes were still being enabled at wiring time) — drop it once the nodes are confirmed live.
-    relayerUrls: [
-      "https://dvt1.aastar.io",
-      "https://dvt2.aastar.io",
-      "https://dvt3.aastar.io",
-    ],
+    // Gasless-relay pool now sourced from DVT_CONFIG (getDvtRelayerUrlsForChain) — single source of
+    // truth. This Cloudflare Worker is only the FINAL fallback.
     relayerUrl: "https://mycelium-relayer.jhfnetboy.workers.dev",
   },
   // --- op-mainnet / ethereum-mainnet: reserved for the path-A reconciliation deploy ---

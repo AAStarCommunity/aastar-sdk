@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DVT_CONFIG, getDvtConfig, getDvtRelayerUrls, checkDvtConnectivity } from './dvt.js';
+import { DVT_CONFIG, getDvtConfig, getDvtRelayerUrls, getDvtRelayerUrlsForChain, checkDvtConnectivity } from './dvt.js';
 
 describe('DVT config', () => {
   it('defaults to the sepolia environment with 3 nodes', () => {
@@ -20,6 +20,22 @@ describe('DVT config', () => {
       'https://dvt2.aastar.io',
       'https://dvt3.aastar.io',
     ]);
+  });
+
+  it('getDvtRelayerUrlsForChain maps Sepolia → the 3 nodes, unknown chain → []', () => {
+    expect(getDvtRelayerUrlsForChain(11155111)).toHaveLength(3);
+    expect(getDvtRelayerUrlsForChain(999999)).toEqual([]);
+  });
+
+  it('AASTAR_DVT_ENV env var overrides the default active', () => {
+    const prev = process.env.AASTAR_DVT_ENV;
+    process.env.AASTAR_DVT_ENV = 'mainnet'; // configured as null placeholder
+    try {
+      expect(() => getDvtConfig()).toThrow(/mainnet.*not configured/);
+    } finally {
+      if (prev === undefined) delete process.env.AASTAR_DVT_ENV;
+      else process.env.AASTAR_DVT_ENV = prev;
+    }
   });
 });
 
