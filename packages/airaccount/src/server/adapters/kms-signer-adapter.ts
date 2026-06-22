@@ -4,6 +4,7 @@ import {
   SignerAuthContext,
 } from "../interfaces/signer-adapter";
 import { KmsManager } from "../services/kms-signer";
+import { commitChallenge, base64UrlEncode } from "../services/webauthn-ceremony";
 
 /** Resolves an app user id to its KMS key + EOA address. App-specific mapping. */
 export type KmsKeyResolver = (
@@ -68,5 +69,39 @@ export class KmsSignerAdapter implements ISignerAdapter {
       "KmsSignerAdapter: KMS signing requires an auth context — pass a one-time " +
         "WebAuthnCeremonyContext { webAuthnAssertion } (preferred)."
     );
+  }
+
+  /**
+   * Strict device-passkey path (two-phase transfer): start a KMS BeginAuthentication ceremony
+   * and return options whose `challenge` is the WYSIWYS commitment over the EXACT digest
+   * {@link signMessage} will sign — `SHA-256(nonce ‖ hashMessage(message))`. The SDK owns the
+   * payload + commitChallenge; the frontend just runs `navigator.credentials.get`.
+   */
+  async beginCeremony(
+    userId: string,
+    message: `0x${string}` | Uint8Array
+  ): Promise<{ challengeId: string; publicKeyOptions: PublicKeyCredentialRequestOptions }> {
+    const { keyId } = await this.resolveKey(userId);
+    // hashMessage(message) is exactly what signMessage() forwards to KMS /SignHash, so the
+    // commitment must bind to THAT (the EIP-191 digest), not the raw message.
+    const signDigest = hashMessage(message);
+    const { ChallengeId, Options } = await this.kms.beginAuthentication({ KeyId: keyId });
+    // Options.challenge is the raw nonce; replace it with the commitment. The KMS wire format
+    // is a base64url string, but normalize a native BufferSource too so a non-JSON Options
+    // can't be silently mis-encoded (#143 Codex HIGH).
+    const raw = (Options as unknown as { challenge: string | BufferSource }).challenge;
+    const nonce =
+      typeof raw === "string"
+        ? raw
+        : base64UrlEncode(
+            ArrayBuffer.isView(raw)
+              ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+              : new Uint8Array(raw)
+          );
+    const committed = commitChallenge(nonce, signDigest);
+    return {
+      challengeId: ChallengeId,
+      publicKeyOptions: { ...Options, challenge: committed } as unknown as PublicKeyCredentialRequestOptions,
+    };
   }
 }
