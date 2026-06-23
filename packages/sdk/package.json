@@ -191,11 +191,11 @@
     "dist"
   ],
   "dependencies": {
-    "viem": "2.43.3",
     "@simplewebauthn/browser": "^13.2.2",
     "axios": "^1.12.2"
   },
   "peerDependencies": {
+    "viem": ">=2.43.0 <3",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "resend": "^6.12.4"
@@ -226,7 +226,8 @@
     "@aastar/channel": "workspace:*",
     "@aastar/email": "workspace:*",
     "tsup": "^8.0.0",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "viem": "2.43.3"
   },
   "scripts": {
     "build": "tsup",
