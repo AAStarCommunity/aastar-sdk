@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.4] - 2026-06-23
+**SDK Code Integrity Hash**: `5735b2065985fe6419dcf19714a54c1756decdceb7f6a3ba27fd2c64900cdad5`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**viem is now a `peerDependency` (#145).** `@aastar/sdk` pinned `viem 2.43.3` as a `dependency`, so a
+consumer on a newer viem (e.g. 2.47.x) ended up with a second nested viem → a `tsc` "two different
+viem types" error when passing their `PublicClient` / `WalletClient` to `TokenSaleClient` (and other
+viem-typed APIs), forcing `as any`.
+
+- **[CHANGED]** `viem`: `dependencies` → `peerDependencies (">=2.43.0 <3")` (+ a `devDependency` for the
+  SDK's own build). tsup already externalizes viem (dist `.d.ts` `import … from 'viem'`), so the
+  consumer's single viem now resolves the SDK types — no more cast.
+- **[ACTION REQUIRED]** consumers must have `viem` in their own dependencies (`pnpm add viem`); almost
+  all already do (they construct the viem clients they pass in). No runtime/behavior change otherwise.
+
 ## [0.26.3] - 2026-06-22
 **SDK Code Integrity Hash**: `c68fdc48ab842a8b69617f9bf8ba19259e0923318982fa823cd88038334468fb`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
