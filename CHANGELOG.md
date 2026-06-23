@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.6] - 2026-06-23
+**SDK Code Integrity Hash**: `335319fc7df9dcfaf5e6072fe8862455cf4fb5314fd712909d779ae78f572d40`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**buySelfPay `recipient` — deliver self-paid tokens to another address (e.g. an AirAccount) (#145 gap 2).**
+
+- **[ADDED] `SelfPayParams.recipient?: Address`** — routes through the new `buyTokensFor` / `buyAPNTsFor`
+  sale functions so a self-pay buy (USDC **or USDT**) can deliver aPNTs/GToken straight into an
+  AirAccount instead of the payer. Omitted = pay to self. (aPNTs still rejects `minOut` — no on-chain
+  slippage param.)
+- **[CHANGED] Sepolia sale stack** (launch#21 redeploy with the `*For` functions): SaleContractV2
+  `0x86aC0278…`, APNTsSaleContract `0x1cE31924…`, BuyHelper `0xF78f8984…`. Refreshed those ABIs.
+  Canonical payout unchanged — `getPayoutToken()` on-chain still resolves GToken `0x20a051…` /
+  aPNTs `0x9e66B457…`.
+
 ## [0.26.5] - 2026-06-23
 **SDK Code Integrity Hash**: `4a1fe97bcd869aff6bfa3db26e8c0252f701bf7986e20eb047cf5ac5d238174f`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
