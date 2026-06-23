@@ -63,6 +63,12 @@ interface SelfPayParams {
   payToken?: PayToken;
   /** Minimum tokens out (slippage guard, 18-decimal). Default `0n`. */
   minOut?: bigint;
+  /**
+   * Deliver the purchased tokens to this address instead of the payer (e.g. buy USDT-paid aPNTs
+   * straight into an AirAccount). Routes through `buyTokensFor` / `buyAPNTsFor` (launch#21).
+   * Default: the payer. (aPNTs has no on-chain slippage param, so `minOut` is still rejected for it.)
+   */
+  recipient?: Address;
 }
 
 interface GaslessParams {
@@ -254,21 +260,23 @@ export class TokenSaleClient {
       if (r.status !== 'success') throw new Error(`approve reverted: ${approveHash}`);
     }
 
+    // Deliver to `recipient` (e.g. an AirAccount) via the *For variants, else to the payer.
+    const to = params.recipient;
     const buyHash = (await wallet.writeContract(
       token === 'GTOKEN'
         ? {
             address: saleAddr,
             abi: SaleContractV2ABI,
-            functionName: 'buyTokens',
-            args: [usdAmount, payAddr, minOut],
+            functionName: to ? 'buyTokensFor' : 'buyTokens',
+            args: to ? [to, usdAmount, payAddr, minOut] : [usdAmount, payAddr, minOut],
             account: signer,
             chain: (wallet as any).chain,
           }
         : ({
             address: saleAddr,
             abi: APNTsSaleContractABI,
-            functionName: 'buyAPNTs',
-            args: [usdAmount, payAddr],
+            functionName: to ? 'buyAPNTsFor' : 'buyAPNTs',
+            args: to ? [to, usdAmount, payAddr] : [usdAmount, payAddr],
             account: signer,
             chain: (wallet as any).chain,
           } as any),
