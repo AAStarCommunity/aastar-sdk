@@ -358,9 +358,9 @@ importers:
       react-dom:
         specifier: ^18.0.0
         version: 18.2.0(react@18.2.0)
-      viem:
-        specifier: 2.43.3
-        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
+      resend:
+        specifier: ^6.12.4
+        version: 6.12.4
     devDependencies:
       '@aastar/account':
         specifier: workspace:*
@@ -380,6 +380,9 @@ importers:
       '@aastar/dapp':
         specifier: workspace:*
         version: link:../dapp
+      '@aastar/email':
+        specifier: workspace:*
+        version: link:../email
       '@aastar/enduser':
         specifier: workspace:*
         version: link:../enduser
@@ -404,6 +407,9 @@ importers:
       typescript:
         specifier: 5.7.2
         version: 5.7.2
+      viem:
+        specifier: 2.43.3
+        version: 2.43.3(typescript@5.7.2)(zod@3.25.76)
 
   packages/tokens:
     dependencies:
@@ -417,6 +423,9 @@ importers:
       typescript:
         specifier: 5.7.2
         version: 5.7.2
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.7.5)
 
   packages/x402:
     dependencies:

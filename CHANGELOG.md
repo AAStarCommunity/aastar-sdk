@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.3] - 2026-06-22
+**SDK Code Integrity Hash**: `c68fdc48ab842a8b69617f9bf8ba19259e0923318982fa823cd88038334468fb`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**DVT testnet default config (signing + relay + keeper) + official community PaymasterV4s + gasless polish.**
+
+- **[ADDED] `DVT_CONFIG` + `getDvtConfig` / `checkDvtConnectivity` (`@aastar/core`):** the 3 live AAStar
+  testnet DVT nodes (dvt1/2/3.aastar.io — BLS signing + gasless relay + price keeper) are now the
+  default testnet config, in an `environments.{sepolia,mainnet}` schema so mainnet is a fill-block +
+  flip-`active` (or `AASTAR_DVT_ENV` env var) zero-code switch. `checkDvtConnectivity()` is a startup
+  self-test (per node: `/health` + `/node/info` nodeId match + `/relay/health`). Live-verified 3/3 ok.
+- **[CHANGED] single-source gasless relay pool:** `TokenSaleClient.buyGasless` load-balances across
+  `getDvtRelayerUrlsForChain(chainId)` (the DVT config) with the Cloudflare Worker as the final
+  fallback (removed the duplicated `LAUNCH_SALE_ADDRESSES.relayerUrls`). **Verified live**: a $5 aPNTs
+  gasless buy through a DVT relay (tx `0x89121665…`, zero gas, aPNTs delivered).
+- **[ADDED] official community PaymasterV4 keys:** `aPNTsPaymasterV4` (AAStar → aPNTs) /
+  `PNTsPaymasterV4` (Mycelian → pnts) on all chains; Sepolia `paymasterV4` fixed to the AAStar
+  aPNTs instance `0x957852…` (was a non-aPNTs proxy), verified on-chain (factory + isTokenSupported).
+- **[FIX] aPNTs self-pay rejects `minOut`** (APNTsSaleContract.buyAPNTs has no slippage param — was
+  silently dropped; use buyGasless for aPNTs slippage). Refreshed stale token-sale test addresses.
+
 ## [0.26.2] - 2026-06-22
 **SDK Code Integrity Hash**: `faa6e3cbe3fee53da7c584d016b9f458803d9fae0c80dfb5db1b7dd22267dd38`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
