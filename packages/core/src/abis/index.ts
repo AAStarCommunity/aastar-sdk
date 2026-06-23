@@ -15,6 +15,9 @@ import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
 import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
 import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
 import PaymasterABIData from './Paymaster.json' with { type: 'json' };
+import AAStarGlobalGuardABIData from './AAStarGlobalGuard.json' with { type: 'json' };
+import RailgunParserABIData from './RailgunParser.json' with { type: 'json' };
+import UniswapV3ParserABIData from './UniswapV3Parser.json' with { type: 'json' };
 
 // AA Standard (从 out/ 提取)
 import EntryPointABIData from './EntryPoint.json' with { type: 'json' };
@@ -77,6 +80,9 @@ export const SuperPaymasterArtifact = SuperPaymasterABIData;
 
 export const PaymasterFactoryABI = (PaymasterFactoryABIData as any).abi || PaymasterFactoryABIData;
 export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
+export const AAStarGlobalGuardABI = (AAStarGlobalGuardABIData as any).abi || AAStarGlobalGuardABIData;
+export const RailgunParserABI = (RailgunParserABIData as any).abi || RailgunParserABIData;
+export const UniswapV3ParserABI = (UniswapV3ParserABIData as any).abi || UniswapV3ParserABIData;
 
 // Paymaster V4 (使用 Paymaster.json)
 export const PaymasterABI = (PaymasterABIData as any).abi || PaymasterABIData;
