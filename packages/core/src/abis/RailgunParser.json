@@ -1,0 +1,28 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "parseTokenTransfer",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tokenIn",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "amountIn",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "pure"
+    }
+  ]
+}

@@ -50,7 +50,8 @@
     "test:eip2537": "tsx scripts/16_verify_eip2537_precompiles.ts",
     "docs:generate": "typedoc --options typedoc.json",
     "docs:sync": "bash scripts/extract-docs.sh",
-    "upstream:versions": "tsx scripts/upstream/upstream-radar.ts --versions"
+    "upstream:versions": "tsx scripts/upstream/upstream-radar.ts --versions",
+    "check:abi": "tsx scripts/check-abi-completeness.ts"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
