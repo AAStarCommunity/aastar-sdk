@@ -25,7 +25,7 @@
     "test:full_sdk": "bash run_sdk_regression.sh sdk",
     "audit": "pnpm audit --audit-level=moderate",
     "audit:fix": "pnpm audit --fix",
-    "audit:abi": "tsx scripts/analyze_abi_coverage.ts",
+    "audit:abi": "tsx scripts/check-abi-completeness.ts && tsx scripts/analyze_abi_coverage.ts",
     "check:addresses": "tsx scripts/check-address-consistency.ts",
     "upstream:check": "tsx scripts/upstream/upstream-radar.ts",
     "upstream:rehearse": "tsx scripts/upstream/upstream-radar.ts --rehearse",

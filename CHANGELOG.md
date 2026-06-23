@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.5] - 2026-06-23
+**SDK Code Integrity Hash**: `4a1fe97bcd869aff6bfa3db26e8c0252f701bf7986e20eb047cf5ac5d238174f`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**GuardClient (AAStarGlobalGuard) + upstream ABI completeness gate.**
+
+- **[ADDED] `GuardClient`** (`@aastar/core`, browser-safe): read + manage an account's
+  AAStarGlobalGuard (per-account spending limits / tiered policy). Reads `getConfig` / `getTokenConfig`
+  / `getTokenTodaySpent`; management (`encodeAddTokenConfig` / `encodeDecreaseDailyLimit` /
+  `encodeDecreaseTokenDailyLimit` / `encodeSetStrictMode`) returns a `GuardCall {to,value,data}` to
+  submit via `account.execute` as a UserOp (Guard writes are `onlyAccount`). `AAStarGlobalGuardABI` exported.
+- **[ADDED] missing ABIs** `RailgunParser` / `UniswapV3Parser` → AirAccount now 14/14.
+- **[ADDED] `pnpm run check:abi`** (chained into `audit:abi`): fails if any upstream concrete contract
+  lacks an SDK ABI (so a missing one — like AAStarGlobalGuard had been — is caught automatically).
+  Coverage: SuperPaymaster 16/16, AirAccount 14/14, launch 4/4.
+
 ## [0.26.4] - 2026-06-23
 **SDK Code Integrity Hash**: `5735b2065985fe6419dcf19714a54c1756decdceb7f6a3ba27fd2c64900cdad5`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
