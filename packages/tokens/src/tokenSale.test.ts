@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TokenSaleClient, usd } from './tokenSale.js';
 
 const SEPOLIA = 11155111;
-// Path-A canonical-bound Sepolia sale stack (buyTokensFor redeploy, launch#21) — matches @aastar/core.
-const SALE_GT = '0x86ac0278fafa3bf51e18426937a264e16b78bce4';
-const SALE_AP = '0x1ce31924ee7e0296d6b739d0bc96b354ca55b30c';
-const BUY_HELPER = '0xF78f898413ef069C870A554f47B66eC6D9c5B429';
+// Path-A canonical-bound Sepolia sale stack (audit-fix redeploy, #165) — matches @aastar/core.
+const SALE_GT = '0xa563fa13e2353ae7d65fce37f4801288cd11fc3e';
+const SALE_AP = '0x9cf028d17b40e5249ce119a2e642a6ec91a285d0';
+const BUY_HELPER = '0x8d08fBD8297355BC93397820AE1CfFD884BEaA00';
 const USDC = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
 const GTOKEN_PAYOUT = '0x4e6A1125B8619d6D05c99AB2F30BDFc96C843B67';
 const APNTS_PAYOUT = '0x4C4EC2e866f0c43DCA4670A6033e962a05B4C772';
@@ -180,9 +180,9 @@ describe('buyGasless', () => {
 
     expect(res).toEqual({ txHash: '0xc0ffee', matchedRule: 'rule-1' });
     expect(wallet.signTypedData).toHaveBeenCalledTimes(2);
-    // primaryType order: TransferWithAuthorization then BuyIntent
+    // primaryType order: ReceiveWithAuthorization (EIP-3009, anti-front-run) then BuyIntent
     const primaries = wallet.signTypedData.mock.calls.map((a: any) => a[0].primaryType);
-    expect(primaries).toEqual(['TransferWithAuthorization', 'BuyIntent']);
+    expect(primaries).toEqual(['ReceiveWithAuthorization', 'BuyIntent']);
     // posts to /v3/relay with the resolved targetToken
     const [url, init] = fetchMock.mock.calls[0] as any[];
     expect(url).toMatch(/\/v3\/relay$/);

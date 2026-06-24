@@ -289,7 +289,7 @@ export class TokenSaleClient {
 
   // ─── Gasless flow (EIP-3009 + BuyIntent → relayer) ───────────────────────
   /**
-   * Buy with zero gas: signs an EIP-3009 USDC `TransferWithAuthorization` (to BuyHelper)
+   * Buy with zero gas: signs an EIP-3009 USDC `ReceiveWithAuthorization` (to BuyHelper)
    * and an EIP-712 `BuyIntent`, then posts both to the relayer's `/v3/relay`. Returns the
    * relayer-submitted tx hash after on-chain confirmation. Payment is always USDC.
    */
@@ -306,12 +306,12 @@ export class TokenSaleClient {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSeconds ?? 1800));
     const nonce = randomNonce();
 
-    // ① EIP-3009 USDC TransferWithAuthorization → BuyHelper
+    // ① EIP-3009 USDC ReceiveWithAuthorization → BuyHelper
     const transferSig = await (wallet as any).signTypedData({
       account: signer,
       domain: { name: 'USDC', version: '2', chainId: this.chainId, verifyingContract: usdc },
       types: {
-        TransferWithAuthorization: [
+        ReceiveWithAuthorization: [
           { name: 'from', type: 'address' },
           { name: 'to', type: 'address' },
           { name: 'value', type: 'uint256' },
@@ -320,7 +320,7 @@ export class TokenSaleClient {
           { name: 'nonce', type: 'bytes32' },
         ],
       },
-      primaryType: 'TransferWithAuthorization',
+      primaryType: 'ReceiveWithAuthorization',
       message: {
         from: account,
         to: buyHelper,
