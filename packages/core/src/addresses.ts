@@ -243,9 +243,9 @@ export const LAUNCH_SALE_ADDRESSES: Record<number, LaunchSaleAddresses> = {
   // inventory funded from the deployer, replacing the earlier test-token-bound
   // deployment. `getPayoutToken()` now resolves on-chain to the canonical tokens.
   11155111: {
-    saleGToken: "0x86aC0278fAFA3Bf51e18426937A264e16B78bce4", // SaleContractV2 → canonical GToken (buyTokensFor redeploy, launch#21)
-    saleAPNTs: "0x1cE31924EE7e0296d6b739d0bC96B354CA55b30C", // APNTsSaleContract → canonical aPNTs (buyAPNTsFor)
-    buyHelper: "0xF78f898413ef069C870A554f47B66eC6D9c5B429", // BuyHelper (DVT-relayer gasless; capExempt)
+    saleGToken: "0xA563fA13E2353aE7D65FCE37F4801288CD11FC3e", // SaleContractV2 → canonical GToken (audit-fix redeploy, #165 / launch#26#27)
+    saleAPNTs: "0x9cF028D17b40E5249Ce119a2E642A6eC91a285D0", // APNTsSaleContract → canonical aPNTs
+    buyHelper: "0x8d08fBD8297355BC93397820AE1CfFD884BEaA00", // BuyHelper (receiveWithAuthorization; BuyIntent domain verifyingContract; capExempt)
     usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     usdt: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", // Aave Sepolia USDT (6-dec)
     // Gasless-relay pool now sourced from DVT_CONFIG (getDvtRelayerUrlsForChain) — single source of
