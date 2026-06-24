@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.7] - 2026-06-24
+**SDK Code Integrity Hash**: `00afe86000ef4819d85d250af234d6f5ca0a7f035b8f144c6dbe0c02d42c4070`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**EIP-3009 `ReceiveWithAuthorization` + audit-fix sale stack (#165). REQUIRED for gasless** — without it
+the relayer's signature verification fails (USDC invalid).
+
+- **[CHANGED] `buyGasless` EIP-3009 primaryType `TransferWithAuthorization` → `ReceiveWithAuthorization`.**
+  The audited BuyHelper now calls `receiveWithAuthorization` (`msg.sender` must == `to` — closes an
+  EIP-3009 front-running hole). Signed fields unchanged (from/to/value/validAfter/validBefore/nonce);
+  only the typehash changes. The relay reconstructs with the same fields → digests match.
+- **[CHANGED] Sepolia sale stack** (audit-fix redeploy): SaleContractV2 `0xA563fA13`, APNTsSaleContract
+  `0x9cF028D1`, BuyHelper `0x8d08fBD8` (also the BuyIntent domain `verifyingContract`). Canonical payout
+  unchanged — on-chain verified `getPayoutToken()` → GToken `0x20a051…` / aPNTs `0x9e66B457…`.
+  `buyTokensFor`/`buyAPNTsFor` unchanged. Refreshed BuyHelper ABI (+`sweepToken`).
+- **[DEV] ABI/deployment maintenance tooling** (not shipped to consumers): `check:abi-drift`, unified
+  `abi:sync`/`abi:triage`, `address:sync`, + the `.claude/skills/abi-sync` & `address-sync` skills.
+
 ## [0.26.6] - 2026-06-23
 **SDK Code Integrity Hash**: `335319fc7df9dcfaf5e6072fe8862455cf4fb5314fd712909d779ae78f572d40`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
