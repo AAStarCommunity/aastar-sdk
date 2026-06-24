@@ -51,7 +51,8 @@
     "docs:generate": "typedoc --options typedoc.json",
     "docs:sync": "bash scripts/extract-docs.sh",
     "upstream:versions": "tsx scripts/upstream/upstream-radar.ts --versions",
-    "check:abi": "tsx scripts/check-abi-completeness.ts"
+    "check:abi": "tsx scripts/check-abi-completeness.ts",
+    "check:abi-drift": "tsx scripts/check-abi-drift.ts"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
