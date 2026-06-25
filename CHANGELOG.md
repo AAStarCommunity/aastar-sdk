@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.12] - 2026-06-25
+**SDK Code Integrity Hash**: `e124566c3eef5ca0fac44290e92c8c76499328aa5a03b41ca4b97ed1c2d14ae0`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**`resolveTransfer` correctness fixes (#176 phase 1, verified against the contracts).**
+
+- **[FIX] daily-limit overage is a HARD block, not a Tier-3 promotion.** `AAStarGlobalGuard.recordSpend`
+  reverts `DailyLimitExceeded` with NO guardian bypass, so exceeding the daily allowance now sets
+  `blockReason` (wait for the daily reset — the limit is monotonic, only lowerable) instead of wrongly
+  promoting to Tier 3. The 0.26.11 model (and the consumer doc it came from) had this backwards.
+- **[FIX] tier is judged on CUMULATIVE daily spend** (`todaySpent + amount`), matching the account's
+  `_enforceGuard` (`requiredTier(guard.todaySpent() + value)`). Judging on the amount alone
+  under-estimated the tier → `InsufficientTier` revert.
+- **[ADDED] `hasGuard`** — whether any tier/daily limit is actually enforced for the asset.
+
 ## [0.26.11] - 2026-06-25
 **SDK Code Integrity Hash**: `c14b1206392abb354758b73cffe0f98a0c5e09808e9168e580ea745b4320bd81`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
