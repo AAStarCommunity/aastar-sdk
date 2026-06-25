@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.8] - 2026-06-25
+**SDK Code Integrity Hash**: `9c7363dd56a2b930167c1e5d7c83202206ec8dfa484805ad0c2fd041e8c6da22`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Community registration `roleData` encoding — fixes the bare `registerRole` revert (#169).**
+
+- **[ADDED] `encodeCommunityRoleData({name, ensName?, website?, description?, logoURI?, stakeAmount})`**
+  (`@aastar/core`) — abi-encodes the Registry's `CommunityRoleData` struct for
+  `registerRole(ROLE_COMMUNITY, user, roleData)`. The deployed Registry decodes `roleData`, so passing
+  `'0x'` made that decode revert with NO reason (the bare `execution reverted` a funded EOA hit on
+  self-registration — an already-registered caller hit `RoleAlreadyGranted` first, before the decode).
+- **[FIX] `CommunityClient.launchCommunity`** built `roleData='0x'` ("Simplified - needs proper
+  encoding") → now uses `encodeCommunityRoleData`. Same bug #169 hit.
+- **Clarification:** the deployed Registry has NO on-chain `registerRoleSelf`; the SDK's
+  `registerRoleSelf` action is a deprecated wrapper over `registerRole(roleId, caller, data)`. Use
+  `registerRole(roleId, yourAddress, roleData)` for self-registration.
+
 ## [0.26.7] - 2026-06-24
 **SDK Code Integrity Hash**: `00afe86000ef4819d85d250af234d6f5ca0a7f035b8f144c6dbe0c02d42c4070`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
