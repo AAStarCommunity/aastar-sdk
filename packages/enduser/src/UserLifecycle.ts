@@ -10,6 +10,8 @@ export interface GaslessConfig {
      * PaymasterV4 is used. CREDIT always routes to the SuperPaymaster (registry-resolved).
      */
     paymasterAddress?: Address;
+    /** ERC-20 used to pay gas under a V4 paymaster (TOKEN/SPONSORED). Required for those policies. */
+    gasToken?: Address;
 }
 
 export interface UserLifecycleConfig extends ClientConfig {
@@ -73,12 +75,10 @@ export class UserLifecycle extends BaseClient {
      * Check if user is eligible to join a community
      * @param community Address of the community
      */
-    async checkEligibility(community: Address): Promise<boolean> {
-        // Validation logic (e.g., check blacklist or whitelist via Registry)
-        const publicClient = this.getStartPublicClient();
-        const registry = registryActions(this.registryAddress)(publicClient);
-        // Placeholder: simplistic check, real logic might involve community specific rules
-        return true; 
+    async checkEligibility(_community: Address): Promise<boolean> {
+        // #169 lesson: don't silently return `true` (a stub that claims everyone is eligible). The
+        // real blacklist/whitelist/community-rule check is not implemented, so throw rather than lie.
+        throw new Error('UserLifecycle.checkEligibility is not implemented — do not rely on a stubbed eligibility result.');
     }
 
     /**
@@ -190,6 +190,7 @@ export class UserLifecycle extends BaseClient {
             data: params.data,
             paymaster: paymasterAddress,
             paymasterType,
+            gasToken: this.gaslessConfig.gasToken,
             operator: params.operator
         });
     }

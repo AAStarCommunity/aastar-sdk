@@ -444,13 +444,23 @@ export class UserClient extends BaseClient {
         data: Hex;
         paymaster: Address;
         paymasterType: 'V4' | 'Super';
+        /** ERC-20 used to pay gas under a V4 paymaster (e.g. the community's xPNTs/aPNTs). REQUIRED for V4. */
+        gasToken?: Address;
         operator?: Address; // Added for SuperPaymaster
         maxRate?: bigint;   // Added for SuperPaymaster
     }, options?: TransactionOptions): Promise<Hash> {
         try {
             const client = this.bundlerClient ? this.bundlerClient.extend(bundlerActions) : (this.client as any).extend(bundlerActions);
-            
+
             const ep = this.requireEntryPoint();
+
+            // #169 lesson: don't silently pass the call target as the gas token. V4 needs the real
+            // ERC-20; Super doesn't use a per-tx token (zero address is fine there).
+            const ZERO = '0x0000000000000000000000000000000000000000' as Address;
+            if (params.paymasterType === 'V4' && !params.gasToken) {
+                throw new Error('executeGasless: gasToken is required for a V4 paymaster (the ERC-20 paid for gas) — not the call target.');
+            }
+            const gasToken: Address = params.gasToken ?? ZERO;
             
             // 1. Prepare Call Data
             const callData = encodeFunctionData({
@@ -479,8 +489,8 @@ export class UserClient extends BaseClient {
                     this.accountAddress,
                     ep,
                     params.paymaster,
-                    params.target, // placeholder
-                    this.bundlerClient?.transport?.url || (this.client.transport as any).url || '', 
+                    gasToken,
+                    this.bundlerClient?.transport?.url || (this.client.transport as any).url || '',
                     callData,
                     {
                         operator: params.operator,
@@ -512,8 +522,8 @@ export class UserClient extends BaseClient {
                 this.accountAddress,
                 ep,
                 params.paymaster,
-                params.target, // placeholder for token if V4
-                this.bundlerClient?.transport?.url || (this.client.transport as any).url || '', 
+                gasToken,
+                this.bundlerClient?.transport?.url || (this.client.transport as any).url || '',
                 callData,
                 {
                     operator: params.operator,

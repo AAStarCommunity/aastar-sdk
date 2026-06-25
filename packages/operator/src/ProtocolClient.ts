@@ -75,23 +75,16 @@ export class ProtocolClient extends BaseClient {
     /**
      * Execute a proposal with collected signatures
      */
-    async executeWithProof(proposalId: bigint, signatures: Hex[], options?: TransactionOptions): Promise<Hash> {
-        try {
-            // Mock proof generation logic or placeholder
-            const proof = '0x' as Hex; 
-            const dvt = dvtActions(this.dvtValidatorAddress)(this.client);
-            
-            return await dvt.executeSlashWithProof({
-                proposalId,
-                repUsers: [], // Needs real data in production
-                newScores: [],
-                epoch: 0n,
-                proof,
-                account: options?.account
-            });
-        } catch (error) {
-            throw error;
-        }
+    async executeWithProof(_proposalId: bigint, _signatures: Hex[], _options?: TransactionOptions): Promise<Hash> {
+        // #169 lesson: never silently submit fake values. This previously sent proof='0x', repUsers=[],
+        // newScores=[], epoch=0n to a slashing call — garbage that ignored `signatures`. The real
+        // BLS-proof aggregation (signatures -> proof + repUsers/newScores/epoch) is not wired, so throw
+        // instead of submitting a broken slash.
+        throw new Error(
+            'ProtocolClient.executeWithProof is not implemented: BLS proof aggregation from signatures ' +
+            'is missing. Build the real proof + repUsers/newScores/epoch and call ' +
+            'dvtActions().executeSlashWithProof directly.',
+        );
     }
 
     // ========================================

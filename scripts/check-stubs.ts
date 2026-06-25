@@ -27,10 +27,16 @@ const MARKERS = [
   /TODO:?\s*(encode|implement|proper|real|wire)/i,
   /\bFIXME\b/,
   /for now,?\s*(just\s+)?(return|use|pass)\s+['"]?0x/i,
+  /,\s*\/\/\s*placeholder/i, // an arg passed with a "// placeholder" note (#169: target-as-token)
+  /\/\/\s*placeholder:/i, // "// Placeholder: <real impl missing>" stub comments
+  /(\bmock\b.*\bplaceholder\b|\bplaceholder\b.*\bmock\b)/i, // "Mock … or placeholder" (#169: proof='0x')
 ];
 
-// Allowlist: file:line substrings intentionally exempt (with a reason in review).
-const ALLOW: string[] = [];
+// Allowlist: file:line substrings intentionally exempt (with a reason). These are NOT silent stubs:
+const ALLOW: string[] = [
+  'admin/src/ProtocolGovernance.ts', // updateEntryPoint THROWS (the "Placeholder:" note explains why, not a silent path)
+  'enduser/src/testAccountManager.ts', // test/experiment harness placeholder account, not a shipped consumer path
+];
 
 function* walk(dir: string): Generator<string> {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
