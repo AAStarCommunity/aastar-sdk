@@ -155,6 +155,12 @@ export interface TransferResult {
 }
 
 /** Phase-1 output of {@link TransferManager.prepareTransfer} (the strict device-passkey flow). */
+/** Signatures a resolved tier requires (null tier = ECDSA/legacy path → passkey/owner only). */
+function requiredSigsForTier(tier: number | null): { passkey: boolean; bls: boolean; guardian: number } {
+  if (tier == null) return { passkey: true, bls: false, guardian: 0 };
+  return { passkey: true, bls: tier >= 2, guardian: tier >= 3 ? 1 : 0 };
+}
+
 export interface PreparedTransfer {
   /** Opaque handle to pass back to {@link TransferManager.submitPreparedTransfer}. */
   transferId: string;
@@ -167,6 +173,14 @@ export interface PreparedTransfer {
   publicKeyOptions: PublicKeyCredentialRequestOptions;
   /** The UserOp hash (informational; the frontend does not need to sign it directly). */
   userOpHash: string;
+  /**
+   * The resolved AirAccount tier for this transfer (1/2/3), or `null` for the ECDSA / legacy-BLS path.
+   * Tier 3 (amount > tier2Limit) REQUIRES a guardian co-signature at submit — pass it via
+   * `submitPreparedTransfer({ ..., guardianSigner })`, or the submit will fail-fast before any gas.
+   */
+  tier: TierLevel | null;
+  /** Which signatures this transfer needs, so the UI knows whether to collect a guardian co-sign. */
+  requiredSigs: { passkey: boolean; bls: boolean; guardian: number };
 }
 
 /** How long a prepareTransfer record lives before it's evicted (the WebAuthn challenge is short-lived). */
@@ -370,7 +384,7 @@ export class TransferManager {
       ownerMessageHex: bytesToHex(message),
       createdAt: now,
     });
-    return { transferId, challengeId, publicKeyOptions, userOpHash };
+    return { transferId, challengeId, publicKeyOptions, userOpHash, tier: strategy.tier as TierLevel | null, requiredSigs: requiredSigsForTier(strategy.tier) };
   }
 
   /**
@@ -380,7 +394,16 @@ export class TransferManager {
    */
   async submitPreparedTransfer(
     userId: string,
-    params: { transferId: string; webAuthnAssertion: WebAuthnAssertion }
+    params: {
+      transferId: string;
+      webAuthnAssertion: WebAuthnAssertion;
+      /**
+       * Guardian co-signer, REQUIRED when the prepared transfer is Tier 3 (see {@link PreparedTransfer.tier}).
+       * Collected at submit time (after the UI saw it was needed). If omitted for a Tier-3 transfer,
+       * submit fail-fasts (no gas) instead of producing an incomplete signature that reverts on-chain.
+       */
+      guardianSigner?: GuardianSigner;
+    }
   ): Promise<TransferResult> {
     const prep = this.prepared.get(params.transferId);
     if (!prep || prep.userId !== userId) {
@@ -403,13 +426,27 @@ export class TransferManager {
           "challenge no longer matches the payload); call prepareTransfer again."
       );
     }
+    // Tier 3 needs a guardian co-sign. Take it from the submit call (the usual browser flow — the
+    // guardian signs after the UI saw tier 3) or fall back to one passed at prepare time. Fail-fast
+    // here with a clear message before consuming the one-time assertion / spending gas.
+    if (strategy.tier === 3 && !params.guardianSigner && !prep.params.guardianSigner) {
+      throw new Error(
+        "submitPreparedTransfer: this is a Tier-3 transfer (amount > tier2Limit) and needs a guardian " +
+          "co-signature — pass `guardianSigner`. (Collect it from a guardian before submitting; not " +
+          "submitting avoids burning gas on a signature the account would reject.)"
+      );
+    }
+    const signParams = params.guardianSigner
+      ? { ...prep.params, guardianSigner: params.guardianSigner }
+      : prep.params;
+
     this.prepared.delete(params.transferId); // one-time (the assertion's challenge is also one-time)
 
     await this.applySignature(
       userId,
       prep.userOp,
       prep.userOpHash,
-      prep.params,
+      signParams,
       { webAuthnAssertion: params.webAuthnAssertion },
       strategy
     );

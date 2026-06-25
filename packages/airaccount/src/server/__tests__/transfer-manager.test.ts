@@ -127,6 +127,34 @@ describe("TransferManager", () => {
     });
   });
 
+  describe("submitPreparedTransfer Tier-3 guardian fail-fast (#176 phase 2)", () => {
+    function seedPrepared(mgr: TransferManager, tier: number) {
+      (mgr as any).prepared.set("t1", {
+        userId: "u1", userOp: {}, userOpHash: "0xhash", version: "0.7",
+        accountAddress: "0xacc", params: {}, ownerMessageHex: "0x", createdAt: Date.now(),
+      });
+      vi.spyOn(mgr as any, "resolveSignStrategy").mockResolvedValue({ useECDSA: false, isCompositeValidator: true, tier });
+      vi.spyOn(mgr as any, "ownerMessageForStrategy").mockResolvedValue(new Uint8Array()); // bytesToHex → "0x", matches
+    }
+
+    it("throws (no gas) when Tier 3 and no guardianSigner is supplied", async () => {
+      const mgr = makeManager();
+      seedPrepared(mgr, 3);
+      await expect(
+        mgr.submitPreparedTransfer("u1", { transferId: "t1", webAuthnAssertion: {} as any })
+      ).rejects.toThrow(/Tier-3.*guardian/);
+    });
+
+    it("does NOT block a Tier-2 transfer for a missing guardian", async () => {
+      const mgr = makeManager();
+      seedPrepared(mgr, 2);
+      // applySignature will fail later (mock deps), but NOT with the Tier-3 guardian fail-fast.
+      await expect(
+        mgr.submitPreparedTransfer("u1", { transferId: "t1", webAuthnAssertion: {} as any })
+      ).rejects.not.toThrow(/Tier-3.*guardian/);
+    });
+  });
+
   describe("detectSignatureStrategy", () => {
     const ACCOUNT = "0x1234567890123456789012345678901234567890";
 
