@@ -146,6 +146,13 @@ export class UserLifecycle extends BaseClient {
         if (!this.gaslessConfig) {
             throw new Error("Gasless configuration not enabled. Call enableGasless() first.");
         }
+        // #169 lesson: an unset policy must NOT silently default to V4 (it would route to the
+        // canonical PaymasterV4 and SUCCEED silently — the dangerous case). Require it explicitly.
+        if (!this.gaslessConfig.policy) {
+            throw new Error(
+                "gasless.policy is required ('CREDIT' | 'TOKEN' | 'SPONSORED') — refusing to default the paymaster silently.",
+            );
+        }
 
         const userClient = await import('./UserClient.js').then(m => new m.UserClient({
             ...this.config,
