@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.10] - 2026-06-25
+**SDK Code Integrity Hash**: `e355a5bd6f21912c9514f6b818946d05d00588c886145cc7efb07dc18df178ca`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Silent-stub cleanup — 5 more placeholder paths eliminated (#169 retrospective, continued).**
+
+The broadened `check:stubs` guard found 5 more silent stubs of the #169 class (placeholder values
+silently used/returned). All fixed:
+- **[FIX] `ProtocolClient.executeWithProof`** submitted `proof='0x'` + empty `repUsers`/`newScores`/
+  `epoch` to a SLASHING call (ignoring `signatures`) → now throws (proof aggregation not wired).
+- **[FIX] `UserClient.executeGasless`** passed the call target as the V4 gas token → now takes an
+  explicit `gasToken` and throws for V4 without it (threaded through `UserLifecycle` gasless config).
+- **[FIX] `UserLifecycle.checkEligibility`** returned `true` unconditionally → now throws.
+- **[FIX] `ProtocolGovernance.getProtocolParams`** `treasury` was approximated as `registry.owner()`
+  → now reads the real `SuperPaymaster.treasury()`.
+- **[FIX] `UserLifecycle.getMyReputation`** `level` was always `0n` → now derived from the Registry's
+  `levelThresholds`. The read-by-index loop breaks ONLY on a contract revert (out-of-bounds), and
+  re-throws network/RPC errors (a `catch{break}` would silently under-report the level — the #169
+  pattern again, caught in review).
+- **[DEV] `check:stubs`** markers broadened (arg-placeholder / `Placeholder:` / mock-placeholder).
+
 ## [0.26.9] - 2026-06-25
 **SDK Code Integrity Hash**: `bf04ef4e9cb516edbb8ec150a03d095b0f1c502afbd4ab51f10529fd60ebc074`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
