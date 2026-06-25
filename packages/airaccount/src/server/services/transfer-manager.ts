@@ -45,7 +45,7 @@ const EMPTY_P256: readonly [`0x${string}`, `0x${string}`, `0x${string}`] = [ZERO
 import { PaymasterPriceStalenessError } from "./paymaster-manager";
 import { UserOperation, PackedUserOperation } from "../../core/types";
 import { ERC4337Utils } from "../../core/erc4337";
-import { TierLevel } from "../../core/tier";
+import { TierLevel, sigsForTier } from "../../core/tier";
 
 // ── Parsed local ABIs ─────────────────────────────────────────────
 // Widened to the loose `Abi` type so encodeFunctionData accepts dynamic
@@ -154,13 +154,14 @@ export interface TransferResult {
   amount: string;
 }
 
-/** Phase-1 output of {@link TransferManager.prepareTransfer} (the strict device-passkey flow). */
-/** Signatures a resolved tier requires (null tier = ECDSA/legacy path → passkey/owner only). */
+/** Signatures a resolved tier requires (null tier = ECDSA/legacy path → owner/passkey only). Reuses
+ *  the single tier→sigs mapping from core/tier so the two definitions never drift. */
 function requiredSigsForTier(tier: number | null): { passkey: boolean; bls: boolean; guardian: number } {
   if (tier == null) return { passkey: true, bls: false, guardian: 0 };
-  return { passkey: true, bls: tier >= 2, guardian: tier >= 3 ? 1 : 0 };
+  return sigsForTier(tier as TierLevel);
 }
 
+/** Phase-1 output of {@link TransferManager.prepareTransfer} (the strict device-passkey flow). */
 export interface PreparedTransfer {
   /** Opaque handle to pass back to {@link TransferManager.submitPreparedTransfer}. */
   transferId: string;
@@ -429,7 +430,7 @@ export class TransferManager {
     // Tier 3 needs a guardian co-sign. Take it from the submit call (the usual browser flow — the
     // guardian signs after the UI saw tier 3) or fall back to one passed at prepare time. Fail-fast
     // here with a clear message before consuming the one-time assertion / spending gas.
-    if (strategy.tier === 3 && !params.guardianSigner && !prep.params.guardianSigner) {
+    if (strategy.tier != null && strategy.tier >= 3 && !params.guardianSigner && !prep.params.guardianSigner) {
       throw new Error(
         "submitPreparedTransfer: this is a Tier-3 transfer (amount > tier2Limit) and needs a guardian " +
           "co-signature — pass `guardianSigner`. (Collect it from a guardian before submitting; not " +
