@@ -1,6 +1,6 @@
 {
   "name": "@aastar/core",
-  "version": "0.26.9",
+  "version": "0.26.10",
   "publishConfig": {
     "access": "public"
   },
