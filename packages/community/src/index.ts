@@ -269,8 +269,14 @@ export class CommunityClient {
 
         await this.publicClient.waitForTransactionReceipt({ hash: approveTx });
 
-        // Step 2: Register role
-        const roleData = '0x'; // Simplified - needs proper encoding
+        // Step 2: Register role. roleData MUST be the abi-encoded CommunityRoleData struct — the
+        // Registry decodes it, so an empty '0x' makes that decode revert with no reason (#169).
+        const { encodeCommunityRoleData } = await import('@aastar/core');
+        const roleData = encodeCommunityRoleData({
+            name: config.name,
+            logoURI: config.logoURI,
+            stakeAmount: config.stakeAmount,
+        });
         const registerTx = await this.walletClient.writeContract({
             address: registryAddress,
             abi: [{

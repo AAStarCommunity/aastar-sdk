@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, type AbiEvent, type BlockNumber, type BlockTag, keccak256, toBytes, decodeFunctionData, decodeAbiParameters } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, type AbiEvent, type BlockNumber, type BlockTag, keccak256, toBytes, decodeFunctionData, decodeAbiParameters, encodeAbiParameters } from 'viem';
 import { RegistryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
@@ -17,6 +17,35 @@ const COMMUNITY_ROLE_DATA_PARAMS = [{
         { name: 'stakeAmount', type: 'uint256' }
     ]
 }] as const;
+
+/** The `roleData` payload a ROLE_COMMUNITY registration must carry (abi-encoded into the bytes). */
+export interface CommunityRoleData {
+    name: string;
+    ensName?: string;
+    website?: string;
+    description?: string;
+    logoURI?: string;
+    /** GToken to lock for the COMMUNITY role (must match the amount actually staked). */
+    stakeAmount: bigint;
+}
+
+/**
+ * Encode the `roleData` bytes for `registerRole(ROLE_COMMUNITY, user, roleData)`.
+ *
+ * The deployed Registry abi-decodes `roleData` into its `CommunityRoleData` struct, so passing `'0x'`
+ * (empty) makes that decode revert with NO reason — the bare `execution reverted` seen when a funded
+ * EOA tries to self-register (aastar-sdk#169). Always build the bytes with this helper.
+ */
+export function encodeCommunityRoleData(data: CommunityRoleData): Hex {
+    return encodeAbiParameters(COMMUNITY_ROLE_DATA_PARAMS, [{
+        name: data.name,
+        ensName: data.ensName ?? '',
+        website: data.website ?? '',
+        description: data.description ?? '',
+        logoURI: data.logoURI ?? '',
+        stakeAmount: data.stakeAmount,
+    }]);
+}
 
 /**
  * Reconstruct the ACTIVE members of a role via event indexing.
