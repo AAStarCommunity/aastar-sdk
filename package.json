@@ -55,7 +55,8 @@
     "check:abi-drift": "tsx scripts/check-abi-drift.ts",
     "abi:sync": "tsx scripts/abi-sync.ts",
     "abi:triage": "tsx scripts/abi-triage.ts",
-    "address:sync": "tsx scripts/address-sync.ts"
+    "address:sync": "tsx scripts/address-sync.ts",
+    "check:stubs": "tsx scripts/check-stubs.ts"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
