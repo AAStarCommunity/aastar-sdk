@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.11] - 2026-06-25
+**SDK Code Integrity Hash**: `c14b1206392abb354758b73cffe0f98a0c5e09808e9168e580ea745b4320bd81`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**`resolveTransfer` — unified ETH+ERC20 tiered-transfer decision API (#176 phase 1).**
+
+- **[ADDED] `resolveTransfer({ client, account, token?, amount, guard? })`** (`@aastar/sdk/airaccount`,
+  read-only, browser-safe) → `{ tier, requiredSigs:{passkey,bls,guardian}, asset, limits, hasGuard,
+  reason, blockReason }`. One call returns the transfer branch so a consumer never hand-judges tiers.
+  Combines the two INDEPENDENT on-chain mechanisms as their MAX — the account tier
+  (`tier1Limit`/`tier2Limit`) and the Guard daily allowance (ETH `dailyLimit`, or per-token
+  `tokenConfigs`+`tokenTodaySpent`). Exceeding the daily allowance forces Tier 3 (a guardian co-sign)
+  even at account-tier 0 — the case #176 hit. `hasGuard` flags whether any limit is actually enforced
+  (so `tier:1 + hasGuard:false` reads as "unprotected", not "small amount").
+- Consumers can use it as an immediate submit gate (fail-fast: don't submit until `requiredSigs` are
+  gathered) ahead of the phase-2 co-sign wiring.
+
 ## [0.26.10] - 2026-06-25
 **SDK Code Integrity Hash**: `e355a5bd6f21912c9514f6b818946d05d00588c886145cc7efb07dc18df178ca`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
