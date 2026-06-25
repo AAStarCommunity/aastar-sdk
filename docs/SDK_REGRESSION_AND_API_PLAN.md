@@ -96,3 +96,26 @@ pnpm build
 # 2. 运行特定场景 (开发中)
 pnpm test:scenarios --filter=01_community
 ```
+
+---
+
+## N. 经验教训：合约耦合写路径的强制测试 (Lessons — Contract-Coupled Write Paths)
+
+> 来源：#169（`registerRole` 裸 revert）。`CommunityClient.launchCommunity` 长期 ship 了 `roleData='0x'`（注释 "Simplified - needs proper encoding"），mock-only 单测从未发现，直到 YAA onboarding 在真实 Registry 上裸 revert。`check:stubs` 随后又抓出 `UserLifecycle` 的 paymaster placeholder（V4 policy 错用 SuperPaymaster 地址）。
+
+### 为什么没被发现
+1. **静默 stub**：stub 不是 throw,而是**默默提交占位数据**（`'0x'`/`address(0)`），函数看起来能用。
+2. **单测 mock 了 writeContract**：只断言"函数被调用",**不校验 args 是否对合约合法**（mock 不管参数都返回假 hash）。
+3. **写路径没有链上/fork 集成测试**：从未在真实 Registry（会 abi.decode roleData）上跑过 launchCommunity。
+4. **潜伏期长**：没有消费方走到该路径,直到 YAA。
+
+### 四条强制规则（已落地为 gate）
+1. **禁止静默 stub**——未完成的编码/参数必须 `throw`（NotImplemented）,**绝不默默提交占位值**。`pnpm run check:stubs` 扫 shipped `src/` 的 stub 标记（"needs proper encoding"/"Simplified -"/placeholder/FIXME/`for now … 0x`）,命中即 FAIL。
+2. **单测校验 ARGS 而非"被调用"**——mock writeContract 时,断言参数可解码/合法（如 roleData decode 成 CommunityRoleData）。见 `packages/core/src/actions/registry.test.ts`。
+3. **每个合约耦合写路径,要么有链上(anvil/fork)集成测试,要么有 `simulateContract` 检查**——roleData/前置不满足的 revert 必须能让测试失败。simulateContract 是最便宜的 gate（YAA 正是用它定位 #169）。
+4. **信链**——写流程对真实/fork 合约验证,不只 mock。
+
+### CI/发版 gate 清单（合并到 `audit:abi` / 发版前）
+- `pnpm run check:abi`（缺合约）· `check:abi-drift`（ABI 漂移）· `check:addresses`（地址）· **`check:stubs`（静默 stub）**
+- `abi:sync` / `address:sync`（上游接口/部署同步）
+- 关键写路径：anvil/fork 集成测试 或 simulateContract（launchCommunity、registerRole、gasless 等）

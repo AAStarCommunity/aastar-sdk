@@ -5,6 +5,11 @@ import { registryActions, sbtActions, tokenActions, stakingActions, entryPointAc
 export interface GaslessConfig {
     paymasterUrl: string;
     policy?: 'CREDIT' | 'TOKEN' | 'SPONSORED';
+    /**
+     * Explicit paymaster for TOKEN/SPONSORED (V4) policies. If omitted, the chain's canonical
+     * PaymasterV4 is used. CREDIT always routes to the SuperPaymaster (registry-resolved).
+     */
+    paymasterAddress?: Address;
 }
 
 export interface UserLifecycleConfig extends ClientConfig {
@@ -141,6 +146,13 @@ export class UserLifecycle extends BaseClient {
         if (!this.gaslessConfig) {
             throw new Error("Gasless configuration not enabled. Call enableGasless() first.");
         }
+        // #169 lesson: an unset policy must NOT silently default to V4 (it would route to the
+        // canonical PaymasterV4 and SUCCEED silently — the dangerous case). Require it explicitly.
+        if (!this.gaslessConfig.policy) {
+            throw new Error(
+                "gasless.policy is required ('CREDIT' | 'TOKEN' | 'SPONSORED') — refusing to default the paymaster silently.",
+            );
+        }
 
         const userClient = await import('./UserClient.js').then(m => new m.UserClient({
             ...this.config,
@@ -150,12 +162,27 @@ export class UserLifecycle extends BaseClient {
             bundlerClient: (this.config as any).bundlerClient 
         }));
 
-        // Determine Paymaster Type based on policy
-        const paymasterType = this.gaslessConfig.policy === 'CREDIT' ? 'Super' : 'V4'; 
-        // Note: Real implementation needs to resolve actual Paymaster Address from Registry/Config
-        // This is a placeholder address resolution
-        const registry = registryActions(this.registryAddress)(this.client);
-        const paymasterAddress = await registry.SUPER_PAYMASTER(); 
+        // Resolve the paymaster ADDRESS for the policy (not a placeholder — #169 lesson: never
+        // silently submit the wrong address). CREDIT → SuperPaymaster (registry-resolved);
+        // TOKEN/SPONSORED → V4: explicit config address, else the chain's canonical PaymasterV4.
+        const paymasterType = this.gaslessConfig.policy === 'CREDIT' ? 'Super' : 'V4';
+        let paymasterAddress: Address;
+        if (paymasterType === 'Super') {
+            const registry = registryActions(this.registryAddress)(this.client);
+            paymasterAddress = await registry.SUPER_PAYMASTER();
+        } else if (this.gaslessConfig.paymasterAddress) {
+            paymasterAddress = this.gaslessConfig.paymasterAddress;
+        } else {
+            const { getCanonicalAddresses } = await import('@aastar/core');
+            const chainId = await this.client.getChainId();
+            const canon = getCanonicalAddresses(chainId) as any;
+            if (!canon?.paymasterV4) {
+                throw new Error(
+                    `No canonical PaymasterV4 for chain ${chainId}; set gasless.paymasterAddress for a ${this.gaslessConfig.policy} policy.`,
+                );
+            }
+            paymasterAddress = canon.paymasterV4 as Address;
+        }
 
         return await userClient.executeGasless({
             target: params.target,
