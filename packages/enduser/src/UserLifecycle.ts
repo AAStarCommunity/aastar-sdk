@@ -217,11 +217,20 @@ export class UserLifecycle extends BaseClient {
             registry.getCreditLimit({ user: this.accountAddress })
         ]);
 
-        return {
-            score,
-            level: 0n, // TODO: Add level calculation logic
-            creditLimit
-        };
+        // Derive the level from the Registry's ascending level thresholds: the level is the number of
+        // thresholds the score meets (read until the thresholds array runs out / reverts).
+        let level = 0n;
+        for (let i = 0; i < 32; i++) {
+            try {
+                const threshold = await registry.levelThresholds({ levelIndex: BigInt(i) });
+                if (score >= threshold) level = BigInt(i + 1);
+                else break;
+            } catch {
+                break; // past the end of the thresholds array
+            }
+        }
+
+        return { score, level, creditLimit };
     }
 
     async getCreditLimit(): Promise<bigint> {
