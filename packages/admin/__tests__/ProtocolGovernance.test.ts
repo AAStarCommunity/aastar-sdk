@@ -17,11 +17,15 @@ const mocks = vi.hoisted(() => {
       owner: vi.fn()
   };
   
+  const mockSuperPaymaster = { treasury: vi.fn().mockResolvedValue('0xTreasury') };
+
   return {
     mockRegistry,
+    mockSuperPaymaster,
     // Factory functions
     mockRegistryActions: vi.fn(() => () => mockRegistry),
     mockEntryPointActions: vi.fn(() => () => ({})), // Not used heavily yet
+    mockSuperPaymasterActions: vi.fn(() => () => mockSuperPaymaster),
   };
 });
 
@@ -31,6 +35,7 @@ vi.mock('@aastar/core', async () => {
     ...actual,
     registryActions: mocks.mockRegistryActions,
     entryPointActions: mocks.mockEntryPointActions,
+    superPaymasterActions: mocks.mockSuperPaymasterActions,
   };
 });
 
