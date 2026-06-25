@@ -39,13 +39,22 @@ describe('resolveTransfer (#176 unified ETH+ERC20 tier/guard branch)', () => {
     expect(r.requiredSigs.guardian).toBe(0);
   });
 
-  it('exceeding the guard daily allowance forces Tier 3 even when account tier is 0 (the #176 case)', async () => {
-    // account tier unconfigured (0/0) → accountTier=1, but amount blows the guard daily → T3 guardian.
+  it('exceeding the guard daily allowance is a HARD block, NOT a tier-3 promotion (corrected #176 model)', async () => {
+    // account tier unconfigured (0/0) → tier 1; amount blows the guard daily → blockReason, not T3.
+    // Guard.recordSpend hard-reverts over-limit spends; a guardian does NOT bypass it.
     const c = makeClient({ guard: GUARD, tier1Limit: 0n, tier2Limit: 0n }, guardDefaults({ dailyLimit: 1000n, remainingDailyAllowance: 1000n }));
+    const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 5000n });
+    expect(r.tier).toBe(1); // NOT promoted to 3
+    expect(r.requiredSigs.guardian).toBe(0);
+    expect(r.blockReason).toMatch(/daily allowance/);
+  });
+
+  it('amount > account tier2Limit → Tier 3 (guardian) — this is the guardian-enabled path', async () => {
+    const c = makeClient({ guard: GUARD, tier1Limit: 100n, tier2Limit: 1000n }, guardDefaults({ dailyLimit: 1000000n, remainingDailyAllowance: 1000000n }));
     const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 5000n });
     expect(r.tier).toBe(3);
     expect(r.requiredSigs).toEqual({ passkey: true, bls: true, guardian: 1 });
-    expect(r.reason).toMatch(/daily allowance/);
+    expect(r.blockReason).toBeUndefined();
   });
 
   it('ERC20 uses the token tier config (guard tokenConfigs), not the account tier', async () => {
