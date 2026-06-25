@@ -71,7 +71,8 @@ interface ReadClient {
   readContract(args: { address: Address; abi: unknown; functionName: string; args?: readonly unknown[] }): Promise<unknown>;
 }
 
-const sigsForTier = (t: TierLevel): RequiredSigs => ({ passkey: true, bls: t >= 2, guardian: t >= 3 ? 1 : 0 });
+/** Single source of truth for the tier → required-signatures mapping (weights: passkey≥T1, +BLS≥T2, +guardian≥T3). */
+export const sigsForTier = (t: TierLevel): RequiredSigs => ({ passkey: true, bls: t >= 2, guardian: t >= 3 ? 1 : 0 });
 
 export interface ResolveTransferParams {
   client: ReadClient;
