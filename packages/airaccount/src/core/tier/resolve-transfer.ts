@@ -52,9 +52,10 @@ export interface TransferResolution {
   asset: 'ETH' | Address;
   limits: TransferLimits;
   /**
-   * Whether a Guard is actually enforcing daily limits for this asset. `false` means the daily-limit
-   * dimension is UNENFORCED (account has no guard, or this ERC-20 has no tokenConfig) — so a `tier:1`
-   * result then reflects "unprotected", not "small amount". Lets the caller surface that distinction.
+   * Whether AT LEAST ONE limit (tier1/tier2 or daily) is actually enforced for this asset. `false`
+   * means nothing is enforced (no guard, or guard present but all limits 0, or an ERC-20 with no
+   * tokenConfig) — so a `tier:1` result then reflects "unprotected", not "small amount". Computed the
+   * same way for ETH and ERC-20.
    */
   hasGuard: boolean;
   /** Why this tier was chosen (account-tier vs guard daily overage). */
@@ -97,9 +98,6 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
   let tier2Limit = 0n;
   let dailyLimit = 0n;
   let todaySpent = 0n;
-  // `hasGuard` reflects whether THIS asset's daily limit is actually enforced (account has a guard
-  // AND, for ERC-20, that token has a config). It's distinct from the guard merely existing.
-  let assetGuarded = false;
   let blockReason: string | undefined;
 
   if (isEth) {
@@ -110,7 +108,6 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
       const cfg = await new GuardClient(client, guardAddr).getConfig();
       dailyLimit = cfg.dailyLimit;
       todaySpent = cfg.todaySpent;
-      assetGuarded = true;
     }
   } else if (hasGuard) {
     const guard = new GuardClient(client, guardAddr);
@@ -123,13 +120,15 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
     tier2Limit = tc.tier2Limit;
     dailyLimit = tc.dailyLimit;
     todaySpent = spent;
-    const configured = tier1Limit !== 0n || tier2Limit !== 0n || dailyLimit !== 0n;
-    assetGuarded = configured;
     // Strict mode blocks tokens with no config at all.
-    if (cfg.strictMode && !configured) {
+    if (cfg.strictMode && tier1Limit === 0n && tier2Limit === 0n && dailyLimit === 0n) {
       blockReason = 'strict mode is on and this token has no Guard config — add a tokenConfig first';
     }
   }
+  // `assetGuarded` = at least one limit (tier OR daily) is actually enforced for THIS asset — same
+  // check for ETH and ERC-20. A guard that exists but has dailyLimit=0 AND no tier limits is NOT
+  // enforcing anything, so this is false (so `tier:1 + hasGuard:false` reads as "unprotected").
+  const assetGuarded = tier1Limit !== 0n || tier2Limit !== 0n || dailyLimit !== 0n;
   // Unified remaining (same formula for ETH and ERC-20; fail-closed — never negative).
   const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
 

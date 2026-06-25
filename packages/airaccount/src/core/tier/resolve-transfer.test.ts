@@ -67,6 +67,14 @@ describe('resolveTransfer (#176 unified ETH+ERC20 tier/guard branch)', () => {
     // ETH with a configured guard → guarded.
     const guarded = makeClient({ guard: GUARD, tier1Limit: 100n, tier2Limit: 1000n }, guardDefaults({ dailyLimit: 10000n, remainingDailyAllowance: 10000n }));
     expect((await resolveTransfer({ client: guarded, account: ACCOUNT, amount: 50n })).hasGuard).toBe(true);
+
+    // ETH, guard present but dailyLimit=0 AND no tier limits → NOT enforced (Codex R2): hasGuard false.
+    const emptyGuard = makeClient({ guard: GUARD, tier1Limit: 0n, tier2Limit: 0n }, guardDefaults({ dailyLimit: 0n }));
+    expect((await resolveTransfer({ client: emptyGuard, account: ACCOUNT, amount: 50n })).hasGuard).toBe(false);
+
+    // ETH protected by tier limits even with dailyLimit=0 → hasGuard true.
+    const tierOnly = makeClient({ guard: GUARD, tier1Limit: 100n, tier2Limit: 1000n }, guardDefaults({ dailyLimit: 0n }));
+    expect((await resolveTransfer({ client: tierOnly, account: ACCOUNT, amount: 50n })).hasGuard).toBe(true);
   });
 
   it('strict mode + unconfigured token → blockReason', async () => {
