@@ -226,7 +226,7 @@ export class UserLifecycle extends BaseClient {
         for (let i = 0; i < 32; i++) {
             let threshold: bigint;
             try {
-                threshold = (await publicClient.readContract({
+                threshold = (await (publicClient as any).readContract({
                     address: this.registryAddress,
                     abi: RegistryABI as any,
                     functionName: 'levelThresholds',
