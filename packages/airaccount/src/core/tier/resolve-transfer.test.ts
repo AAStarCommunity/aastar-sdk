@@ -49,6 +49,15 @@ describe('resolveTransfer (#176 unified ETH+ERC20 tier/guard branch)', () => {
     expect(r.blockReason).toMatch(/daily allowance/);
   });
 
+  it('tier escalates on CUMULATIVE daily spend (todaySpent+amount), not this amount alone (Codex #179)', async () => {
+    // tier2Limit=1000, todaySpent=900, amount=200 → cumulative 1100 > tier2 → Tier 3 (amount alone=200 → T2).
+    const c = makeClient({ guard: GUARD, tier1Limit: 100n, tier2Limit: 1000n }, guardDefaults({ dailyLimit: 100000n, todaySpent: 900n }));
+    const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 200n });
+    expect(r.tier).toBe(3);
+    expect(r.requiredSigs.guardian).toBe(1);
+    expect(r.blockReason).toBeUndefined(); // still within the daily allowance (1100 < 100000)
+  });
+
   it('amount > account tier2Limit → Tier 3 (guardian) — this is the guardian-enabled path', async () => {
     const c = makeClient({ guard: GUARD, tier1Limit: 100n, tier2Limit: 1000n }, guardDefaults({ dailyLimit: 1000000n, remainingDailyAllowance: 1000000n }));
     const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 5000n });
