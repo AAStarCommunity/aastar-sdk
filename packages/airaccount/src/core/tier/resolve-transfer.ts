@@ -6,13 +6,15 @@
  * limits behind the decision, and any hard block. Works for ETH AND any ERC-20, because the two
  * INDEPENDENT on-chain mechanisms are combined here:
  *
- *   1. Account tier (`AAStarAirAccountV7`): tier1Limit / tier2Limit → resolveTier(amount).
+ *   1. Account tier (`AAStarAirAccountV7`): tier1Limit / tier2Limit → resolveTier(amount). This is
+ *      what decides the SIGNATURES (Tier 3 = amount > tier2Limit = a guardian co-sign is REQUIRED).
  *   2. Guard daily allowance (`AAStarGlobalGuard`): ETH `dailyLimit`/`remainingDailyAllowance`, or a
- *      token's `tokenConfigs[token]` + `tokenTodaySpent`. Exceeding the daily allowance forces Tier 3
- *      (a guardian co-sign) REGARDLESS of the account tier — which is exactly the case #176 hit (an
- *      account with requiredTier=0 that still needed a guardian because it blew the guard dailyLimit).
+ *      token's `tokenConfigs[token]` + `tokenTodaySpent`. This is a SEPARATE, HARD cap —
+ *      `Guard.recordSpend` reverts `DailyLimitExceeded` and a guardian does NOT bypass it. So
+ *      exceeding it is a `blockReason` (the transfer cannot succeed as-is), NOT a tier promotion.
  *
- * The required tier is the MAX of both. This is read-only + browser-safe.
+ * So `tier`/`requiredSigs` come from the account tier; `blockReason` flags a hard daily-limit block.
+ * Read-only + browser-safe.
  *
  * NOTE on signatures: this returns what the on-chain `validateUserOp` will REQUIRE. Collecting them
  * (passkey assertion, DVT-BLS from the signer network, guardian ECDSA) + assembling the UserOp is the
@@ -132,22 +134,33 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
   // Unified remaining (same formula for ETH and ERC-20; fail-closed — never negative).
   const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
 
-  // Mechanism 1: account tier from the amount vs tier limits.
-  const accountTier = resolveTier(amount, { tier1Limit, tier2Limit });
-  // Mechanism 2: exceeding the (token) daily allowance forces a guardian co-sign (Tier 3).
-  const exceedsDaily = dailyLimit > 0n && amount > remaining;
-  const tier = Math.max(accountTier, exceedsDaily ? 3 : 1) as TierLevel;
+  // The required tier (which signatures) comes from the account tier limits, evaluated against the
+  // CUMULATIVE daily spend (`todaySpent + amount`), NOT this transfer alone — the account's
+  // `_enforceGuard` computes `requiredTier(guard.todaySpent() + value)` (AAStarAirAccountBase.sol),
+  // so judging on `amount` alone under-estimates the tier and reverts with InsufficientTier. A
+  // guardian co-sign is enabled at Tier 3 (cumulative > tier2Limit).
+  const cumulative = todaySpent + amount;
+  const tier = resolveTier(cumulative, { tier1Limit, tier2Limit });
+
+  // The Guard daily allowance is a SEPARATE, HARD cap — `Guard.recordSpend` reverts
+  // `DailyLimitExceeded` when `todaySpent + amount > dailyLimit`, and a guardian does NOT bypass it
+  // (verified in AAStarGlobalGuard.sol). So exceeding it is a BLOCK, not a tier-3 promotion. The
+  // Guard daily limit is monotonic — it can only be LOWERED — so the only remedy is the daily reset.
+  if (dailyLimit > 0n && amount > remaining && !blockReason) {
+    blockReason =
+      `exceeds the ${isEth ? 'ETH' : 'token'} daily allowance (remaining ${remaining} of ${dailyLimit}); ` +
+      `the Guard hard-reverts over-limit spends (a guardian does not bypass it, and the daily limit ` +
+      `can only be lowered) — wait for the daily window to reset`;
+  }
 
   const reason =
-    tier === 3 && exceedsDaily && accountTier < 3
-      ? `exceeds the ${isEth ? 'ETH' : 'token'} daily allowance (remaining ${remaining})`
-      : tier === 3
-        ? `exceeds tier2Limit (${tier2Limit})`
-        : tier === 2
-          ? `exceeds tier1Limit (${tier1Limit})`
-          : tier1Limit === 0n && tier2Limit === 0n
-            ? 'no tier limits configured — passkey only'
-            : `within tier1Limit (${tier1Limit})`;
+    tier === 3
+      ? `cumulative spend (${cumulative}) exceeds tier2Limit (${tier2Limit}) — guardian co-sign required`
+      : tier === 2
+        ? `cumulative spend (${cumulative}) exceeds tier1Limit (${tier1Limit})`
+        : tier1Limit === 0n && tier2Limit === 0n
+          ? 'no tier limits configured — passkey only'
+          : `cumulative spend (${cumulative}) within tier1Limit (${tier1Limit})`;
 
   return {
     tier,
