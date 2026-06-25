@@ -1,5 +1,5 @@
-import { type Address, type Hash, type Hex, parseEther } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
+import { type Address, type Hash, type Hex, parseEther, BaseError, ContractFunctionRevertedError } from 'viem';
+import { BaseClient, type ClientConfig, type TransactionOptions, RegistryABI } from '@aastar/core';
 import { registryActions, sbtActions, tokenActions, stakingActions, entryPointActions } from '@aastar/core'; // L2/L1 Actions
 
 export interface GaslessConfig {
@@ -10,6 +10,8 @@ export interface GaslessConfig {
      * PaymasterV4 is used. CREDIT always routes to the SuperPaymaster (registry-resolved).
      */
     paymasterAddress?: Address;
+    /** ERC-20 used to pay gas under a V4 paymaster (TOKEN/SPONSORED). Required for those policies. */
+    gasToken?: Address;
 }
 
 export interface UserLifecycleConfig extends ClientConfig {
@@ -73,12 +75,10 @@ export class UserLifecycle extends BaseClient {
      * Check if user is eligible to join a community
      * @param community Address of the community
      */
-    async checkEligibility(community: Address): Promise<boolean> {
-        // Validation logic (e.g., check blacklist or whitelist via Registry)
-        const publicClient = this.getStartPublicClient();
-        const registry = registryActions(this.registryAddress)(publicClient);
-        // Placeholder: simplistic check, real logic might involve community specific rules
-        return true; 
+    async checkEligibility(_community: Address): Promise<boolean> {
+        // #169 lesson: don't silently return `true` (a stub that claims everyone is eligible). The
+        // real blacklist/whitelist/community-rule check is not implemented, so throw rather than lie.
+        throw new Error('UserLifecycle.checkEligibility is not implemented — do not rely on a stubbed eligibility result.');
     }
 
     /**
@@ -190,6 +190,7 @@ export class UserLifecycle extends BaseClient {
             data: params.data,
             paymaster: paymasterAddress,
             paymasterType,
+            gasToken: this.gaslessConfig.gasToken,
             operator: params.operator
         });
     }
@@ -216,11 +217,32 @@ export class UserLifecycle extends BaseClient {
             registry.getCreditLimit({ user: this.accountAddress })
         ]);
 
-        return {
-            score,
-            level: 0n, // TODO: Add level calculation logic
-            creditLimit
-        };
+        // Derive the level from the Registry's ascending level thresholds: the level is the number of
+        // thresholds the score meets. The thresholds array has no length getter, so read by index until
+        // an out-of-bounds read REVERTS (Panic) — but ONLY a revert means "end of array". A network /
+        // RPC / unexpected error must propagate: silently breaking would under-report the level (the
+        // #169 silent-error pattern). Read raw so the viem error type is preserved for that distinction.
+        let level = 0n;
+        for (let i = 0; i < 32; i++) {
+            let threshold: bigint;
+            try {
+                threshold = (await (publicClient as any).readContract({
+                    address: this.registryAddress,
+                    abi: RegistryABI as any,
+                    functionName: 'levelThresholds',
+                    args: [BigInt(i)],
+                })) as bigint;
+            } catch (err) {
+                if (err instanceof BaseError && err.walk((e) => e instanceof ContractFunctionRevertedError)) {
+                    break; // out-of-bounds read = past the end of the thresholds array
+                }
+                throw err; // network/RPC/unexpected — do NOT silently report a truncated level
+            }
+            if (score >= threshold) level = BigInt(i + 1);
+            else break;
+        }
+
+        return { score, level, creditLimit };
     }
 
     async getCreditLimit(): Promise<bigint> {

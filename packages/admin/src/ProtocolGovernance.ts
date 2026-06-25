@@ -1,6 +1,6 @@
 import { type Address, type Hash, type Hex } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
-import { registryActions, entryPointActions } from '@aastar/core'; // L2/L1 Actions
+import { registryActions, entryPointActions, superPaymasterActions } from '@aastar/core'; // L2/L1 Actions
 
 export interface ProtocolParams {
     minStake: bigint;
@@ -143,9 +143,12 @@ export class ProtocolGovernance extends BaseClient {
             registry.GTOKEN_STAKING()
         ]);
 
+        // Read the real treasury from SuperPaymaster (not the registry owner — they can differ).
+        const treasury = await superPaymasterActions(sp)(this.client).treasury();
+
         return {
             minStake: 0n, // Global default not directly exposed, usually per role
-            treasury: await registry.owner(), // Approximation for now
+            treasury,
             entryPoint: this.entryPointAddress,
             superPaymaster: sp
         };

@@ -86,12 +86,10 @@ describe('ProtocolClient', () => {
         }));
     });
 
-    it('executeWithProof should call executeSlashWithProof', async () => {
-        await client.executeWithProof(1n, ['0x5555']);
-        expect(mocks.mockDVT.executeSlashWithProof).toHaveBeenCalledWith(expect.objectContaining({
-            proposalId: 1n,
-            // proof is mocked inside implementation
-        }));
+    it('executeWithProof throws (not implemented — never submits a garbage proof, #169)', async () => {
+        await expect(client.executeWithProof(1n, ['0x5555'])).rejects.toThrow(/not implemented/);
+        // it must NOT call the slashing path with placeholder proof/repUsers/scores
+        expect(mocks.mockDVT.executeSlashWithProof).not.toHaveBeenCalled();
     });
   });
 

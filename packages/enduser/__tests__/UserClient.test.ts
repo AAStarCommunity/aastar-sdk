@@ -291,11 +291,22 @@ describe('UserClient', () => {
               value: 0n,
               data: '0x1234',
               paymaster: '0x2222222222222222222222222222222222222222',
-              paymasterType: 'V4'
+              paymasterType: 'V4',
+              gasToken: '0x3333333333333333333333333333333333333333' // V4 requires an explicit gas token (#169)
           });
-          
+
           expect(client.client.extend).toHaveBeenCalled();
           expect(result).toBe('0xUserOpHash');
+      });
+
+      it('executeGasless throws for a V4 paymaster without a gasToken (#169 — no silent target-as-token)', async () => {
+          await expect(client.executeGasless({
+              target: '0x1111111111111111111111111111111111111111',
+              value: 0n,
+              data: '0x1234',
+              paymaster: '0x2222222222222222222222222222222222222222',
+              paymasterType: 'V4'
+          })).rejects.toThrow(/gasToken is required/);
       });
   });
 
