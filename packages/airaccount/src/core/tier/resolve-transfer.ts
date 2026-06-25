@@ -51,6 +51,12 @@ export interface TransferResolution {
   /** `'ETH'` for the native asset, else the ERC-20 token address. */
   asset: 'ETH' | Address;
   limits: TransferLimits;
+  /**
+   * Whether a Guard is actually enforcing daily limits for this asset. `false` means the daily-limit
+   * dimension is UNENFORCED (account has no guard, or this ERC-20 has no tokenConfig) — so a `tier:1`
+   * result then reflects "unprotected", not "small amount". Lets the caller surface that distinction.
+   */
+  hasGuard: boolean;
   /** Why this tier was chosen (account-tier vs guard daily overage). */
   reason: string;
   /** Set when the transfer is hard-blocked before signing (e.g. strict-mode unconfigured token). */
@@ -91,7 +97,9 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
   let tier2Limit = 0n;
   let dailyLimit = 0n;
   let todaySpent = 0n;
-  let remaining = 0n;
+  // `hasGuard` reflects whether THIS asset's daily limit is actually enforced (account has a guard
+  // AND, for ERC-20, that token has a config). It's distinct from the guard merely existing.
+  let assetGuarded = false;
   let blockReason: string | undefined;
 
   if (isEth) {
@@ -102,29 +110,28 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
       const cfg = await new GuardClient(client, guardAddr).getConfig();
       dailyLimit = cfg.dailyLimit;
       todaySpent = cfg.todaySpent;
-      remaining = cfg.remainingDailyAllowance;
+      assetGuarded = true;
     }
-  } else {
-    if (!hasGuard) {
-      // No guard → no per-token limits to enforce (the account tier still applies, but token tiers are 0).
-    } else {
-      const guard = new GuardClient(client, guardAddr);
-      const [tc, spent, cfg] = await Promise.all([
-        guard.getTokenConfig(token!),
-        guard.getTokenTodaySpent(token!),
-        guard.getConfig(),
-      ]);
-      tier1Limit = tc.tier1Limit;
-      tier2Limit = tc.tier2Limit;
-      dailyLimit = tc.dailyLimit;
-      todaySpent = spent;
-      remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
-      // Strict mode blocks tokens with no config at all.
-      if (cfg.strictMode && tier1Limit === 0n && tier2Limit === 0n && dailyLimit === 0n) {
-        blockReason = 'strict mode is on and this token has no Guard config — add a tokenConfig first';
-      }
+  } else if (hasGuard) {
+    const guard = new GuardClient(client, guardAddr);
+    const [tc, spent, cfg] = await Promise.all([
+      guard.getTokenConfig(token!),
+      guard.getTokenTodaySpent(token!),
+      guard.getConfig(),
+    ]);
+    tier1Limit = tc.tier1Limit;
+    tier2Limit = tc.tier2Limit;
+    dailyLimit = tc.dailyLimit;
+    todaySpent = spent;
+    const configured = tier1Limit !== 0n || tier2Limit !== 0n || dailyLimit !== 0n;
+    assetGuarded = configured;
+    // Strict mode blocks tokens with no config at all.
+    if (cfg.strictMode && !configured) {
+      blockReason = 'strict mode is on and this token has no Guard config — add a tokenConfig first';
     }
   }
+  // Unified remaining (same formula for ETH and ERC-20; fail-closed — never negative).
+  const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
 
   // Mechanism 1: account tier from the amount vs tier limits.
   const accountTier = resolveTier(amount, { tier1Limit, tier2Limit });
@@ -148,6 +155,7 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
     requiredSigs: sigsForTier(tier),
     asset: isEth ? 'ETH' : token!,
     limits: { tier1Limit, tier2Limit, dailyLimit, todaySpent, remaining },
+    hasGuard: assetGuarded,
     reason,
     blockReason,
   };

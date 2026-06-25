@@ -60,6 +60,15 @@ describe('resolveTransfer (#176 unified ETH+ERC20 tier/guard branch)', () => {
     expect(r.limits.tier1Limit).toBe(10n);
   });
 
+  it('hasGuard distinguishes "small amount" from "unprotected" (Medium review finding)', async () => {
+    // ERC-20 with a guard but no config for this token → unguarded for this asset.
+    const noCfg = makeClient({ guard: GUARD }, guardDefaults(), { tier1: 0n, tier2: 0n, daily: 0n });
+    expect((await resolveTransfer({ client: noCfg, account: ACCOUNT, amount: 1n, token: TOKEN })).hasGuard).toBe(false);
+    // ETH with a configured guard → guarded.
+    const guarded = makeClient({ guard: GUARD, tier1Limit: 100n, tier2Limit: 1000n }, guardDefaults({ dailyLimit: 10000n, remainingDailyAllowance: 10000n }));
+    expect((await resolveTransfer({ client: guarded, account: ACCOUNT, amount: 50n })).hasGuard).toBe(true);
+  });
+
   it('strict mode + unconfigured token → blockReason', async () => {
     const c = makeClient({ guard: GUARD }, guardDefaults({ blockUnconfiguredTokens: true }), { tier1: 0n, tier2: 0n, daily: 0n });
     const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 1n, token: TOKEN });
