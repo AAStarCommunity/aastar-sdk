@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.9] - 2026-06-25
+**SDK Code Integrity Hash**: `bf04ef4e9cb516edbb8ec150a03d095b0f1c502afbd4ab51f10529fd60ebc074`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Gasless paymaster resolution — no silent default (#169 retrospective).**
+
+- **[FIX] `UserLifecycle.executeGaslessTx`** resolved the paymaster ADDRESS via a placeholder
+  (`registry.SUPER_PAYMASTER()` for every policy). Now CREDIT → SuperPaymaster; TOKEN/SPONSORED → an
+  explicit `gasless.paymasterAddress` (new optional field) or the chain's canonical PaymasterV4.
+  An **unset `gasless.policy` now throws** instead of silently routing to V4 (the dangerous case Codex
+  flagged — it would succeed silently when a canonical V4 exists).
+- **[DEV] `pnpm run check:stubs`** — a silent-stub guard that greps shipped `src/` for placeholder
+  markers (the kind that shipped `roleData='0x'` in #169) and fails the build. Plus a test-plan
+  "contract-coupled write paths" section (stubs throw, unit tests validate args, write paths need
+  on-chain/simulate tests).
+
 ## [0.26.8] - 2026-06-25
 **SDK Code Integrity Hash**: `9c7363dd56a2b930167c1e5d7c83202206ec8dfa484805ad0c2fd041e8c6da22`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
