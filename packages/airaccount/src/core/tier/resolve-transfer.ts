@@ -97,9 +97,10 @@ export interface ResolveTransferParams {
    * confirmation are signer-side and surface in the signer's response, not here.
    */
   policyRegistry?: Address;
-  /** Transfer target (recipient/contract) for the policy preview. Defaults to the account itself. */
+  /** Transfer target (recipient/contract). REQUIRED for the policy preview — without it the preview
+   *  is skipped (previewing a self-transfer would give a misleading willPass=true). */
   target?: Address;
-  /** Call selector for the policy preview (default `0x00000000` = a plain value transfer). */
+  /** Call selector for the policy preview. Default: ETH `0x00000000`, ERC-20 `0xa9059cbb` (transfer). */
   selector?: Hex;
 }
 
@@ -181,17 +182,26 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
           : `cumulative spend (${cumulative}) within tier1Limit (${tier1Limit})`;
 
   // Optional Layer-1 policy preview (what the DVT signer checks on-chain before signing).
+  // REQUIRES an explicit `target`: previewing against the account itself (a self-transfer) would
+  // typically pass and yield a dangerous FALSE-POSITIVE willPass=true (#186 Med-B). Best-effort —
+  // a registry read failure must NOT break the core tier/guard decision (#186 Med-A).
   let policy: TransferResolution['policy'];
-  if (params.policyRegistry) {
-    const ZERO = '0x0000000000000000000000000000000000000000' as Address;
-    const r = (await client.readContract({
-      address: params.policyRegistry,
-      abi: PolicyRegistryABI,
-      functionName: 'checkPolicy',
-      args: [account, params.target ?? account, isEth ? ZERO : token!, amount, params.selector ?? '0x00000000'],
-    })) as any;
-    const [decision, limitValue] = Array.isArray(r) ? r : [r[0], r[1]];
-    policy = { willPass: Number(decision) === 0, decision: Number(decision), limitValue: BigInt(limitValue) };
+  if (params.policyRegistry && params.target) {
+    try {
+      // For an ERC-20 transfer the call is `transfer(to,amount)` (selector 0xa9059cbb); a native ETH
+      // transfer carries no selector (0x00000000). Caller can override.
+      const selector = params.selector ?? (isEth ? '0x00000000' : '0xa9059cbb');
+      const r = (await client.readContract({
+        address: params.policyRegistry,
+        abi: PolicyRegistryABI,
+        functionName: 'checkPolicy',
+        args: [account, params.target, isEth ? (ZERO as Address) : token!, amount, selector],
+      })) as any;
+      const [decision, limitValue] = Array.isArray(r) ? r : [r[0], r[1]];
+      policy = { willPass: Number(decision) === 0, decision: Number(decision), limitValue: BigInt(limitValue) };
+    } catch {
+      policy = undefined; // preview unavailable (registry read failed) — never break the core result
+    }
   }
 
   return {
