@@ -27,7 +27,7 @@ export interface AccountCall {
  * guardian=1; tier thresholds 3/5/6. These are fixed by the contract's design — profiles vary the
  * AMOUNT limits, not the weights. Exposed so callers can confirm/override.
  */
-export interface WeightConfig {
+export interface TierWeightConfig {
   passkeyWeight: number;
   ecdsaWeight: number;
   blsWeight: number;
@@ -41,7 +41,7 @@ export interface WeightConfig {
 
 // Frozen so the shared default can't be mutated; each profile below gets its OWN copy so tweaking
 // one profile's weights never pollutes the others (or this default).
-export const DEFAULT_WEIGHT_CONFIG: WeightConfig = Object.freeze({
+export const DEFAULT_WEIGHT_CONFIG: TierWeightConfig = Object.freeze({
   passkeyWeight: 3,
   ecdsaWeight: 2,
   blsWeight: 2,
@@ -63,7 +63,7 @@ export interface AccountTierProfile {
   tier2Limit: bigint;
   /** Guard daily ETH allowance (a hard cap; set on the Guard, not the account tier). */
   dailyLimit: bigint;
-  weights: WeightConfig;
+  weights: TierWeightConfig;
 }
 
 /**
@@ -88,7 +88,7 @@ export function encodeSetTierLimits(account: Address, tier1Limit: bigint, tier2L
 }
 
 /** `setWeightConfig(config)` (onlyOwner) — arms the weight thresholds (needed for the weighted path). */
-export function encodeSetWeightConfig(account: Address, weights: WeightConfig = DEFAULT_WEIGHT_CONFIG): AccountCall {
+export function encodeSetWeightConfig(account: Address, weights: TierWeightConfig = DEFAULT_WEIGHT_CONFIG): AccountCall {
   return {
     to: account,
     value: 0n,
