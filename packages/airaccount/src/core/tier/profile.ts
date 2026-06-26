@@ -147,6 +147,34 @@ export function modifyTierLimitsGuardianDigest(params: {
   );
 }
 
+/** Minimal read surface (decouples from viem's PublicClient generic). */
+interface ReadClient {
+  readContract(args: { address: Address; abi: unknown; functionName: string; args?: readonly unknown[] }): Promise<unknown>;
+}
+
+/**
+ * Read the account's current `tierLimitNonce()` from chain, then build the guardian challenge digest
+ * for a `modifyTierLimitsWithGuardians` change — the one-call path that closes the #188 end-to-end gap
+ * (the getter shipped in airaccount-contract#132). Equivalent to reading the nonce yourself and calling
+ * {@link modifyTierLimitsGuardianDigest}. Guardians then sign the returned hash as a raw message.
+ */
+export async function modifyTierLimitsGuardianDigestFromChain(params: {
+  client: ReadClient;
+  account: Address;
+  chainId: bigint;
+  tier1Limit: bigint;
+  tier2Limit: bigint;
+  deadline: bigint;
+  guardianSigVersion?: number;
+}): Promise<Hex> {
+  const nonce = (await params.client.readContract({
+    address: params.account,
+    abi: AAStarAirAccountV7ABI,
+    functionName: 'tierLimitNonce',
+  })) as bigint;
+  return modifyTierLimitsGuardianDigest({ ...params, tierLimitNonce: BigInt(nonce) });
+}
+
 /**
  * RAISE the tier limits (guardian-gated) — `setTierLimits` only LOWERS without guardians; loosening
  * needs guardian co-signatures over the change (deadline-bound). Compute the per-guardian challenge

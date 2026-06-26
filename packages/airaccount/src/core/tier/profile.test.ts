@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { decodeFunctionData, parseEther } from 'viem';
 import { AAStarAirAccountV7ABI } from '@aastar/core';
 import {
@@ -8,6 +8,7 @@ import {
   encodeSetWeightConfig,
   profileSetupCalls,
   modifyTierLimitsGuardianDigest,
+  modifyTierLimitsGuardianDigestFromChain,
 } from './profile.js';
 
 const ACCOUNT = '0xACC0000000000000000000000000000000000001' as const;
@@ -62,6 +63,22 @@ describe('tier profiles (#176 phase 3)', () => {
     expect(modifyTierLimitsGuardianDigest({ ...p, tier1Limit: 2n, tier2Limit: 1n })).not.toBe(GOLDEN); // transposed
     expect(modifyTierLimitsGuardianDigest({ ...p, chainId: 1n })).not.toBe(GOLDEN);
     expect(modifyTierLimitsGuardianDigest({ ...p, deadline: 1000n })).not.toBe(GOLDEN);
+  });
+
+  it('modifyTierLimitsGuardianDigestFromChain reads tierLimitNonce then builds the same digest (#188 e2e / contract#132)', async () => {
+    const acct = '0xacc0000000000000000000000000000000000001' as const;
+    const client = {
+      readContract: vi.fn(async ({ functionName }: any) => {
+        expect(functionName).toBe('tierLimitNonce');
+        return 7n; // the on-chain nonce
+      }),
+    };
+    const digest = await modifyTierLimitsGuardianDigestFromChain({
+      client, account: acct, chainId: 11155111n, tier1Limit: 1n, tier2Limit: 2n, deadline: 999n,
+    });
+    // identical to passing the read nonce to the pure builder (the GOLDEN above uses nonce=7)
+    expect(digest).toBe('0x1e69487123200f48090c2df7b40a870bfffdb3af3ba6fde44b605dd23f19731c');
+    expect(client.readContract).toHaveBeenCalledOnce();
   });
 
   it('DEFAULT_WEIGHT_CONFIG matches the on-chain weight model', () => {
