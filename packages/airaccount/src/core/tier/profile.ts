@@ -13,7 +13,7 @@
  * needs guardians — see {@link encodeModifyTierLimitsWithGuardians}. Browser-safe (viem-only).
  */
 import { type Address, type Hex, parseEther, encodeFunctionData, encodeAbiParameters, keccak256 } from 'viem';
-import { AAStarAirAccountV7ABI } from '@aastar/core';
+import { AAStarAirAccountV7ABI, GUARDIAN_SIG_VERSION, opDataModifyTierLimits } from '@aastar/core';
 
 /** A call to submit via the account owner (`account.execute` / a UserOp to the account). */
 export interface AccountCall {
@@ -136,14 +136,13 @@ export function modifyTierLimitsGuardianDigest(params: {
   /** Override only if the contract's GUARDIAN_SIG_VERSION changes (default 4). */
   guardianSigVersion?: number;
 }): Hex {
-  const opData = encodeAbiParameters(
-    [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
-    [params.tierLimitNonce, params.tier1Limit, params.tier2Limit, params.deadline],
-  );
+  // Reuse the shared constant + opData encoder from @aastar/core (no inline drift). NOTE: this is the
+  // ECDSA-guardian inner hash (no "P256_GUARDIAN" domain) — distinct from buildP256GuardianChallenge.
+  const opData = opDataModifyTierLimits(params.tierLimitNonce, params.tier1Limit, params.tier2Limit, params.deadline);
   return keccak256(
     encodeAbiParameters(
       [{ type: 'uint8' }, { type: 'uint256' }, { type: 'address' }, { type: 'string' }, { type: 'bytes' }],
-      [params.guardianSigVersion ?? 4, params.chainId, params.account, 'MODIFY_TIER_LIMITS', opData],
+      [params.guardianSigVersion ?? GUARDIAN_SIG_VERSION, params.chainId, params.account, 'MODIFY_TIER_LIMITS', opData],
     ),
   );
 }
