@@ -25,6 +25,14 @@ describe('dvt out-of-band confirmation poll (#124 / #190 fixes)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('passes a per-request timeout signal to fetch (#190 residual)', async () => {
+    const fetchMock = okJson({ status: 'pending', expiresAt: 1 });
+    vi.stubGlobal('fetch', fetchMock);
+    await getDvtConfirmationStatus(NODE, HASH, undefined, 5000);
+    const init = fetchMock.mock.calls[0][1] as any;
+    expect(init.signal).toBeInstanceOf(AbortSignal); // a hung node read will abort, not stall the poll
+  });
+
   it('throws on a non-OK status', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
     await expect(getDvtConfirmationStatus(NODE, HASH)).rejects.toThrow(/500/);
