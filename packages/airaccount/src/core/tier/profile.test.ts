@@ -51,4 +51,13 @@ describe('tier profiles (#176 phase 3)', () => {
   it('DEFAULT_WEIGHT_CONFIG matches the on-chain weight model', () => {
     expect(DEFAULT_WEIGHT_CONFIG).toMatchObject({ passkeyWeight: 3, ecdsaWeight: 2, blsWeight: 2, tier3Threshold: 6 });
   });
+
+  it('each profile has its OWN weights copy — mutating one does not pollute others (#184 Low)', () => {
+    TIER_PROFILES.trader.weights.passkeyWeight = 99; // tweak one profile
+    expect(TIER_PROFILES['web3-newbie'].weights.passkeyWeight).toBe(3); // others unaffected
+    expect(DEFAULT_WEIGHT_CONFIG.passkeyWeight).toBe(3); // default unaffected
+    TIER_PROFILES.trader.weights.passkeyWeight = 3; // restore
+    // the shared default is frozen
+    expect(Object.isFrozen(DEFAULT_WEIGHT_CONFIG)).toBe(true);
+  });
 });

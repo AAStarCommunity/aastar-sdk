@@ -39,7 +39,9 @@ export interface WeightConfig {
   tier3Threshold: number;
 }
 
-export const DEFAULT_WEIGHT_CONFIG: WeightConfig = {
+// Frozen so the shared default can't be mutated; each profile below gets its OWN copy so tweaking
+// one profile's weights never pollutes the others (or this default).
+export const DEFAULT_WEIGHT_CONFIG: WeightConfig = Object.freeze({
   passkeyWeight: 3,
   ecdsaWeight: 2,
   blsWeight: 2,
@@ -49,7 +51,7 @@ export const DEFAULT_WEIGHT_CONFIG: WeightConfig = {
   tier1Threshold: 3,
   tier2Threshold: 5,
   tier3Threshold: 6,
-};
+});
 
 export type ProfileName = 'web3-newbie' | 'trader' | 'conservative';
 
@@ -70,11 +72,11 @@ export interface AccountTierProfile {
  */
 export const TIER_PROFILES: Record<ProfileName, AccountTierProfile> = {
   // Frequent small spends sign with just a passkey; bigger ones step up to BLS / guardian.
-  'web3-newbie': { name: 'web3-newbie', tier1Limit: parseEther('0.01'), tier2Limit: parseEther('0.1'), dailyLimit: parseEther('0.2'), weights: DEFAULT_WEIGHT_CONFIG },
+  'web3-newbie': { name: 'web3-newbie', tier1Limit: parseEther('0.01'), tier2Limit: parseEther('0.1'), dailyLimit: parseEther('0.2'), weights: { ...DEFAULT_WEIGHT_CONFIG } },
   // Higher limits → fewer co-sign prompts for an active user.
-  trader: { name: 'trader', tier1Limit: parseEther('0.1'), tier2Limit: parseEther('1'), dailyLimit: parseEther('5'), weights: DEFAULT_WEIGHT_CONFIG },
+  trader: { name: 'trader', tier1Limit: parseEther('0.1'), tier2Limit: parseEther('1'), dailyLimit: parseEther('5'), weights: { ...DEFAULT_WEIGHT_CONFIG } },
   // Tight limits → guardian co-sign kicks in early; lowest daily cap.
-  conservative: { name: 'conservative', tier1Limit: parseEther('0.005'), tier2Limit: parseEther('0.05'), dailyLimit: parseEther('0.1'), weights: DEFAULT_WEIGHT_CONFIG },
+  conservative: { name: 'conservative', tier1Limit: parseEther('0.005'), tier2Limit: parseEther('0.05'), dailyLimit: parseEther('0.1'), weights: { ...DEFAULT_WEIGHT_CONFIG } },
 };
 
 const enc = (functionName: string, args: readonly unknown[]): Hex =>
