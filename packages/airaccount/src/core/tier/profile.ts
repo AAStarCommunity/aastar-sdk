@@ -53,6 +53,11 @@ export const DEFAULT_WEIGHT_CONFIG: TierWeightConfig = Object.freeze({
   tier3Threshold: 6,
 });
 
+// NOTE: this weight type was briefly `WeightConfig` in 0.26.14, but that bare name collides with the
+// weighted-signature-service `WeightConfig` in the kms subpath re-export (breaks the umbrella dts
+// build), and a backward-compat `WeightConfig` alias re-triggers the same collision — so the rename
+// to `TierWeightConfig` is required and there is intentionally no alias. (BREAKING vs 0.26.14.)
+
 export type ProfileName = 'web3-newbie' | 'trader' | 'conservative';
 
 export interface AccountTierProfile {
