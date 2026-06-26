@@ -69,6 +69,9 @@ function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): Abor
     if (signal.aborted) ctrl.abort((signal as any).reason);
     else signal.addEventListener('abort', onCallerAbort, { once: true });
   }
+  // Pre-aborted caller → no timer (the 'abort' already fired, so the clear-on-abort listener below
+  // would never run → a stray timer would leak for timeoutMs). #195 [Low].
+  if (ctrl.signal.aborted) return ctrl.signal;
   const timer = setTimeout(() => ctrl.abort(new DOMException('request timeout', 'TimeoutError')), timeoutMs);
   ctrl.signal.addEventListener('abort', () => {
     clearTimeout(timer);
