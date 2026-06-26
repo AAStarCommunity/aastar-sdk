@@ -233,5 +233,6 @@
     "build": "tsup",
     "example:local": "tsx examples/regression_test.ts",
     "test": "vitest run"
-  }
+  },
+  "sideEffects": false
 }

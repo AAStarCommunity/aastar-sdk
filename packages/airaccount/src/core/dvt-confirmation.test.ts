@@ -25,6 +25,28 @@ describe('dvt out-of-band confirmation poll (#124 / #190 fixes)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('passes a per-request timeout signal to fetch (#190 residual)', async () => {
+    const fetchMock = okJson({ status: 'pending', expiresAt: 1 });
+    vi.stubGlobal('fetch', fetchMock);
+    await getDvtConfirmationStatus(NODE, HASH, undefined, 5000);
+    const init = fetchMock.mock.calls[0][1] as any;
+    expect(init.signal).toBeInstanceOf(AbortSignal); // a hung node read will abort, not stall the poll
+  });
+
+  it('keeps the per-request timeout even without AbortSignal.any (#195 A — old browsers)', async () => {
+    const fetchMock = okJson({ status: 'pending', expiresAt: 1 });
+    vi.stubGlobal('fetch', fetchMock);
+    const orig = (AbortSignal as any).any;
+    (AbortSignal as any).any = undefined; // simulate Safari <17.4 / Chrome <116
+    try {
+      await getDvtConfirmationStatus(NODE, HASH, new AbortController().signal, 5000);
+      const init = fetchMock.mock.calls[0][1] as any;
+      expect(init.signal).toBeInstanceOf(AbortSignal); // fallback still wires a (timeout-bearing) signal
+    } finally {
+      (AbortSignal as any).any = orig;
+    }
+  });
+
   it('throws on a non-OK status', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
     await expect(getDvtConfirmationStatus(NODE, HASH)).rejects.toThrow(/500/);

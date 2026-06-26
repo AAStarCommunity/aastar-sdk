@@ -1,6 +1,8 @@
 /**
- * @deprecated Import from `@aastar/sdk/kms` instead. This `@aastar/sdk/airaccount`
- * subpath is a backward-compatible alias kept for ONE release; it re-exports the
- * canonical KMS surface (`./kms`) verbatim and will be removed in a future major.
+ * Browser-safe AirAccount surface (no Node-only signer code): tiered-transfer decisions
+ * (`resolveTransfer`), tier profiles + config encoders (`TIER_PROFILES`, `encodeSetTierLimits`,
+ * `modifyTierLimitsGuardianDigest`), out-of-band confirmation polling (`pollDvtConfirmation`),
+ * BLS/passkey helpers, and the AirAccount client. Use this in a frontend (#189/#176 — the new tiering
+ * APIs need a browser-safe entry). For the Node-only DVT signer surface, use `@aastar/sdk/kms`.
  */
-export * from './kms.js';
+export * from '@aastar/airaccount';

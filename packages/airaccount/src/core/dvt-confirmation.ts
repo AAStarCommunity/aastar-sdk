@@ -54,14 +54,41 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 const isAbortError = (e: unknown): boolean => e instanceof DOMException && e.name === 'AbortError';
 
 /** Read (does NOT consume) a node's out-of-band confirmation status: `GET /signature/confirmation/:userOpHash`. */
+/** Combine an optional caller signal with a per-request timeout (a hung node must not stall the poll). */
+function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  // Fast path: native AbortSignal.timeout + .any (Node 20+ / modern browsers).
+  if (typeof (AbortSignal as any).timeout === 'function' && typeof (AbortSignal as any).any === 'function') {
+    const timeout = (AbortSignal as any).timeout(timeoutMs);
+    return signal ? (AbortSignal as any).any([signal, timeout]) : timeout;
+  }
+  // Fallback (older Safari <17.4 / Chrome <116): a manual controller that aborts on EITHER the caller
+  // signal OR the timeout — so the per-request timeout is NEVER lost (the #190 fix must not regress).
+  const ctrl = new AbortController();
+  const onCallerAbort = () => ctrl.abort((signal as any)?.reason);
+  if (signal) {
+    if (signal.aborted) ctrl.abort((signal as any).reason);
+    else signal.addEventListener('abort', onCallerAbort, { once: true });
+  }
+  const timer = setTimeout(() => ctrl.abort(new DOMException('request timeout', 'TimeoutError')), timeoutMs);
+  ctrl.signal.addEventListener('abort', () => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onCallerAbort);
+  }, { once: true });
+  return ctrl.signal;
+}
+
 export async function getDvtConfirmationStatus(
   nodeEndpoint: string,
   userOpHash: string,
   signal?: AbortSignal,
+  requestTimeoutMs = 15_000,
 ): Promise<ConfirmationState> {
   assertUserOpHash(userOpHash);
   const base = nodeEndpoint.replace(/\/$/, '');
-  const res = await fetch(`${base}/signature/confirmation/${encodeURIComponent(userOpHash)}`, { signal });
+  // Per-request timeout (#190 residual): without it a hung node stalls the whole poll cadence.
+  const res = await fetch(`${base}/signature/confirmation/${encodeURIComponent(userOpHash)}`, {
+    signal: requestSignal(signal, requestTimeoutMs),
+  });
   if (!res.ok) throw new Error(`DVT confirmation status ${res.status} from ${base} for ${userOpHash}`);
   const body = (await res.json()) as { userOpHash?: string; status: ConfirmationStatus; expiresAt: number | null };
   return { userOpHash, status: body.status, expiresAt: body.expiresAt ?? null };
@@ -78,6 +105,8 @@ export interface PollConfirmationOptions {
   onStatus?: (state: ConfirmationState) => void;
   /** Called on a transient read error (the poll keeps going until timeout — it does NOT end the window). */
   onError?: (error: unknown) => void;
+  /** Per-request fetch timeout (ms). A hung node read times out + retries, not stalls. Default 15000. */
+  requestTimeoutMs?: number;
 }
 
 /**
@@ -101,9 +130,10 @@ export async function pollDvtConfirmation(
     throwIfAborted(options.signal);
     let state: ConfirmationState;
     try {
-      state = await getDvtConfirmationStatus(nodeEndpoint, userOpHash, options.signal);
+      state = await getDvtConfirmationStatus(nodeEndpoint, userOpHash, options.signal, options.requestTimeoutMs);
     } catch (err) {
-      if (isAbortError(err)) throw err; // a real abort propagates
+      // A caller abort ('AbortError') propagates; a per-request TIMEOUT ('TimeoutError') is transient → retry.
+      if (isAbortError(err)) throw err;
       options.onError?.(err); // transient — keep the window alive
       if (Date.now() >= deadline) throw err; // out of time: surface the last error
       await abortableSleep(intervalMs, options.signal);
