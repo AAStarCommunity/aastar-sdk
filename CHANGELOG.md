@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.17] - 2026-06-26
+**SDK Code Integrity Hash**: `5bc2041a283eeec2e51f839e44e7ab64b75b6ca28f8c16fbba49e40e66b87e27`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Guardian-loosening end-to-end + AirAccount v0.20.1 (#188 / #176 phase 5).**
+
+- **[ADDED] `modifyTierLimitsGuardianDigestFromChain({client, account, ...})`** — reads the account's
+  `tierLimitNonce()` then builds the guardian challenge digest in one call. Closes the #188 end-to-end
+  gap now that the account exposes the getter (airaccount-contract#132 / v0.20.1).
+- **[CHANGED] AirAccount addresses → v0.20.1 (Sepolia)**: impl/extension/factory/agentRegistry
+  redeployed with the additive `tierLimitNonce()` getter; `tierLimitNonce()` added to the merged
+  `AAStarAirAccountV7` ABI. (BLS/Validator/etc. reused.)
+- **Verified on live Sepolia v0.20.1** (end-to-end, real tx): deploy account with 2 ECDSA guardians →
+  `setTierLimits(low)` → SDK reads nonce + builds digest → 2 guardians sign → `modifyTierLimitsWithGuardians`
+  RAISES the limits (tier1 0.01→1 ETH, tier2 0.1→5 ETH; nonce 0→1).
+  account `0xF92692354C0FA30075D24b78dFeb1f4caBF04722`, tx `0x285040e88ed76f702ad24e028747456dcb9f034aeae3fac92daee9f3d9d6ba44`.
+
 ## [0.26.16] - 2026-06-26
 **SDK Code Integrity Hash**: `869b82d3fe21d07907b039c5d1cf50c82dd151fd8719b7d172b0b8e446615518`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
