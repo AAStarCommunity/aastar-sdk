@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.16] - 2026-06-26
+**SDK Code Integrity Hash**: `869b82d3fe21d07907b039c5d1cf50c82dd151fd8719b7d172b0b8e446615518`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Browser-safe `@aastar/sdk/airaccount` + per-request poll timeout (#189 / #176).**
+
+- **[CHANGED] `@aastar/sdk/airaccount` is now browser-safe** — re-exports the `@aastar/airaccount` MAIN
+  entry (resolveTransfer / TIER_PROFILES / encodeSetTierLimits / modifyTierLimitsGuardianDigest /
+  pollDvtConfirmation / passkey / client), NOT `/server` (Node-only). Use `@aastar/sdk/kms` for the
+  Node DVT signer surface. (The 0.26.14 missing-`.d.ts` regression — #189 — was already fixed in 0.26.15.)
+- **[CHANGED] `sideEffects: false`** on `@aastar/sdk` + `@aastar/airaccount` so a consumer's bundler
+  tree-shakes the Node-only `CryptoUtil` (`node:crypto`) out of a browser build that imports only the
+  tiering APIs. (`@aastar/core` keeps side effects — it has a `node-init` config-loading import.)
+- **[ADDED] per-request fetch timeout** in `getDvtConfirmationStatus`/`pollDvtConfirmation`
+  (`requestTimeoutMs`, default 15s; merged with the caller signal, with an old-browser fallback) so a
+  hung node read times out + retries instead of stalling the poll.
+
 ## [0.26.15] - 2026-06-26
 **SDK Code Integrity Hash**: `b8f75bf4a98e4eabd299a1a5dbed05b85465088309bea377af6c314f17c6ad17`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

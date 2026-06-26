@@ -1,6 +1,6 @@
 {
   "name": "@aastar/channel",
-  "version": "0.26.15",
+  "version": "0.26.16",
   "publishConfig": {
     "access": "public"
   },
