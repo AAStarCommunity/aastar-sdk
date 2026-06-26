@@ -95,6 +95,25 @@ describe('resolveTransfer (#176 unified ETH+ERC20 tier/guard branch)', () => {
     expect((await resolveTransfer({ client: tierOnly, account: ACCOUNT, amount: 50n })).hasGuard).toBe(true);
   });
 
+  it('Layer-1 policy preview: checkPolicy decision 0 → willPass true, non-zero → false (#176 phase 4)', async () => {
+    const POLICY = '0x90a4444444444444444444444444444444444444';
+    const mk = (decision: number) => ({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        if (functionName === 'guard') return GUARD;
+        if (functionName === 'tier1Limit' || functionName === 'tier2Limit') return 1000n;
+        if (functionName === 'checkPolicy') return [decision, 500n];
+        return guardDefaults({ dailyLimit: 100000n, remainingDailyAllowance: 100000n })[functionName] ?? 0n;
+      }),
+    }) as any;
+    const ok = await resolveTransfer({ client: mk(0), account: ACCOUNT, amount: 50n, policyRegistry: POLICY as any });
+    expect(ok.policy).toEqual({ willPass: true, decision: 0, limitValue: 500n });
+    const denied = await resolveTransfer({ client: mk(2), account: ACCOUNT, amount: 50n, policyRegistry: POLICY as any });
+    expect(denied.policy?.willPass).toBe(false);
+    // without policyRegistry → no policy field
+    const none = await resolveTransfer({ client: mk(0), account: ACCOUNT, amount: 50n });
+    expect(none.policy).toBeUndefined();
+  });
+
   it('strict mode + unconfigured token → blockReason', async () => {
     const c = makeClient({ guard: GUARD }, guardDefaults({ blockUnconfiguredTokens: true }), { tier1: 0n, tier2: 0n, daily: 0n });
     const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 1n, token: TOKEN });
