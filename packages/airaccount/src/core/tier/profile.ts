@@ -12,8 +12,8 @@
  * (a normal owner UserOp); `setTierLimits`/`setWeightConfig` are `onlyOwner`. RAISING limits later
  * needs guardians — see {@link encodeModifyTierLimitsWithGuardians}. Browser-safe (viem-only).
  */
-import { type Address, type Hex, parseEther, encodeFunctionData } from 'viem';
-import { AAStarAirAccountV7ABI } from '@aastar/core';
+import { type Address, type Hex, parseEther, encodeFunctionData, encodeAbiParameters, keccak256 } from 'viem';
+import { AAStarAirAccountV7ABI, GUARDIAN_SIG_VERSION, opDataModifyTierLimits } from '@aastar/core';
 
 /** A call to submit via the account owner (`account.execute` / a UserOp to the account). */
 export interface AccountCall {
@@ -113,8 +113,44 @@ export function encodeSetWeightConfig(account: Address, weights: TierWeightConfi
 }
 
 /**
+ * The exact hash each guardian must sign to authorize a `modifyTierLimitsWithGuardians` change.
+ *
+ * Byte-identical to the account's `_guardianOpHash("MODIFY_TIER_LIMITS", abi.encode(nonce,t1,t2,deadline))`
+ * (AAStarAirAccountBase.sol) — i.e. `keccak256(abi.encode(uint8 GUARDIAN_SIG_VERSION, chainId, account,
+ * "MODIFY_TIER_LIMITS", opData))`. The contract recovers against `toEthSignedMessageHash(thisHash)`, so
+ * each guardian signs the RETURNED hash as a raw message:
+ *   `walletClient.signMessage({ message: { raw: digest } })`  (viem applies the EIP-191 prefix).
+ * Collect RECOVERY_THRESHOLD (2) distinct guardian signatures, then pass them to
+ * {@link encodeModifyTierLimitsWithGuardians}.
+ *
+ * `GUARDIAN_SIG_VERSION` is currently 4 (folded in to bind the account version/epoch); `tierLimitNonce`
+ * must be the account's current `_tierLimitNonce` (needs a contract getter — see airaccount-contract).
+ */
+export function modifyTierLimitsGuardianDigest(params: {
+  chainId: bigint;
+  account: Address;
+  tierLimitNonce: bigint;
+  tier1Limit: bigint;
+  tier2Limit: bigint;
+  deadline: bigint;
+  /** Override only if the contract's GUARDIAN_SIG_VERSION changes (default 4). */
+  guardianSigVersion?: number;
+}): Hex {
+  // Reuse the shared constant + opData encoder from @aastar/core (no inline drift). NOTE: this is the
+  // ECDSA-guardian inner hash (no "P256_GUARDIAN" domain) — distinct from buildP256GuardianChallenge.
+  const opData = opDataModifyTierLimits(params.tierLimitNonce, params.tier1Limit, params.tier2Limit, params.deadline);
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: 'uint8' }, { type: 'uint256' }, { type: 'address' }, { type: 'string' }, { type: 'bytes' }],
+      [params.guardianSigVersion ?? GUARDIAN_SIG_VERSION, params.chainId, params.account, 'MODIFY_TIER_LIMITS', opData],
+    ),
+  );
+}
+
+/**
  * RAISE the tier limits (guardian-gated) — `setTierLimits` only LOWERS without guardians; loosening
- * needs guardian co-signatures over the change (deadline-bound). Collect `guardianSigs` first.
+ * needs guardian co-signatures over the change (deadline-bound). Compute the per-guardian challenge
+ * with {@link modifyTierLimitsGuardianDigest}, collect the signatures, then pass them here.
  */
 export function encodeModifyTierLimitsWithGuardians(
   account: Address,

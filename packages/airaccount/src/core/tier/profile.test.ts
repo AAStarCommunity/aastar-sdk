@@ -7,6 +7,7 @@ import {
   encodeSetTierLimits,
   encodeSetWeightConfig,
   profileSetupCalls,
+  modifyTierLimitsGuardianDigest,
 } from './profile.js';
 
 const ACCOUNT = '0xACC0000000000000000000000000000000000001' as const;
@@ -46,6 +47,21 @@ describe('tier profiles (#176 phase 3)', () => {
     expect(calls.every((c) => c.to === ACCOUNT)).toBe(true);
     // tier limits match the chosen profile
     expect((decode(calls[0].data) as any).args).toEqual([parseEther('0.01'), parseEther('0.1')]);
+  });
+
+  it('modifyTierLimitsGuardianDigest matches a pinned golden hash (#188 / #191 — catches transposition)', () => {
+    const acct = '0xacc0000000000000000000000000000000000001' as const;
+    const p = { chainId: 11155111n, account: acct, tierLimitNonce: 7n, tier1Limit: 1n, tier2Limit: 2n, deadline: 999n };
+    // GOLDEN: pinned hex for these exact inputs (formula verified against AAStarAirAccountBase
+    // _guardianOpHash in review). A field transposition (e.g. swapping tier1/tier2 in the encoding)
+    // changes the digest → != golden → fails. NOT re-derived by the same code path.
+    const GOLDEN = '0x1e69487123200f48090c2df7b40a870bfffdb3af3ba6fde44b605dd23f19731c';
+    expect(modifyTierLimitsGuardianDigest(p)).toBe(GOLDEN);
+    // every field is bound: a change to ANY of them must move off the golden (replay/transposition-safe)
+    expect(modifyTierLimitsGuardianDigest({ ...p, tierLimitNonce: 8n })).not.toBe(GOLDEN);
+    expect(modifyTierLimitsGuardianDigest({ ...p, tier1Limit: 2n, tier2Limit: 1n })).not.toBe(GOLDEN); // transposed
+    expect(modifyTierLimitsGuardianDigest({ ...p, chainId: 1n })).not.toBe(GOLDEN);
+    expect(modifyTierLimitsGuardianDigest({ ...p, deadline: 1000n })).not.toBe(GOLDEN);
   });
 
   it('DEFAULT_WEIGHT_CONFIG matches the on-chain weight model', () => {
