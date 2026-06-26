@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.27.0] - 2026-06-26
+**SDK Code Integrity Hash**: `2f1ef077b6f754c68022b86ad556e990c060ff87afec20e7b077284a8e55795c`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Contact binding + out-of-band approval — notification-binding client & approve helper (#193).**
+
+- **[ADDED] browser-safe KMS contact-binding client** (`@aastar/sdk/airaccount`):
+  `createContactBindingClient({ kmsEndpoint, apiKey, ceremony })` → `beginContactBinding` /
+  `confirmContactBinding` / `getContacts` / `removeContact` over the live KMS v0.27.0 endpoints. Owner
+  WebAuthn ceremony supplied by the caller (sent in the capitalized `WebAuthn:{ChallengeId,Credential}`
+  field); per-request fetch timeout; email rejects loudly until `begin_email_binding` opens.
+- **[ADDED] out-of-band approve helper**: `submitDvtConfirmation(node, userOpHash, passkey)` POSTs to
+  `/signature/confirm` with the passkey as **`AuthenticationResponseJSON` passed AS-IS** (never
+  flattened — the node/KMS verifier needs `id`/`rawId`/`type`). `confirmationCredentialRequest(userOpHash,
+  {rpId,...})` builds the `navigator.credentials.get` challenge = the 32-byte userOpHash (WYSIWYS).
+  `userOpHash` is the pendingId; idempotent across quorum nodes. (Validator#124 / #126.)
+- **[DOCS]** corrected: `setTierLimits`/`setWeightConfig`/`addGuardian`/`modifyTierLimitsWithGuardians`
+  are strict `onlyOwner` — a DIRECT owner tx, NOT a 4337 UserOp (#382).
+
 ## [0.26.18] - 2026-06-26
 **SDK Code Integrity Hash**: `982e0c9598d04fd7ea6096ce78d09681efb15b2337cc79c258b6ee37fae025b3`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
