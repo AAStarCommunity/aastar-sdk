@@ -126,10 +126,10 @@ export const CANONICAL_ADDRESSES = {
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0x99C9300d52EDD9f4B7135DEd1811fBa6FFa1DDC6",  // v0.20.0 (NEW ctor: implementation injected as arg 1)
-    airAccountV7Impl: "0xd51db7eB20FF99c8588281CBe1785681Bb17D473",  // v0.20.0
-    airAccountExtension: "0x5529f50811814E0a4966cFC21200DCeF9C3FCb5B",  // v0.20.0 (auto-deployed by impl ctor; recovery + P-256 guardian surface)
-    agentRegistry: "0xbcE1163817EEBA2E07d39424427B10937bF1D121",  // v0.20.0 (bindFactory set-once)
+    airAccountFactoryV7: "0x4f7BBb00c1086f5c0EBdDBDb4BC39cF348EfB2C3",  // v0.20.1 (re-points to new impl; tierLimitNonce getter)
+    airAccountV7Impl: "0xf4a534deCcB1652a28e4b4d388b518008F23f3f3",  // v0.20.1
+    airAccountExtension: "0xBE1aBaae2c678959Be4E0708568dDf0Fc8765cb8",  // v0.20.1 (+tierLimitNonce() getter — #132)
+    agentRegistry: "0xdE603987C184d25f37f612B9E84481E92719B08B",  // v0.20.1 (bindFactory set-once)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x8c2488d46d5447418558c38AA6441720df656094",
