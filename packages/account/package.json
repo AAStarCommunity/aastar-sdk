@@ -1,6 +1,6 @@
 {
   "name": "@aastar/account",
-  "version": "0.26.18",
+  "version": "0.27.0",
   "publishConfig": {
     "access": "public"
   },
