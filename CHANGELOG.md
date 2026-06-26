@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.15] - 2026-06-26
+**SDK Code Integrity Hash**: `b8f75bf4a98e4eabd299a1a5dbed05b85465088309bea377af6c314f17c6ad17`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Out-of-band confirmation polling + guardian-loosening digest (#176 phase 4/5).**
+
+- **[BREAKING] `WeightConfig` → `TierWeightConfig`** (the tier-profile weight type added in 0.26.14).
+  The bare name collided with the weighted-signature `WeightConfig` in the kms subpath and broke the
+  umbrella dts build; a back-compat alias re-triggers the collision, so the rename is required (no
+  alias). Update imports if you used the 0.26.14 `WeightConfig`.
+- **[ADDED] out-of-band confirmation poll** (`@aastar/sdk/airaccount`): `getDvtConfirmationStatus` +
+  `pollDvtConfirmation` (poll-only; never calls `/confirm` — that's the user's independent channel).
+  Resilient (a transient error doesn't end the 10-min window), abortable, validates the userOpHash.
+  Pairs with the existing `DvtPendingConfirmationError`. (#124 / Phase 4)
+- **[ADDED] `modifyTierLimitsGuardianDigest`** — the byte-exact hash each guardian signs to authorize
+  RAISING tier limits (`modifyTierLimitsWithGuardians`); reuses core's `GUARDIAN_SIG_VERSION` /
+  `opDataModifyTierLimits`. (#188 / Phase 5; end-to-end pending a `tierLimitNonce()` getter —
+  airaccount-contract#131.)
+
 ## [0.26.14] - 2026-06-26
 **SDK Code Integrity Hash**: `71c0dbb85eeb9d4419c714f9ea10541753be1026464747bd220e4501530d585f`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
