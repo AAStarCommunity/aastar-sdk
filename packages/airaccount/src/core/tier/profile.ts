@@ -8,14 +8,20 @@
  * `createAccountWithDefaults`, run {@link profileSetupCalls} (setTierLimits + setWeightConfig) to
  * actually arm the tiers — otherwise tiering is silently off (the #176 root cause).
  *
- * The encoders return an {@link AccountCall} (`{ to, value, data }`) to submit via the account owner
- * (a normal owner UserOp); `setTierLimits`/`setWeightConfig` are `onlyOwner`. RAISING limits later
- * needs guardians — see {@link encodeModifyTierLimitsWithGuardians}. Browser-safe (viem-only).
+ * The encoders return an {@link AccountCall} (`{ to, value, data }`). IMPORTANT: `setTierLimits`,
+ * `setWeightConfig`, `addGuardian` and `modifyTierLimitsWithGuardians` are all STRICT `onlyOwner`
+ * (`msg.sender == owner`), NOT `onlyOwnerOrEntryPoint` — so they CANNOT be sent as a 4337 UserOp
+ * (routing through the EntryPoint makes `msg.sender` the EntryPoint and reverts `NotOwner`), nor via
+ * `account.execute` (that makes `msg.sender` the account). They must be a DIRECT tx FROM the owner key
+ * (`{ to: account, data }`, `msg.sender == owner`). For a KMS/TEE-owned account the owner is a TEE-held
+ * secp256k1 key, so the KMS signs + broadcasts the owner tx. RAISING limits later additionally needs
+ * guardian co-signatures — see {@link encodeModifyTierLimitsWithGuardians}. Browser-safe (viem-only).
  */
 import { type Address, type Hex, parseEther, encodeFunctionData, encodeAbiParameters, keccak256 } from 'viem';
 import { AAStarAirAccountV7ABI, GUARDIAN_SIG_VERSION, opDataModifyTierLimits } from '@aastar/core';
 
-/** A call to submit via the account owner (`account.execute` / a UserOp to the account). */
+/** A call the account OWNER sends as a DIRECT tx (`msg.sender == owner`) — NOT a UserOp/EntryPoint/
+ *  `execute` (these targets are strict `onlyOwner` and would revert `NotOwner` otherwise). */
 export interface AccountCall {
   to: Address;
   value: bigint;
