@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.13] - 2026-06-25
+**SDK Code Integrity Hash**: `e2f18f5edfd7d5a3c097e0d4835a6e5c805913b51b8cea1e580afef1e2fdcbd4`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Two-phase Tier-3 guardian co-sign + fail-fast (#176 phase 2).**
+
+- **[ADDED] `prepareTransfer` returns `{ tier, requiredSigs:{passkey,bls,guardian} }`** so the UI knows
+  up front whether a transfer needs a guardian co-sign.
+- **[ADDED] `submitPreparedTransfer` accepts an optional `guardianSigner`** (collected at submit time —
+  the usual browser device-passkey flow) and threads it into the signature. A **Tier-3 transfer
+  without a guardian fail-fasts before consuming the assertion or spending gas** (the account would
+  reject an incomplete signature on-chain). Tier 3 here = the account tier (cumulative spend >
+  tier2Limit), which IS guardian-enabled — distinct from the daily-limit hard cap.
+- **[CHORE]** unified the tier→signatures mapping to a single `sigsForTier` source (no drift); tier≥3
+  comparison for consistency.
+
 ## [0.26.12] - 2026-06-25
 **SDK Code Integrity Hash**: `e124566c3eef5ca0fac44290e92c8c76499328aa5a03b41ca4b97ed1c2d14ae0`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
