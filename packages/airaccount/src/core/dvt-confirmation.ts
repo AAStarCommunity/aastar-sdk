@@ -54,8 +54,9 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 const isAbortError = (e: unknown): boolean => e instanceof DOMException && e.name === 'AbortError';
 
 /** Read (does NOT consume) a node's out-of-band confirmation status: `GET /signature/confirmation/:userOpHash`. */
-/** Combine an optional caller signal with a per-request timeout (a hung node must not stall the poll). */
-function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+/** Combine an optional caller signal with a per-request timeout (a hung request must not stall). Shared
+ *  with the contact-binding client so a hung KMS read can't block the owner ceremony (#203 N3). */
+export function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
   // Fast path: native AbortSignal.timeout + .any (Node 20+ / modern browsers).
   if (typeof (AbortSignal as any).timeout === 'function' && typeof (AbortSignal as any).any === 'function') {
     const timeout = (AbortSignal as any).timeout(timeoutMs);
