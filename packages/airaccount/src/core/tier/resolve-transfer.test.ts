@@ -95,6 +95,48 @@ describe('resolveTransfer (#176 unified ETH+ERC20 tier/guard branch)', () => {
     expect((await resolveTransfer({ client: tierOnly, account: ACCOUNT, amount: 50n })).hasGuard).toBe(true);
   });
 
+  describe('Layer-1 policy preview (#176 phase 4 / #186 fixes)', () => {
+    const POLICY = '0x90a4444444444444444444444444444444444444';
+    const TARGET = '0x70a5555555555555555555555555555555555555';
+    const mk = (checkPolicy: (() => any) | number) => {
+      const cp = typeof checkPolicy === 'number' ? () => [checkPolicy, 500n] : checkPolicy;
+      return {
+        readContract: vi.fn(async ({ functionName }: any) => {
+          if (functionName === 'guard') return GUARD;
+          if (functionName === 'tier1Limit' || functionName === 'tier2Limit') return 1000n;
+          if (functionName === 'checkPolicy') return cp();
+          return guardDefaults({ dailyLimit: 100000n, remainingDailyAllowance: 100000n })[functionName] ?? 0n;
+        }),
+      } as any;
+    };
+
+    it('decision 0 → willPass true; passes the right checkPolicy args (account/target/asset/amount/selector)', async () => {
+      const client = mk(0);
+      const r = await resolveTransfer({ client, account: ACCOUNT, amount: 50n, policyRegistry: POLICY as any, target: TARGET as any });
+      expect(r.policy).toEqual({ willPass: true, decision: 0, limitValue: 500n });
+      const call = client.readContract.mock.calls.find((a: any) => a[0].functionName === 'checkPolicy');
+      expect(call[0].args).toEqual([ACCOUNT, TARGET, '0x0000000000000000000000000000000000000000', 50n, '0x00000000']);
+    });
+
+    it('non-zero decision → willPass false', async () => {
+      const r = await resolveTransfer({ client: mk(2), account: ACCOUNT, amount: 50n, policyRegistry: POLICY as any, target: TARGET as any });
+      expect(r.policy?.willPass).toBe(false);
+    });
+
+    it('no target → preview skipped (no false-positive willPass on a self-transfer) (#186 Med-B)', async () => {
+      const r = await resolveTransfer({ client: mk(0), account: ACCOUNT, amount: 50n, policyRegistry: POLICY as any });
+      expect(r.policy).toBeUndefined();
+      expect(r.tier).toBe(1); // core result still produced
+    });
+
+    it('registry read failure does NOT break the core result (#186 Med-A)', async () => {
+      const client = mk(() => { throw new Error('rpc down'); });
+      const r = await resolveTransfer({ client, account: ACCOUNT, amount: 50n, policyRegistry: POLICY as any, target: TARGET as any });
+      expect(r.policy).toBeUndefined(); // preview unavailable
+      expect(r.tier).toBe(1); // but tier/guard still resolved
+    });
+  });
+
   it('strict mode + unconfigured token → blockReason', async () => {
     const c = makeClient({ guard: GUARD }, guardDefaults({ blockUnconfiguredTokens: true }), { tier1: 0n, tier2: 0n, daily: 0n });
     const r = await resolveTransfer({ client: c, account: ACCOUNT, amount: 1n, token: TOKEN });

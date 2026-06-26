@@ -21,8 +21,8 @@
  * prepare/submit flow's job; `resolveTransfer` is the planner that drives fail-fast (don't submit
  * until `requiredSigs` are all gathered).
  */
-import { type Address } from 'viem';
-import { AAStarAirAccountV7ABI, GuardClient } from '@aastar/core';
+import { type Address, type Hex } from 'viem';
+import { AAStarAirAccountV7ABI, GuardClient, PolicyRegistryABI } from '@aastar/core';
 import { resolveTier } from './tier-router.js';
 import type { TierLevel } from './types.js';
 
@@ -64,6 +64,12 @@ export interface TransferResolution {
   reason: string;
   /** Set when the transfer is hard-blocked before signing (e.g. strict-mode unconfigured token). */
   blockReason?: string;
+  /**
+   * Layer-1 on-chain policy preview (only when `policyRegistry` is passed). `willPass=false` means the
+   * DVT signer will reject this transfer at the on-chain gate — warn the user before submitting. The
+   * Layer-2 node gate + out-of-band confirmation are NOT previewed here (signer-side).
+   */
+  policy?: { willPass: boolean; decision: number; limitValue: bigint };
 }
 
 /** Minimal read surface (decouples from viem's PublicClient generic). */
@@ -84,6 +90,18 @@ export interface ResolveTransferParams {
   token?: Address | 'ETH';
   /** Guard address; if omitted it's read from `account.guard()`. */
   guard?: Address;
+  /**
+   * Layer-1 PolicyRegistry address. If given, the result includes a `policy` PREVIEW of the on-chain
+   * per-account policy the DVT signer checks before signing (`checkPolicy`). NOTE: this previews only
+   * Layer-1 (on-chain). The DVT node's Layer-2 env (operator allowlist / perTxMax) and out-of-band
+   * confirmation are signer-side and surface in the signer's response, not here.
+   */
+  policyRegistry?: Address;
+  /** Transfer target (recipient/contract). REQUIRED for the policy preview — without it the preview
+   *  is skipped (previewing a self-transfer would give a misleading willPass=true). */
+  target?: Address;
+  /** Call selector for the policy preview. Default: ETH `0x00000000`, ERC-20 `0xa9059cbb` (transfer). */
+  selector?: Hex;
 }
 
 export async function resolveTransfer(params: ResolveTransferParams): Promise<TransferResolution> {
@@ -163,6 +181,29 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
           ? 'no tier limits configured — passkey only'
           : `cumulative spend (${cumulative}) within tier1Limit (${tier1Limit})`;
 
+  // Optional Layer-1 policy preview (what the DVT signer checks on-chain before signing).
+  // REQUIRES an explicit `target`: previewing against the account itself (a self-transfer) would
+  // typically pass and yield a dangerous FALSE-POSITIVE willPass=true (#186 Med-B). Best-effort —
+  // a registry read failure must NOT break the core tier/guard decision (#186 Med-A).
+  let policy: TransferResolution['policy'];
+  if (params.policyRegistry && params.target) {
+    try {
+      // For an ERC-20 transfer the call is `transfer(to,amount)` (selector 0xa9059cbb); a native ETH
+      // transfer carries no selector (0x00000000). Caller can override.
+      const selector = params.selector ?? (isEth ? '0x00000000' : '0xa9059cbb');
+      const r = (await client.readContract({
+        address: params.policyRegistry,
+        abi: PolicyRegistryABI,
+        functionName: 'checkPolicy',
+        args: [account, params.target, isEth ? (ZERO as Address) : token!, amount, selector],
+      })) as any;
+      const [decision, limitValue] = Array.isArray(r) ? r : [r[0], r[1]];
+      policy = { willPass: Number(decision) === 0, decision: Number(decision), limitValue: BigInt(limitValue) };
+    } catch {
+      policy = undefined; // preview unavailable (registry read failed) — never break the core result
+    }
+  }
+
   return {
     tier,
     requiredSigs: sigsForTier(tier),
@@ -171,5 +212,6 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
     hasGuard: assetGuarded,
     reason,
     blockReason,
+    policy,
   };
 }

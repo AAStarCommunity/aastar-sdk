@@ -52,12 +52,12 @@ describe('tier profiles (#176 phase 3)', () => {
     expect(DEFAULT_WEIGHT_CONFIG).toMatchObject({ passkeyWeight: 3, ecdsaWeight: 2, blsWeight: 2, tier3Threshold: 6 });
   });
 
-  it('each profile has its OWN weights copy — mutating one does not pollute others (#184 Low)', () => {
-    TIER_PROFILES.trader.weights.passkeyWeight = 99; // tweak one profile
-    expect(TIER_PROFILES['web3-newbie'].weights.passkeyWeight).toBe(3); // others unaffected
-    expect(DEFAULT_WEIGHT_CONFIG.passkeyWeight).toBe(3); // default unaffected
-    TIER_PROFILES.trader.weights.passkeyWeight = 3; // restore
-    // the shared default is frozen
+  it('each profile has its OWN weights copy, not a shared reference (#184 Low)', () => {
+    // Assert isolation by reference identity — no mutation of the shared static (avoids a transient
+    // bad value under parallel test runs, per the #185 R4 suggestion).
+    expect(TIER_PROFILES.trader.weights).not.toBe(DEFAULT_WEIGHT_CONFIG);
+    expect(TIER_PROFILES.trader.weights).not.toBe(TIER_PROFILES['web3-newbie'].weights);
+    expect(TIER_PROFILES.trader.weights).toEqual(DEFAULT_WEIGHT_CONFIG); // a copy: equal values, different object
     expect(Object.isFrozen(DEFAULT_WEIGHT_CONFIG)).toBe(true);
   });
 });
