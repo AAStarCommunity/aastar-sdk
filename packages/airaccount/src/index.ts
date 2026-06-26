@@ -7,3 +7,4 @@ export * from "./core/crypto/crypto.util";
 export * from "./core/types";
 export * from "./core/erc4337";
 export * from "./core/tier";
+export * from "./core/dvt-confirmation.js";
