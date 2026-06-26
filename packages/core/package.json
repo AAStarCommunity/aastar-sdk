@@ -37,6 +37,5 @@
     "abitype": "1.2.3",
     "typescript": "5.7.2"
   },
-  "private": true,
-  "sideEffects": false
+  "private": true
 }

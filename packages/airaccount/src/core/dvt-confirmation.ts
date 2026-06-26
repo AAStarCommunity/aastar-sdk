@@ -56,10 +56,25 @@ const isAbortError = (e: unknown): boolean => e instanceof DOMException && e.nam
 /** Read (does NOT consume) a node's out-of-band confirmation status: `GET /signature/confirmation/:userOpHash`. */
 /** Combine an optional caller signal with a per-request timeout (a hung node must not stall the poll). */
 function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
-  const timeout = AbortSignal.timeout(timeoutMs);
-  if (!signal) return timeout;
-  // AbortSignal.any (Node 20+/modern browsers) merges them; fall back to the caller signal if absent.
-  return typeof (AbortSignal as any).any === 'function' ? (AbortSignal as any).any([signal, timeout]) : signal;
+  // Fast path: native AbortSignal.timeout + .any (Node 20+ / modern browsers).
+  if (typeof (AbortSignal as any).timeout === 'function' && typeof (AbortSignal as any).any === 'function') {
+    const timeout = (AbortSignal as any).timeout(timeoutMs);
+    return signal ? (AbortSignal as any).any([signal, timeout]) : timeout;
+  }
+  // Fallback (older Safari <17.4 / Chrome <116): a manual controller that aborts on EITHER the caller
+  // signal OR the timeout — so the per-request timeout is NEVER lost (the #190 fix must not regress).
+  const ctrl = new AbortController();
+  const onCallerAbort = () => ctrl.abort((signal as any)?.reason);
+  if (signal) {
+    if (signal.aborted) ctrl.abort((signal as any).reason);
+    else signal.addEventListener('abort', onCallerAbort, { once: true });
+  }
+  const timer = setTimeout(() => ctrl.abort(new DOMException('request timeout', 'TimeoutError')), timeoutMs);
+  ctrl.signal.addEventListener('abort', () => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onCallerAbort);
+  }, { once: true });
+  return ctrl.signal;
 }
 
 export async function getDvtConfirmationStatus(
