@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeFunctionData, parseEther } from 'viem';
+import { decodeFunctionData, parseEther, encodeAbiParameters, keccak256 } from 'viem';
 import { AAStarAirAccountV7ABI } from '@aastar/core';
 import {
   TIER_PROFILES,
@@ -7,6 +7,7 @@ import {
   encodeSetTierLimits,
   encodeSetWeightConfig,
   profileSetupCalls,
+  modifyTierLimitsGuardianDigest,
 } from './profile.js';
 
 const ACCOUNT = '0xACC0000000000000000000000000000000000001' as const;
@@ -46,6 +47,24 @@ describe('tier profiles (#176 phase 3)', () => {
     expect(calls.every((c) => c.to === ACCOUNT)).toBe(true);
     // tier limits match the chosen profile
     expect((decode(calls[0].data) as any).args).toEqual([parseEther('0.01'), parseEther('0.1')]);
+  });
+
+  it('modifyTierLimitsGuardianDigest matches the contract _guardianOpHash construction (#188)', () => {
+    // Re-derive independently: keccak256(abi.encode(uint8 4, chainId, account, "MODIFY_TIER_LIMITS",
+    // abi.encode(nonce,t1,t2,deadline))) — must equal the helper, byte for byte.
+    const acct = '0xacc0000000000000000000000000000000000001' as const; // lowercase = valid for abi 'address'
+    const p = { chainId: 11155111n, account: acct, tierLimitNonce: 7n, tier1Limit: 1n, tier2Limit: 2n, deadline: 999n };
+    const opData = encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+      [p.tierLimitNonce, p.tier1Limit, p.tier2Limit, p.deadline],
+    );
+    const expected = keccak256(encodeAbiParameters(
+      [{ type: 'uint8' }, { type: 'uint256' }, { type: 'address' }, { type: 'string' }, { type: 'bytes' }],
+      [4, p.chainId, p.account, 'MODIFY_TIER_LIMITS', opData],
+    ));
+    expect(modifyTierLimitsGuardianDigest(p)).toBe(expected);
+    // deterministic 32-byte hash; nonce change → different digest (replay-safe)
+    expect(modifyTierLimitsGuardianDigest({ ...p, tierLimitNonce: 8n })).not.toBe(expected);
   });
 
   it('DEFAULT_WEIGHT_CONFIG matches the on-chain weight model', () => {
