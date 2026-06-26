@@ -20,6 +20,7 @@
  * credential format (YetAnotherAA-Validator#124) — and is intentionally not in this module yet.
  */
 import type { Address } from 'viem';
+import { requestSignal } from './dvt-confirmation.js';
 
 export type ContactChannel = 'telegram' | 'email';
 
@@ -45,6 +46,8 @@ export interface ContactBindingClientOptions {
   ceremony: OwnerCeremony;
   /** Override fetch (tests / non-global-fetch runtimes). */
   fetchImpl?: typeof fetch;
+  /** Per-request timeout (ms) so a hung KMS request can't block the owner ceremony. Default 15000. (#203 N3) */
+  requestTimeoutMs?: number;
 }
 
 export interface BeginBindingResult {
@@ -71,11 +74,13 @@ export function createContactBindingClient(options: ContactBindingClientOptions)
   const base = options.kmsEndpoint.replace(/\/$/, '');
   const doFetch = options.fetchImpl ?? fetch;
 
+  const timeoutMs = options.requestTimeoutMs ?? 15_000;
   async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
     const res = await doFetch(`${base}${path}`, {
       method,
       headers: { 'content-type': 'application/json', 'x-api-key': options.apiKey },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: requestSignal(undefined, timeoutMs), // #203 N3 — a hung KMS request times out, not hangs
     });
     if (!res.ok) throw new Error(`KMS ${method} ${path} → ${res.status}`);
     return (await res.json()) as T;

@@ -54,8 +54,9 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 const isAbortError = (e: unknown): boolean => e instanceof DOMException && e.name === 'AbortError';
 
 /** Read (does NOT consume) a node's out-of-band confirmation status: `GET /signature/confirmation/:userOpHash`. */
-/** Combine an optional caller signal with a per-request timeout (a hung node must not stall the poll). */
-function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+/** Combine an optional caller signal with a per-request timeout (a hung request must not stall). Shared
+ *  with the contact-binding client so a hung KMS read can't block the owner ceremony (#203 N3). */
+export function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
   // Fast path: native AbortSignal.timeout + .any (Node 20+ / modern browsers).
   if (typeof (AbortSignal as any).timeout === 'function' && typeof (AbortSignal as any).any === 'function') {
     const timeout = (AbortSignal as any).timeout(timeoutMs);
@@ -147,4 +148,73 @@ export async function pollDvtConfirmation(
     if (Date.now() >= deadline) return state; // timed out while still pending
     await abortableSleep(intervalMs, options.signal);
   }
+}
+
+// ── Out-of-band APPROVAL (option-2: passkey over userOpHash) — aastar-sdk#193 / Validator#124/#126 ──
+
+/**
+ * The WebAuthn assertion exactly as `navigator.credentials.get()` returns it (serialized by e.g.
+ * `@simplewebauthn/browser`'s `startAuthentication`). It is POSTed to the DVT node AS-IS — do NOT
+ * flatten to `{authenticatorData, clientDataJSON, signature}`: the KMS verifier needs `id`/`rawId`/
+ * `type` (the flat shape drops them and verification fails).
+ */
+export interface AuthenticationResponseJSON {
+  id: string;
+  rawId: string;
+  type: 'public-key';
+  response: {
+    authenticatorData: string;
+    clientDataJSON: string;
+    signature: string;
+    userHandle?: string;
+  };
+  authenticatorAttachment?: string;
+  clientExtensionResults?: Record<string, unknown>;
+}
+
+/**
+ * Build the `navigator.credentials.get({ publicKey })` request options for an out-of-band approval:
+ * the WebAuthn challenge IS the 32-byte `userOpHash` (WYSIWYS — the user signs exactly the op they're
+ * confirming). Run this in the browser, then pass the resulting assertion to {@link submitDvtConfirmation}.
+ */
+export function confirmationCredentialRequest(
+  userOpHash: string,
+  opts: { rpId: string; allowCredentials?: { id: BufferSource; type?: 'public-key' }[]; timeoutMs?: number },
+): { challenge: Uint8Array; rpId: string; userVerification: 'required'; timeout?: number; allowCredentials?: { id: BufferSource; type: 'public-key' }[] } {
+  assertUserOpHash(userOpHash);
+  // hexToBytes of the 0x+64hex userOpHash → the exact 32-byte challenge the node binds against.
+  const challenge = Uint8Array.from((userOpHash.slice(2).match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)));
+  return {
+    challenge,
+    rpId: opts.rpId,
+    userVerification: 'required',
+    ...(opts.timeoutMs !== undefined ? { timeout: opts.timeoutMs } : {}),
+    ...(opts.allowCredentials ? { allowCredentials: opts.allowCredentials.map((c) => ({ id: c.id, type: 'public-key' as const })) } : {}),
+  };
+}
+
+/**
+ * Submit an out-of-band approval to a DVT node: `POST {node}/signature/confirm { userOpHash, passkey }`.
+ * `userOpHash` IS the pendingId; `passkey` is the {@link AuthenticationResponseJSON} passed AS-IS. The
+ * node verifies the assertion (challenge==userOpHash + the account's passkey, delegated to the KMS) and
+ * releases its withheld signature. Stateless + idempotent — the SAME assertion can be submitted to each
+ * quorum node independently.
+ */
+export async function submitDvtConfirmation(
+  nodeEndpoint: string,
+  userOpHash: string,
+  passkey: AuthenticationResponseJSON,
+  signal?: AbortSignal,
+): Promise<{ status: 'confirmed' | 'rejected'; confirmed: boolean }> {
+  assertUserOpHash(userOpHash);
+  const base = nodeEndpoint.replace(/\/$/, '');
+  const res = await fetch(`${base}/signature/confirm`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userOpHash, passkey }), // passkey AS-IS — never flattened
+    signal,
+  });
+  if (!res.ok) throw new Error(`DVT confirm ${res.status} from ${base} for ${userOpHash}`);
+  const body = (await res.json()) as { status?: 'confirmed' | 'rejected'; confirmed?: boolean };
+  return { status: body.status ?? (body.confirmed ? 'confirmed' : 'rejected'), confirmed: !!body.confirmed };
 }

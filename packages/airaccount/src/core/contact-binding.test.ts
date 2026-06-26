@@ -8,7 +8,7 @@ const ASSERTION: KmsWebAuthn = { ChallengeId: 'chal-1', Credential: { id: 'cred'
 function mk(responses: Record<string, any>) {
   const calls: any[] = [];
   const fetchImpl = vi.fn(async (url: string, init: any) => {
-    calls.push({ url, method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined });
+    calls.push({ url, method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined, signal: init.signal });
     const key = `${init.method} ${url.replace(KMS, '')}`;
     const body = responses[key] ?? responses[Object.keys(responses).find((k) => key.startsWith(k.split('?')[0])) ?? ''];
     return { ok: body !== undefined, status: body !== undefined ? 200 : 404, json: async () => body };
@@ -54,6 +54,12 @@ describe('contact-binding client (#193 / KMS v0.27.0)', () => {
     const { client, fetchImpl } = mk({});
     await expect(client.beginContactBinding({ account: ACCOUNT, channel: 'email' })).rejects.toThrow(/email.*not available/i);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('passes a per-request timeout signal to fetch (#203 N3)', async () => {
+    const { client, calls } = mk({ [`GET /contact/${ACCOUNT}`]: { contacts: [] } });
+    await client.getContacts(ACCOUNT);
+    expect(calls[0].signal).toBeInstanceOf(AbortSignal); // hung KMS request times out, not blocks the ceremony
   });
 
   it('throws on a non-OK KMS response', async () => {

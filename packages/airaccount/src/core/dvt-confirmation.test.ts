@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { getDvtConfirmationStatus, pollDvtConfirmation } from './dvt-confirmation.js';
+import {
+  getDvtConfirmationStatus,
+  pollDvtConfirmation,
+  submitDvtConfirmation,
+  confirmationCredentialRequest,
+  type AuthenticationResponseJSON,
+} from './dvt-confirmation.js';
 
 const NODE = 'https://dvt1.aastar.io';
 const HASH = ('0x' + 'ab'.repeat(32)) as `0x${string}`; // valid 0x+64hex userOpHash
@@ -85,5 +91,47 @@ describe('dvt out-of-band confirmation poll (#124 / #190 fixes)', () => {
     vi.stubGlobal('fetch', okJson({ status: 'expired', expiresAt: 0 }));
     const final = await pollDvtConfirmation(NODE, HASH, { intervalMs: 1 });
     expect(final.status).toBe('expired');
+  });
+
+  // ── out-of-band approval (passkey over userOpHash) — #193 / Validator#124 ──
+  const ASSERTION: AuthenticationResponseJSON = {
+    id: 'cred-id', rawId: 'raw-id', type: 'public-key',
+    response: { authenticatorData: 'AA', clientDataJSON: 'BB', signature: 'CC' },
+  };
+
+  it('submitDvtConfirmation POSTs the passkey AS-IS (never flattened — keeps id/rawId/type)', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ status: 'confirmed', confirmed: true }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await submitDvtConfirmation(NODE, HASH, ASSERTION);
+    expect(r).toEqual({ status: 'confirmed', confirmed: true });
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toBe(`${NODE}/signature/confirm`);
+    expect(init.method).toBe('POST');
+    const sent = JSON.parse(init.body);
+    expect(sent.userOpHash).toBe(HASH);
+    expect(sent.passkey).toEqual(ASSERTION); // full object, NOT a flat {authenticatorData,...}
+    expect(sent.passkey.id).toBe('cred-id'); // id/rawId/type preserved
+  });
+
+  it('submitDvtConfirmation derives status from confirmed when status is absent', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ confirmed: false }) })));
+    expect((await submitDvtConfirmation(NODE, HASH, ASSERTION)).status).toBe('rejected');
+  });
+
+  it('submitDvtConfirmation rejects an invalid userOpHash + throws on non-OK', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 422 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(submitDvtConfirmation(NODE, '0xbad' as any, ASSERTION)).rejects.toThrow(/invalid userOpHash/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(submitDvtConfirmation(NODE, HASH, ASSERTION)).rejects.toThrow(/confirm 422/);
+  });
+
+  it('confirmationCredentialRequest sets the WebAuthn challenge to the 32-byte userOpHash (WYSIWYS)', () => {
+    const req = confirmationCredentialRequest(HASH, { rpId: 'kms.aastar.io' });
+    expect(req.challenge).toBeInstanceOf(Uint8Array);
+    expect(req.challenge.length).toBe(32);
+    expect([...req.challenge.slice(0, 2)]).toEqual([0xab, 0xab]); // == hexToBytes(userOpHash)
+    expect(req.rpId).toBe('kms.aastar.io');
+    expect(req.userVerification).toBe('required');
   });
 });
