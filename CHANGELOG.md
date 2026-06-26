@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.18] - 2026-06-26
+**SDK Code Integrity Hash**: `982e0c9598d04fd7ea6096ce78d09681efb15b2337cc79c258b6ee37fae025b3`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Browser bundle: drop the Node-only `CryptoUtil` AES leak (#189).**
+
+- **[FIX] no more `node:crypto` AES in a browser bundle** — the airaccount main barrel re-exported the
+  internal, unused `CryptoUtil` (aes-256-gcm / scrypt / createCipheriv); as a public re-export,
+  `sideEffects:false` could not tree-shake it, so it leaked into `@aastar/sdk/kms` consumers' browser
+  builds (YAA found 3 AES chunks). Removed from the barrel — `/kms`, `/airaccount`, and the root index
+  dist now contain **0 AES chunks**.
+- **[BREAKING] (minor)** `CryptoUtil` is no longer exported from `@aastar/airaccount` / `@aastar/sdk/kms`.
+  It has no SDK consumer; import it directly from the source path in Node code if ever needed.
+- Reminder: import the tiering APIs (`resolveTransfer`, `TIER_PROFILES`, `pollDvtConfirmation`) from
+  the browser-safe `@aastar/sdk/airaccount` (0 `node:crypto`). `@aastar/sdk/kms` is Node-only
+  (`KmsManager` uses `createHash`); browser code should use the axios-based `KmsHttpClient`.
+
 ## [0.26.17] - 2026-06-26
 **SDK Code Integrity Hash**: `5bc2041a283eeec2e51f839e44e7ab64b75b6ca28f8c16fbba49e40e66b87e27`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
