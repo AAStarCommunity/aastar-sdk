@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.14] - 2026-06-26
+**SDK Code Integrity Hash**: `71c0dbb85eeb9d4419c714f9ea10541753be1026464747bd220e4501530d585f`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Tier profiles + Layer-1 policy preview (#176 phase 3 + 4).**
+
+- **[ADDED] tier profiles** (`@aastar/sdk/airaccount`): `TIER_PROFILES` (web3-newbie / trader /
+  conservative) + frozen `DEFAULT_WEIGHT_CONFIG` (per-profile copy) + encoders `encodeSetTierLimits` /
+  `encodeSetWeightConfig` / `encodeModifyTierLimitsWithGuardians` and `profileSetupCalls(account,
+  profile)` to ARM a fresh account after `createAccountWithDefaults` (both factory paths leave tiers
+  at 0 → `requiredTier` 0 → tiering silently off, the #176 root cause).
+- **[ADDED] `resolveTransfer` Layer-1 policy preview** — pass `policyRegistry` + `target` for
+  `policy:{willPass,decision,limitValue}` (what the DVT signer checks on-chain via `checkPolicy`).
+  Best-effort (a registry read failure never breaks the core result); requires an explicit `target`
+  (no self-transfer false-positive).
+- **Note:** the Layer-1 PolicyRegistry read/write is the existing `policyRegistryActions` in
+  `@aastar/core`. Layer-2 (node env) + out-of-band confirm are signer-side.
+
 ## [0.26.13] - 2026-06-25
 **SDK Code Integrity Hash**: `e2f18f5edfd7d5a3c097e0d4835a6e5c805913b51b8cea1e580afef1e2fdcbd4`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
