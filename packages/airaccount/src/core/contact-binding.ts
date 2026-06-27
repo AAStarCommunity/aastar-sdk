@@ -91,24 +91,32 @@ export function createContactBindingClient(options: ContactBindingClientOptions)
     if (channel === 'email') throw new Error('email contact binding is not available yet (pending KMS begin_email_binding) — use telegram');
   }
 
+  // The KMS keys contacts by a LOWERCASE address (v0.27.2 #129/#203 — a checksummed key would silently
+  // fail-close). Normalize here (defense-in-depth, like the DVT node) so we never depend on the KMS's
+  // own normalization being present.
+  const lc = (a: Address) => a.toLowerCase() as Address;
+
   return {
     async beginContactBinding({ account, channel }) {
       assertTelegram(channel);
-      const WebAuthn = await options.ceremony({ account, purpose: 'begin-binding' });
-      return call<BeginBindingResult>('POST', '/contact/begin-binding', { account, channel, WebAuthn });
+      const acct = lc(account);
+      const WebAuthn = await options.ceremony({ account: acct, purpose: 'begin-binding' });
+      return call<BeginBindingResult>('POST', '/contact/begin-binding', { account: acct, channel, WebAuthn });
     },
     async confirmContactBinding({ account, bindingCode, verifyToken }) {
-      const WebAuthn = await options.ceremony({ account, purpose: 'confirm-binding' });
-      return call<{ status: 'verified' }>('POST', '/contact/confirm-binding', { account, bindingCode, verifyToken, WebAuthn });
+      const acct = lc(account);
+      const WebAuthn = await options.ceremony({ account: acct, purpose: 'confirm-binding' });
+      return call<{ status: 'verified' }>('POST', '/contact/confirm-binding', { account: acct, bindingCode, verifyToken, WebAuthn });
     },
     async getContacts(account) {
-      const r = await call<{ contacts: ContactRecord[] }>('GET', `/contact/${account}`);
+      const r = await call<{ contacts: ContactRecord[] }>('GET', `/contact/${lc(account)}`);
       return r.contacts ?? [];
     },
     async removeContact({ account, channel }) {
       assertTelegram(channel);
-      const WebAuthn = await options.ceremony({ account, purpose: 'unbind' });
-      return call<{ status: string }>('POST', '/contact/unbind', { account, channel, WebAuthn });
+      const acct = lc(account);
+      const WebAuthn = await options.ceremony({ account: acct, purpose: 'unbind' });
+      return call<{ status: string }>('POST', '/contact/unbind', { account: acct, channel, WebAuthn });
     },
   };
 }
