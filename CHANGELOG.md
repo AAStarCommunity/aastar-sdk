@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.27.1] - 2026-06-27
+**SDK Code Integrity Hash**: `8de7a704fd68c305b352a4961e7f8435f8bf31f4b10da7d616139da7cedb5eff`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Upstream sync: lowercase the account in contact-binding KMS calls (#193 / KMS v0.27.2).**
+
+- **[FIX]** the contact-binding client now lowercases the `account` before every KMS call (begin/confirm/
+  getContacts/unbind — body, URL, and ceremony ctx). KMS v0.27.2 (AirAccount#137, names #129/#203) keys
+  contacts by a LOWERCASE address; a checksummed (EIP-55) key silently fail-closed. Defense-in-depth like
+  the DVT node — never depend on the KMS's own normalization. `submitDvtConfirmation` is unaffected (it
+  sends `userOpHash`, not an account). DVT v1.6.0's confirmation API was verified field-for-field against
+  the SDK — already aligned, no change.
+
 ## [0.27.0] - 2026-06-26
 **SDK Code Integrity Hash**: `2f1ef077b6f754c68022b86ad556e990c060ff87afec20e7b077284a8e55795c`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
