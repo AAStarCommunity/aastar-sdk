@@ -49,8 +49,8 @@ All notable changes to this project will be documented in this file.
   [`docs/onchain-evidence/v0.20.2-module-governance.md`](docs/onchain-evidence/v0.20.2-module-governance.md),
   re-runnable script `tests/regression/onchain-evidence/v0202-module-install-e2e.ts`.
 
-## [0.27.1] - 2026-06-27
-**SDK Code Integrity Hash**: `8de7a704fd68c305b352a4961e7f8435f8bf31f4b10da7d616139da7cedb5eff`
+## [0.28.0] - 2026-06-28
+**SDK Code Integrity Hash**: `e30feaeb8928ab1c2760d6b9284ee542640f52899bad2527f08c6f9fa7c71461`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Upstream sync: lowercase the account in contact-binding KMS calls (#193 / KMS v0.27.2).**
