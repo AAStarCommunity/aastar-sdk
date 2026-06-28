@@ -193,14 +193,37 @@ export class X402Client {
     }
 
     /**
-     * Settle via external facilitator (Coinbase, self-hosted, etc.).
-     * Requires facilitator config in constructor.
+     * Merge the settlement `extra` (`settlement`/`maxFee`/`salt`) from the signed payload into the
+     * requirements the facilitator actually reads. In the `x402Fetch` path the server's 402 is a bare
+     * requirements object (no settlement fields), so the facilitator can't pick the path/fee/salt unless
+     * we carry them across from `payload.accepted.extra`. Defaults the whole requirements to
+     * `payload.accepted` when none is supplied.
      */
-    async settleViaFacilitator(payload: PaymentPayload, requirements: PaymentRequirements): Promise<SettleResponse> {
+    private requirementsForFacilitator(payload: PaymentPayload, requirements?: PaymentRequirements): PaymentRequirements {
+        if (!requirements) return payload.accepted;
+        return { ...requirements, extra: { ...requirements.extra, ...payload.accepted.extra } };
+    }
+
+    /**
+     * Verify a payment via the external facilitator (`POST /x402/verify`). `requirements` defaults to
+     * the signed `payload.accepted` (which carries the settlement `extra`).
+     */
+    async verifyViaFacilitator(payload: PaymentPayload, requirements?: PaymentRequirements) {
         if (!this.facilitatorClient) {
             throw new Error('No facilitator configured. Pass facilitator config to X402Client constructor.');
         }
-        return this.facilitatorClient.settle(payload, requirements);
+        return this.facilitatorClient.verify(payload, this.requirementsForFacilitator(payload, requirements));
+    }
+
+    /**
+     * Settle via external facilitator (`POST /x402/settle`). `requirements` defaults to the signed
+     * `payload.accepted`, so the settlement `extra` (settlement/maxFee/salt) always reaches the facilitator.
+     */
+    async settleViaFacilitator(payload: PaymentPayload, requirements?: PaymentRequirements): Promise<SettleResponse> {
+        if (!this.facilitatorClient) {
+            throw new Error('No facilitator configured. Pass facilitator config to X402Client constructor.');
+        }
+        return this.facilitatorClient.settle(payload, this.requirementsForFacilitator(payload, requirements));
     }
 
     /**

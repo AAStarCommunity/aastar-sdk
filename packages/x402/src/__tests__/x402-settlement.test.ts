@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   createWalletClient, http, encodeAbiParameters, keccak256,
   recoverTypedDataAddress, type Address, type Hex,
@@ -76,5 +76,40 @@ describe('X402Client.createPayment — eip-3009 (USDC)', () => {
       signature: payload.payload.signature,
     });
     expect(recovered.toLowerCase()).toBe(account.address.toLowerCase());
+  });
+});
+
+describe('settleViaFacilitator carries the settlement extra into paymentRequirements', () => {
+  function facilClient() {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    return new X402Client({
+      publicClient: {} as never, walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID,
+      facilitator: { url: 'https://dvt1.aastar.io/x402' },
+    });
+  }
+
+  it('sends settlement/maxFee/salt in paymentRequirements even when no requirements arg is passed (x402Fetch path)', async () => {
+    const c = facilClient();
+    const amount = 5n * 10n ** 6n;
+    const { payload } = await c.createPayment({
+      from: account.address, to: PAYTO, asset: ASSET, amount,
+      settlement: 'eip-3009', maxFee: amount, salt: ('0x' + '33'.repeat(32)) as Hex,
+    });
+    let captured: any;
+    const fetchMock = vi.fn(async (_url: any, init: any) => {
+      captured = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ success: true, transaction: '0xabc' }) } as any;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const res = await c.settleViaFacilitator(payload); // no requirements arg
+      expect(res.success).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith('https://dvt1.aastar.io/x402/settle', expect.anything());
+      expect(captured.paymentRequirements.extra.settlement).toBe('eip-3009');
+      expect(captured.paymentRequirements.extra.maxFee).toBe(amount.toString());
+      expect(captured.paymentRequirements.extra.salt).toBe('0x' + '33'.repeat(32));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
