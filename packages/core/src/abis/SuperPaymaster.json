@@ -215,6 +215,19 @@
     },
     {
       "type": "function",
+      "name": "cancelSlash",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "clearPendingDebt",
       "inputs": [
         {
@@ -615,6 +628,19 @@
     },
     {
       "type": "function",
+      "name": "initBLSAggregator",
+      "inputs": [
+        {
+          "name": "_bls",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "initialize",
       "inputs": [
         {
@@ -986,6 +1012,19 @@
       "inputs": [
         {
           "name": "_bls",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "queueSlash",
+      "inputs": [
+        {
+          "name": "operator",
           "type": "address",
           "internalType": "address"
         }
@@ -2156,6 +2195,19 @@
     },
     {
       "type": "event",
+      "name": "SlashCancelled",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "SlashExecutedWithProof",
       "inputs": [
         {
@@ -2187,6 +2239,19 @@
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SlashQueued",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
         }
       ],
       "anonymous": false
@@ -2531,6 +2596,11 @@
     {
       "type": "error",
       "name": "SlashCooldown",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SlashPending",
       "inputs": []
     },
     {
