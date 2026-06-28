@@ -158,9 +158,11 @@ export type X402PaymentParams = {
 /** Facilitator client configuration */
 export type FacilitatorConfig = {
     url: string;
-    createAuthHeaders?: () => Promise<{
-        verify?: Record<string, string>;
-        settle?: Record<string, string>;
-        supported?: Record<string, string>;
-    }>;
+    /**
+     * Per-request auth headers (stateless, no prior round-trip). Receives the endpoint + the exact
+     * raw request body so it can sign it (e.g. the §4 HMAC over `${timestamp}.${rawBody}`). Use
+     * {@link createX402AuthHeaders} for the DVT facilitator's HMAC scheme. Return `{}` for no auth.
+     */
+    createAuthHeaders?: (ctx: { endpoint: 'verify' | 'settle' | 'supported'; body: string })
+        => Promise<Record<string, string>> | Record<string, string>;
 };
