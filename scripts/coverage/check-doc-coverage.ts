@@ -70,6 +70,11 @@ const AIRACCOUNT_ABIS = [
 const KMS_EXEMPT: Record<string, string> = {
   "GET /": "HTML landing page, not a programmatic endpoint",
   "GET /test": "HTML test page, not a programmatic endpoint",
+  // openapi 0.27.2 contact-binding additions (#124/#129) — called by the DVT node / Telegram bot,
+  // NOT the SDK's owner-facing contact-binding client (begin/confirm/get/unbind, v0.27.0). See sdk#193.
+  "POST /verify-confirm-assertion": "DVT node RP-verifies a passkey OOB-confirm assertion (#124)",
+  "POST /contact/claim-binding": "Telegram bot claims a binding code (#129)",
+  "GET /contact/{account}": "DVT node lists verified contacts, DVT-api-key gated (#129)",
 };
 
 // Contract-level exemptions. Names here are excluded from BOTH SP and AA totals.

@@ -268,6 +268,11 @@ const KMS_API_EXEMPT = new Set<string>([
   "GET /test",
   "GET /.well-known/attestation-measurements.json",
   "GET /.well-known/attestation-measurements-proof.json",
+  // openapi 0.27.2 contact-binding additions (#124/#129) — DVT-node/Telegram-bot side, NOT the SDK's
+  // owner-facing contact-binding client (begin/confirm/get/unbind, shipped v0.27.0). See sdk#193.
+  "POST /verify-confirm-assertion", // DVT node RP-verifies a passkey OOB-confirm assertion
+  "POST /contact/claim-binding",    // Telegram bot claims a binding code
+  "GET /contact/{account}",         // DVT node lists verified contacts (DVT api-key gated)
 ]);
 
 // ---------------------------------------------------------------------------
