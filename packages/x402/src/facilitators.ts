@@ -20,12 +20,12 @@ export interface X402FacilitatorEnv {
 
 export const DEFAULT_X402_FACILITATORS: Readonly<Record<number, X402FacilitatorEnv>> = {
   // Sepolia — X402Facilitator v5.4.1 (X402Facilitator-1.0.0), proven on-chain via settleX402PaymentDirect.
+  // Hosted facilitator services run on the AAStar DVT nodes (YetAnotherAA-Validator#130, x402-facilitator
+  // module). Load-balanced + fail over on 5xx — each node has its own operator (all approvedFacilitators).
   11155111: {
     chainId: 11155111,
     contract: '0xfe1DB01e1d6622e722B92ed5993af61325DB92aF',
-    // Hosted services pending the DVT x402-facilitator module (YetAnotherAA-Validator#130).
-    // Expected: ["https://dvt1.aastar.io/x402", "https://dvt2.aastar.io/x402", "https://dvt3.aastar.io/x402"].
-    urls: [],
+    urls: ['https://dvt1.aastar.io/x402', 'https://dvt2.aastar.io/x402', 'https://dvt3.aastar.io/x402'],
   },
 };
 
