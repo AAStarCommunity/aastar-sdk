@@ -7,10 +7,10 @@
 
 | Source | Total | Covered | Coverage % | Gaps | Exempt |
 |---|---|---|---|---|---|
-| KMS API (openapi.yaml) | 36 | 36 | 100.0% | 0 | 2 |
+| KMS API (openapi.yaml) | 39 | 39 | 100.0% | 0 | 5 |
 | SuperPaymaster ABI | 261 | 261 | 100.0% | 0 | 3 |
 | AirAccount ABI | 140 | 140 | 100.0% | 0 | 9 |
-| **OVERALL** | **437** | **437** | **100.0%** | **0** | — |
+| **OVERALL** | **440** | **440** | **100.0%** | **0** | — |
 
 ## Coverage definition
 
@@ -23,15 +23,18 @@
 
 ### KMS API (openapi.yaml)
 
-- Total (non-exempt): **36**
-- Covered: **36** (100.0%) — direct: 36, indirect/verify: 0
+- Total (non-exempt): **39**
+- Covered: **39** (100.0%) — direct: 39, indirect/verify: 0
 - Gaps: **0**
-- Exempt: 2
+- Exempt: 5
 
-**Exempt (2):**
+**Exempt (5):**
 
 - `GET /` — HTML landing page, not a programmatic endpoint
 - `GET /test` — HTML test page, not a programmatic endpoint
+- `POST /verify-confirm-assertion` — DVT node RP-verifies a passkey OOB-confirm assertion (#124)
+- `POST /contact/claim-binding` — Telegram bot claims a binding code (#129)
+- `GET /contact/{account}` — DVT node lists verified contacts, DVT-api-key gated (#129)
 
 ### SuperPaymaster ABI
 
