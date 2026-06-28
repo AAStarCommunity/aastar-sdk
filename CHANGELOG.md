@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.1] - 2026-06-28
+**Upstream sync: AirAccount v0.20.2 → v0.20.3 (gasless self-call redeploy).**
+
+AirAccount v0.20.3 (upstream #140) adds `onlyOwnerOrSelf` to four tier/weight config
+functions (`setTierLimits`, `modifyTierLimitsWithGuardians`, `setWeightConfig`,
+`modifyTierLimitsWithMixedGuardians`) so they can be submitted as SuperPaymaster-sponsored
+UserOps via `execute()`. **Modifier-only change → zero ABI delta**; no SDK API change.
+But `ACCOUNT_VERSION`/`FACTORY_VERSION` bumped → bytecode changed → redeploy.
+
+- **[ADDRESS]** `CANONICAL_ADDRESSES[11155111]` AirAccount stack re-pointed to v0.20.3
+  (all on-chain verified): impl `0x91Ee5a7…` (`ACCOUNT_VERSION "0.20.3"`), extension
+  `0xC3F4Ff…`, factory `0x78775786…` (`FACTORY_VERSION "0.20.2"`, `implementation()→0x91Ee5a7`),
+  agentRegistry `0x33B3287…`. The remaining v0.20.0 stack (validators/aggregator/session/
+  parsers) was not redeployed and is unchanged. (PR #225, closes #224.)
+- **[EVIDENCE]** Full AirAccount business-scenario set re-run on live Sepolia against the new
+  addresses — `docs/onchain-evidence/0.29.1.md`: P-256 account-create, P-256 guardian +
+  EIP-7212 recovery, mixed-sig guardian + `modifyTierLimitsWithMixedGuardians`, weighted-sig
+  + `setWeightConfig`, SuperPaymaster-sponsored gasless, ECDSA social recovery; plus negatives
+  (timelock reverts). Both v0.20.3 `onlyOwnerOrSelf` surfaces FEATURE-MET on-chain.
+- SuperPaymaster (v5.4.1-rc.1) and launch upstreams re-scanned against fresh `forge build` —
+  no SDK-relevant ABI change.
+
 ## [0.29.0] - 2026-06-28
 **x402 signature-required settlement + DVT-hosted facilitator (live).**
 
@@ -75,8 +97,8 @@ All notable changes to this project will be documented in this file.
   [`docs/onchain-evidence/v0.20.2-module-governance.md`](docs/onchain-evidence/v0.20.2-module-governance.md),
   re-runnable script `tests/regression/onchain-evidence/v0202-module-install-e2e.ts`.
 
-## [0.29.0] - 2026-06-28
-**SDK Code Integrity Hash**: `cf5ad31f8e44b3f2ce51d091e6705a5f7c7e53e0ae1469b1f00fbd90bb99c3c2`
+## [0.29.1] - 2026-06-28
+**SDK Code Integrity Hash**: `96f595abd4b7facd9c5ee680eb8ce938a03c73bddb0116ba42d199094dd8b466`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Upstream sync: lowercase the account in contact-binding KMS calls (#193 / KMS v0.27.2).**
