@@ -688,29 +688,6 @@
     },
     {
       "type": "function",
-      "name": "installModule",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "initData",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
       "name": "isModuleInstalled",
       "inputs": [
         {
@@ -1126,29 +1103,6 @@
         }
       ],
       "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "uninstallModule",
-      "inputs": [
-        {
-          "name": "moduleTypeId",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "module",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "deInitData",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -2399,6 +2353,100 @@
     },
     {
       "type": "function",
+      "name": "addGuardianWithMixedSigs",
+      "inputs": [
+        {
+          "name": "_guardian",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "addP256Guardian",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "addP256GuardianWithMixedSigs",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "approveRecovery",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "approveRecoveryWithSig",
+      "inputs": [
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "approveWeightChange",
       "inputs": [],
       "outputs": [],
@@ -2446,6 +2494,31 @@
     },
     {
       "type": "function",
+      "name": "cancelRecovery",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "cancelRecoveryWithSig",
+      "inputs": [
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "cancelWeightChange",
       "inputs": [],
       "outputs": [],
@@ -2466,8 +2539,62 @@
     },
     {
       "type": "function",
+      "name": "executeRecovery",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "executeWeightChange",
       "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getGuardianP256Key",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "installModule",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "initData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
       "outputs": [],
       "stateMutability": "nonpayable"
     },
@@ -2493,6 +2620,39 @@
           "internalType": "uint256"
         }
       ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "modifyTierLimitsWithMixedGuardians",
+      "inputs": [
+        {
+          "name": "_tier1",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_tier2",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
       "stateMutability": "nonpayable"
     },
     {
@@ -2557,6 +2717,42 @@
         },
         {
           "name": "initData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "proposeRecovery",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "proposeRecoveryWithSig",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "gIdx",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "sig",
           "type": "bytes",
           "internalType": "bytes"
         }
@@ -2677,6 +2873,29 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "removeGuardianWithMixedSigs",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "signerIdxs",
+          "type": "uint8[]",
+          "internalType": "uint8[]"
+        },
+        {
+          "name": "sigs",
+          "type": "bytes[]",
+          "internalType": "bytes[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -2854,6 +3073,29 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "uninstallModule",
+      "inputs": [
+        {
+          "name": "moduleTypeId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "deInitData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     }
   ]
 }

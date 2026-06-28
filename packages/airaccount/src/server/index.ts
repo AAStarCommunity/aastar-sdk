@@ -43,7 +43,14 @@ export type {
   SerializedGuardianSpec,
 } from "./services/account-init-config";
 export { ModuleManager } from "./services/module-manager";
-export { buildInstallModuleHash, buildUninstallModuleHash } from "./services/module-manager";
+export {
+  buildInstallModuleHash,
+  buildUninstallModuleHash,
+  buildSetModuleTimelockHash,
+  buildInstallModuleP256Challenge,
+  buildUninstallModuleP256Challenge,
+  buildSetModuleTimelockP256Challenge,
+} from "./services/module-manager";
 export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";
 export { SessionKeyService, packSecp256k1SessionSignature, packP256SessionSignature } from "./services/session-key-service";
 export type { GrantSessionParams, GrantP256SessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";

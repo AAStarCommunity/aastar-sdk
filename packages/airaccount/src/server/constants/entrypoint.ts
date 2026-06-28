@@ -142,6 +142,8 @@ export const AIRACCOUNT_ABI = [
   // ── ERC-7579 Module Management (M7.2) ──
   "function installModule(uint256 moduleTypeId, address module, bytes calldata initData) external",
   "function uninstallModule(uint256 moduleTypeId, address module, bytes calldata deInitData) external",
+  "function proposeModuleInstall(uint256 moduleTypeId, address module, bytes calldata initData) external",
+  "function setModuleInstallTimelock(uint256 newTimelock, bytes calldata guardianSigs) external",
   "function executeFromExecutor(bytes32 mode, bytes calldata executionCalldata) external returns (bytes[] memory returnData)",
   // ── ERC-7579 Introspection ──
   "function accountId() external pure returns (string memory)",

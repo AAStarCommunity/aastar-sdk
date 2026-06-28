@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.28.0] - 2026-06-28
+**Upstream sync (4/4): AirAccount v0.20.2 · SuperPaymaster v5.4.1-rc.1 · KMS openapi 0.26.1 · DVT v1.6.0.**
+
+> **BREAKING** — the AirAccount module-governance helpers changed signature to match the
+> v0.20.2 mixed-sig (ECDSA + P-256) encoding. See migration notes below (upstream #209).
+
+- **[BREAKING]** `@aastar/airaccount` `ModuleManager.encodeInstall` / `encodeUninstall` and the
+  standalone `buildInstallModuleHash` / `buildUninstallModuleHash` now implement the AirAccount
+  **v0.20.2** encoding (installModule/uninstallModule relocated to `AirAccountExtension`,
+  fallback-routed):
+  - `installModule` initData is `abi.encode(uint8[] signerIdxs, bytes[] sigs, bytes moduleInitData)`
+    when `sigsRequired > 0`, and raw `moduleInitData` when `sigsRequired == 0` (backward compatible).
+  - `uninstallModule` deInitData is **always** `abi.encode(uint8[] signerIdxs, bytes[] sigs)`; the
+    module deInit-data passthrough was **removed** upstream, and uninstall now needs
+    `min(guardianCount, 2)` sigs (0-guardian accounts degrade to owner-only).
+  - the guardian digest is now
+    `keccak256(abi.encode(GUARDIAN_SIG_VERSION=4, chainId, account, opLabel, opData)).toEthSignedMessageHash()`
+    with `opData` folding the on-chain **`moduleManagementNonce()`** (replay guard, upstream #75).
+    `buildInstallModuleHash`/`buildUninstallModuleHash` take a required `nonce: bigint` — read it via
+    the new `ModuleManager.readModuleNonce(account)`. `InstallModuleParams`/`UninstallModuleParams`
+    now carry `signerIdxs` + `guardianSigs` (P-256 WebAuthn assertion blobs accepted) instead of the
+    old `guardianSig1`/`guardianSig2`/`moduleDeInitData`. 13 byte-exact decode-roundtrip tests added.
+- **[ADDED]** `@aastar/core` SuperPaymaster actions `queueSlash`, `cancelSlash`, `initBLSAggregator`
+  (v5.4.1-rc.1). The two-step slash guard (#249) means `slashOperator` / `executeSlashWithBLS` now
+  **revert with `SlashPending()` unless `queueSlash` was called first**.
+- **[ADDED]** module-governance encoders/digests completing the v0.20.2 surface (#209):
+  `ModuleManager.encodeProposeModuleInstall` (timelocked two-step install — same encoding as
+  installModule) and `encodeSetModuleTimelockGuardianSigs` + `buildSetModuleTimelockHash`
+  (weakening path, `min(guardianCount,2)` sigs). **P-256 guardian** challenge builders
+  `buildInstallModuleP256Challenge` / `buildUninstallModuleP256Challenge` /
+  `buildSetModuleTimelockP256Challenge` (`_p256GuardianChallenge` — folds the `"P256_GUARDIAN"`
+  domain, no EIP-191 prefix) so passkey guardians can co-sign module ops. 20 byte-exact tests total.
+- **[SYNC]** addresses — SuperPaymaster full Sepolia redeploy (~18 keys) + AirAccount v0.20.2
+  (impl/extension/factory/agentRegistry); re-vendored `SuperPaymaster.json` (+3 fns),
+  `AAStarAirAccountV7.json` (+13 recovery/guardian/P-256 fns), `AirAccountExtension.json`
+  (+installModule/uninstallModule). `config.sepolia.json` realigned to the upstream deployment record.
+  Every changed address validated strict EIP-55. **On-chain verified (Sepolia)**: all synced contracts
+  deployed; `superPaymaster.version() == "SuperPaymaster-5.4.1"`. Radar 4/4 in-sync.
+- **[ADDED]** adopted Mycelium community `PNTsPaymasterV4` `0xC827…4a46` (Sepolia) after on-chain
+  verify (`PMV4-Deposit-4.5.0`, `isTokenSupported(pnts)==true`). Corrected "Mycelian" → "Mycelium".
+- **[E2E ACCEPTANCE]** (#209) live Sepolia on-chain proof — deployed a guardianed v0.20.2 account and ran
+  install (`sigsRequired=1`) + uninstall (`sigsRequired=2`) with real guardian signatures through the SDK
+  encoders; the deployed `AirAccountExtension` accepted both. Tx: deploy `0xff29fa49…`, install
+  `0xc21e55bd…`, uninstall `0x71741963…` (all `status=0x1`). Evidence:
+  [`docs/onchain-evidence/v0.20.2-module-governance.md`](docs/onchain-evidence/v0.20.2-module-governance.md),
+  re-runnable script `tests/regression/onchain-evidence/v0202-module-install-e2e.ts`.
+
 ## [0.27.1] - 2026-06-27
 **SDK Code Integrity Hash**: `8de7a704fd68c305b352a4961e7f8435f8bf31f4b10da7d616139da7cedb5eff`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

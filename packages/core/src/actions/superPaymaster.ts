@@ -90,7 +90,17 @@ export type SuperPaymasterActions = {
     updateReputation: (args: { operator: Address, newScore: bigint, account?: Account | Address }) => Promise<Hash>;
     executeSlashWithBLS: (args: { operator: Address, level: number, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     slashOperator: (args: { operator: Address, level: number, penaltyAmount: bigint, reason: string, account?: Account | Address }) => Promise<Hash>;
-    
+    /**
+     * Two-step slash guard (v5.4.1-rc.1 #249): queue a pending slash for `operator`.
+     * Both {@link slashOperator} and {@link executeSlashWithBLS} now revert with
+     * `SlashPending()` unless `_pendingSlash[operator]` was set first via this call,
+     * and `withdraw()` reverts while it is set (closes the slash-escape window).
+     * Governance-gated.
+     */
+    queueSlash: (args: { operator: Address, account?: Account | Address }) => Promise<Hash>;
+    /** Cancel a queued slash (governance escape hatch); clears the pending-slash flag. */
+    cancelSlash: (args: { operator: Address, account?: Account | Address }) => Promise<Hash>;
+
     // User & SBT Management
     updateBlockedStatus: (args: { operator: Address, users: Address[], statuses: boolean[], account?: Account | Address }) => Promise<Hash>;
     updateSBTStatus: (args: { user: Address, status: boolean, account?: Account | Address }) => Promise<Hash>;
@@ -146,6 +156,12 @@ export type SuperPaymasterActions = {
     // BLS Aggregator Timelock (setBLSAggregator sets directly; queue/apply is timelocked)
     queueBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
     applyBLSAggregator: (args: { account?: Account | Address }) => Promise<Hash>;
+    /**
+     * One-time BLS_AGGREGATOR wiring for a fresh deploy (v5.4.1-rc.1 #S3): callable
+     * only while `BLS_AGGREGATOR == address(0)`; `onlyOwner`, no timelock. To change
+     * an already-set aggregator use {@link queueBLSAggregator} + {@link applyBLSAggregator}.
+     */
+    initBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
 
     // Callbacks
     onTransferReceived: (args: { operator: Address, from: Address, value: bigint, data: Hex }) => Promise<Hex>;
@@ -458,6 +474,54 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'slashOperator');
+        }
+    },
+
+    async queueSlash({ operator, account }) {
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'queueSlash',
+                args: [operator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'queueSlash');
+        }
+    },
+
+    async cancelSlash({ operator, account }) {
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'cancelSlash',
+                args: [operator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'cancelSlash');
+        }
+    },
+
+    async initBLSAggregator({ aggregator, account }) {
+        try {
+            validateAddress(aggregator, 'aggregator');
+            return await (client as any).writeContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'initBLSAggregator',
+                args: [aggregator],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'initBLSAggregator');
         }
     },
 

@@ -28,7 +28,7 @@ export const CANONICAL_ADDRESSES = {
     paymasterV4Impl: "0xc4dd13F7825409EEC13FBCBdD9D8f6d618207cca",
     // Official community PaymasterV4 instances (one per community, each backed by its own points token).
     aPNTsPaymasterV4: "0x67a70a578E142b950987081e7016906ae4F56Df4",  // AAStar community → aPNTs
-    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; not deployed on this chain
+    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelium (Anni) → pnts; not deployed on this chain
     xPNTsFactory: "0x864971a26384d9DCC7115f0bBC428e2623F28b6e",
     blsAggregator: "0x1C305372ecc5a36CBef1FA371392234bCD55eB19",
     blsValidator: "0xA88ADec5A8dc422B57488272d5aD5913d728942A",
@@ -69,41 +69,42 @@ export const CANONICAL_ADDRESSES = {
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
   //                  AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md
-  // Latest sync: 2026-06-20 — AirAccount contracts v0.20.0 (P-256/WebAuthn guardian + recovery
-  //   relocated to AirAccountExtension; FULL Sepolia redeploy, docs/DEPLOYMENT-v0.20.0.md).
-  //   SuperPaymaster remains v5.4.0-beta.1-redeploy (deployments/config.sepolia.json 2026-06-16).
-  //   SP proxy 0x0300... (impl 0x24a945...), Registry 0x3F92... (impl 0x177033...)
-  //   v5.4 keys: x402Facilitator 0x326Fc3..., policyRegistry 0x8c2488..., timelockController 0xB734df...
-  //   AirAccount v0.20.0 factory 0x99C9300d... (NEW ctor: impl injected as arg 1).
+  // Latest sync: 2026-06-28 — AirAccount contracts v0.20.2 (P-256/WebAuthn mixed-sig module
+  //   governance; installModule/uninstallModule moved to AirAccountExtension, fallback-routed —
+  //   CHANGELOG v0.20.2 "Deployed (Sepolia)"). SuperPaymaster v5.4.1-rc.1 (FULL Sepolia redeploy,
+  //   deployments/config.sepolia.json 2026-06-27; two-step slash guard + BLS_AGGREGATOR wiring).
+  //   SP proxy 0x09DF... (impl 0x027481...), Registry 0xf5Bf... ; v5.4.1 keys: x402Facilitator
+  //   0xfe1DB0..., policyRegistry 0x29253b..., timelockController 0x86C86c...
+  //   AirAccount v0.20.2: impl 0xf36c81..., extension 0xFe0B7f..., factory 0xe9ea2D..., agentRegistry 0xFc9e7e...
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: official community PaymasterV4s below — `aPNTsPaymasterV4` (AAStar → aPNTs) and
-  //   `PNTsPaymasterV4` (Mycelian/Anni → pnts), auto-deployed by SuperPaymaster prepare-test and
+  //   `PNTsPaymasterV4` (Mycelium/Anni → pnts), auto-deployed by SuperPaymaster prepare-test and
   //   synced via config.sepolia.json. `paymasterV4` = the AAStar one (= aPNTsPaymasterV4).
   //   All verified on-chain (PaymasterFactory.getPaymasterList + isTokenSupported + owner).
   11155111: {
-    registry: "0x3F920B25f8b65988359C372F66F036E48adFc556",
-    gToken: "0x20a051502a7AE6e40cfFd6EBe59057538E698984",
-    staking: "0x3B363598746Ea57314d4869B160940948c569D48",
-    sbt: "0x072A0D12f4212B6baD7c6d0A633eaffbDE9105bF",
-    reputationSystem: "0x7fEd690E1663755e24a1C9d6164336809d68a578",
-    superPaymaster: "0x030025f40d509b1a99547bAEb3795bD27F7182b7",  // proxy (impl 0x24a94572...; 2026-06-16 redeploy)
-    paymasterFactory: "0x0Aa06EA5295eeD4D48c93c594Db1CBf3626971A5",
-    paymasterV4: "0x957852251f44570dc2B60Dde0954f191FF3372eE",  // = aPNTsPaymasterV4 (AAStar; was 0x1f0D4eF, a non-aPNTs proxy)
-    paymasterV4Impl: "0x59DCA5861aaDA602fE1BFbfcc36DFAc36C58623d",
+    registry: "0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71",
+    gToken: "0x4c09aE57503Aa1E2A43b05621A38DbdD43b0Aa08",
+    staking: "0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e",
+    sbt: "0x4867B4302bf4C7818b71F55E53A3520Ee1855Aa7",
+    reputationSystem: "0x4Ec2D49D75D5D4206B64387A7d6a6C3c5c90fB5A",
+    superPaymaster: "0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9",  // proxy (impl 0x0274811E...; v5.4.1-rc.1 2026-06-27 redeploy)
+    paymasterFactory: "0xA936F8e3d682B0eCf280E6f5c05fF4204ee87180",
+    paymasterV4: "0xf3948753ff21D33f6A5f516621FFF245B23efa0e",  // = aPNTsPaymasterV4 (AAStar)
+    paymasterV4Impl: "0xc0F968625E3Ac0A2ad7f107cD5857425F672D268",
     // Official community PaymasterV4 instances (verified on-chain). AAStar's is an ERC-1167 clone of
     // paymasterV4Impl above (version PMV4-Deposit-4.5.0), owner = SuperPaymaster owner 0xb5600060….
-    aPNTsPaymasterV4: "0x957852251f44570dc2B60Dde0954f191FF3372eE",  // AAStar community → aPNTs (0x9e66B457)
-    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; filled by next prepare-test (on-chain candidate 0xd998013F… supports pnts)
-    xPNTsFactory: "0xCec3655525a112882E74Fb7C26AcB267a07724cb",  // 2026-06-16 redeploy (was 0xc312...)
-    blsAggregator: "0x15387e161c1b3dAe7c66Fbd5c1F32837B58B2e79",  // SP BLSAggregator 2026-06-16 redeploy (was 0x7ec7...)
+    aPNTsPaymasterV4: "0xf3948753ff21D33f6A5f516621FFF245B23efa0e",  // AAStar community → aPNTs (0x696A7370)
+    PNTsPaymasterV4: "0xC827747674ab6397c319e284f650D07d8c2a4a46",   // Mycelium (Anni) → pnts; on-chain verified 2026-06-28 (version PMV4-Deposit-4.5.0, isTokenSupported(pnts)==true, owner 0xEcAACb91…)
+    xPNTsFactory: "0x67422d2e44a33c8dA99b3b776841bF316bD209a2",  // v5.4.1-rc.1 2026-06-27 redeploy
+    blsAggregator: "0x893b8fb7B3d203C288b481400fE05Ade5edD6d11",  // SP BLSAggregator v5.4.1-rc.1 2026-06-27 redeploy
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
-    dvtValidator: "0x19BA9829C784E4A41b68960b9c0bA55f83718997",
+    dvtValidator: "0x9946953af7aAA8F56e8dF4E46F68FFFA0c4F593D",
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
-    aPNTs: "0x9e66B457E0ABb1F139FD8A596d00f784eBA2873b",  // AAStar aPNTs (deployer operator)
+    aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89",  // AAStar aPNTs (v5.4.1-rc.1 redeploy)
     priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",  // Sepolia Chainlink ETH/USD
     simpleAccountFactory: "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
-    microPaymentChannel: "0x405851A141Cde827E33247d4D4089Af2814c2FF5",  // SP v5.4 2026-06-16 redeploy (was 0xfCC9...)
+    microPaymentChannel: "0x37578b70B231CC0Eda5991CA633ae99eb35f3818",  // SP v5.4.1-rc.1 2026-06-27 redeploy
     agentIdentityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",  // ERC-8004 vanity addr (beta.3)
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
@@ -126,24 +127,24 @@ export const CANONICAL_ADDRESSES = {
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0x4f7BBb00c1086f5c0EBdDBDb4BC39cF348EfB2C3",  // v0.20.1 (re-points to new impl; tierLimitNonce getter)
-    airAccountV7Impl: "0xf4a534deCcB1652a28e4b4d388b518008F23f3f3",  // v0.20.1
-    airAccountExtension: "0xBE1aBaae2c678959Be4E0708568dDf0Fc8765cb8",  // v0.20.1 (+tierLimitNonce() getter — #132)
-    agentRegistry: "0xdE603987C184d25f37f612B9E84481E92719B08B",  // v0.20.1 (bindFactory set-once)
+    airAccountFactoryV7: "0xe9ea2D29F2De1be80BEdb8A284ad4f98e6dAb6a1",  // v0.20.2 (re-points to v0.20.2 impl)
+    airAccountV7Impl: "0xf36c81110Dd30D3052285EFc507E1BCE6875987C",  // v0.20.2 (P-256 mixed-sig module governance #127)
+    airAccountExtension: "0xFe0B7f7C4D3551931ec6d5457a293bA1C12418b0",  // v0.20.2 (installModule/uninstallModule + recovery, fallback-routed)
+    agentRegistry: "0xFc9e7e35eC82978EFAD1B5f9D472018FA42B1fFe",  // v0.20.2
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
-    policyRegistry: "0x8c2488d46d5447418558c38AA6441720df656094",
+    policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",
     // SP v5.4 x402 settlement facilitator (verify/settle EIP-3009 + direct xPNTs).
-    x402Facilitator: "0x326Fc3413c8A0185b0179B971C69813B6dFD971B",
+    x402Facilitator: "0xfe1DB01e1d6622e722B92ed5993af61325DB92aF",
     // SP v5.4 governance TimelockController (2-day minDelay; gates PolicyRegistry loosen/unfreeze).
-    timelockController: "0xB734df3c0A1809bc06708512363D368Ac51dF1A2",
+    timelockController: "0x86C86c789EDc099801cc6a5F48334F1D67dC9564",
     // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
     // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
     // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
     // drifted from the live deployment; realigned per "Sepolia deployment is the
     // source of truth". A community-specific xPNTs belongs under its own key, not
     // the canonical base `pnts`.
-    pnts: "0xC687f8a115D308ECD39658a8EE33bC3c8F75EE31",
+    pnts: "0xE6579A90dc498a710008de12119812D0FB7aA224",
   },
 
   // --- OP Sepolia (Chain ID: 11155420) ---
