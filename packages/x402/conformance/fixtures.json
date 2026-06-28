@@ -1,0 +1,158 @@
+{
+  "note": "Golden x402 wire conformance vectors (#130 / aastar-sdk#39). Regenerate via scripts/x402/gen-conformance-fixtures.mjs.",
+  "config": {
+    "chainId": 11155111,
+    "facilitatorContract": "0xfefeFEFeFEFEFEFEFeFefefefefeFEfEfefefEfe",
+    "supportedAssets": [
+      "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+    ],
+    "nowSecForVerify": 1500000000
+  },
+  "vectors": [
+    {
+      "name": "direct-xpnts",
+      "description": "xPNTs direct settlement — payer signs X402PaymentAuthorization",
+      "body": {
+        "x402Version": 2,
+        "paymentPayload": {
+          "x402Version": 2,
+          "accepted": {
+            "scheme": "exact",
+            "network": "eip155:11155111",
+            "asset": "0xA1A1a1a1A1A1A1A1A1a1a1a1a1a1A1A1a1A1a1a1",
+            "amount": "1000000",
+            "payTo": "0x4444444444444444444444444444444444444444",
+            "maxTimeoutSeconds": 3600,
+            "extra": {
+              "name": "aPNTs",
+              "version": "1",
+              "settlement": "direct",
+              "maxFee": "1000000"
+            }
+          },
+          "payload": {
+            "signature": "0x6ff9173214c376e1e73b970696dacb8eb00b80837f390a4f5e8995f0ab5ba235373e6b87e6e32462e7d879af4b4e037afb88c287dc30dfc9a4c106d04b1838171c",
+            "authorization": {
+              "from": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+              "to": "0x4444444444444444444444444444444444444444",
+              "value": "1000000",
+              "validAfter": "0",
+              "validBefore": "2000000000",
+              "nonce": "0x5555555555555555555555555555555555555555555555555555555555555555"
+            }
+          }
+        },
+        "paymentRequirements": {
+          "scheme": "exact",
+          "network": "eip155:11155111",
+          "asset": "0xA1A1a1a1A1A1A1A1A1a1a1a1a1a1A1A1a1A1a1a1",
+          "amount": "1000000",
+          "payTo": "0x4444444444444444444444444444444444444444",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "aPNTs",
+            "version": "1",
+            "settlement": "direct",
+            "maxFee": "1000000"
+          }
+        }
+      },
+      "expect": {
+        "scheme": "direct",
+        "payer": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "effectiveNonce": "0x5555555555555555555555555555555555555555555555555555555555555555",
+        "settle": {
+          "method": "settleX402PaymentDirect",
+          "args": [
+            "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+            "0x4444444444444444444444444444444444444444",
+            "0xA1A1a1a1A1A1A1A1A1a1a1a1a1a1A1A1a1A1a1a1",
+            "1000000",
+            "1000000",
+            "2000000000",
+            "0x5555555555555555555555555555555555555555555555555555555555555555",
+            "0x6ff9173214c376e1e73b970696dacb8eb00b80837f390a4f5e8995f0ab5ba235373e6b87e6e32462e7d879af4b4e037afb88c287dc30dfc9a4c106d04b1838171c"
+          ]
+        }
+      }
+    },
+    {
+      "name": "eip3009-usdc",
+      "description": "USDC EIP-3009 settlement — payer signs ReceiveWithAuthorization over the recipient-bound derived nonce",
+      "body": {
+        "x402Version": 2,
+        "paymentPayload": {
+          "x402Version": 2,
+          "accepted": {
+            "scheme": "exact",
+            "network": "eip155:11155111",
+            "asset": "0x1111111111111111111111111111111111111111",
+            "amount": "2000000",
+            "payTo": "0x4444444444444444444444444444444444444444",
+            "maxTimeoutSeconds": 3600,
+            "extra": {
+              "name": "USDC",
+              "version": "2",
+              "settlement": "eip-3009",
+              "maxFee": "2000000",
+              "salt": "0x5555555555555555555555555555555555555555555555555555555555555555"
+            }
+          },
+          "payload": {
+            "signature": "0x0524c7d45d8f7418fdbc8e38427997fcf0634a636ee5dd853cf51a81e73b66ae32076cdcc16c2610633b567cc325b1a551422deed502f34ae80e1eb0b224e4241c",
+            "authorization": {
+              "from": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+              "to": "0xfefeFEFeFEFEFEFEFeFefefefefeFEfEfefefEfe",
+              "value": "2000000",
+              "validAfter": "1000000000",
+              "validBefore": "2000000000",
+              "nonce": "0x14fbb2662c9a5101c1ce4d8872e7e1783addb73862540e7a738e30906effed6a"
+            }
+          }
+        },
+        "paymentRequirements": {
+          "scheme": "exact",
+          "network": "eip155:11155111",
+          "asset": "0x1111111111111111111111111111111111111111",
+          "amount": "2000000",
+          "payTo": "0x4444444444444444444444444444444444444444",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "USDC",
+            "version": "2",
+            "settlement": "eip-3009",
+            "maxFee": "2000000",
+            "salt": "0x5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        }
+      },
+      "expect": {
+        "scheme": "eip-3009",
+        "payer": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "effectiveNonce": "0x14fbb2662c9a5101c1ce4d8872e7e1783addb73862540e7a738e30906effed6a",
+        "settle": {
+          "method": "settleX402Payment",
+          "args": [
+            "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+            "0x4444444444444444444444444444444444444444",
+            "0x1111111111111111111111111111111111111111",
+            "2000000",
+            "2000000",
+            "1000000000",
+            "2000000000",
+            "0x5555555555555555555555555555555555555555555555555555555555555555",
+            "0x0524c7d45d8f7418fdbc8e38427997fcf0634a636ee5dd853cf51a81e73b66ae32076cdcc16c2610633b567cc325b1a551422deed502f34ae80e1eb0b224e4241c"
+          ]
+        }
+      }
+    }
+  ],
+  "authHeader": {
+    "secret": "conformance-secret",
+    "rawBody": "{\"hello\":\"x402\"}",
+    "headers": {
+      "X-X402-Timestamp": "1500000000000",
+      "X-X402-Auth": "7ba74ae1389ee8579292704bcd35a6dce71995db950764e629176e25b5819bd9"
+    }
+  }
+}

@@ -7,6 +7,7 @@ export {
     DEFAULT_X402_FACILITATORS, getX402FacilitatorContract, getX402FacilitatorUrls,
     type X402FacilitatorEnv,
 } from './facilitators.js';
+export { createX402AuthHeaders, hmacSha256Hex } from './authHeaders.js';
 export type {
     X402PaymentParams, PaymentRequired, PaymentPayload, PaymentRequirements,
     SettleResponse, VerifyResponse, FacilitatorSupported, FacilitatorConfig,

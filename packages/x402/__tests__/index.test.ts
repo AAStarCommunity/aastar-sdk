@@ -530,10 +530,8 @@ describe('@aastar/x402', () => {
 
                 const client = new FacilitatorClient({
                     url: 'https://x402.org/facilitator',
-                    createAuthHeaders: async () => ({
-                        verify: { 'X-API-Key': 'test-key-verify' },
-                        settle: { 'X-API-Key': 'test-key-settle' },
-                    }),
+                    // New signature: per-request, receives { endpoint, body }.
+                    createAuthHeaders: async ({ endpoint }) => ({ 'X-API-Key': `test-key-${endpoint}` }),
                 });
 
                 await client.verify(samplePaymentPayload, samplePaymentPayload.accepted);
