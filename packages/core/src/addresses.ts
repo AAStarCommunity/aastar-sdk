@@ -69,13 +69,16 @@ export const CANONICAL_ADDRESSES = {
   // --- Sepolia (Chain ID: 11155111) ---
   // Source of truth: SuperPaymaster repo `deployments/config.sepolia.json`
   //                  AirAccount repo docs/e2e/E2E_TESTDATA_v0.18.0-beta.2.md
-  // Latest sync: 2026-06-28 — AirAccount contracts v0.20.2 (P-256/WebAuthn mixed-sig module
-  //   governance; installModule/uninstallModule moved to AirAccountExtension, fallback-routed —
-  //   CHANGELOG v0.20.2 "Deployed (Sepolia)"). SuperPaymaster v5.4.1-rc.1 (FULL Sepolia redeploy,
+  // Latest sync: 2026-06-28 — AirAccount contracts v0.20.3 (gasless self-call patch: onlyOwnerOrSelf
+  //   on setTierLimits/modifyTierLimitsWithGuardians/setWeightConfig/modifyTierLimitsWithMixedGuardians
+  //   so tier/weight config can be submitted as SuperPaymaster-sponsored UserOps — #140. Modifier-only
+  //   change → ZERO ABI delta vs v0.20.2; but ACCOUNT_VERSION/FACTORY_VERSION bump redeployed impl+
+  //   extension+factory+agentRegistry to fresh addrs). SuperPaymaster v5.4.1-rc.1 (FULL Sepolia redeploy,
   //   deployments/config.sepolia.json 2026-06-27; two-step slash guard + BLS_AGGREGATOR wiring).
   //   SP proxy 0x09DF... (impl 0x027481...), Registry 0xf5Bf... ; v5.4.1 keys: x402Facilitator
   //   0xfe1DB0..., policyRegistry 0x29253b..., timelockController 0x86C86c...
-  //   AirAccount v0.20.2: impl 0xf36c81..., extension 0xFe0B7f..., factory 0xe9ea2D..., agentRegistry 0xFc9e7e...
+  //   AirAccount v0.20.3 (on-chain verified): impl 0x91Ee5a7 (ACCOUNT_VERSION 0.20.3), extension 0xC3F4Ff,
+  //   factory 0x78775786 (FACTORY_VERSION 0.20.2, implementation()→0x91Ee5a7), agentRegistry 0x33B3287.
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: official community PaymasterV4s below — `aPNTsPaymasterV4` (AAStar → aPNTs) and
@@ -127,10 +130,10 @@ export const CANONICAL_ADDRESSES = {
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0xe9ea2D29F2De1be80BEdb8A284ad4f98e6dAb6a1",  // v0.20.2 (re-points to v0.20.2 impl)
-    airAccountV7Impl: "0xf36c81110Dd30D3052285EFc507E1BCE6875987C",  // v0.20.2 (P-256 mixed-sig module governance #127)
-    airAccountExtension: "0xFe0B7f7C4D3551931ec6d5457a293bA1C12418b0",  // v0.20.2 (installModule/uninstallModule + recovery, fallback-routed)
-    agentRegistry: "0xFc9e7e35eC82978EFAD1B5f9D472018FA42B1fFe",  // v0.20.2
+    airAccountFactoryV7: "0x78775786dc6B1CD2f6631Ab59C2BE86B1a1e585e",  // v0.20.3 (FACTORY_VERSION 0.20.2; implementation()→0x91Ee5a7; on-chain verified)
+    airAccountV7Impl: "0x91Ee5a7ec57A82f3FcEe991bDc75d918266edcb8",  // v0.20.3 (ACCOUNT_VERSION 0.20.3; gasless self-call onlyOwnerOrSelf #140)
+    airAccountExtension: "0xC3F4Ff562b8cB806bc3207cFD2d4621994599880",  // v0.20.3 (setWeightConfig/mixed-guardian self-call; fallback-routed)
+    agentRegistry: "0x33B3287Ef08219E84fEEF8BF3BE787347A3Df064",  // v0.20.3 (factory.agentRegistry() on-chain verified)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",
