@@ -30,6 +30,18 @@ export type PaymentRequirements = {
     extra: {
         name: string;       // Token name for EIP-712 domain (e.g. "USDC")
         version: string;    // Token version for EIP-712 domain (e.g. "2")
+        /**
+         * Settlement scheme the facilitator should use (DVT#130 schema). When omitted the
+         * facilitator defaults by asset (`asset ∈ X402_SUPPORTED_ASSETS ? "direct" : "eip-3009"`).
+         */
+        settlement?: 'direct' | 'eip-3009';
+        /** Fee ceiling (atomic units, stringified uint256). Default: the payment amount. */
+        maxFee?: string;
+        /**
+         * Salt for the eip-3009 derived nonce `keccak256(abi.encode(payTo, maxFee, salt))`
+         * (recipient-binding C-03 fix). Default: `authorization.nonce`.
+         */
+        salt?: Hex;
     };
 };
 
@@ -131,6 +143,16 @@ export type X402PaymentParams = {
     validAfter?: bigint;
     validBefore?: bigint;
     nonce?: Hex;
+    /**
+     * Settlement path (DVT#130). `"direct"` → sign an X402PaymentAuthorization (xPNTs);
+     * `"eip-3009"` → sign a ReceiveWithAuthorization with the recipient-bound derived nonce (USDC).
+     * Default: `"eip-3009"` (the x402 v2 default) unless the client/asset implies direct.
+     */
+    settlement?: 'direct' | 'eip-3009';
+    /** Fee ceiling (atomic units). Default: `amount`. */
+    maxFee?: bigint;
+    /** Salt for the eip-3009 derived nonce. Default: a fresh random 32-byte value. */
+    salt?: Hex;
 };
 
 /** Facilitator client configuration */

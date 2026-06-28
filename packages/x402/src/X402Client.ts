@@ -4,7 +4,9 @@ import type {
     X402PaymentParams, PaymentRequired, PaymentPayload,
     PaymentRequirements, SettleResponse, FacilitatorConfig,
 } from './types.js';
-import { signTransferWithAuthorization, generateNonce } from './eip3009.js';
+import { EIP3009_TYPES, getEIP3009Domain, generateNonce } from './eip3009.js';
+import { signX402PaymentAuthorization, deriveEip3009Nonce } from './x402auth.js';
+import { getX402FacilitatorContract } from './facilitators.js';
 import {
     encodePaymentPayload,
     extractPaymentRequired,
@@ -23,6 +25,12 @@ export type X402ClientConfig = {
     walletClient: WalletClient;
     superPaymasterAddress: Address;
     chainId: number;
+    /**
+     * The deployed `X402Facilitator` contract — the EIP-712 `verifyingContract` for the direct-path
+     * `X402PaymentAuthorization` AND the on-chain recipient for the eip-3009 path. Defaults to
+     * `DEFAULT_X402_FACILITATORS[chainId].contract`.
+     */
+    facilitatorContract?: Address;
     /** Facilitator endpoint (default: self-facilitated via SuperPaymaster) */
     facilitator?: FacilitatorConfig;
     /** EIP-712 domain for asset token (defaults: USDC / version "2") */
@@ -54,64 +62,93 @@ export class X402Client {
         }
     }
 
+    /** Resolve the deployed X402Facilitator contract (config override → DEFAULT_X402_FACILITATORS). */
+    private facilitatorContract(): Address {
+        return this.config.facilitatorContract ?? getX402FacilitatorContract(this.config.chainId);
+    }
+
     /**
-     * Create a signed payment payload (EIP-3009 TransferWithAuthorization).
-     * Returns a base64-encoded PaymentPayload ready for PAYMENT-SIGNATURE header.
+     * Create a signed payment payload, aligned with the deployed `X402Facilitator` (DVT#130).
+     * Two settlement paths:
+     *  - `"direct"`   (xPNTs): payer signs an `X402PaymentAuthorization` (EIP-712 over the facilitator),
+     *                 settled via `settleX402PaymentDirect(..., signature)`.
+     *  - `"eip-3009"` (USDC, default): payer signs a `ReceiveWithAuthorization` over the TOKEN, with
+     *                 recipient = the facilitator and a DERIVED nonce `keccak256(abi.encode(payTo,maxFee,salt))`
+     *                 that binds the final recipient (C-03). The facilitator submits `settleX402Payment`.
+     * Returns a base64-encoded PaymentPayload ready for the PAYMENT-SIGNATURE header.
      */
     async createPayment(params: X402PaymentParams): Promise<{
         payload: PaymentPayload;
         encoded: string;
         nonce: Hex;
     }> {
-        const nonce = params.nonce || generateNonce();
+        const wallet = this.config.walletClient;
+        const account = wallet.account!;
+        const chainId = this.config.chainId;
         const now = BigInt(Math.floor(Date.now() / 1000));
         const validAfter = params.validAfter ?? (now - 600n); // 10 min grace (per x402 spec)
         const validBefore = params.validBefore ?? (now + 3600n);
         const tokenName = this.config.tokenName || 'USDC';
         const tokenVersion = this.config.tokenVersion || '2';
+        const maxFee = params.maxFee ?? params.amount;
+        const settlement = params.settlement ?? 'eip-3009';
+        const facilitator = this.facilitatorContract();
 
-        const signature = await signTransferWithAuthorization(this.config.walletClient, {
-            from: params.from,
-            to: params.to,
-            value: params.amount,
-            validAfter,
-            validBefore,
-            nonce,
-            tokenName,
-            tokenVersion,
-            chainId: this.config.chainId,
-            verifyingContract: params.asset,
+        const acceptedBase = {
+            scheme: 'exact' as const,
+            network: toNetworkId(chainId),
+            asset: params.asset,
+            amount: params.amount.toString(),
+            payTo: params.to,
+            maxTimeoutSeconds: 3600,
+        };
+
+        if (settlement === 'direct') {
+            // xPNTs path — X402PaymentAuthorization over the facilitator (EIP-712).
+            const nonce = params.nonce || generateNonce();
+            const signature = await signX402PaymentAuthorization(wallet, {
+                from: params.from, to: params.to, asset: params.asset, amount: params.amount,
+                maxFee, validBefore, nonce, chainId, facilitator,
+            });
+            const payload: PaymentPayload = {
+                x402Version: 2,
+                accepted: { ...acceptedBase, extra: { name: tokenName, version: tokenVersion, settlement: 'direct', maxFee: maxFee.toString() } },
+                payload: {
+                    signature,
+                    authorization: {
+                        from: params.from, to: params.to, value: params.amount.toString(),
+                        validAfter: '0', validBefore: validBefore.toString(), nonce,
+                    },
+                },
+            };
+            return { payload, encoded: encodePaymentPayload(payload), nonce };
+        }
+
+        // eip-3009 path (USDC) — ReceiveWithAuthorization, recipient = facilitator, recipient-bound nonce.
+        const salt = params.salt || generateNonce();
+        const derivedNonce = deriveEip3009Nonce(params.to, maxFee, salt);
+        const signature = await wallet.signTypedData({
+            account,
+            domain: getEIP3009Domain(tokenName, tokenVersion, chainId, params.asset),
+            types: EIP3009_TYPES,
+            primaryType: 'ReceiveWithAuthorization',
+            message: {
+                from: params.from, to: facilitator, value: params.amount,
+                validAfter, validBefore, nonce: derivedNonce,
+            },
         });
-
         const payload: PaymentPayload = {
             x402Version: 2,
-            accepted: {
-                scheme: 'exact',
-                network: toNetworkId(this.config.chainId),
-                asset: params.asset,
-                amount: params.amount.toString(),
-                payTo: params.to,
-                maxTimeoutSeconds: 3600,
-                extra: { name: tokenName, version: tokenVersion },
-            },
+            accepted: { ...acceptedBase, extra: { name: tokenName, version: tokenVersion, settlement: 'eip-3009', maxFee: maxFee.toString(), salt } },
             payload: {
                 signature,
                 authorization: {
-                    from: params.from,
-                    to: params.to,
-                    value: params.amount.toString(),
-                    validAfter: validAfter.toString(),
-                    validBefore: validBefore.toString(),
-                    nonce,
+                    from: params.from, to: facilitator, value: params.amount.toString(),
+                    validAfter: validAfter.toString(), validBefore: validBefore.toString(), nonce: derivedNonce,
                 },
             },
         };
-
-        return {
-            payload,
-            encoded: encodePaymentPayload(payload),
-            nonce,
-        };
+        return { payload, encoded: encodePaymentPayload(payload), nonce: derivedNonce };
     }
 
     /**
