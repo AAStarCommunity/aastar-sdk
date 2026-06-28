@@ -27,14 +27,23 @@ All notable changes to this project will be documented in this file.
 - **[ADDED]** `@aastar/core` SuperPaymaster actions `queueSlash`, `cancelSlash`, `initBLSAggregator`
   (v5.4.1-rc.1). The two-step slash guard (#249) means `slashOperator` / `executeSlashWithBLS` now
   **revert with `SlashPending()` unless `queueSlash` was called first**.
+- **[ADDED]** module-governance encoders/digests completing the v0.20.2 surface (#209):
+  `ModuleManager.encodeProposeModuleInstall` (timelocked two-step install — same encoding as
+  installModule) and `encodeSetModuleTimelockGuardianSigs` + `buildSetModuleTimelockHash`
+  (weakening path, `min(guardianCount,2)` sigs). **P-256 guardian** challenge builders
+  `buildInstallModuleP256Challenge` / `buildUninstallModuleP256Challenge` /
+  `buildSetModuleTimelockP256Challenge` (`_p256GuardianChallenge` — folds the `"P256_GUARDIAN"`
+  domain, no EIP-191 prefix) so passkey guardians can co-sign module ops. 20 byte-exact tests total.
 - **[SYNC]** addresses — SuperPaymaster full Sepolia redeploy (~18 keys) + AirAccount v0.20.2
   (impl/extension/factory/agentRegistry); re-vendored `SuperPaymaster.json` (+3 fns),
   `AAStarAirAccountV7.json` (+13 recovery/guardian/P-256 fns), `AirAccountExtension.json`
   (+installModule/uninstallModule). `config.sepolia.json` realigned to the upstream deployment record.
-  Every changed address validated strict EIP-55. Radar 4/4 in-sync.
-- **[KNOWN FOLLOW-UP]** (#209) `proposeModuleInstall` / `setModuleInstallTimelock` remain raw-passthrough
-  in `@aastar/core`; callers must build the same `abi.encode(signerIdxs, sigs[, moduleInitData])` shape.
-  P-256-guardian module-governance signing helper + on-chain E2E acceptance still TODO.
+  Every changed address validated strict EIP-55. **On-chain verified (Sepolia)**: all synced contracts
+  deployed; `superPaymaster.version() == "SuperPaymaster-5.4.1"`. Radar 4/4 in-sync.
+- **[ADDED]** adopted Mycelium community `PNTsPaymasterV4` `0xC827…4a46` (Sepolia) after on-chain
+  verify (`PMV4-Deposit-4.5.0`, `isTokenSupported(pnts)==true`). Corrected "Mycelian" → "Mycelium".
+- **[KNOWN FOLLOW-UP]** (#209) live on-chain E2E acceptance (install + uninstall through EntryPoint on a
+  guardianed v0.20.2 account with `sigsRequired>0`) still pending — needs a provisioned funded account.
 
 ## [0.27.1] - 2026-06-27
 **SDK Code Integrity Hash**: `8de7a704fd68c305b352a4961e7f8435f8bf31f4b10da7d616139da7cedb5eff`

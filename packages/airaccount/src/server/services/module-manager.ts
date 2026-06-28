@@ -65,9 +65,30 @@ export interface UninstallModuleParams {
   guardianSigs?: string[];
 }
 
+// ── opData encoders (the per-op payload the contract folds into the guardian digest) ──
+// install / proposeModuleInstall: abi.encode(moduleTypeId, module, keccak256(moduleInitData), nonce)
+function installOpData(moduleTypeId: ModuleTypeId, module: string, nonce: bigint, moduleInitData: string): Hex {
+  return encodeAbiParameters(
+    [{ type: "uint256" }, { type: "address" }, { type: "bytes32" }, { type: "uint256" }],
+    [BigInt(moduleTypeId), module as Address, keccak256(moduleInitData as Hex), nonce],
+  );
+}
+// uninstall: abi.encode(moduleTypeId, module, nonce)
+function uninstallOpData(moduleTypeId: ModuleTypeId, module: string, nonce: bigint): Hex {
+  return encodeAbiParameters(
+    [{ type: "uint256" }, { type: "address" }, { type: "uint256" }],
+    [BigInt(moduleTypeId), module as Address, nonce],
+  );
+}
+// setModuleInstallTimelock (weakening): abi.encode(newTimelock, nonce)
+function setTimelockOpData(newTimelock: bigint, nonce: bigint): Hex {
+  return encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [newTimelock, nonce]);
+}
+
 /**
- * Build the EIP-191 install digest that an ECDSA guardian must sign (AirAccount
- * v0.20.2, `AirAccountExtension._verifyGuardianSigByIdx`):
+ * Build the install digest an **ECDSA** guardian must sign (AirAccount v0.20.2,
+ * `AirAccountExtension._verifyGuardianSigByIdx`). Same digest is used for
+ * `proposeModuleInstall` (the timelocked two-step path — identical opLabel/opData):
  *
  *   innerHash = keccak256(abi.encode(
  *                 GUARDIAN_SIG_VERSION, chainId, account, "INSTALL_MODULE",
@@ -76,14 +97,12 @@ export interface UninstallModuleParams {
  *
  * Returns `innerHash` (NO EIP-191 prefix). The contract recovers against
  * `toEthSignedMessageHash(innerHash)`, so the guardian signs the returned hash as a
- * raw personal_sign message and viem adds the prefix.
+ * raw personal_sign message and viem adds the prefix. For P-256 (passkey) guardians
+ * use {@link buildInstallModuleP256Challenge} instead.
  *
  * `nonce` is the account's current `moduleManagementNonce()` (issue #75 replay
  * guard — increments on every install AND uninstall). Read it on-chain via
  * {@link ModuleManager.readModuleNonce} immediately before collecting signatures.
- *
- * P-256 (passkey) guardians use a different (WebAuthn) challenge and are NOT
- * produced by this helper; supply their assertion blobs directly to encodeInstall.
  *
  * @example
  * const nonce = await mm.readModuleNonce(account);
@@ -98,15 +117,11 @@ export function buildInstallModuleHash(
   nonce: bigint,
   moduleInitData: string = "0x",
 ): string {
-  const opData = encodeAbiParameters(
-    [{ type: "uint256" }, { type: "address" }, { type: "bytes32" }, { type: "uint256" }],
-    [BigInt(moduleTypeId), module as Address, keccak256(moduleInitData as Hex), nonce],
-  );
-  return guardianDigest(chainId, account, "INSTALL_MODULE", opData);
+  return guardianDigest(chainId, account, "INSTALL_MODULE", installOpData(moduleTypeId, module, nonce, moduleInitData));
 }
 
 /**
- * Build the EIP-191 uninstall digest an ECDSA guardian must sign (v0.20.2):
+ * Build the uninstall digest an ECDSA guardian must sign (v0.20.2):
  *   opData = abi.encode(moduleTypeId, module, nonce)
  */
 export function buildUninstallModuleHash(
@@ -116,11 +131,64 @@ export function buildUninstallModuleHash(
   module: string,
   nonce: bigint,
 ): string {
-  const opData = encodeAbiParameters(
-    [{ type: "uint256" }, { type: "address" }, { type: "uint256" }],
-    [BigInt(moduleTypeId), module as Address, nonce],
-  );
-  return guardianDigest(chainId, account, "UNINSTALL_MODULE", opData);
+  return guardianDigest(chainId, account, "UNINSTALL_MODULE", uninstallOpData(moduleTypeId, module, nonce));
+}
+
+/**
+ * Build the `setModuleInstallTimelock` digest an ECDSA guardian must sign when
+ * **weakening** the timelock (lowering it, or disabling → 0). Strengthening is a
+ * direct owner action and needs no guardian sigs (pass empty guardianSigs).
+ *   opData = abi.encode(newTimelock, nonce); opLabel = "SET_MODULE_TIMELOCK".
+ * Weakening requires `min(guardianCount, 2)` sigs.
+ */
+export function buildSetModuleTimelockHash(
+  chainId: number,
+  account: string,
+  newTimelock: bigint,
+  nonce: bigint,
+): string {
+  return guardianDigest(chainId, account, "SET_MODULE_TIMELOCK", setTimelockOpData(newTimelock, nonce));
+}
+
+/**
+ * P-256 (WebAuthn passkey) guardian challenge for `installModule`/`proposeModuleInstall`
+ * (AirAccount v0.20.2 `_p256GuardianChallenge`). Distinct from the ECDSA digest — it folds
+ * an extra `"P256_GUARDIAN"` domain string and is NOT EIP-191-prefixed:
+ *   keccak256(abi.encode(GUARDIAN_SIG_VERSION, chainId, account, "P256_GUARDIAN", "INSTALL_MODULE", opData))
+ * Use the returned bytes32 as the WebAuthn ceremony challenge; pack the resulting assertion
+ * as `abi.encode(authenticatorData, clientDataJSONPrefix, clientDataJSONSuffix, r, s)` and pass
+ * it in `guardianSigs` to {@link ModuleManager.encodeInstall} (mixed ECDSA/P-256 supported).
+ */
+export function buildInstallModuleP256Challenge(
+  chainId: number,
+  account: string,
+  moduleTypeId: ModuleTypeId,
+  module: string,
+  nonce: bigint,
+  moduleInitData: string = "0x",
+): string {
+  return p256GuardianChallenge(chainId, account, "INSTALL_MODULE", installOpData(moduleTypeId, module, nonce, moduleInitData));
+}
+
+/** P-256 guardian challenge for `uninstallModule` (see {@link buildInstallModuleP256Challenge}). */
+export function buildUninstallModuleP256Challenge(
+  chainId: number,
+  account: string,
+  moduleTypeId: ModuleTypeId,
+  module: string,
+  nonce: bigint,
+): string {
+  return p256GuardianChallenge(chainId, account, "UNINSTALL_MODULE", uninstallOpData(moduleTypeId, module, nonce));
+}
+
+/** P-256 guardian challenge for weakening `setModuleInstallTimelock` (see {@link buildInstallModuleP256Challenge}). */
+export function buildSetModuleTimelockP256Challenge(
+  chainId: number,
+  account: string,
+  newTimelock: bigint,
+  nonce: bigint,
+): string {
+  return p256GuardianChallenge(chainId, account, "SET_MODULE_TIMELOCK", setTimelockOpData(newTimelock, nonce));
 }
 
 /**
@@ -137,6 +205,19 @@ function guardianDigest(chainId: number, account: string, opLabel: string, opDat
     encodeAbiParameters(
       [{ type: "uint8" }, { type: "uint256" }, { type: "address" }, { type: "string" }, { type: "bytes" }],
       [GUARDIAN_SIG_VERSION, BigInt(chainId), account as Address, opLabel, opData],
+    ),
+  );
+}
+
+/**
+ * Shared P-256 guardian WebAuthn challenge — `_p256GuardianChallenge`: folds the extra
+ * "P256_GUARDIAN" domain and is NOT EIP-191-prefixed (WebAuthn assertions don't use it).
+ */
+function p256GuardianChallenge(chainId: number, account: string, opLabel: string, opData: Hex): string {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint8" }, { type: "uint256" }, { type: "address" }, { type: "string" }, { type: "string" }, { type: "bytes" }],
+      [GUARDIAN_SIG_VERSION, BigInt(chainId), account as Address, "P256_GUARDIAN", opLabel, opData],
     ),
   );
 }
@@ -161,37 +242,51 @@ export class ModuleManager {
     this.chainId = chainId;
   }
 
+  /** Shared install initData packing (installModule + proposeModuleInstall use the same shape). */
+  private packInstallInitData(params: InstallModuleParams, fn: "installModule" | "proposeModuleInstall"): Hex {
+    const initData = (params.moduleInitData ?? "0x") as Hex;
+    const sigs = (params.guardianSigs ?? []) as Hex[];
+    if (sigs.length > 0) {
+      const signerIdxs = params.signerIdxs;
+      if (!signerIdxs || signerIdxs.length !== sigs.length) {
+        throw new Error(
+          `${fn}: signerIdxs is required and must be parallel to guardianSigs ` +
+            "(AirAccount v0.20.2 mixed-sig encoding)",
+        );
+      }
+      // sigsRequired > 0 path: abi.encode(uint8[] signerIdxs, bytes[] sigs, bytes moduleInitData)
+      return encodeAbiParameters(
+        [{ type: "uint8[]" }, { type: "bytes[]" }, { type: "bytes" }],
+        [signerIdxs, sigs, initData],
+      );
+    }
+    // sigsRequired == 0 path: raw module init data (backward compatible).
+    return initData;
+  }
+
   /**
    * Encode calldata for installModule().
    * Caller is responsible for submitting via UserOp (EntryPoint) or direct tx.
    */
   encodeInstall(params: InstallModuleParams): string {
-    const initData = (params.moduleInitData ?? "0x") as Hex;
-    const sigs = (params.guardianSigs ?? []) as Hex[];
-
-    let packed: Hex;
-    if (sigs.length > 0) {
-      const signerIdxs = params.signerIdxs;
-      if (!signerIdxs || signerIdxs.length !== sigs.length) {
-        throw new Error(
-          "installModule: signerIdxs is required and must be parallel to guardianSigs " +
-            "(AirAccount v0.20.2 mixed-sig encoding)",
-        );
-      }
-      // sigsRequired > 0 path: abi.encode(uint8[] signerIdxs, bytes[] sigs, bytes moduleInitData)
-      packed = encodeAbiParameters(
-        [{ type: "uint8[]" }, { type: "bytes[]" }, { type: "bytes" }],
-        [signerIdxs, sigs, initData],
-      );
-    } else {
-      // sigsRequired == 0 path: raw module init data (backward compatible).
-      packed = initData;
-    }
-
     return encodeFunctionData({
       abi: parseAbi(AIRACCOUNT_ABI as readonly string[]),
       functionName: "installModule",
-      args: [BigInt(params.moduleTypeId), params.module as Address, packed],
+      args: [BigInt(params.moduleTypeId), params.module as Address, this.packInstallInitData(params, "installModule")],
+    });
+  }
+
+  /**
+   * Encode calldata for proposeModuleInstall() — the timelocked two-step install
+   * (issue #58 / KI-6). Same initData encoding + guardian digest as installModule
+   * ({@link buildInstallModuleHash}); after the timelock elapses, finalize with the
+   * core action `executeModuleInstall(moduleInitData)`.
+   */
+  encodeProposeModuleInstall(params: InstallModuleParams): string {
+    return encodeFunctionData({
+      abi: parseAbi(AIRACCOUNT_ABI as readonly string[]),
+      functionName: "proposeModuleInstall",
+      args: [BigInt(params.moduleTypeId), params.module as Address, this.packInstallInitData(params, "proposeModuleInstall")],
     });
   }
 
@@ -217,6 +312,24 @@ export class ModuleManager {
       functionName: "uninstallModule",
       args: [BigInt(params.moduleTypeId), params.module as Address, packed],
     });
+  }
+
+  /**
+   * Build the `guardianSigs` bytes for `setModuleInstallTimelock` when **weakening**
+   * the timelock — `abi.encode(uint8[] signerIdxs, bytes[] sigs)` over
+   * {@link buildSetModuleTimelockHash}. Pass the result as the core action's
+   * `guardianSigs` arg. When **strengthening** (raising the timelock, or first-time set)
+   * no guardian consensus is needed — pass `"0x"` instead (the contract never decodes it).
+   * Weakening needs `min(guardianCount, 2)` sigs.
+   */
+  encodeSetModuleTimelockGuardianSigs(signerIdxs: number[], guardianSigs: string[]): Hex {
+    if (signerIdxs.length !== guardianSigs.length) {
+      throw new Error("setModuleInstallTimelock: signerIdxs and guardianSigs must be equal length");
+    }
+    return encodeAbiParameters(
+      [{ type: "uint8[]" }, { type: "bytes[]" }],
+      [signerIdxs, guardianSigs as Hex[]],
+    );
   }
 
   /** Read the account's current module-management nonce (issue #75 replay guard). */

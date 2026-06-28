@@ -7,7 +7,15 @@ import {
   type Hex,
 } from "viem";
 import { parseAbi } from "viem";
-import { buildInstallModuleHash, buildUninstallModuleHash, ModuleManager } from "../services/module-manager";
+import {
+  buildInstallModuleHash,
+  buildUninstallModuleHash,
+  buildSetModuleTimelockHash,
+  buildInstallModuleP256Challenge,
+  buildUninstallModuleP256Challenge,
+  buildSetModuleTimelockP256Challenge,
+  ModuleManager,
+} from "../services/module-manager";
 
 const CHAIN_ID = 11155111;
 const ACCOUNT = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -157,6 +165,78 @@ describe("ModuleManager.encodeUninstall (v0.20.2 layout)", () => {
     expect(() =>
       mm.encodeUninstall({ account: ACCOUNT, moduleTypeId: 1, module: MODULE, signerIdxs: [0], guardianSigs: [] }),
     ).toThrow(/equal length/);
+  });
+});
+
+const TIMELOCK = 86400n;
+const GOLDEN_SET_TIMELOCK_DIGEST = "0xeff729034f4b600f0a6ee427b3440bb73cf2b19ff95d8a1e1216b7e2284e4be7";
+const GOLDEN_INSTALL_P256_CHALLENGE = "0x539e2ecaa7b1f31607e88051427563fddd90fbc8e33fc767f3c6e2c5d4d35ac2";
+const GOLDEN_UNINSTALL_P256_CHALLENGE = "0xb8f27c074aaa2e92e8b05dd95fdaa5f49d8b165ffed2ae099850cf44b812f1f4";
+
+describe("buildSetModuleTimelockHash (weakening, v0.20.2)", () => {
+  it("matches opData = abi.encode(newTimelock, nonce), opLabel SET_MODULE_TIMELOCK (byte-exact)", () => {
+    const opData = encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [TIMELOCK, NONCE]);
+    const got = buildSetModuleTimelockHash(CHAIN_ID, ACCOUNT, TIMELOCK, NONCE);
+    expect(got).toBe(expectedDigest("SET_MODULE_TIMELOCK", opData));
+    expect(got).toBe(GOLDEN_SET_TIMELOCK_DIGEST);
+  });
+  it("varies with newTimelock and nonce", () => {
+    expect(buildSetModuleTimelockHash(CHAIN_ID, ACCOUNT, TIMELOCK, NONCE)).not.toBe(
+      buildSetModuleTimelockHash(CHAIN_ID, ACCOUNT, TIMELOCK + 1n, NONCE),
+    );
+    expect(buildSetModuleTimelockHash(CHAIN_ID, ACCOUNT, TIMELOCK, NONCE)).not.toBe(
+      buildSetModuleTimelockHash(CHAIN_ID, ACCOUNT, TIMELOCK, NONCE + 1n),
+    );
+  });
+});
+
+describe("P-256 guardian challenges (v0.20.2 _p256GuardianChallenge)", () => {
+  it("install/uninstall challenges are byte-exact and fold the P256_GUARDIAN domain", () => {
+    expect(buildInstallModuleP256Challenge(CHAIN_ID, ACCOUNT, 1, MODULE, NONCE, "0xdeadbeef")).toBe(
+      GOLDEN_INSTALL_P256_CHALLENGE,
+    );
+    expect(buildUninstallModuleP256Challenge(CHAIN_ID, ACCOUNT, 1, MODULE, NONCE)).toBe(
+      GOLDEN_UNINSTALL_P256_CHALLENGE,
+    );
+  });
+  it("differ from the ECDSA digest for identical params (extra P256_GUARDIAN domain string)", () => {
+    expect(buildInstallModuleP256Challenge(CHAIN_ID, ACCOUNT, 1, MODULE, NONCE, "0xdeadbeef")).not.toBe(
+      buildInstallModuleHash(CHAIN_ID, ACCOUNT, 1, MODULE, NONCE, "0xdeadbeef"),
+    );
+    expect(buildSetModuleTimelockP256Challenge(CHAIN_ID, ACCOUNT, TIMELOCK, NONCE)).not.toBe(
+      buildSetModuleTimelockHash(CHAIN_ID, ACCOUNT, TIMELOCK, NONCE),
+    );
+  });
+});
+
+describe("ModuleManager.encodeProposeModuleInstall", () => {
+  const mm = new ModuleManager({} as never, CHAIN_ID);
+  const PROPOSE_ABI = parseAbi([
+    "function proposeModuleInstall(uint256 moduleTypeId, address module, bytes initData)",
+  ]);
+
+  it("uses the SAME initData encoding as installModule (only the selector differs)", () => {
+    const args = { account: ACCOUNT, moduleTypeId: 1 as const, module: MODULE, signerIdxs: [0], guardianSigs: ["0x" + "ab".repeat(65)], moduleInitData: "0xbeef" as Hex };
+    const install = mm.encodeInstall(args);
+    const propose = mm.encodeProposeModuleInstall(args);
+    expect(propose).not.toBe(install); // different 4-byte selector
+    expect(propose.slice(10)).toBe(install.slice(10)); // identical encoded args
+    const { functionName } = decodeFunctionData({ abi: PROPOSE_ABI, data: propose as Hex });
+    expect(functionName).toBe("proposeModuleInstall");
+  });
+});
+
+describe("ModuleManager.encodeSetModuleTimelockGuardianSigs", () => {
+  const mm = new ModuleManager({} as never, CHAIN_ID);
+  it("abi.encode(uint8[] signerIdxs, bytes[] sigs) — decode-roundtrips", () => {
+    const sigs = ["0x" + "ab".repeat(65), "0x" + "cd".repeat(65)] as Hex[];
+    const encoded = mm.encodeSetModuleTimelockGuardianSigs([0, 1], sigs);
+    const [idxs, blobs] = decodeAbiParameters([{ type: "uint8[]" }, { type: "bytes[]" }], encoded);
+    expect((idxs as readonly number[]).map(Number)).toEqual([0, 1]);
+    expect(blobs).toEqual(sigs);
+  });
+  it("throws on length mismatch", () => {
+    expect(() => mm.encodeSetModuleTimelockGuardianSigs([0], [])).toThrow(/equal length/);
   });
 });
 

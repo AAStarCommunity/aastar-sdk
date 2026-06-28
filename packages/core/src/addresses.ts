@@ -28,7 +28,7 @@ export const CANONICAL_ADDRESSES = {
     paymasterV4Impl: "0xc4dd13F7825409EEC13FBCBdD9D8f6d618207cca",
     // Official community PaymasterV4 instances (one per community, each backed by its own points token).
     aPNTsPaymasterV4: "0x67a70a578E142b950987081e7016906ae4F56Df4",  // AAStar community → aPNTs
-    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; not deployed on this chain
+    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelium (Anni) → pnts; not deployed on this chain
     xPNTsFactory: "0x864971a26384d9DCC7115f0bBC428e2623F28b6e",
     blsAggregator: "0x1C305372ecc5a36CBef1FA371392234bCD55eB19",
     blsValidator: "0xA88ADec5A8dc422B57488272d5aD5913d728942A",
@@ -79,7 +79,7 @@ export const CANONICAL_ADDRESSES = {
   //   NOTE: #60 syncs the v0.18 read-layer + addresses ONLY; v0.18 runtime-signing
   //   behavioral changes (BLS packer / #45 hash_to_curve binding) are a separate follow-up.
   //   NOTE: official community PaymasterV4s below — `aPNTsPaymasterV4` (AAStar → aPNTs) and
-  //   `PNTsPaymasterV4` (Mycelian/Anni → pnts), auto-deployed by SuperPaymaster prepare-test and
+  //   `PNTsPaymasterV4` (Mycelium/Anni → pnts), auto-deployed by SuperPaymaster prepare-test and
   //   synced via config.sepolia.json. `paymasterV4` = the AAStar one (= aPNTsPaymasterV4).
   //   All verified on-chain (PaymasterFactory.getPaymasterList + isTokenSupported + owner).
   11155111: {
@@ -95,7 +95,7 @@ export const CANONICAL_ADDRESSES = {
     // Official community PaymasterV4 instances (verified on-chain). AAStar's is an ERC-1167 clone of
     // paymasterV4Impl above (version PMV4-Deposit-4.5.0), owner = SuperPaymaster owner 0xb5600060….
     aPNTsPaymasterV4: "0xf3948753ff21D33f6A5f516621FFF245B23efa0e",  // AAStar community → aPNTs (0x696A7370)
-    PNTsPaymasterV4: "0x0000000000000000000000000000000000000000",   // Mycelian (Anni) → pnts; on-chain candidate 0xC827747674… in SP config — adopt after on-chain proxy verify
+    PNTsPaymasterV4: "0xC827747674ab6397c319e284f650D07d8c2a4a46",   // Mycelium (Anni) → pnts; on-chain verified 2026-06-28 (version PMV4-Deposit-4.5.0, isTokenSupported(pnts)==true, owner 0xEcAACb91…)
     xPNTsFactory: "0x67422d2e44a33c8dA99b3b776841bF316bD209a2",  // v5.4.1-rc.1 2026-06-27 redeploy
     blsAggregator: "0x893b8fb7B3d203C288b481400fE05Ade5edD6d11",  // SP BLSAggregator v5.4.1-rc.1 2026-06-27 redeploy
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
