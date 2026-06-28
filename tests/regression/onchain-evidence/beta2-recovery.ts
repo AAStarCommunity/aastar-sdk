@@ -167,7 +167,7 @@ async function main() {
         if (rcpt.status !== 'success') throw new Error('createAccount reverted');
         console.log(`   ✅ Deploy account (via SDK factory): ${deployTx}`);
     }
-    steps.push({ step: `Deploy v0.19 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
+    steps.push({ step: `Deploy v0.20.3 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');

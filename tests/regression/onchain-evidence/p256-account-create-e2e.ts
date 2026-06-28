@@ -61,7 +61,7 @@ import {
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 const CHAIN_ID = 11155111;
-const FACTORY: Address = CANONICAL_ADDRESSES[CHAIN_ID].airAccountFactoryV7 as Address; // v0.20.0
+const FACTORY: Address = CANONICAL_ADDRESSES[CHAIN_ID].airAccountFactoryV7 as Address; // v0.20.3
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 const DAILY_LIMIT = 1_000_000_000_000_000_000n; // 1 ETH
 
@@ -90,7 +90,7 @@ async function main() {
     console.log('🧪 P-256 (passkey) main-account creation via the SERVER-CLIENT path (#118) — Sepolia');
     console.log(`   Owner (JASON) EOA: ${owner.address}`);
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
-    console.log(`   Factory (v0.20.0): ${FACTORY}`);
+    console.log(`   Factory (v0.20.3): ${FACTORY}`);
 
     const steps: StepRecord[] = [];
 
@@ -107,7 +107,7 @@ async function main() {
         rpcUrl: rpc,
         bundlerRpcUrl: rpc, // unused here (no UserOp submission); required by ServerConfig
         chainId: CHAIN_ID,
-        entryPoints: { v07: sepoliaV07Config() }, // factory = canonical v0.20.0
+        entryPoints: { v07: sepoliaV07Config() }, // factory = canonical v0.20.3
         defaultVersion: '0.7',
         storage,
         signer,
@@ -130,7 +130,7 @@ async function main() {
     console.log(`   record.approvedAlgIds: ${JSON.stringify(record.approvedAlgIds)}  minDailyLimit: ${record.minDailyLimit}`);
 
     if (getAddress(record.factoryAddress as Address) !== getAddress(FACTORY)) {
-        throw new Error(`server factory ${record.factoryAddress} != canonical v0.20.0 factory ${FACTORY}`);
+        throw new Error(`server factory ${record.factoryAddress} != canonical v0.20.3 factory ${FACTORY}`);
     }
     if (!record.guardianSpecs || record.guardianSpecs.length !== 1 || !('p256' in record.guardianSpecs[0])) {
         throw new Error('record did not persist the P-256 guardian spec');
@@ -173,7 +173,7 @@ async function main() {
         const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 180_000 });
         if (rcpt.status !== 'success') throw new Error(`createAccount reverted: ${deployTx}`);
         console.log(`   ✅ DEPLOY (factory createAccount with server-built P-256 InitConfig): ${deployTx}`);
-        steps.push({ step: `Deploy v0.20.0 account WITH P-256 guardian (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
+        steps.push({ step: `Deploy v0.20.3 account WITH P-256 guardian (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
     }
 
     const code = await publicClient.getBytecode({ address: record.address as Address });
@@ -196,7 +196,7 @@ async function main() {
     const md: string[] = [];
     md.push(`### Run ${now}`, '');
     md.push(`- **Network:** Ethereum Sepolia (chainId ${CHAIN_ID})`);
-    md.push(`- **Factory (v0.20.0):** \`${FACTORY}\``);
+    md.push(`- **Factory (v0.20.3):** \`${FACTORY}\``);
     md.push(`- **Account owner (JASON):** \`${owner.address}\``);
     md.push(`- **Server-predicted & deployed account:** \`${record.address}\` (salt \`${salt}\`)`);
     md.push(`- **P-256 guardian pubkey:** x=\`${x}\` y=\`${y}\``);

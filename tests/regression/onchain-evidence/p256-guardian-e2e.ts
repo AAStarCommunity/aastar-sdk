@@ -1,10 +1,10 @@
 /**
  * P-256 (WebAuthn passkey) guardian — on-chain evidence (REAL Sepolia txs, NOT a unit test).
  *
- * Proves the airaccount-contract v0.20.0 passkey-guardian social-recovery path end-to-end on
+ * Proves the airaccount-contract v0.20.3 passkey-guardian social-recovery path end-to-end on
  * live Sepolia, driven entirely through the SDK's new P-256 surface (`@aastar/core`):
  *
- *   1. Deploy a fresh v0.20.0 account owned by JASON (InitConfig built via `buildInitConfig`).
+ *   1. Deploy a fresh v0.20.3 account owned by JASON (InitConfig built via `buildInitConfig`).
  *   2. OWNER `addP256Guardian(x, y)` — owner-only bootstrap (no guardianSig; count < threshold).
  *   3. Read `getGuardianP256Key(0)` == (x, y) and `getRecoveryNonce()` == 0 on-chain.
  *   4. Software P-256 authenticator (`signP256GuardianAssertion`, mirrors gen_p256_assertion.mjs)
@@ -57,7 +57,7 @@ import { RecoveryService } from '../../../packages/airaccount/src/server/index.j
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 const CHAIN_ID = 11155111;
-const FACTORY: Address = CANONICAL_ADDRESSES[CHAIN_ID].airAccountFactoryV7 as Address; // v0.20.0
+const FACTORY: Address = CANONICAL_ADDRESSES[CHAIN_ID].airAccountFactoryV7 as Address; // v0.20.3
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 
 function clean(v?: string): string { return (v ?? '').replace(/^['"]|['"]$/g, ''); }
@@ -79,7 +79,7 @@ async function main() {
     console.log('🧪 P-256 (passkey) guardian on-chain evidence (Sepolia)');
     console.log(`   Owner (JASON) EOA: ${owner.address}`);
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
-    console.log(`   Factory (v0.20.0): ${FACTORY}`);
+    console.log(`   Factory (v0.20.3): ${FACTORY}`);
 
     const steps: StepRecord[] = [];
     const fees = await bumpedFees(publicClient);
@@ -99,7 +99,7 @@ async function main() {
     console.log(`\n   Software passkey guardian pubkey: x=${x}`);
     console.log(`                                     y=${y}`);
 
-    // ── 1. Deploy a fresh v0.20.0 account (no guardians yet) — config via buildInitConfig ──
+    // ── 1. Deploy a fresh v0.20.3 account (no guardians yet) — config via buildInitConfig ──
     const config = buildInitConfig({ dailyLimit: 1_000_000_000_000_000_000n /* 1 ETH */ });
     const salt = BigInt(Math.floor(Date.now() / 1000));
     const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
@@ -112,7 +112,7 @@ async function main() {
     }
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
-    steps.push({ step: `Deploy v0.20.0 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
+    steps.push({ step: `Deploy v0.20.3 account (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
 
     const extReader = airAccountExtensionActions(account)(publicClient);
     const extWriter = airAccountExtensionActions(account)(ownerWallet);
@@ -201,7 +201,7 @@ async function main() {
     const md: string[] = [];
     md.push(`### Run ${now}`, '');
     md.push(`- **Network:** Ethereum Sepolia (chainId ${CHAIN_ID})`);
-    md.push(`- **Factory (v0.20.0):** \`${FACTORY}\``);
+    md.push(`- **Factory (v0.20.3):** \`${FACTORY}\``);
     md.push(`- **Account owner (JASON):** \`${owner.address}\``);
     md.push(`- **Deployed account:** \`${account}\` (salt \`${salt}\`)`);
     md.push(`- **P-256 guardian pubkey:** x=\`${x}\` y=\`${y}\``);

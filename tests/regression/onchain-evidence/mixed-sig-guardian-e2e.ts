@@ -2,7 +2,7 @@
  * Mixed-signature guardian consensus — on-chain evidence (REAL Sepolia txs, NOT a unit test).
  *
  * v0.22.0 SHIPPED the mixed-sig guardian paths implemented + unit-tested + Codex-verified, but they
- * were never exercised against the deployed v0.20.0 contracts. This proves the highest-risk path —
+ * were never exercised against the deployed v0.20.3 contracts. This proves the highest-risk path —
  * `removeGuardianWithMixedSigs` (Codex flagged it as the most dangerous un-exercised path) — plus
  * `modifyTierLimitsWithMixedGuardians`, end-to-end on live Sepolia, driven through the SDK
  * (`@aastar/core` → `airAccountExtensionActions` + the `crypto/p256Guardian` opData builders).
@@ -28,7 +28,7 @@
  *   MODIFY_TIER_LIMITS  : abi.encode(uint256 nonce, uint256 tier1, uint256 tier2, uint256 deadline)
  *
  * ## Flow
- *   1. Deploy a fresh v0.20.0 account with 3 ECDSA guardians (buildInitConfig). Guardians are EOAs
+ *   1. Deploy a fresh v0.20.3 account with 3 ECDSA guardians (buildInitConfig). Guardians are EOAs
  *      used ONLY to sign — they never submit a tx, so they need no funding (the owner relays).
  *   2. Read `getGuardianRemovalNonce(account)` (internal slot 15) == 0.
  *   3. removeGuardianWithMixedSigs(index=0, signerIdxs=[1,2], sigs=[g1,g2]) — remove slot 0 with the
@@ -79,7 +79,7 @@ import {
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 const CHAIN_ID = 11155111;
-const FACTORY: Address = CANONICAL_ADDRESSES[CHAIN_ID].airAccountFactoryV7 as Address; // v0.20.0
+const FACTORY: Address = CANONICAL_ADDRESSES[CHAIN_ID].airAccountFactoryV7 as Address; // v0.20.3
 const ETHERSCAN = (h: string) => `https://sepolia.etherscan.io/tx/${h}`;
 const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 
@@ -114,7 +114,7 @@ async function main() {
     console.log('🧪 Mixed-signature guardian consensus on-chain evidence (Sepolia)');
     console.log(`   Owner (JASON) EOA: ${owner.address}`);
     console.log(`   Owner balance: ${formatEther(await publicClient.getBalance({ address: owner.address }))} ETH`);
-    console.log(`   Factory (v0.20.0): ${FACTORY}`);
+    console.log(`   Factory (v0.20.3): ${FACTORY}`);
 
     const steps: StepRecord[] = [];
     const fees = await bumpedFees(publicClient);
@@ -125,7 +125,7 @@ async function main() {
     console.log('\n   ECDSA guardians (sign-only EOAs):');
     guardians.forEach((g, i) => console.log(`     g${i} (slot ${i}): ${g.address}`));
 
-    // ── 1. Deploy a fresh v0.20.0 account with 3 ECDSA guardians ──
+    // ── 1. Deploy a fresh v0.20.3 account with 3 ECDSA guardians ──
     const config = buildInitConfig({
         guardians: guardians.map((g) => ({ ecdsa: g.address as Address })),
         dailyLimit: 1_000_000_000_000_000_000n, // 1 ETH
@@ -137,11 +137,11 @@ async function main() {
     {
         const rcpt = await publicClient.waitForTransactionReceipt({ hash: deployTx, timeout: 180_000 });
         if (rcpt.status !== 'success') throw new Error('createAccount reverted');
-        console.log(`   ✅ Deploy v0.20.0 account (3 ECDSA guardians): ${deployTx}`);
+        console.log(`   ✅ Deploy v0.20.3 account (3 ECDSA guardians): ${deployTx}`);
     }
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');
-    steps.push({ step: `Deploy v0.20.0 account w/ 3 ECDSA guardians (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
+    steps.push({ step: `Deploy v0.20.3 account w/ 3 ECDSA guardians (salt=${salt})`, actor: `JASON ${owner.address}`, tx: deployTx });
 
     const extReader = airAccountExtensionActions(account)(publicClient);
     const extWriter = airAccountExtensionActions(account)(ownerWallet);
@@ -353,7 +353,7 @@ async function main() {
     const md: string[] = [];
     md.push(`### Run ${now}`, '');
     md.push(`- **Network:** Ethereum Sepolia (chainId ${CHAIN_ID})`);
-    md.push(`- **Factory (v0.20.0):** \`${FACTORY}\``);
+    md.push(`- **Factory (v0.20.3):** \`${FACTORY}\``);
     md.push(`- **Account owner (JASON):** \`${owner.address}\``);
     md.push(`- **Deployed account:** \`${account}\` (salt \`${salt}\`)`);
     md.push(`- **ECDSA guardians:** g0=\`${guardians[0].address}\` g1=\`${guardians[1].address}\` g2=\`${guardians[2].address}\``);

@@ -71,7 +71,7 @@ import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 // ── beta.4 Sepolia addresses ────────────────────────────────────────────────
-const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
+const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.20.3 factory (SDK source of truth)
 const ALG_ECDSA = 2;
 // v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
 const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
@@ -189,7 +189,7 @@ async function main() {
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique per run
     console.log(`\n   Using salt: ${salt}`);
 
-    // Address prediction + deployment via the SDK factory action (v0.19 factory), not inline ABI.
+    // Address prediction + deployment via the SDK factory action (v0.20.3 factory), not inline ABI.
     const account = await factorySvc.getAddress({ owner: owner.address, salt, config });
     console.log(`   Predicted account: ${account}`);
 
@@ -199,7 +199,7 @@ async function main() {
         if (rcpt.status !== 'success') throw new Error('createAccount reverted');
         console.log(`   ✅ Deploy account (via SDK factory): ${deployTx}`);
     }
-    steps.push({ step: `Deploy v0.19 account (salt=${salt}, guardians g1,g2)`, actor: `BOB ${owner.address}`, tx: deployTx });
+    steps.push({ step: `Deploy v0.20.3 account (salt=${salt}, guardians g1,g2)`, actor: `BOB ${owner.address}`, tx: deployTx });
 
     const code = await publicClient.getBytecode({ address: account });
     if (!code || code === '0x') throw new Error('Account has no bytecode after deploy');

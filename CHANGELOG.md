@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.29.1] - 2026-06-28
+**SDK Code Integrity Hash**: `6996672d55aaa7891b7515e02c3cf932cf577f52d36092cd3ab1e298c8872fb1`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
 **Upstream sync: AirAccount v0.20.2 → v0.20.3 (gasless self-call redeploy).**
 
 AirAccount v0.20.3 (upstream #140) adds `onlyOwnerOrSelf` to four tier/weight config
@@ -97,8 +100,8 @@ But `ACCOUNT_VERSION`/`FACTORY_VERSION` bumped → bytecode changed → redeploy
   [`docs/onchain-evidence/v0.20.2-module-governance.md`](docs/onchain-evidence/v0.20.2-module-governance.md),
   re-runnable script `tests/regression/onchain-evidence/v0202-module-install-e2e.ts`.
 
-## [0.29.1] - 2026-06-28
-**SDK Code Integrity Hash**: `96f595abd4b7facd9c5ee680eb8ce938a03c73bddb0116ba42d199094dd8b466`
+## [0.29.0] - 2026-06-28
+**SDK Code Integrity Hash**: `cf5ad31f8e44b3f2ce51d091e6705a5f7c7e53e0ae1469b1f00fbd90bb99c3c2`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Upstream sync: lowercase the account in contact-binding KMS calls (#193 / KMS v0.27.2).**
