@@ -1,5 +1,12 @@
 export { X402Client, type X402ClientConfig } from './X402Client.js';
 export { FacilitatorClient } from './facilitator.js';
+export {
+    signX402PaymentAuthorization, deriveEip3009Nonce, X402_PAYMENT_AUTHORIZATION_TYPES,
+} from './x402auth.js';
+export {
+    DEFAULT_X402_FACILITATORS, getX402FacilitatorContract, getX402FacilitatorUrls,
+    type X402FacilitatorEnv,
+} from './facilitators.js';
 export type {
     X402PaymentParams, PaymentRequired, PaymentPayload, PaymentRequirements,
     SettleResponse, VerifyResponse, FacilitatorSupported, FacilitatorConfig,
