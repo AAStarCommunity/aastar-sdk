@@ -42,8 +42,12 @@ All notable changes to this project will be documented in this file.
   deployed; `superPaymaster.version() == "SuperPaymaster-5.4.1"`. Radar 4/4 in-sync.
 - **[ADDED]** adopted Mycelium community `PNTsPaymasterV4` `0xC827…4a46` (Sepolia) after on-chain
   verify (`PMV4-Deposit-4.5.0`, `isTokenSupported(pnts)==true`). Corrected "Mycelian" → "Mycelium".
-- **[KNOWN FOLLOW-UP]** (#209) live on-chain E2E acceptance (install + uninstall through EntryPoint on a
-  guardianed v0.20.2 account with `sigsRequired>0`) still pending — needs a provisioned funded account.
+- **[E2E ACCEPTANCE]** (#209) live Sepolia on-chain proof — deployed a guardianed v0.20.2 account and ran
+  install (`sigsRequired=1`) + uninstall (`sigsRequired=2`) with real guardian signatures through the SDK
+  encoders; the deployed `AirAccountExtension` accepted both. Tx: deploy `0xff29fa49…`, install
+  `0xc21e55bd…`, uninstall `0x71741963…` (all `status=0x1`). Evidence:
+  [`docs/onchain-evidence/v0.20.2-module-governance.md`](docs/onchain-evidence/v0.20.2-module-governance.md),
+  re-runnable script `tests/regression/onchain-evidence/v0202-module-install-e2e.ts`.
 
 ## [0.27.1] - 2026-06-27
 **SDK Code Integrity Hash**: `8de7a704fd68c305b352a4961e7f8435f8bf31f4b10da7d616139da7cedb5eff`
