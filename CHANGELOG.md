@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.0] - 2026-06-28
+**x402 signature-required settlement + DVT-hosted facilitator (live).**
+
+> **BREAKING (x402)** — `FacilitatorConfig.createAuthHeaders` now takes `{ endpoint, body }` and
+> returns the headers for that request (was `() => { verify, settle, supported }`), so it can sign the
+> exact request bytes (the §4 HMAC). `X402Client.createPayment` also changed signing semantics (below).
+
+- **[BREAKING/FIX] x402 settlement signing aligned with the deployed `X402Facilitator`** (#39, YetAnotherAA-Validator#130):
+  - **direct (xPNTs)**: payer signs an `X402PaymentAuthorization` (EIP-712, domain `name="X402Facilitator"`,
+    `version="1"`, `verifyingContract=facilitator`); settled via `settleX402PaymentDirect(...,signature)`.
+  - **eip-3009 (USDC)**: payer signs a **`ReceiveWithAuthorization`** (was `TransferWithAuthorization`), recipient =
+    the facilitator contract, with the recipient-bound derived nonce `keccak256(abi.encode(payTo, maxFee, salt))`
+    (the C-03 fix). `extra` now carries `settlement`/`maxFee`/`salt`.
+  - `settleViaFacilitator`/`verifyViaFacilitator` default `requirements` to `payload.accepted` and merge its
+    `extra`, so the facilitator always receives the settlement fields.
+- **[ADDED]** `createX402AuthHeaders(secret)` — the §4 stateless-HMAC auth (`X-X402-Timestamp` +
+  `X-X402-Auth = HMAC-SHA256(secret, "${ts}.${rawBody}")`) on `/x402/settle`, opt-in per node.
+- **[ADDED]** `DEFAULT_X402_FACILITATORS` — the DVT-hosted facilitator services, now **live** on
+  `https://dvt{1,2,3}.aastar.io/x402` (each node a distinct, provisioned operator).
+- **[ADDED]** `signX402PaymentAuthorization`, `deriveEip3009Nonce`, `getX402FacilitatorContract/Urls`.
+- **[TEST]** Cross-repo conformance: `createPayment` emits **byte-identical** `paymentPayload`+`paymentRequirements`
+  (signatures included) to the DVT golden fixtures (`packages/x402/conformance/fixtures.json`), for direct + eip-3009,
+  and `createX402AuthHeaders` matches the HMAC vector. **Live round-trip proven**: createPayment → `/x402/verify`
+  (`isValid`) → `/x402/settle` → on-chain tx `0x95e41bd1…`, recipient received `amount − feeBPS` exactly (9.8 aPNTs).
+  (61 x402 tests; full §4 business regression was run at 0.28.0 and is unchanged by this x402-only delta.)
+
 ## [0.28.0] - 2026-06-28
 **Upstream sync (4/4): AirAccount v0.20.2 · SuperPaymaster v5.4.1-rc.1 · KMS openapi 0.26.1 · DVT v1.6.0.**
 
@@ -49,8 +75,8 @@ All notable changes to this project will be documented in this file.
   [`docs/onchain-evidence/v0.20.2-module-governance.md`](docs/onchain-evidence/v0.20.2-module-governance.md),
   re-runnable script `tests/regression/onchain-evidence/v0202-module-install-e2e.ts`.
 
-## [0.28.0] - 2026-06-28
-**SDK Code Integrity Hash**: `e30feaeb8928ab1c2760d6b9284ee542640f52899bad2527f08c6f9fa7c71461`
+## [0.29.0] - 2026-06-28
+**SDK Code Integrity Hash**: `cf5ad31f8e44b3f2ce51d091e6705a5f7c7e53e0ae1469b1f00fbd90bb99c3c2`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Upstream sync: lowercase the account in contact-binding KMS calls (#193 / KMS v0.27.2).**
