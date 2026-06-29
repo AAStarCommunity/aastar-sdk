@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.7] - 2026-06-29
+**SDK Code Integrity Hash**: `697a060bdd8836d7f6326cb5c9efeb4ce057cafa33e7f7383a5ced8afb011879`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: WebAuthn passkey submit robustness (#240 review).**
+
+Follow-up hardening for the device-passkey prepare/submit wrap shipped in v0.29.6:
+
+- **[FIX]** `submitPreparedTransfer` (WebAuthn path): the one-time prepared entry is now deleted only
+  AFTER `generateWebAuthnTieredSignature` succeeds. A DVT-unreachable / guardian-sign failure no longer
+  discards it, so the caller can resubmit without re-running `prepareTransfer` + a fresh WebAuthn
+  ceremony (consistent with the #237 principle on the WebAuthn path).
+- **[FIX]** `BLSSignatureService.generateWebAuthnTieredSignature`: the Tier-3 `guardianSigner` presence
+  check now runs BEFORE the DVT `generateBLSSignature` round-trip — a missing guardian fails fast with
+  no wasted `/signature/sign` network call.
+- **[CHORE]** Moved the `GuardianSigner` / `DeviceWebAuthnAssertion` interface declarations below the imports.
+- **[TEST]** WebAuthn submit preserves the prepared entry on an async signing failure (DVT down) → resubmittable.
+
 ## [0.29.6] - 2026-06-29
 **SDK Code Integrity Hash**: `566c183cd0597b45668192461753cbd184f2e1b789de50a2ed9485eac92f2277`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
