@@ -46,10 +46,12 @@ const DEFAULT_GAS_ESTIMATE_BUFFER_PERCENT = 10;
 /**
  * Adds a percentage buffer to a hex-encoded gas value and returns it as hex.
  * A bufferPercent of 0 returns the value unchanged. Negative values are clamped to 0.
+ * Fractional percents are rounded to the nearest integer (e.g. 10.7 → 11) since the
+ * buffer is computed in integer (BigInt) arithmetic.
  */
 function addGasBuffer(hexValue: string, bufferPercent: number): string {
   const base = BigInt(hexValue);
-  const pct = bufferPercent > 0 ? BigInt(Math.floor(bufferPercent)) : 0n;
+  const pct = bufferPercent > 0 ? BigInt(Math.round(bufferPercent)) : 0n;
   const buffered = base + (base * pct) / 100n;
   return `0x${buffered.toString(16)}`;
 }

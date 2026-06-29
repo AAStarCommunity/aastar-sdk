@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.29.3] - 2026-06-29
-**SDK Code Integrity Hash**: `ef7569abc48c1b60a385531777c06f89eefa58d7feb5373a6472d08266cfa4a4`
+**SDK Code Integrity Hash**: `fff93b190696af4601b39f6be5110eb1b291a7e3be1dffc23906766f6fb1a1f4`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Fix: `estimateUserOperationGas` masked bundler estimation failures and inflated the prefund (`InsufficientBalance`).**

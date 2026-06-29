@@ -39,6 +39,7 @@ export interface ServerConfig {
    * simulated estimate (cold storage, BLS verification variance), so a small
    * margin avoids out-of-gas reverts. preVerificationGas is left untouched
    * (calldata cost is deterministic). Defaults to 10. Set 0 to disable.
+   * Fractional values are rounded to the nearest integer percent (e.g. 10.7 → 11).
    */
   gasEstimateBufferPercent?: number;
 

@@ -205,6 +205,21 @@ describe("EthereumProvider — RPC methods", () => {
       expect(result).toEqual(estimate);
     });
 
+    it("rounds a fractional gasEstimateBufferPercent to the nearest integer", async () => {
+      const epFrac = new EthereumProvider({ ...CHAIN_CONFIG, gasEstimateBufferPercent: 10.7 });
+      const { mockBundler: mb } = injectMocks(epFrac);
+      mb.request.mockResolvedValueOnce({
+        callGasLimit: "0x2710", // 10000
+        verificationGasLimit: "0x2710", // 10000
+        preVerificationGas: "0x2710", // 10000
+      });
+
+      const result = await epFrac.estimateUserOperationGas({});
+      // 10.7 → 11% → 10000 * 1.11 = 11100 (not 11000 from a floor to 10).
+      expect(BigInt(result.callGasLimit)).toBe(11100n);
+      expect(BigInt(result.preVerificationGas)).toBe(10000n);
+    });
+
     it("logs a warning (not silent) and falls back to static limits when the bundler fails", async () => {
       const warn = vi.spyOn(CHAIN_CONFIG.logger!, "warn");
       mockBundler.request.mockRejectedValueOnce(new Error("bundler 401"));
