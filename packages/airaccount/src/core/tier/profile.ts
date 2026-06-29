@@ -29,9 +29,17 @@ export interface AccountCall {
 }
 
 /**
- * The on-chain weight model (AAStarAgentStorageLayout): passkey=3, owner ECDSA=2, DVT-BLS=2, each
- * guardian=1; tier thresholds 3/5/6. These are fixed by the contract's design — profiles vary the
- * AMOUNT limits, not the weights. Exposed so callers can confirm/override.
+ * The on-chain weight model: passkey=2, owner ECDSA=2, DVT-BLS=2, each guardian=1; tier thresholds
+ * 3/5/6. Profiles vary the AMOUNT limits, not the weights. Exposed so callers can confirm/override.
+ *
+ * IMPORTANT (aastar-sdk#227): the contract's `_validateWeightConfig` REQUIRES every individual weight
+ * to be STRICTLY LESS THAN tier1Threshold (`passkeyWeight >= tier1Threshold` reverts
+ * `InsecureWeightConfig`). This is deliberate — no single factor may unlock any tier alone, so the
+ * KMS-held owner ECDSA must always co-sign. So `passkeyWeight` is 2 (NOT 3): the product's "T1 = one
+ * passkey" is a UX statement — a single WebAuthn gesture causes the KMS TEE to transparently emit BOTH
+ * the P256 passkey sig (weight 2) AND the owner ECDSA sig (weight 2), summing to 4 >= tier1Threshold(3).
+ * The on-chain account never sees a lone passkey. (The contract's AAStarAgentStorageLayout struct
+ * comment still says "default: 3" — that is a stale contract-side doc bug, see airaccount-contract#146.)
  */
 export interface TierWeightConfig {
   passkeyWeight: number;
@@ -48,7 +56,7 @@ export interface TierWeightConfig {
 // Frozen so the shared default can't be mutated; each profile below gets its OWN copy so tweaking
 // one profile's weights never pollutes the others (or this default).
 export const DEFAULT_WEIGHT_CONFIG: TierWeightConfig = Object.freeze({
-  passkeyWeight: 3,
+  passkeyWeight: 2, // MUST be < tier1Threshold (#227): contract reverts InsecureWeightConfig if >=
   ecdsaWeight: 2,
   blsWeight: 2,
   guardian0Weight: 1,
