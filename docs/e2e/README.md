@@ -22,7 +22,7 @@ Latest: **[v0.20.1](./v0.20.1/01-TESTDATA.md)** — 7 scenarios (agent / gasless
 ```bash
 pnpm exec tsx tests/regression/onchain-evidence/beta4-agent-lifecycle-e2e.ts   # agent (v0.19)
 pnpm exec tsx tests/regression/onchain-evidence/beta1-sponsored-gasless.ts     # gasless
-pnpm exec tsx tests/regression/onchain-evidence/dvt-realnode-e2e.ts            # dvt (needs nodes 3001/2/3)
+pnpm exec tsx tests/regression/onchain-evidence/dvt-realnode-e2e.ts            # dvt (uses public dvt1/2/3.aastar.io by default — no local nodes needed)
 pnpm exec tsx tests/regression/onchain-evidence/beta2-session.ts               # session
 pnpm exec tsx tests/regression/onchain-evidence/beta2-recovery.ts              # recovery
 pnpm exec tsx tests/regression/onchain-evidence/beta3-weighted-sig.ts          # weighted
