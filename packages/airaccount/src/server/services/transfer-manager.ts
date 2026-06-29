@@ -481,12 +481,31 @@ export class TransferManager {
         accountAddress
       ));
     }
+    // An explicit tiering opt-in MUST be honored — but it needs a guardChecker to resolve the
+    // tier. Silently ignoring the request (and falling back to the inline-ECDSA path) is how a
+    // tier-2/3 op ends up under-weight on-chain, so fail loudly instead (#234, same class as #229).
+    if (params.useAirAccountTiering && !this.guardChecker) {
+      throw new Error(
+        "useAirAccountTiering:true was requested but no TierGuardChecker is configured, so the " +
+          "signing tier cannot be resolved. Configure the guard checker, or omit useAirAccountTiering."
+      );
+    }
+
     let tier: number | null = null;
-    if (!useECDSA && params.useAirAccountTiering && this.guardChecker) {
+    // Tiering opt-in is AUTHORITATIVE over the ECDSA heuristic. A weighted/composite AirAccount can
+    // report validator()==address(0) (no external validator router — validation happens in-account
+    // via the weight config) yet still REQUIRE a tiered composite signature (algId 0x04/0x05) for
+    // tier>=2. Gating tier resolution on !useECDSA let such accounts silently emit an under-weight
+    // inline-ECDSA (0x02) signature for tier-2/3 ops, surfacing only as an opaque on-chain AA24 (#234).
+    if (params.useAirAccountTiering && this.guardChecker) {
       const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
       const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
       if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
       tier = preCheck.tier;
+      // Don't let the inline-ECDSA path shadow the tiered composite signature. (Tier 1 still emits a
+      // bare ECDSA via generateTieredSignature, which the account accepts as inline ECDSA, so this is
+      // a no-op for tier 1 and the actual fix for tier-2/3.)
+      if (tier != null) useECDSA = false;
     }
     return { useECDSA, isCompositeValidator, tier };
   }

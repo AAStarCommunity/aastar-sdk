@@ -4,6 +4,7 @@ import { MemoryStorage } from "../adapters/memory-storage";
 import { TransferRecord } from "../interfaces/storage-adapter";
 import { TransferManager, detectSignatureStrategy } from "../services/transfer-manager";
 import { SilentLogger } from "../interfaces/logger";
+import { EntryPointVersion } from "../constants/entrypoint";
 
 /**
  * TransferManager tests — focused on the pure-logic methods
@@ -208,6 +209,66 @@ describe("TransferManager", () => {
       const result = await detectSignatureStrategy(provider, ACCOUNT);
       expect(result.useECDSA).toBe(true);
       expect(result.isCompositeValidator).toBe(false);
+    });
+  });
+
+  describe("resolveSignStrategy — tiering precedence over the ECDSA heuristic (#234)", () => {
+    // A weighted/composite AirAccount can report validator()==address(0) yet still require a tiered
+    // composite signature. detectSignatureStrategy returns useECDSA=true for that account; the bug
+    // was that tier resolution was gated on !useECDSA, so tier-2/3 ops silently fell back to a single
+    // inline-ECDSA (0x02) signature → on-chain AA24.
+    function makeManagerWith(opts: {
+      validatorResult?: string;
+      tier?: number;
+      withGuardChecker?: boolean;
+    }): TransferManager {
+      const provider = {
+        getCode: vi.fn().mockResolvedValue("0x608060"), // deployed
+        readContract: vi.fn().mockResolvedValue(opts.validatorResult ?? zeroAddress),
+      } as unknown as PublicClient;
+      const ethereum = { getProvider: () => provider } as any;
+      const guardChecker = opts.withGuardChecker
+        ? ({ preCheck: vi.fn().mockResolvedValue({ ok: true, tier: opts.tier ?? 3, errors: [] }) } as any)
+        : undefined;
+      return new TransferManager(
+        ethereum,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        storage,
+        {} as any,
+        new SilentLogger(),
+        guardChecker
+      );
+    }
+
+    const PARAMS = (extra: object = {}) => ({ to: "0xbbbb", amount: "0.051", useAirAccountTiering: true, ...extra });
+
+    it("validator()==0 + useAirAccountTiering: tiering wins (useECDSA forced false, tier resolved)", async () => {
+      const mgr = makeManagerWith({ validatorResult: zeroAddress, tier: 3, withGuardChecker: true });
+      const strat = await (mgr as any).resolveSignStrategy("0xacc", EntryPointVersion.V0_7, PARAMS());
+      // Pre-fix this returned { useECDSA: true, tier: null } → silent 0x02+ECDSA for a tier-3 op.
+      expect(strat.useECDSA).toBe(false);
+      expect(strat.tier).toBe(3);
+    });
+
+    it("does NOT silently ignore useAirAccountTiering when no guardChecker is configured", async () => {
+      const mgr = makeManagerWith({ validatorResult: zeroAddress, withGuardChecker: false });
+      await expect(
+        (mgr as any).resolveSignStrategy("0xacc", EntryPointVersion.V0_7, PARAMS())
+      ).rejects.toThrow(/useAirAccountTiering.*no TierGuardChecker/);
+    });
+
+    it("non-tiering caller on a validator()==0 account still uses ECDSA (unchanged)", async () => {
+      const mgr = makeManagerWith({ validatorResult: zeroAddress, withGuardChecker: true });
+      const strat = await (mgr as any).resolveSignStrategy("0xacc", EntryPointVersion.V0_7, {
+        to: "0xbbbb",
+        amount: "0.051",
+        // useAirAccountTiering omitted
+      });
+      expect(strat.useECDSA).toBe(true);
+      expect(strat.tier).toBeNull();
     });
   });
 

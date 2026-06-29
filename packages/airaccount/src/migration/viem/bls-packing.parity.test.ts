@@ -141,73 +141,49 @@ describe("BLS packing (golden vs locked ethers output)", () => {
     });
   });
 
-  describe("packCumulativeT2Signature", () => {
-    const cases: Array<[string, any]> = [
-      [
-        "golden 2 nodes",
-        {
-          p256Signature: P256_SIG,
-          nodeIds: [NODE_A, NODE_B],
-          blsSignature: BLS_SIG,
-          messagePoint: MSG_POINT,
-          messagePointSignature: MP_SIG,
-        },
-      ],
-      [
-        "zero nodes",
-        {
-          p256Signature: P256_SIG,
-          nodeIds: [],
-          blsSignature: BLS_SIG,
-          messagePoint: MSG_POINT,
-          messagePointSignature: MP_SIG,
-        },
-      ],
-      [
-        "max + zero nodeIds",
-        {
-          p256Signature: hex(64, "00"),
-          nodeIds: [NODE_MAX, NODE_ZERO],
-          blsSignature: BLS_SIG,
-          messagePoint: MSG_POINT,
-          messagePointSignature: MP_SIG,
-        },
-      ],
+  // Expected packed bytes built from the CANONICAL contract field order (independent of the packer
+  // impl — not circular). Contract issue #45 Fix 1 removed the embedded messagePoint(256) +
+  // messagePointSignature(65) from the cumulative format; these assertions pin the new layout that
+  // `_validateCumulativeTier2/3` in AAStarAirAccountBase.sol expects.
+  const strip = (h: string) => (h.startsWith("0x") ? h.slice(2) : h);
+  const u256 = (n: number) => n.toString(16).padStart(64, "0");
+  const nodeIdsBlock = (ids: string[]) => u256(ids.length) + ids.map(strip).join("");
+
+  describe("packCumulativeT2Signature (contract #45: P256 + BLS, no messagePoint)", () => {
+    const cases: Array<[string, string[]]> = [
+      ["2 nodes", [NODE_A, NODE_B]],
+      ["zero nodes", []],
+      ["max + zero nodeIds", [NODE_MAX, NODE_ZERO]],
     ];
 
-    it.each(cases)("%s", (label, data) => {
-      expect(packCumulativeT2Signature(data)).toBe((GOLDEN.packT2 as Record<string, string>)[label]);
+    it.each(cases)("%s", (_label, nodeIds) => {
+      const out = packCumulativeT2Signature({ p256Signature: P256_SIG, nodeIds, blsSignature: BLS_SIG });
+      const expected = "0x04" + strip(P256_SIG) + nodeIdsBlock(nodeIds) + strip(BLS_SIG);
+      expect(out).toBe(expected);
+      // Exact contract length: algId(1) + P256(64) + nodeIdsLength(32) + nodeIds(N×32) + blsSig(256).
+      // No messagePoint(256)/mpSig(65) tail — that is what the strict-length validator rejects.
+      expect(hexToBytes(out).length).toBe(1 + 64 + 32 + nodeIds.length * 32 + 256);
     });
   });
 
-  describe("packCumulativeT3Signature", () => {
-    const cases: Array<[string, any]> = [
-      [
-        "golden 3 nodes",
-        {
-          p256Signature: P256_SIG,
-          nodeIds: [NODE_A, NODE_B, NODE_LEADING_ZERO],
-          blsSignature: BLS_SIG,
-          messagePoint: MSG_POINT,
-          messagePointSignature: MP_SIG,
-          guardianSignature: GUARDIAN_SIG,
-        },
-      ],
-      [
-        "zero nodes",
-        {
-          p256Signature: P256_SIG,
-          nodeIds: [],
-          blsSignature: BLS_SIG,
-          messagePoint: MSG_POINT,
-          messagePointSignature: MP_SIG,
-          guardianSignature: GUARDIAN_SIG,
-        },
-      ],
+  describe("packCumulativeT3Signature (contract #45: P256 + BLS + guardian, no messagePoint)", () => {
+    const cases: Array<[string, string[]]> = [
+      ["3 nodes", [NODE_A, NODE_B, NODE_LEADING_ZERO]],
+      ["zero nodes", []],
     ];
 
-    it.each(cases)("%s", (label, data) => {
-      expect(packCumulativeT3Signature(data)).toBe((GOLDEN.packT3 as Record<string, string>)[label]);
+    it.each(cases)("%s", (_label, nodeIds) => {
+      const out = packCumulativeT3Signature({
+        p256Signature: P256_SIG,
+        nodeIds,
+        blsSignature: BLS_SIG,
+        guardianSignature: GUARDIAN_SIG,
+      });
+      const expected =
+        "0x05" + strip(P256_SIG) + nodeIdsBlock(nodeIds) + strip(BLS_SIG) + strip(GUARDIAN_SIG);
+      expect(out).toBe(expected);
+      // Guardian is the LAST 65 bytes (what the contract reads); nothing between blsSig and guardian.
+      expect(hexToBytes(out).length).toBe(1 + 64 + 32 + nodeIds.length * 32 + 256 + 65);
     });
   });
 

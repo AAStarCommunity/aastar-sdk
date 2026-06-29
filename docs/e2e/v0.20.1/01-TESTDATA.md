@@ -70,6 +70,6 @@ Keys are read from `.env.sepolia` (`PRIVATE_KEY_JASON` / `PRIVATE_KEY_ANNI` / `P
 - [ ] `pnpm run upstream:check` → exit 0, all 4 in-sync
 - [ ] `pnpm run check:addresses` → all 4 configs OK
 - [ ] `.env.sepolia` present with funded JASON/ANNI/BOB
-- [ ] DVT nodes reachable (`localhost:3001/2/3`) for the dvt scenario
+- [ ] DVT nodes reachable for the dvt scenario — default is the public `dvt1/2/3.aastar.io` (no local ports needed). For a LOCAL stack the port depends on the launch method: `dvt-testnet.sh` = `4001/2/3`, `docker-compose.testnet.yml` = `3001/2/3` (see aastar-sdk#232)
 - [ ] `KMS_E2E=1` set for the kms scenario (creates a real TEE key)
 - [ ] Resilient RPC: `SEPOLIA_RPC_URL` / `SEPOLIA_RPC_URL2` / `SEPOLIA_RPC_URL3`

@@ -34,8 +34,10 @@ export interface CumulativeT2SignatureData {
   p256Signature: string; // 64 bytes: [r(32)][s(32)]
   nodeIds: string[];
   blsSignature: string; // EIP-2537 aggregate BLS signature
-  messagePoint: string; // EIP-2537 G2 message point
-  messagePointSignature: string; // 65-byte ECDSA of keccak256(messagePoint)
+  // NOTE: messagePoint / messagePointSignature were removed from the on-chain cumulative format by
+  // contract issue #45 Fix 1 (the account recomputes the message point from userOpHash and the owner
+  // messagePointSignature is redundant). They are intentionally absent here — re-adding them would
+  // make packCumulativeT2/T3Signature emit extra bytes that the strict-length validator rejects.
 }
 
 /**
