@@ -302,13 +302,14 @@ export class BLSSignatureService {
       skipOwnerOpSignature: true,
     });
 
+    // messagePoint / messagePointSignature are intentionally NOT included: contract issue #45 Fix 1
+    // removed them from the cumulative format (the account recomputes the message point on-chain), so
+    // the packed signature carries only P256 + the BLS [nodeIds][blsSig] block (+ guardian for T3).
     if (tier === 2) {
       const t2Data: CumulativeT2SignatureData = {
         p256Signature,
         nodeIds: blsData.nodeIds,
         blsSignature: blsData.signature,
-        messagePoint: blsData.messagePoint,
-        messagePointSignature: blsData.messagePointSignature,
       };
       return manager.packCumulativeT2Signature(t2Data);
     }
@@ -326,8 +327,6 @@ export class BLSSignatureService {
       p256Signature,
       nodeIds: blsData.nodeIds,
       blsSignature: blsData.signature,
-      messagePoint: blsData.messagePoint,
-      messagePointSignature: blsData.messagePointSignature,
       guardianSignature,
     };
     return manager.packCumulativeT3Signature(t3Data);

@@ -71,11 +71,14 @@ export function packSignature(data: BLSSignatureData): Hex {
 /**
  * Pack cumulative Tier 2 signature (algId 0x04): P256 + BLS.
  *
- * Format:
+ * Format (MUST match `_validateCumulativeTier2` in AAStarAirAccountBase.sol — issue #45 Fix 1
+ * removed the embedded messagePoint + messagePointSignature; the account now recomputes the
+ * message point on-chain via hash_to_curve(userOpHash) and verifies the pairing against THAT,
+ * so the owner messagePointSignature is redundant and the bytes must NOT be present, or the
+ * account's strict-length BLS-payload parse rejects the signature):
  *   [algId=0x04 (1)] [P256 r (32)] [P256 s (32)]
  *   [nodeIdsLength (32)] [nodeIds (N×32)]
- *   [blsAggregateSig (256)] [messagePoint (256)]
- *   [messagePointECDSA (65)]
+ *   [blsAggregateSig (256)]
  */
 export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex {
   const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
@@ -85,15 +88,13 @@ export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex 
   );
 
   return encodePacked(
-    ["bytes1", "bytes", "bytes", "bytes", "bytes", "bytes", "bytes"],
+    ["bytes1", "bytes", "bytes", "bytes", "bytes"],
     [
       "0x04",
       data.p256Signature as Hex,
       nodeIdsLength,
       nodeIdsBytes,
       data.blsSignature as Hex,
-      data.messagePoint as Hex,
-      data.messagePointSignature as Hex,
     ]
   );
 }
@@ -101,11 +102,13 @@ export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex 
 /**
  * Pack cumulative Tier 3 signature (algId 0x05): P256 + BLS + Guardian.
  *
- * Format:
+ * Format (MUST match `_validateCumulativeTier3` in AAStarAirAccountBase.sol — see the T2 note: the
+ * embedded messagePoint + messagePointSignature were removed by issue #45 Fix 1. The account reads
+ * the guardian signature from the LAST 65 bytes and the BLS payload from sigData[64 : len-65], so
+ * any extra bytes between the BLS aggregate and the guardian signature break verification):
  *   [algId=0x05 (1)] [P256 r (32)] [P256 s (32)]
  *   [nodeIdsLength (32)] [nodeIds (N×32)]
- *   [blsAggregateSig (256)] [messagePoint (256)]
- *   [messagePointECDSA (65)] [guardianECDSA (65)]
+ *   [blsAggregateSig (256)] [guardianECDSA (65)]
  */
 export function packCumulativeT3Signature(data: CumulativeT3SignatureData): Hex {
   const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
@@ -115,15 +118,13 @@ export function packCumulativeT3Signature(data: CumulativeT3SignatureData): Hex 
   );
 
   return encodePacked(
-    ["bytes1", "bytes", "bytes", "bytes", "bytes", "bytes", "bytes", "bytes"],
+    ["bytes1", "bytes", "bytes", "bytes", "bytes", "bytes"],
     [
       "0x05",
       data.p256Signature as Hex,
       nodeIdsLength,
       nodeIdsBytes,
       data.blsSignature as Hex,
-      data.messagePoint as Hex,
-      data.messagePointSignature as Hex,
       data.guardianSignature as Hex,
     ]
   );
