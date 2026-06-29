@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.3] - 2026-06-29
+**SDK Code Integrity Hash**: `ef7569abc48c1b60a385531777c06f89eefa58d7feb5373a6472d08266cfa4a4`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: `estimateUserOperationGas` masked bundler estimation failures and inflated the prefund (`InsufficientBalance`).**
+
+`EthereumProvider.estimateUserOperationGas` (the AirAccount/KMS server gas-estimation path, bundled into
+`@aastar/sdk/kms`) wrapped the bundler's `eth_estimateUserOperationGas` call in a **silent `catch {}`** that, on
+any failure, fell through to a flat **4,000,000 (`0x3d0900`) `verificationGasLimit`**. Because that fallback is
+fed straight into the submitted UserOperation (`transfer-manager.ts` build path), a failed estimate produced a
+hugely inflated required prefund and surfaced downstream as a confusing `InsufficientBalance` — while the *real*
+cause (bundler 401 / down / un-simulatable userOp) was swallowed and never logged (aastar-sdk#229).
+
+This was two distinct problems: the **trigger** is caller/environment-side (the bundler estimation call must
+actually succeed — bundler URL/API-key/userOp params), and the **SDK defect** is that it hid that failure behind
+a magic constant instead of surfacing it.
+
+- **[FIX]** Success path now adds a configurable safety buffer (default **10%**) on top of the bundler estimate for
+  `callGasLimit` / `verificationGasLimit` (`preVerificationGas`, the deterministic calldata cost, is left
+  untouched) — the dynamic estimate-plus-buffer behavior expected of an SDK
+  (`packages/airaccount/src/server/providers/ethereum-provider.ts`).
+- **[FIX]** Failure path no longer swallows the error: it `logger.warn`s the **real** bundler error (plus a hint to
+  check the bundler URL/key and userOp params) before falling back, so the true cause is visible.
+- **[FEAT]** New optional `ServerConfig` fields: `gasEstimateBufferPercent` (default 10, set 0 to disable) and
+  `fallbackGasLimits` (default keeps the 4M `verificationGasLimit`, which AirAccount's BLS verification + factory
+  deployment genuinely need and some bundlers cannot simulate — now overridable per deployment).
+- **[TEST]** `ethereum-provider-rpc.test.ts`: buffer applied to estimate, `bufferPercent: 0` passthrough,
+  `logger.warn` invoked on bundler failure (not silent), and custom `fallbackGasLimits` honored.
+
 ## [0.29.2] - 2026-06-29
 **SDK Code Integrity Hash**: `9e582ff891ef75709f616d5aeb82b864fa67e47567703149b7248789a6ca9901`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
