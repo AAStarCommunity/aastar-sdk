@@ -13,3 +13,13 @@ export * from "./core/erc4337";
 export * from "./core/tier";
 export * from "./core/dvt-confirmation.js";
 export * from "./core/contact-binding.js";
+// WebAuthn cumulative signature packers (device-passkey Tier-2/3 — algId 0x09/0x0a, #234).
+// Build the on-chain WebAuthn passkey factor + the cumulative composite an integrator submits.
+export {
+  packWebAuthnBlob,
+  packCumulativeT2WA,
+  packCumulativeT3WA,
+  packBlsPayload,
+  ALG_CUMULATIVE_T2_WA,
+  ALG_CUMULATIVE_T3_WA,
+} from "./migration/viem/bls-packing";
