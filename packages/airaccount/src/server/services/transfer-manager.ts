@@ -19,7 +19,7 @@ import { parseAbi, encodeFunctionData } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { readValidatorGasEstimate } from "../providers/typed-reads";
 import { AccountManager } from "./account-manager";
-import { BLSSignatureService, GuardianSigner } from "./bls-signature-service";
+import { BLSSignatureService, GuardianSigner, DeviceWebAuthnAssertion } from "./bls-signature-service";
 import { GuardChecker } from "./guard-checker";
 import { wrapExecuteUserOp } from "../utils/execute-user-op";
 import { PaymasterManager } from "./paymaster-manager";
@@ -126,6 +126,14 @@ export interface ExecuteTransferParams {
   /** Enable AirAccount tiered signature routing. Default: false (legacy BLS-only). */
   useAirAccountTiering?: boolean;
   /**
+   * Use the on-chain WebAuthn-passkey cumulative path (algId 0x09/0x0a) for Tier-2/3 instead of the
+   * raw-P256 cumulative (0x04/0x05). Set this when the account's passkey is a real device WebAuthn
+   * credential (the common case): the frontend runs ONE `navigator.credentials.get()` ceremony with
+   * `challenge = the prepared userOpHash`, and submit derives the on-chain passkey factor from that
+   * assertion (no KMS owner ceremony, no manual packing). Requires `useAirAccountTiering: true`.
+   */
+  useWebAuthnPasskey?: boolean;
+  /**
    * Wrap the execute()/executeBatch() callData with the `executeUserOp` selector
    * (v0.17.2-beta.4 bundler-compat). REQUIRED for guard-enabled accounts submitted
    * through a standard ERC-4337 bundler; the account re-derives the signature algId
@@ -165,13 +173,18 @@ function requiredSigsForTier(tier: number | null): { passkey: boolean; bls: bool
 export interface PreparedTransfer {
   /** Opaque handle to pass back to {@link TransferManager.submitPreparedTransfer}. */
   transferId: string;
-  /** KMS BeginAuthentication ChallengeId — pair it with the credential as the webAuthnAssertion. */
-  challengeId: string;
+  /**
+   * KMS BeginAuthentication ChallengeId — pair it with the credential as the webAuthnAssertion.
+   * Absent on the WebAuthn passkey path (`useWebAuthnPasskey`), which runs no KMS ceremony — there
+   * the frontend uses `userOpHash` itself as the navigator.credentials.get() challenge.
+   */
+  challengeId?: string;
   /**
    * Credential-request options to feed `navigator.credentials.get` / `startAuthentication`.
    * Its `challenge` is ALREADY the WYSIWYS commitment over the correct payload (SDK-computed).
+   * Absent on the WebAuthn passkey path (use `userOpHash` as the challenge).
    */
-  publicKeyOptions: PublicKeyCredentialRequestOptions;
+  publicKeyOptions?: PublicKeyCredentialRequestOptions;
   /** The UserOp hash (informational; the frontend does not need to sign it directly). */
   userOpHash: string;
   /**
@@ -335,7 +348,10 @@ export class TransferManager {
    * {@link submitPreparedTransfer} (single-process; a multi-worker deployment needs a shared store).
    */
   async prepareTransfer(userId: string, params: ExecuteTransferParams): Promise<PreparedTransfer> {
-    if (!this.signer.beginCeremony) {
+    // The KMS ceremony (beginCeremony) is only needed for the owner-signature paths. The WebAuthn
+    // passkey path signs userOpHash directly on the device (challenge=userOpHash), so it needs no
+    // KMS ceremony — defer that requirement to the non-WebAuthn branch below.
+    if (!params.useWebAuthnPasskey && !this.signer.beginCeremony) {
       throw new Error(
         "prepareTransfer needs a signer adapter that implements beginCeremony (e.g. KmsSignerAdapter)."
       );
@@ -359,13 +375,8 @@ export class TransferManager {
       params.wrapExecuteUserOp ?? false
     );
     const userOpHash = await this.ethereum.getUserOpHash(userOp, version);
-    await this.signer.ensureSigner(userId);
 
-    // The exact message the SINGLE owner signature will sign (the adapter then applies EIP-191
-    // + commitChallenge). Tier-dependent — this is precisely the logic the SDK must own.
     const strategy = await this.resolveSignStrategy(account.address, version, params);
-    const message = await this.ownerMessageForStrategy(strategy, userOpHash);
-    const { challengeId, publicKeyOptions } = await this.signer.beginCeremony(userId, message);
 
     // Opportunistically evict stale prepared entries (O(entries) — fine for typical prepare
     // volumes; a high-throughput deployment should move to an expiry queue / shared store).
@@ -373,8 +384,39 @@ export class TransferManager {
     for (const [id, e] of this.prepared) {
       if (now - e.createdAt > PREPARED_TTL_MS) this.prepared.delete(id);
     }
-
     const transferId = generateId();
+
+    // ── WebAuthn passkey path: no KMS ceremony — the device signs `userOpHash` directly ─────────
+    if (params.useWebAuthnPasskey) {
+      if (strategy.tier == null || strategy.tier < 2) {
+        throw new Error(
+          "prepareTransfer: useWebAuthnPasskey applies to Tier-2/3 only (the device passkey is the " +
+            "cumulative on-chain factor for tier>=2). For Tier-1 use the plain owner path."
+        );
+      }
+      this.prepared.set(transferId, {
+        userId,
+        userOp,
+        userOpHash,
+        version,
+        accountAddress: account.address,
+        params,
+        // WA: the frontend uses `userOpHash` itself as the WebAuthn ceremony challenge; there is no
+        // separate committed owner message. Store the hash as a marker (submit re-checks the tier only).
+        ownerMessageHex: userOpHash as `0x${string}`,
+        createdAt: now,
+      });
+      // challengeId/publicKeyOptions are undefined: the frontend runs navigator.credentials.get with
+      // `challenge = userOpHash` itself (no KMS BeginAuthentication).
+      return { transferId, userOpHash, tier: strategy.tier as TierLevel, requiredSigs: requiredSigsForTier(strategy.tier) };
+    }
+
+    await this.signer.ensureSigner(userId);
+    // The exact message the SINGLE owner signature will sign (the adapter then applies EIP-191
+    // + commitChallenge). Tier-dependent — this is precisely the logic the SDK must own.
+    const message = await this.ownerMessageForStrategy(strategy, userOpHash);
+    const { challengeId, publicKeyOptions } = await this.signer.beginCeremony!(userId, message);
+
     this.prepared.set(transferId, {
       userId,
       userOp,
@@ -397,7 +439,8 @@ export class TransferManager {
     userId: string,
     params: {
       transferId: string;
-      webAuthnAssertion: WebAuthnAssertion;
+      /** KMS-ceremony assertion for the owner-signature paths. Not used by the WebAuthn passkey path. */
+      webAuthnAssertion?: WebAuthnAssertion;
       /**
        * Guardian co-signer, REQUIRED when the prepared transfer is Tier 3 (see {@link PreparedTransfer.tier}).
        * Collected at submit time (after the UI saw it was needed). If omitted for a Tier-3 transfer,
@@ -405,14 +448,18 @@ export class TransferManager {
        */
       guardianSigner?: GuardianSigner;
       /**
-       * Device-passkey P256 signature (64-byte `r‖s` hex) over the prepared `userOpHash`, REQUIRED for
-       * Tier 2/3. It MUST be collected at submit time: the device signs the `userOpHash` that
-       * {@link prepareTransfer} returned (it cannot be known before prepare). Omitting it for a Tier ≥ 2
-       * transfer fail-fasts here (no gas) instead of reverting on-chain. (The KMS does NOT produce this —
-       * it is the device passkey factor, distinct from {@link webAuthnAssertion} which authorizes the
-       * KMS owner signature.)
+       * Device-passkey P256 signature (64-byte `r‖s` hex) over the prepared `userOpHash`, for the
+       * RAW-P256 cumulative path (algId 0x04/0x05). For real device WebAuthn passkeys use
+       * `deviceWebAuthn` + `useWebAuthnPasskey` instead (the device can't produce a raw r‖s).
        */
       p256Signature?: string;
+      /**
+       * The device WebAuthn assertion (`navigator.credentials.get()` response over `challenge = userOpHash`)
+       * for the WebAuthn passkey cumulative path (algId 0x09/0x0a). Required when the prepared transfer
+       * was created with `useWebAuthnPasskey: true`. The SDK derives the on-chain passkey factor + fetches
+       * the DVT BLS aggregate + packs the composite — no manual packing.
+       */
+      deviceWebAuthn?: DeviceWebAuthnAssertion;
     }
   ): Promise<TransferResult> {
     const prep = this.prepared.get(params.transferId);
@@ -422,6 +469,47 @@ export class TransferManager {
     if (Date.now() - prep.createdAt > PREPARED_TTL_MS) {
       this.prepared.delete(params.transferId);
       throw new Error("submitPreparedTransfer: prepared transfer expired; call prepareTransfer again.");
+    }
+
+    // ── WebAuthn passkey path: derive the composite from the device assertion (no KMS ceremony) ──
+    if (prep.params.useWebAuthnPasskey) {
+      const strategy = await this.resolveSignStrategy(prep.accountAddress, prep.version, prep.params);
+      const tier = strategy.tier;
+      if (tier == null || tier < 2) {
+        throw new Error("submitPreparedTransfer: WebAuthn passkey path is Tier-2/3 only.");
+      }
+      if (!params.deviceWebAuthn) {
+        throw new Error(
+          "submitPreparedTransfer: this is a WebAuthn passkey transfer — pass `deviceWebAuthn` " +
+            "(the navigator.credentials.get() assertion whose challenge is the prepared userOpHash)."
+        );
+      }
+      if (tier >= 3 && !params.guardianSigner && !prep.params.guardianSigner) {
+        throw new Error(
+          "submitPreparedTransfer: this is a Tier-3 transfer and needs a guardian co-signature — pass `guardianSigner`."
+        );
+      }
+      this.prepared.delete(params.transferId); // one-time
+      prep.userOp.signature = (await this.blsService.generateWebAuthnTieredSignature({
+        tier: tier as TierLevel,
+        userId,
+        userOpHash: prep.userOpHash,
+        deviceWebAuthn: params.deviceWebAuthn,
+        guardianSigner: params.guardianSigner ?? prep.params.guardianSigner,
+      })) as `0x${string}`;
+      return this.finalizeAndSubmit(
+        userId,
+        prep.accountAddress,
+        prep.version,
+        prep.userOp,
+        prep.userOpHash,
+        prep.params,
+        params.transferId
+      );
+    }
+
+    if (!params.webAuthnAssertion) {
+      throw new Error("submitPreparedTransfer: webAuthnAssertion is required for the owner-signature path.");
     }
     // Tier-drift guard: the committed challenge was bound to the prepare-time payload. Resolve the
     // strategy ONCE and reuse it for BOTH the comparison and the signing, so submit signs exactly
