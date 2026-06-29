@@ -16,6 +16,23 @@ import {
   CumulativeT2SignatureData,
   CumulativeT3SignatureData,
 } from "../../core/bls";
+import {
+  packWebAuthnBlob,
+  packBlsPayload,
+  packCumulativeT2WA,
+  packCumulativeT3WA,
+} from "../../migration/viem/bls-packing";
+
+/**
+ * Device WebAuthn assertion (the three `AuthenticatorAssertionResponse` fields the frontend gets
+ * from `navigator.credentials.get()` with `challenge = userOpHash`). Used by the WebAuthn cumulative
+ * Tier-2/3 path — the SDK derives the on-chain passkey factor (algId 0x09/0x0a) from it.
+ */
+export interface DeviceWebAuthnAssertion {
+  authenticatorData: `0x${string}` | Uint8Array;
+  clientDataJSON: `0x${string}` | Uint8Array | string;
+  signature: `0x${string}` | Uint8Array; // DER-encoded P-256 signature
+}
 import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
@@ -330,5 +347,49 @@ export class BLSSignatureService {
       guardianSignature,
     };
     return manager.packCumulativeT3Signature(t3Data);
+  }
+
+  /**
+   * Generate a WebAuthn cumulative Tier-2/3 signature (algId 0x09 / 0x0a) from a DEVICE passkey
+   * assertion — the integrator-zero-packing path (#234). The frontend runs one WebAuthn ceremony
+   * with `challenge = userOpHash`; the SDK derives the on-chain passkey factor from the assertion,
+   * fetches + aggregates the DVT BLS co-signatures itself, and packs the composite. No KMS owner
+   * signature is involved (the device passkey IS the owner factor; cumulative = P256 + BLS [+ guardian]).
+   *
+   * @param tier 2 or 3 (tier 1 is plain ECDSA — not this path).
+   * @param deviceWebAuthn the `navigator.credentials.get()` response fields (challenge MUST be userOpHash).
+   * @param guardianSigner required for tier 3.
+   */
+  async generateWebAuthnTieredSignature(params: {
+    tier: TierLevel;
+    userId: string;
+    userOpHash: string;
+    deviceWebAuthn: DeviceWebAuthnAssertion;
+    guardianSigner?: GuardianSigner;
+  }): Promise<string> {
+    const { tier, userId, userOpHash, deviceWebAuthn, guardianSigner } = params;
+    if (tier !== 2 && tier !== 3) {
+      throw new Error(`generateWebAuthnTieredSignature: tier must be 2 or 3, got ${tier}`);
+    }
+    // 1) On-chain passkey factor from the device assertion (verifies challenge == userOpHash,
+    //    decodes DER → r/s + low-S; throws in-SDK if the assertion doesn't bind userOpHash).
+    const waBlob = packWebAuthnBlob(deviceWebAuthn, userOpHash as `0x${string}`);
+
+    // 2) DVT BLS aggregate — fetched + aggregated by the SDK (no owner ECDSA needed for the cumulative).
+    const blsData = await this.generateBLSSignature(userId, userOpHash, undefined, {
+      skipOwnerOpSignature: true,
+    });
+    const blsPayload = packBlsPayload(blsData.nodeIds as `0x${string}`[], blsData.signature as `0x${string}`);
+
+    if (tier === 2) {
+      return packCumulativeT2WA(waBlob, blsPayload);
+    }
+
+    // 3) Tier 3 — guardian ECDSA over userOpHash.
+    if (!guardianSigner) {
+      throw new Error("Guardian signer required for Tier 3 (WebAuthn)");
+    }
+    const guardianSignature = await guardianSigner.signMessage(hexToBytes(userOpHash as `0x${string}`));
+    return packCumulativeT3WA(waBlob, blsPayload, guardianSignature as `0x${string}`);
   }
 }

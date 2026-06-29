@@ -192,6 +192,46 @@ describe("TransferManager", () => {
     });
   });
 
+  describe("submitPreparedTransfer WebAuthn passkey path (#234 wrap)", () => {
+    function seedWA(mgr: TransferManager, tier: number) {
+      (mgr as any).prepared.set("t1", {
+        userId: "u1", userOp: {}, userOpHash: "0xhash", version: "0.7",
+        accountAddress: "0xacc", params: { useWebAuthnPasskey: true }, ownerMessageHex: "0xhash", createdAt: Date.now(),
+      });
+      vi.spyOn(mgr as any, "resolveSignStrategy").mockResolvedValue({ useECDSA: false, isCompositeValidator: true, tier });
+    }
+    const ASSERTION = { authenticatorData: "0x00", clientDataJSON: "0x00", signature: "0x00" } as any;
+
+    it("throws (no gas) when deviceWebAuthn is missing", async () => {
+      const mgr = makeManager();
+      seedWA(mgr, 2);
+      await expect(
+        mgr.submitPreparedTransfer("u1", { transferId: "t1" })
+      ).rejects.toThrow(/deviceWebAuthn/);
+    });
+
+    it("throws (no gas) when Tier 3 and no guardianSigner", async () => {
+      const mgr = makeManager();
+      seedWA(mgr, 3);
+      await expect(
+        mgr.submitPreparedTransfer("u1", { transferId: "t1", deviceWebAuthn: ASSERTION })
+      ).rejects.toThrow(/Tier-3.*guardian/);
+    });
+
+    it("does NOT require webAuthnAssertion on the WebAuthn path (passes the fail-fasts)", async () => {
+      const mgr = makeManager();
+      seedWA(mgr, 3);
+      // No webAuthnAssertion supplied — the WA path must not demand it; it fails later on the mock blsService.
+      await expect(
+        mgr.submitPreparedTransfer("u1", {
+          transferId: "t1",
+          deviceWebAuthn: ASSERTION,
+          guardianSigner: { signMessage: async () => "0x" } as any,
+        })
+      ).rejects.not.toThrow(/deviceWebAuthn|Tier-3.*guardian|webAuthnAssertion is required/);
+    });
+  });
+
   describe("detectSignatureStrategy", () => {
     const ACCOUNT = "0x1234567890123456789012345678901234567890";
 
