@@ -40,6 +40,22 @@ import { UserOperation, PackedUserOperation } from "../../core/types";
  * returned value is `unknown` (cast at the call site). This mirrors the dynamic
  * surface that `ethers.Contract` previously exposed.
  */
+/** Default safety buffer (percent) applied to bundler gas estimates. */
+const DEFAULT_GAS_ESTIMATE_BUFFER_PERCENT = 10;
+
+/**
+ * Adds a percentage buffer to a hex-encoded gas value and returns it as hex.
+ * A bufferPercent of 0 returns the value unchanged. Negative values are clamped to 0.
+ * Fractional percents are rounded to the nearest integer (e.g. 10.7 → 11) since the
+ * buffer is computed in integer (BigInt) arithmetic.
+ */
+function addGasBuffer(hexValue: string, bufferPercent: number): string {
+  const base = BigInt(hexValue);
+  const pct = bufferPercent > 0 ? BigInt(Math.round(bufferPercent)) : 0n;
+  const buffered = base + (base * pct) / 100n;
+  return `0x${buffered.toString(16)}`;
+}
+
 export type ViemContractMethods = Record<string, (...args: unknown[]) => Promise<unknown>>;
 export interface ViemContract {
   address: Address;
@@ -252,15 +268,38 @@ export class EthereumProvider {
     version: EntryPointVersion = EntryPointVersion.V0_6
   ): Promise<{ callGasLimit: string; verificationGasLimit: string; preVerificationGas: string }> {
     try {
-      return await this.bundlerRequest("eth_estimateUserOperationGas", [
-        userOp,
-        this.getEntryPointAddress(version),
-      ]);
-    } catch {
+      const est = await this.bundlerRequest<{
+        callGasLimit: string;
+        verificationGasLimit: string;
+        preVerificationGas: string;
+      }>("eth_estimateUserOperationGas", [userOp, this.getEntryPointAddress(version)]);
+
+      // Add a safety buffer on top of the dynamic estimate. The bundler simulates
+      // gas, but execution-time usage can be higher (cold storage, BLS verification
+      // variance), so a margin avoids out-of-gas reverts. preVerificationGas is the
+      // deterministic calldata cost and is left as-is.
+      const bufferPercent = this.config.gasEstimateBufferPercent ?? DEFAULT_GAS_ESTIMATE_BUFFER_PERCENT;
       return {
-        callGasLimit: "0x249f0",
-        verificationGasLimit: "0x3d0900", // 4M — enough for M4 factory deployment + BLS verification
-        preVerificationGas: "0x11170",
+        callGasLimit: addGasBuffer(est.callGasLimit, bufferPercent),
+        verificationGasLimit: addGasBuffer(est.verificationGasLimit, bufferPercent),
+        preVerificationGas: est.preVerificationGas,
+      };
+    } catch (err) {
+      // Do NOT silently swallow. A failed estimate previously fell through to a flat
+      // 4M verificationGasLimit, which masked the real cause (bundler 401 / down /
+      // un-simulatable userOp) and surfaced downstream as a confusing InsufficientBalance.
+      // Log the true error and fall back to configurable static limits.
+      const fb = this.config.fallbackGasLimits;
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `eth_estimateUserOperationGas failed (${reason}); falling back to static gas limits. ` +
+          `Verify the bundler URL/API key and the userOp parameters — the fallback ignores ` +
+          `current gas price and may over-estimate the required prefund.`
+      );
+      return {
+        callGasLimit: fb?.callGasLimit ?? "0x249f0",
+        verificationGasLimit: fb?.verificationGasLimit ?? "0x3d0900", // 4M — heavy enough for factory deploy + BLS verification
+        preVerificationGas: fb?.preVerificationGas ?? "0x11170",
       };
     }
   }

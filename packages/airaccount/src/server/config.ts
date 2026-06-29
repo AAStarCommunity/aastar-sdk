@@ -33,6 +33,30 @@ export interface ServerConfig {
   /** Default EntryPoint version to use when not specified. */
   defaultVersion?: "0.6" | "0.7" | "0.8";
 
+  /**
+   * Safety buffer (percent) added on top of the bundler's gas estimate for
+   * callGasLimit / verificationGasLimit. Execution-time gas can exceed the
+   * simulated estimate (cold storage, BLS verification variance), so a small
+   * margin avoids out-of-gas reverts. preVerificationGas is left untouched
+   * (calldata cost is deterministic). Defaults to 10. Set 0 to disable.
+   * Fractional values are rounded to the nearest integer percent (e.g. 10.7 → 11).
+   */
+  gasEstimateBufferPercent?: number;
+
+  /**
+   * Static fallback gas limits (hex strings) used ONLY when the bundler's
+   * eth_estimateUserOperationGas call fails. The previous hard-coded 4M
+   * verificationGasLimit is kept as the default because AirAccount's BLS
+   * verification + factory deployment are genuinely gas-heavy and some bundlers
+   * cannot simulate them — but a failed estimate is now logged loudly (it used
+   * to be swallowed) and these values can be overridden per deployment.
+   */
+  fallbackGasLimits?: {
+    callGasLimit?: string;
+    verificationGasLimit?: string;
+    preVerificationGas?: string;
+  };
+
   /** BLS signer seed nodes for gossip discovery. */
   blsSeedNodes?: string[];
   /** Timeout for BLS node discovery in ms. */

@@ -172,29 +172,78 @@ describe("EthereumProvider — RPC methods", () => {
   // ── estimateUserOperationGas ──────────────────────────────────────
 
   describe("estimateUserOperationGas", () => {
-    it("returns gas estimate from bundler", async () => {
+    it("applies the default 10% safety buffer to the bundler estimate", async () => {
       const estimate = {
-        callGasLimit: "0x249f0",
-        verificationGasLimit: "0xf4240",
-        preVerificationGas: "0x11170",
+        callGasLimit: "0x249f0", // 150000
+        verificationGasLimit: "0xf4240", // 1000000
+        preVerificationGas: "0x11170", // 70000
       };
       mockBundler.request.mockResolvedValueOnce(estimate);
 
       const result = await ep.estimateUserOperationGas({}, EntryPointVersion.V0_6);
-      expect(result).toEqual(estimate);
+      // callGasLimit / verificationGasLimit buffered by 10%, preVerificationGas untouched.
+      expect(BigInt(result.callGasLimit)).toBe(165000n);
+      expect(BigInt(result.verificationGasLimit)).toBe(1100000n);
+      expect(BigInt(result.preVerificationGas)).toBe(70000n);
       expect(mockBundler.request).toHaveBeenCalledWith({
         method: "eth_estimateUserOperationGas",
         params: [expect.any(Object), expect.any(String)],
       });
     });
 
-    it("returns default fallback values when bundler call fails", async () => {
-      mockBundler.request.mockRejectedValueOnce(new Error("bundler unavailable"));
+    it("honors a custom gasEstimateBufferPercent (0 = raw passthrough)", async () => {
+      const epNoBuffer = new EthereumProvider({ ...CHAIN_CONFIG, gasEstimateBufferPercent: 0 });
+      const { mockBundler: mb } = injectMocks(epNoBuffer);
+      const estimate = {
+        callGasLimit: "0x249f0",
+        verificationGasLimit: "0xf4240",
+        preVerificationGas: "0x11170",
+      };
+      mb.request.mockResolvedValueOnce(estimate);
+
+      const result = await epNoBuffer.estimateUserOperationGas({});
+      expect(result).toEqual(estimate);
+    });
+
+    it("rounds a fractional gasEstimateBufferPercent to the nearest integer", async () => {
+      const epFrac = new EthereumProvider({ ...CHAIN_CONFIG, gasEstimateBufferPercent: 10.7 });
+      const { mockBundler: mb } = injectMocks(epFrac);
+      mb.request.mockResolvedValueOnce({
+        callGasLimit: "0x2710", // 10000
+        verificationGasLimit: "0x2710", // 10000
+        preVerificationGas: "0x2710", // 10000
+      });
+
+      const result = await epFrac.estimateUserOperationGas({});
+      // 10.7 → 11% → 10000 * 1.11 = 11100 (not 11000 from a floor to 10).
+      expect(BigInt(result.callGasLimit)).toBe(11100n);
+      expect(BigInt(result.preVerificationGas)).toBe(10000n);
+    });
+
+    it("logs a warning (not silent) and falls back to static limits when the bundler fails", async () => {
+      const warn = vi.spyOn(CHAIN_CONFIG.logger!, "warn");
+      mockBundler.request.mockRejectedValueOnce(new Error("bundler 401"));
 
       const result = await ep.estimateUserOperationGas({});
       expect(result.callGasLimit).toBe("0x249f0");
-      expect(result.verificationGasLimit).toBe("0x3d0900"); // 4M — enough for M4 factory deployment + BLS verification
+      expect(result.verificationGasLimit).toBe("0x3d0900"); // 4M default fallback for factory deploy + BLS
       expect(result.preVerificationGas).toBe("0x11170");
+      // The real cause must be surfaced, not swallowed.
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("bundler 401"));
+      warn.mockRestore();
+    });
+
+    it("uses configurable fallback gas limits when provided", async () => {
+      const epCustom = new EthereumProvider({
+        ...CHAIN_CONFIG,
+        fallbackGasLimits: { verificationGasLimit: "0x186a0" }, // 100000
+      });
+      const { mockBundler: mb } = injectMocks(epCustom);
+      mb.request.mockRejectedValueOnce(new Error("down"));
+
+      const result = await epCustom.estimateUserOperationGas({});
+      expect(result.verificationGasLimit).toBe("0x186a0");
+      expect(result.callGasLimit).toBe("0x249f0"); // unset → default
     });
   });
 
