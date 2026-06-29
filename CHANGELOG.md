@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.4] - 2026-06-29
+**SDK Code Integrity Hash**: `fb593ca9f3c50fad9431c765b9dfc01ebe12874a905a9627fe3aa605e3336e9b`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: Tier-2/3 device-passkey transfers reverted on-chain with `AA24 signature error` (two stacked bugs).** (aastar-sdk#234)
+
+A `useAirAccountTiering: true` transfer above `tier1Limit` produced a UserOperation the deployed
+v0.20.3 AirAccount rejected. Two independent defects, both now fixed and verified on-chain (Sepolia):
+
+- **[FIX] Tiering precedence (silent fallback).** A weighted/composite AirAccount can report
+  `validator() == address(0)` (validation is in-account via the weight config), which made
+  `detectSignatureStrategy` return `useECDSA = true`. `resolveSignStrategy` gated tier resolution on
+  `!useECDSA`, so a tier-2/3 op **silently** emitted a single inline-ECDSA (`0x02`, 66 B) signature —
+  under-weight for tier ≥ 2 → opaque on-chain `AA24`. An explicit `useAirAccountTiering: true` is now
+  authoritative over the ECDSA heuristic (the `!useECDSA` gate is removed; a resolved tier forces
+  `useECDSA = false`), and requesting tiering with no `TierGuardChecker` configured now throws loudly
+  instead of falling back to inline ECDSA (`packages/airaccount/src/server/services/transfer-manager.ts`).
+- **[FIX] Cumulative signature format drift.** The deployed contract (`_validateCumulativeTier2/3`,
+  issue #45 Fix 1 since v0.18) recomputes the message point on-chain from `userOpHash` and strictly
+  parses the BLS-payload length, so the cumulative format is `T2 0x04 = [P256 r][P256 s][nodeIdsLen]
+  [nodeIds][blsSig]` and `T3 0x05 = … [blsSig][guardianECDSA]`. The SDK packer still emitted
+  `messagePoint(256) + messagePointSignature(65)` — 321 extra bytes the strict-length parse rejects
+  (`AA24` even once a `0x04`/`0x05` is produced). Removed from `packCumulativeT2/T3Signature`,
+  `CumulativeT2SignatureData`, and `BLSSignatureService.generateTieredSignature`.
+- **[FIX] `submitPreparedTransfer` could not receive the device-passkey P256 signature.** Tier-2/3 needs
+  `p256Signature` (the device's P256 `r‖s` over `userOpHash`), which can only be produced AFTER
+  `prepareTransfer` returns the hash — but `submitPreparedTransfer` only threaded `guardianSigner`, so the
+  two-phase device-passkey flow had no way to supply it. Added `p256Signature?` to `submitPreparedTransfer`
+  (threaded into signing like `guardianSigner`) + a Tier-≥2 fail-fast (no gas / no consumed assertion) when
+  it is missing.
+- **[TEST]** New `tier3-composite-e2e.ts` on-chain acceptance (software P256 + 3-node DVT BLS aggregate
+  + guardian, no browser/KMS): the SDK-packed `0x05` composite returns `validateUserOp == 0` (ACCEPTED)
+  on Sepolia, while the old `+messagePoint` format returns `1` (REJECTED, with real components — isolating
+  the length/format drift). Plus a Tier-1 no-op guard (tiered tier-1 == raw inline ECDSA) and structural
+  cumulative-format parity assertions pinned to the contract layout.
+
 ## [0.29.3] - 2026-06-29
 **SDK Code Integrity Hash**: `fff93b190696af4601b39f6be5110eb1b291a7e3be1dffc23906766f6fb1a1f4`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

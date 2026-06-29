@@ -261,8 +261,8 @@ export class BLSSignatureService {
    * Generate a tiered signature based on the required tier level.
    *
    * - Tier 1: raw 65-byte ECDSA (no algId prefix, backwards-compat)
-   * - Tier 2: algId 0x04 — P256 + BLS aggregate + messagePoint ECDSA
-   * - Tier 3: algId 0x05 — P256 + BLS + messagePoint ECDSA + Guardian ECDSA
+   * - Tier 2: algId 0x04 — P256 + BLS aggregate (contract #45: no messagePoint/mpSig)
+   * - Tier 3: algId 0x05 — P256 + BLS aggregate + Guardian ECDSA (contract #45: no messagePoint/mpSig)
    *
    * @param tier - Required tier level (1, 2, or 3)
    * @param userId - User ID for account lookup

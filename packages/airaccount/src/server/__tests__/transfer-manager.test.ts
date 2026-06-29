@@ -154,6 +154,28 @@ describe("TransferManager", () => {
         mgr.submitPreparedTransfer("u1", { transferId: "t1", webAuthnAssertion: {} as any })
       ).rejects.not.toThrow(/Tier-3.*guardian/);
     });
+
+    it("throws (no gas) when Tier 2 and no p256Signature is supplied (#234)", async () => {
+      const mgr = makeManager();
+      seedPrepared(mgr, 2);
+      await expect(
+        mgr.submitPreparedTransfer("u1", { transferId: "t1", webAuthnAssertion: {} as any })
+      ).rejects.toThrow(/device-passkey P256/);
+    });
+
+    it("accepts p256Signature at submit (does not throw the P256 fail-fast) for Tier 2/3 (#234)", async () => {
+      const mgr = makeManager();
+      seedPrepared(mgr, 3);
+      // Both factors supplied at submit time — the fail-fasts pass; it fails later on mock deps only.
+      await expect(
+        mgr.submitPreparedTransfer("u1", {
+          transferId: "t1",
+          webAuthnAssertion: {} as any,
+          guardianSigner: { signMessage: async () => "0x" } as any,
+          p256Signature: "0x" + "ab".repeat(64),
+        })
+      ).rejects.not.toThrow(/device-passkey P256|Tier-3.*guardian/);
+    });
   });
 
   describe("detectSignatureStrategy", () => {

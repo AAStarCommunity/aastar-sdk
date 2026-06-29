@@ -58,8 +58,9 @@ import {
     airAccountFactoryActions,
     entryPointActions,
 } from '@aastar/core';
-// SDK packer UNDER TEST (the #234-fixed cumulative format).
-import { packCumulativeT3Signature } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+// SDK packer UNDER TEST (the #234-fixed cumulative format) + the message-point helper used to build a
+// REALISTIC negative control (so the old-format rejection isolates the length/format, not bad inputs).
+import { packCumulativeT3Signature, generateMessagePoint } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -239,17 +240,21 @@ async function main() {
     const accepted = await validate(composite);
     console.log(`\n[6] validateUserOp(0x05 composite) = ${accepted}  -> ${accepted === 0n ? '0 ✅ ACCEPTED' : '❌ REJECTED'}`);
 
-    // ── (7) Negative: the OLD pre-#234 format (messagePoint + mpSig re-inserted) MUST be rejected ─
+    // ── (7) Negative: the OLD pre-#234 format MUST be rejected ──────────────────────────────────
+    // Use a REAL messagePoint (the on-chain-recomputable G2 of userOpHash) + a REAL owner ECDSA over
+    // keccak256(messagePoint) — exactly the two fields #45 removed. Every component is individually
+    // VALID, so the ONLY difference from the accepted composite is the extra 321 bytes. The rejection
+    // therefore isolates the length/format drift (not bad inputs) — addresses #235 review F2.
     const nodeIdsLen = numberToHex(BigInt(nodeIds.length), { size: 32 });
     const nodeIdsBytes = nodeIds.length ? (concat(nodeIds) as Hex) : ('0x' as Hex);
-    const fakeMessagePoint = `0x${'00'.repeat(256)}` as Hex; // 256B
-    const fakeMpSig = `0x${'00'.repeat(65)}` as Hex; // 65B owner ECDSA
+    const realMessagePoint = (await generateMessagePoint(userOpHash)) as Hex; // 256B EIP-2537 G2
+    const realMpSig = await walletClient.signMessage({ account: owner, message: { raw: keccak256(realMessagePoint) } }); // 65B owner ECDSA
     const oldFormat = encodePacked(
         ['bytes1', 'bytes', 'bytes', 'bytes', 'bytes', 'bytes', 'bytes', 'bytes'],
-        ['0x05', p256Signature, nodeIdsLen, nodeIdsBytes, blsSignature, fakeMessagePoint, fakeMpSig, guardianSignature]
+        ['0x05', p256Signature, nodeIdsLen, nodeIdsBytes, blsSignature, realMessagePoint, realMpSig, guardianSignature]
     ) as Hex;
     const oldResult = await validate(oldFormat);
-    console.log(`[7] validateUserOp(OLD format +messagePoint+mpSig) = ${oldResult}  -> ${oldResult !== 0n ? '✅ rejected (proves #234 fix matters)' : '❌ accepted (UNEXPECTED)'}`);
+    console.log(`[7] validateUserOp(OLD format, real messagePoint+mpSig, +321B) = ${oldResult}  -> ${oldResult !== 0n ? '✅ rejected (isolates the length/format drift)' : '❌ accepted (UNEXPECTED)'}`);
 
     console.log('\n┌─────────────────── EVIDENCE (Tier-3 composite, #234) ───────────────────');
     console.log(`│ account        : ${account}`);
