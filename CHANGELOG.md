@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.6] - 2026-06-29
+**SDK Code Integrity Hash**: `566c183cd0597b45668192461753cbd184f2e1b789de50a2ed9485eac92f2277`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feat: device-passkey Tier-2/3 prepare/submit wrap — zero manual packing.** (aastar-sdk#234)
+
+Builds on the v0.29.5 WebAuthn packers: integrators no longer hand-assemble the composite. For a
+`useWebAuthnPasskey` Tier-2/3 transfer the SDK derives the on-chain passkey factor from the device
+WebAuthn assertion, fetches + aggregates the DVT BLS co-signatures, and packs the `0x09`/`0x0a`
+composite internally.
+
+- **[FEAT]** `ExecuteTransferParams.useWebAuthnPasskey` — `prepareTransfer` skips the KMS ceremony and
+  returns `userOpHash` as the WebAuthn challenge (the frontend runs ONE `navigator.credentials.get`
+  with `challenge = userOpHash`). `PreparedTransfer.challengeId` / `publicKeyOptions` are now optional.
+- **[FEAT]** `submitPreparedTransfer({ transferId, deviceWebAuthn, guardianSigner })` — new
+  `deviceWebAuthn` param (the 3 `AuthenticatorAssertionResponse` fields); `webAuthnAssertion` is now
+  optional (the WebAuthn path needs no KMS owner ceremony). Tier-≥2 fail-fast if `deviceWebAuthn` is
+  missing; Tier-3 fail-fast if `guardianSigner` is missing.
+- **[FEAT]** `BLSSignatureService.generateWebAuthnTieredSignature(...)` + `DeviceWebAuthnAssertion` type.
+- The packed composite is byte-identical to the on-chain-verified `tier3-webauthn-composite-e2e`
+  (`validateUserOp(0x0a) == 0` on Sepolia v0.21.0). Unit tests cover the routing + fail-fasts.
+
 ## [0.29.5] - 2026-06-29
 **SDK Code Integrity Hash**: `0092c68ff4b7a762cb9a0e54351a7198413cffe34afbd5a14d22f637e7e6b120`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
