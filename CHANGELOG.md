@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.29.2] - 2026-06-29
-**SDK Code Integrity Hash**: `6fde62dc656a009b157cc8e0d18cb4d62affff87d364b37071454ad579a43ad6`
+**SDK Code Integrity Hash**: `9e582ff891ef75709f616d5aeb82b864fa67e47567703149b7248789a6ca9901`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Fix: `TIER_PROFILES` weighted-config rejected on-chain by AirAccount v0.20.3 (`InsecureWeightConfig`).**
