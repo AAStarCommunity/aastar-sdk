@@ -163,6 +163,20 @@ describe("TransferManager", () => {
       ).rejects.toThrow(/device-passkey P256/);
     });
 
+    it("rejects a malformed p256Signature WITHOUT consuming the prepared transfer (#236 review)", async () => {
+      const mgr = makeManager();
+      seedPrepared(mgr, 2);
+      await expect(
+        mgr.submitPreparedTransfer("u1", {
+          transferId: "t1",
+          webAuthnAssertion: {} as any,
+          p256Signature: "0xdeadbeef", // non-empty but not 64 bytes
+        })
+      ).rejects.toThrow(/must be 64-byte hex/);
+      // The one-time prepared transfer must survive a format error so the caller can resubmit.
+      expect((mgr as any).prepared.has("t1")).toBe(true);
+    });
+
     it("accepts p256Signature at submit (does not throw the P256 fail-fast) for Tier 2/3 (#234)", async () => {
       const mgr = makeManager();
       seedPrepared(mgr, 3);
