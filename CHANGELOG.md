@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.29.4] - 2026-06-29
-**SDK Code Integrity Hash**: `13c54f02cedbdc8de148bba284b3344931900a3db41c0621d227ef2d2dff21a7`
+**SDK Code Integrity Hash**: `fb593ca9f3c50fad9431c765b9dfc01ebe12874a905a9627fe3aa605e3336e9b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Fix: Tier-2/3 device-passkey transfers reverted on-chain with `AA24 signature error` (two stacked bugs).** (aastar-sdk#234)
@@ -26,6 +26,12 @@ v0.20.3 AirAccount rejected. Two independent defects, both now fixed and verifie
   `messagePoint(256) + messagePointSignature(65)` — 321 extra bytes the strict-length parse rejects
   (`AA24` even once a `0x04`/`0x05` is produced). Removed from `packCumulativeT2/T3Signature`,
   `CumulativeT2SignatureData`, and `BLSSignatureService.generateTieredSignature`.
+- **[FIX] `submitPreparedTransfer` could not receive the device-passkey P256 signature.** Tier-2/3 needs
+  `p256Signature` (the device's P256 `r‖s` over `userOpHash`), which can only be produced AFTER
+  `prepareTransfer` returns the hash — but `submitPreparedTransfer` only threaded `guardianSigner`, so the
+  two-phase device-passkey flow had no way to supply it. Added `p256Signature?` to `submitPreparedTransfer`
+  (threaded into signing like `guardianSigner`) + a Tier-≥2 fail-fast (no gas / no consumed assertion) when
+  it is missing.
 - **[TEST]** New `tier3-composite-e2e.ts` on-chain acceptance (software P256 + 3-node DVT BLS aggregate
   + guardian, no browser/KMS): the SDK-packed `0x05` composite returns `validateUserOp == 0` (ACCEPTED)
   on Sepolia, while the old `+messagePoint` format returns `1` (REJECTED, with real components — isolating

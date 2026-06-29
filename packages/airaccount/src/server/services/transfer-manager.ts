@@ -404,6 +404,15 @@ export class TransferManager {
        * submit fail-fasts (no gas) instead of producing an incomplete signature that reverts on-chain.
        */
       guardianSigner?: GuardianSigner;
+      /**
+       * Device-passkey P256 signature (64-byte `r‖s` hex) over the prepared `userOpHash`, REQUIRED for
+       * Tier 2/3. It MUST be collected at submit time: the device signs the `userOpHash` that
+       * {@link prepareTransfer} returned (it cannot be known before prepare). Omitting it for a Tier ≥ 2
+       * transfer fail-fasts here (no gas) instead of reverting on-chain. (The KMS does NOT produce this —
+       * it is the device passkey factor, distinct from {@link webAuthnAssertion} which authorizes the
+       * KMS owner signature.)
+       */
+      p256Signature?: string;
     }
   ): Promise<TransferResult> {
     const prep = this.prepared.get(params.transferId);
@@ -437,9 +446,21 @@ export class TransferManager {
           "submitting avoids burning gas on a signature the account would reject.)"
       );
     }
-    const signParams = params.guardianSigner
-      ? { ...prep.params, guardianSigner: params.guardianSigner }
-      : prep.params;
+    // Tier 2/3 need the device-passkey P256 signature over the prepared userOpHash. It can only be
+    // supplied at submit (the hash isn't known before prepare), so fail-fast here BEFORE consuming the
+    // one-time assertion / spending gas, instead of letting generateTieredSignature throw mid-flow.
+    if (strategy.tier != null && strategy.tier >= 2 && !params.p256Signature && !prep.params.p256Signature) {
+      throw new Error(
+        "submitPreparedTransfer: this is a Tier-2/3 transfer and needs the device-passkey P256 " +
+          "signature — pass `p256Signature` (64-byte r‖s hex) over the prepared `userOpHash`. " +
+          "(Sign the userOpHash that prepareTransfer returned with the device passkey before submitting.)"
+      );
+    }
+    const signParams = {
+      ...prep.params,
+      ...(params.guardianSigner ? { guardianSigner: params.guardianSigner } : {}),
+      ...(params.p256Signature ? { p256Signature: params.p256Signature } : {}),
+    };
 
     this.prepared.delete(params.transferId); // one-time (the assertion's challenge is also one-time)
 
