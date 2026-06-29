@@ -130,10 +130,10 @@ export const CANONICAL_ADDRESSES = {
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0x78775786dc6B1CD2f6631Ab59C2BE86B1a1e585e",  // v0.20.3 (FACTORY_VERSION 0.20.2; implementation()→0x91Ee5a7; on-chain verified)
-    airAccountV7Impl: "0x91Ee5a7ec57A82f3FcEe991bDc75d918266edcb8",  // v0.20.3 (ACCOUNT_VERSION 0.20.3; gasless self-call onlyOwnerOrSelf #140)
-    airAccountExtension: "0xC3F4Ff562b8cB806bc3207cFD2d4621994599880",  // v0.20.3 (setWeightConfig/mixed-guardian self-call; fallback-routed)
-    agentRegistry: "0x33B3287Ef08219E84fEEF8BF3BE787347A3Df064",  // v0.20.3 (factory.agentRegistry() on-chain verified)
+    airAccountFactoryV7: "0x3891c6543af966B11F772448228c7eC1906EF382",  // v0.21.0 (FACTORY_VERSION 0.21.0; implementation()→0x55fcEdC; WebAuthn-cumulative algId 0x09/0x0a; on-chain verified)
+    airAccountV7Impl: "0x55fcEdC0902f192e4118E682b4f58582eaE78A73",  // v0.21.0 (ACCOUNT_VERSION 0.21.0; factory.implementation() on-chain verified)
+    airAccountExtension: "0x8928E1b549a81303105E2CB15713FE2718e11bb5",  // v0.21.0 (impl.agentExtension() on-chain verified; deployed by the impl constructor)
+    agentRegistry: "0x6C598985B2f5deDFad0F34951147C4b1D37ea582",  // v0.21.0 (factory.agentRegistry() on-chain verified)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",

@@ -22,12 +22,17 @@
 
 import {
   encodePacked,
+  encodeAbiParameters,
+  concat,
+  size,
   numberToHex,
   hexToBytes,
   bytesToHex,
+  stringToBytes,
   type Hex,
 } from "viem";
 import { bls12_381 as bls } from "@noble/curves/bls12-381.js";
+import { p256 } from "@noble/curves/nist.js";
 
 import type {
   BLSSignatureData,
@@ -128,6 +133,134 @@ export function packCumulativeT3Signature(data: CumulativeT3SignatureData): Hex 
       data.guardianSignature as Hex,
     ]
   );
+}
+
+// ── WebAuthn cumulative signatures (algId 0x09 / 0x0a) — airaccount-contract #147/#148 ───────────
+//
+// Device passkeys (WebAuthn) CANNOT sign userOpHash raw — the authenticator signs
+// `authenticatorData ‖ sha256(clientDataJSON)` with the op hash as the clientDataJSON `challenge`.
+// So the contract verifies the assertion on-chain (Coinbase webauthn-sol / OZ WebAuthn stance) and
+// these packers carry the WebAuthn assertion blob instead of a bare 64-byte r‖s.
+
+/** algId for a WebAuthn-passkey + BLS cumulative Tier-2 signature. */
+export const ALG_CUMULATIVE_T2_WA = 0x09;
+/** algId for a WebAuthn-passkey + BLS + Guardian cumulative Tier-3 signature. */
+export const ALG_CUMULATIVE_T3_WA = 0x0a;
+
+/** The fixed clientDataJSON preamble the contract binds (`type` first, then `challenge`). */
+const WEBAUTHN_CLIENTDATA_PREFIX = '{"type":"webauthn.get","challenge":"';
+
+/** Normalize a Hex | Uint8Array to bytes. */
+function asBytes(v: Hex | Uint8Array): Uint8Array {
+  return typeof v === "string" ? hexToBytes(v) : v;
+}
+
+/** Base64URL-encode bytes (no padding) — matches the contract's `_base64UrlEncode32`. */
+function base64UrlEncode(bytes: Uint8Array): string {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Build the WebAuthn assertion blob the contract decodes for the cumulative passkey factor:
+ *   abi.encode(bytes authenticatorData, bytes clientDataJSONPrefix, bytes clientDataJSONSuffix,
+ *              bytes32 r, bytes32 s)
+ *
+ * The signature is the raw P-256 DER from `navigator.credentials.get()`; r/s are decoded and the
+ * low-S form is enforced (the contract rejects high-S). clientDataJSON is split into the fixed
+ * `{"type":"webauthn.get","challenge":"` prefix and the suffix AFTER the base64url(challenge), so
+ * the contract can reconstruct it around `base64url(userOpHash)`.
+ *
+ * @param assertion The three `AuthenticatorAssertionResponse` fields (ArrayBuffers decoded to bytes,
+ *   or hex; clientDataJSON may also be the raw JSON string).
+ * @param userOpHash The op hash that MUST be the assertion's challenge — verified here so a mismatched
+ *   assertion fails in the SDK, not as an opaque on-chain revert.
+ */
+export function packWebAuthnBlob(
+  assertion: {
+    authenticatorData: Hex | Uint8Array;
+    clientDataJSON: Hex | Uint8Array | string;
+    signature: Hex | Uint8Array;
+  },
+  userOpHash: Hex
+): Hex {
+  const authData = asBytes(assertion.authenticatorData);
+
+  const clientDataJSON =
+    typeof assertion.clientDataJSON === "string"
+      ? assertion.clientDataJSON
+      : new TextDecoder().decode(asBytes(assertion.clientDataJSON));
+
+  if (!clientDataJSON.startsWith(WEBAUTHN_CLIENTDATA_PREFIX)) {
+    throw new Error(
+      `packWebAuthnBlob: clientDataJSON must start with ${WEBAUTHN_CLIENTDATA_PREFIX} (got ${clientDataJSON.slice(0, 40)}…)`
+    );
+  }
+  const rest = clientDataJSON.slice(WEBAUTHN_CLIENTDATA_PREFIX.length);
+  const closeQuote = rest.indexOf('"');
+  if (closeQuote < 0) throw new Error("packWebAuthnBlob: malformed clientDataJSON (no challenge terminator)");
+  const challengeB64 = rest.slice(0, closeQuote);
+  const suffix = rest.slice(closeQuote); // includes the closing quote
+
+  // The on-chain reconstruction uses base64url(userOpHash) as the challenge, so the assertion MUST
+  // have been signed over exactly that — otherwise the rebuilt clientDataJSON won't match and P256
+  // verify fails on-chain.
+  const expected = base64UrlEncode(hexToBytes(userOpHash));
+  if (challengeB64 !== expected) {
+    throw new Error(
+      `packWebAuthnBlob: assertion challenge != userOpHash (challenge=${challengeB64}, expected=${expected}). ` +
+        "The passkey must sign the prepared userOpHash as its WebAuthn challenge."
+    );
+  }
+
+  // DER → (r, s), enforce low-S (the contract rejects s > n/2; WebAuthn authenticators don't
+  // guarantee low-S, so normalize: @noble/curves v2 — parse DER, flip s when hasHighS()).
+  const parsed = p256.Signature.fromBytes(asBytes(assertion.signature), "der");
+  const n = p256.Point.Fn.ORDER;
+  const sNorm = parsed.hasHighS() ? n - parsed.s : parsed.s;
+  const r = numberToHex(parsed.r, { size: 32 });
+  const s = numberToHex(sNorm, { size: 32 });
+
+  return encodeAbiParameters(
+    [{ type: "bytes" }, { type: "bytes" }, { type: "bytes" }, { type: "bytes32" }, { type: "bytes32" }],
+    [bytesToHex(authData), bytesToHex(stringToBytes(WEBAUTHN_CLIENTDATA_PREFIX)), bytesToHex(stringToBytes(suffix)), r, s]
+  );
+}
+
+/**
+ * Pack a WebAuthn cumulative Tier-2 signature (algId 0x09):
+ *   [0x09 (1)] [waBlobLen: uint32 BE (4)] [waBlob] [blsPayload]
+ * where blsPayload = `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]` (build via {@link packBlsPayload}).
+ */
+export function packCumulativeT2WA(waBlob: Hex, blsPayload: Hex): Hex {
+  return concat([
+    numberToHex(ALG_CUMULATIVE_T2_WA, { size: 1 }),
+    numberToHex(size(waBlob), { size: 4 }),
+    waBlob,
+    blsPayload,
+  ]);
+}
+
+/**
+ * Pack a WebAuthn cumulative Tier-3 signature (algId 0x0a):
+ *   [0x0a (1)] [waBlobLen: uint32 BE (4)] [waBlob] [blsPayload] [guardianECDSA (65)]
+ */
+export function packCumulativeT3WA(waBlob: Hex, blsPayload: Hex, guardianSig: Hex): Hex {
+  return concat([
+    numberToHex(ALG_CUMULATIVE_T3_WA, { size: 1 }),
+    numberToHex(size(waBlob), { size: 4 }),
+    waBlob,
+    blsPayload,
+    guardianSig,
+  ]);
+}
+
+/** Build the BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`. */
+export function packBlsPayload(nodeIds: readonly Hex[], blsSignature: Hex): Hex {
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
+  const nodeIdsBytes = encodePacked(Array(nodeIds.length).fill("bytes32"), nodeIds as Hex[]);
+  return concat([nodeIdsLength, nodeIdsBytes, blsSignature]);
 }
 
 /**
