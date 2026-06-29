@@ -50,6 +50,11 @@ For each: `status=0x1` is NOT enough — decode + assert the post-state (the FEA
 - [ ] the on-chain POST-STATE proves the feature (e.g. `getGuardianP256Key` returns the set key, `guardianCount` changed, recovery event with `guardianIdx` fired, tier limits updated).
 - [ ] negatives: the op REVERTED for the right reason.
 Tool: `scripts/upstream/verify-onchain-evidence.ts` (extend per surface).
+Named runners (see `docs/e2e/README.md`): the **Tier-2/3 device-passkey composite** acceptance is
+`tests/regression/onchain-evidence/tier3-composite-e2e.ts` (P256 + DVT BLS aggregate + guardian → on-chain
+`validateUserOp == 0`, with a real-component negative that isolates the cumulative-format length check, #234).
+Any change to the cumulative signature packing (`packCumulativeT2/T3Signature`) or the tiered submit path
+MUST re-green this runner before release.
 
 ## 5. Adversarial review — MINE first, then Codex; REAL + FEATURE-MET bar
 - [ ] **My OWN review FIRST** (see [[feedback_self_review_before_codex]]): read `git diff main...HEAD` line-by-line; cross-check every constant/type/slot/selector/encoding against the contract source; hunt the recurring bug classes (wrong constant, precision loss → CREATE2/fund-stranding, encoding/selector mismatch, missing validation, whitelist/algId omission, residual stale shapes, predicted≠deployed); review the **evidence** — does each tx prove the business feature? Fix my own findings.

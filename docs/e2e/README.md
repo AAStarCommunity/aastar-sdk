@@ -26,6 +26,7 @@ pnpm exec tsx tests/regression/onchain-evidence/dvt-realnode-e2e.ts            #
 pnpm exec tsx tests/regression/onchain-evidence/beta2-session.ts               # session
 pnpm exec tsx tests/regression/onchain-evidence/beta2-recovery.ts              # recovery
 pnpm exec tsx tests/regression/onchain-evidence/beta3-weighted-sig.ts          # weighted
+pnpm exec tsx tests/regression/onchain-evidence/tier3-composite-e2e.ts         # tier-3 composite (P256+DVT BLS+guardian, 0x05) — #234
 KMS_E2E=1 pnpm exec tsx tests/regression/onchain-evidence/kms-account-e2e.ts   # kms create→sign
 ```
 

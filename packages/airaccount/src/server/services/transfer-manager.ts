@@ -449,12 +449,25 @@ export class TransferManager {
     // Tier 2/3 need the device-passkey P256 signature over the prepared userOpHash. It can only be
     // supplied at submit (the hash isn't known before prepare), so fail-fast here BEFORE consuming the
     // one-time assertion / spending gas, instead of letting generateTieredSignature throw mid-flow.
-    if (strategy.tier != null && strategy.tier >= 2 && !params.p256Signature && !prep.params.p256Signature) {
-      throw new Error(
-        "submitPreparedTransfer: this is a Tier-2/3 transfer and needs the device-passkey P256 " +
-          "signature — pass `p256Signature` (64-byte r‖s hex) over the prepared `userOpHash`. " +
-          "(Sign the userOpHash that prepareTransfer returned with the device passkey before submitting.)"
-      );
+    if (strategy.tier != null && strategy.tier >= 2) {
+      const effectiveP256 = params.p256Signature ?? prep.params.p256Signature;
+      if (!effectiveP256) {
+        throw new Error(
+          "submitPreparedTransfer: this is a Tier-2/3 transfer and needs the device-passkey P256 " +
+            "signature — pass `p256Signature` (64-byte r‖s hex) over the prepared `userOpHash`. " +
+            "(Sign the userOpHash that prepareTransfer returned with the device passkey before submitting.)"
+        );
+      }
+      // Validate the format BEFORE deleting the (one-time) prepared transfer: a non-empty but
+      // malformed value would otherwise pass the presence check, consume the prepared transfer via
+      // prepared.delete(), then fail deep in signing — forcing a needless prepareTransfer retry.
+      if (!/^0x[0-9a-fA-F]{128}$/.test(effectiveP256)) {
+        throw new Error(
+          "submitPreparedTransfer: `p256Signature` must be 64-byte hex (0x + 128 hex chars: r‖s), " +
+            `got ${effectiveP256.length}-char value. The prepared transfer is preserved — fix the ` +
+            "signature and resubmit (no need to call prepareTransfer again)."
+        );
+      }
     }
     const signParams = {
       ...prep.params,
