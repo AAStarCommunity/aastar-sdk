@@ -489,7 +489,11 @@ export class TransferManager {
           "submitPreparedTransfer: this is a Tier-3 transfer and needs a guardian co-signature — pass `guardianSigner`."
         );
       }
-      this.prepared.delete(params.transferId); // one-time
+      // Produce the signature BEFORE consuming the one-time prepared entry: a DVT-unreachable /
+      // guardian-sign failure must NOT discard the prepared transfer (else the caller has to re-run
+      // prepareTransfer + a fresh WebAuthn ceremony). The synchronous fail-fasts above already ran;
+      // only an async signing failure reaches here, and it now preserves the entry for resubmit
+      // (#240 review — keeps the WebAuthn path consistent with the #237 principle).
       prep.userOp.signature = (await this.blsService.generateWebAuthnTieredSignature({
         tier: tier as TierLevel,
         userId,
@@ -497,6 +501,7 @@ export class TransferManager {
         deviceWebAuthn: params.deviceWebAuthn,
         guardianSigner: params.guardianSigner ?? prep.params.guardianSigner,
       })) as `0x${string}`;
+      this.prepared.delete(params.transferId); // one-time — only after signing succeeded
       return this.finalizeAndSubmit(
         userId,
         prep.accountAddress,
