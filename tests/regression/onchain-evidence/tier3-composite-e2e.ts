@@ -30,7 +30,8 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { bls12_381 as noble } from '@noble/curves/bls12-381.js';
-import { p256 } from '@noble/curves/p256.js';
+// @noble/curves v2 moved p256 to /nist (no /p256.js export); /nist.js exists in both v1 and v2.
+import { p256 } from '@noble/curves/nist.js';
 import {
     createPublicClient,
     createWalletClient,
@@ -182,8 +183,10 @@ async function main() {
     console.log(`\n[1] userOpHash = ${userOpHash}`);
 
     // ── (2) P256 passkey signature over userOpHash (low-S, 64B r||s) ────────────────────────────
-    const sig = p256.sign(userOpHash.slice(2), P256_PRIV, { lowS: true });
-    const p256Signature = concat([numberToHex(sig.r, { size: 32 }), numberToHex(sig.s, { size: 32 })]);
+    // version-agnostic: @noble/curves v1 sign→Signature(.r/.s); v2 sign→Uint8Array (parse via Signature.fromBytes).
+    const p256Res = p256.sign(userOpHash.slice(2) as `0x${string}`, P256_PRIV, { lowS: true }) as unknown as { r?: bigint; s?: bigint };
+    const rs = typeof p256Res.r === 'bigint' ? p256Res : (p256.Signature as any).fromBytes(p256Res as unknown as Uint8Array, 'compact');
+    const p256Signature = concat([numberToHex(rs.r, { size: 32 }), numberToHex(rs.s, { size: 32 })]);
     console.log(`[2] P256 sig (r||s) = ${p256Signature.slice(0, 26)}… (${(p256Signature.length - 2) / 2}B)`);
 
     // ── (3) DVT node co-signatures over userOpHash → aggregate ──────────────────────────────────

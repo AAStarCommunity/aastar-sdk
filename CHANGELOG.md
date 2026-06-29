@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.5] - 2026-06-29
+**SDK Code Integrity Hash**: `0092c68ff4b7a762cb9a0e54351a7198413cffe34afbd5a14d22f637e7e6b120`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feat: device-passkey Tier-2/3 — WebAuthn cumulative signature packers + v0.21.0 address sync.** (aastar-sdk#234, airaccount-contract#147/#148)
+
+Device WebAuthn passkeys cannot raw-sign `userOpHash` (the authenticator signs
+`authenticatorData ‖ sha256(clientDataJSON)`), so the deployed v0.21.0 AirAccount verifies the
+WebAuthn assertion on-chain (Coinbase `webauthn-sol` / OZ stance) under new algIds `0x09`
+(`ALG_CUMULATIVE_T2_WA`) / `0x0a` (`ALG_CUMULATIVE_T3_WA`). This release adds the SDK packing for
+that path and syncs the deployment.
+
+- **[FEAT]** New packers (exported via `@aastar/sdk/kms`): `packWebAuthnBlob(assertion, userOpHash)`
+  → `abi.encode(authenticatorData, clientDataJSONPrefix, clientDataJSONSuffix, r, s)` (splits
+  clientDataJSON around `base64url(challenge)`, verifies `challenge == userOpHash`, decodes the DER
+  signature with low-S normalization); `packCumulativeT2WA(waBlob, blsPayload)` →
+  `[0x09][waBlobLen u32 BE][waBlob][blsPayload]`; `packCumulativeT3WA(waBlob, blsPayload, guardianSig)`
+  → `[0x0a]…[blsPayload][guardianECDSA(65)]`; `packBlsPayload(nodeIds, blsSig)` helper.
+- **[CHORE]** Address sync to **v0.21.0** (Sepolia, all on-chain verified): `airAccountFactoryV7`
+  `0x3891c6543af966B11F772448228c7eC1906EF382`, `airAccountV7Impl`
+  `0x55fcEdC0902f192e4118E682b4f58582eaE78A73`, `airAccountExtension`
+  `0x8928E1b549a81303105E2CB15713FE2718e11bb5`, `agentRegistry`
+  `0x6C598985B2f5deDFad0F34951147C4b1D37ea582`. No external ABI change (WebAuthn is internal
+  `_validateSignature` dispatch).
+- **[TEST]** `tier3-webauthn-composite-e2e.ts` — on-chain acceptance on Sepolia: a synthetic WebAuthn
+  assertion (software P-256, challenge=userOpHash) + DVT BLS aggregate + guardian, packed as `0x0a`,
+  returns `validateUserOp == 0` (ACCEPTED); wrong-challenge negative rejected. Plus packer unit tests
+  (round-trip, low-S, challenge mismatch, layout).
+
+> NOTE: the integrator-ergonomic wiring (`submitPreparedTransfer` deriving the WebAuthn blob from the
+> device assertion automatically) is intentionally deferred — integrators use the packers directly for
+> now (see #234 integration guide); the submit wrapping lands after YAA confirms the flow.
+
 ## [0.29.4] - 2026-06-29
 **SDK Code Integrity Hash**: `fb593ca9f3c50fad9431c765b9dfc01ebe12874a905a9627fe3aa605e3336e9b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

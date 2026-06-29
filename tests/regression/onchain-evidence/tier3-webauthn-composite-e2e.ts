@@ -23,7 +23,8 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { bls12_381 as noble } from '@noble/curves/bls12-381.js';
-import { p256 } from '@noble/curves/p256.js';
+// @noble/curves v2 moved p256 to /nist (no /p256.js export); /nist.js exists in both v1 and v2.
+import { p256 } from '@noble/curves/nist.js';
 import {
     createPublicClient,
     createWalletClient,
@@ -82,6 +83,13 @@ type PackedUserOp = {
     accountGasLimits: Hex; preVerificationGas: bigint; gasFees: Hex; paymasterAndData: Hex; signature: Hex;
 };
 
+/** P-256 low-S DER signature — version-agnostic across @noble/curves v1 (Signature obj) and v2 (Uint8Array). */
+function p256SignDerLowS(hash: Uint8Array, priv: string): Uint8Array {
+    const res = p256.sign(hash, priv, { lowS: true }) as unknown as { toDERRawBytes?: () => Uint8Array };
+    if (typeof res.toDERRawBytes === 'function') return res.toDERRawBytes(); // v1.x
+    return (p256.Signature as any).fromBytes(res as unknown as Uint8Array, 'compact').toBytes('der'); // v2.x
+}
+
 function base64Url(bytes: Uint8Array): string {
     let bin = ''; for (const b of bytes) bin += String.fromCharCode(b);
     return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -95,8 +103,7 @@ function makeWebAuthnAssertion(userOpHash: Hex, priv: string) {
     const clientDataBytes = stringToBytes(clientDataJSON);
     const authenticatorData = hexToBytesLocal(('0x' + 'ab'.repeat(32) + '05' + '00000001') as Hex); // rpIdHash + UP|UV + signCount
     const payloadHash = sha256(concat([bytesToHex(authenticatorData), sha256(clientDataBytes)]));
-    const sig = p256.sign(hexToBytesLocal(payloadHash), priv, { lowS: true });
-    return { authenticatorData, clientDataJSON, signature: sig.toDERRawBytes() };
+    return { authenticatorData, clientDataJSON, signature: p256SignDerLowS(hexToBytesLocal(payloadHash), priv) };
 }
 function hexToBytesLocal(h: Hex): Uint8Array { return toBytes(h); }
 
