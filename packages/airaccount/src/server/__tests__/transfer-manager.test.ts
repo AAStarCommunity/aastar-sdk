@@ -230,6 +230,23 @@ describe("TransferManager", () => {
         })
       ).rejects.not.toThrow(/deviceWebAuthn|Tier-3.*guardian|webAuthnAssertion is required/);
     });
+
+    it("preserves the prepared entry when async signing fails (DVT down) — resubmittable (#240 review)", async () => {
+      const mgr = makeManager();
+      seedWA(mgr, 2);
+      // Simulate an async signing failure AFTER the synchronous fail-fasts (e.g. DVT unreachable).
+      (mgr as any).blsService = {
+        generateWebAuthnTieredSignature: async () => {
+          throw new Error("No active BLS signer nodes available");
+        },
+      };
+      await expect(
+        mgr.submitPreparedTransfer("u1", { transferId: "t1", deviceWebAuthn: ASSERTION })
+      ).rejects.toThrow(/BLS signer nodes/);
+      // The one-time prepared transfer must SURVIVE an async failure so the caller can resubmit
+      // without re-running prepareTransfer + a fresh WebAuthn ceremony.
+      expect((mgr as any).prepared.has("t1")).toBe(true);
+    });
   });
 
   describe("detectSignatureStrategy", () => {

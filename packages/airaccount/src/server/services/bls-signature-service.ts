@@ -1,15 +1,6 @@
 import { hexToBytes } from "viem";
 import { keccak256 } from "../../migration/viem/hashing";
 import axios from "axios";
-
-/**
- * Minimal guardian signer surface (was `ethers.Signer`): an external signer that
- * performs an EIP-191 personal-sign over raw bytes and returns a 0x-prefixed
- * 65-byte hex signature. Structural — any ethers/viem signer with this method fits.
- */
-export interface GuardianSigner {
-  signMessage(message: Uint8Array): Promise<string>;
-}
 import {
   BLSManager,
   BLSSignatureData,
@@ -22,6 +13,21 @@ import {
   packCumulativeT2WA,
   packCumulativeT3WA,
 } from "../../migration/viem/bls-packing";
+import { TierLevel } from "../../core/tier";
+import { EthereumProvider } from "../providers/ethereum-provider";
+import { IStorageAdapter } from "../interfaces/storage-adapter";
+import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
+import { ILogger, ConsoleLogger } from "../interfaces/logger";
+import { ServerConfig } from "../config";
+
+/**
+ * Minimal guardian signer surface (was `ethers.Signer`): an external signer that
+ * performs an EIP-191 personal-sign over raw bytes and returns a 0x-prefixed
+ * 65-byte hex signature. Structural — any ethers/viem signer with this method fits.
+ */
+export interface GuardianSigner {
+  signMessage(message: Uint8Array): Promise<string>;
+}
 
 /**
  * Device WebAuthn assertion (the three `AuthenticatorAssertionResponse` fields the frontend gets
@@ -33,12 +39,6 @@ export interface DeviceWebAuthnAssertion {
   clientDataJSON: `0x${string}` | Uint8Array | string;
   signature: `0x${string}` | Uint8Array; // DER-encoded P-256 signature
 }
-import { TierLevel } from "../../core/tier";
-import { EthereumProvider } from "../providers/ethereum-provider";
-import { IStorageAdapter } from "../interfaces/storage-adapter";
-import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
-import { ILogger, ConsoleLogger } from "../interfaces/logger";
-import { ServerConfig } from "../config";
 
 /**
  * Raised when a DVT node (aNode YetAnotherAA-Validator ≥ v1.3.0, running with
@@ -371,6 +371,12 @@ export class BLSSignatureService {
     if (tier !== 2 && tier !== 3) {
       throw new Error(`generateWebAuthnTieredSignature: tier must be 2 or 3, got ${tier}`);
     }
+    // Tier-3 needs a guardian — check BEFORE the DVT round-trip so a missing guardian fails fast
+    // (no wasted /signature/sign network call). #240 PK finding.
+    if (tier === 3 && !guardianSigner) {
+      throw new Error("Guardian signer required for Tier 3 (WebAuthn)");
+    }
+
     // 1) On-chain passkey factor from the device assertion (verifies challenge == userOpHash,
     //    decodes DER → r/s + low-S; throws in-SDK if the assertion doesn't bind userOpHash).
     const waBlob = packWebAuthnBlob(deviceWebAuthn, userOpHash as `0x${string}`);
@@ -385,11 +391,8 @@ export class BLSSignatureService {
       return packCumulativeT2WA(waBlob, blsPayload);
     }
 
-    // 3) Tier 3 — guardian ECDSA over userOpHash.
-    if (!guardianSigner) {
-      throw new Error("Guardian signer required for Tier 3 (WebAuthn)");
-    }
-    const guardianSignature = await guardianSigner.signMessage(hexToBytes(userOpHash as `0x${string}`));
+    // 3) Tier 3 — guardian ECDSA over userOpHash (guardianSigner presence already checked above).
+    const guardianSignature = await guardianSigner!.signMessage(hexToBytes(userOpHash as `0x${string}`));
     return packCumulativeT3WA(waBlob, blsPayload, guardianSignature as `0x${string}`);
   }
 }
