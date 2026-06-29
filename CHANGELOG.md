@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.2] - 2026-06-29
+**SDK Code Integrity Hash**: `6fde62dc656a009b157cc8e0d18cb4d62affff87d364b37071454ad579a43ad6`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: `TIER_PROFILES` weighted-config rejected on-chain by AirAccount v0.20.3 (`InsecureWeightConfig`).**
+
+The three shipped tier profiles (`web3-newbie` / `trader` / `conservative`) and
+`DEFAULT_WEIGHT_CONFIG` set `passkeyWeight = 3` with `tier1Threshold = 3`. The account contract's
+`_validateWeightConfig` requires **every individual weight to be strictly `< tier1Threshold`**, so
+`setWeightConfig` (and therefore `profileSetupCalls`) reverted `InsecureWeightConfig` on-chain —
+tiering could not be armed (aastar-sdk#227).
+
+This is **not** a contract bug, and it does **not** contradict the "T1 = one passkey" product model.
+"One passkey" is a UX statement: a single WebAuthn gesture causes the KMS TEE to transparently emit
+**both** the P256 passkey signature **and** the owner-ECDSA signature. The contract deliberately
+forbids any single factor from reaching a tier alone (so the KMS-held owner key must always co-sign,
+preventing a stolen passkey from controlling the account). The on-chain rule has existed unchanged
+since v0.16.0 (M6.1) — it was **not** introduced by v0.20.3.
+
+- **[FIX]** `DEFAULT_WEIGHT_CONFIG.passkeyWeight` `3 → 2` (`packages/airaccount/src/core/tier/profile.ts`).
+  All three `TIER_PROFILES` spread this default, so the single change fixes all of them. The full
+  config is now `passkey 2 / ecdsa 2 / bls 2 / guardian 1·1·1, thresholds 3/5/6`, which satisfies
+  `_validateWeightConfig` (every weight `< 3`). On-chain proven: `passkeyWeight=2` → `setWeightConfig`
+  passes; `passkeyWeight=3` → `InsecureWeightConfig` (aastar-sdk#227).
+- **[TEST]** Added a root-cause guard in `profile.test.ts` that validates **every shipped
+  `TIER_PROFILE` + `DEFAULT_WEIGHT_CONFIG`** against the contract's exact `_validateWeightConfig` rule
+  (non-zero + monotonic thresholds, every weight `< tier1Threshold`). The bug escaped because the
+  on-chain evidence test used a hand-rolled config (`tier1Threshold = 4`) and never exercised the real
+  profiles; this guard prevents that class of regression.
+- **[DOC]** Corrected the stale `passkey = 3` rationale comment in `profile.ts`. The companion
+  contract-side doc fix (`AAStarAgentStorageLayout` struct still says "default: 3") is tracked in
+  airaccount-contract#146.
+- **[FOLLOW-UP]** Tier-band tuning (`tier2`/`tier3`) interacts with the always-present P256+ECDSA base
+  weight (=4); making "T2 requires BLS / T3 requires guardian" strict needs `tier2=5/tier3=7` and a
+  live T2/T3 transfer-flow verification. Deferred to the contract/product owner — unchanged this release.
+
 ## [0.29.1] - 2026-06-28
 **SDK Code Integrity Hash**: `6996672d55aaa7891b7515e02c3cf932cf577f52d36092cd3ab1e298c8872fb1`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

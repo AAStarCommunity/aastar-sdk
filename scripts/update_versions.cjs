@@ -106,11 +106,35 @@ try {
             modified = true;
         }
 
-        // Pattern 3: CHANGELOG specifically
-        const changelogRegex = /## \[([\d\.]+)\] - \d{4}-\d{2}-\d{2}\n\*\*SDK Code Integrity Hash\*\*: `[a-f0-9]{64}`/;
-        if (docPath.endsWith('CHANGELOG.md') && changelogRegex.test(content)) {
-             content = content.replace(changelogRegex, `## [${newVersion}] - ${new Date().toISOString().split('T')[0]}\n**SDK Code Integrity Hash**: \`${integrityHash}\``);
-             modified = true;
+        // Pattern 3: CHANGELOG — PREPEND a new release section, never overwrite the previous one.
+        // The old behavior renamed the topmost `## [X.Y.Z]` header IN PLACE, which silently destroyed
+        // the prior version's entry (e.g. 0.29.1 → 0.29.2) and forced a manual restore. Now we insert
+        // a fresh section above the current topmost entry, leaving all history intact. Re-running the
+        // same version refreshes that section's date+hash in place instead of stacking a duplicate.
+        if (docPath.endsWith('CHANGELOG.md')) {
+            const today = new Date().toISOString().split('T')[0];
+            const sectionHeader = `## [${newVersion}] - ${today}`;
+            const hashLine = `**SDK Code Integrity Hash**: \`${integrityHash}\``;
+            const stabilityNote = '*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*';
+            const escaped = newVersion.replace(/\./g, '\\.');
+            const existing = new RegExp(`## \\[${escaped}\\] - \\d{4}-\\d{2}-\\d{2}\\n\\*\\*SDK Code Integrity Hash\\*\\*: \`[a-f0-9]{64}\``);
+
+            if (existing.test(content)) {
+                // Same version re-run: refresh date + hash, keep the body the author already wrote.
+                content = content.replace(existing, `${sectionHeader}\n${hashLine}`);
+                modified = true;
+            } else {
+                const newSection = `\n${sectionHeader}\n${hashLine}\n${stabilityNote}\n\n> _TODO: describe the changes in this release before publishing._\n`;
+                const anchor = content.indexOf('\n## [');
+                if (anchor !== -1) {
+                    // Insert directly above the current topmost version entry.
+                    content = content.slice(0, anchor) + newSection + content.slice(anchor);
+                } else {
+                    // No prior entries — insert right after the "All notable changes" preamble line.
+                    content = content.replace(/(All notable changes[^\n]*\n)/, `$1${newSection}`);
+                }
+                modified = true;
+            }
         }
 
         // Pattern 4: hand-written "**Version**: X.Y.Z" doc headers (e.g. docs/API_REFERENCE.md),

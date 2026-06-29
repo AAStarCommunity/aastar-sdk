@@ -33,11 +33,11 @@ describe('tier profiles (#176 phase 3)', () => {
     expect(args).toEqual([10n, 100n]);
   });
 
-  it('encodeSetWeightConfig encodes the default weight model (3/2/2, thresholds 3/5/6, _padding 0)', () => {
+  it('encodeSetWeightConfig encodes the default weight model (2/2/2, thresholds 3/5/6, _padding 0)', () => {
     const { functionName, args } = decode(encodeSetWeightConfig(ACCOUNT).data) as any;
     expect(functionName).toBe('setWeightConfig');
     expect(args[0]).toMatchObject({
-      passkeyWeight: 3, ecdsaWeight: 2, blsWeight: 2,
+      passkeyWeight: 2, ecdsaWeight: 2, blsWeight: 2,
       tier1Threshold: 3, tier2Threshold: 5, tier3Threshold: 6, _padding: 0,
     });
   });
@@ -82,7 +82,31 @@ describe('tier profiles (#176 phase 3)', () => {
   });
 
   it('DEFAULT_WEIGHT_CONFIG matches the on-chain weight model', () => {
-    expect(DEFAULT_WEIGHT_CONFIG).toMatchObject({ passkeyWeight: 3, ecdsaWeight: 2, blsWeight: 2, tier3Threshold: 6 });
+    expect(DEFAULT_WEIGHT_CONFIG).toMatchObject({ passkeyWeight: 2, ecdsaWeight: 2, blsWeight: 2, tier3Threshold: 6 });
+  });
+
+  // Root-cause guard (#227): the SHIPPING profiles must satisfy the contract's `_validateWeightConfig`,
+  // which reverts InsecureWeightConfig unless EVERY individual weight is strictly < tier1Threshold and
+  // the thresholds are non-zero + monotonic. The bug that shipped (passkeyWeight 3 == tier1Threshold 3)
+  // escaped because the on-chain evidence test used a hand-rolled config (tier1=4), never the real
+  // TIER_PROFILES. This asserts the exact contract rule against every config we actually ship.
+  it('every shipped TIER_PROFILE + DEFAULT_WEIGHT_CONFIG passes the contract _validateWeightConfig rule', () => {
+    const assertValid = (w: typeof DEFAULT_WEIGHT_CONFIG, label: string) => {
+      expect(w.tier1Threshold, `${label}: tier1Threshold must be non-zero`).toBeGreaterThan(0);
+      for (const [k, v] of Object.entries(w)) {
+        if (k.endsWith('Weight')) {
+          expect(v, `${label}: ${k}=${v} must be < tier1Threshold=${w.tier1Threshold} (InsecureWeightConfig)`)
+            .toBeLessThan(w.tier1Threshold);
+        }
+      }
+      if (w.tier2Threshold !== 0) expect(w.tier2Threshold, `${label}: tier2 >= tier1`).toBeGreaterThanOrEqual(w.tier1Threshold);
+      if (w.tier3Threshold !== 0) {
+        expect(w.tier3Threshold, `${label}: tier3 >= tier2`).toBeGreaterThanOrEqual(w.tier2Threshold);
+        expect(w.tier2Threshold, `${label}: tier3 set requires tier2 set`).toBeGreaterThan(0);
+      }
+    };
+    assertValid(DEFAULT_WEIGHT_CONFIG, 'DEFAULT_WEIGHT_CONFIG');
+    for (const [name, p] of Object.entries(TIER_PROFILES)) assertValid(p.weights, `TIER_PROFILES.${name}`);
   });
 
   it('each profile has its OWN weights copy, not a shared reference (#184 Low)', () => {
