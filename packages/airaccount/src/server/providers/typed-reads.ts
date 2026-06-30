@@ -47,17 +47,21 @@ export function readValidatorGasEstimate(
 // ── Factory: counterfactual account address (= fund-custody address) ──────────
 
 /**
- * `getAddress(address owner, uint256 salt, InitConfig config) view returns (address)`.
- * The predicted address is where user funds are sent before deployment, so a
- * mistyped `salt` (uint256) would yield a different, unrecoverable address.
+ * `getAddress(address owner, uint256 salt, InitConfig config, bytes32 ownerP256X, bytes32 ownerP256Y)
+ *  view returns (address)` (v0.22.0 — 5-arg). The predicted address is where user funds are sent
+ * before deployment, so it MUST bind the SAME `ownerP256X/Y` the deploy uses (the salt folds them in).
+ * Omit them (default 0) for accounts deployed WITHOUT a birth-injected passkey — the common path.
  */
+const TR_ZERO_BYTES32 = `0x${"00".repeat(32)}` as `0x${string}`;
 export function readPredictedAddress(
   factory: ViemContract,
   owner: string,
   salt: bigint,
-  config: readonly unknown[]
+  config: readonly unknown[],
+  ownerP256X: `0x${string}` = TR_ZERO_BYTES32,
+  ownerP256Y: `0x${string}` = TR_ZERO_BYTES32
 ): Promise<Address> {
-  return readFn(factory, "getAddress")([owner, salt, config]) as Promise<Address>;
+  return readFn(factory, "getAddress")([owner, salt, config, ownerP256X, ownerP256Y]) as Promise<Address>;
 }
 
 /**

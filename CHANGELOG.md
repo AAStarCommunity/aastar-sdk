@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.30.0] - 2026-06-30
-**SDK Code Integrity Hash**: `fbfe3f7af7c95c557b5aa9f7aad7a4c07865890a16c60e33dd633908721710bb`
+**SDK Code Integrity Hash**: `b676f07e0469f20003de75c6920db13ef63abc15e015a91bb7ec6f18f95e191c`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Sync: airaccount-contract v0.22.0 — factory `createAccount`/`getAddress` breaking ABI; passkey + validator at birth.** (aastar-sdk#244)
