@@ -1,4 +1,4 @@
-import { zeroAddress, parseEther, type Address, type Hash, type WalletClient } from "viem";
+import { zeroAddress, parseEther, hexToBytes, type Address, type Hash, type WalletClient } from "viem";
 // AIRACCOUNT_ABI is a local human-readable signature array (not in @aastar/core);
 // parseAbi is required to feed it to viem's encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
@@ -602,6 +602,21 @@ export class AccountManager {
 
     const { address: owner } = await this.signer.ensureSigner(userId);
 
+    // Guardian sanity: the factory reverts DuplicateGuardian (pairwise-distinct, AAStarAirAccountFactoryV7
+    // L255-260) and rejects guardian == owner. getAddress does NOT revert on these, so a caller could
+    // pre-fund the predicted address and then be unable to deploy → stranded funds. Fail fast. (Codex §5 #249.)
+    const nonZeroGuardians = (config.guardians as readonly Address[]).filter((g) => g !== zeroAddress);
+    for (let i = 0; i < nonZeroGuardians.length; i++) {
+      if (nonZeroGuardians[i].toLowerCase() === owner.toLowerCase()) {
+        throw new Error(`createAccountWithPasskey: guardian ${nonZeroGuardians[i]} must not equal the owner`);
+      }
+      for (let j = i + 1; j < nonZeroGuardians.length; j++) {
+        if (nonZeroGuardians[i].toLowerCase() === nonZeroGuardians[j].toLowerCase()) {
+          throw new Error(`createAccountWithPasskey: duplicate ECDSA guardian ${nonZeroGuardians[i]}`);
+        }
+      }
+    }
+
     if (typeof params.salt === "number" && !Number.isSafeInteger(params.salt)) {
       throw new Error(`salt ${params.salt} exceeds Number.MAX_SAFE_INTEGER; pass a bigint`);
     }
@@ -641,7 +656,10 @@ export class AccountManager {
         chainId, factory: factoryAddress, owner, salt: saltBig,
         ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y, config, nonce, deadline,
       });
-      const ownerSig = await this.signer.signMessage(userId, hash, opts.signerCtx);
+      // Sign the 32-byte digest as RAW BYTES (hexToBytes) — NOT the "0x…" string. A string is EIP-191'd
+      // as UTF-8 text by the KMS adapter (hashMessage), which would sign the wrong preimage and the relay
+      // would revert InvalidOwnerSignature. Matches the bls-signature-service convention (#249, Codex §5).
+      const ownerSig = await this.signer.signMessage(userId, hexToBytes(hash), opts.signerCtx);
 
       deployTx = (await airAccountFactoryActions(factoryAddress)(opts.deployerWallet).createAccount({
         owner, salt: saltBig, config,

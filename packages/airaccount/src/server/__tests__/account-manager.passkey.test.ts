@@ -70,11 +70,12 @@ describe("AccountManager.createAccountWithPasskey (#249)", () => {
       { deployerWallet: deployer }
     );
 
-    // signMessage called once over a 32-byte digest (NOT a hand-rolled hash — it is buildCreateAccountHash's
-    // output; byte-exactness is the golden unit test + the on-chain relay e2e).
+    // signMessage called once over the 32-byte digest as RAW BYTES (Uint8Array, not a "0x…" string — a
+    // string is EIP-191'd as UTF-8 text by the KMS adapter and would sign the wrong preimage; #249 Codex §5).
     expect(signSpy).toHaveBeenCalledTimes(1);
-    const signedHash = signSpy.mock.calls[0][1] as Hex;
-    expect(signedHash).toMatch(/^0x[0-9a-f]{64}$/);
+    const signedHash = signSpy.mock.calls[0][1] as Uint8Array;
+    expect(signedHash).toBeInstanceOf(Uint8Array);
+    expect(signedHash.length).toBe(32);
     const ownerSig = await signSpy.mock.results[0].value as Hex;
 
     // Relay: createAccount called on the DEPLOYER wallet (msg.sender = deployer != owner) with that ownerSig.
@@ -108,6 +109,23 @@ describe("AccountManager.createAccountWithPasskey (#249)", () => {
     await expect(
       mgr.createAccountWithPasskey("u", { ownerP256X: PX, ownerP256Y: PY, dailyLimit: 10n ** 18n, entryPointVersion: EntryPointVersion.V0_7 }, { deployerWallet: {} as never })
     ).rejects.toThrow(/deployerWallet/);
+  });
+
+  it("rejects a guardian equal to the owner (would revert on-chain → stranded funds)", async () => {
+    const ethereum = makeEthereumMock();
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    await expect(
+      mgr.createAccountWithPasskey("u", { ownerP256X: PX, ownerP256Y: PY, ecdsaGuardians: [OWNER], dailyLimit: 10n ** 18n, entryPointVersion: EntryPointVersion.V0_7 }, { deployerWallet: makeDeployerWallet() })
+    ).rejects.toThrow(/must not equal the owner/);
+  });
+
+  it("rejects duplicate ECDSA guardians (factory DuplicateGuardian)", async () => {
+    const ethereum = makeEthereumMock();
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    const dup = "0x4444444444444444444444444444444444444444" as Address;
+    await expect(
+      mgr.createAccountWithPasskey("u", { ownerP256X: PX, ownerP256Y: PY, ecdsaGuardians: [dup, dup], dailyLimit: 10n ** 18n, entryPointVersion: EntryPointVersion.V0_7 }, { deployerWallet: makeDeployerWallet() })
+    ).rejects.toThrow(/duplicate ECDSA guardian/);
   });
 
   it("adopts an already-deployed account without re-relaying", async () => {
