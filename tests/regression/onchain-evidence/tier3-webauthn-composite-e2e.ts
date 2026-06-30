@@ -167,8 +167,13 @@ async function main() {
         const r = await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: tx }));
         console.log(`     deploy tx=${tx} status=${r.status}`);
         if (r.status !== 'success') throw new Error('deploy reverted');
-        if (r.contractAddress && r.contractAddress.toLowerCase() !== account.toLowerCase()) {
-            throw new Error(`counterfactual address ${account} != deployed ${r.contractAddress}`);
+        // (No r.contractAddress check: the factory CREATE2s the account internally, so the receipt's
+        // contractAddress is undefined. The counterfactual match is proven below — we read p256KeyX
+        // from the PREDICTED `account` address and assert it == the injected passkey; if the prediction
+        // were wrong, that read would hit an empty/zero account and the assertion would fail.)
+        const deployedCode = await withRpcFallback((c) => c.getCode({ address: account }));
+        if (!deployedCode || deployedCode === '0x') {
+            throw new Error(`counterfactual address ${account} has no code after deploy — getAddress prediction wrong`);
         }
     }
 

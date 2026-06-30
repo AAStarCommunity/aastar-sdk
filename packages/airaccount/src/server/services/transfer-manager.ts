@@ -969,18 +969,16 @@ export class TransferManager {
             // Full-config (P-256 / mixed-guardian) account (#118): rebuild the BYTE-IDENTICAL
             // 8-field InitConfig from the persisted record so the deploy CREATE2 address matches
             // the create-time prediction (the factory binds the address to keccak256(config)).
-            const rebuilt = initConfigFromRecord(account);
-            // v0.22.0 createAccount is 8-arg. We pass direct-mode defaults (no passkey-at-birth,
-            // ownerSig "0x"). NOTE: direct mode requires msg.sender == owner — true for an
-            // owner-submitted deploy, and NOT exercised for a pre-deployed account (the common path).
-            // The deploy-inside-initCode path (msg.sender = EntryPoint) needs a KMS-relay ownerSig over
-            // the CREATE_ACCOUNT digest — tracked as a v0.22.0 follow-up.
-            deployCalldata = encodeFn(AIRACCOUNT_FACTORY_ABI_PARSED, "createAccount", [
-              account.signerAddress,
-              BigInt(account.salt),
-              initConfigToTuple(rebuilt),
-              ZERO32, ZERO32, 0n, 0n, "0x",
-            ]);
+            // v0.22.0 `createAccount` direct mode requires `msg.sender == owner`, but in an initCode
+            // deploy msg.sender is the EntryPoint — so building this calldata would revert on-chain.
+            // Fail loud (no silent reverting calldata) and direct the caller to pre-deploy. (A KMS-relay
+            // ownerSig over the CREATE_ACCOUNT digest for initCode-deploy is the tracked follow-up.)
+            throw new Error(
+              "Gasless deploy-inside-initCode is unsupported on the v0.22.0 factory: createAccount " +
+                "direct mode requires msg.sender == owner, but initCode runs as the EntryPoint. " +
+                "Pre-deploy the account first (deployAndWireValidator with the owner wallet), then submit " +
+                "the gasless op. (KMS-relay ownerSig for initCode-deploy: tracked follow-up.)"
+            );
           } else if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
             // Guardian account: use createAccountWithDefaults so the factory-computed address
             // matches the stored sender (which was predicted via getAddressWithDefaults).
@@ -1001,23 +999,14 @@ export class TransferManager {
               storedDailyLimit,
             ]);
           } else {
-            // Standard account: createAccount with zero guardians and stored dailyLimit.
-            const minimalConfig = [
-              [zeroAddress, zeroAddress, zeroAddress], // guardians (address[3])
-              EMPTY_P256, // guardianP256X (bytes32[3]) — v0.20.0
-              EMPTY_P256, // guardianP256Y (bytes32[3]) — v0.20.0
-              storedDailyLimit,
-              [], // approvedAlgIds
-              0n, // minDailyLimit
-              [], // initialTokens
-              [], // initialTokenConfigs
-            ];
-            deployCalldata = encodeFn(AIRACCOUNT_FACTORY_ABI_PARSED, "createAccount", [
-              account.signerAddress,
-              BigInt(account.salt),
-              minimalConfig,
-              ZERO32, ZERO32, 0n, 0n, "0x", // v0.22.0 8-arg direct-mode defaults (see note above)
-            ]);
+            // Standard account (zero guardians): same v0.22.0 constraint as the full-config branch —
+            // createAccount direct mode needs msg.sender == owner, unavailable in initCode. Fail loud.
+            throw new Error(
+              "Gasless deploy-inside-initCode is unsupported on the v0.22.0 factory: createAccount " +
+                "direct mode requires msg.sender == owner, but initCode runs as the EntryPoint. " +
+                "Pre-deploy the account first (deployAndWireValidator with the owner wallet), then submit " +
+                "the gasless op. (KMS-relay ownerSig for initCode-deploy: tracked follow-up.)"
+            );
           }
         } else {
           deployCalldata = encodeFn(FACTORY_ABI_V6_PARSED, "createAccountWithAAStarValidator", [
