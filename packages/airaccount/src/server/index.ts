@@ -29,6 +29,7 @@ export { EthereumProvider } from "./providers/ethereum-provider";
 
 // ── Services ──────────────────────────────────────────────────────
 export { AccountManager } from "./services/account-manager";
+export type { PasskeyCreateParams, PreparedPasskeyCreate } from "./services/account-manager";
 // Full-config (P-256 / passkey guardian) account-creation helpers (#118).
 export {
   buildFullInitConfig,

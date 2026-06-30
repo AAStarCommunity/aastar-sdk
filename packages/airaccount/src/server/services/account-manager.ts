@@ -1,4 +1,5 @@
-import { zeroAddress, parseEther, hexToBytes, type Address, type Hash, type WalletClient } from "viem";
+import { zeroAddress, parseEther, hexToBytes, bytesToHex, type Address, type Hash, type WalletClient } from "viem";
+import { randomUUID } from "node:crypto";
 // AIRACCOUNT_ABI is a local human-readable signature array (not in @aastar/core);
 // parseAbi is required to feed it to viem's encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
@@ -49,12 +50,82 @@ export interface EnsureValidatorRouterResult {
   router?: Address;
 }
 
+/** Parameters shared by the inline ({@link AccountManager.createAccountWithPasskey}) and two-phase
+ * ({@link AccountManager.prepareCreateAccountWithPasskey}) KMS passkey-at-birth create paths (#249). */
+export interface PasskeyCreateParams {
+  /** Owner device WebAuthn passkey public key (each bytes32) — injected at birth, NOT a guardian. */
+  ownerP256X: Hex;
+  ownerP256Y: Hex;
+  /** Optional P-256 (passkey) guardians installed at deploy time. */
+  p256Guardians?: P256GuardianKey[];
+  /** Optional ECDSA guardians installed via the full-config path (no acceptance sig). */
+  ecdsaGuardians?: Address[];
+  /** Daily spend limit in wei. MUST be > 0 (enables the on-chain GUARD). */
+  dailyLimit: bigint;
+  /** Validator algorithm ids approved at init (e.g. [0x0a] for device-passkey Tier-3). */
+  approvedAlgIds?: number[];
+  minDailyLimit?: bigint;
+  salt?: number | bigint;
+  entryPointVersion?: EntryPointVersion;
+  /** ownerSig validity window in seconds from now. Default 3600. */
+  deadlineSeconds?: number;
+}
+
+/** Result of {@link AccountManager.prepareCreateAccountWithPasskey} — the frontend runs a WebAuthn
+ * ceremony over `challenge`, then calls {@link AccountManager.submitPreparedCreateAccount}. */
+export interface PreparedPasskeyCreate {
+  /** Opaque handle for {@link AccountManager.submitPreparedCreateAccount}. */
+  createId: string;
+  /** Counterfactual account address (deploys here). */
+  predictedAddress: Address;
+  /** The CREATE_ACCOUNT digest the owner must sign (the WebAuthn ceremony challenge for KMS). 32-byte hex. */
+  challenge: Hex;
+  /** Set on the KMS path: the begun ceremony id + credential-request options for navigator.credentials.get(). */
+  challengeId?: string;
+  publicKeyOptions?: PublicKeyCredentialRequestOptions;
+  nonce: bigint;
+  deadline: bigint;
+  /** True when the account is already deployed on-chain — no ceremony/submit needed. */
+  alreadyDeployed: boolean;
+}
+
+/** Internal resolved plan shared by the create paths (validation + config + prediction + idempotency). */
+interface ResolvedPasskeyCreate {
+  userId: string;
+  owner: Address;
+  saltBig: bigint;
+  config: ReturnType<typeof buildFullInitConfig>;
+  specs: ReturnType<typeof toGuardianSpecs>;
+  version: EntryPointVersion;
+  versionStr: string;
+  factoryAddress: Address;
+  chainId: number;
+  accountAddress: Address;
+  ownerP256X: Hex;
+  ownerP256Y: Hex;
+  dailyLimit: bigint;
+  existing?: AccountRecord;
+  alreadyDeployed: boolean;
+}
+
 /**
  * Account manager — extracted from NestJS AccountService.
  * Creates and retrieves smart accounts without framework dependencies.
  */
 export class AccountManager {
   private readonly logger: ILogger;
+  /** In-memory store for two-phase passkey creates (prepare → ceremony → submit). Single-process;
+   * a multi-worker deployment needs a shared store. Entries are TTL-evicted (the challenge is short-lived). */
+  private readonly preparedCreates = new Map<string, {
+    userId: string;
+    plan: ResolvedPasskeyCreate;
+    nonce: bigint;
+    deadline: bigint;
+    hash: Hex;
+    challengeId?: string;
+    createdAt: number;
+  }>();
+  private static readonly PREPARED_CREATE_TTL_MS = 5 * 60 * 1000;
 
   constructor(
     private readonly ethereum: EthereumProvider,
@@ -536,44 +607,121 @@ export class AccountManager {
   }
 
   /**
-   * KMS-style **passkey-at-birth** account creation via the v0.22.0 factory RELAY mode (aastar-sdk#249).
+   * KMS-style **passkey-at-birth** account creation via the v0.22.0 factory RELAY mode (#249) — INLINE
+   * single-method form. Works for an EOA/local owner (signs the digest inline), OR a KMS owner IF you
+   * already hold a ceremony assertion committed to the digest. For the STANDARD KMS flow where the user
+   * runs the WebAuthn ceremony separately, use the two-phase {@link prepareCreateAccountWithPasskey} /
+   * {@link submitPreparedCreateAccount} — the ceremony challenge must commit to the digest, which is only
+   * known AFTER the nonce/deadline are resolved (so a single method can't hand the caller the challenge).
    *
-   * The owner's device WebAuthn passkey (`ownerP256X/Y`) and the validator router are wired AT BIRTH in
-   * a single `createAccount` tx — no post-deploy `setP256Key`/`setValidator`. Because a KMS owner key
-   * lives in a TEE and cannot send a raw tx (direct mode needs `msg.sender == owner`), authorization is
-   * an EIP-191 `ownerSig` over the factory's CREATE_ACCOUNT digest (built by the SDK via
-   * {@link buildCreateAccountHash} — the integrator never hand-rolls the hash), and a funded
-   * `deployerWallet` relays the tx + pays gas.
-   *
-   * This is `createAccountWithP256Guardians` + the owner's own passkey + relay deploy, returning a
-   * DEPLOYED record. For KMS-backed signers pass `opts.signerCtx` (the one-time WebAuthn ceremony that
-   * authorizes the owner-key sign).
+   * The owner passkey (`ownerP256X/Y`) + validator are wired AT BIRTH in one `createAccount` tx. A KMS
+   * owner key (TEE) can't send a raw tx, so authorization is an EIP-191 `ownerSig` over the SDK-built
+   * CREATE_ACCOUNT digest ({@link buildCreateAccountHash} — never hand-rolled) and a funded
+   * `deployerWallet` relays + pays gas.
    */
   async createAccountWithPasskey(
     userId: string,
-    params: {
-      /** Owner device WebAuthn passkey public key (each bytes32) — injected at birth, NOT a guardian. */
-      ownerP256X: Hex;
-      ownerP256Y: Hex;
-      /** Optional P-256 (passkey) guardians installed at deploy time. */
-      p256Guardians?: P256GuardianKey[];
-      /** Optional ECDSA guardians installed via the full-config path (no acceptance sig). */
-      ecdsaGuardians?: Address[];
-      /** Daily spend limit in wei. MUST be > 0 (enables the on-chain GUARD). */
-      dailyLimit: bigint;
-      /** Validator algorithm ids approved at init (e.g. [0x0a] for device-passkey Tier-3). */
-      approvedAlgIds?: number[];
-      minDailyLimit?: bigint;
-      salt?: number | bigint;
-      entryPointVersion?: EntryPointVersion;
-      /** ownerSig validity window in seconds from now. Default 3600. */
-      deadlineSeconds?: number;
-    },
+    params: PasskeyCreateParams,
     opts: { deployerWallet: WalletClient; signerCtx?: SignerAuthContext }
   ): Promise<AccountRecord> {
     if (!opts?.deployerWallet?.account) {
       throw new Error("createAccountWithPasskey: opts.deployerWallet (funded relayer) is required");
     }
+    const plan = await this._resolvePasskeyCreate(userId, params);
+    if (plan.existing) return plan.existing;
+    if (plan.alreadyDeployed) return this._persistPasskeyRecord(plan, null);
+
+    const nonce = (await this._factoryRead(plan.factoryAddress).createNonces({ owner: plan.owner })) as bigint;
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSeconds ?? 3600));
+    const hash = this._passkeyCreateHash(plan, nonce, deadline);
+    // Sign the digest as RAW BYTES — a "0x…" string is EIP-191'd as UTF-8 by the KMS adapter (#249).
+    const ownerSig = await this.signer.signMessage(userId, hexToBytes(hash), opts.signerCtx);
+    return this._relayPasskeyDeploy(plan, nonce, deadline, ownerSig, opts.deployerWallet);
+  }
+
+  /**
+   * Two-phase KMS passkey-at-birth — **PHASE 1** (#249). Resolves the account + computes the
+   * CREATE_ACCOUNT digest (the only thing a KMS WebAuthn ceremony can commit its challenge to) and, for
+   * KMS signers, BEGINS the ceremony. The frontend runs `navigator.credentials.get(publicKeyOptions)`
+   * (or uses `challenge` directly) and passes the assertion to {@link submitPreparedCreateAccount}.
+   *
+   * Mirrors `prepareTransfer`/`submitPreparedTransfer` — necessary because the ceremony challenge must
+   * commit to the digest, which depends on the internally-resolved nonce/deadline, so the caller cannot
+   * precompute it (the chicken-and-egg the single-method form hits for separated-ceremony KMS owners).
+   */
+  async prepareCreateAccountWithPasskey(userId: string, params: PasskeyCreateParams): Promise<PreparedPasskeyCreate> {
+    const plan = await this._resolvePasskeyCreate(userId, params);
+    const createId = randomUUID();
+    if (plan.existing || plan.alreadyDeployed) {
+      // Nothing to sign — submit short-circuits to the existing/on-chain record.
+      this.preparedCreates.set(createId, { userId, plan, nonce: 0n, deadline: 0n, hash: ZERO32, createdAt: Date.now() });
+      return { createId, predictedAddress: plan.accountAddress, challenge: ZERO32, nonce: 0n, deadline: 0n, alreadyDeployed: true };
+    }
+    const nonce = (await this._factoryRead(plan.factoryAddress).createNonces({ owner: plan.owner })) as bigint;
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSeconds ?? 3600));
+    const hash = this._passkeyCreateHash(plan, nonce, deadline);
+
+    // KMS owner signing needs a challenge-bound ceremony over the EXACT digest submit will sign.
+    let challengeId: string | undefined;
+    let publicKeyOptions: PublicKeyCredentialRequestOptions | undefined;
+    if (this.signer.beginCeremony) {
+      ({ challengeId, publicKeyOptions } = await this.signer.beginCeremony(userId, hexToBytes(hash)));
+    }
+    this._evictExpiredCreates();
+    this.preparedCreates.set(createId, { userId, plan, nonce, deadline, hash, challengeId, createdAt: Date.now() });
+    return { createId, predictedAddress: plan.accountAddress, challenge: hash, challengeId, publicKeyOptions, nonce, deadline, alreadyDeployed: false };
+  }
+
+  /**
+   * Two-phase KMS passkey-at-birth — **PHASE 2** (#249). Signs the prepared digest with the user's
+   * ceremony assertion (KMS owner key, via `opts.signerCtx`) and relays `createAccount` through
+   * `deployerWallet`. Returns the deployed record.
+   */
+  async submitPreparedCreateAccount(
+    createId: string,
+    opts: { deployerWallet: WalletClient; signerCtx?: SignerAuthContext }
+  ): Promise<AccountRecord> {
+    const entry = this.preparedCreates.get(createId);
+    if (!entry) throw new Error(`submitPreparedCreateAccount: unknown or expired createId ${createId}`);
+    if (Date.now() - entry.createdAt > AccountManager.PREPARED_CREATE_TTL_MS) {
+      this.preparedCreates.delete(createId);
+      throw new Error(`submitPreparedCreateAccount: prepared create ${createId} expired`);
+    }
+    if (!opts?.deployerWallet?.account) {
+      throw new Error("submitPreparedCreateAccount: opts.deployerWallet (funded relayer) is required");
+    }
+    const { plan, nonce, deadline, hash } = entry;
+    if (plan.existing) { this.preparedCreates.delete(createId); return plan.existing; }
+    if (plan.alreadyDeployed) { this.preparedCreates.delete(createId); return this._persistPasskeyRecord(plan, null); }
+
+    const ownerSig = await this.signer.signMessage(entry.userId, hexToBytes(hash), opts.signerCtx);
+    const account = await this._relayPasskeyDeploy(plan, nonce, deadline, ownerSig, opts.deployerWallet);
+    this.preparedCreates.delete(createId);
+    return account;
+  }
+
+  // ── Private helpers shared by the inline + two-phase passkey-create paths ──────────────────────
+
+  private _factoryRead(factoryAddress: Address) {
+    return airAccountFactoryActions(factoryAddress)(this.ethereum.getProvider() as never);
+  }
+
+  private _passkeyCreateHash(plan: ResolvedPasskeyCreate, nonce: bigint, deadline: bigint): Hex {
+    return buildCreateAccountHash({
+      chainId: plan.chainId, factory: plan.factoryAddress, owner: plan.owner, salt: plan.saltBig,
+      ownerP256X: plan.ownerP256X, ownerP256Y: plan.ownerP256Y, config: plan.config, nonce, deadline,
+    });
+  }
+
+  private _evictExpiredCreates(): void {
+    const now = Date.now();
+    for (const [id, e] of this.preparedCreates) {
+      if (now - e.createdAt > AccountManager.PREPARED_CREATE_TTL_MS) this.preparedCreates.delete(id);
+    }
+  }
+
+  /** Validate + build config + predict + idempotency. Throws on bad input; sets existing/alreadyDeployed. */
+  private async _resolvePasskeyCreate(userId: string, params: PasskeyCreateParams): Promise<ResolvedPasskeyCreate> {
     const zero32 = `0x${"00".repeat(32)}`;
     if (!params.ownerP256X || params.ownerP256X.toLowerCase() === zero32 ||
         !params.ownerP256Y || params.ownerP256Y.toLowerCase() === zero32) {
@@ -582,14 +730,13 @@ export class AccountManager {
     if (params.dailyLimit <= 0n) {
       throw new Error("createAccountWithPasskey requires dailyLimit > 0 (enables the on-chain guard)");
     }
-
     const version = params.entryPointVersion ?? this.ethereum.getDefaultVersion();
     if (version === EntryPointVersion.V0_6) {
       throw new Error("createAccountWithPasskey requires EntryPoint v0.7 or v0.8 (full-config createAccount)");
     }
     const versionStr = version as string;
 
-    // Build the FULL InitConfig (the owner passkey is NOT a guardian — it is the explicit ownerP256X/Y).
+    // The owner passkey is NOT a guardian — it is the explicit ownerP256X/Y.
     const fullParams: FullConfigGuardianParams = {
       p256Guardians: params.p256Guardians ?? [],
       ecdsaGuardians: params.ecdsaGuardians,
@@ -602,9 +749,8 @@ export class AccountManager {
 
     const { address: owner } = await this.signer.ensureSigner(userId);
 
-    // Guardian sanity: the factory reverts DuplicateGuardian (pairwise-distinct, AAStarAirAccountFactoryV7
-    // L255-260) and rejects guardian == owner. getAddress does NOT revert on these, so a caller could
-    // pre-fund the predicted address and then be unable to deploy → stranded funds. Fail fast. (Codex §5 #249.)
+    // Guardian sanity (factory reverts DuplicateGuardian / guardian==owner; getAddress does not → fail fast
+    // so a pre-funded predicted address is never stranded). Codex §5 #249.
     const nonZeroGuardians = (config.guardians as readonly Address[]).filter((g) => g !== zeroAddress);
     for (let i = 0; i < nonZeroGuardians.length; i++) {
       if (nonZeroGuardians[i].toLowerCase() === owner.toLowerCase()) {
@@ -624,70 +770,61 @@ export class AccountManager {
 
     const factoryAddress = this.ethereum.getFactoryAddress(version) as Address;
     const chainId = this.ethereum.getChainId();
-    const pub = this.ethereum.getProvider();
-    const factoryRead = airAccountFactoryActions(factoryAddress)(pub as never);
-
-    // Counterfactual address — bound to (owner, salt, config, ownerP256X/Y) on v0.22.0.
-    const accountAddress = await factoryRead.getAddress({
+    const accountAddress = await this._factoryRead(factoryAddress).getAddress({
       owner, salt: saltBig, config, ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y,
     });
 
-    // Idempotent: a persisted record for this (user, version, passkey-at-birth) wins.
     const existing = (await this.storage.getAccounts()).find(
       a => a.userId === userId && a.entryPointVersion === versionStr && a.address === accountAddress
     );
-    if (existing) return existing;
-
-    // Already deployed on-chain (e.g. a prior run) — adopt it.
     let alreadyDeployed = false;
-    try {
-      const code = await pub.getCode({ address: accountAddress as Address });
-      alreadyDeployed = !!code && code !== "0x";
-    } catch { /* treat as not deployed */ }
-
-    let deployTx: Hash | null = null;
-    if (!alreadyDeployed) {
-      const nonce = (await factoryRead.createNonces({ owner })) as bigint;
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSeconds ?? 3600));
-
-      // SDK-built digest (byte-exact to the factory's _getConfigHash + CREATE_ACCOUNT preimage) —
-      // the integrator NEVER hand-rolls this. KMS owner key signs it EIP-191 (signerCtx authorizes).
-      const hash = buildCreateAccountHash({
-        chainId, factory: factoryAddress, owner, salt: saltBig,
-        ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y, config, nonce, deadline,
-      });
-      // Sign the 32-byte digest as RAW BYTES (hexToBytes) — NOT the "0x…" string. A string is EIP-191'd
-      // as UTF-8 text by the KMS adapter (hashMessage), which would sign the wrong preimage and the relay
-      // would revert InvalidOwnerSignature. Matches the bls-signature-service convention (#249, Codex §5).
-      const ownerSig = await this.signer.signMessage(userId, hexToBytes(hash), opts.signerCtx);
-
-      deployTx = (await airAccountFactoryActions(factoryAddress)(opts.deployerWallet).createAccount({
-        owner, salt: saltBig, config,
-        ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y,
-        nonce, deadline, ownerSig, account: opts.deployerWallet.account,
-      })) as Hash;
-      const rcpt = await pub.waitForTransactionReceipt({ hash: deployTx });
-      if (rcpt.status !== "success") {
-        throw new Error(`createAccountWithPasskey: relay deploy reverted (tx ${deployTx})`);
-      }
-      this.logger.log(`[AccountManager] passkey-at-birth account relayed: ${accountAddress} (tx ${deployTx})`);
+    if (!existing) {
+      try {
+        const code = await this.ethereum.getProvider().getCode({ address: accountAddress as Address });
+        alreadyDeployed = !!code && code !== "0x";
+      } catch { /* treat as not deployed */ }
     }
 
+    return {
+      userId, owner, saltBig, config, specs, version, versionStr, factoryAddress, chainId, accountAddress,
+      ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y, dailyLimit: params.dailyLimit,
+      existing, alreadyDeployed,
+    };
+  }
+
+  /** Relay createAccount via the deployer + persist the deployed record. */
+  private async _relayPasskeyDeploy(
+    plan: ResolvedPasskeyCreate, nonce: bigint, deadline: bigint, ownerSig: `0x${string}`, deployerWallet: WalletClient
+  ): Promise<AccountRecord> {
+    const deployTx = (await airAccountFactoryActions(plan.factoryAddress)(deployerWallet).createAccount({
+      owner: plan.owner, salt: plan.saltBig, config: plan.config,
+      ownerP256X: plan.ownerP256X, ownerP256Y: plan.ownerP256Y,
+      nonce, deadline, ownerSig, account: deployerWallet.account,
+    })) as Hash;
+    const rcpt = await this.ethereum.getProvider().waitForTransactionReceipt({ hash: deployTx });
+    if (rcpt.status !== "success") {
+      throw new Error(`createAccountWithPasskey: relay deploy reverted (tx ${deployTx})`);
+    }
+    this.logger.log(`[AccountManager] passkey-at-birth account relayed: ${plan.accountAddress} (tx ${deployTx})`);
+    return this._persistPasskeyRecord(plan, deployTx);
+  }
+
+  private async _persistPasskeyRecord(plan: ResolvedPasskeyCreate, deployTx: Hash | null): Promise<AccountRecord> {
     const account: AccountRecord = {
-      userId,
-      address: accountAddress,
-      signerAddress: owner,
-      salt: saltBig.toString(),
+      userId: plan.userId,
+      address: plan.accountAddress,
+      signerAddress: plan.owner,
+      salt: plan.saltBig.toString(),
       deployed: true,
       deploymentTxHash: deployTx,
-      validatorAddress: this.ethereum.getValidatorAddress(version),
-      entryPointVersion: versionStr,
-      factoryAddress,
+      validatorAddress: this.ethereum.getValidatorAddress(plan.version),
+      entryPointVersion: plan.versionStr,
+      factoryAddress: plan.factoryAddress,
       createdAt: new Date().toISOString(),
-      dailyLimit: params.dailyLimit.toString(),
-      guardianSpecs: serializeGuardianSpecs(specs),
-      approvedAlgIds: [...config.approvedAlgIds],
-      minDailyLimit: config.minDailyLimit.toString(),
+      dailyLimit: plan.dailyLimit.toString(),
+      guardianSpecs: serializeGuardianSpecs(plan.specs),
+      approvedAlgIds: [...plan.config.approvedAlgIds],
+      minDailyLimit: plan.config.minDailyLimit.toString(),
     };
     await this.storage.saveAccount(account);
     return account;

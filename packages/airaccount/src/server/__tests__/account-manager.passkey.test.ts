@@ -3,7 +3,7 @@ import { AccountManager } from "../services/account-manager";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { LocalWalletSigner } from "../adapters/local-wallet-signer";
 import { EntryPointVersion } from "../constants/entrypoint";
-import type { Address, Hex } from "viem";
+import { bytesToHex, type Address, type Hex } from "viem";
 
 // createAccountWithPasskey (#249): KMS-style passkey-at-birth via v0.22.0 RELAY mode. The byte-exactness
 // of the digest is proven on-chain (createaccount-relay-passkey-e2e.ts); here we verify the COMPOSITION:
@@ -137,5 +137,77 @@ describe("AccountManager.createAccountWithPasskey (#249)", () => {
     expect(signSpy).not.toHaveBeenCalled();
     expect(deployer.writeContract).not.toHaveBeenCalled();
     expect(rec.deployed).toBe(true);
+  });
+});
+
+// Two-phase (#249): KMS owners run a separate WebAuthn ceremony whose challenge must commit to the
+// CREATE_ACCOUNT digest — but the digest depends on nonce/deadline resolved INSIDE the SDK, so a single
+// method can't hand the caller the challenge (chicken-and-egg). prepare → ceremony → submit splits it.
+describe("AccountManager two-phase passkey create (#249)", () => {
+  let storage: MemoryStorage;
+  let signer: LocalWalletSigner;
+  beforeEach(() => { storage = new MemoryStorage(); signer = new LocalWalletSigner(OWNER_PK); });
+
+  const params = { ownerP256X: PX, ownerP256Y: PY, dailyLimit: 10n ** 18n, minDailyLimit: 10n ** 17n, approvedAlgIds: [0x0a], salt: 42n, entryPointVersion: EntryPointVersion.V0_7 };
+
+  it("prepare returns the CREATE_ACCOUNT digest as the challenge + predicted address", async () => {
+    const ethereum = makeEthereumMock({ nonce: 0n });
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    const prep = await mgr.prepareCreateAccountWithPasskey("user-1", params);
+    expect(prep.createId).toBeTruthy();
+    expect(prep.predictedAddress).toBe(PREDICTED);
+    expect(prep.challenge).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(prep.alreadyDeployed).toBe(false);
+    expect(prep.nonce).toBe(0n);
+    expect(prep.challengeId).toBeUndefined(); // LocalWallet has no beginCeremony
+  });
+
+  it("submit signs the PREPARED digest (raw bytes) and relays createAccount with that ownerSig", async () => {
+    const ethereum = makeEthereumMock({ nonce: 0n });
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    const prep = await mgr.prepareCreateAccountWithPasskey("user-1", params);
+    const signSpy = vi.spyOn(signer, "signMessage");
+    const deployer = makeDeployerWallet();
+    const rec = await mgr.submitPreparedCreateAccount(prep.createId, { deployerWallet: deployer });
+
+    // Signs the EXACT prepared challenge, as raw bytes.
+    expect(signSpy).toHaveBeenCalledTimes(1);
+    const signed = signSpy.mock.calls[0][1] as Uint8Array;
+    expect(signed).toBeInstanceOf(Uint8Array);
+    expect(bytesToHex(signed)).toBe(prep.challenge);
+    const ownerSig = await signSpy.mock.results[0].value as Hex;
+
+    // Relays createAccount with that ownerSig.
+    const callArgs = (deployer.writeContract as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.functionName).toBe("createAccount");
+    expect(callArgs.args[7]).toBe(ownerSig);
+    expect(rec.deployed).toBe(true);
+    expect(rec.deploymentTxHash).toBe(TX);
+
+    // createId is consumed (single-use).
+    await expect(mgr.submitPreparedCreateAccount(prep.createId, { deployerWallet: deployer })).rejects.toThrow(/unknown or expired/);
+  });
+
+  it("KMS signer: prepare begins the ceremony over the 32-byte digest (challenge commits to the hash)", async () => {
+    const ethereum = makeEthereumMock({ nonce: 0n });
+    const kmsSigner = {
+      ensureSigner: vi.fn().mockResolvedValue({ address: OWNER }),
+      signMessage: vi.fn().mockResolvedValue(("0x" + "ab".repeat(65)) as Hex),
+      beginCeremony: vi.fn().mockResolvedValue({ challengeId: "ch-1", publicKeyOptions: { challenge: "x" } }),
+    };
+    const mgr = new AccountManager(ethereum as never, storage, kmsSigner as never, { log: vi.fn(), error: vi.fn() } as never);
+    const prep = await mgr.prepareCreateAccountWithPasskey("user-1", params);
+    expect(kmsSigner.beginCeremony).toHaveBeenCalledTimes(1);
+    const ceremonyMsg = kmsSigner.beginCeremony.mock.calls[0][1] as Uint8Array;
+    expect(ceremonyMsg).toBeInstanceOf(Uint8Array);
+    expect(bytesToHex(ceremonyMsg)).toBe(prep.challenge); // ceremony challenge == the digest submit signs
+    expect(prep.challengeId).toBe("ch-1");
+    expect(prep.publicKeyOptions).toBeTruthy();
+  });
+
+  it("submit rejects an unknown createId", async () => {
+    const ethereum = makeEthereumMock();
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    await expect(mgr.submitPreparedCreateAccount("nope", { deployerWallet: makeDeployerWallet() })).rejects.toThrow(/unknown or expired/);
   });
 });
