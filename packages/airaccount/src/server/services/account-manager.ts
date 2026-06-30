@@ -8,7 +8,9 @@ import {
   getCanonicalAddresses,
   airAccountActions,
   airAccountFactoryActions,
+  buildCreateAccountHash,
 } from "@aastar/core";
+import type { Hex } from "viem";
 import { keccak256 } from "../../migration/viem/hashing";
 import { solidityPacked } from "../../migration/viem/abi-encoding";
 import { EthereumProvider } from "../providers/ethereum-provider";
@@ -17,7 +19,7 @@ import {
   readPredictedAddressWithDefaults,
 } from "../providers/typed-reads";
 import { IStorageAdapter, AccountRecord } from "../interfaces/storage-adapter";
-import { ISignerAdapter } from "../interfaces/signer-adapter";
+import { ISignerAdapter, type SignerAuthContext } from "../interfaces/signer-adapter";
 import { EntryPointVersion, AIRACCOUNT_FACTORY_ABI, AIRACCOUNT_ABI } from "../constants/entrypoint";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 import {
@@ -530,6 +532,146 @@ export class AccountManager {
           `after a manual deploy) — required for those algIds to validate.`
       );
     }
+    return account;
+  }
+
+  /**
+   * KMS-style **passkey-at-birth** account creation via the v0.22.0 factory RELAY mode (aastar-sdk#249).
+   *
+   * The owner's device WebAuthn passkey (`ownerP256X/Y`) and the validator router are wired AT BIRTH in
+   * a single `createAccount` tx — no post-deploy `setP256Key`/`setValidator`. Because a KMS owner key
+   * lives in a TEE and cannot send a raw tx (direct mode needs `msg.sender == owner`), authorization is
+   * an EIP-191 `ownerSig` over the factory's CREATE_ACCOUNT digest (built by the SDK via
+   * {@link buildCreateAccountHash} — the integrator never hand-rolls the hash), and a funded
+   * `deployerWallet` relays the tx + pays gas.
+   *
+   * This is `createAccountWithP256Guardians` + the owner's own passkey + relay deploy, returning a
+   * DEPLOYED record. For KMS-backed signers pass `opts.signerCtx` (the one-time WebAuthn ceremony that
+   * authorizes the owner-key sign).
+   */
+  async createAccountWithPasskey(
+    userId: string,
+    params: {
+      /** Owner device WebAuthn passkey public key (each bytes32) — injected at birth, NOT a guardian. */
+      ownerP256X: Hex;
+      ownerP256Y: Hex;
+      /** Optional P-256 (passkey) guardians installed at deploy time. */
+      p256Guardians?: P256GuardianKey[];
+      /** Optional ECDSA guardians installed via the full-config path (no acceptance sig). */
+      ecdsaGuardians?: Address[];
+      /** Daily spend limit in wei. MUST be > 0 (enables the on-chain GUARD). */
+      dailyLimit: bigint;
+      /** Validator algorithm ids approved at init (e.g. [0x0a] for device-passkey Tier-3). */
+      approvedAlgIds?: number[];
+      minDailyLimit?: bigint;
+      salt?: number | bigint;
+      entryPointVersion?: EntryPointVersion;
+      /** ownerSig validity window in seconds from now. Default 3600. */
+      deadlineSeconds?: number;
+    },
+    opts: { deployerWallet: WalletClient; signerCtx?: SignerAuthContext }
+  ): Promise<AccountRecord> {
+    if (!opts?.deployerWallet?.account) {
+      throw new Error("createAccountWithPasskey: opts.deployerWallet (funded relayer) is required");
+    }
+    const zero32 = `0x${"00".repeat(32)}`;
+    if (!params.ownerP256X || params.ownerP256X.toLowerCase() === zero32 ||
+        !params.ownerP256Y || params.ownerP256Y.toLowerCase() === zero32) {
+      throw new Error("createAccountWithPasskey requires a non-zero ownerP256X/Y (the owner device passkey)");
+    }
+    if (params.dailyLimit <= 0n) {
+      throw new Error("createAccountWithPasskey requires dailyLimit > 0 (enables the on-chain guard)");
+    }
+
+    const version = params.entryPointVersion ?? this.ethereum.getDefaultVersion();
+    if (version === EntryPointVersion.V0_6) {
+      throw new Error("createAccountWithPasskey requires EntryPoint v0.7 or v0.8 (full-config createAccount)");
+    }
+    const versionStr = version as string;
+
+    // Build the FULL InitConfig (the owner passkey is NOT a guardian — it is the explicit ownerP256X/Y).
+    const fullParams: FullConfigGuardianParams = {
+      p256Guardians: params.p256Guardians ?? [],
+      ecdsaGuardians: params.ecdsaGuardians,
+      dailyLimit: params.dailyLimit,
+      approvedAlgIds: params.approvedAlgIds,
+      minDailyLimit: params.minDailyLimit,
+    };
+    const specs = toGuardianSpecs(fullParams);
+    const config = buildFullInitConfig(fullParams);
+
+    const { address: owner } = await this.signer.ensureSigner(userId);
+
+    if (typeof params.salt === "number" && !Number.isSafeInteger(params.salt)) {
+      throw new Error(`salt ${params.salt} exceeds Number.MAX_SAFE_INTEGER; pass a bigint`);
+    }
+    const saltBig = BigInt(params.salt ?? Math.floor(Math.random() * 1000000));
+
+    const factoryAddress = this.ethereum.getFactoryAddress(version) as Address;
+    const chainId = this.ethereum.getChainId();
+    const pub = this.ethereum.getProvider();
+    const factoryRead = airAccountFactoryActions(factoryAddress)(pub as never);
+
+    // Counterfactual address — bound to (owner, salt, config, ownerP256X/Y) on v0.22.0.
+    const accountAddress = await factoryRead.getAddress({
+      owner, salt: saltBig, config, ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y,
+    });
+
+    // Idempotent: a persisted record for this (user, version, passkey-at-birth) wins.
+    const existing = (await this.storage.getAccounts()).find(
+      a => a.userId === userId && a.entryPointVersion === versionStr && a.address === accountAddress
+    );
+    if (existing) return existing;
+
+    // Already deployed on-chain (e.g. a prior run) — adopt it.
+    let alreadyDeployed = false;
+    try {
+      const code = await pub.getCode({ address: accountAddress as Address });
+      alreadyDeployed = !!code && code !== "0x";
+    } catch { /* treat as not deployed */ }
+
+    let deployTx: Hash | null = null;
+    if (!alreadyDeployed) {
+      const nonce = (await factoryRead.createNonces({ owner })) as bigint;
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSeconds ?? 3600));
+
+      // SDK-built digest (byte-exact to the factory's _getConfigHash + CREATE_ACCOUNT preimage) —
+      // the integrator NEVER hand-rolls this. KMS owner key signs it EIP-191 (signerCtx authorizes).
+      const hash = buildCreateAccountHash({
+        chainId, factory: factoryAddress, owner, salt: saltBig,
+        ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y, config, nonce, deadline,
+      });
+      const ownerSig = await this.signer.signMessage(userId, hash, opts.signerCtx);
+
+      deployTx = (await airAccountFactoryActions(factoryAddress)(opts.deployerWallet).createAccount({
+        owner, salt: saltBig, config,
+        ownerP256X: params.ownerP256X, ownerP256Y: params.ownerP256Y,
+        nonce, deadline, ownerSig, account: opts.deployerWallet.account,
+      })) as Hash;
+      const rcpt = await pub.waitForTransactionReceipt({ hash: deployTx });
+      if (rcpt.status !== "success") {
+        throw new Error(`createAccountWithPasskey: relay deploy reverted (tx ${deployTx})`);
+      }
+      this.logger.log(`[AccountManager] passkey-at-birth account relayed: ${accountAddress} (tx ${deployTx})`);
+    }
+
+    const account: AccountRecord = {
+      userId,
+      address: accountAddress,
+      signerAddress: owner,
+      salt: saltBig.toString(),
+      deployed: true,
+      deploymentTxHash: deployTx,
+      validatorAddress: this.ethereum.getValidatorAddress(version),
+      entryPointVersion: versionStr,
+      factoryAddress,
+      createdAt: new Date().toISOString(),
+      dailyLimit: params.dailyLimit.toString(),
+      guardianSpecs: serializeGuardianSpecs(specs),
+      approvedAlgIds: [...config.approvedAlgIds],
+      minDailyLimit: config.minDailyLimit.toString(),
+    };
+    await this.storage.saveAccount(account);
     return account;
   }
 

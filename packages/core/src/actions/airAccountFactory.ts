@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, keccak256, encodeAbiParameters } from 'viem';
 import { AAStarAirAccountFactoryV7ABI } from '../abis/index.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
@@ -79,6 +79,91 @@ export type AirAccountFactoryActions = {
 const ABI = AAStarAirAccountFactoryV7ABI;
 /** bytes32(0) — "no passkey" / direct-mode default for the v0.22.0 createAccount/getAddress args. */
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex;
+
+/**
+ * Byte-exact replica of the factory's `internal pure _getConfigHash(InitConfig)`:
+ * `keccak256(abi.encode(guardians, guardianP256X, guardianP256Y, dailyLimit, approvedAlgIds,
+ *  minDailyLimit, initialTokens, initialTokenConfigs))`. Field order is consensus-critical — it feeds
+ * both the CREATE2 clone salt and the relay-mode ownerSig digest. The factory has NO public view for
+ * this (airaccount-contract#155), so the SDK mirrors it here; the on-chain relay-deploy e2e is the
+ * cross-check that the replica matches (a wrong byte => the deploy reverts InvalidOwnerSignature).
+ */
+export function configHashFromInitConfig(config: InitConfig): Hex {
+    return keccak256(encodeAbiParameters(
+        [
+            { type: 'address[3]' },   // guardians
+            { type: 'bytes32[3]' },   // guardianP256X
+            { type: 'bytes32[3]' },   // guardianP256Y
+            { type: 'uint256' },      // dailyLimit
+            { type: 'uint8[]' },      // approvedAlgIds
+            { type: 'uint256' },      // minDailyLimit
+            { type: 'address[]' },    // initialTokens
+            { type: 'tuple[]', components: [{ type: 'uint128' }, { type: 'uint128' }, { type: 'uint256' }] }, // initialTokenConfigs
+        ],
+        [
+            config.guardians as readonly Address[],
+            config.guardianP256X as readonly Hex[],
+            config.guardianP256Y as readonly Hex[],
+            config.dailyLimit,
+            config.approvedAlgIds.map((a) => BigInt(a)),
+            config.minDailyLimit,
+            config.initialTokens as readonly Address[],
+            config.initialTokenConfigs.map((t) => [t.tier1Limit, t.tier2Limit, t.dailyLimit]),
+        ] as never
+    ));
+}
+
+/**
+ * Build the **inner** CREATE_ACCOUNT digest the v0.22.0 factory recovers the relay-mode `ownerSig`
+ * against (KMS / deployer-relayed deploy where `msg.sender != owner`):
+ * `keccak256(abi.encode("CREATE_ACCOUNT", chainId, factory, owner, salt, ownerP256X, ownerP256Y,
+ *  _getConfigHash(config), nonce, deadline))`.
+ *
+ * The factory then applies EIP-191 (`toEthSignedMessageHash`) before `ecrecover`, so the OWNER signs
+ * this hash with a personal-sign / EIP-191 signer — viem `signMessage({ message: { raw } })` or the KMS
+ * owner-key sign — and that signature is passed as `createAccount(..., ownerSig)`. `nonce` must equal
+ * `createNonces(owner)` and `deadline` must be in the future. Returns the raw 32-byte hash (NOT
+ * EIP-191-wrapped). See [[#249]].
+ */
+export function buildCreateAccountHash(args: {
+    chainId: number | bigint;
+    factory: Address;
+    owner: Address;
+    salt: bigint;
+    ownerP256X: Hex;
+    ownerP256Y: Hex;
+    config: InitConfig;
+    nonce: bigint;
+    deadline: bigint;
+}): Hex {
+    const configHash = configHashFromInitConfig(args.config);
+    return keccak256(encodeAbiParameters(
+        [
+            { type: 'string' },   // "CREATE_ACCOUNT"
+            { type: 'uint256' },  // chainId
+            { type: 'address' },  // factory (address(this))
+            { type: 'address' },  // owner
+            { type: 'uint256' },  // salt
+            { type: 'bytes32' },  // ownerP256X
+            { type: 'bytes32' },  // ownerP256Y
+            { type: 'bytes32' },  // _getConfigHash(config)
+            { type: 'uint256' },  // nonce
+            { type: 'uint256' },  // deadline
+        ],
+        [
+            'CREATE_ACCOUNT',
+            BigInt(args.chainId),
+            args.factory,
+            args.owner,
+            args.salt,
+            args.ownerP256X,
+            args.ownerP256Y,
+            configHash,
+            args.nonce,
+            args.deadline,
+        ]
+    ));
+}
 
 export const airAccountFactoryActions = (address: Address) => (client: PublicClient | WalletClient): AirAccountFactoryActions => ({
     async getAddress({ owner, salt, config, ownerP256X, ownerP256Y }) {
