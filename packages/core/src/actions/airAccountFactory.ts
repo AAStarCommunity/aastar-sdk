@@ -9,11 +9,22 @@ export type AirAccountFactoryActions = {
     getAddressWithChainId: (args: { owner: Address, salt: bigint, config: InitConfig }) => Promise<{ account: Address, chainQualified: Hex }>;
     // CREATE2 address prediction using factory defaults (guard, validator, dailyLimit).
     getAddressWithDefaults: (args: { owner: Address, salt: bigint, guard: Address, validator: Address, dailyLimit: bigint }) => Promise<Address>;
-    // getAddress(owner, salt, config) -> CREATE2 prediction of a (non-agent) AirAccount.
-    getAddress: (args: { owner: Address, salt: bigint, config: InitConfig }) => Promise<Address>;
-    // createAccount(owner, salt, config) -> deploys a (non-agent) AirAccount and returns its address.
-    // Optional EIP-1559 fee overrides (some networks need an explicit priority tip).
-    createAccount: (args: { owner: Address, salt: bigint, config: InitConfig, account?: Account | Address, maxFeePerGas?: bigint, maxPriorityFeePerGas?: bigint }) => Promise<Hash>;
+    // getAddress(owner, salt, config, ownerP256X, ownerP256Y) -> CREATE2 prediction (v0.22.0).
+    // The clone salt now includes keccak256(configHash, ownerP256X, ownerP256Y), so the SAME passkey
+    // coords passed to createAccount MUST be passed here. Omit them (default 0) for no-passkey accounts.
+    getAddress: (args: { owner: Address, salt: bigint, config: InitConfig, ownerP256X?: Hex, ownerP256Y?: Hex }) => Promise<Address>;
+    // createAccount (v0.22.0, 8 args) -> deploys an AirAccount, optionally injecting the owner WebAuthn
+    // passkey (ownerP256X/Y) at birth (no post-deploy setP256Key) and wiring the validator router at birth.
+    //  - Direct mode (default): ownerSig "0x", msg.sender must be the owner; nonce/deadline ignored.
+    //  - KMS relay mode: pass nonce (from createNonces(owner)), deadline, and the EIP-191 ownerSig over
+    //    keccak256("CREATE_ACCOUNT", chainId, factory, owner, salt, ownerP256X, ownerP256Y, configHash, nonce, deadline).
+    createAccount: (args: {
+        owner: Address, salt: bigint, config: InitConfig,
+        ownerP256X?: Hex, ownerP256Y?: Hex, nonce?: bigint, deadline?: bigint, ownerSig?: Hex,
+        account?: Account | Address, maxFeePerGas?: bigint, maxPriorityFeePerGas?: bigint,
+    }) => Promise<Hash>;
+    // createNonces(owner) -> the factory's anti-replay nonce for KMS-relay createAccount.
+    createNonces: (args: { owner: Address }) => Promise<bigint>;
     // createAccountWithDefaults(owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit)
     // -> deploys an AirAccount using the factory's default guard/validator with up to two ECDSA
     // guardians (each authorizing via signature). Args forwarded in exact ABI order.
@@ -65,31 +76,45 @@ export type AirAccountFactoryActions = {
 };
 
 const ABI = AAStarAirAccountFactoryV7ABI;
+/** bytes32(0) — "no passkey" / direct-mode default for the v0.22.0 createAccount/getAddress args. */
+const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex;
 
 export const airAccountFactoryActions = (address: Address) => (client: PublicClient | WalletClient): AirAccountFactoryActions => ({
-    async getAddress({ owner, salt, config }) {
+    async getAddress({ owner, salt, config, ownerP256X, ownerP256Y }) {
         try {
             validateAddress(owner, 'owner');
             validateRequired(config, 'config');
             return await (client as PublicClient).readContract({
-                address, abi: ABI, functionName: 'getAddress', args: [owner, salt, config]
+                address, abi: ABI, functionName: 'getAddress',
+                args: [owner, salt, config, ownerP256X ?? ZERO_BYTES32, ownerP256Y ?? ZERO_BYTES32]
             }) as Address;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getAddress');
         }
     },
-    async createAccount({ owner, salt, config, account, maxFeePerGas, maxPriorityFeePerGas }) {
+    async createAccount({ owner, salt, config, ownerP256X, ownerP256Y, nonce, deadline, ownerSig, account, maxFeePerGas, maxPriorityFeePerGas }) {
         try {
             validateAddress(owner, 'owner');
             validateRequired(config, 'config');
             return await (client as WalletClient).writeContract({
-                address, abi: ABI, functionName: 'createAccount', args: [owner, salt, config],
+                address, abi: ABI, functionName: 'createAccount',
+                args: [owner, salt, config, ownerP256X ?? ZERO_BYTES32, ownerP256Y ?? ZERO_BYTES32, nonce ?? 0n, deadline ?? 0n, ownerSig ?? '0x'],
                 account: account as any, chain: (client as any).chain,
                 ...(maxFeePerGas !== undefined ? { maxFeePerGas } : {}),
                 ...(maxPriorityFeePerGas !== undefined ? { maxPriorityFeePerGas } : {}),
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'createAccount');
+        }
+    },
+    async createNonces({ owner }) {
+        try {
+            validateAddress(owner, 'owner');
+            return await (client as PublicClient).readContract({
+                address, abi: ABI, functionName: 'createNonces', args: [owner]
+            }) as bigint;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'createNonces');
         }
     },
     async createAccountWithDefaults({ owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit, account, maxFeePerGas, maxPriorityFeePerGas }) {

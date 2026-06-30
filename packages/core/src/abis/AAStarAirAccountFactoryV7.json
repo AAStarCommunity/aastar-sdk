@@ -150,6 +150,31 @@
             ]
           }
         ]
+      },
+      {
+        "name": "ownerP256X",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ownerP256Y",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ownerSig",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [
@@ -258,6 +283,25 @@
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createNonces",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -375,6 +419,16 @@
             ]
           }
         ]
+      },
+      {
+        "name": "ownerP256X",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ownerP256Y",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [
@@ -463,6 +517,16 @@
             ]
           }
         ]
+      },
+      {
+        "name": "ownerP256X",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ownerP256Y",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [
@@ -752,6 +816,33 @@
   },
   {
     "type": "error",
+    "name": "ECDSAInvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureS",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "FailedDeployment",
     "inputs": []
   },
@@ -830,7 +921,22 @@
   },
   {
     "type": "error",
+    "name": "InvalidOwnerSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonceMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotFactoryAdmin",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SignatureExpired",
     "inputs": []
   },
   {
