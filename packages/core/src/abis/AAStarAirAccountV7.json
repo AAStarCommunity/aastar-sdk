@@ -2,7 +2,13 @@
   "abi": [
     {
       "type": "constructor",
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "_validatorRouter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
       "stateMutability": "nonpayable"
     },
     {
@@ -512,88 +518,16 @@
           "name": "_guardAddr",
           "type": "address",
           "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "initialize",
-      "inputs": [
-        {
-          "name": "_entryPoint",
-          "type": "address",
-          "internalType": "address"
         },
         {
-          "name": "_owner",
-          "type": "address",
-          "internalType": "address"
+          "name": "_ownerP256X",
+          "type": "bytes32",
+          "internalType": "bytes32"
         },
         {
-          "name": "_config",
-          "type": "tuple",
-          "internalType": "struct AAStarAirAccountBase.InitConfig",
-          "components": [
-            {
-              "name": "guardians",
-              "type": "address[3]",
-              "internalType": "address[3]"
-            },
-            {
-              "name": "guardianP256X",
-              "type": "bytes32[3]",
-              "internalType": "bytes32[3]"
-            },
-            {
-              "name": "guardianP256Y",
-              "type": "bytes32[3]",
-              "internalType": "bytes32[3]"
-            },
-            {
-              "name": "dailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "approvedAlgIds",
-              "type": "uint8[]",
-              "internalType": "uint8[]"
-            },
-            {
-              "name": "minDailyLimit",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "initialTokens",
-              "type": "address[]",
-              "internalType": "address[]"
-            },
-            {
-              "name": "initialTokenConfigs",
-              "type": "tuple[]",
-              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-              "components": [
-                {
-                  "name": "tier1Limit",
-                  "type": "uint128",
-                  "internalType": "uint128"
-                },
-                {
-                  "name": "tier2Limit",
-                  "type": "uint128",
-                  "internalType": "uint128"
-                },
-                {
-                  "name": "dailyLimit",
-                  "type": "uint256",
-                  "internalType": "uint256"
-                }
-              ]
-            }
-          ]
+          "name": "_ownerP256Y",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "outputs": [],
@@ -1189,6 +1123,19 @@
           "name": "",
           "type": "address",
           "internalType": "contract IAAStarValidator"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "validatorRouter",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "stateMutability": "view"
