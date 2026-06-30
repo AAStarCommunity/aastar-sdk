@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.0] - 2026-06-30
+**SDK Code Integrity Hash**: `fbfe3f7af7c95c557b5aa9f7aad7a4c07865890a16c60e33dd633908721710bb`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Sync: airaccount-contract v0.22.0 — factory `createAccount`/`getAddress` breaking ABI; passkey + validator at birth.** (aastar-sdk#244)
+
+Minor bump (new factory surface; wrapper changes are backward-compatible so existing callers keep working).
+
+- **[FEAT]** Factory wrapper (`@aastar/sdk/core`): `createAccount` and `getAddress`/`getAddressWithChainId`
+  gained OPTIONAL `ownerP256X` / `ownerP256Y` (+ `nonce` / `deadline` / `ownerSig` for `createAccount`),
+  defaulting to **direct mode** (no passkey, `ownerSig "0x"`). Passing `ownerP256X/Y` injects the owner
+  WebAuthn passkey **at account birth** (no post-deploy `setP256Key`); the validator router is wired at
+  birth too (no `setValidator`). New `createNonces(owner)` read helper for the KMS-relay deploy mode.
+- **[CHORE]** ABIs re-vendored to v0.22.0: factory JSON (8-arg `createAccount`, 5-arg `getAddress`/
+  `getAddressWithChainId`, `createNonces`), the human-readable `AIRACCOUNT_FACTORY_ABI`, and the
+  `AAStarAirAccountV7` account ABI (+`validatorRouter()`, `initialize` 4→6 args). `upstream:check`
+  reports AirAccount **abis: in-sync**.
+- **[CHORE]** Sepolia v0.22.0 addresses (all on-chain verified): factory
+  `0x0eb0E7a61d5D9e03bc3578f8C1b0d9f40cc0a5B9`, impl `0x1cE314101E218D28bb6c6D16d6C259A4a1E67578`,
+  extension `0xF736C229fE6f0cb9C864A4298E2755b7a0A19691`, agentRegistry
+  `0x19d89A661F41c353c119d90F76BB7151E03F0D91`. README pin → v0.22.0.
+- **[FIX]** Gasless deploy-inside-initCode now **fails loud** (createAccount direct mode requires
+  `msg.sender == owner`, unavailable in initCode) instead of emitting silently-reverting calldata.
+  Pre-deployed accounts (the common path) are unaffected; KMS-relay ownerSig tracked in #246.
+- **[TEST]** On-chain Sepolia v0.22.0 acceptance (3 paths, evidence `docs/onchain-evidence/v0.22.0.md`):
+  WebAuthn passkey-at-birth (`validateUserOp(0x0a)==0`, `p256KeyX()==supplied`), guardian tier-raise,
+  raw-P256 `0x05`. Selector-parity unit test + e2e raw-ABI callers updated to v0.22.0.
+
+> Out of scope (separate upstream syncs): KMS openapi 0.27.2→0.27.3, DVT v1.6.0→v1.7.0.
+
 ## [0.29.7] - 2026-06-29
 **SDK Code Integrity Hash**: `697a060bdd8836d7f6326cb5c9efeb4ce057cafa33e7f7383a5ced8afb011879`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
