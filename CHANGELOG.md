@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.0] - 2026-06-30
+**SDK Code Integrity Hash**: `6dcbb82886c5e4c9fccfe4bee17fa6b7fa42f75ab88c65a52f44037a1f341982`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: `createAccountWithPasskey` — KMS relay-mode passkey-at-birth account creation.** (aastar-sdk#249)
+
+Closes the gap 0.30.0 left: v0.22.0 passkey-at-birth was only proven for EOA owners (DIRECT mode,
+`msg.sender == owner`). A KMS owner key lives in a TEE and cannot send a raw tx, so production accounts
+need RELAY mode (owner EIP-191-signs the `CREATE_ACCOUNT` digest, a deployer relays + pays gas).
+
+- **[FEAT]** `@aastar/core`: `buildCreateAccountHash({chainId, factory, owner, salt, ownerP256X,
+  ownerP256Y, config, nonce, deadline}) → Hex` — byte-exact replica of the factory's internal
+  `_getConfigHash` + `CREATE_ACCOUNT` preimage (the part integrators must NOT hand-roll). Returns the
+  inner hash; the signer applies EIP-191. `configHashFromInitConfig` exported too.
+- **[FEAT]** `@aastar/airaccount`: `AccountManager.createAccountWithPasskey(userId, {ownerP256X/Y,
+  p256Guardians?, ecdsaGuardians?, dailyLimit, approvedAlgIds, salt?, deadlineSeconds?}, {deployerWallet,
+  signerCtx?})` — `ensureSigner` → `createNonces` → `buildCreateAccountHash` → `signer.signMessage`
+  (KMS owner key, EIP-191, signed as raw bytes) → relay `createAccount` via the deployer → deployed
+  `AccountRecord`. Fails fast on `guardian == owner` / duplicate guardians (else the predicted address
+  could be pre-funded but undeployable).
+- **[TEST]** On-chain Sepolia v0.22.0 relay deploy (`docs/onchain-evidence/v0.31.0-createaccount-passkey.md`):
+  account `0xC51DBbBb…`, relay tx `0xf6d5f34…`, `p256KeyX()==passkey`, `validator()!=0`, `createNonces
+  0→1` — a successful relay deploy proves `buildCreateAccountHash` is byte-exact. Codex §5 caught + fixed
+  a HIGH (digest must be signed as raw bytes, not a hex string — KMS path) + a MEDIUM (guardian validation).
+
+> Contract follow-up: airaccount-contract#155 — expose `_getConfigHash` as a public view (drift-safety;
+> not a blocker, the on-chain e2e + golden tests pin the SDK replica).
+
 ## [0.30.0] - 2026-06-30
 **SDK Code Integrity Hash**: `b676f07e0469f20003de75c6920db13ef63abc15e015a91bb7ec6f18f95e191c`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
