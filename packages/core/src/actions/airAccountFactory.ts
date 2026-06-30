@@ -5,8 +5,9 @@ import { AAStarError } from '../errors/index.js';
 import type { InitConfig } from './airAccount.js';
 
 export type AirAccountFactoryActions = {
-    // CREATE2 address prediction with full InitConfig + chain-qualified id.
-    getAddressWithChainId: (args: { owner: Address, salt: bigint, config: InitConfig }) => Promise<{ account: Address, chainQualified: Hex }>;
+    // CREATE2 address prediction with full InitConfig + chain-qualified id (v0.22.0: 5-arg — the salt
+    // binds ownerP256X/Y, so pass the SAME passkey coords as createAccount; omit for no-passkey accounts).
+    getAddressWithChainId: (args: { owner: Address, salt: bigint, config: InitConfig, ownerP256X?: Hex, ownerP256Y?: Hex }) => Promise<{ account: Address, chainQualified: Hex }>;
     // CREATE2 address prediction using factory defaults (guard, validator, dailyLimit).
     getAddressWithDefaults: (args: { owner: Address, salt: bigint, guard: Address, validator: Address, dailyLimit: bigint }) => Promise<Address>;
     // getAddress(owner, salt, config, ownerP256X, ownerP256Y) -> CREATE2 prediction (v0.22.0).
@@ -137,12 +138,13 @@ export const airAccountFactoryActions = (address: Address) => (client: PublicCli
             throw AAStarError.fromViemError(error as Error, 'createAccountWithDefaults');
         }
     },
-    async getAddressWithChainId({ owner, salt, config }) {
+    async getAddressWithChainId({ owner, salt, config, ownerP256X, ownerP256Y }) {
         try {
             validateAddress(owner, 'owner');
             validateRequired(config, 'config');
             const r = await (client as PublicClient).readContract({
-                address, abi: ABI, functionName: 'getAddressWithChainId', args: [owner, salt, config]
+                address, abi: ABI, functionName: 'getAddressWithChainId',
+                args: [owner, salt, config, ownerP256X ?? ZERO_BYTES32, ownerP256Y ?? ZERO_BYTES32]
             }) as readonly [Address, Hex];
             return { account: r[0], chainQualified: r[1] };
         } catch (error) {
