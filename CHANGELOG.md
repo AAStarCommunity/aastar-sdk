@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.1] - 2026-06-30
+**SDK Code Integrity Hash**: `02df1cc66d00506d97c1a826a37e6603058eb761dfa0103d025439936a69d646`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: guard-read regression that bricked ALL transfers/config on v0.22.0 accounts.** (aastar-sdk#254)
+
+- **[FIX]** `readAccountGuardAddress` (run by guard-checker on every `prepareTransfer` + config op) read
+  `account.getConfigDescription().guardAddress`, but **v0.22.0 accounts removed `getConfigDescription()`**
+  (only ForceExitModule exposes one, different semantics) → the call reverted → every transfer/config op
+  on a v0.22.0 account was blocked. Now reads `guard()` directly (the same value the struct carried;
+  already used by guard-state-reader). On-chain verified on a v0.22.0 account: `getConfigDescription()`
+  reverts, `guard()` returns the guard address. Evidence `docs/onchain-evidence/v0.32.1-guard-read-fix.md`.
+
 ## [0.32.0] - 2026-06-30
 **SDK Code Integrity Hash**: `098e4280910dc8316f7810f9a5e0a7105b1c641479ad4c995c24dfe54bd7d87b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
