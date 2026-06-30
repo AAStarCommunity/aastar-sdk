@@ -19,6 +19,8 @@ import { AIRACCOUNT_ADDRESSES, AIRACCOUNT_FACTORY_ABI } from "../constants/entry
 
 // Parse the local human-readable factory ABI once so viem reads can consume it.
 const FACTORY_ABI = parseAbi(AIRACCOUNT_FACTORY_ABI);
+// v0.22.0 getAddress/getAddressWithChainId are 5-arg; OAPD accounts carry no birth-injected passkey.
+const OAPD_ZERO_BYTES32 = `0x${"00".repeat(32)}` as `0x${string}`;
 
 export interface OapdConfig {
   /** Account owner address */
@@ -73,7 +75,7 @@ export async function getOapdAddress(
     address: factoryAddress as `0x${string}`,
     abi: FACTORY_ABI,
     functionName: "getAddress",
-    args: [config.owner as `0x${string}`, salt, config.initConfig],
+    args: [config.owner as `0x${string}`, salt, config.initConfig, OAPD_ZERO_BYTES32, OAPD_ZERO_BYTES32],
   }) as Promise<string>;
 }
 
@@ -91,7 +93,7 @@ export async function getOapdAddressWithChainId(
     address: factoryAddress as `0x${string}`,
     abi: FACTORY_ABI,
     functionName: "getAddressWithChainId",
-    args: [config.owner as `0x${string}`, salt, config.initConfig],
+    args: [config.owner as `0x${string}`, salt, config.initConfig, OAPD_ZERO_BYTES32, OAPD_ZERO_BYTES32],
   })) as readonly [string, string];
   return { address: result[0], chainQualified: result[1] };
 }

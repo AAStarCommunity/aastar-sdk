@@ -41,7 +41,8 @@ const FACTORY_ABI = [
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
-            { name: 'tier1Limit', type: 'uint128' }, { name: 'tier2Limit', type: 'uint128' }, { name: 'dailyLimit', type: 'uint256' }] }] }],
+            { name: 'tier1Limit', type: 'uint128' }, { name: 'tier2Limit', type: 'uint128' }, { name: 'dailyLimit', type: 'uint256' }] }] },
+        { name: 'ownerP256X', type: 'bytes32' }, { name: 'ownerP256Y', type: 'bytes32' }], // v0.22.0 5-arg
       outputs: [{ type: 'address' }] },
     { type: 'function', name: 'createAccount', stateMutability: 'nonpayable',
       inputs: [{ name: 'owner', type: 'address' }, { name: 'salt', type: 'uint256' },
@@ -96,7 +97,8 @@ async function main() {
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique-ish per run (stamped at runtime)
 
     const factory = getContract({ address: FACTORY, abi: FACTORY_ABI, client: publicClient });
-    const sender = await factory.read.getAddress([owner.address, salt, config as any]) as Address;
+    const Zb32 = `0x${'00'.repeat(32)}` as `0x${string}`; // no birth passkey
+    const sender = await factory.read.getAddress([owner.address, salt, config as any, Zb32, Zb32]) as Address;
     console.log(`   Predicted account: ${sender}`);
 
     // 1. Deploy the account directly via the owner EOA (separates deploy from the UserOp).

@@ -126,10 +126,13 @@ describe("AccountManager", () => {
       // Production code (viem): readPredictedAddress wraps factory.read.getAddress
       // and coerces the uint256 `salt` to bigint (byte-identical encoding to the
       // number reused in the deploy-time initCode).
+      const ZERO_BYTES32 = `0x${"00".repeat(32)}`;
       expect(mockFactory.read.getAddress).toHaveBeenCalledWith([
         SIGNER_ADDRESS, // signerAddress
         99n,            // salt (uint256 -> bigint)
         expect.any(Array), // minimalConfig
+        ZERO_BYTES32,   // ownerP256X (v0.22.0 5-arg; no birth passkey)
+        ZERO_BYTES32,   // ownerP256Y
       ]);
     });
   });
