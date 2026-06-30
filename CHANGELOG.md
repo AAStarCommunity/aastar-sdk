@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.0] - 2026-06-30
+**SDK Code Integrity Hash**: `098e4280910dc8316f7810f9a5e0a7105b1c641479ad4c995c24dfe54bd7d87b`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: two-phase `prepare`/`submitCreateAccountWithPasskey` — KMS account creation with a separated WebAuthn ceremony.** (aastar-sdk#249)
+
+Closes the KMS gap in 0.31.0's single-method `createAccountWithPasskey`: it works for EOA owners (inline
+sign) but DEADLOCKS for KMS owners — the WebAuthn ceremony challenge must commit to the CREATE_ACCOUNT
+digest, but the digest depends on nonce/deadline resolved inside the method, so the caller can't pre-make
+the assertion. Same reason transfers are two-phase (`prepareTransfer`/`submitPreparedTransfer`).
+
+- **[FEAT]** `@aastar/sdk/kms` → `AccountManager.prepareCreateAccountWithPasskey(userId, params)` →
+  `{ createId, predictedAddress, challenge, challengeId?, publicKeyOptions?, nonce, deadline, alreadyDeployed }`.
+  For KMS signers begins the ceremony over the digest; the frontend runs `navigator.credentials.get`.
+- **[FEAT]** `AccountManager.submitPreparedCreateAccount(createId, { deployerWallet, signerCtx })` → signs
+  the prepared digest with the ceremony assertion + relays `createAccount` → deployed `AccountRecord`.
+  Re-reads `createNonces` and aborts if it advanced since prepare (the assertion is bound to the old
+  nonce's digest); single-use createId (deleted on every exit); per-entry TTL eviction.
+- **[REFACTOR]** Inline `createAccountWithPasskey` (EOA) + the two-phase path share
+  `_resolvePasskeyCreate` / `_relayPasskeyDeploy` / `_persistPasskeyRecord` (zero logic drift). Exported
+  `PasskeyCreateParams` + `PreparedPasskeyCreate` types.
+- **[TEST]** 12 passkey unit tests (inline 6 + two-phase 6). Digest byte-exactness proven on-chain
+  (`createaccount-relay-passkey-e2e`). Codex §5: caught + fixed a HIGH (re-read nonce) + MEDIUM (single-use
+  on failure) + 2 LOW; re-review CLEAN. Evidence `docs/onchain-evidence/v0.32.0-two-phase-create.md`.
+
 ## [0.31.0] - 2026-06-30
 **SDK Code Integrity Hash**: `6dcbb82886c5e4c9fccfe4bee17fa6b7fa42f75ab88c65a52f44037a1f341982`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
