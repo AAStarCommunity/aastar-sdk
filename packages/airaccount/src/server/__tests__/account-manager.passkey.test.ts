@@ -20,16 +20,20 @@ const PX = `0x${"22".repeat(32)}` as Hex;
 const PY = `0x${"33".repeat(32)}` as Hex;
 const TX = "0xf6d5f3474d59939a710def0386e62d4aa0fb255214793766560d090173db04ac" as Hex;
 
-function makeEthereumMock(opts: { deployed?: boolean; nonce?: bigint } = {}) {
+function makeEthereumMock(opts: { deployed?: boolean; nonce?: bigint; noncesSeq?: bigint[]; receiptStatus?: "success" | "reverted" } = {}) {
+  let ni = 0;
   const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
     if (functionName === "getAddress") return PREDICTED;
-    if (functionName === "createNonces") return opts.nonce ?? 0n;
+    if (functionName === "createNonces") {
+      if (opts.noncesSeq) return opts.noncesSeq[Math.min(ni++, opts.noncesSeq.length - 1)];
+      return opts.nonce ?? 0n;
+    }
     throw new Error(`unexpected read ${functionName}`);
   });
   const provider = {
     getCode: vi.fn().mockResolvedValue(opts.deployed ? "0xabcd" : "0x"),
     readContract,
-    waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: "success" }),
+    waitForTransactionReceipt: vi.fn().mockResolvedValue({ status: opts.receiptStatus ?? "success" }),
   };
   return {
     getDefaultVersion: vi.fn().mockReturnValue(EntryPointVersion.V0_7),
@@ -209,5 +213,27 @@ describe("AccountManager two-phase passkey create (#249)", () => {
     const ethereum = makeEthereumMock();
     const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
     await expect(mgr.submitPreparedCreateAccount("nope", { deployerWallet: makeDeployerWallet() })).rejects.toThrow(/unknown or expired/);
+  });
+
+  it("submit aborts (and consumes the createId) when createNonces advanced since prepare", async () => {
+    // createNonces returns 0n at prepare, then 1n at submit — the ceremony assertion is bound to the
+    // old nonce's digest, so submit MUST abort rather than relay with a stale nonce. (Codex §5 HIGH.)
+    const ethereum = makeEthereumMock({ noncesSeq: [0n, 1n] });
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    const prep = await mgr.prepareCreateAccountWithPasskey("user-1", params);
+    const deployer = makeDeployerWallet();
+    await expect(mgr.submitPreparedCreateAccount(prep.createId, { deployerWallet: deployer })).rejects.toThrow(/advanced 0→1|re-run prepare/);
+    expect(deployer.writeContract).not.toHaveBeenCalled();
+    // single-use: the createId is gone even though it aborted.
+    await expect(mgr.submitPreparedCreateAccount(prep.createId, { deployerWallet: deployer })).rejects.toThrow(/unknown or expired/);
+  });
+
+  it("createId is single-use even when the relay fails (no stale-nonce replay)", async () => {
+    const ethereum = makeEthereumMock({ nonce: 0n, receiptStatus: "reverted" });
+    const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);
+    const prep = await mgr.prepareCreateAccountWithPasskey("user-1", params);
+    const deployer = makeDeployerWallet();
+    await expect(mgr.submitPreparedCreateAccount(prep.createId, { deployerWallet: deployer })).rejects.toThrow(/relay deploy reverted/);
+    await expect(mgr.submitPreparedCreateAccount(prep.createId, { deployerWallet: deployer })).rejects.toThrow(/unknown or expired/);
   });
 });

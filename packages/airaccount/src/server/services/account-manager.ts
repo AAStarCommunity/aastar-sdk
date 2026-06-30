@@ -1,4 +1,4 @@
-import { zeroAddress, parseEther, hexToBytes, bytesToHex, type Address, type Hash, type WalletClient } from "viem";
+import { zeroAddress, parseEther, hexToBytes, type Address, type Hash, type WalletClient } from "viem";
 import { randomUUID } from "node:crypto";
 // AIRACCOUNT_ABI is a local human-readable signature array (not in @aastar/core);
 // parseAbi is required to feed it to viem's encodeFunctionData during the ethers->viem migration.
@@ -654,7 +654,7 @@ export class AccountManager {
     const createId = randomUUID();
     if (plan.existing || plan.alreadyDeployed) {
       // Nothing to sign — submit short-circuits to the existing/on-chain record.
-      this.preparedCreates.set(createId, { userId, plan, nonce: 0n, deadline: 0n, hash: ZERO32, createdAt: Date.now() });
+      this._storePrepared(createId, { userId, plan, nonce: 0n, deadline: 0n, hash: ZERO32, createdAt: Date.now() });
       return { createId, predictedAddress: plan.accountAddress, challenge: ZERO32, nonce: 0n, deadline: 0n, alreadyDeployed: true };
     }
     const nonce = (await this._factoryRead(plan.factoryAddress).createNonces({ owner: plan.owner })) as bigint;
@@ -667,8 +667,7 @@ export class AccountManager {
     if (this.signer.beginCeremony) {
       ({ challengeId, publicKeyOptions } = await this.signer.beginCeremony(userId, hexToBytes(hash)));
     }
-    this._evictExpiredCreates();
-    this.preparedCreates.set(createId, { userId, plan, nonce, deadline, hash, challengeId, createdAt: Date.now() });
+    this._storePrepared(createId, { userId, plan, nonce, deadline, hash, challengeId, createdAt: Date.now() });
     return { createId, predictedAddress: plan.accountAddress, challenge: hash, challengeId, publicKeyOptions, nonce, deadline, alreadyDeployed: false };
   }
 
@@ -683,21 +682,35 @@ export class AccountManager {
   ): Promise<AccountRecord> {
     const entry = this.preparedCreates.get(createId);
     if (!entry) throw new Error(`submitPreparedCreateAccount: unknown or expired createId ${createId}`);
-    if (Date.now() - entry.createdAt > AccountManager.PREPARED_CREATE_TTL_MS) {
-      this.preparedCreates.delete(createId);
-      throw new Error(`submitPreparedCreateAccount: prepared create ${createId} expired`);
-    }
     if (!opts?.deployerWallet?.account) {
       throw new Error("submitPreparedCreateAccount: opts.deployerWallet (funded relayer) is required");
     }
-    const { plan, nonce, deadline, hash } = entry;
-    if (plan.existing) { this.preparedCreates.delete(createId); return plan.existing; }
-    if (plan.alreadyDeployed) { this.preparedCreates.delete(createId); return this._persistPasskeyRecord(plan, null); }
+    // Single-use: drop the prepared entry no matter the outcome. A failed relay must NOT leave a reusable
+    // createId carrying a now-stale nonce/hash (Codex §5 #249) — the caller re-runs prepare to retry.
+    try {
+      if (Date.now() - entry.createdAt > AccountManager.PREPARED_CREATE_TTL_MS) {
+        throw new Error(`submitPreparedCreateAccount: prepared create ${createId} expired`);
+      }
+      const { plan, nonce, deadline, hash } = entry;
+      if (plan.existing) return plan.existing;
+      if (plan.alreadyDeployed) return this._persistPasskeyRecord(plan, null);
 
-    const ownerSig = await this.signer.signMessage(entry.userId, hexToBytes(hash), opts.signerCtx);
-    const account = await this._relayPasskeyDeploy(plan, nonce, deadline, ownerSig, opts.deployerWallet);
-    this.preparedCreates.delete(createId);
-    return account;
+      // The stored nonce was read at prepare. If another deploy advanced createNonces(owner) since, the
+      // relay would revert NonceMismatch — and we CANNOT just bump it, because the ceremony assertion is
+      // bound to the OLD nonce's digest. Abort with a clear error so the caller re-prepares (Codex §5 HIGH).
+      const freshNonce = (await this._factoryRead(plan.factoryAddress).createNonces({ owner: plan.owner })) as bigint;
+      if (freshNonce !== nonce) {
+        throw new Error(
+          `submitPreparedCreateAccount: createNonces(${plan.owner}) advanced ${nonce}→${freshNonce} since prepare; ` +
+            `re-run prepareCreateAccountWithPasskey (the ceremony assertion is bound to the old nonce's digest)`
+        );
+      }
+
+      const ownerSig = await this.signer.signMessage(entry.userId, hexToBytes(hash), opts.signerCtx);
+      return await this._relayPasskeyDeploy(plan, nonce, deadline, ownerSig, opts.deployerWallet);
+    } finally {
+      this.preparedCreates.delete(createId);
+    }
   }
 
   // ── Private helpers shared by the inline + two-phase passkey-create paths ──────────────────────
@@ -718,6 +731,19 @@ export class AccountManager {
     for (const [id, e] of this.preparedCreates) {
       if (now - e.createdAt > AccountManager.PREPARED_CREATE_TTL_MS) this.preparedCreates.delete(id);
     }
+  }
+
+  /** Store a prepared-create entry: opportunistic sweep + a per-entry TTL timer so an entry that is
+   * NEVER submitted (and with no later prepare to trigger the sweep) is still evicted. The timer is
+   * `unref`'d so it never keeps the process alive (Codex §5 #249). */
+  private _storePrepared(
+    createId: string,
+    entry: { userId: string; plan: ResolvedPasskeyCreate; nonce: bigint; deadline: bigint; hash: Hex; challengeId?: string; createdAt: number }
+  ): void {
+    this._evictExpiredCreates();
+    this.preparedCreates.set(createId, entry);
+    const timer = setTimeout(() => this.preparedCreates.delete(createId), AccountManager.PREPARED_CREATE_TTL_MS);
+    (timer as { unref?: () => void }).unref?.();
   }
 
   /** Validate + build config + predict + idempotency. Throws on bad input; sets existing/alreadyDeployed. */
