@@ -52,11 +52,14 @@ async function main() {
     minDailyLimit: parseEther('0.1'),
     approvedAlgIds: [0x02, 0x03], // ECDSA + P256 (never BLS in defaults)
   });
+  // v0.22.0 factory: getAddress is 5-arg, createAccount is 8-arg. No WebAuthn passkey here, so pass
+  // bytes32(0) for ownerP256X/Y; direct mode = ownerSig "0x" (msg.sender == owner).
+  const Z32 = `0x${'00'.repeat(32)}` as `0x${string}`;
   const account = getAddress((await pub.readContract({
-    address: FACTORY, abi: AAStarAirAccountFactoryV7ABI as never, functionName: 'getAddress', args: [owner.address, salt, config],
+    address: FACTORY, abi: AAStarAirAccountFactoryV7ABI as never, functionName: 'getAddress', args: [owner.address, salt, config, Z32, Z32],
   })) as string);
   console.log(`\n1) predicted account=${account} (salt=${salt})`);
-  await send(FACTORY, 'createAccount', [owner.address, salt, config], AAStarAirAccountFactoryV7ABI);
+  await send(FACTORY, 'createAccount', [owner.address, salt, config, Z32, Z32, 0n, 0n, '0x'], AAStarAirAccountFactoryV7ABI);
   const gc = Number(await read(account, 'guardianCount'));
   const gAddrs = [await read(account, 'guardians', [0n]), await read(account, 'guardians', [1n])];
   console.log(`   deployed; guardianCount=${gc}; guardians=${JSON.stringify(gAddrs)}`);
