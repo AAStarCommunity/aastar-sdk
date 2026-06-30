@@ -112,12 +112,17 @@ export function readAlgorithmApproved(account: ViemContract, algId: number): Pro
 }
 
 /**
- * `getConfigDescription()` -> named struct; we read only `guardAddress`, which
+ * `guard()` -> the per-account AAStarGlobalGuard address (zero when no guard is enforced); this is what
  * decides whether the per-account spending guard is enforced at all.
+ *
+ * #254 regression fix: this used to read `getConfigDescription().guardAddress`, but v0.22.0 accounts
+ * REMOVED `getConfigDescription()` (only ForceExitModule exposes one, with different semantics). The call
+ * reverted on every v0.22.0 account, and guard-checker / `prepareTransfer` run this on EVERY transfer +
+ * config op — bricking all of them. The guard is exposed directly via `guard()` (same value the struct's
+ * `guardAddress` field carried), already used by guard-state-reader. Read it directly.
  */
 export async function readAccountGuardAddress(account: ViemContract): Promise<Address> {
-  const config = (await readFn(account, "getConfigDescription")([])) as { guardAddress: Address };
-  return config.guardAddress;
+  return (await readFn(account, "guard")([])) as Address;
 }
 
 // ── Guard: daily spend allowance gate ─────────────────────────────────────────
