@@ -52,7 +52,10 @@ const FACTORY_ABI = [
           { name: 'approvedAlgIds', type: 'uint8[]' }, { name: 'minDailyLimit', type: 'uint256' },
           { name: 'initialTokens', type: 'address[]' },
           { name: 'initialTokenConfigs', type: 'tuple[]', components: [
-            { name: 'tier1Limit', type: 'uint128' }, { name: 'tier2Limit', type: 'uint128' }, { name: 'dailyLimit', type: 'uint256' }] }] }],
+            { name: 'tier1Limit', type: 'uint128' }, { name: 'tier2Limit', type: 'uint128' }, { name: 'dailyLimit', type: 'uint256' }] }] },
+        // v0.22.0: createAccount gained ownerP256X/Y + nonce/deadline/ownerSig (passkey + relay support).
+        { name: 'ownerP256X', type: 'bytes32' }, { name: 'ownerP256Y', type: 'bytes32' },
+        { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }, { name: 'ownerSig', type: 'bytes' }],
       outputs: [{ type: 'address' }] },
 ] as const;
 
@@ -100,7 +103,8 @@ async function main() {
     const deployedCode = await publicClient.getBytecode({ address: sender });
     if (!deployedCode || deployedCode === '0x') {
         console.log('   Deploying beta.4 account via factory.createAccount...');
-        const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any] });
+        const Z32 = `0x${'00'.repeat(32)}` as `0x${string}`; // no passkey; direct mode (ownerSig "0x")
+        const deployData = encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createAccount', args: [owner.address, salt, config as any, Z32, Z32, 0n, 0n, '0x'] });
         const txHash = await walletClient.sendTransaction({ to: FACTORY, data: deployData });
         await publicClient.waitForTransactionReceipt({ hash: txHash });
         console.log(`   ✅ Account deployed (tx ${txHash})`);

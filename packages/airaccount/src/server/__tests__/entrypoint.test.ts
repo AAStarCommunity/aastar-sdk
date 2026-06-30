@@ -82,15 +82,16 @@ describe("EntryPoint constants", () => {
   // fails instead of silently agreeing while reverting on-chain. These selectors were confirmed against
   // live Sepolia factory 0x99C9300d52EDD9f4B7135DEd1811fBa6FFa1DDC6 (createAccount/getAddress both mined
   // status=0x1 in the #118 evidence run).
-  describe("AIRACCOUNT_FACTORY_ABI selector parity with the deployed v0.20.0 factory", () => {
+  describe("AIRACCOUNT_FACTORY_ABI selector parity with the deployed v0.22.0 factory", () => {
     const parsed = parseAbi(AIRACCOUNT_FACTORY_ABI) as readonly AbiFunction[];
     const json = AAStarAirAccountFactoryV7ABI as readonly AbiFunction[];
 
-    // Known-good selectors of the deployed v0.20.0 factory (InitConfig.TokenConfig = (uint128,uint128,uint256)).
+    // Known-good selectors of the deployed v0.22.0 factory (createAccount 8-arg: +ownerP256X/Y, nonce,
+    // deadline, ownerSig; getAddress / getAddressWithChainId 5-arg: +ownerP256X/Y).
     const DEPLOYED_SELECTORS: Record<string, `0x${string}`> = {
-      getAddress: "0x3989c6b8",
-      createAccount: "0x5512953b",
-      getAddressWithChainId: "0x203df583",
+      getAddress: "0xbd4bcf83",
+      createAccount: "0x5f6314a2",
+      getAddressWithChainId: "0xaf799fc6",
     };
 
     for (const [name, expected] of Object.entries(DEPLOYED_SELECTORS)) {

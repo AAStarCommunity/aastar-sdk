@@ -147,37 +147,38 @@ async function main() {
     const p256Y = norm(Buffer.from(p256Pub.slice(33, 65)).toString('hex'));
     const guardian = privateKeyToAccount(GUARDIAN_PK);
     const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: http(RPCS[0]) });
-    console.log(`\n[0a] factory(v0.21.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
+    console.log(`\n[0a] factory(v0.22.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
 
-    // ── Deploy a fresh account approving algId 0x0a, with the guardian ──────────────────────────
+    // ── v0.22.0: deploy with the passkey + validator wired AT BIRTH (no setP256Key/setValidator tx) ──
+    // getAddress + createAccount both take the SAME ownerP256X/Y (the salt now binds them).
     const config = buildInitConfig({ guardians: [{ ecdsa: guardian.address }], dailyLimit: 10n ** 18n, approvedAlgIds: [ALG_CUMULATIVE_T3_WA] });
     const account = (await withRpcFallback((c) =>
-        airAccountFactoryActions(FACTORY)(c).getAddress({ owner: owner.address, salt: SALT, config })
+        airAccountFactoryActions(FACTORY)(c).getAddress({ owner: owner.address, salt: SALT, config, ownerP256X: p256X, ownerP256Y: p256Y })
     )) as Address;
-    console.log(`[0b] account = ${account}`);
+    console.log(`[0b] counterfactual account = ${account}`);
     const code = await withRpcFallback((c) => c.getCode({ address: account }));
     if (code && code !== '0x') {
         console.log('     already deployed ✓');
     } else {
-        const tx = await airAccountFactoryActions(FACTORY)(walletClient).createAccount({ owner: owner.address, salt: SALT, config, account: owner });
+        // direct mode: ownerSig "0x" (msg.sender == owner), passkey injected at birth.
+        const tx = await airAccountFactoryActions(FACTORY)(walletClient).createAccount({
+            owner: owner.address, salt: SALT, config, ownerP256X: p256X, ownerP256Y: p256Y, account: owner,
+        });
         const r = await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: tx }));
         console.log(`     deploy tx=${tx} status=${r.status}`);
         if (r.status !== 'success') throw new Error('deploy reverted');
+        if (r.contractAddress && r.contractAddress.toLowerCase() !== account.toLowerCase()) {
+            throw new Error(`counterfactual address ${account} != deployed ${r.contractAddress}`);
+        }
     }
 
-    // ── setValidator (set-once) + register the passkey via setP256Key ───────────────────────────
-    const curValidator = (await withRpcFallback((c) => c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'validator' }))) as Address;
-    if (curValidator === '0x0000000000000000000000000000000000000000') {
-        const tx = await walletClient.writeContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'setValidator', args: [VALIDATOR_ROUTER], chain: sepolia });
-        await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: tx }));
-        console.log(`[0c] setValidator ✓`);
-    } else console.log(`[0c] validator already set`);
-    const curX = (await withRpcFallback((c) => c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'p256KeyX' }))) as Hex;
-    if (curX === ZERO_BYTES32) {
-        const tx = await walletClient.writeContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'setP256Key', args: [p256X, p256Y], chain: sepolia });
-        await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: tx }));
-        console.log(`     setP256Key ✓ (x=${p256X.slice(0, 14)}…)`);
-    } else console.log(`     p256Key already set`);
+    // ── v0.22.0 birth-injection assertions: passkey + validator set with NO post-deploy tx ──────────
+    const bornX = (await withRpcFallback((c) => c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'p256KeyX' }))) as Hex;
+    const bornValidator = (await withRpcFallback((c) => c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'validator' }))) as Address;
+    console.log(`[0c] p256KeyX @birth = ${bornX.slice(0, 14)}…  (== supplied: ${bornX.toLowerCase() === p256X.toLowerCase()})`);
+    console.log(`     validator @birth = ${bornValidator} (non-zero: ${bornValidator !== '0x0000000000000000000000000000000000000000'})`);
+    if (bornX.toLowerCase() !== p256X.toLowerCase()) throw new Error('passkey not injected at birth (p256KeyX != supplied ownerP256X)');
+    if (bornValidator === '0x0000000000000000000000000000000000000000') throw new Error('validator not wired at birth');
 
     // ── Build userOp + userOpHash ───────────────────────────────────────────────────────────────
     const nonce = (await withRpcFallback((c) => entryPointActions(ENTRY_POINT)(c).getNonce({ sender: account, key: 0n }))) as bigint;

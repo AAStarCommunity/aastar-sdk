@@ -970,10 +970,16 @@ export class TransferManager {
             // 8-field InitConfig from the persisted record so the deploy CREATE2 address matches
             // the create-time prediction (the factory binds the address to keccak256(config)).
             const rebuilt = initConfigFromRecord(account);
+            // v0.22.0 createAccount is 8-arg. We pass direct-mode defaults (no passkey-at-birth,
+            // ownerSig "0x"). NOTE: direct mode requires msg.sender == owner — true for an
+            // owner-submitted deploy, and NOT exercised for a pre-deployed account (the common path).
+            // The deploy-inside-initCode path (msg.sender = EntryPoint) needs a KMS-relay ownerSig over
+            // the CREATE_ACCOUNT digest — tracked as a v0.22.0 follow-up.
             deployCalldata = encodeFn(AIRACCOUNT_FACTORY_ABI_PARSED, "createAccount", [
               account.signerAddress,
               BigInt(account.salt),
               initConfigToTuple(rebuilt),
+              ZERO32, ZERO32, 0n, 0n, "0x",
             ]);
           } else if (account.guardian1 && account.guardian2 && account.guardian1Sig && account.guardian2Sig) {
             // Guardian account: use createAccountWithDefaults so the factory-computed address
@@ -1010,6 +1016,7 @@ export class TransferManager {
               account.signerAddress,
               BigInt(account.salt),
               minimalConfig,
+              ZERO32, ZERO32, 0n, 0n, "0x", // v0.22.0 8-arg direct-mode defaults (see note above)
             ]);
           }
         } else {
