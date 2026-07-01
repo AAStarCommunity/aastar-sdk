@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.2] - 2026-07-01
+**SDK Code Integrity Hash**: `3d790197ea8d226dda462ec4c22251a76909d1eec6c2166834972af0f3e7dcf0`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: Tier-2/3 strict-KMS ceremony bound to the wrong payload (completes the #259 unblock).**
+
+Supersedes 0.33.1 (Tier-1 double-sign fix). A Codex review of 0.33.1 caught a separate defect it still
+shipped:
+
+- **[FIX]** `prepareTransfer`'s `ownerMessageForStrategy` returned `keccak256(messagePoint)` for Tier-2/3,
+  so `beginCeremony` bound the strict-KMS challenge to `hashMessage(messagePointHash)`. But after #257 + the
+  #258 M1 fix, the ONLY owner signature Tier-2/3 produces is the DVT `ownerAuth` over `userOpHash` (the
+  messagePoint signature is skipped). Ceremony committed to messagePointHash while submit signed userOpHash
+  → strict-KMS challenge mismatch (400). Now binds to `userOpHash` for all owner-signed strategies.
+- (0.33.1) Tier-1 no longer builds a DVT `ownerAuth` (Tier-1 uses no DVT), so a single-use ceremony
+  assertion is signed exactly once.
+
+Evidence `docs/onchain-evidence/v0.33.2-ceremony-binding-fix.md`.
+
 ## [0.33.1] - 2026-07-01
 **SDK Code Integrity Hash**: `13016d95748579be66e6fca38c6066fc1ce34ee2fa0974c1132b988a9b05e2eb`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
