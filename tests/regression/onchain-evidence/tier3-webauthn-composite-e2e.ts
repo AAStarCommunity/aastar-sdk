@@ -54,11 +54,12 @@ import {
     airAccountFactoryActions,
     entryPointActions,
 } from '@aastar/core';
-// SDK packers UNDER TEST (WebAuthn cumulative, algId 0x0a).
+// SDK packers UNDER TEST (WebAuthn cumulative, algId 0x0a; #261 tagged owner-auth 0x02).
 import {
     packWebAuthnBlob,
     packCumulativeT3WA,
     packBlsPayload,
+    packOwnerAuthWebAuthn,
 } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
@@ -131,7 +132,7 @@ function eip2537ToG2(sig256: Hex) {
 
 async function main() {
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log(' Tier-3 WebAuthn cumulative (0x0a) E2E — passkey + DVT BLS + guardian, Sepolia v0.21.0 (#234)');
+    console.log(' Tier-3 WebAuthn cumulative (0x0a) E2E — passkey + DVT BLS + guardian + tag-0x02 DVT ownerAuth, Sepolia v0.23.0 (#234/#261)');
     console.log('═══════════════════════════════════════════════════════════════════════════');
     if (RPCS.length === 0) throw new Error('No SEPOLIA_RPC_URL[/2/3] in .env.sepolia');
 
@@ -147,7 +148,7 @@ async function main() {
     const p256Y = norm(Buffer.from(p256Pub.slice(33, 65)).toString('hex'));
     const guardian = privateKeyToAccount(GUARDIAN_PK);
     const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: http(RPCS[0]) });
-    console.log(`\n[0a] factory(v0.22.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
+    console.log(`\n[0a] factory(v0.23.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
 
     // ── v0.22.0: deploy with the passkey + validator wired AT BIRTH (no setP256Key/setValidator tx) ──
     // getAddress + createAccount both take the SAME ownerP256X/Y (the salt now binds them).
@@ -200,7 +201,11 @@ async function main() {
     console.log(`[2] WebAuthn blob = ${(waBlob.length - 2) / 2} bytes (clientDataJSON challenge=userOpHash)`);
 
     // ── DVT BLS aggregate over userOpHash ───────────────────────────────────────────────────────
-    const ownerAuth = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    // #261: authorize the DVT with a TAG-0x02 device-passkey ownerAuth (the same WebAuthn assertion the
+    // composite uses). The v1.7.1 DVT eth_calls account.isValidOwnerAuth(userOpHash, ownerAuth), whose
+    // WEBAUTHN branch P256-verifies this against the account's on-chain p256KeyX/Y — NO KMS owner ECDSA.
+    const ownerAuth = packOwnerAuthWebAuthn(assertion, userOpHash);
+    console.log(`[2b] tag-0x02 device-passkey ownerAuth = ${(ownerAuth.length - 2) / 2} bytes (tag=0x${ownerAuth.slice(2, 4)})`);
     const userOpRpc = { sender: userOp.sender, nonce: numberToHex(userOp.nonce), initCode: userOp.initCode, callData: userOp.callData, accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas), gasFees: userOp.gasFees, paymasterAndData: userOp.paymasterAndData, signature: userOp.signature };
     const signed: { nodeId: Hex; signature: Hex }[] = [];
     for (const url of ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io']) {
@@ -247,8 +252,8 @@ async function main() {
     }
     console.log(`[6] negative (challenge != userOpHash) -> ${negResult === 0n ? '❌ accepted (BAD)' : `✅ rejected (${negResult})`}`);
 
-    console.log('\n┌─────────────── EVIDENCE (Tier-3 WebAuthn composite, v0.21.0 #234) ───────────────');
-    console.log(`│ factory        : ${FACTORY} (v0.21.0)`);
+    console.log('\n┌─────────────── EVIDENCE (Tier-3 WebAuthn composite + tag-0x02 DVT ownerAuth, v0.23.0 #234/#261) ───────────────');
+    console.log(`│ factory        : ${FACTORY} (v0.23.0)`);
     console.log(`│ account        : ${account}`);
     console.log(`│ userOpHash     : ${userOpHash}`);
     console.log(`│ waBlob bytes   : ${(waBlob.length - 2) / 2}`);
