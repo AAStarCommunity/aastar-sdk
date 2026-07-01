@@ -19,6 +19,14 @@ consumer path**.
 - NEVER report "verified" on `status=0x1` alone — decode + prove the post-state (FEATURE-MET).
 - NEVER call a release "done" before publish AND the smoke check pass.
 - NEVER hand to Codex before doing my OWN adversarial review.
+- **NEVER publish from local before review — HOTFIXES ARE NOT EXEMPT.** "Production-bricking" /
+  "urgent" / "the user reported the exact root cause" do NOT waive §5. Every publish (patch included)
+  goes through a PR + self-review + Codex/human approval BEFORE `npm publish`. This rule exists because
+  publishing a hotfix from local without review shipped incomplete fixes MORE than once (0.33.1 fixed the
+  Tier-1 double-sign but a Codex review of it immediately found Tier-2/3 still broken → 0.33.2; the #258
+  M1 "fix" likewise missed the Tier-1 case → #259). A signing/auth-path change is the LEAST exempt of all.
+  If production is down, the fastest SAFE path is still: PR → Codex → merge → publish — not a local publish
+  you have to re-patch.
 
 ## 1. Understand the diff — at SIGNATURE / struct level
 - [ ] Authoritative source: the per-version deploy record (`docs/DEPLOYMENT-v<X>.md`) > moving git tag > CHANGELOG table.
