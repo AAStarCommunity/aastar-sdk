@@ -687,6 +687,16 @@ export class TransferManager {
     ctx: SignerAuthContext | undefined
   ): Promise<DvtSignRequest> {
     const op = userOp as PackedUserOperation;
+    // DVT co-signing is a Tier-2/3 (v0.7/v0.8 packed) concern. A v0.6 UNPACKED UserOperation has no
+    // accountGasLimits/gasFees, so serializing it as packed would send undefined fields → the node
+    // recovers a DIFFERENT userOpHash than the one ownerAuth signed → owner-auth rejection. Fail loud
+    // instead of emitting a request that mysteriously fails auth (#257 Codex §5 B3).
+    if (op.accountGasLimits == null || op.gasFees == null) {
+      throw new Error(
+        "buildDvtRequest: DVT co-signing requires a v0.7/v0.8 PACKED UserOperation (accountGasLimits + " +
+          "gasFees). A v0.6 unpacked op reached the tiered/BLS signing path — this is a bug."
+      );
+    }
     const toHex = (v: unknown): string =>
       v == null
         ? "0x0"

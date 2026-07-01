@@ -195,8 +195,12 @@ describe("TransferManager", () => {
   describe("submitPreparedTransfer WebAuthn passkey path (#234 wrap)", () => {
     function seedWA(mgr: TransferManager, tier: number) {
       const validHash = "0x" + "11".repeat(32); // buildDvtRequest hexToBytes(userOpHash) needs valid hex
+      const z32 = "0x" + "00".repeat(32);
       (mgr as any).prepared.set("t1", {
-        userId: "u1", userOp: {}, userOpHash: validHash, version: "0.7",
+        // A v0.7 PACKED userOp (buildDvtRequest #257 requires accountGasLimits/gasFees present).
+        userId: "u1",
+        userOp: { sender: "0xacc", nonce: 0n, initCode: "0x", callData: "0x", accountGasLimits: z32, preVerificationGas: 0n, gasFees: z32, paymasterAndData: "0x", signature: "0x" },
+        userOpHash: validHash, version: "0.7",
         accountAddress: "0xacc", params: { useWebAuthnPasskey: true }, ownerMessageHex: validHash, createdAt: Date.now(),
       });
       vi.spyOn(mgr as any, "resolveSignStrategy").mockResolvedValue({ useECDSA: false, isCompositeValidator: true, tier });
