@@ -774,6 +774,17 @@ export class AccountManager {
     const config = buildFullInitConfig(fullParams);
 
     const { address: owner } = await this.signer.ensureSigner(userId);
+    // The account owner is the ECDSA signer address; it MUST be non-zero. A zero owner (owner()==0x0,
+    // "passkey-only") deploys fine but is rejected by the DVT's owner-auth gate (P256-owner authorization
+    // is Stage-2 / not yet supported), so BLS/Tier-2/3 finalization would silently fail later. Fail fast
+    // here rather than shipping an un-finalizable account (#261 Codex §5).
+    if (!owner || owner.toLowerCase() === zeroAddress) {
+      throw new Error(
+        "createAccountWithPasskey: the signer returned a zero owner address (owner()==0x0). AirAccounts " +
+          "need a non-zero ECDSA owner for DVT owner-authorization; a passkey-only account cannot finalize " +
+          "Tier-2/3 transfers (see airaccount-contract owner / DVT #40)."
+      );
+    }
 
     // Guardian sanity (factory reverts DuplicateGuardian / guardian==owner; getAddress does not → fail fast
     // so a pre-funded predicted address is never stranded). Codex §5 #249.
