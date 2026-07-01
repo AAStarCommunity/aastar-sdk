@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.0] - 2026-07-01
+**SDK Code Integrity Hash**: `43057cffa69c5491fcbb89da01ab5b106e75267b8c103b6e6abaefa7829d1b12`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Two B3-unblocking fixes: DVT node compatibility (#257) + the v0.22.0 guard/tier read regression (#254).**
+
+### #257 — DVT sign format + node discovery (+ P2P-migration seam)
+The redeployed DVT (v1.7) rejects the legacy `{ message }` sign body and validates owner authorization
+before co-signing; discovery returned 1 localhost node (Tier-3 needs ≥2). This blocked all Tier-3
+finalization.
+- **[FIX]** `BLSManager.getAvailableNodes`: iterate all seeds and use the EXTERNAL seed URL as the
+  apiEndpoint (the peer's registered apiEndpoint is `localhost:400x`), dedupe by nodeId → ≥2 external nodes.
+- **[FIX]** BLS sign request: POST `{ userOp (packed RPC), ownerAuth }` instead of `{ message }`.
+  `ownerAuth` = the owner's EIP-191 signature over `userOpHash` — a DVT authorization credential produced
+  in the SUBMIT flow (`buildDvtRequest`) and threaded as a transport param. It is NOT part of the on-chain
+  composite; the composite-signature functions stay pure (P256 + BLS + guardian).
+- **[REFACTOR]** The DVT transport is isolated in one method, `_coordinateBlsAggregate` — the
+  **P2P-migration seam**. A future self-organizing P2P transport swaps just it, with no change to the
+  composite assembly, the tiered packers, or the contract format.
+
+### #254 — guard/tier read regression on v0.22.0 accounts (completes 0.32.1)
+- **[FIX]** `AIRACCOUNT_ABI` lacked the standalone `tier1Limit()`/`tier2Limit()` getters (they lived in
+  the v0.22.0-removed `getConfigDescription` struct), so `prepareTransfer`'s guard-checker still reverted
+  at the tier read even after 0.32.1 fixed the guard-address read. Added the getters; removed the dead
+  `getConfigDescription()` declaration.
+- **[TEST]** `v022-preparetransfer-guard-read-e2e.ts` — the removed-function regression guard (§4).
+
+**On-chain (live Sepolia)**: SDK discovery → 3 external dvt nodes; SDK `{ userOp, ownerAuth }` → dvt1/2/3
+co-sign + aggregate 256B → EntryPoint `validate() == 0`. guard-checker `preCheck` resolves on a v0.22.0
+account. Evidence `docs/onchain-evidence/v0.33.0-dvt-compat-and-guard-read.md`.
+
 ## [0.32.1] - 2026-06-30
 **SDK Code Integrity Hash**: `02df1cc66d00506d97c1a826a37e6603058eb761dfa0103d025439936a69d646`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
