@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { zeroAddress, type PublicClient } from "viem";
+import { zeroAddress, bytesToHex, type PublicClient } from "viem";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { TransferRecord } from "../interfaces/storage-adapter";
 import { TransferManager, detectSignatureStrategy } from "../services/transfer-manager";
@@ -472,6 +472,58 @@ describe("TransferManager", () => {
       const result = await manager.getTransferHistory("user-1");
       expect(result.transfers).toHaveLength(1);
       expect(result.transfers[0].id).toBe("tx-user1");
+    });
+  });
+
+  describe("applySignature — single-use ceremony assertion (#259)", () => {
+    const PACKED = {
+      sender: "0xacc", nonce: 0n, initCode: "0x", callData: "0x",
+      accountGasLimits: "0x" + "00".repeat(32), preVerificationGas: 0n,
+      gasFees: "0x" + "00".repeat(32), paymasterAndData: "0x", signature: "0x",
+    };
+    const CTX = { webAuthnAssertion: { ChallengeId: "c1", Credential: {} } } as any;
+    const HASH = "0x" + "11".repeat(32);
+
+    it("Tier-1 does NOT build a DVT request (no second sign of the one-time assertion)", async () => {
+      const mgr = makeManager();
+      (mgr as any).signer = { signMessage: vi.fn().mockResolvedValue("0x" + "ab".repeat(65)) };
+      (mgr as any).blsService = { generateTieredSignature: vi.fn().mockResolvedValue("0xsig") };
+      const buildSpy = vi.spyOn(mgr as any, "buildDvtRequest");
+
+      await (mgr as any).applySignature("u1", { ...PACKED }, HASH, {}, CTX, { useECDSA: false, isCompositeValidator: false, tier: 1 });
+
+      // Tier-1 is a raw owner ECDSA over userOpHash + uses no DVT — building a dvtRequest would spend the
+      // single-use ceremony a SECOND time (ownerAuth) and 400 on the spent challenge.
+      expect(buildSpy).not.toHaveBeenCalled();
+      expect((mgr as any).blsService.generateTieredSignature).toHaveBeenCalledWith(
+        expect.objectContaining({ tier: 1, dvtRequest: undefined })
+      );
+    });
+
+    it("Tier-2/3 builds exactly ONE ceremony sign (ownerAuth); the composite adds no owner sign", async () => {
+      const mgr = makeManager();
+      const signMessage = vi.fn().mockResolvedValue("0x" + "ab".repeat(65));
+      (mgr as any).signer = { signMessage };
+      (mgr as any).blsService = { generateTieredSignature: vi.fn().mockResolvedValue("0xsig") };
+      const buildSpy = vi.spyOn(mgr as any, "buildDvtRequest");
+
+      await (mgr as any).applySignature("u1", { ...PACKED }, HASH, {}, CTX, { useECDSA: false, isCompositeValidator: true, tier: 2 });
+
+      expect(buildSpy).toHaveBeenCalledTimes(1); // Tier-2/3 DOES need the DVT ownerAuth
+      expect(signMessage).toHaveBeenCalledTimes(1); // exactly one ceremony sign (ownerAuth); mocked composite adds none
+    });
+
+    it("Tier-2/3 ceremony binds to userOpHash (not messagePointHash) so strict-KMS matches the submit sign (#259 Codex)", async () => {
+      const mgr = makeManager();
+      // The prepareTransfer ceremony commitment MUST equal what submit signs. For Tier-2/3 the only owner
+      // sign is now the DVT ownerAuth over userOpHash (#257) — NOT the messagePoint signature (dropped by
+      // #258 M1). Binding to keccak256(messagePoint) would make the strict-KMS challenge mismatch → 400.
+      for (const tier of [2, 3]) {
+        const msg = await (mgr as any).ownerMessageForStrategy({ useECDSA: false, tier }, HASH);
+        expect(bytesToHex(msg as Uint8Array)).toBe(HASH); // raw userOpHash bytes, not messagePointHash
+      }
+      const ecdsa = await (mgr as any).ownerMessageForStrategy({ useECDSA: true, tier: null }, HASH);
+      expect(bytesToHex(ecdsa as Uint8Array)).toBe(HASH);
     });
   });
 });

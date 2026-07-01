@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.2] - 2026-07-01
+**SDK Code Integrity Hash**: `3d790197ea8d226dda462ec4c22251a76909d1eec6c2166834972af0f3e7dcf0`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: Tier-2/3 strict-KMS ceremony bound to the wrong payload (completes the #259 unblock).**
+
+Supersedes 0.33.1 (Tier-1 double-sign fix). A Codex review of 0.33.1 caught a separate defect it still
+shipped:
+
+- **[FIX]** `prepareTransfer`'s `ownerMessageForStrategy` returned `keccak256(messagePoint)` for Tier-2/3,
+  so `beginCeremony` bound the strict-KMS challenge to `hashMessage(messagePointHash)`. But after #257 + the
+  #258 M1 fix, the ONLY owner signature Tier-2/3 produces is the DVT `ownerAuth` over `userOpHash` (the
+  messagePoint signature is skipped). Ceremony committed to messagePointHash while submit signed userOpHash
+  → strict-KMS challenge mismatch (400). Now binds to `userOpHash` for all owner-signed strategies.
+- (0.33.1) Tier-1 no longer builds a DVT `ownerAuth` (Tier-1 uses no DVT), so a single-use ceremony
+  assertion is signed exactly once.
+
+Evidence `docs/onchain-evidence/v0.33.2-ceremony-binding-fix.md`.
+
+## [0.33.1] - 2026-07-01
+**SDK Code Integrity Hash**: `13016d95748579be66e6fca38c6066fc1ce34ee2fa0974c1132b988a9b05e2eb`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: Tier-1 double-signed the single-use ceremony assertion — bricked arming / Tier-1 KMS ops.** (aastar-sdk#259)
+
+- **[FIX]** `applySignature` built the #257 DVT `ownerAuth` for ALL tiers. Tier-1 is a raw owner ECDSA
+  over `userOpHash` that uses NO DVT/BLS, so the SDK fed the SINGLE-USE WebAuthn ceremony assertion to
+  `signMessage` twice (ownerAuth + the Tier-1 op signature), and the KMS (correct anti-replay) rejected
+  the reused challenge with 400. Now a `dvtRequest`/`ownerAuth` is built ONLY for Tier-2/3 (which actually
+  talk to the DVT); Tier-1 signs exactly once. Principle: one ceremony assertion → exactly one `signMessage`.
+- **[TEST]** Regression tests: Tier-1 builds no dvtRequest; Tier-2/3 = exactly one ceremony sign. Evidence
+  `docs/onchain-evidence/v0.33.1-tier1-double-sign-fix.md`.
+
 ## [0.33.0] - 2026-07-01
 **SDK Code Integrity Hash**: `a2537d8768dea9d56d931ec04ca20db6840a202a274e25c1139dad4408dd0ed3`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

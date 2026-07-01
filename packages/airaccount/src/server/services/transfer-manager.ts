@@ -11,7 +11,6 @@ import {
   type Abi,
 } from "viem";
 import { randomUUID } from "node:crypto";
-import { generateMessagePoint } from "../../migration/viem/bls-packing";
 // Local human-readable ABIs (not in @aastar/core); parseAbi is required to feed
 // them to viem's readContract / encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
@@ -648,20 +647,21 @@ export class TransferManager {
 
   /**
    * The exact message the single owner signature will sign (before the adapter's EIP-191 wrap),
-   * for a resolved strategy — so prepareTransfer binds the commitment to the value submit signs:
-   *  - ECDSA / Tier-1: the userOpHash.
-   *  - Tier-2/3: `keccak256(messagePoint)` — Tier-2/3 omit the owner ECDSA over userOpHash, so the
-   *    one owner signature is the messagePoint signature (mirrors BLSSignatureService).
+   * for a resolved strategy — so prepareTransfer binds the strict-KMS ceremony challenge to the value
+   * submit actually signs. For ALL owner-signed strategies that is now the `userOpHash`:
+   *  - ECDSA / Tier-1: the owner ECDSA over userOpHash.
+   *  - Tier-2/3: the ONLY owner signature is the DVT `ownerAuth` over userOpHash (#257). Tier-2/3 omit
+   *    both the owner ECDSA AND the messagePoint signature (#258 M1 — generateBLSSignature skips them
+   *    under skipOwnerOpSignature). #259: previously this returned `keccak256(messagePoint)`, so the
+   *    ceremony committed to messagePointHash while submit signed userOpHash → strict-KMS challenge
+   *    mismatch (400). Bind to userOpHash to match.
    */
   private async ownerMessageForStrategy(
     strategy: { useECDSA: boolean; tier: number | null },
     userOpHash: string
   ): Promise<Uint8Array> {
-    if (strategy.useECDSA || strategy.tier === 1) return hexToBytes(userOpHash as `0x${string}`);
-    if (strategy.tier != null) {
-      const messagePoint = await generateMessagePoint(userOpHash);
-      return hexToBytes(keccak256(messagePoint as `0x${string}`));
-    }
+    // Every current owner-signature path (ECDSA, Tier-1 op sign, Tier-2/3 DVT ownerAuth) signs userOpHash.
+    if (strategy.useECDSA || strategy.tier != null) return hexToBytes(userOpHash as `0x${string}`);
     throw new Error(
       "prepareTransfer: the non-tiered BLS path needs two owner signatures and can't be prepared " +
         "with a single device-passkey assertion. Use useAirAccountTiering:true (single signature)."
@@ -758,6 +758,13 @@ export class TransferManager {
       }
     } else if (strategy.tier != null) {
       this.logger.log(`Tier ${strategy.tier} selected`);
+      // #259: a KMS WebAuthn ceremony assertion is SINGLE-USE. Tier-1 is a raw owner ECDSA over
+      // userOpHash (generateTieredSignature signs it directly) and uses NO DVT/BLS — so building a
+      // dvtRequest here would spend the assertion a SECOND time on ownerAuth (same owner, same
+      // userOpHash) and the second SignHash hits a spent challenge (400). Only Tier-2/3 talk to the DVT;
+      // for them the ownerAuth is the ONLY ceremony sign (the composite uses the device passkey + BLS +
+      // guardian, and generateBLSSignature skips aaSignature/messagePointSignature under skipOwnerOpSignature).
+      const needsDvt = (strategy.tier as number) >= 2;
       userOp.signature = await this.blsService.generateTieredSignature({
         tier: strategy.tier as TierLevel,
         userId,
@@ -765,7 +772,9 @@ export class TransferManager {
         p256Signature: params.p256Signature,
         guardianSigner: params.guardianSigner,
         ctx: assertionCtx,
-        dvtRequest: await this.buildDvtRequest(userId, userOp, userOpHash, assertionCtx),
+        dvtRequest: needsDvt
+          ? await this.buildDvtRequest(userId, userOp, userOpHash, assertionCtx)
+          : undefined,
       });
     } else {
       // BLS accounts are always compositeValidator by design — algId prefix applied unconditionally.
