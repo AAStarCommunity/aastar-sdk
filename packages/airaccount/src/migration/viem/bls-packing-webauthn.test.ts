@@ -21,6 +21,10 @@ import {
   packCumulativeT2WA,
   packCumulativeT3WA,
   packBlsPayload,
+  packOwnerAuthEcdsa,
+  packOwnerAuthWebAuthn,
+  OWNER_AUTH_TAG_ECDSA,
+  OWNER_AUTH_TAG_WEBAUTHN,
   ALG_CUMULATIVE_T2_WA,
   ALG_CUMULATIVE_T3_WA,
 } from "./bls-packing";
@@ -125,3 +129,35 @@ describe("packCumulativeT2WA / packCumulativeT3WA (contract #147/#148 layout)", 
     expect(("0x" + out.slice(2).slice(-130)) as Hex).toBe(GUARDIAN);
   });
 });
+
+// #261: TAGGED ownerAuth the DVT forwards to account.isValidOwnerAuth(userOpHash, ownerAuth)
+// (airaccount-contract v0.23.0, magic 0xa0cf00cf). Tag 0x01 = ECDSA, tag 0x02 = device-passkey WebAuthn.
+describe("packOwnerAuth* (DVT ownerAuth for isValidOwnerAuth, #261)", () => {
+  const userOpHash = ("0x" + "cd".repeat(32)) as Hex;
+  const priv = hexToBytes(("0x" + "11".repeat(32)) as Hex);
+
+  it("packOwnerAuthWebAuthn = 0x02 ‖ packWebAuthnBlob(assertion) (tag 0x02, byte-identical payload)", () => {
+    const a = makeAssertion(userOpHash, priv);
+    const ownerAuth = packOwnerAuthWebAuthn(a, userOpHash);
+    const blob = packWebAuthnBlob(a, userOpHash);
+    expect(uint8(ownerAuth, 0)).toBe(OWNER_AUTH_TAG_WEBAUTHN); // 0x02
+    expect(("0x" + ownerAuth.slice(4)) as Hex).toBe(blob); // remainder is exactly the WebAuthn blob
+    expect(size(ownerAuth)).toBe(1 + size(blob));
+  });
+
+  it("packOwnerAuthEcdsa = 0x01 ‖ 65-byte EIP-191 sig (tag 0x01)", () => {
+    const sig = ("0x" + "ab".repeat(65)) as Hex; // synthetic 65-byte r‖s‖v
+    const ownerAuth = packOwnerAuthEcdsa(sig);
+    expect(uint8(ownerAuth, 0)).toBe(OWNER_AUTH_TAG_ECDSA); // 0x01
+    expect(("0x" + ownerAuth.slice(4)) as Hex).toBe(sig);
+    expect(size(ownerAuth)).toBe(66);
+  });
+
+  it("packOwnerAuthEcdsa rejects a non-65-byte signature (fail-loud)", () => {
+    expect(() => packOwnerAuthEcdsa(("0x" + "ab".repeat(64)) as Hex)).toThrow(/65-byte/);
+  });
+});
+
+function uint8(hex: Hex, byteIndex: number): number {
+  return hexToBytes(hex)[byteIndex];
+}

@@ -229,6 +229,40 @@ export function packWebAuthnBlob(
 }
 
 /**
+ * Owner-authorization tag bytes for the account's `isValidOwnerAuth(userOpHash, ownerAuth)` view
+ * (airaccount-contract v0.23.0+, issue #159). The DVT forwards the SDK's `ownerAuth` verbatim to
+ * that view via eth_call; the first byte selects the verification branch.
+ */
+export const OWNER_AUTH_TAG_ECDSA = 0x01;
+export const OWNER_AUTH_TAG_WEBAUTHN = 0x02;
+
+/**
+ * Tag an ECDSA/KMS owner authorization: `0x01 ‖ 65-byte EIP-191 personal_sign(userOpHash)`.
+ * Mirrors the contract's `OWNER_AUTH_TAG_ECDSA` branch (which applies `toEthSignedMessageHash` then
+ * ecrecover == owner()), so `personalSign65` MUST be an EIP-191 personal_sign, NOT a raw sign.
+ */
+export function packOwnerAuthEcdsa(personalSign65: Hex): Hex {
+  if (size(personalSign65) !== 65) {
+    throw new Error(`packOwnerAuthEcdsa: expected a 65-byte EIP-191 signature, got ${size(personalSign65)} bytes`);
+  }
+  return concat([numberToHex(OWNER_AUTH_TAG_ECDSA, { size: 1 }), personalSign65]);
+}
+
+/**
+ * Tag a device-passkey owner authorization: `0x02 ‖ abi.encode(authenticatorData, clientDataJSONPrefix,
+ * clientDataJSONSuffix, r, s)`. The device passkey is the account's `p256KeyX/Y` owner factor; the
+ * contract's `OWNER_AUTH_TAG_WEBAUTHN` branch P256-verifies this blob against it. The payload is exactly
+ * {@link packWebAuthnBlob}'s output (same assertion the composite P256 factor uses), so re-packing it
+ * here does NOT re-consume any one-time credential — it is a pure re-encode.
+ */
+export function packOwnerAuthWebAuthn(
+  assertion: Parameters<typeof packWebAuthnBlob>[0],
+  userOpHash: Hex
+): Hex {
+  return concat([numberToHex(OWNER_AUTH_TAG_WEBAUTHN, { size: 1 }), packWebAuthnBlob(assertion, userOpHash)]);
+}
+
+/**
  * Pack a WebAuthn cumulative Tier-2 signature (algId 0x09):
  *   [0x09 (1)] [waBlobLen: uint32 BE (4)] [waBlob] [blsPayload]
  * where blsPayload = `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]` (build via {@link packBlsPayload}).

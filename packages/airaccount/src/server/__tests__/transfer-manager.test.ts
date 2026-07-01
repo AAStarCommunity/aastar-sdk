@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { zeroAddress, bytesToHex, type PublicClient } from "viem";
+import { zeroAddress, bytesToHex, sha256, concat, hexToBytes, stringToBytes, type Hex, type PublicClient } from "viem";
+import { p256 } from "@noble/curves/nist.js";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { TransferRecord } from "../interfaces/storage-adapter";
 import { TransferManager, detectSignatureStrategy } from "../services/transfer-manager";
@@ -12,6 +13,20 @@ import { EntryPointVersion } from "../constants/entrypoint";
  * The full executeTransfer flow requires real chain interaction
  * and is better tested as an integration test.
  */
+
+/** A synthetic device-passkey WebAuthn assertion (software P-256) whose challenge == userOpHash. */
+function makeDeviceAssertion(userOpHash: Hex) {
+  const b64 = (bytes: Uint8Array) => {
+    let bin = ""; for (const c of bytes) bin += String.fromCharCode(c);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+  const clientDataJSON = '{"type":"webauthn.get","challenge":"' + b64(hexToBytes(userOpHash)) + '","origin":"https://app"}';
+  const authenticatorData = hexToBytes(("0x" + "ab".repeat(32) + "05" + "00000001") as Hex);
+  const payloadHash = sha256(concat([bytesToHex(authenticatorData), sha256(stringToBytes(clientDataJSON))]));
+  const der = p256.sign(hexToBytes(payloadHash), hexToBytes(("0x" + "11".repeat(32)) as Hex), { lowS: true, prehash: false, format: "der" });
+  return { authenticatorData, clientDataJSON, signature: der };
+}
+
 describe("TransferManager", () => {
   let storage: MemoryStorage;
 
@@ -248,8 +263,10 @@ describe("TransferManager", () => {
           throw new Error("No active BLS signer nodes available");
         },
       };
+      // #261: buildDvtRequest now packs the device assertion into a tag-0x02 ownerAuth, so it must be a
+      // VALID assertion over the prepared userOpHash (0x11..) — else it fails there, not at the BLS mock.
       await expect(
-        mgr.submitPreparedTransfer("u1", { transferId: "t1", deviceWebAuthn: ASSERTION })
+        mgr.submitPreparedTransfer("u1", { transferId: "t1", deviceWebAuthn: makeDeviceAssertion("0x" + "11".repeat(32)) })
       ).rejects.toThrow(/BLS signer nodes/);
       // The one-time prepared transfer must SURVIVE an async failure so the caller can resubmit
       // without re-running prepareTransfer + a fresh WebAuthn ceremony.
@@ -524,6 +541,35 @@ describe("TransferManager", () => {
       }
       const ecdsa = await (mgr as any).ownerMessageForStrategy({ useECDSA: true, tier: null }, HASH);
       expect(bytesToHex(ecdsa as Uint8Array)).toBe(HASH);
+    });
+  });
+
+  describe("buildDvtRequest — tagged ownerAuth (#261)", () => {
+    const PACKED = {
+      sender: "0xacc", nonce: 0n, initCode: "0x", callData: "0x",
+      accountGasLimits: "0x" + "00".repeat(32), preVerificationGas: 0n,
+      gasFees: "0x" + "00".repeat(32), paymasterAndData: "0x", signature: "0x",
+    };
+    const HASH = ("0x" + "cd".repeat(32)) as Hex;
+
+    it("device-passkey → tag 0x02 WebAuthn ownerAuth, and does NOT KMS-sign", async () => {
+      const mgr = makeManager();
+      const signMessage = vi.fn();
+      (mgr as any).signer = { signMessage };
+      const req = await (mgr as any).buildDvtRequest("u1", { ...PACKED }, HASH, undefined, makeDeviceAssertion(HASH));
+      expect(hexToBytes(req.ownerAuth as Hex)[0]).toBe(0x02); // WEBAUTHN tag
+      expect(signMessage).not.toHaveBeenCalled(); // no KMS owner sign on the device-passkey path
+    });
+
+    it("ECDSA/KMS (no deviceWebAuthn) → tag 0x01 ‖ personal_sign(userOpHash)", async () => {
+      const mgr = makeManager();
+      const sig = ("0x" + "ab".repeat(65)) as Hex;
+      const signMessage = vi.fn().mockResolvedValue(sig);
+      (mgr as any).signer = { signMessage };
+      const req = await (mgr as any).buildDvtRequest("u1", { ...PACKED }, HASH, { webAuthnAssertion: {} }, undefined);
+      expect(hexToBytes(req.ownerAuth as Hex)[0]).toBe(0x01); // ECDSA tag
+      expect(("0x" + (req.ownerAuth as string).slice(4))).toBe(sig); // remainder is exactly the 65-byte sig
+      expect(signMessage).toHaveBeenCalledTimes(1);
     });
   });
 });
