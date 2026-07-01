@@ -19,7 +19,7 @@ import { parseAbi, encodeFunctionData } from "viem";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { readValidatorGasEstimate } from "../providers/typed-reads";
 import { AccountManager } from "./account-manager";
-import { BLSSignatureService, GuardianSigner, DeviceWebAuthnAssertion } from "./bls-signature-service";
+import { BLSSignatureService, GuardianSigner, DeviceWebAuthnAssertion, DvtSignRequest } from "./bls-signature-service";
 import { GuardChecker } from "./guard-checker";
 import { wrapExecuteUserOp } from "../utils/execute-user-op";
 import { PaymasterManager } from "./paymaster-manager";
@@ -500,6 +500,15 @@ export class TransferManager {
         userOpHash: prep.userOpHash,
         deviceWebAuthn: params.deviceWebAuthn,
         guardianSigner: params.guardianSigner ?? prep.params.guardianSigner,
+        // #257: the DVT needs owner authorization (owner EIP-191 over userOpHash). For a device-passkey
+        // (WebAuthn) submit the owner sign uses the same signer; an EOA owner signs inline, a KMS owner
+        // uses its ceremony auth context (webAuthnAssertion) when present.
+        dvtRequest: await this.buildDvtRequest(
+          userId,
+          prep.userOp,
+          prep.userOpHash,
+          params.webAuthnAssertion ? { webAuthnAssertion: params.webAuthnAssertion } : undefined
+        ),
       })) as `0x${string}`;
       this.prepared.delete(params.transferId); // one-time — only after signing succeeded
       return this.finalizeAndSubmit(
@@ -664,6 +673,53 @@ export class TransferManager {
    * BLS). Shared by executeTransfer and submitPreparedTransfer so the signing logic never drifts;
    * taking the resolved strategy (not re-detecting) means submit signs exactly the committed payload.
    */
+  /**
+   * #257: build the DVT sign request `{ userOp (packed, RPC hex), ownerAuth }`. `ownerAuth` = the
+   * owner's EIP-191 signature over `userOpHash` — the owner-authorization the redeployed DVT (v1.7)
+   * validates before co-signing. Produced HERE (the submit flow, where owner authorization belongs) and
+   * threaded into the BLS coordination as a pure transport credential — it is NOT part of the on-chain
+   * composite signature, and the composite-assembly functions do not produce it.
+   */
+  private async buildDvtRequest(
+    userId: string,
+    userOp: UserOperation | PackedUserOperation,
+    userOpHash: string,
+    ctx: SignerAuthContext | undefined
+  ): Promise<DvtSignRequest> {
+    const op = userOp as PackedUserOperation;
+    // DVT co-signing is a Tier-2/3 (v0.7/v0.8 packed) concern. A v0.6 UNPACKED UserOperation has no
+    // accountGasLimits/gasFees, so serializing it as packed would send undefined fields → the node
+    // recovers a DIFFERENT userOpHash than the one ownerAuth signed → owner-auth rejection. Fail loud
+    // instead of emitting a request that mysteriously fails auth (#257 Codex §5 B3).
+    if (op.accountGasLimits == null || op.gasFees == null) {
+      throw new Error(
+        "buildDvtRequest: DVT co-signing requires a v0.7/v0.8 PACKED UserOperation (accountGasLimits + " +
+          "gasFees). A v0.6 unpacked op reached the tiered/BLS signing path — this is a bug."
+      );
+    }
+    const toHex = (v: unknown): string =>
+      v == null
+        ? "0x0"
+        : typeof v === "bigint"
+          ? "0x" + v.toString(16)
+          : typeof v === "string" && v.startsWith("0x")
+            ? v
+            : "0x" + BigInt(v as string | number).toString(16);
+    const rpcUserOp: Record<string, unknown> = {
+      sender: op.sender,
+      nonce: toHex(op.nonce),
+      initCode: op.initCode ?? "0x",
+      callData: op.callData,
+      accountGasLimits: op.accountGasLimits,
+      preVerificationGas: toHex(op.preVerificationGas),
+      gasFees: op.gasFees,
+      paymasterAndData: op.paymasterAndData ?? "0x",
+      signature: op.signature ?? "0x",
+    };
+    const ownerAuth = await this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
+    return { userOp: rpcUserOp, ownerAuth };
+  }
+
   private async applySignature(
     userId: string,
     userOp: UserOperation | PackedUserOperation,
@@ -709,10 +765,13 @@ export class TransferManager {
         p256Signature: params.p256Signature,
         guardianSigner: params.guardianSigner,
         ctx: assertionCtx,
+        dvtRequest: await this.buildDvtRequest(userId, userOp, userOpHash, assertionCtx),
       });
     } else {
       // BLS accounts are always compositeValidator by design — algId prefix applied unconditionally.
-      const blsData = await this.blsService.generateBLSSignature(userId, userOpHash, assertionCtx);
+      const blsData = await this.blsService.generateBLSSignature(userId, userOpHash, assertionCtx, {
+        dvtRequest: await this.buildDvtRequest(userId, userOp, userOpHash, assertionCtx),
+      });
       const packedBls = await this.blsService.packSignature(blsData);
       userOp.signature = concat([numberToHex(ALG_ID.BLS, { size: 1 }), packedBls as `0x${string}`]);
     }

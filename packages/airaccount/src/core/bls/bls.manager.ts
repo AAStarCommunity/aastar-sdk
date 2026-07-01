@@ -26,37 +26,49 @@ export class BLSManager {
   async getAvailableNodes(): Promise<BLSNode[]> {
     const { seedNodes, discoveryTimeout = 5000 } = this.config;
 
+    // #257/#258: each externally-reachable seed (e.g. https://dvt1.aastar.io) is ONE DVT node whose
+    // registered `apiEndpoint` is its INTERNAL address (http://localhost:400x) — NOT reachable from an SDK
+    // consumer. So we treat each SEED URL as the node's external apiEndpoint and iterate ALL seeds (the
+    // old logic returned only the first seed's peer list → 1 localhost node → Tier-3 (needs >= 2) couldn't
+    // aggregate).
+    //
+    // #258 review H1: dedupe by the EXTERNAL ENDPOINT, NEVER by a peer nodeId. The DVT has no self-identity
+    // endpoint, and /gossip/peers is not guaranteed self-first, so picking a peer's nodeId as "this seed's
+    // identity" can be wrong; keying nodes by that nodeId would then blacklist and silently drop a correct
+    // seed. The nodeId here is ADVISORY metadata only — the authoritative per-node nodeId used for BLS
+    // aggregation comes from each /signature/sign RESPONSE (see _coordinateBlsAggregate), so a best-effort
+    // value cannot corrupt aggregation.
+    const nodes: BLSNode[] = [];
+    const seenEndpoints = new Set<string>();
+
     for (const seedEndpoint of seedNodes) {
+      const endpoint = seedEndpoint.replace(/\/+$/, "");
+      if (seenEndpoints.has(endpoint)) continue;
       try {
-        // Try to get peers from gossip endpoint
-        const response = await axios.get(`${seedEndpoint}/gossip/peers`, {
-          timeout: discoveryTimeout,
-        });
-
-        const peers = response.data.peers || [];
-
-        // Filter active nodes with proper structure
-        const activeNodes: BLSNode[] = peers
-          .filter((p: any) => p.status === "active" && p.apiEndpoint && p.publicKey)
-          .map((p: any, index: number) => ({
-            index: index + 1, // 1-based index likely expected by contract if using bitmap
-            nodeId: p.nodeId,
-            nodeName: p.nodeName,
-            apiEndpoint: p.apiEndpoint,
-            status: "active",
-            publicKey: p.publicKey,
-          }));
-
-        if (activeNodes.length > 0) {
-          return activeNodes;
-        }
+        const response = await axios.get(`${endpoint}/gossip/peers`, { timeout: discoveryTimeout });
+        const peers: Array<{ status?: string; nodeId?: string; nodeName?: string; publicKey?: string }> =
+          response.data.peers || [];
+        // Require at least one ACTIVE BLS identity (nodeId + publicKey) so we don't add a dead endpoint.
+        // Best-effort self identity: when the node reports a single active peer (the current DVT deployment)
+        // it is unambiguous; otherwise the first active is advisory (authoritative nodeId comes from signing).
+        const active = peers.filter((p) => p.status === "active" && p.nodeId && p.publicKey);
+        if (active.length === 0) continue;
+        const self = active[0];
+        seenEndpoints.add(endpoint);
+        nodes.push({
+          index: nodes.length + 1, // 1-based ordering
+          nodeId: self.nodeId,
+          nodeName: self.nodeName,
+          apiEndpoint: endpoint, // EXTERNAL seed URL, NOT the peer's localhost apiEndpoint
+          status: "active",
+          publicKey: self.publicKey,
+        } as BLSNode);
       } catch {
-        // Try next seed node
-        continue;
+        continue; // seed unreachable — try the next
       }
     }
 
-    return [];
+    return nodes;
   }
 
   /**

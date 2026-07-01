@@ -534,33 +534,24 @@ async function paymasterManagement(client: AirAccountServerClient) {
 // ============================================
 
 async function blsSignatures(client: AirAccountServerClient) {
-  // BLS signatures require seed nodes for the gossip network.
-  // Configure them in the ServerConfig.
+  // BLS signatures require seed nodes for the gossip network (configure `blsSeedNodes` in ServerConfig).
+  //
+  // NOTE (#257): the redeployed DVT (v1.7) validates OWNER AUTHORIZATION before co-signing, so the
+  // low-level `generateBLSSignature` now needs a `dvtRequest` ({ userOp, ownerAuth }). In practice you do
+  // NOT call it directly — drive it through the transfer flow, which builds the packed userOp, produces
+  // ownerAuth (owner EIP-191 over userOpHash) in `submitPreparedTransfer`, and threads it in:
+  //
+  //   const prep = await client.transfers.prepareTransfer(userId, { to, amount, useAirAccountTiering: true });
+  //   // (frontend) device-passkey ceremony over prep.userOpHash …
+  //   await client.transfers.submitPreparedTransfer(userId, { transferId: prep.transferId, deviceWebAuthn, guardianSigner });
+  //
+  // submitPreparedTransfer assembles the Tier-2/3 composite (P256 + DVT BLS aggregate + guardian) itself.
+  console.log("BLS signing runs inside submitPreparedTransfer — see the transfer example.");
 
-  // Generate BLS signature for a UserOp hash
-  const userOpHash =
-    "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-  const blsData = await client.bls.generateBLSSignature(
-    "user-abc",
-    userOpHash
-  );
-  console.log("BLS signature data:", blsData);
-
-  // Pack signature for on-chain verification
-  const packed = await client.bls.packSignature(blsData);
-  console.log("Packed signature:", packed);
-
-  // Generate tiered signature (AirAccount M4)
-  // Tier 1: raw ECDSA (algId 0x02)
-  // Tier 2: P256 + BLS aggregate (algId 0x04)
-  // Tier 3: P256 + BLS + Guardian ECDSA (algId 0x05)
-  const tieredSig = await client.bls.generateTieredSignature({
-    tier: 2,
-    userId: "user-abc",
-    userOpHash,
-    p256Signature: "0x...", // 64-byte P256 signature
-  });
-  console.log("Tiered (T2) signature:", tieredSig);
+  // Tiered signatures (AirAccount) — Tier 1: raw ECDSA (0x02); Tier 2: P256 + BLS aggregate (0x04/0x09);
+  // Tier 3: + Guardian ECDSA (0x05/0x0a). The tier is resolved on-chain from the transfer value and the
+  // composite is assembled inside submitPreparedTransfer (which also produces the DVT ownerAuth, #257) —
+  // integrators drive it through prepareTransfer/submitPreparedTransfer, not generateTieredSignature.
 }
 
 // ============================================
