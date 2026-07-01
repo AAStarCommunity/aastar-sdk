@@ -37,6 +37,9 @@ import {
     stringToBytes,
     bytesToHex,
     getAddress,
+    parseEther,
+    formatEther,
+    encodeFunctionData,
     type Address,
     type Hex,
     type PublicClient,
@@ -61,6 +64,8 @@ import {
     packBlsPayload,
     packOwnerAuthWebAuthn,
 } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op';
+import { UserOperationBuilder } from '../../../packages/sdk/src/index.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -128,6 +133,25 @@ function eip2537ToG2(sig256: Hex) {
     });
     point.assertValidity();
     return point;
+}
+
+/** POST {userOp, tag-0x02 ownerAuth} to the 3 live DVT nodes → aggregate their BLS co-signatures. */
+async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Promise<Hex> {
+    const signed: { nodeId: Hex; signature: Hex }[] = [];
+    for (const url of ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io']) {
+        try {
+            const res = await fetch(`${url}/signature/sign`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userOp: userOpRpc, ownerAuth }) });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok || !body.nodeId || !body.signature) { console.warn(`    ! ${url} -> ${res.status}`); continue; }
+            const registered = (await withRpcFallback((c) => c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [norm(body.nodeId)] }))) as boolean;
+            if (!registered) { console.warn(`    ! ${url} not registered`); continue; }
+            signed.push({ nodeId: norm(body.nodeId), signature: norm(body.signature) });
+            console.log(`    ${url.replace('https://', '')}  co-signed (isValidOwnerAuth ✓)`);
+        } catch (e) { console.warn(`    ! ${url} ${(e as Error).message.slice(0, 70)}`); }
+    }
+    if (signed.length < 2) throw new Error(`need >= 2 node co-signatures, got ${signed.length}`);
+    const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
+    return packBlsPayload(signed.map((s) => s.nodeId), encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex));
 }
 
 async function main() {
@@ -251,6 +275,72 @@ async function main() {
         negResult = 'sdk-rejected'; // packWebAuthnBlob's challenge!=userOpHash guard fired (correct)
     }
     console.log(`[6] negative (challenge != userOpHash) -> ${negResult === 0n ? '❌ accepted (BAD)' : `✅ rejected (${negResult})`}`);
+    if (accepted !== 0n) throw new Error('FAIL: WebAuthn 0x0a composite was NOT accepted on-chain');
+    if (negResult === 0n) throw new Error('FAIL: wrong-challenge negative was accepted');
+
+    // ═══════════════ Phase 2: REAL gasless Tier-3 transfer via bundler → g2 receives 0.051 ETH ═══════════════
+    console.log('\n─────────── Phase 2: real device-passkey Tier-3 transfer (bundler) ───────────');
+    const bundlerUrl = (process.env.PIMLICO_BUNDLER_URL || '').replace(/^["']|["']$/g, '');
+    if (!bundlerUrl) throw new Error('PIMLICO_BUNDLER_URL missing in .env.sepolia');
+    const bundler = createPublicClient({ chain: sepolia, transport: http(bundlerUrl) });
+    const G2 = getAddress('0xC59516625749001366aFab57FEFE23f3b62bB8B7'); // deterministic B3 recipient
+    const TRANSFER = parseEther('0.051');
+
+    const g2Before = (await withRpcFallback((c) => c.getBalance({ address: G2 }))) as bigint;
+    const acctBal = (await withRpcFallback((c) => c.getBalance({ address: account }))) as bigint;
+    const NEED = TRANSFER + parseEther('0.03'); // transfer + generous gas prefund (unused is refunded by the EntryPoint)
+    if (acctBal < NEED) {
+        const fundTx = await walletClient.sendTransaction({ to: account, value: NEED - acctBal, chain: sepolia });
+        await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: fundTx }));
+        console.log(`[7] funded account +${formatEther(NEED - acctBal)} ETH  (tx ${fundTx})`);
+    }
+
+    // Real callData: execute(g2, 0.051 ETH, 0x), wrapped with executeUserOp for the guard-enabled account.
+    const EXEC_ABI = [{ type: 'function', name: 'execute', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'bytes' }], outputs: [] }] as const;
+    const inner = encodeFunctionData({ abi: EXEC_ABI, functionName: 'execute', args: [G2, TRANSFER, '0x'] });
+    const callData2 = wrapExecuteUserOp(inner) as Hex;
+    const nonce2 = (await withRpcFallback((c) => entryPointActions(ENTRY_POINT)(c).getNonce({ sender: account, key: 0n }))) as bigint;
+    // Pimlico enforces a floor on maxPriorityFeePerGas — take its own recommended price (the userOpHash
+    // binds these, so they must be final BEFORE we sign the composite below).
+    const gp = (await (bundler as any).request({ method: 'pimlico_getUserOperationGasPrice', params: [] })) as { fast: { maxFeePerGas: Hex; maxPriorityFeePerGas: Hex } };
+    const maxFee = BigInt(gp.fast.maxFeePerGas);
+    const maxPrio = BigInt(gp.fast.maxPriorityFeePerGas);
+    const txOp: PackedUserOp = {
+        sender: account, nonce: nonce2, initCode: '0x', callData: callData2,
+        accountGasLimits: UserOperationBuilder.packAccountGasLimits(1_200_000n, 300_000n) as Hex, // verification (BLS-heavy) | call
+        preVerificationGas: 200_000n,
+        gasFees: UserOperationBuilder.packGasFees(maxPrio, maxFee) as Hex,
+        paymasterAndData: '0x', signature: '0x',
+    };
+    const txHash = (await withRpcFallback((c) => c.readContract({ address: ENTRY_POINT, abi: EntryPointABI, functionName: 'getUserOpHash', args: [txOp] }))) as Hex;
+    console.log(`[8] real userOpHash = ${txHash}  (transfer ${formatEther(TRANSFER)} ETH → ${G2})`);
+
+    // Tier-3 composite over the REAL userOpHash: device passkey → tag-0x02 DVT ownerAuth → BLS → guardian.
+    const txAssertion = makeWebAuthnAssertion(txHash, P256_PRIV);
+    const txWaBlob = packWebAuthnBlob(txAssertion, txHash);
+    const txOwnerAuth = packOwnerAuthWebAuthn(txAssertion, txHash);
+    const txOpRpc = { sender: txOp.sender, nonce: numberToHex(txOp.nonce), initCode: txOp.initCode, callData: txOp.callData, accountGasLimits: txOp.accountGasLimits, preVerificationGas: numberToHex(txOp.preVerificationGas), gasFees: txOp.gasFees, paymasterAndData: txOp.paymasterAndData, signature: txOp.signature };
+    const txBlsPayload = await coSignDvt(txOpRpc, txOwnerAuth);
+    const txGuardianSig = await guardianWallet.signMessage({ account: guardian, message: { raw: txHash } });
+    txOp.signature = packCumulativeT3WA(txWaBlob, txBlsPayload, txGuardianSig);
+    console.log(`[9] Tier-3 composite signed (${(txOp.signature.length - 2) / 2} bytes, algId 0x0a)`);
+
+    // Submit via bundler → wait for the on-chain receipt.
+    const submitHash = await (bundler as any).request({ method: 'eth_sendUserOperation', params: [UserOperationBuilder.toAlchemyUserOperation(txOp), ENTRY_POINT] });
+    console.log(`[10] eth_sendUserOperation → ${submitHash}`);
+    let rcpt: any = null;
+    for (let i = 0; i < 45; i++) {
+        rcpt = await (bundler as any).request({ method: 'eth_getUserOperationReceipt', params: [submitHash] }).catch(() => null);
+        if (rcpt) break;
+        await new Promise((r) => setTimeout(r, 4000));
+    }
+    if (!rcpt) throw new Error('no UserOperation receipt after ~180s');
+    const opSuccess = rcpt.success === true || rcpt.success === 'true';
+    const onchainTx = rcpt.receipt?.transactionHash;
+    console.log(`[11] receipt: success=${opSuccess}  tx=${onchainTx}`);
+    const g2After = (await withRpcFallback((c) => c.getBalance({ address: G2 }))) as bigint;
+    const delta = g2After - g2Before;
+    console.log(`[12] g2 balance ${formatEther(g2Before)} → ${formatEther(g2After)} ETH  (Δ +${formatEther(delta)})`);
 
     console.log('\n┌─────────────── EVIDENCE (Tier-3 WebAuthn composite + tag-0x02 DVT ownerAuth, v0.23.0 #234/#261) ───────────────');
     console.log(`│ factory        : ${FACTORY} (v0.23.0)`);
@@ -260,11 +350,16 @@ async function main() {
     console.log(`│ composite bytes: ${(composite.length - 2) / 2} (algId 0x0a)`);
     console.log(`│ validate(WA)   : ${accepted} ${accepted === 0n ? '= 0 ✅ ACCEPTED' : '❌'}`);
     console.log(`│ negative       : ${negResult} ${negResult !== 0n ? '✅ rejected' : '❌'}`);
+    console.log(`│ recipient (g2) : ${G2}`);
+    console.log(`│ transfer       : ${formatEther(TRANSFER)} ETH  → Δ +${formatEther(delta)} ETH`);
+    console.log(`│ bundler userOp : ${submitHash}`);
+    console.log(`│ on-chain tx    : ${onchainTx}  success=${opSuccess}`);
     console.log('└──────────────────────────────────────────────────────────────────────────');
 
-    if (accepted !== 0n) throw new Error('FAIL: WebAuthn 0x0a composite was NOT accepted on-chain');
-    if (negResult === 0n) throw new Error('FAIL: wrong-challenge negative was accepted');
-    console.log('\n🎉 PASS — Tier-3 WebAuthn composite ACCEPTED on-chain; wrong-challenge rejected.');
+    if (!opSuccess) throw new Error(`FAIL: bundler UserOp reverted (tx ${onchainTx})`);
+    if (delta !== TRANSFER) throw new Error(`FAIL: g2 received ${formatEther(delta)} ETH, expected ${formatEther(TRANSFER)}`);
+    console.log(`\n🎉 PASS — device-passkey Tier-3 gasless transfer LANDED: g2 received ${formatEther(TRANSFER)} ETH via a real bundler UserOp.`);
+    console.log('   (composite ACCEPTED on-chain, tag-0x02 DVT ownerAuth co-signed by 3 live nodes, wrong-challenge rejected.)');
 }
 
 main().catch((e) => { console.error(`\n❌ E2E FAILED: ${e.message}`); process.exit(1); });
