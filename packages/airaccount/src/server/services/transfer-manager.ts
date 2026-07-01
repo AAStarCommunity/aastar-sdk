@@ -758,6 +758,13 @@ export class TransferManager {
       }
     } else if (strategy.tier != null) {
       this.logger.log(`Tier ${strategy.tier} selected`);
+      // #259: a KMS WebAuthn ceremony assertion is SINGLE-USE. Tier-1 is a raw owner ECDSA over
+      // userOpHash (generateTieredSignature signs it directly) and uses NO DVT/BLS — so building a
+      // dvtRequest here would spend the assertion a SECOND time on ownerAuth (same owner, same
+      // userOpHash) and the second SignHash hits a spent challenge (400). Only Tier-2/3 talk to the DVT;
+      // for them the ownerAuth is the ONLY ceremony sign (the composite uses the device passkey + BLS +
+      // guardian, and generateBLSSignature skips aaSignature/messagePointSignature under skipOwnerOpSignature).
+      const needsDvt = (strategy.tier as number) >= 2;
       userOp.signature = await this.blsService.generateTieredSignature({
         tier: strategy.tier as TierLevel,
         userId,
@@ -765,7 +772,9 @@ export class TransferManager {
         p256Signature: params.p256Signature,
         guardianSigner: params.guardianSigner,
         ctx: assertionCtx,
-        dvtRequest: await this.buildDvtRequest(userId, userOp, userOpHash, assertionCtx),
+        dvtRequest: needsDvt
+          ? await this.buildDvtRequest(userId, userOp, userOpHash, assertionCtx)
+          : undefined,
       });
     } else {
       // BLS accounts are always compositeValidator by design — algId prefix applied unconditionally.
