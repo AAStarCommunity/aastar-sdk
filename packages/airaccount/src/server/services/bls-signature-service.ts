@@ -200,20 +200,19 @@ export class BLSSignatureService {
       );
     }
 
-    // `aaSignature` (owner ECDSA over userOpHash) is only consumed by the legacy
-    // non-tiered packSignature format; Tier-2/3 packings omit it. Skip it for
-    // tiered callers to avoid a wasted owner signature (and, under the ceremony
-    // KMS path, a wasted user gesture). Empty string is safe: the tiered packers
-    // never read it.
+    // `aaSignature` (owner ECDSA over userOpHash) and `messagePointSignature` are only consumed by the
+    // legacy non-tiered packSignature format; the Tier-2/3 cumulative packings omit BOTH. Skip them for
+    // tiered callers — beyond saving wasted signatures, under the KMS WebAuthn-ceremony path the ceremony
+    // assertion is SINGLE-USE, and the submit flow already spends it on the DVT `ownerAuth`
+    // (buildDvtRequest); a second ctx sign here would reuse a consumed assertion and fail (#258 review M1).
+    // Empty strings are safe: the tiered packers never read either field.
     const aaSignature = options?.skipOwnerOpSignature
       ? "0x"
       : await this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
     const messagePointHash = keccak256(messagePoint as `0x${string}`);
-    const messagePointSignature = await this.signer.signMessage(
-      userId,
-      hexToBytes(messagePointHash as `0x${string}`),
-      ctx
-    );
+    const messagePointSignature = options?.skipOwnerOpSignature
+      ? "0x"
+      : await this.signer.signMessage(userId, hexToBytes(messagePointHash as `0x${string}`), ctx);
 
     return {
       nodeIds: signerNodeIds,

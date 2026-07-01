@@ -26,25 +26,35 @@ export class BLSManager {
   async getAvailableNodes(): Promise<BLSNode[]> {
     const { seedNodes, discoveryTimeout = 5000 } = this.config;
 
-    // #257: each externally-reachable seed (e.g. https://dvt1.aastar.io) reports its OWN identity via
-    // /gossip/peers, but the peer's registered `apiEndpoint` is the node's INTERNAL address
-    // (http://localhost:400x) — NOT reachable from an SDK consumer. The old logic returned the first
-    // seed's peer list verbatim, yielding 1 localhost node → Tier-3 (needs >= 2) couldn't aggregate.
-    // Iterate ALL seeds and use the SEED URL itself as the apiEndpoint; dedupe by nodeId.
+    // #257/#258: each externally-reachable seed (e.g. https://dvt1.aastar.io) is ONE DVT node whose
+    // registered `apiEndpoint` is its INTERNAL address (http://localhost:400x) — NOT reachable from an SDK
+    // consumer. So we treat each SEED URL as the node's external apiEndpoint and iterate ALL seeds (the
+    // old logic returned only the first seed's peer list → 1 localhost node → Tier-3 (needs >= 2) couldn't
+    // aggregate).
+    //
+    // #258 review H1: dedupe by the EXTERNAL ENDPOINT, NEVER by a peer nodeId. The DVT has no self-identity
+    // endpoint, and /gossip/peers is not guaranteed self-first, so picking a peer's nodeId as "this seed's
+    // identity" can be wrong; keying nodes by that nodeId would then blacklist and silently drop a correct
+    // seed. The nodeId here is ADVISORY metadata only — the authoritative per-node nodeId used for BLS
+    // aggregation comes from each /signature/sign RESPONSE (see _coordinateBlsAggregate), so a best-effort
+    // value cannot corrupt aggregation.
     const nodes: BLSNode[] = [];
-    const seen = new Set<string>();
+    const seenEndpoints = new Set<string>();
 
     for (const seedEndpoint of seedNodes) {
       const endpoint = seedEndpoint.replace(/\/+$/, "");
+      if (seenEndpoints.has(endpoint)) continue;
       try {
         const response = await axios.get(`${endpoint}/gossip/peers`, { timeout: discoveryTimeout });
         const peers: Array<{ status?: string; nodeId?: string; nodeName?: string; publicKey?: string }> =
           response.data.peers || [];
-        // The node's own active entry (nodeId + BLS publicKey). Its reported apiEndpoint is localhost, so
-        // we override it with the external seed URL we reached it on.
-        const self = peers.find((p) => p.status === "active" && p.nodeId && p.publicKey);
-        if (!self || !self.nodeId || seen.has(self.nodeId)) continue;
-        seen.add(self.nodeId);
+        // Require at least one ACTIVE BLS identity (nodeId + publicKey) so we don't add a dead endpoint.
+        // Best-effort self identity: when the node reports a single active peer (the current DVT deployment)
+        // it is unambiguous; otherwise the first active is advisory (authoritative nodeId comes from signing).
+        const active = peers.filter((p) => p.status === "active" && p.nodeId && p.publicKey);
+        if (active.length === 0) continue;
+        const self = active[0];
+        seenEndpoints.add(endpoint);
         nodes.push({
           index: nodes.length + 1, // 1-based ordering
           nodeId: self.nodeId,

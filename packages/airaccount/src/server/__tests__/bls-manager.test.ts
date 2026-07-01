@@ -86,15 +86,20 @@ describe("BLSManager", () => {
       expect(nodes[1].apiEndpoint).toBe("http://s2.example.com");
     });
 
-    it("assigns a 1-based index across seeds and dedupes by nodeId", async () => {
-      const mgr = new BLSManager({ seedNodes: ["http://s1.example.com", "http://s2.example.com", "http://s3.example.com"], discoveryTimeout: 500 });
+    it("dedupes by the EXTERNAL endpoint and keeps distinct seeds even if a peer nodeId repeats (#258 H1)", async () => {
+      // A repeated peer nodeId must NOT drop a distinct seed — the peer-list nodeId is advisory (the
+      // authoritative nodeId comes from /signature/sign). Dedup is by endpoint only.
+      const mgr = new BLSManager({ seedNodes: ["http://s1.example.com", "http://s1.example.com/", "http://s2.example.com"], discoveryTimeout: 500 });
       mockAxios.get
         .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", apiEndpoint: "http://localhost:4001", publicKey: "0xpk1", status: "active" }] } })
-        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n2", apiEndpoint: "http://localhost:4002", publicKey: "0xpk2", status: "active" }] } })
-        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", apiEndpoint: "http://localhost:4003", publicKey: "0xpk1", status: "active" }] } }); // duplicate nodeId
+        // s1 again (trailing slash normalized) — same endpoint → deduped, not re-queried into results.
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", apiEndpoint: "http://localhost:4001", publicKey: "0xpk1", status: "active" }] } })
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", apiEndpoint: "http://localhost:4002", publicKey: "0xpk1", status: "active" }] } }); // duplicate nodeId, DIFFERENT seed
 
       const nodes = await mgr.getAvailableNodes();
-      expect(nodes).toHaveLength(2); // n1 deduped
+      expect(nodes).toHaveLength(2); // s1 (deduped by endpoint) + s2 — the repeated nodeId did NOT drop s2
+      expect(nodes[0].apiEndpoint).toBe("http://s1.example.com");
+      expect(nodes[1].apiEndpoint).toBe("http://s2.example.com");
       expect(nodes[0].index).toBe(1);
       expect(nodes[1].index).toBe(2);
     });
