@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { zeroAddress, type PublicClient } from "viem";
+import { zeroAddress, bytesToHex, type PublicClient } from "viem";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { TransferRecord } from "../interfaces/storage-adapter";
 import { TransferManager, detectSignatureStrategy } from "../services/transfer-manager";
@@ -511,6 +511,19 @@ describe("TransferManager", () => {
 
       expect(buildSpy).toHaveBeenCalledTimes(1); // Tier-2/3 DOES need the DVT ownerAuth
       expect(signMessage).toHaveBeenCalledTimes(1); // exactly one ceremony sign (ownerAuth); mocked composite adds none
+    });
+
+    it("Tier-2/3 ceremony binds to userOpHash (not messagePointHash) so strict-KMS matches the submit sign (#259 Codex)", async () => {
+      const mgr = makeManager();
+      // The prepareTransfer ceremony commitment MUST equal what submit signs. For Tier-2/3 the only owner
+      // sign is now the DVT ownerAuth over userOpHash (#257) — NOT the messagePoint signature (dropped by
+      // #258 M1). Binding to keccak256(messagePoint) would make the strict-KMS challenge mismatch → 400.
+      for (const tier of [2, 3]) {
+        const msg = await (mgr as any).ownerMessageForStrategy({ useECDSA: false, tier }, HASH);
+        expect(bytesToHex(msg as Uint8Array)).toBe(HASH); // raw userOpHash bytes, not messagePointHash
+      }
+      const ecdsa = await (mgr as any).ownerMessageForStrategy({ useECDSA: true, tier: null }, HASH);
+      expect(bytesToHex(ecdsa as Uint8Array)).toBe(HASH);
     });
   });
 });
