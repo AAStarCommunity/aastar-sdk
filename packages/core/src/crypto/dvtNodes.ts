@@ -25,7 +25,10 @@ export interface DVTNode {
  * `YetAnotherAA-Validator/deploy/sdk-dvt-config.testnet.json`.
  *
  * Conventions for these nodes: `userOpHash = EntryPoint.getUserOpHash(PackedUserOp)`;
- * `ownerAuth = owner EIP-191 ECDSA over userOpHash`; proof wire = EIP-2537 (matches {@link encodeDVTVerifierProof}).
+ * `ownerAuth` is a TAG-prefixed owner authorization the DVT (v1.7+) forwards to
+ * `account.isValidOwnerAuth(userOpHash, ownerAuth)` (airaccount-contract v0.23.0, #159/#257/#261):
+ * tag `0x01` = 65-byte EIP-191 ECDSA over userOpHash; tag `0x02` = device-passkey WebAuthn blob
+ * (P256-verified against the account's `p256KeyX/Y`). Proof wire = EIP-2537 (matches {@link encodeDVTVerifierProof}).
  * Mandatory-BLS account: guard-enabled + `approvedAlgIds = [0x01]`.
  */
 export const DEFAULT_DVT_NODES: Readonly<Record<number, readonly DVTNode[]>> = {

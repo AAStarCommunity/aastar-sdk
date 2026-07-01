@@ -112,7 +112,12 @@ export const CANONICAL_ADDRESSES = {
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
     agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
-    // --- AirAccount v0.20.0 stack (FULL Sepolia redeploy 2026-06-20) ---
+    // --- AirAccount stack (Sepolia) — mixed versions ---
+    // NOTE: the account triplet (airAccountFactoryV7 / airAccountV7Impl / airAccountExtension) was
+    // subsequently redeployed to v0.23.0 (see those lines below: #159 isValidOwnerAuth owner-auth view,
+    // FACTORY/ACCOUNT_VERSION 0.23.0 on-chain verified). The BLS/validator/session/recovery contracts in
+    // this block below remain at v0.20.0 (not redeployed since). The v0.20.0 history that follows applies
+    // to those unchanged contracts.
     // v0.20.0 ships first-class P-256/WebAuthn guardian support (#119) and a diamond-lite
     // refactor that relocates the cold ECDSA recovery path (propose/approve/execute/cancel)
     // into AirAccountExtension, reached via the V7 fallback→delegatecall boundary (frees the

@@ -117,24 +117,22 @@ export class BLSManager {
   }
 
   /**
-   * Request signature from a single node
+   * @deprecated REMOVED behavior — do not use. This posted an untagged `{ message }` to `/signature/sign`,
+   * which the DVT (YetAnotherAA-Validator v1.7+) no longer accepts: it now requires `{ userOp, ownerAuth }`
+   * where `ownerAuth` is a TAG-prefixed owner authorization (0x01 ECDSA / 0x02 device-passkey) verified via
+   * `account.isValidOwnerAuth` (#257/#261). There is no live caller. Sending `{ message }` to a v1.7+ node
+   * fails owner-authorization, so this throws instead of silently hitting a rejection. Use the
+   * TransferManager path (`_coordinateBlsAggregate` builds the tagged request via `buildDvtRequest`).
    */
   async requestNodeSignature(
-    node: BLSNode,
-    message: string
+    _node: BLSNode,
+    _message: string
   ): Promise<{ signature: string; publicKey: string }> {
-    const response = await axios.post(`${node.apiEndpoint}/signature/sign`, {
-      message,
-    });
-
-    const signatureEIP = response.data.signature;
-    // Prefer compact if available, logic copied from legacy service
-    const signature = response.data.signatureCompact || signatureEIP;
-
-    return {
-      signature: signature.startsWith("0x") ? signature : `0x${signature}`,
-      publicKey: response.data.publicKey,
-    };
+    throw new Error(
+      "BLSManager.requestNodeSignature is removed: the DVT (v1.7+) requires a tagged { userOp, ownerAuth } " +
+        "request (isValidOwnerAuth, #257/#261), not { message }. Use the TransferManager transfer flow, " +
+        "which builds the tagged owner-authorization via buildDvtRequest / _coordinateBlsAggregate."
+    );
   }
 
   /**
