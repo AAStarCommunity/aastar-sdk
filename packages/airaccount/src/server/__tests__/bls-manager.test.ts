@@ -269,46 +269,14 @@ describe("BLSManager", () => {
   // ── requestNodeSignature ───────────────────────────────────────────
 
   describe("requestNodeSignature", () => {
-    it("returns signature with 0x prefix added when missing", async () => {
-      mockAxios.post.mockResolvedValueOnce({
-        data: { signature: "aabbccdd", publicKey: "0xpk" },
-      });
-
-      const result = await manager.requestNodeSignature(makeNode(), "0xmessage");
-      expect(result.signature).toBe("0xaabbccdd");
-      expect(result.publicKey).toBe("0xpk");
-    });
-
-    it("preserves existing 0x prefix in signature", async () => {
-      mockAxios.post.mockResolvedValueOnce({
-        data: { signature: "0xalreadyprefixed", publicKey: "0xpk" },
-      });
-
-      const result = await manager.requestNodeSignature(makeNode(), "0xmessage");
-      expect(result.signature).toBe("0xalreadyprefixed");
-    });
-
-    it("prefers signatureCompact over signature when both present", async () => {
-      mockAxios.post.mockResolvedValueOnce({
-        data: { signature: "0xeipformat", signatureCompact: "0xcompact", publicKey: "0xpk" },
-      });
-
-      const result = await manager.requestNodeSignature(makeNode(), "0xmessage");
-      expect(result.signature).toBe("0xcompact");
-    });
-
-    it("POSTs to the correct node endpoint", async () => {
-      mockAxios.post.mockResolvedValueOnce({
-        data: { signature: "0xsig", publicKey: "0xpk" },
-      });
-
-      const node = makeNode({ apiEndpoint: "http://mynode.example.com" });
-      await manager.requestNodeSignature(node, "0xmessage");
-
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        "http://mynode.example.com/signature/sign",
-        expect.objectContaining({ message: "0xmessage" })
+    // #261: removed — the DVT (v1.7+) requires a TAGGED { userOp, ownerAuth } request via the
+    // TransferManager flow, not the legacy untagged { message } POST. It now fails loud so no caller
+    // silently hits an owner-authorization rejection against a v1.7+ node.
+    it("throws (removed) and never POSTs an untagged { message }", async () => {
+      await expect(manager.requestNodeSignature(makeNode(), "0xmessage")).rejects.toThrow(
+        /removed|isValidOwnerAuth|tagged/
       );
+      expect(mockAxios.post).not.toHaveBeenCalled();
     });
   });
 

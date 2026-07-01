@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.0] - 2026-07-01
+**SDK Code Integrity Hash**: `17c430c98a0a8a16752b1c437123c3224b06303d1a8aa99a254caeae09bfb262`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: tagged `ownerAuth` for the DVT's `isValidOwnerAuth` check + contract v0.23.0 sync — unblocks device-passkey Tier-3.** (aastar-sdk#261)
+
+⚠️ **COORDINATED breaking change** — ships in lockstep with DVT YetAnotherAA-Validator v1.7.1.
+
+- **[FEAT]** The DVT (v1.7.1) now eth_calls `account.isValidOwnerAuth(userOpHash, ownerAuth)`
+  (airaccount-contract v0.23.0, #159). `buildDvtRequest` emits a TAG-prefixed `ownerAuth`:
+  device-passkey → `0x02 ‖ packWebAuthnBlob(deviceAssertion)` (the device passkey is the account's
+  `p256KeyX/Y` owner factor — no KMS owner ceremony needed, which unblocks B3); ECDSA/KMS →
+  `0x01 ‖ 65-byte EIP-191 personal_sign(userOpHash)`. New `packOwnerAuthEcdsa`/`packOwnerAuthWebAuthn`
+  + `OWNER_AUTH_TAG_*` helpers.
+- **[SYNC]** Sepolia AirAccount Factory/Impl/Extension → v0.23.0 (`0xc5095E3B…`/`0xc8D9803e…`/`0x3Cb68b0c…`,
+  on-chain wiring + FACTORY/ACCOUNT_VERSION verified).
+- **[FIX]** Legacy `BLSManager.requestNodeSignature` (untagged `{ message }`, no live caller) now fails
+  loud — the v1.7+ DVT rejects untagged requests.
+- **[TEST]** +6 unit tests; Codex-reviewed (core signing path CLEAN). Evidence
+  `docs/onchain-evidence/v0.34.0-tagged-ownerauth.md`.
+
 ## [0.33.2] - 2026-07-01
 **SDK Code Integrity Hash**: `3d790197ea8d226dda462ec4c22251a76909d1eec6c2166834972af0f3e7dcf0`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

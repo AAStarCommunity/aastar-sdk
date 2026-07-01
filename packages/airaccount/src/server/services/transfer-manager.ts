@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 // them to viem's readContract / encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi, encodeFunctionData } from "viem";
+import { packOwnerAuthEcdsa, packOwnerAuthWebAuthn } from "../../migration/viem/bls-packing";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { readValidatorGasEstimate } from "../providers/typed-reads";
 import { AccountManager } from "./account-manager";
@@ -499,14 +500,16 @@ export class TransferManager {
         userOpHash: prep.userOpHash,
         deviceWebAuthn: params.deviceWebAuthn,
         guardianSigner: params.guardianSigner ?? prep.params.guardianSigner,
-        // #257: the DVT needs owner authorization (owner EIP-191 over userOpHash). For a device-passkey
-        // (WebAuthn) submit the owner sign uses the same signer; an EOA owner signs inline, a KMS owner
-        // uses its ceremony auth context (webAuthnAssertion) when present.
+        // #257/#261: the DVT needs owner authorization over userOpHash. This is the device-passkey
+        // (WebAuthn) path, so authorize with the DEVICE assertion as a tag-0x02 ownerAuth — the device
+        // passkey is the account's p256KeyX/Y owner factor, so no KMS owner ceremony is required here
+        // (which the WebAuthn path doesn't have). buildDvtRequest packs it via packOwnerAuthWebAuthn.
         dvtRequest: await this.buildDvtRequest(
           userId,
           prep.userOp,
           prep.userOpHash,
-          params.webAuthnAssertion ? { webAuthnAssertion: params.webAuthnAssertion } : undefined
+          params.webAuthnAssertion ? { webAuthnAssertion: params.webAuthnAssertion } : undefined,
+          params.deviceWebAuthn
         ),
       })) as `0x${string}`;
       this.prepared.delete(params.transferId); // one-time — only after signing succeeded
@@ -684,7 +687,8 @@ export class TransferManager {
     userId: string,
     userOp: UserOperation | PackedUserOperation,
     userOpHash: string,
-    ctx: SignerAuthContext | undefined
+    ctx: SignerAuthContext | undefined,
+    deviceWebAuthn?: DeviceWebAuthnAssertion
   ): Promise<DvtSignRequest> {
     const op = userOp as PackedUserOperation;
     // DVT co-signing is a Tier-2/3 (v0.7/v0.8 packed) concern. A v0.6 UNPACKED UserOperation has no
@@ -716,7 +720,18 @@ export class TransferManager {
       paymasterAndData: op.paymasterAndData ?? "0x",
       signature: op.signature ?? "0x",
     };
-    const ownerAuth = await this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
+    // #261: the DVT forwards `ownerAuth` verbatim to `account.isValidOwnerAuth(userOpHash, ownerAuth)`
+    // (airaccount-contract v0.23.0, #159), which selects a verification branch by the leading TAG byte.
+    // - device-passkey account → tag 0x02 ‖ WebAuthn blob: the device passkey IS the account's owner
+    //   factor (p256KeyX/Y), so the contract P256-verifies the same assertion the composite uses — no
+    //   KMS ceremony needed (the WebAuthn path has none). packOwnerAuthWebAuthn is a pure re-encode, so
+    //   re-packing the assertion here does NOT re-consume any one-time credential.
+    // - ECDSA/KMS owner → tag 0x01 ‖ 65-byte EIP-191 personal_sign(userOpHash).
+    const ownerAuth = deviceWebAuthn
+      ? packOwnerAuthWebAuthn(deviceWebAuthn, userOpHash as `0x${string}`)
+      : packOwnerAuthEcdsa(
+          (await this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx)) as `0x${string}`
+        );
     return { userOp: rpcUserOp, ownerAuth };
   }
 

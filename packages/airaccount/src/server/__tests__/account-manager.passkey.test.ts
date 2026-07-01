@@ -115,6 +115,35 @@ describe("AccountManager.createAccountWithPasskey (#249)", () => {
     ).rejects.toThrow(/deployerWallet/);
   });
 
+  it("rejects a zero owner() from the signer — un-finalizable account (#261)", async () => {
+    // A passkey-only account (owner()==0x0) deploys but the DVT owner-auth gate rejects it (P256-owner
+    // auth is Stage 2 / DVT #40), so Tier-2/3 would silently fail later. Fail fast at creation.
+    const ethereum = makeEthereumMock();
+    const zeroSigner = {
+      ensureSigner: vi.fn().mockResolvedValue({ address: "0x0000000000000000000000000000000000000000" }),
+      signMessage: vi.fn(),
+    };
+    const mgr = new AccountManager(ethereum as never, storage, zeroSigner as never, { log: vi.fn(), error: vi.fn() } as never);
+    await expect(
+      mgr.createAccountWithPasskey("u", { ownerP256X: PX, ownerP256Y: PY, dailyLimit: 10n ** 18n, entryPointVersion: EntryPointVersion.V0_7 }, { deployerWallet: makeDeployerWallet() })
+    ).rejects.toThrow(/zero owner/);
+  });
+
+  it("prepareCreateAccountWithPasskey ALSO rejects a zero owner — the guard is in the shared _resolvePasskeyCreate (#262 review)", async () => {
+    // The prepare→submit two-phase path resolves the plan via the SAME _resolvePasskeyCreate helper that
+    // holds the zero-owner guard, so it CANNOT bypass it. Pin that.
+    const ethereum = makeEthereumMock();
+    const zeroSigner = {
+      ensureSigner: vi.fn().mockResolvedValue({ address: "0x0000000000000000000000000000000000000000" }),
+      signMessage: vi.fn(),
+      beginCeremony: vi.fn(),
+    };
+    const mgr = new AccountManager(ethereum as never, storage, zeroSigner as never, { log: vi.fn(), error: vi.fn() } as never);
+    await expect(
+      mgr.prepareCreateAccountWithPasskey("u", { ownerP256X: PX, ownerP256Y: PY, dailyLimit: 10n ** 18n, entryPointVersion: EntryPointVersion.V0_7 })
+    ).rejects.toThrow(/zero owner/);
+  });
+
   it("rejects a guardian equal to the owner (would revert on-chain → stranded funds)", async () => {
     const ethereum = makeEthereumMock();
     const mgr = new AccountManager(ethereum as never, storage, signer, { log: vi.fn(), error: vi.fn() } as never);

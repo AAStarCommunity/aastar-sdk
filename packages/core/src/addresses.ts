@@ -112,7 +112,12 @@ export const CANONICAL_ADDRESSES = {
     agentReputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
     // ERC-8004 agent validation registry (SP v5.4) — present in SP config.
     agentValidationRegistry: "0x8004Cb1BF31DAf7788923b405b754f57acEB4272",
-    // --- AirAccount v0.20.0 stack (FULL Sepolia redeploy 2026-06-20) ---
+    // --- AirAccount stack (Sepolia) — mixed versions ---
+    // NOTE: the account triplet (airAccountFactoryV7 / airAccountV7Impl / airAccountExtension) was
+    // subsequently redeployed to v0.23.0 (see those lines below: #159 isValidOwnerAuth owner-auth view,
+    // FACTORY/ACCOUNT_VERSION 0.23.0 on-chain verified). The BLS/validator/session/recovery contracts in
+    // this block below remain at v0.20.0 (not redeployed since). The v0.20.0 history that follows applies
+    // to those unchanged contracts.
     // v0.20.0 ships first-class P-256/WebAuthn guardian support (#119) and a diamond-lite
     // refactor that relocates the cold ECDSA recovery path (propose/approve/execute/cancel)
     // into AirAccountExtension, reached via the V7 fallback→delegatecall boundary (frees the
@@ -130,9 +135,9 @@ export const CANONICAL_ADDRESSES = {
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0x0eb0E7a61d5D9e03bc3578f8C1b0d9f40cc0a5B9",  // v0.22.0 (FACTORY_VERSION 0.22.0; createAccount 8-arg + passkey/validator at birth; getAddress 5-arg; on-chain verified)
-    airAccountV7Impl: "0x1cE314101E218D28bb6c6D16d6C259A4a1E67578",  // v0.22.0 (ACCOUNT_VERSION 0.22.0; factory.implementation() on-chain verified)
-    airAccountExtension: "0xF736C229fE6f0cb9C864A4298E2755b7a0A19691",  // v0.22.0 (impl.agentExtension() on-chain verified)
+    airAccountFactoryV7: "0xc5095E3B3b248007ef69E09F81F75612fBE629ce",  // v0.23.0 (FACTORY_VERSION 0.23.0; #159 isValidOwnerAuth owner-auth view; createAccount 8-arg + passkey/validator at birth; getAddress 5-arg; implementation() on-chain verified)
+    airAccountV7Impl: "0xc8D9803ebde03706926181b540220C5E58306Ef8",  // v0.23.0 (ACCOUNT_VERSION 0.23.0; factory.implementation() on-chain verified)
+    airAccountExtension: "0x3Cb68b0c573608b4f9FF4b51ab33DB88ac495b17",  // v0.23.0 (impl.agentExtension() on-chain verified; hosts isValidOwnerAuth #159)
     agentRegistry: "0x19d89A661F41c353c119d90F76BB7151E03F0D91",  // v0.22.0 (factory.agentRegistry() on-chain verified)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
