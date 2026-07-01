@@ -194,9 +194,10 @@ describe("TransferManager", () => {
 
   describe("submitPreparedTransfer WebAuthn passkey path (#234 wrap)", () => {
     function seedWA(mgr: TransferManager, tier: number) {
+      const validHash = "0x" + "11".repeat(32); // buildDvtRequest hexToBytes(userOpHash) needs valid hex
       (mgr as any).prepared.set("t1", {
-        userId: "u1", userOp: {}, userOpHash: "0xhash", version: "0.7",
-        accountAddress: "0xacc", params: { useWebAuthnPasskey: true }, ownerMessageHex: "0xhash", createdAt: Date.now(),
+        userId: "u1", userOp: {}, userOpHash: validHash, version: "0.7",
+        accountAddress: "0xacc", params: { useWebAuthnPasskey: true }, ownerMessageHex: validHash, createdAt: Date.now(),
       });
       vi.spyOn(mgr as any, "resolveSignStrategy").mockResolvedValue({ useECDSA: false, isCompositeValidator: true, tier });
     }
@@ -235,6 +236,9 @@ describe("TransferManager", () => {
       const mgr = makeManager();
       seedWA(mgr, 2);
       // Simulate an async signing failure AFTER the synchronous fail-fasts (e.g. DVT unreachable).
+      // buildDvtRequest (owner-auth for the DVT, #257) runs first — give it a working signer so the
+      // failure comes from the DVT round-trip, matching the scenario.
+      (mgr as any).signer = { signMessage: async () => ("0x" + "ab".repeat(65)) };
       (mgr as any).blsService = {
         generateWebAuthnTieredSignature: async () => {
           throw new Error("No active BLS signer nodes available");

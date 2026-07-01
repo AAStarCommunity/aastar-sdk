@@ -71,49 +71,32 @@ describe("BLSManager", () => {
   // ── getAvailableNodes ──────────────────────────────────────────────
 
   describe("getAvailableNodes", () => {
-    it("returns active nodes that have apiEndpoint and publicKey", async () => {
-      mockAxios.get.mockResolvedValueOnce({
-        data: {
-          peers: [
-            {
-              nodeId: "n1",
-              nodeName: "N1",
-              apiEndpoint: "http://n1.com",
-              publicKey: "0xpk1",
-              status: "active",
-            },
-            {
-              nodeId: "n2",
-              nodeName: "N2",
-              apiEndpoint: "http://n2.com",
-              publicKey: "0xpk2",
-              status: "active",
-            },
-          ],
-        },
-      });
+    it("returns one node per seed with the SEED URL as apiEndpoint (#257: peer apiEndpoint is localhost)", async () => {
+      const mgr = new BLSManager({ seedNodes: ["http://s1.example.com", "http://s2.example.com"], discoveryTimeout: 500 });
+      // Each seed reports its OWN identity via /gossip/peers with a localhost apiEndpoint we override.
+      mockAxios.get
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", nodeName: "N1", apiEndpoint: "http://localhost:4001", publicKey: "0xpk1", status: "active" }] } })
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n2", nodeName: "N2", apiEndpoint: "http://localhost:4002", publicKey: "0xpk2", status: "active" }] } });
 
-      const nodes = await manager.getAvailableNodes();
+      const nodes = await mgr.getAvailableNodes();
       expect(nodes).toHaveLength(2);
       expect(nodes[0].nodeId).toBe("n1");
+      expect(nodes[0].apiEndpoint).toBe("http://s1.example.com"); // seed URL, NOT the peer's localhost
       expect(nodes[1].nodeId).toBe("n2");
+      expect(nodes[1].apiEndpoint).toBe("http://s2.example.com");
     });
 
-    it("assigns 1-based index to returned nodes", async () => {
-      mockAxios.get.mockResolvedValueOnce({
-        data: {
-          peers: [
-            { nodeId: "n1", apiEndpoint: "http://n1.com", publicKey: "0xpk1", status: "active" },
-            { nodeId: "n2", apiEndpoint: "http://n2.com", publicKey: "0xpk2", status: "active" },
-            { nodeId: "n3", apiEndpoint: "http://n3.com", publicKey: "0xpk3", status: "active" },
-          ],
-        },
-      });
+    it("assigns a 1-based index across seeds and dedupes by nodeId", async () => {
+      const mgr = new BLSManager({ seedNodes: ["http://s1.example.com", "http://s2.example.com", "http://s3.example.com"], discoveryTimeout: 500 });
+      mockAxios.get
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", apiEndpoint: "http://localhost:4001", publicKey: "0xpk1", status: "active" }] } })
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n2", apiEndpoint: "http://localhost:4002", publicKey: "0xpk2", status: "active" }] } })
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", apiEndpoint: "http://localhost:4003", publicKey: "0xpk1", status: "active" }] } }); // duplicate nodeId
 
-      const nodes = await manager.getAvailableNodes();
+      const nodes = await mgr.getAvailableNodes();
+      expect(nodes).toHaveLength(2); // n1 deduped
       expect(nodes[0].index).toBe(1);
       expect(nodes[1].index).toBe(2);
-      expect(nodes[2].index).toBe(3);
     });
 
     it("filters out nodes with inactive status", async () => {
@@ -147,17 +130,13 @@ describe("BLSManager", () => {
       expect(nodes[0].nodeId).toBe("n2");
     });
 
-    it("filters out nodes missing apiEndpoint", async () => {
-      mockAxios.get.mockResolvedValueOnce({
-        data: {
-          peers: [
-            { nodeId: "n1", publicKey: "0xpk1", status: "active" }, // no apiEndpoint
-            { nodeId: "n2", apiEndpoint: "http://n2.com", publicKey: "0xpk2", status: "active" },
-          ],
-        },
-      });
+    it("skips a seed whose self-peer lacks a nodeId or publicKey (#257: apiEndpoint comes from the seed URL)", async () => {
+      const mgr = new BLSManager({ seedNodes: ["http://s1.example.com", "http://s2.example.com"], discoveryTimeout: 500 });
+      mockAxios.get
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n1", status: "active" }] } }) // no publicKey → skipped
+        .mockResolvedValueOnce({ data: { peers: [{ nodeId: "n2", apiEndpoint: "http://localhost:4002", publicKey: "0xpk2", status: "active" }] } });
 
-      const nodes = await manager.getAvailableNodes();
+      const nodes = await mgr.getAvailableNodes();
       expect(nodes).toHaveLength(1);
       expect(nodes[0].nodeId).toBe("n2");
     });

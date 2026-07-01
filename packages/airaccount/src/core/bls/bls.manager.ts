@@ -26,37 +26,39 @@ export class BLSManager {
   async getAvailableNodes(): Promise<BLSNode[]> {
     const { seedNodes, discoveryTimeout = 5000 } = this.config;
 
+    // #257: each externally-reachable seed (e.g. https://dvt1.aastar.io) reports its OWN identity via
+    // /gossip/peers, but the peer's registered `apiEndpoint` is the node's INTERNAL address
+    // (http://localhost:400x) — NOT reachable from an SDK consumer. The old logic returned the first
+    // seed's peer list verbatim, yielding 1 localhost node → Tier-3 (needs >= 2) couldn't aggregate.
+    // Iterate ALL seeds and use the SEED URL itself as the apiEndpoint; dedupe by nodeId.
+    const nodes: BLSNode[] = [];
+    const seen = new Set<string>();
+
     for (const seedEndpoint of seedNodes) {
+      const endpoint = seedEndpoint.replace(/\/+$/, "");
       try {
-        // Try to get peers from gossip endpoint
-        const response = await axios.get(`${seedEndpoint}/gossip/peers`, {
-          timeout: discoveryTimeout,
-        });
-
-        const peers = response.data.peers || [];
-
-        // Filter active nodes with proper structure
-        const activeNodes: BLSNode[] = peers
-          .filter((p: any) => p.status === "active" && p.apiEndpoint && p.publicKey)
-          .map((p: any, index: number) => ({
-            index: index + 1, // 1-based index likely expected by contract if using bitmap
-            nodeId: p.nodeId,
-            nodeName: p.nodeName,
-            apiEndpoint: p.apiEndpoint,
-            status: "active",
-            publicKey: p.publicKey,
-          }));
-
-        if (activeNodes.length > 0) {
-          return activeNodes;
-        }
+        const response = await axios.get(`${endpoint}/gossip/peers`, { timeout: discoveryTimeout });
+        const peers: Array<{ status?: string; nodeId?: string; nodeName?: string; publicKey?: string }> =
+          response.data.peers || [];
+        // The node's own active entry (nodeId + BLS publicKey). Its reported apiEndpoint is localhost, so
+        // we override it with the external seed URL we reached it on.
+        const self = peers.find((p) => p.status === "active" && p.nodeId && p.publicKey);
+        if (!self || !self.nodeId || seen.has(self.nodeId)) continue;
+        seen.add(self.nodeId);
+        nodes.push({
+          index: nodes.length + 1, // 1-based ordering
+          nodeId: self.nodeId,
+          nodeName: self.nodeName,
+          apiEndpoint: endpoint, // EXTERNAL seed URL, NOT the peer's localhost apiEndpoint
+          status: "active",
+          publicKey: self.publicKey,
+        } as BLSNode);
       } catch {
-        // Try next seed node
-        continue;
+        continue; // seed unreachable — try the next
       }
     }
 
-    return [];
+    return nodes;
   }
 
   /**
