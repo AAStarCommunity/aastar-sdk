@@ -55,7 +55,7 @@ Before publishing to NPM, the script:
 *   Compares it with the "Official" hash recorded in `README.md`.
 *   Blocks the release if any code was modified after the last version update.
 
-**Current Code Integrity Hash (v0.33.0)**: `43057cffa69c5491fcbb89da01ab5b106e75267b8c103b6e6abaefa7829d1b12`
+**Current Code Integrity Hash (v0.33.0)**: `a2537d8768dea9d56d931ec04ca20db6840a202a274e25c1139dad4408dd0ed3`
 *(Excludes metadata/markdown to ensure stability)*
 
 ## Verification (`verify_onchain_milestone.ts`)

@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.33.0] - 2026-07-01
-**SDK Code Integrity Hash**: `43057cffa69c5491fcbb89da01ab5b106e75267b8c103b6e6abaefa7829d1b12`
+**SDK Code Integrity Hash**: `a2537d8768dea9d56d931ec04ca20db6840a202a274e25c1139dad4408dd0ed3`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Two B3-unblocking fixes: DVT node compatibility (#257) + the v0.22.0 guard/tier read regression (#254).**
