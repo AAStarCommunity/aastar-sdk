@@ -10,6 +10,7 @@ import {
   airAccountActions,
   airAccountFactoryActions,
   buildCreateAccountHash,
+  type TokenConfig,
 } from "@aastar/core";
 import type { Hex } from "viem";
 import { keccak256 } from "../../migration/viem/hashing";
@@ -65,6 +66,17 @@ export interface PasskeyCreateParams {
   /** Validator algorithm ids approved at init (e.g. [0x0a] for device-passkey Tier-3). */
   approvedAlgIds?: number[];
   minDailyLimit?: bigint;
+  /**
+   * ERC-20 tokens to pre-register with the guard at birth (index-aligned with `initialTokenConfigs`),
+   * baked into the InitConfig the owner signature already covers (pure plumbing, no protocol change). #266.
+   *
+   * ⚠️ These are per-ERC-20-TOKEN spend limits. They do NOT set the account's NATIVE-ETH tier1/tier2
+   * (which are account storage slots 10/11, NOT in InitConfig). To bake a native-ETH tier profile at
+   * birth, call `setTierLimits(tier1, tier2)` after deploy (onlyOwnerOrSelf) — see #266.
+   */
+  initialTokens?: readonly Address[];
+  /** Per-token `{ tier1Limit, tier2Limit, dailyLimit }` (wei), 1:1 with `initialTokens`. */
+  initialTokenConfigs?: readonly TokenConfig[];
   salt?: number | bigint;
   entryPointVersion?: EntryPointVersion;
   /** ownerSig validity window in seconds from now. Default 3600. */
@@ -769,6 +781,8 @@ export class AccountManager {
       dailyLimit: params.dailyLimit,
       approvedAlgIds: params.approvedAlgIds,
       minDailyLimit: params.minDailyLimit,
+      initialTokens: params.initialTokens,
+      initialTokenConfigs: params.initialTokenConfigs,
     };
     const specs = toGuardianSpecs(fullParams);
     const config = buildFullInitConfig(fullParams);

@@ -1,5 +1,5 @@
 import { type Address, type Hex } from "viem";
-import { buildInitConfig, type GuardianSpec, type InitConfig } from "@aastar/core";
+import { buildInitConfig, type GuardianSpec, type InitConfig, type TokenConfig } from "@aastar/core";
 import type { AccountRecord } from "../interfaces/storage-adapter";
 
 /**
@@ -54,6 +54,14 @@ export interface FullConfigGuardianParams {
   approvedAlgIds?: number[];
   /** Floor the daily limit may be lowered to via the guard. Defaults to 0. */
   minDailyLimit?: bigint;
+  /**
+   * ERC-20 tokens to pre-register with the guard at birth (index-aligned with `initialTokenConfigs`).
+   * NOTE: these are per-TOKEN spend limits — they do NOT set the account's NATIVE-ETH tier1/tier2
+   * (those live in account storage slots 10/11, set via `setTierLimits`, not in InitConfig). #266.
+   */
+  initialTokens?: readonly Address[];
+  /** Per-token `{ tier1Limit, tier2Limit, dailyLimit }` (wei), 1:1 with `initialTokens`. */
+  initialTokenConfigs?: readonly TokenConfig[];
 }
 
 /** A guardian slot serialized for JSON persistence on the {@link AccountRecord}. */
@@ -82,6 +90,8 @@ export function buildFullInitConfig(p: FullConfigGuardianParams): InitConfig {
     dailyLimit: p.dailyLimit,
     ...(p.approvedAlgIds ? { approvedAlgIds: p.approvedAlgIds } : {}),
     ...(p.minDailyLimit !== undefined ? { minDailyLimit: p.minDailyLimit } : {}),
+    ...(p.initialTokens ? { initialTokens: p.initialTokens } : {}),
+    ...(p.initialTokenConfigs ? { initialTokenConfigs: p.initialTokenConfigs } : {}),
   });
 }
 
