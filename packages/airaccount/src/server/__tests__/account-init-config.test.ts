@@ -187,4 +187,25 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
       }
     });
   });
+
+  describe("initialTokens / initialTokenConfigs plumbing (#266)", () => {
+    const TOKEN = "0x1111111111111111111111111111111111111111" as const;
+
+    it("threads initialTokens + per-token configs into the InitConfig", () => {
+      const cfg = buildFullInitConfig({
+        p256Guardians: [],
+        dailyLimit: 10n ** 18n,
+        initialTokens: [TOKEN],
+        initialTokenConfigs: [{ tier1Limit: 1n, tier2Limit: 2n, dailyLimit: 3n }],
+      } as FullConfigGuardianParams);
+      expect(cfg.initialTokens).toEqual([TOKEN]);
+      expect(cfg.initialTokenConfigs).toEqual([{ tier1Limit: 1n, tier2Limit: 2n, dailyLimit: 3n }]);
+    });
+
+    it("defaults to empty when omitted (backward compatible)", () => {
+      const cfg = buildFullInitConfig({ p256Guardians: [], dailyLimit: 10n ** 18n } as FullConfigGuardianParams);
+      expect(cfg.initialTokens).toEqual([]);
+      expect(cfg.initialTokenConfigs).toEqual([]);
+    });
+  });
 });
