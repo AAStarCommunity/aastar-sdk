@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0] - 2026-07-02
+**SDK Code Integrity Hash**: `ddad2d06eba8d47a821a40e6a0d282cbcb611a10958ea8e9f87c2396d0be6406`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: unified per-segment tier profiles — bake native-ETH + per-ERC-20 (USDC/USDT/custom) ceilings at account birth.** (aastar-sdk#266)
+
+- **[FEAT]** `PasskeyCreateParams` now exposes `initialTokens` + `initialTokenConfigs` — per-ERC-20 guard
+  tier limits (`{ tier1Limit, tier2Limit, dailyLimit }`) baked into the InitConfig at birth (pure
+  plumbing; the CREATE_ACCOUNT digest already hashes the full InitConfig). Backward-compatible.
+- **[FEAT]** `TierProfile` + `resolveTierProfile()` + `REFERENCE_ETH_PROFILES` (beginner/trader/
+  conservative): one profile carries native-ETH `{tier1,tier2,daily}` AND per-ERC-20 `{tier1,tier2,daily}`.
+  `resolveTierProfile` splits it into the birth-bakeable InitConfig params (ETH daily + all token configs)
+  and the native-ETH tier limits (→ `setTierLimits` after deploy). Once airaccount-contract#161 folds
+  native ETH tier into InitConfig, the two halves collapse to one `createAccount` with NO API change.
+- **[TEST]** +9 tests. Unblocks YAAA onboarding (resolveTierProfile → PasskeyCreateParams + yaaa#417
+  deploy-at-birth).
+
 ## [0.34.0] - 2026-07-01
 **SDK Code Integrity Hash**: `17c430c98a0a8a16752b1c437123c3224b06303d1a8aa99a254caeae09bfb262`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
