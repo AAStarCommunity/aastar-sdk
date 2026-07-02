@@ -30,6 +30,9 @@ export { EthereumProvider } from "./providers/ethereum-provider";
 // ── Services ──────────────────────────────────────────────────────
 export { AccountManager } from "./services/account-manager";
 export type { PasskeyCreateParams, PreparedPasskeyCreate } from "./services/account-manager";
+// Unified tier-profile (#266): one profile → native-ETH + per-ERC-20 (USDC/USDT/custom) ceilings.
+export { resolveTierProfile, REFERENCE_ETH_PROFILES } from "./services/tier-profile";
+export type { TierProfile, TierProfileToken, ResolvedTierProfile } from "./services/tier-profile";
 // Full-config (P-256 / passkey guardian) account-creation helpers (#118).
 export {
   buildFullInitConfig,
