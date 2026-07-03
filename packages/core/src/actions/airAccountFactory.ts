@@ -8,8 +8,10 @@ export type AirAccountFactoryActions = {
     // CREATE2 address prediction with full InitConfig + chain-qualified id (v0.22.0: 5-arg — the salt
     // binds ownerP256X/Y, so pass the SAME passkey coords as createAccount; omit for no-passkey accounts).
     getAddressWithChainId: (args: { owner: Address, salt: bigint, config: InitConfig, ownerP256X?: Hex, ownerP256Y?: Hex }) => Promise<{ account: Address, chainQualified: Hex }>;
-    // CREATE2 address prediction using factory defaults (guard, validator, dailyLimit).
-    getAddressWithDefaults: (args: { owner: Address, salt: bigint, guard: Address, validator: Address, dailyLimit: bigint }) => Promise<Address>;
+    // CREATE2 address prediction for createAccountWithDefaults. The guardian identities are folded
+    // into the address (contract security fix), so they MUST match the guardians passed to
+    // createAccountWithDefaults or the predicted address will not match the deployed one.
+    getAddressWithDefaults: (args: { owner: Address, salt: bigint, guardian1: Address, guardian2: Address, dailyLimit: bigint }) => Promise<Address>;
     // getAddress(owner, salt, config, ownerP256X, ownerP256Y) -> CREATE2 prediction (v0.22.0).
     // The clone salt now includes keccak256(configHash, ownerP256X, ownerP256Y), so the SAME passkey
     // coords passed to createAccount MUST be passed here. Omit them (default 0) for no-passkey accounts.
@@ -237,13 +239,16 @@ export const airAccountFactoryActions = (address: Address) => (client: PublicCli
         }
     },
 
-    async getAddressWithDefaults({ owner, salt, guard, validator, dailyLimit }) {
+    async getAddressWithDefaults({ owner, salt, guardian1, guardian2, dailyLimit }) {
         try {
             validateAddress(owner, 'owner');
-            validateAddress(guard, 'guard');
-            validateAddress(validator, 'validator');
+            validateAddress(guardian1, 'guardian1');
+            validateAddress(guardian2, 'guardian2');
+            // args[2]/args[3] MUST be the real guardian1/guardian2 (same as createAccountWithDefaults):
+            // the contract folds them into the CREATE2 salt, so passing anything else (previously the
+            // ignored guard/validator) would return an address that does not match the deployed account.
             return await (client as PublicClient).readContract({
-                address, abi: ABI, functionName: 'getAddressWithDefaults', args: [owner, salt, guard, validator, dailyLimit]
+                address, abi: ABI, functionName: 'getAddressWithDefaults', args: [owner, salt, guardian1, guardian2, dailyLimit]
             }) as Address;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getAddressWithDefaults');
