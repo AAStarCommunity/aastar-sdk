@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.0] - 2026-07-04
+**SDK Code Integrity Hash**: `79db55ef1d26a119b1e35153d1a519d59bf05e0554803a476ffd32147c9993a3`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Sync: airaccount-contract v0.24.0 — security hardening (c/b/d/M-C) + getAddressWithDefaults guardian fix.**
+
+⚠️ New factory address — pre-deploy predicted addresses change vs v0.23.0.
+
+- **[SYNC]** Sepolia addresses → v0.24.0 (on-chain verified): Factory `0xD00bFa57…`, Impl `0xcdDA9180…`,
+  Extension `0x80ab91cd…`, AAStarValidator/router `0x10fAfB96…` (NEW), SessionKeyValidator `0x6b044fB2…`
+  (NEW, fix-d), AgentRegistry `0x8D7243D2…`. BLS/aggregator/forceExit/delegate/parser unchanged.
+- **[ABI]** Re-vendored: Factory (+`getConfigHash`/`hashCreateAccount` #158), Extension (+`isValidOwnerAuth`
+  #159); added `isValidOwnerAuth` to AAStarAirAccountV7 (fallback-routed → callable on the account).
+- **[FIX]** `getAddressWithDefaults` now passes real `guardian1`/`guardian2` (companion to contract #162:
+  the CREATE2 salt folds guardians to block front-run account takeover). Breaking param rename
+  `guard/validator` → `guardian1/guardian2`. (#269)
+- Security fixes assessed: #163 (weight-raise→guardian-proposal — SDK first-time setWeightConfig path
+  unaffected), #164 (block self-call escalation), #165 (validateUserOp tryRecover) — behavioral, no SDK
+  signature change. Codex-reviewed; 850/447 tests, 0 failed.
+
 ## [0.35.0] - 2026-07-02
 **SDK Code Integrity Hash**: `ddad2d06eba8d47a821a40e6a0d282cbcb611a10958ea8e9f87c2396d0be6406`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
