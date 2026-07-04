@@ -122,7 +122,7 @@ describe('AAStarAirAccountFactoryV7 actions', () => {
     expect(r.account).toBe(ACCT);
     expect(r.chainQualified).toBe(B32);
     p.readContract.mockResolvedValueOnce(ACCT);
-    await act.getAddressWithDefaults({ owner: OWNER, salt: 1n, guard: ADDR, validator: ADDR, dailyLimit: 1n });
+    await act.getAddressWithDefaults({ owner: OWNER, salt: 1n, guardian1: ADDR, guardian2: ADDR, dailyLimit: 1n });
     p.readContract.mockResolvedValueOnce(B32);
     await act.getChainQualifiedAddress({ account: ACCT });
     p.readContract.mockResolvedValueOnce(ADDR);
