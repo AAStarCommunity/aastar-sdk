@@ -9,7 +9,15 @@ import type { Hex } from "viem";
 export interface DVTNode {
     /** Base URL of the node (POST `{url}/signature/sign` with `{ userOp, ownerAuth }`). */
     url: string;
-    /** The node's `bytes32` nodeId, as registered on the validator's `AAStarBLSAlgorithm`. */
+    /**
+     * The node's `bytes32` nodeId, as registered on the validator's `AAStarBLSAlgorithm`.
+     *
+     * TREAT AS OPAQUE. Since YetAnotherAA-Validator #165, staked registration derives
+     * `nodeId = keccak256(pubkey)`. The live co-sign path reads nodeIds DYNAMICALLY (from the
+     * `/signature/sign` response and the `/gossip/peers` roster), so a re-registration is
+     * transparent to aggregation — this hardcoded value is only a discovery-free default and
+     * MUST be refreshed once operators re-register (until then it tracks the current live nodes).
+     */
     nodeId: Hex;
 }
 
