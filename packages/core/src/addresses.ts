@@ -129,16 +129,16 @@ export const CANONICAL_ADDRESSES = {
     // Source of truth: AirAccount repo docs/DEPLOYMENT-v0.20.0.md "Core addresses"
     //   (Sepolia 2026-06-20). NOTE: factory ctor is NEW — impl injected as arg 1.
     aaStarBLSAlgorithm: "0xAF525A161CB17e0A1b6254ef0B8d8473bdA05174",  // v0.20.0 (algId 0x01)
-    aaStarValidator: "0xfcDfd17a373E037c3F9C8ffE2c781915E7Ae6e11",  // v0.20.0 (ValidatorRouter, set-once validator)
+    aaStarValidator: "0x10fAfB964a6bb88552a588Ed652257EE4E90Eb87",  // v0.24.0 (ValidatorRouter, NEW; impl.validatorRouter() on-chain verified; router.getAlgorithm(0x01)=BLS, (0x08)=SessionKeyValidator, setupComplete)
     aaStarBLSAggregator: "0x35775df9a4f4dB42Ea0C46118a12dDd0cEc70609",  // v0.20.0
-    sessionKeyValidator: "0x6810CfB7c72D16e044a17694fAa8076e517264D0",  // v0.20.0 (algId 0x08)
+    sessionKeyValidator: "0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f",  // v0.24.0 (algId 0x08; NEW — security fix d #164 block self-call escalation)
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0xc5095E3B3b248007ef69E09F81F75612fBE629ce",  // v0.23.0 (FACTORY_VERSION 0.23.0; #159 isValidOwnerAuth owner-auth view; createAccount 8-arg + passkey/validator at birth; getAddress 5-arg; implementation() on-chain verified)
-    airAccountV7Impl: "0xc8D9803ebde03706926181b540220C5E58306Ef8",  // v0.23.0 (ACCOUNT_VERSION 0.23.0; factory.implementation() on-chain verified)
-    airAccountExtension: "0x3Cb68b0c573608b4f9FF4b51ab33DB88ac495b17",  // v0.23.0 (impl.agentExtension() on-chain verified; hosts isValidOwnerAuth #159)
-    agentRegistry: "0x19d89A661F41c353c119d90F76BB7151E03F0D91",  // v0.22.0 (factory.agentRegistry() on-chain verified)
+    airAccountFactoryV7: "0xD00bFa573B42C9cB046877032742e7961e986631",  // v0.24.0 (FACTORY_VERSION 0.24.0; security hardening c/b/d/M-C #162-165; #162 createAccountWithDefaults salt now folds guardian1+guardian2; createAccount 8-arg + passkey/validator at birth; getAddress 5-arg; implementation() on-chain verified)
+    airAccountV7Impl: "0xcdDA9180Ee728aaA926895d360ae0D0ed8D38718",  // v0.24.0 (ACCOUNT_VERSION 0.24.0; factory.implementation() on-chain verified)
+    airAccountExtension: "0x80ab91cdb986042E941a5FC3D1769c538918f9c6",  // v0.24.0 (impl.agentExtension() on-chain verified; hosts isValidOwnerAuth #159)
+    agentRegistry: "0x8D7243D20A3F09e0b73653895Dd93881eeE4b2c0",  // v0.24.0 (factory.agentRegistry() on-chain verified)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",

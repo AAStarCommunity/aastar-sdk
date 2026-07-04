@@ -1,947 +1,1135 @@
-[
-  {
-    "type": "constructor",
-    "inputs": [
-      {
-        "name": "_implementation",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_entryPoint",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_communityGuardian",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "defaultTokens",
-        "type": "address[]",
-        "internalType": "address[]"
-      },
-      {
-        "name": "defaultConfigs",
-        "type": "tuple[]",
-        "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-        "components": [
-          {
-            "name": "tier1Limit",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "tier2Limit",
-            "type": "uint128",
-            "internalType": "uint128"
-          },
-          {
-            "name": "dailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "FACTORY_VERSION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "agentRegistry",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "createAccount",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "config",
-        "type": "tuple",
-        "internalType": "struct AAStarAirAccountBase.InitConfig",
-        "components": [
-          {
-            "name": "guardians",
-            "type": "address[3]",
-            "internalType": "address[3]"
-          },
-          {
-            "name": "guardianP256X",
-            "type": "bytes32[3]",
-            "internalType": "bytes32[3]"
-          },
-          {
-            "name": "guardianP256Y",
-            "type": "bytes32[3]",
-            "internalType": "bytes32[3]"
-          },
-          {
-            "name": "dailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "approvedAlgIds",
-            "type": "uint8[]",
-            "internalType": "uint8[]"
-          },
-          {
-            "name": "minDailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "initialTokens",
-            "type": "address[]",
-            "internalType": "address[]"
-          },
-          {
-            "name": "initialTokenConfigs",
-            "type": "tuple[]",
-            "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-            "components": [
-              {
-                "name": "tier1Limit",
-                "type": "uint128",
-                "internalType": "uint128"
-              },
-              {
-                "name": "tier2Limit",
-                "type": "uint128",
-                "internalType": "uint128"
-              },
-              {
-                "name": "dailyLimit",
-                "type": "uint256",
-                "internalType": "uint256"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "ownerP256X",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "ownerP256Y",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "nonce",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "deadline",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "ownerSig",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "createAccountWithDefaults",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "guardian1",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "guardian1Sig",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "guardian2",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "guardian2Sig",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "dailyLimit",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "createAgentAccount",
-    "inputs": [
-      {
-        "name": "agentKey",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "agentId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "guardian2",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "guardian2Sig",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "agentKeySig",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "deadline",
-        "type": "uint48",
-        "internalType": "uint48"
-      },
-      {
-        "name": "dailyLimit",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "createNonces",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "defaultCommunityGuardian",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "entryPoint",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "factoryAdmin",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getAddress",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "config",
-        "type": "tuple",
-        "internalType": "struct AAStarAirAccountBase.InitConfig",
-        "components": [
-          {
-            "name": "guardians",
-            "type": "address[3]",
-            "internalType": "address[3]"
-          },
-          {
-            "name": "guardianP256X",
-            "type": "bytes32[3]",
-            "internalType": "bytes32[3]"
-          },
-          {
-            "name": "guardianP256Y",
-            "type": "bytes32[3]",
-            "internalType": "bytes32[3]"
-          },
-          {
-            "name": "dailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "approvedAlgIds",
-            "type": "uint8[]",
-            "internalType": "uint8[]"
-          },
-          {
-            "name": "minDailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "initialTokens",
-            "type": "address[]",
-            "internalType": "address[]"
-          },
-          {
-            "name": "initialTokenConfigs",
-            "type": "tuple[]",
-            "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-            "components": [
-              {
-                "name": "tier1Limit",
-                "type": "uint128",
-                "internalType": "uint128"
-              },
-              {
-                "name": "tier2Limit",
-                "type": "uint128",
-                "internalType": "uint128"
-              },
-              {
-                "name": "dailyLimit",
-                "type": "uint256",
-                "internalType": "uint256"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "ownerP256X",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "ownerP256Y",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getAddressWithChainId",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "config",
-        "type": "tuple",
-        "internalType": "struct AAStarAirAccountBase.InitConfig",
-        "components": [
-          {
-            "name": "guardians",
-            "type": "address[3]",
-            "internalType": "address[3]"
-          },
-          {
-            "name": "guardianP256X",
-            "type": "bytes32[3]",
-            "internalType": "bytes32[3]"
-          },
-          {
-            "name": "guardianP256Y",
-            "type": "bytes32[3]",
-            "internalType": "bytes32[3]"
-          },
-          {
-            "name": "dailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "approvedAlgIds",
-            "type": "uint8[]",
-            "internalType": "uint8[]"
-          },
-          {
-            "name": "minDailyLimit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "initialTokens",
-            "type": "address[]",
-            "internalType": "address[]"
-          },
-          {
-            "name": "initialTokenConfigs",
-            "type": "tuple[]",
-            "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
-            "components": [
-              {
-                "name": "tier1Limit",
-                "type": "uint128",
-                "internalType": "uint128"
-              },
-              {
-                "name": "tier2Limit",
-                "type": "uint128",
-                "internalType": "uint128"
-              },
-              {
-                "name": "dailyLimit",
-                "type": "uint256",
-                "internalType": "uint256"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "ownerP256X",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "ownerP256Y",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "chainQualified",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getAddressWithDefaults",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getAgentAddress",
-    "inputs": [
-      {
-        "name": "humanOwner",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "agentKey",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "agentId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getChainQualifiedAddress",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "implementation",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "setAgentRegistry",
-    "inputs": [
-      {
-        "name": "_agentRegistry",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "AccountCreated",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "owner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "salt",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AgentAccountCreated",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "agentKey",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "humanOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "agentId",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "guardian2",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      },
-      {
-        "name": "dailyLimit",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AgentRegistrySet",
-    "inputs": [
-      {
-        "name": "agentRegistry",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AgentKeyCannotBeCommunityGuardian",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AgentKeyCannotBeGuardian2",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AgentKeyDidNotAccept",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AgentKeyRequired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AgentRegistryAlreadySet",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AgentRegistryMarkValidFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AgentRegistryNotContract",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "CallerCannotBeGuardian2",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DailyLimitRequired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DeadlineTooFarInFuture",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DefaultTokenAddressZero",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "DuplicateDefaultToken",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "DuplicateGuardian",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ECDSAInvalidSignature",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ECDSAInvalidSignatureLength",
-    "inputs": [
-      {
-        "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ECDSAInvalidSignatureS",
-    "inputs": [
-      {
-        "name": "s",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "FailedDeployment",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "Guardian2CannotBeCommunityGuardian",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "Guardian2Required",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "GuardianDidNotAccept",
-    "inputs": [
-      {
-        "name": "guardian",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "GuardianSigExpired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "GuardiansMustBeDistinct",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "GuardiansRequired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "HumanOwnerCannotBeCommunityGuardian",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ImplementationRequired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InsufficientBalance",
-    "inputs": [
-      {
-        "name": "balance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "needed",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidDefaultTokenConfig",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidOwnerSignature",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NonceMismatch",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotFactoryAdmin",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SignatureExpired",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TokenConfigLengthMismatch",
-    "inputs": []
-  }
-]
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_implementation",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_entryPoint",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_communityGuardian",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "defaultTokens",
+          "type": "address[]",
+          "internalType": "address[]"
+        },
+        {
+          "name": "defaultConfigs",
+          "type": "tuple[]",
+          "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+          "components": [
+            {
+              "name": "tier1Limit",
+              "type": "uint128",
+              "internalType": "uint128"
+            },
+            {
+              "name": "tier2Limit",
+              "type": "uint128",
+              "internalType": "uint128"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "FACTORY_VERSION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "agentRegistry",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "createAccount",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "internalType": "struct AAStarAirAccountBase.InitConfig",
+          "components": [
+            {
+              "name": "guardians",
+              "type": "address[3]",
+              "internalType": "address[3]"
+            },
+            {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "approvedAlgIds",
+              "type": "uint8[]",
+              "internalType": "uint8[]"
+            },
+            {
+              "name": "minDailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialTokens",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "initialTokenConfigs",
+              "type": "tuple[]",
+              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+              "components": [
+                {
+                  "name": "tier1Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "tier2Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "dailyLimit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ownerP256X",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "ownerP256Y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "nonce",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "ownerSig",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "createAccountWithDefaults",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardian1",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "guardian1Sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "guardian2",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "guardian2Sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "dailyLimit",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "createAgentAccount",
+      "inputs": [
+        {
+          "name": "agentKey",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "agentId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "guardian2",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "guardian2Sig",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "agentKeySig",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "deadline",
+          "type": "uint48",
+          "internalType": "uint48"
+        },
+        {
+          "name": "dailyLimit",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "createNonces",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "defaultCommunityGuardian",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "entryPoint",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "factoryAdmin",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAddress",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "internalType": "struct AAStarAirAccountBase.InitConfig",
+          "components": [
+            {
+              "name": "guardians",
+              "type": "address[3]",
+              "internalType": "address[3]"
+            },
+            {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "approvedAlgIds",
+              "type": "uint8[]",
+              "internalType": "uint8[]"
+            },
+            {
+              "name": "minDailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialTokens",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "initialTokenConfigs",
+              "type": "tuple[]",
+              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+              "components": [
+                {
+                  "name": "tier1Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "tier2Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "dailyLimit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ownerP256X",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "ownerP256Y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAddressWithChainId",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "internalType": "struct AAStarAirAccountBase.InitConfig",
+          "components": [
+            {
+              "name": "guardians",
+              "type": "address[3]",
+              "internalType": "address[3]"
+            },
+            {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "approvedAlgIds",
+              "type": "uint8[]",
+              "internalType": "uint8[]"
+            },
+            {
+              "name": "minDailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialTokens",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "initialTokenConfigs",
+              "type": "tuple[]",
+              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+              "components": [
+                {
+                  "name": "tier1Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "tier2Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "dailyLimit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ownerP256X",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "ownerP256Y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "chainQualified",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAddressWithDefaults",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardian1",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "guardian2",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAgentAddress",
+      "inputs": [
+        {
+          "name": "humanOwner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "agentKey",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "agentId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getChainQualifiedAddress",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getConfigHash",
+      "inputs": [
+        {
+          "name": "config",
+          "type": "tuple",
+          "internalType": "struct AAStarAirAccountBase.InitConfig",
+          "components": [
+            {
+              "name": "guardians",
+              "type": "address[3]",
+              "internalType": "address[3]"
+            },
+            {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "approvedAlgIds",
+              "type": "uint8[]",
+              "internalType": "uint8[]"
+            },
+            {
+              "name": "minDailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialTokens",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "initialTokenConfigs",
+              "type": "tuple[]",
+              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+              "components": [
+                {
+                  "name": "tier1Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "tier2Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "dailyLimit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "hashCreateAccount",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "internalType": "struct AAStarAirAccountBase.InitConfig",
+          "components": [
+            {
+              "name": "guardians",
+              "type": "address[3]",
+              "internalType": "address[3]"
+            },
+            {
+              "name": "guardianP256X",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "guardianP256Y",
+              "type": "bytes32[3]",
+              "internalType": "bytes32[3]"
+            },
+            {
+              "name": "dailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "approvedAlgIds",
+              "type": "uint8[]",
+              "internalType": "uint8[]"
+            },
+            {
+              "name": "minDailyLimit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "initialTokens",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "initialTokenConfigs",
+              "type": "tuple[]",
+              "internalType": "struct AAStarGlobalGuard.TokenConfig[]",
+              "components": [
+                {
+                  "name": "tier1Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "tier2Limit",
+                  "type": "uint128",
+                  "internalType": "uint128"
+                },
+                {
+                  "name": "dailyLimit",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ownerP256X",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "ownerP256Y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "nonce",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "implementation",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "setAgentRegistry",
+      "inputs": [
+        {
+          "name": "_agentRegistry",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "AccountCreated",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AgentAccountCreated",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "agentKey",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "humanOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "agentId",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "guardian2",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "dailyLimit",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AgentRegistrySet",
+      "inputs": [
+        {
+          "name": "agentRegistry",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyCannotBeCommunityGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyCannotBeGuardian2",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyDidNotAccept",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentKeyRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentRegistryAlreadySet",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentRegistryMarkValidFailed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AgentRegistryNotContract",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CallerCannotBeGuardian2",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DailyLimitRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DeadlineTooFarInFuture",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DefaultTokenAddressZero",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "DuplicateDefaultToken",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "DuplicateGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ECDSAInvalidSignature",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ECDSAInvalidSignatureLength",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ECDSAInvalidSignatureS",
+      "inputs": [
+        {
+          "name": "s",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "FailedDeployment",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Guardian2CannotBeCommunityGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Guardian2Required",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardianDidNotAccept",
+      "inputs": [
+        {
+          "name": "guardian",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "GuardianSigExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardiansMustBeDistinct",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardiansRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "HumanOwnerCannotBeCommunityGuardian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ImplementationRequired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InsufficientBalance",
+      "inputs": [
+        {
+          "name": "balance",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "needed",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidDefaultTokenConfig",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidOwnerSignature",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NonceMismatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotFactoryAdmin",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SignatureExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "TokenConfigLengthMismatch",
+      "inputs": []
+    }
+  ]
+}

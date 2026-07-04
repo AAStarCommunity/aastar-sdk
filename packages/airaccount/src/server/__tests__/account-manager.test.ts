@@ -642,7 +642,7 @@ describe("AccountManager", () => {
   describe("ensureValidatorRouter", () => {
     const SEPOLIA = 11155111;
     const OP_SEPOLIA = 11155420; // canonical aaStarValidator == zeroAddress (not deployed)
-    const SEPOLIA_ROUTER = "0xfcDfd17a373E037c3F9C8ffE2c781915E7Ae6e11"; // CANONICAL_ADDRESSES[11155111]
+    const SEPOLIA_ROUTER = "0x10fAfB964a6bb88552a588Ed652257EE4E90Eb87"; // CANONICAL_ADDRESSES[11155111].aaStarValidator (v0.24.0 router)
     const ZERO = "0x0000000000000000000000000000000000000000";
     const ACC = "0xAccountForRouterWiring000000000000000001";
 
@@ -806,7 +806,7 @@ describe("AccountManager", () => {
   // ── deployAndWireValidator (Gap B — one-call deploy + setValidator) ──
   describe("deployAndWireValidator", () => {
     const SEPOLIA = 11155111;
-    const SEPOLIA_ROUTER = "0xfcDfd17a373E037c3F9C8ffE2c781915E7Ae6e11";
+    const SEPOLIA_ROUTER = "0x10fAfB964a6bb88552a588Ed652257EE4E90Eb87"; // v0.24.0 router
     const ZERO = "0x0000000000000000000000000000000000000000";
     const X1 = `0x${"11".repeat(32)}`;
     const Y1 = `0x${"22".repeat(32)}`;
