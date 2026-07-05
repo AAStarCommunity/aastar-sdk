@@ -268,7 +268,7 @@ interface ExecuteTransferParams {
 
 | Tier | AlgId  | Components                       | Use Case            |
 | ---- | ------ | -------------------------------- | ------------------- |
-| 1    | `0x02` | Raw ECDSA (65 bytes)             | Small transactions  |
+| 1    | `0x02` | Single ECDSA (`[0x02][r][s][v]`, 66 bytes) | Small transactions  |
 | 2    | `0x04` | P256 + BLS aggregate             | Medium transactions |
 | 3    | `0x05` | P256 + BLS + Guardian ECDSA      | Large transactions  |
 | BLS  | `0x01` | Legacy BLS (prepended to pack)   | Default non-tiered  |

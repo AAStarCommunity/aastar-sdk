@@ -548,7 +548,7 @@ async function blsSignatures(client: AirAccountServerClient) {
   // submitPreparedTransfer assembles the Tier-2/3 composite (P256 + DVT BLS aggregate + guardian) itself.
   console.log("BLS signing runs inside submitPreparedTransfer — see the transfer example.");
 
-  // Tiered signatures (AirAccount) — Tier 1: raw ECDSA (0x02); Tier 2: P256 + BLS aggregate (0x04/0x09);
+  // Tiered signatures (AirAccount) — Tier 1: single ECDSA framed [0x02][r][s][v] (0x02); Tier 2: P256 + BLS aggregate (0x04/0x09);
   // Tier 3: + Guardian ECDSA (0x05/0x0a). The tier is resolved on-chain from the transfer value and the
   // composite is assembled inside submitPreparedTransfer (which also produces the DVT ownerAuth, #257) —
   // integrators drive it through prepareTransfer/submitPreparedTransfer, not generateTieredSignature.

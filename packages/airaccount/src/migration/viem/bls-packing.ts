@@ -25,12 +25,14 @@ import {
   encodeAbiParameters,
   concat,
   size,
+  isHex,
   numberToHex,
   hexToBytes,
   bytesToHex,
   stringToBytes,
   type Hex,
 } from "viem";
+import { ALG_ECDSA } from "../../core/tier/types";
 import { bls12_381 as bls } from "@noble/curves/bls12-381.js";
 import { p256 } from "@noble/curves/nist.js";
 
@@ -246,6 +248,25 @@ export function packOwnerAuthEcdsa(personalSign65: Hex): Hex {
     throw new Error(`packOwnerAuthEcdsa: expected a 65-byte EIP-191 signature, got ${size(personalSign65)} bytes`);
   }
   return concat([numberToHex(OWNER_AUTH_TAG_ECDSA, { size: 1 }), personalSign65]);
+}
+
+/**
+ * Frame a bare secp256k1 owner signature as a single-ECDSA UserOp signature:
+ * `[algId 0x02][r(32)][s(32)][v(1)]` = 66 bytes. airaccount-contract v0.25.0 removed the raw-65
+ * fallback, so tiered / compositeValidator accounts REQUIRE this algId prefix (#273).
+ *
+ * `bareSig65` MUST be a bare 65-byte secp256k1 signature (r‖s‖v) — the value an ISignerAdapter
+ * (KMS / local wallet) returns. The strict hex + length check rejects an already-framed signature
+ * (e.g. the Ledger path returns [0x02]‖r‖s‖v) so it can't be silently double-prefixed into 67 bytes.
+ */
+export function packEcdsaAlgId(bareSig65: Hex): Hex {
+  if (!isHex(bareSig65, { strict: true }) || size(bareSig65) !== 65) {
+    const detail = isHex(bareSig65, { strict: true }) ? `${size(bareSig65)} bytes` : "a non-hex value";
+    throw new Error(
+      `packEcdsaAlgId: expected a bare 65-byte secp256k1 signature (r‖s‖v) to prefix with algId 0x02, got ${detail}`
+    );
+  }
+  return concat([numberToHex(ALG_ECDSA, { size: 1 }), bareSig65]);
 }
 
 /**

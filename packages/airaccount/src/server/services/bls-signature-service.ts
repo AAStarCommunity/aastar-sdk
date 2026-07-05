@@ -12,8 +12,9 @@ import {
   packBlsPayload,
   packCumulativeT2WA,
   packCumulativeT3WA,
+  packEcdsaAlgId,
 } from "../../migration/viem/bls-packing";
-import { TierLevel, ALG_ECDSA } from "../../core/tier";
+import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
 import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
@@ -333,7 +334,8 @@ export class BLSSignatureService {
     if (tier === 1) {
       // Tier 1: single ECDSA, packed as [algId 0x02][r(32)][s(32)][v(1)] = 66 bytes.
       // airaccount-contract v0.25.0 dropped the raw-65 fallback, so the 0x02 algId prefix is
-      // mandatory (#273); prior to that we returned the owner sig verbatim.
+      // mandatory (#273); prior to that we returned the owner sig verbatim. packEcdsaAlgId validates
+      // the signer returned a bare 65-byte sig (guards against double-prefixing).
       const account = await this.storage.findAccountByUserId(userId);
       if (!account) throw new Error(`User account not found for userId: ${userId}`);
 
@@ -342,15 +344,7 @@ export class BLSSignatureService {
         hexToBytes(userOpHash as `0x${string}`),
         ctx
       );
-      // Guard against double-prefixing: signers must return a bare 65-byte secp256k1 sig
-      // (0x + 130 hex). If a signer ever pre-frames an algId, prefixing again would corrupt it.
-      if (rawEcdsa.length !== 132) {
-        throw new Error(
-          `Tier-1 ECDSA signer returned ${(rawEcdsa.length - 2) / 2} bytes, expected a bare 65-byte ` +
-            `secp256k1 signature (r‖s‖v) to prefix with algId 0x02`
-        );
-      }
-      return `0x${ALG_ECDSA.toString(16).padStart(2, "0")}${rawEcdsa.slice(2)}` as `0x${string}`;
+      return packEcdsaAlgId(rawEcdsa as `0x${string}`);
     }
 
     // Tier 2 and 3 both need BLS + P256
