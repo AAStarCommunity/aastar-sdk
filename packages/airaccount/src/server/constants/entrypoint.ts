@@ -363,16 +363,21 @@ export const MODULE_TYPE = {
 } as const;
 
 // AirAccount algorithm IDs (algId values for signature dispatch)
+// algId map — MUST match AAStarAirAccountBase.sol on-chain constants exactly.
 export const ALG_ID = {
   BLS: 0x01,
   ECDSA: 0x02,
   P256: 0x03,
-  CUMULATIVE_T2: 0x04,  // P256 + BLS
-  CUMULATIVE_T3: 0x05,  // P256 + BLS + Guardian ECDSA
+  CUMULATIVE_T2: 0x04,  // raw-P256 + BLS
+  CUMULATIVE_T3: 0x05,  // raw-P256 + BLS + Guardian ECDSA
   COMBINED_T1: 0x06,    // P256 AND ECDSA simultaneously
   WEIGHTED: 0x07,       // Weighted multi-signature
   SESSION_KEY: 0x08,    // Time-limited session key (SessionKeyValidator)
-  AGENT_SESSION_KEY: 0x09, // AI agent session key (AgentSessionKeyValidator)
+  CUMULATIVE_T2_WA: 0x09, // WebAuthn(device-passkey) + BLS — on-chain ALG_CUMULATIVE_T2_WA
+  CUMULATIVE_T3_WA: 0x0a, // WebAuthn(device-passkey) + BLS + Guardian — on-chain ALG_CUMULATIVE_T3_WA
+  // NOTE: there is NO distinct on-chain algId for an "agent session key". The previous
+  // `AGENT_SESSION_KEY: 0x09` collided with ALG_CUMULATIVE_T2_WA (0x09) and was WRONG + unused; removed.
+  // The AgentSessionKeyValidator's actual signing algId is unresolved — see #282.
 } as const;
 
 // ── M6 继承合约 ABIs ─────────────────────────────────────────────
