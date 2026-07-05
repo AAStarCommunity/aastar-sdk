@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.1] - 2026-07-05
+**SDK Code Integrity Hash**: `50b49ea55a6d62437850dc9f8698e9969021f00194529bcde7568af0fd18d868`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: Tier-1 tiering signature now prepends algId `0x02` (forward-compat with airaccount-contract v0.25.0).**
+
+airaccount-contract v0.25.0 removes the raw-65 ECDSA fallback; a bare 65-byte owner signature is
+rejected by tiered (compositeValidator) accounts on that version. `generateTieredSignature(tier=1)`
+emitted exactly that.
+
+- **[FIX]** `@aastar/airaccount` `generateTieredSignature(tier=1)` now packs Tier-1 as
+  `[algId 0x02][r][s][v]` = 66 bytes, matching the Ledger path and the compositeValidator ECDSA branch
+  in `transfer-manager`. KMS/Ledger already emitted `0x02` and are unaffected. (#273, PR #275)
+- **[REFACTOR]** Extracted a shared `packEcdsaAlgId(bareSig65)` framer (`migration/viem/bls-packing`)
+  used by BOTH the tier-1 path and the compositeValidator ECDSA path, with a strict `isHex` + 65-byte
+  length guard so a pre-framed signer sig can't be double-prefixed. (PR #275)
+- **[EVIDENCE]** On-chain §4 acceptance proven on the live v0.24.0 account (Sepolia): the new
+  0x02-framed Tier-1 sig is ACCEPTED by `validateUserOp` (=0), a wrong-signer 0x02 frame is REJECTED
+  (=1). See `docs/onchain-evidence/v0.36.1-tier1-algid-0x02.md`. Probe:
+  `tests/regression/onchain-evidence/tier1-ecdsa-algid-e2e.ts`. (#273, PR #276)
+- Non-composite ECDSA accounts intentionally keep the raw signature (different account type, not the
+  v0.25.0-hardened one). `@aastar/airaccount` suite 856 passed / 7 skipped; Codex-reviewed (2 rounds).
+
+> Note: the raw-65 REJECTION that v0.25.0 introduces cannot be proven on-chain until a v0.25.0 account
+> is deployed (the SDK is pinned to v0.24.0); this release makes Tier-1 forward-ready for it.
+
 ## [0.36.0] - 2026-07-04
 **SDK Code Integrity Hash**: `79db55ef1d26a119b1e35153d1a519d59bf05e0554803a476ffd32147c9993a3`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
