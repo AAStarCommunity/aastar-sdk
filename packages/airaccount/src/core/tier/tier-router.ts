@@ -5,6 +5,8 @@ import {
   ALG_ECDSA,
   ALG_CUMULATIVE_T2,
   ALG_CUMULATIVE_T3,
+  ALG_CUMULATIVE_T2_WA,
+  ALG_CUMULATIVE_T3_WA,
 } from "./types";
 
 /**
@@ -26,17 +28,23 @@ export function resolveTier(value: bigint, config: TierConfig): TierLevel {
 /**
  * Get the algorithm ID to use for a given tier.
  *
+ * `webAuthn` selects the device-passkey (WebAuthn) cumulative variant for Tier-2/3 — the account
+ * approves (and validateUserOp enforces) the EXACT signing algId, and the WebAuthn path signs
+ * `0x09`/`0x0a`, NOT the raw-P256 `0x04`/`0x05`. A guard/pre-flight that queries the wrong algId gives a
+ * false "algorithm not approved" on device-passkey accounts (#256). Tier-1 is always ECDSA `0x02`
+ * (`useWebAuthnPasskey` applies to Tier-2/3 only — the device passkey is the composite P256 factor).
+ *
  * - Tier 1: ALG_ECDSA (0x02) — single ECDSA, packed [0x02][r][s][v] (66 bytes); v0.25.0 requires the prefix (#273)
- * - Tier 2: ALG_CUMULATIVE_T2 (0x04) — P256 + BLS
- * - Tier 3: ALG_CUMULATIVE_T3 (0x05) — P256 + BLS + Guardian
+ * - Tier 2: raw ALG_CUMULATIVE_T2 (0x04) · WebAuthn ALG_CUMULATIVE_T2_WA (0x09)
+ * - Tier 3: raw ALG_CUMULATIVE_T3 (0x05) · WebAuthn ALG_CUMULATIVE_T3_WA (0x0a)
  */
-export function algIdForTier(tier: TierLevel): AlgId {
+export function algIdForTier(tier: TierLevel, webAuthn = false): AlgId {
   switch (tier) {
     case 1:
       return ALG_ECDSA;
     case 2:
-      return ALG_CUMULATIVE_T2;
+      return webAuthn ? ALG_CUMULATIVE_T2_WA : ALG_CUMULATIVE_T2;
     case 3:
-      return ALG_CUMULATIVE_T3;
+      return webAuthn ? ALG_CUMULATIVE_T3_WA : ALG_CUMULATIVE_T3;
   }
 }
