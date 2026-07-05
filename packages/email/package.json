@@ -1,6 +1,6 @@
 {
   "name": "@aastar/email",
-  "version": "0.36.1",
+  "version": "0.37.0",
   "description": "Email utility for the AAStar SDK — Resend API wrapper for server-side and agent use",
   "type": "module",
   "publishConfig": {
