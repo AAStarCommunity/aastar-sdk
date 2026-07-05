@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.1] - 2026-07-05
+**SDK Code Integrity Hash**: `e9f0bb4e1a45174e963110db246904ffa7fde380ccab4ddbf94863684f6369a1`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: device-passkey Tier-3 pre-check algId + refreshed DVT nodeIds.**
+
+- **[FIX]** `GuardChecker.preCheck` for a device-passkey (`useWebAuthnPasskey`) Tier-2/3 transfer now queries
+  the WebAuthn cumulative algId (`0x09`/`0x0a`) the account actually approves — not the raw `0x04`/`0x05`.
+  `algIdForTier(tier, webAuthn)` gained the WA branch; the raw path false-failed "Algorithm Cumulative T3
+  (0x05) is not approved" and blocked device-passkey Tier-3 in `prepareTransfer` (on-chain
+  `validateUserOp(0x0a)` was always fine — only the pre-flight blocked). +7 tests. (#256)
+- **[FIX]** Refreshed `DEFAULT_DVT_NODES` nodeIds — the DVT operators re-registered via `registerWithProof`
+  (`nodeId = keccak256(pubkey)`, YetAnotherAA-Validator #165), so dvt1/2/3 have new keccak-derived ids
+  (verified against the live `/gossip/peers` roster). Aggregation was never broken (co-sign reads nodeIds
+  dynamically); this updates the discovery-free default. (#270, #281)
+
 ## [0.37.0] - 2026-07-05
 **SDK Code Integrity Hash**: `ae1776333bc20b6e53a56fc7c1f99b04dd0c19b3e16a90801904987e95dd46cd`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
