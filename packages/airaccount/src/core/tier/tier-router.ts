@@ -26,7 +26,7 @@ export function resolveTier(value: bigint, config: TierConfig): TierLevel {
 /**
  * Get the algorithm ID to use for a given tier.
  *
- * - Tier 1: ALG_ECDSA (0x02) — raw 65-byte ECDSA, no prefix needed
+ * - Tier 1: ALG_ECDSA (0x02) — single ECDSA, packed [0x02][r][s][v] (66 bytes); v0.25.0 requires the prefix (#273)
  * - Tier 2: ALG_CUMULATIVE_T2 (0x04) — P256 + BLS
  * - Tier 3: ALG_CUMULATIVE_T3 (0x05) — P256 + BLS + Guardian
  */

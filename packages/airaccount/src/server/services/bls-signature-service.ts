@@ -13,7 +13,7 @@ import {
   packCumulativeT2WA,
   packCumulativeT3WA,
 } from "../../migration/viem/bls-packing";
-import { TierLevel } from "../../core/tier";
+import { TierLevel, ALG_ECDSA } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
 import { ISignerAdapter, SignerAuthContext } from "../interfaces/signer-adapter";
@@ -304,7 +304,9 @@ export class BLSSignatureService {
   /**
    * Generate a tiered signature based on the required tier level.
    *
-   * - Tier 1: raw 65-byte ECDSA (no algId prefix, backwards-compat)
+   * - Tier 1: algId 0x02 — single ECDSA ([0x02][r][s][v] = 66 bytes). airaccount-contract
+   *   v0.25.0 removed the raw-65 fallback, so the leading 0x02 is now REQUIRED (#273). This
+   *   matches the Ledger path (auth/hardware/ledger.ts) and the compositeValidator ECDSA path.
    * - Tier 2: algId 0x04 — P256 + BLS aggregate (contract #45: no messagePoint/mpSig)
    * - Tier 3: algId 0x05 — P256 + BLS aggregate + Guardian ECDSA (contract #45: no messagePoint/mpSig)
    *
@@ -329,11 +331,26 @@ export class BLSSignatureService {
     const manager = await this.ensureInitialized();
 
     if (tier === 1) {
-      // Tier 1: raw ECDSA signature (65 bytes, no algId prefix)
+      // Tier 1: single ECDSA, packed as [algId 0x02][r(32)][s(32)][v(1)] = 66 bytes.
+      // airaccount-contract v0.25.0 dropped the raw-65 fallback, so the 0x02 algId prefix is
+      // mandatory (#273); prior to that we returned the owner sig verbatim.
       const account = await this.storage.findAccountByUserId(userId);
       if (!account) throw new Error(`User account not found for userId: ${userId}`);
 
-      return this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
+      const rawEcdsa = await this.signer.signMessage(
+        userId,
+        hexToBytes(userOpHash as `0x${string}`),
+        ctx
+      );
+      // Guard against double-prefixing: signers must return a bare 65-byte secp256k1 sig
+      // (0x + 130 hex). If a signer ever pre-frames an algId, prefixing again would corrupt it.
+      if (rawEcdsa.length !== 132) {
+        throw new Error(
+          `Tier-1 ECDSA signer returned ${(rawEcdsa.length - 2) / 2} bytes, expected a bare 65-byte ` +
+            `secp256k1 signature (r‖s‖v) to prefix with algId 0x02`
+        );
+      }
+      return `0x${ALG_ECDSA.toString(16).padStart(2, "0")}${rawEcdsa.slice(2)}` as `0x${string}`;
     }
 
     // Tier 2 and 3 both need BLS + P256
