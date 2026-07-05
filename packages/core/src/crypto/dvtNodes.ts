@@ -26,7 +26,7 @@ export interface DVTNode {
  *
  * Sepolia (11155111): the 3 production-key nodes behind AAStar's Cloudflare named tunnel,
  * each registered on the v0.20.0 validator `AAStarBLSAlgorithm`
- * (`0xAF525A161CB17e0A1b6254ef0B8d8473bdA05174` = `CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm`).
+ * (`0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC` = `CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm`, the v0.27.0 DVT validator).
  * These are AAStar's **beta-test** nodes with INDEPENDENT secret keys (NOT the public `BLS_TEST`
  * fixtures). On-chain verified: a 3-node co-sign → `validate(userOpHash, proof) === 0`, with
  * fail-closed `403` on a bad `ownerAuth`. Source of truth:

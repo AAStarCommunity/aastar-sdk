@@ -104,6 +104,10 @@ async function main() {
         dailyLimit: 10n ** 18n, // 1 ETH — guard enabled ⇒ the approvedAlgIds whitelist is enforced
         approvedAlgIds: [ALG_ECDSA],
     });
+    const factoryVersion = (await withRpcFallback((c) =>
+        c.readContract({ address: FACTORY, abi: [{ name: 'FACTORY_VERSION', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }] as const, functionName: 'FACTORY_VERSION' })
+    ).catch(() => 'unknown')) as string;
+    console.log(`     factory ${FACTORY} FACTORY_VERSION=${factoryVersion}`);
     const account = (await withRpcFallback((c) =>
         airAccountFactoryActions(FACTORY)(c).getAddress({ owner: owner.address, salt: SALT, config })
     )) as Address;
@@ -216,9 +220,15 @@ async function main() {
     console.log(`│ [5] wrong-signer 0x02    : ${wrongResult} ${wrongOk ? '✅ rejected' : '❌'}`);
     console.log('└──────────────────────────────────────────────────────────────────────────────');
 
-    if (!acceptOk) throw new Error('FAIL: the live account REJECTED the SDK 0x02-framed tier-1 signature — shipping 0.36.1 would break Tier-1');
+    if (!acceptOk) throw new Error('FAIL: the live account REJECTED the SDK 0x02-framed tier-1 signature — the algId-0x02 framing is wrong for this account version');
     if (!wrongOk) throw new Error('FAIL: the oracle accepted a wrong-signer signature — validateUserOp is not discriminating');
-    console.log('\n✅ Tier-1 0x02 acceptance PROVEN on the live v0.24.0 account (#273).');
+    const rawGone = raw65Result !== 0n;
+    console.log(
+        `\n✅ Tier-1 0x02 acceptance PROVEN on the live account (FACTORY_VERSION=${factoryVersion}) (#273).` +
+        (rawGone
+            ? '\n   raw-65 is REJECTED here → this account already removed the fallback (v0.25.0+); the 0x02 fix is REQUIRED.'
+            : '\n   raw-65 still accepted here → pre-v0.25.0 account; the 0x02 fix is forward-compat.')
+    );
 }
 
 main().catch((e) => { console.error('\n❌ E2E FAILED:', e instanceof Error ? e.message : e); process.exit(1); });
