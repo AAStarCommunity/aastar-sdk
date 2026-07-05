@@ -42,9 +42,9 @@ export interface DVTNode {
 export const DEFAULT_DVT_NODES: Readonly<Record<number, readonly DVTNode[]>> = {
     // Sepolia — AAStar always-on testnet DVT (airaccount-contract v0.20.0).
     11155111: [
-        { url: "https://dvt1.aastar.io", nodeId: "0x2df775b934046ddd210828fb5096ea8a15bb18a145dae5bd94535375c319c53f" },
-        { url: "https://dvt2.aastar.io", nodeId: "0xd907ad728a7091c5cc628d9c7c71ae8d69f062a39533a2890bea3c299bacd201" },
-        { url: "https://dvt3.aastar.io", nodeId: "0xd4f954361cdb2b2d89a631c939b6f930de5b2c5753911d2be7fb1ecc9f17a60e" },
+        { url: "https://dvt1.aastar.io", nodeId: "0x1f5e41c69465733eeb19341d95853ee6d9295a9e6698f5398d70e509be8f326d" },
+        { url: "https://dvt2.aastar.io", nodeId: "0xe3a4a3af3973b65bc95dd962e767e17592dfb331f3544209676271b188fd9f80" },
+        { url: "https://dvt3.aastar.io", nodeId: "0x96d64ba8240694153c757707732a11ff175380065ddacb6406094c9d5fa5cfce" },
     ],
 } as const;
 

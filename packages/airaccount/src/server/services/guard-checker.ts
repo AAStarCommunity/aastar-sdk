@@ -20,6 +20,8 @@ import {
   ALG_BLS,
   ALG_CUMULATIVE_T2,
   ALG_CUMULATIVE_T3,
+  ALG_CUMULATIVE_T2_WA,
+  ALG_CUMULATIVE_T3_WA,
 } from "../../core/tier";
 import { resolveTier, algIdForTier } from "../../core/tier";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
@@ -30,6 +32,8 @@ const ALG_NAMES: Record<number, string> = {
   [ALG_P256]: "P256 (0x03)",
   [ALG_CUMULATIVE_T2]: "Cumulative T2 (0x04)",
   [ALG_CUMULATIVE_T3]: "Cumulative T3 (0x05)",
+  [ALG_CUMULATIVE_T2_WA]: "Cumulative T2 WebAuthn (0x09)",
+  [ALG_CUMULATIVE_T3_WA]: "Cumulative T3 WebAuthn (0x0a)",
 };
 
 /**
@@ -94,13 +98,15 @@ export class GuardChecker {
    * Pre-check a transaction: determine tier, check guard limits and algorithm approval.
    * Returns errors array (empty = OK to proceed).
    */
-  async preCheck(accountAddress: string, value: bigint): Promise<PreCheckResult> {
+  async preCheck(accountAddress: string, value: bigint, useWebAuthnPasskey = false): Promise<PreCheckResult> {
     const errors: string[] = [];
 
-    // Fetch tier config → resolve tier → get algId
+    // Fetch tier config → resolve tier → get algId. The device-passkey (WebAuthn) path signs the WA
+    // cumulative variant (0x09/0x0a), which is what such accounts approve; querying the raw 0x04/0x05
+    // gave a false "not approved" and blocked Tier-3 device-passkey transfers (#256).
     const tierConfig = await this.fetchTierConfig(accountAddress);
     const tier = resolveTier(value, tierConfig);
-    const algId = algIdForTier(tier);
+    const algId = algIdForTier(tier, useWebAuthnPasskey);
 
     // Fetch guard status
     const guard = await this.fetchGuardStatus(accountAddress);

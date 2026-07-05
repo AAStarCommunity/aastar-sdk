@@ -637,7 +637,9 @@ export class TransferManager {
     // inline-ECDSA (0x02) signature for tier-2/3 ops, surfacing only as an opaque on-chain AA24 (#234).
     if (params.useAirAccountTiering && this.guardChecker) {
       const transferValue = params.tokenAddress ? 0n : parseEther(params.amount);
-      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
+      // Pass the device-passkey flag so the pre-flight queries the WA algId (0x09/0x0a) the account
+      // actually approves — not the raw 0x04/0x05, which would false-fail a device-passkey Tier-3 (#256).
+      const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue, params.useWebAuthnPasskey);
       if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
       tier = preCheck.tier;
       // Don't let the inline-ECDSA path shadow the tiered composite signature. (Tier 1 emits a
