@@ -159,18 +159,27 @@ describe('encodeG2Point — EIP-2537 256-byte G2 layout (x.c0@16 / x.c1@80 / y.c
 });
 
 describe('encodeDVTVerifierProof — [nodeIds…][blsSig(256)] (no nodeIdsLength prefix)', () => {
-    it('concatenates nodeIds + blsSig in order, matching the LIVE C4 nodeIds/blsSig', () => {
+    it('emits nodeIds STRICTLY ASCENDING then blsSig (#274 — v0.27.0 validator requires it)', () => {
+        // C4_NODE_IDS is the LIVE (pre-#274) order, which is DESCENDING (b548… > 7f7e…). The encoder now
+        // sorts ascending: BLS aggregation is commutative, so the same aggregate blsSig stays valid with
+        // the reordered ids, and the new validator's ordered-signerMask check passes.
         const proof = encodeDVTVerifierProof(C4_NODE_IDS, C4_BLS_SIG);
-        expect(proof).toBe(concat([...C4_NODE_IDS, C4_BLS_SIG]));
+        const ascending = [...C4_NODE_IDS].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1));
+        expect(proof).toBe(concat([...ascending, C4_BLS_SIG]));
+        expect(proof).not.toBe(concat([...C4_NODE_IDS, C4_BLS_SIG])); // input was descending → sort changed it
         // Verifier-level length = N*32 + 256, and (len - 256) % 32 === 0 (contract's nodeCount derivation).
         expect(hexLen(proof)).toBe(C4_NODE_IDS.length * 32 + 256);
         expect((hexLen(proof) - 256) % 32).toBe(0);
     });
 
-    it('preserves nodeIds order (verifier aggregates registered keys in this order)', () => {
+    it('sorts nodeIds so the wire is independent of caller order (#274)', () => {
         const a = encodeDVTVerifierProof([C4_NODE_IDS[0], C4_NODE_IDS[1]], C4_BLS_SIG);
         const b = encodeDVTVerifierProof([C4_NODE_IDS[1], C4_NODE_IDS[0]], C4_BLS_SIG);
-        expect(a).not.toBe(b);
+        expect(a).toBe(b); // both sort to strictly-ascending
+    });
+
+    it('throws on a duplicate nodeId (#274 strictly ascending ⇒ no equals)', () => {
+        expect(() => encodeDVTVerifierProof([C4_NODE_IDS[0], C4_NODE_IDS[0]], C4_BLS_SIG)).toThrow(/duplicate nodeId/);
     });
 
     it('rejects an empty nodeIds list', () => {
@@ -183,18 +192,31 @@ describe('encodeDVTVerifierProof — [nodeIds…][blsSig(256)] (no nodeIdsLength
 });
 
 describe('encodeDVTAccountSignature — account-level wire (LIVE byte-for-byte)', () => {
-    it('T2 (0x04): reproduces the LIVE C4 PackedUserOperation.signature byte-for-byte', () => {
+    // #274: the LIVE C4/C5 captures carried DESCENDING nodeIds (accepted by the pre-v0.27.0 validator,
+    // which did not order-check). The encoder now sorts ascending, so the expected wire is the live
+    // capture with its nodeId words reordered ascending — same aggregate blsSig (BLS is commutative),
+    // now also accepted by the v0.27.0 validator. nodeIds start after [algId(1)][P256(64)][len(32)] = 97 B.
+    const withAscendingNodeIds = (wire: Hex, startByte: number, count: number): Hex => {
+        const body = wire.slice(2);
+        const s = startByte * 2;
+        const ids: string[] = [];
+        for (let i = 0; i < count; i++) ids.push(body.slice(s + i * 64, s + (i + 1) * 64));
+        ids.sort((a, b) => (BigInt('0x' + a) < BigInt('0x' + b) ? -1 : 1));
+        return ('0x' + body.slice(0, s) + ids.join('') + body.slice(s + count * 64)) as Hex;
+    };
+
+    it('T2 (0x04): emits the LIVE C4 wire with nodeIds sorted ascending (#274)', () => {
         const wire = encodeDVTAccountSignature({
             tier: C4_TIER,
             p256: { r: C4_P256_R, s: C4_P256_S },
             nodeIds: C4_NODE_IDS,
             blsSig: C4_BLS_SIG,
         });
-        expect(wire).toBe(C4_LIVE_WIRE);
+        expect(wire).toBe(withAscendingNodeIds(C4_LIVE_WIRE, 97, 2));
         expect(hexLen(wire)).toBe(417); // 1 + 64 + 32 + 2*32 + 256
     });
 
-    it('T3 (0x05): reproduces the LIVE C5 PackedUserOperation.signature byte-for-byte (with guardian)', () => {
+    it('T3 (0x05): emits the LIVE C5 wire with nodeIds sorted ascending, guardian preserved (#274)', () => {
         const wire = encodeDVTAccountSignature({
             tier: C5_TIER,
             p256: { r: C5_P256_R, s: C5_P256_S },
@@ -202,7 +224,7 @@ describe('encodeDVTAccountSignature — account-level wire (LIVE byte-for-byte)'
             blsSig: C5_BLS_SIG,
             guardianSig: C5_GUARDIAN_SIG,
         });
-        expect(wire).toBe(C5_LIVE_WIRE);
+        expect(wire).toBe(withAscendingNodeIds(C5_LIVE_WIRE, 97, 2));
         expect(hexLen(wire)).toBe(482); // T2 (417) + 65-byte guardian
     });
 

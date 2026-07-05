@@ -33,6 +33,7 @@ import {
   type Hex,
 } from "viem";
 import { ALG_ECDSA } from "../../core/tier/types";
+import { sortNodeIdsAscending } from "@aastar/core";
 import { bls12_381 as bls } from "@noble/curves/bls12-381.js";
 import { p256 } from "@noble/curves/nist.js";
 
@@ -56,10 +57,13 @@ export function packSignature(data: BLSSignatureData): Hex {
     throw new Error("Missing required signature components");
   }
 
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
+  // #274: the BLS 0x01 wire (transfer-manager's non-tiered path) must carry strictly-ascending nodeIds,
+  // or the v0.27.0 DVT validator rejects it. BLS aggregation is commutative → no re-aggregation needed.
+  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]);
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
   const nodeIdsBytes = encodePacked(
-    Array(data.nodeIds.length).fill("bytes32"),
-    data.nodeIds
+    Array(nodeIds.length).fill("bytes32"),
+    nodeIds
   );
 
   return encodePacked(
@@ -88,10 +92,11 @@ export function packSignature(data: BLSSignatureData): Hex {
  *   [blsAggregateSig (256)]
  */
 export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex {
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
+  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]); // #274: strict-ascending wire order
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
   const nodeIdsBytes = encodePacked(
-    Array(data.nodeIds.length).fill("bytes32"),
-    data.nodeIds
+    Array(nodeIds.length).fill("bytes32"),
+    nodeIds
   );
 
   return encodePacked(
@@ -118,10 +123,11 @@ export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex 
  *   [blsAggregateSig (256)] [guardianECDSA (65)]
  */
 export function packCumulativeT3Signature(data: CumulativeT3SignatureData): Hex {
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
+  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]); // #274: strict-ascending wire order
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
   const nodeIdsBytes = encodePacked(
-    Array(data.nodeIds.length).fill("bytes32"),
-    data.nodeIds
+    Array(nodeIds.length).fill("bytes32"),
+    nodeIds
   );
 
   return encodePacked(
@@ -311,10 +317,16 @@ export function packCumulativeT3WA(waBlob: Hex, blsPayload: Hex, guardianSig: He
   ]);
 }
 
-/** Build the BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`. */
+// #274 nodeId strict-ascending sort lives in @aastar/core (crypto/dvtWire) — the single source shared by
+// the core dvtWire encoders and these airaccount packers. Re-exported so ./bls-packing consumers keep it.
+export { sortNodeIdsAscending };
+
+/** Build the BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`.
+ *  nodeIds are sorted strictly ascending + dedup-checked before packing (#274). */
 export function packBlsPayload(nodeIds: readonly Hex[], blsSignature: Hex): Hex {
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
-  const nodeIdsBytes = encodePacked(Array(nodeIds.length).fill("bytes32"), nodeIds as Hex[]);
+  const sorted = sortNodeIdsAscending(nodeIds);
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(sorted.length)]);
+  const nodeIdsBytes = encodePacked(Array(sorted.length).fill("bytes32"), sorted);
   return concat([nodeIdsLength, nodeIdsBytes, blsSignature]);
 }
 

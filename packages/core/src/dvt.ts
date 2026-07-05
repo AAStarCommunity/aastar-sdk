@@ -39,8 +39,13 @@ export const DVT_CONFIG: DvtConfig = {
   environments: {
     sepolia: {
       chainId: 11155111,
-      validator: "0xAF525A161CB17e0A1b6254ef0B8d8473bdA05174",
+      // v0.27.0 DVT-unification validator (algId 0x01; router.getAlgorithm(0x01) on-chain verified). #274/CC-12.
+      validator: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",
       entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+      // NOTE: these are v0.20 fallback nodeIds. Under v0.27.0 operators re-register on 0x539B with
+      // nodeId=keccak256(EIP-2537 G1 pubkey); the live co-sign path reads nodeIds DYNAMICALLY, so these
+      // fallbacks refresh once operator re-registration completes (tracked in CC-12; DVT sign endpoint
+      // was mid-migration / 403 at sync time). Do NOT hand-guess the new ids — read them from the nodes.
       dvtNodes: [
         { url: "https://dvt1.aastar.io", nodeId: "0x2df775b934046ddd210828fb5096ea8a15bb18a145dae5bd94535375c319c53f" },
         { url: "https://dvt2.aastar.io", nodeId: "0xd907ad728a7091c5cc628d9c7c71ae8d69f062a39533a2890bea3c299bacd201" },
