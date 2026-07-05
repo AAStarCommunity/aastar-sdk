@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.2] - 2026-07-05
+**SDK Code Integrity Hash**: `1c05def2c3480753f7981be310f871fe504383c21255457dd046d80396408111`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Fix: align `ALG_ID` to the on-chain algId map (0x09 collision).** (#282, #283)
+
+- **[FIX]** `ALG_ID.AGENT_SESSION_KEY` was `0x09`, colliding with on-chain `ALG_CUMULATIVE_T2_WA = 0x09`
+  (`AAStarAirAccountBase.sol`) — wrong + unused (only `ALG_ID.BLS` is referenced). Removed it; added the
+  correct `CUMULATIVE_T2_WA: 0x09` / `CUMULATIVE_T3_WA: 0x0a` so `ALG_ID` matches the contract map exactly.
+  No behavior change. The AgentSessionKeyValidator's real signing algId is tracked in #282 (contract-team
+  confirmation, Seeder CC-16 — likely the reused SessionKeyValidator 0x08, no distinct algId).
+
 ## [0.37.1] - 2026-07-05
 **SDK Code Integrity Hash**: `e9f0bb4e1a45174e963110db246904ffa7fde380ccab4ddbf94863684f6369a1`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

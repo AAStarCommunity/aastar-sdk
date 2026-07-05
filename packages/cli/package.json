@@ -1,6 +1,6 @@
 {
   "name": "@aastar/cli",
-  "version": "0.37.1",
+  "version": "0.37.2",
   "publishConfig": {
     "access": "public"
   },
