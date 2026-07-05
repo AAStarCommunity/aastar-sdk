@@ -88,10 +88,11 @@ export function packSignature(data: BLSSignatureData): Hex {
  *   [blsAggregateSig (256)]
  */
 export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex {
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
+  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]); // #274: strict-ascending wire order
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
   const nodeIdsBytes = encodePacked(
-    Array(data.nodeIds.length).fill("bytes32"),
-    data.nodeIds
+    Array(nodeIds.length).fill("bytes32"),
+    nodeIds
   );
 
   return encodePacked(
@@ -118,10 +119,11 @@ export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex 
  *   [blsAggregateSig (256)] [guardianECDSA (65)]
  */
 export function packCumulativeT3Signature(data: CumulativeT3SignatureData): Hex {
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(data.nodeIds.length)]);
+  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]); // #274: strict-ascending wire order
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
   const nodeIdsBytes = encodePacked(
-    Array(data.nodeIds.length).fill("bytes32"),
-    data.nodeIds
+    Array(nodeIds.length).fill("bytes32"),
+    nodeIds
   );
 
   return encodePacked(
@@ -311,10 +313,39 @@ export function packCumulativeT3WA(waBlob: Hex, blsPayload: Hex, guardianSig: He
   ]);
 }
 
-/** Build the BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`. */
+/**
+ * Sort nodeIds STRICTLY ASCENDING (by 32-byte big-endian value) for the BLS aggregation wire (#274).
+ *
+ * The DVT-unification validator (algId 0x01, airaccount-contract v0.27.0 / YetAnotherAA-Validator #170)
+ * rejects unordered or duplicate nodeIds: a single node could otherwise submit `[nid, nid, …]` + k·sig to
+ * fake an M-of-N quorum. Strictly-increasing ⇒ dedup, matching SP BLSAggregator's ordered signerMask.
+ *
+ * BLS aggregation is commutative (Σ sig / Σ pubkey are order-independent), so reordering the ids does NOT
+ * change the aggregate signature — this only fixes the WIRE order. A duplicate nodeId is a malformed
+ * aggregate → throw (rather than silently dropping an id whose signature is already summed into the aggregate).
+ */
+export function sortNodeIdsAscending(nodeIds: readonly Hex[]): Hex[] {
+  const sorted = [...nodeIds].sort((a, b) => {
+    const av = BigInt(a);
+    const bv = BigInt(b);
+    return av < bv ? -1 : av > bv ? 1 : 0;
+  });
+  for (let i = 1; i < sorted.length; i++) {
+    if (BigInt(sorted[i]) === BigInt(sorted[i - 1])) {
+      throw new Error(
+        `sortNodeIdsAscending: duplicate nodeId ${sorted[i]} — a valid M-of-N BLS aggregate has strictly-ascending, distinct nodeIds (#274)`
+      );
+    }
+  }
+  return sorted;
+}
+
+/** Build the BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`.
+ *  nodeIds are sorted strictly ascending + dedup-checked before packing (#274). */
 export function packBlsPayload(nodeIds: readonly Hex[], blsSignature: Hex): Hex {
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
-  const nodeIdsBytes = encodePacked(Array(nodeIds.length).fill("bytes32"), nodeIds as Hex[]);
+  const sorted = sortNodeIdsAscending(nodeIds);
+  const nodeIdsLength = encodePacked(["uint256"], [BigInt(sorted.length)]);
+  const nodeIdsBytes = encodePacked(Array(sorted.length).fill("bytes32"), sorted);
   return concat([nodeIdsLength, nodeIdsBytes, blsSignature]);
 }
 
