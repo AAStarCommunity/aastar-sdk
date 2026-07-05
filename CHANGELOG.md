@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.0] - 2026-07-05
+**SDK Code Integrity Hash**: `ae1776333bc20b6e53a56fc7c1f99b04dd0c19b3e16a90801904987e95dd46cd`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Sync: airaccount-contract v0.27.0 (DVT-unification) — addresses + BLS nodeIds strict-ascending.** (#274, CC-10/CC-12)
+
+⚠️ New factory address — pre-deploy predicted addresses change vs v0.24.0. (Supersedes the npm-published
+`0.36.1`, which shipped the Tier-1 `0x02` fix on the older v0.24.0 addresses; use `0.37.0` for v0.27.0.)
+
+- **[SYNC]** Sepolia addresses → v0.27.0 (all six on-chain verified: `FACTORY`/`ACCOUNT_VERSION`==0.27.0):
+  Factory `0xf25621DF…`, Impl `0x4a76dEf9…`, Extension `0xEcE87546…`, AAStarValidator/router `0xe68d6A7B…`,
+  DVT validator (algId 0x01) `0x539B9681…`.
+- **[FIX]** BLS aggregation wire sorts `nodeIds` **strictly ascending** in ALL encoders — `packSignature`
+  + the three `dvtWire` encoders — via a single shared `sortNodeIdsAscending` in `@aastar/core` (the
+  v0.27.0 DVT validator-unification requires ascending nodeIds). (#274)
+- Includes the Tier-1 `0x02` framing fix from `0.36.1` (#273/#275). Codex/PK: no new findings.
+
 ## [0.36.1] - 2026-07-05
 **SDK Code Integrity Hash**: `50b49ea55a6d62437850dc9f8698e9969021f00194529bcde7568af0fd18d868`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

@@ -22,7 +22,7 @@ This SDK integrates **four upstream AAStar infrastructure stacks**. Each MUST be
 
 | Upstream | Pinned version | Releases | Source of truth in this SDK |
 |---|---|---|---|
-| **AirAccount** (contracts) | `v0.22.0` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
+| **AirAccount** (contracts) | `v0.27.0` | [airaccount-contract](https://github.com/AAStarCommunity/airaccount-contract/releases) | ABIs `packages/core/src/abis/AAStarAirAccount*.json` · addresses `packages/core/src/addresses.ts` |
 | **SuperPaymaster** | `v5.4.1-rc.1` | [SuperPaymaster](https://github.com/AAStarCommunity/SuperPaymaster/releases) | ABIs `packages/core/src/abis/{SuperPaymaster,Registry,PolicyRegistry,X402Facilitator,BLSAggregator,…}.json` · addresses |
 | **KMS** | `openapi 0.27.2` | [AirAccount](https://github.com/AAStarCommunity/AirAccount/releases) | HTTP client `packages/airaccount/src/server/services/kms-*.ts` (spec: `AirAccount/kms/docs/api/openapi.yaml`) |
 | **DVT** (validator nodes) | `v1.8.0` | [YetAnotherAA-Validator](https://github.com/AAStarCommunity/YetAnotherAA-Validator/releases) | combined-sig wire `packages/core/src/crypto/dvtWire.ts` + node `/signature/sign` client (`{ userOp, ownerAuth }`; owner-auth via account `isValidOwnerAuth` eth_call — scheme-agnostic ECDSA/P256, #261); on-chain verifier `AAStarBLSAlgorithm` (the SDK calls DVT nodes to co-sign account UserOps); default testnet nodes `DEFAULT_DVT_NODES` (`packages/core/src/crypto/dvtNodes.ts`). **Aggregation wire (`verifyAggregateSignature(nodeIds, sig, messagePoint)`) unchanged vs v1.6.0.** #165: staked registration now derives `nodeId = keccak256(pubkey)` — the SDK reads nodeIds dynamically (sign response + `/gossip/peers`), so re-registration is transparent; the hardcoded `DEFAULT_DVT_NODES` ids track the current live nodes (refresh after operators re-register). |
@@ -284,7 +284,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.36.1)**: `50b49ea55a6d62437850dc9f8698e9969021f00194529bcde7568af0fd18d868`
+**Current Code Integrity Hash (v0.37.0)**: `ae1776333bc20b6e53a56fc7c1f99b04dd0c19b3e16a90801904987e95dd46cd`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
