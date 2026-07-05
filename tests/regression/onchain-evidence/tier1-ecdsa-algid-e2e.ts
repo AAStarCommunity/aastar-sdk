@@ -126,8 +126,12 @@ async function main() {
         const tx = await walletClient.writeContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'setValidator', args: [VALIDATOR_ROUTER], chain: sepolia });
         const r = await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: tx }));
         console.log(`\n[0c] setValidator tx=${tx} status=${r.status}`);
+    } else if (getAddress(curValidator) !== VALIDATOR_ROUTER) {
+        // Idempotent rerun MUST land on an account wired to the SAME router — else the probe would
+        // silently validate against a stale/mis-configured account and the result would be meaningless.
+        throw new Error(`[0c] account ${account} has validator ${curValidator}, expected the canonical router ${VALIDATOR_ROUTER} — stale account? bump SALT or investigate`);
     } else {
-        console.log(`\n[0c] validator already set = ${curValidator}`);
+        console.log(`\n[0c] validator already set = ${curValidator} (matches canonical router ✓)`);
     }
 
     // ── (1) Build a v0.7 PackedUserOperation + authoritative userOpHash ─────────────────────────
@@ -142,6 +146,17 @@ async function main() {
     console.log(`\n[1] userOpHash = ${userOpHash}`);
 
     // ── (2) Tier-1 signature via the REAL SDK path (generateTieredSignature → packEcdsaAlgId) ────
+    // Harden: the sig MUST come from the account's on-chain owner, else [3] acceptance could be
+    // coincidental. Assert signer identity == owner == the account's on-chain owner() before signing.
+    const signer = new LocalWalletSigner(jasonPk);
+    const signerAddr = (await signer.getAddress('jason')) as Address;
+    const onchainOwner = (await withRpcFallback((c) =>
+        c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'owner' })
+    )) as Address;
+    if (getAddress(signerAddr) !== getAddress(owner.address) || getAddress(onchainOwner) !== getAddress(owner.address)) {
+        throw new Error(`signer/owner mismatch — signer=${signerAddr} onchainOwner=${onchainOwner} expected=${owner.address}; [3] would not prove owner acceptance`);
+    }
+    console.log(`     signer==owner==onchain owner() ✓ (${onchainOwner})`);
     const storageStub = {
         getBlsConfig: async () => undefined,
         findAccountByUserId: async () => ({ signerAddress: owner.address }),
@@ -150,7 +165,7 @@ async function main() {
         { blsSeedNodes: [] } as any,
         {} as any, // ethereum — unused on the tier-1 path
         storageStub as any,
-        new LocalWalletSigner(jasonPk)
+        signer
     );
     const tier1Sig = (await svc.generateTieredSignature({ tier: 1, userId: 'jason', userOpHash })) as Hex;
     const tier1Bytes = (tier1Sig.length - 2) / 2;
