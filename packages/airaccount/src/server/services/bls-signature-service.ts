@@ -12,6 +12,7 @@ import {
   packBlsPayload,
   packCumulativeT2WA,
   packCumulativeT3WA,
+  packEcdsaAlgId,
 } from "../../migration/viem/bls-packing";
 import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
@@ -304,7 +305,9 @@ export class BLSSignatureService {
   /**
    * Generate a tiered signature based on the required tier level.
    *
-   * - Tier 1: raw 65-byte ECDSA (no algId prefix, backwards-compat)
+   * - Tier 1: algId 0x02 — single ECDSA ([0x02][r][s][v] = 66 bytes). airaccount-contract
+   *   v0.25.0 removed the raw-65 fallback, so the leading 0x02 is now REQUIRED (#273). This
+   *   matches the Ledger path (auth/hardware/ledger.ts) and the compositeValidator ECDSA path.
    * - Tier 2: algId 0x04 — P256 + BLS aggregate (contract #45: no messagePoint/mpSig)
    * - Tier 3: algId 0x05 — P256 + BLS aggregate + Guardian ECDSA (contract #45: no messagePoint/mpSig)
    *
@@ -329,11 +332,19 @@ export class BLSSignatureService {
     const manager = await this.ensureInitialized();
 
     if (tier === 1) {
-      // Tier 1: raw ECDSA signature (65 bytes, no algId prefix)
+      // Tier 1: single ECDSA, packed as [algId 0x02][r(32)][s(32)][v(1)] = 66 bytes.
+      // airaccount-contract v0.25.0 dropped the raw-65 fallback, so the 0x02 algId prefix is
+      // mandatory (#273); prior to that we returned the owner sig verbatim. packEcdsaAlgId validates
+      // the signer returned a bare 65-byte sig (guards against double-prefixing).
       const account = await this.storage.findAccountByUserId(userId);
       if (!account) throw new Error(`User account not found for userId: ${userId}`);
 
-      return this.signer.signMessage(userId, hexToBytes(userOpHash as `0x${string}`), ctx);
+      const rawEcdsa = await this.signer.signMessage(
+        userId,
+        hexToBytes(userOpHash as `0x${string}`),
+        ctx
+      );
+      return packEcdsaAlgId(rawEcdsa as `0x${string}`);
     }
 
     // Tier 2 and 3 both need BLS + P256

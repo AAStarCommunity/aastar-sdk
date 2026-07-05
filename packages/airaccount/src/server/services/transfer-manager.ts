@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 // them to viem's readContract / encodeFunctionData during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi, encodeFunctionData } from "viem";
-import { packOwnerAuthEcdsa, packOwnerAuthWebAuthn } from "../../migration/viem/bls-packing";
+import { packOwnerAuthEcdsa, packOwnerAuthWebAuthn, packEcdsaAlgId } from "../../migration/viem/bls-packing";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { readValidatorGasEstimate } from "../providers/typed-reads";
 import { AccountManager } from "./account-manager";
@@ -640,9 +640,10 @@ export class TransferManager {
       const preCheck = await this.guardChecker.preCheck(accountAddress, transferValue);
       if (!preCheck.ok) throw new Error(`Guard pre-check failed: ${preCheck.errors.join("; ")}`);
       tier = preCheck.tier;
-      // Don't let the inline-ECDSA path shadow the tiered composite signature. (Tier 1 still emits a
-      // bare ECDSA via generateTieredSignature, which the account accepts as inline ECDSA, so this is
-      // a no-op for tier 1 and the actual fix for tier-2/3.)
+      // Don't let the inline-ECDSA path shadow the tiered composite signature. (Tier 1 emits a
+      // single ECDSA framed as [algId 0x02][r][s][v] via generateTieredSignature — the same framing
+      // the compositeValidator ECDSA path uses (#273) — so this stays consistent for tier 1 and is
+      // the actual fix for tier-2/3.)
       if (tier != null) useECDSA = false;
     }
     return { useECDSA, isCompositeValidator, tier };
@@ -766,15 +767,18 @@ export class TransferManager {
       );
       if (strategy.isCompositeValidator) {
         this.logger.log("ECDSA path for compositeValidator: prepending algId prefix");
-        userOp.signature = concat([numberToHex(ALG_ID.ECDSA, { size: 1 }), ecdsaSig as `0x${string}`]);
+        // packEcdsaAlgId validates a bare 65-byte sig before framing [0x02][r][s][v] — same guard as
+        // the tier-1 path (#273), so a pre-framed signer sig can't be double-prefixed into 67 bytes.
+        userOp.signature = packEcdsaAlgId(ecdsaSig as `0x${string}`);
       } else {
         this.logger.log("ECDSA path for non-compositeValidator: raw signature");
         userOp.signature = ecdsaSig;
       }
     } else if (strategy.tier != null) {
       this.logger.log(`Tier ${strategy.tier} selected`);
-      // #259: a KMS WebAuthn ceremony assertion is SINGLE-USE. Tier-1 is a raw owner ECDSA over
-      // userOpHash (generateTieredSignature signs it directly) and uses NO DVT/BLS — so building a
+      // #259: a KMS WebAuthn ceremony assertion is SINGLE-USE. Tier-1 is a single owner ECDSA over
+      // userOpHash (generateTieredSignature signs it directly, framed [0x02][r][s][v]) and uses NO
+      // DVT/BLS — so building a
       // dvtRequest here would spend the assertion a SECOND time on ownerAuth (same owner, same
       // userOpHash) and the second SignHash hits a spent challenge (400). Only Tier-2/3 talk to the DVT;
       // for them the ownerAuth is the ONLY ceremony sign (the composite uses the device passkey + BLS +

@@ -91,7 +91,7 @@ async function m4Setup() {
       v07: {
         entryPointAddress: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
         factoryAddress: "0x914db0a849f55e68a726c72fd02b7114b1176d88",
-        // No validatorAddress → M4 ECDSA path (raw 65-byte signature)
+        // No validatorAddress → M4 ECDSA path (single owner ECDSA; a compositeValidator frames it [0x02][r][s][v], a plain account stays raw)
       },
     },
     defaultVersion: "0.7",
@@ -548,7 +548,7 @@ async function blsSignatures(client: AirAccountServerClient) {
   // submitPreparedTransfer assembles the Tier-2/3 composite (P256 + DVT BLS aggregate + guardian) itself.
   console.log("BLS signing runs inside submitPreparedTransfer — see the transfer example.");
 
-  // Tiered signatures (AirAccount) — Tier 1: raw ECDSA (0x02); Tier 2: P256 + BLS aggregate (0x04/0x09);
+  // Tiered signatures (AirAccount) — Tier 1: single ECDSA framed [0x02][r][s][v] (0x02); Tier 2: P256 + BLS aggregate (0x04/0x09);
   // Tier 3: + Guardian ECDSA (0x05/0x0a). The tier is resolved on-chain from the transfer value and the
   // composite is assembled inside submitPreparedTransfer (which also produces the DVT ownerAuth, #257) —
   // integrators drive it through prepareTransfer/submitPreparedTransfer, not generateTieredSignature.

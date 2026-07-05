@@ -30,35 +30,45 @@ describe("DvtPendingConfirmationError (DVT v1.3.0 pending_confirmation)", () => 
   });
 });
 
-describe("generateTieredSignature — Tier 1 is a no-op vs inline ECDSA (#235 review F1)", () => {
-  // The precedence fix sets `useECDSA=false` for ALL non-null tiers, including tier=1, on the claim
-  // that generateTieredSignature(tier=1) emits the SAME bytes as the inline-ECDSA path (raw 65-byte
-  // ECDSA, no algId prefix — the account accepts it as algId 0x02 implied). This pins that claim so a
-  // future change that prefixed an algId for tier-1 (which would break tier-1 tiered calls) is caught.
-  it("returns the raw owner ECDSA (no algId prefix, not 0x04/0x05) for tier 1", async () => {
-    const RAW_ECDSA = ("0x" + "ab".repeat(65)) as `0x${string}`; // 65-byte owner sig
-    const signMessage = vi.fn().mockResolvedValue(RAW_ECDSA);
-    const storage = {
-      getBlsConfig: vi.fn().mockResolvedValue(undefined),
-      findAccountByUserId: vi.fn().mockResolvedValue({ signerAddress: "0x" + "11".repeat(20) }),
-    };
-    const svc = new BLSSignatureService(
+describe("generateTieredSignature — Tier 1 prefixes algId 0x02 (#273; was #235 review F1)", () => {
+  // airaccount-contract v0.25.0 removed the raw-65 fallback, so tier-1 MUST emit the single-ECDSA
+  // algId frame [0x02][r][s][v] = 66 bytes (matching the compositeValidator ECDSA path in
+  // transfer-manager, which already prepends 0x02). This pins the prefix so a regression back to a
+  // bare 65-byte owner signature — which v0.25.0 accounts reject — is caught.
+  const RAW_ECDSA = ("0x" + "ab".repeat(65)) as `0x${string}`; // bare 65-byte owner sig from the signer
+
+  const makeSvc = (signMessage: any) =>
+    new BLSSignatureService(
       { blsSeedNodes: [] } as any,
       {} as any, // ethereum (unused on the tier-1 path)
-      storage as any,
+      {
+        getBlsConfig: vi.fn().mockResolvedValue(undefined),
+        findAccountByUserId: vi.fn().mockResolvedValue({ signerAddress: "0x" + "11".repeat(20) }),
+      } as any,
       { signMessage } as any
     );
 
-    const out = await svc.generateTieredSignature({
+  it("emits [0x02][r][s][v] = 66 bytes for tier 1 (not raw 65, not 0x04/0x05)", async () => {
+    const out = await makeSvc(vi.fn().mockResolvedValue(RAW_ECDSA)).generateTieredSignature({
       tier: 1 as any,
       userId: "u1",
       userOpHash: "0x" + "cd".repeat(32),
     });
 
-    expect(out).toBe(RAW_ECDSA); // identical to inline ECDSA — no algId prefix
-    expect(out.slice(0, 4)).not.toBe("0x04"); // not a cumulative T2
-    expect(out.slice(0, 4)).not.toBe("0x05"); // not a cumulative T3
-    expect((out.length - 2) / 2).toBe(65); // exactly the 65-byte ECDSA, no extra bytes
+    expect(out.slice(0, 4)).toBe("0x02"); // single-ECDSA algId prefix
+    expect(out).toBe(("0x02" + "ab".repeat(65)) as `0x${string}`); // 0x02 ‖ the owner sig verbatim
+    expect((out.length - 2) / 2).toBe(66); // 1 algId byte + 65 ECDSA bytes
+  });
+
+  it("rejects a signer that returns a non-65-byte sig (double-prefix guard)", async () => {
+    const alreadyPrefixed = ("0x02" + "ab".repeat(65)) as `0x${string}`; // 66 bytes
+    await expect(
+      makeSvc(vi.fn().mockResolvedValue(alreadyPrefixed)).generateTieredSignature({
+        tier: 1 as any,
+        userId: "u1",
+        userOpHash: "0x" + "cd".repeat(32),
+      })
+    ).rejects.toThrow(/expected a bare 65-byte/);
   });
 });
 
