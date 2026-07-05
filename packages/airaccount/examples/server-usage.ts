@@ -91,7 +91,7 @@ async function m4Setup() {
       v07: {
         entryPointAddress: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
         factoryAddress: "0x914db0a849f55e68a726c72fd02b7114b1176d88",
-        // No validatorAddress → M4 ECDSA path (raw 65-byte signature)
+        // No validatorAddress → M4 ECDSA path (single owner ECDSA; a compositeValidator frames it [0x02][r][s][v], a plain account stays raw)
       },
     },
     defaultVersion: "0.7",

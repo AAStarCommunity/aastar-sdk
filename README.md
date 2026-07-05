@@ -188,7 +188,7 @@ const result = await client.transfers.executeTransfer('agent-001', {
 > **Signature Tiers (M4 AirAccount)**
 > | Tier | Components | Use Case |
 > | --- | --- | --- |
-> | 1 | Raw ECDSA | Small transactions |
+> | 1 | Single ECDSA (`0x02`-framed) | Small transactions |
 > | 2 | P256 + BLS aggregate | Medium transactions |
 > | 3 | P256 + BLS + Guardian | Large / high-value |
 
