@@ -1,8 +1,8 @@
 /**
- * Tier-3 WebAuthn cumulative composite (algId 0x0a) — full on-chain E2E on Sepolia (v0.21.0).
+ * Tier-3 WebAuthn cumulative composite (algId 0x0a) — full on-chain E2E on Sepolia (v0.27.0 DVT-unification).
  *
  * Proves the device-passkey path: the SDK-assembled Tier-3 composite — on-chain WebAuthn P256
- * (passkey) + DVT BLS aggregate + guardian ECDSA — is ACCEPTED by the deployed v0.21.0 AirAccount
+ * (passkey) + DVT BLS aggregate + guardian ECDSA — is ACCEPTED by the deployed v0.27.0 AirAccount
  * (`_validateCumulativeTier3` WebAuthn variant, algId 0x0a). This is the device-passkey acceptance
  * for aastar-sdk#234 / airaccount-contract#147/#148.
  *
@@ -12,7 +12,7 @@
  *   - the key signs sha256(authenticatorData ‖ sha256(clientDataJSON))  (ECDSA-SHA256)
  * so the on-chain WebAuthn reconstruction + P256VERIFY (0x100 precompile) passes — no browser needed.
  *
- * Flow (all live): deploy via the v0.21.0 factory (approvedAlgIds=[0x0a]) → setValidator + setP256Key
+ * Flow (all live): deploy via the v0.27.0 factory (approvedAlgIds=[0x0a]) → setValidator + setP256Key
  * → build userOp + userOpHash → WebAuthn assertion → packWebAuthnBlob → DVT BLS aggregate → guardian
  * → packCumulativeT3WA → eth_call validateUserOp == 0. Negative: a tampered challenge is rejected.
  *
@@ -70,7 +70,7 @@ import { UserOperationBuilder } from '../../../packages/sdk/src/index.js';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 const SEPOLIA = 11155111;
-const FACTORY = getAddress(CANONICAL_ADDRESSES[SEPOLIA].airAccountFactoryV7); // v0.21.0
+const FACTORY = getAddress(CANONICAL_ADDRESSES[SEPOLIA].airAccountFactoryV7); // v0.27.0 (from CANONICAL_ADDRESSES)
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEPOLIA].entryPoint);
 const VALIDATOR_ROUTER = getAddress(CANONICAL_ADDRESSES[SEPOLIA].aaStarValidator);
 const BLS_VERIFIER = getAddress(CANONICAL_ADDRESSES[SEPOLIA].aaStarBLSAlgorithm);
@@ -156,7 +156,7 @@ async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Pr
 
 async function main() {
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log(' Tier-3 WebAuthn cumulative (0x0a) E2E — passkey + DVT BLS + guardian + tag-0x02 DVT ownerAuth, Sepolia v0.23.0 (#234/#261)');
+    console.log(' Tier-3 WebAuthn cumulative (0x0a) E2E — passkey + DVT BLS + guardian + tag-0x02 DVT ownerAuth, Sepolia v0.27.0 (#234/#261/#274)');
     console.log('═══════════════════════════════════════════════════════════════════════════');
     if (RPCS.length === 0) throw new Error('No SEPOLIA_RPC_URL[/2/3] in .env.sepolia');
 
@@ -172,7 +172,7 @@ async function main() {
     const p256Y = norm(Buffer.from(p256Pub.slice(33, 65)).toString('hex'));
     const guardian = privateKeyToAccount(GUARDIAN_PK);
     const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: http(RPCS[0]) });
-    console.log(`\n[0a] factory(v0.23.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
+    console.log(`\n[0a] factory(v0.27.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
 
     // ── v0.22.0: deploy with the passkey + validator wired AT BIRTH (no setP256Key/setValidator tx) ──
     // getAddress + createAccount both take the SAME ownerP256X/Y (the salt now binds them).
@@ -342,8 +342,8 @@ async function main() {
     const delta = g2After - g2Before;
     console.log(`[12] g2 balance ${formatEther(g2Before)} → ${formatEther(g2After)} ETH  (Δ +${formatEther(delta)})`);
 
-    console.log('\n┌─────────────── EVIDENCE (Tier-3 WebAuthn composite + tag-0x02 DVT ownerAuth, v0.23.0 #234/#261) ───────────────');
-    console.log(`│ factory        : ${FACTORY} (v0.23.0)`);
+    console.log('\n┌─────────────── EVIDENCE (Tier-3 WebAuthn composite + tag-0x02 DVT ownerAuth, v0.27.0 #234/#261/#274) ───────────────');
+    console.log(`│ factory        : ${FACTORY} (v0.27.0)`);
     console.log(`│ account        : ${account}`);
     console.log(`│ userOpHash     : ${userOpHash}`);
     console.log(`│ waBlob bytes   : ${(waBlob.length - 2) / 2}`);
