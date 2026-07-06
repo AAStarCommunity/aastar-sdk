@@ -22,7 +22,6 @@ import {
   ACCOUNT_ABI,
   AIRACCOUNT_ABI,
   VALIDATOR_ABI,
-  AGENT_SESSION_KEY_VALIDATOR_ABI,
   TIER_GUARD_HOOK_ABI,
   AIR_ACCOUNT_COMPOSITE_VALIDATOR_ABI,
   FORCE_EXIT_MODULE_ABI,
@@ -187,11 +186,15 @@ export class EthereumProvider {
   // These methods are retained for backwards compatibility; callers should pass an explicit address.
   /**
    * @deprecated No `AgentSessionKeyValidator` contract is deployed (airaccount-contract v0.27.0, #282).
-   * The bound ABI is phantom — its functions revert on-chain. Use `SessionKeyValidator` (algId 0x08) via
-   * {@link getSessionKeyValidatorContract} instead. Removed in the next major.
+   * Its ABI is phantom — every function reverts on-chain — so this now FAILS CLOSED (throws) instead of
+   * handing back a contract whose reads/calls revert. Use `SessionKeyValidator` (algId 0x08) via
+   * {@link getSessionKeyValidatorContract} instead. Signature retained for one minor; removed next major.
    */
-  getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidatorM7r4): ViemContract {
-    return this.contractAt(address, AGENT_SESSION_KEY_VALIDATOR_ABI);
+  getAgentSessionKeyValidatorContract(_address?: string): ViemContract {
+    throw new Error(
+      "getAgentSessionKeyValidatorContract is not supported: no AgentSessionKeyValidator contract is " +
+      "deployed (airaccount-contract v0.27.0, #282). Use getSessionKeyValidatorContract (SessionKeyValidator, algId 0x08)."
+    );
   }
 
   getTierGuardHookContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.tierGuardHookM7r4): ViemContract {
