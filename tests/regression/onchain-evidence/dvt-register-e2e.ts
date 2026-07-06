@@ -120,6 +120,9 @@ async function main() {
   if (eff < minStake) throw new Error('operator not staked to minStake after registerRole — aborting before registerWithProof');
 
   // --- 3. build PoP (SDK) ---
+  // WARNING: this node key is DETERMINISTICALLY derived from a public string — anyone who clones
+  // this repo can recompute it and impersonate this node. It is a TESTNET FIXTURE ONLY; a real DVT
+  // node must use a private, securely-generated BLS key that never leaves the operator's control.
   const nodeBlsKey = toHex(BigInt(keccak256(toHex('aastar-dvt-jack-testnode-v1'))) % bls.params.r, { size: 32 });
   const pop = buildDvtPop(nodeBlsKey);
   log(`\nbuildDvtPop -> nodeId=${pop.nodeId}`);
