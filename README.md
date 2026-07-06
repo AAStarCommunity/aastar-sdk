@@ -284,7 +284,7 @@ To ensure seamless navigation and rapid reference, **all critical documentation*
 > [!IMPORTANT]
 > **Security First**: To ensure you are using an official release and protect your private keys, always verify the integrity of the SDK code.
 
-**Current Code Integrity Hash (v0.37.2)**: `1c05def2c3480753f7981be310f871fe504383c21255457dd046d80396408111`
+**Current Code Integrity Hash (v0.37.3)**: `fdd05d9e2dadc6fb35c93c0e1a3ea981096d5da096da43dd2537df7e332d55f3`
 
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum

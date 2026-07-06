@@ -43,7 +43,7 @@ export type AggregatorActions = {
     
     // Proposal & Execution
     executeProposal: (args: { proposalId: bigint, target: Address, callData: Hex, requiredThreshold: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
-    verifyAndExecute: (args: { proposalId: bigint, operator: Address, slashLevel: number, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    verifyAndExecute: (args: { proposalId: bigint, operator: Address, slashLevel: number, repUsers: Address[], newScores: bigint[], epoch: bigint, evidenceHash: Hex, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     executedProposals: (args: { proposalId: bigint }) => Promise<boolean>;
     proposalNonces: (args: { proposalId: bigint }) => Promise<bigint>;
     
@@ -273,7 +273,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
         }
     },
 
-    async verifyAndExecute({ proposalId, operator, slashLevel, repUsers, newScores, epoch, proof, account }) {
+    async verifyAndExecute({ proposalId, operator, slashLevel, repUsers, newScores, epoch, evidenceHash, proof, account }) {
         try {
             validateRequired(proposalId, 'proposalId');
             validateAddress(operator, 'operator');
@@ -281,12 +281,16 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             validateRequired(repUsers, 'repUsers');
             validateRequired(newScores, 'newScores');
             validateRequired(epoch, 'epoch');
+            // #285/SP#329 slash-consensus unify: verifyAndExecute now binds an evidenceHash (part of the
+            // execute messageHash keccak256(abi.encode(proposalId, operator, slashLevel, repUsers, newScores,
+            // epoch, chainid, evidenceHash))). The old 7-arg overload was REMOVED on-chain.
+            validateRequired(evidenceHash, 'evidenceHash');
             validateRequired(proof, 'proof');
             return await (client as any).writeContract({
                 address,
                 abi: BLSAggregatorABI,
                 functionName: 'verifyAndExecute',
-                args: [proposalId, operator, slashLevel, repUsers, newScores, epoch, proof],
+                args: [proposalId, operator, slashLevel, repUsers, newScores, epoch, evidenceHash, proof],
                 account: account as any,
                 chain: (client as any).chain
             });

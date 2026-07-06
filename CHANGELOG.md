@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.3] - 2026-07-06
+**SDK Code Integrity Hash**: `fdd05d9e2dadc6fb35c93c0e1a3ea981096d5da096da43dd2537df7e332d55f3`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Sync: BLSAggregator/DVTValidator ABI → SuperPaymaster #329 (slash-consensus unify). ABI only — addresses stay on the OLD deployment until SP applies.** (#285)
+
+- **[ABI]** Re-vendored `BLSAggregator` + `DVTValidator` ABIs to the #329 interface: `verifyAndExecute`
+  now takes `bytes32 evidenceHash` (the old 7-arg overload was REMOVED on-chain); new
+  `queueSlashWithConsensus`/`slashThresholds`/`setSlashThreshold`/`setSlashPolicyAdmin` + slash events/errors;
+  `DVTValidator` +`createProposal(…, evidenceHash)` overload +`queueSlashWithProof`.
+- **[FIX]** `aggregatorActions.verifyAndExecute` wrapper now requires + forwards `evidenceHash` (matching the
+  new on-chain execute messageHash). Calling the old 7-arg shape would have reverted.
+- **[ADDRESS]** BLSAggregator/DVTValidator addresses STAY on the OLD active deployment — SP changes its
+  aggregator behind a 24h timelock, so switching before `SP.applyBLSAggregator()` would revert slashes at SP.
+  New addresses (`0xF51c…`/`0x568b…`) are noted in `addresses.ts`; switch after SP applies (CC-18, #285).
+
 ## [0.37.2] - 2026-07-05
 **SDK Code Integrity Hash**: `1c05def2c3480753f7981be310f871fe504383c21255457dd046d80396408111`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
