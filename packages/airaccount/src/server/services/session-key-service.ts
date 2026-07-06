@@ -12,16 +12,28 @@ import {
 import { parseAbi } from "viem";
 import {
   SESSION_KEY_VALIDATOR_ABI,
-  AGENT_SESSION_KEY_VALIDATOR_ABI,
 } from "../constants/entrypoint";
 import { type ViemContract } from "../providers/ethereum-provider";
 import { readBuildGrantHash, readBuildP256GrantHash } from "../providers/typed-reads";
 
-// Parse the local human-readable ABIs once. Widened to `Abi` so viem treats the
+// Parse the local human-readable ABI once. Widened to `Abi` so viem treats the
 // call args loosely (plain address strings / numbers) — matching the previous
 // ethers.Interface ergonomics without per-call `0x${string}` casts.
 const SESSION_KEY_VALIDATOR_VIEM_ABI = parseAbi(SESSION_KEY_VALIDATOR_ABI) as Abi;
-const AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI = parseAbi(AGENT_SESSION_KEY_VALIDATOR_ABI) as Abi;
+
+/**
+ * The M7 "agent session" methods below are deprecated no-ops that throw: airaccount-contract v0.27.0
+ * confirmed (Seeder CC-16 / #282) there is no deployed `AgentSessionKeyValidator` and no distinct agent
+ * algId — an agent session reuses `SessionKeyValidator` (algId `0x08`) with a scoped `Session`. These
+ * methods previously produced calldata that reverts on-chain; they now fail closed with a clear error.
+ */
+function agentSessionUnsupported(method: string): never {
+  throw new Error(
+    `SessionKeyService.${method} is not supported: no AgentSessionKeyValidator contract is deployed ` +
+    `(airaccount-contract v0.27.0, #282). Agent sessions reuse SessionKeyValidator (algId 0x08) — use ` +
+    `the M6 session methods (grantSession / grantP256Session) with a scoped Session instead.`
+  );
+}
 
 // ─── M6 SessionKeyValidator ──────────────────────────────────────
 
@@ -163,8 +175,9 @@ function decodeSessionInfo(session: unknown): SessionInfo {
   };
 }
 
-// ─── M7 AgentSessionKeyValidator ─────────────────────────────────
+// ─── M7 AgentSessionKeyValidator (DEPRECATED — no deployed contract, #282) ───
 
+/** @deprecated No AgentSessionKeyValidator is deployed (airaccount-contract v0.27.0, #282). Use a scoped M6 {@link GrantSessionParams} instead. */
 export interface AgentSessionConfig {
   expiry: number;               // Unix timestamp
   velocityLimit: number;        // Max calls per velocityWindow (0 = unlimited)
@@ -173,6 +186,7 @@ export interface AgentSessionConfig {
   selectorAllowlist: string[];  // Allowed selectors (empty = any)
 }
 
+/** @deprecated No AgentSessionKeyValidator is deployed (#282). See {@link AgentSessionConfig}. */
 export interface AgentSessionInfo extends AgentSessionConfig {
   revoked: boolean;
   callCount: bigint;
@@ -180,33 +194,31 @@ export interface AgentSessionInfo extends AgentSessionConfig {
 }
 
 /**
- * SessionKeyService — manage M6 (basic) and M7 (agent) session keys.
+ * SessionKeyService — manage M6 session keys on `SessionKeyValidator` (algId `0x08`):
+ * time-limited ECDSA/P256 keys with optional contract+selector scope, for standard delegated
+ * actions (hot wallet, automated tasks, and — via a scoped Session — agent delegation).
  *
- * M6 SessionKeyValidator (algId=0x08):
- *   Simple time-limited ECDSA/P256 key with optional contract+selector scope.
- *   Used for standard delegated actions (hot wallet, automated tasks).
- *
- * M7 AgentSessionKeyValidator (algId=0x09):
- *   Rich session key for AI agents: velocity limits, spend caps, call allowlists,
- *   hierarchical delegation (parent → sub-agent with scope narrowing).
+ * The M7 "agent session" methods (grantAgentSession/delegateSession/…) are **deprecated and throw**:
+ * airaccount-contract v0.27.0 confirmed there is no deployed `AgentSessionKeyValidator` and no distinct
+ * agent algId (Seeder CC-16 / #282). Use the M6 methods with a scoped Session instead.
  */
 export class SessionKeyService {
   private readonly skValidator: ViemContract;
-  private readonly askValidator: ViemContract;
 
+  /**
+   * @param provider viem PublicClient for reads.
+   * @param sessionKeyValidatorAddress the M6 `SessionKeyValidator` (algId 0x08).
+   * @param _agentSessionKeyValidatorAddress @deprecated ignored — no AgentSessionKeyValidator is
+   *   deployed (#282). Accepted for one minor to keep the 3-arg call sites compiling.
+   */
   constructor(
     provider: PublicClient,
     sessionKeyValidatorAddress: string,
-    agentSessionKeyValidatorAddress: string,
+    _agentSessionKeyValidatorAddress?: string,
   ) {
     this.skValidator = getContract({
       address: sessionKeyValidatorAddress as `0x${string}`,
       abi: SESSION_KEY_VALIDATOR_VIEM_ABI,
-      client: provider,
-    }) as unknown as ViemContract;
-    this.askValidator = getContract({
-      address: agentSessionKeyValidatorAddress as `0x${string}`,
-      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
       client: provider,
     }) as unknown as ViemContract;
   }
@@ -348,98 +360,47 @@ export class SessionKeyService {
     });
   }
 
-  // ── M7: Agent Session Keys ────────────────────────────────────
+  // ── M7: Agent Session Keys (DEPRECATED — no deployed contract, #282) ──
+  //
+  // These methods target a phantom `AgentSessionKeyValidator` (grantAgentSession/delegateSession/…)
+  // that does NOT exist on-chain (airaccount-contract v0.27.0, Seeder CC-16). They previously produced
+  // calldata / reads that revert against a real deployment. They now FAIL CLOSED (throw) so callers get
+  // a clear error instead of a silent on-chain revert. Use the M6 methods (grantSession /
+  // grantP256Session) with a scoped Session for agent delegation. Removed in the next major.
 
-  /**
-   * Encode calldata for grantAgentSession().
-   * Must be called from the account (via UserOp or direct execute).
-   * The contract uses msg.sender as the account — no account param needed.
-   */
-  encodeGrantAgentSession(sessionKey: string, cfg: AgentSessionConfig): string {
-    return encodeFunctionData({
-      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
-      functionName: "grantAgentSession",
-      args: [
-        sessionKey,
-        {
-          expiry: cfg.expiry,
-          velocityLimit: cfg.velocityLimit,
-          velocityWindow: cfg.velocityWindow,
-          revoked: false,
-          callTargets: cfg.callTargets,
-          selectorAllowlist: cfg.selectorAllowlist,
-        },
-      ],
-    });
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. Use {@link encodeGrantSession} with a scoped Session. */
+  encodeGrantAgentSession(_sessionKey: string, _cfg: AgentSessionConfig): string {
+    return agentSessionUnsupported("encodeGrantAgentSession");
   }
 
-  /**
-   * Encode calldata for delegateSession() — sub-agent delegation.
-   * The sub-agent config must be a strict subset of the parent session's scope.
-   * Called by the parent session key (not the account owner).
-   * @param account The smart account under which the parent session was granted.
-   */
-  encodeDelegateSession(account: string, subKey: string, subCfg: AgentSessionConfig): string {
-    return encodeFunctionData({
-      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
-      functionName: "delegateSession",
-      args: [
-        account,
-        subKey,
-        {
-          expiry: subCfg.expiry,
-          velocityLimit: subCfg.velocityLimit,
-          velocityWindow: subCfg.velocityWindow,
-          revoked: false,
-          callTargets: subCfg.callTargets,
-          selectorAllowlist: subCfg.selectorAllowlist,
-        },
-      ],
-    });
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. */
+  encodeDelegateSession(_account: string, _subKey: string, _subCfg: AgentSessionConfig): string {
+    return agentSessionUnsupported("encodeDelegateSession");
   }
 
-  /** Encode calldata for revokeAgentSession(). */
-  encodeRevokeAgentSession(sessionKey: string): string {
-    return encodeFunctionData({
-      abi: AGENT_SESSION_KEY_VALIDATOR_VIEM_ABI,
-      functionName: "revokeAgentSession",
-      args: [sessionKey],
-    });
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. Use {@link encodeRevokeSession}. */
+  encodeRevokeAgentSession(_sessionKey: string): string {
+    return agentSessionUnsupported("encodeRevokeAgentSession");
   }
 
-  /** Query agent session config + runtime state. */
-  async getAgentSession(account: string, sessionKey: string): Promise<AgentSessionInfo> {
-    // Multi-output view fns are returned by viem as a positional array.
-    const [expiry, velocityLimit, velocityWindow, revoked, callTargets, selectorAllowlist] =
-      (await this.askValidator.read.agentSessions([account, sessionKey])) as readonly unknown[];
-    const [callCount, windowStart] =
-      (await this.askValidator.read.sessionStates([account, sessionKey])) as readonly unknown[];
-    return {
-      expiry: Number(expiry),
-      velocityLimit: Number(velocityLimit),
-      velocityWindow: Number(velocityWindow),
-      callTargets: callTargets as string[],
-      selectorAllowlist: selectorAllowlist as string[],
-      revoked: revoked as boolean,
-      callCount: BigInt(callCount as bigint),
-      windowStart: BigInt(windowStart as bigint),
-    };
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. Use {@link getSession}. */
+  async getAgentSession(_account: string, _sessionKey: string): Promise<AgentSessionInfo> {
+    return agentSessionUnsupported("getAgentSession");
   }
 
-  /** Check if an agent session is active (not expired, not revoked). */
-  async isAgentSessionActive(account: string, sessionKey: string): Promise<boolean> {
-    const session = await this.getAgentSession(account, sessionKey);
-    return session.expiry > Math.floor(Date.now() / 1000) && !session.revoked;
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. Use {@link isSessionActive}. */
+  async isAgentSessionActive(_account: string, _sessionKey: string): Promise<boolean> {
+    return agentSessionUnsupported("isAgentSessionActive");
   }
 
-  /** Return the parent account of a delegated session key. */
-  async getSessionKeyOwner(sessionKey: string): Promise<string> {
-    return this.askValidator.read.sessionKeyOwner([sessionKey]) as Promise<string>;
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. */
+  async getSessionKeyOwner(_sessionKey: string): Promise<string> {
+    return agentSessionUnsupported("getSessionKeyOwner");
   }
 
-  /** Return the parent key that delegated to subKey, or ZeroAddress if not delegated. */
-  async getDelegatedBy(account: string, subKey: string): Promise<string> {
-    return this.askValidator.read.delegatedBy([account, subKey]) as Promise<string>;
+  /** @deprecated No AgentSessionKeyValidator is deployed (#282) — throws. */
+  async getDelegatedBy(_account: string, _subKey: string): Promise<string> {
+    return agentSessionUnsupported("getDelegatedBy");
   }
 }
 

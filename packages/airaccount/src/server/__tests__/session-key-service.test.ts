@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_TYPE } from "../constants/entrypoint";
-import { SESSION_KEY_VALIDATOR_ABI, AGENT_SESSION_KEY_VALIDATOR_ABI } from "../constants/entrypoint";
+import { SESSION_KEY_VALIDATOR_ABI } from "../constants/entrypoint";
 // eslint-disable-next-line no-restricted-imports
 import {
   parseAbi,
@@ -18,7 +18,6 @@ import { selectorFromId } from "../../migration/viem/hashing";
 const ACCOUNT_ADDR = "0x3333333333333333333333333333333333333333";
 const SESSION_KEY  = "0x4444444444444444444444444444444444444444";
 const SUB_KEY      = "0x5555555555555555555555555555555555555555";
-const PARENT_KEY   = "0x6666666666666666666666666666666666666666";
 
 // ─── Minimal stand-in for SessionKeyService (avoids contract-instance mocking) ─
 // Re-implements only the methods under test using the same encode/decode logic
@@ -27,7 +26,6 @@ const PARENT_KEY   = "0x6666666666666666666666666666666666666666";
 // not the dependency wiring.
 
 const SK_ABI: Abi = parseAbi(SESSION_KEY_VALIDATOR_ABI as readonly string[]);
-const ASK_ABI: Abi = parseAbi(AGENT_SESSION_KEY_VALIDATOR_ABI as readonly string[]);
 
 // Authoritative ABI from @aastar/core — used to cross-check that the local
 // SESSION_KEY_VALIDATOR_ABI fragments encode the SAME Session tuple shape, so a
@@ -99,60 +97,6 @@ function encodeGrantP256Session(params: {
 function encodeRevokeP256Session(account: string, keyX: string, keyY: string): string {
   return enc(SK_ABI, "revokeP256Session", [account, keyX, keyY]);
 }
-
-function encodeGrantAgentSession(sessionKey: string, cfg: {
-  expiry: number; velocityLimit: number; velocityWindow: number;
-  callTargets: string[]; selectorAllowlist: string[];
-}): string {
-  return enc(ASK_ABI, "grantAgentSession", [
-    sessionKey,
-    { expiry: cfg.expiry, velocityLimit: cfg.velocityLimit,
-      velocityWindow: cfg.velocityWindow, revoked: false,
-      callTargets: cfg.callTargets, selectorAllowlist: cfg.selectorAllowlist },
-  ]);
-}
-
-// M9 change: now accepts (account, subKey, subCfg) — 3 params
-function encodeDelegateSession(account: string, subKey: string, subCfg: {
-  expiry: number; velocityLimit: number; velocityWindow: number;
-  callTargets: string[]; selectorAllowlist: string[];
-}): string {
-  return enc(ASK_ABI, "delegateSession", [
-    account, subKey,
-    { expiry: subCfg.expiry, velocityLimit: subCfg.velocityLimit,
-      velocityWindow: subCfg.velocityWindow, revoked: false,
-      callTargets: subCfg.callTargets, selectorAllowlist: subCfg.selectorAllowlist },
-  ]);
-}
-
-function encodeRevokeAgentSession(sessionKey: string): string {
-  return enc(ASK_ABI, "revokeAgentSession", [sessionKey]);
-}
-
-// Decoder logic extracted from getAgentSession — M9 6-field + 2-field layout
-function decodeAgentSession(
-  agentSessionsResult: [bigint, bigint, bigint, boolean, string[], string[]],
-  sessionStatesResult: [bigint, bigint]
-) {
-  const [expiry, velocityLimit, velocityWindow, revoked, callTargets, selectorAllowlist]
-    = agentSessionsResult;
-  const [callCount, windowStart] = sessionStatesResult;
-  return {
-    expiry: Number(expiry),
-    velocityLimit: Number(velocityLimit),
-    velocityWindow: Number(velocityWindow),
-    callTargets,
-    selectorAllowlist,
-    revoked,
-    callCount: BigInt(callCount),
-    windowStart: BigInt(windowStart),
-  };
-}
-
-const BASE_CFG = {
-  expiry: 9999999999, velocityLimit: 10, velocityWindow: 3600,
-  callTargets: [] as string[], selectorAllowlist: [] as string[],
-};
 
 // ─── MODULE_TYPE constants (M9: HOOK changed 3→4, FALLBACK=3 added) ──────────
 describe("MODULE_TYPE constants — M9 changes", () => {
@@ -338,110 +282,28 @@ describe("SessionKeyService — isP256SessionActive (mocked read)", () => {
 });
 
 // ─── M7: Agent session key encode ────────────────────────────────────────────
-describe("SessionKeyService — M7 encodeGrantAgentSession", () => {
-  it("returns hex calldata", () => {
-    expect(encodeGrantAgentSession(SESSION_KEY, BASE_CFG)).toMatch(/^0x[0-9a-f]+$/i);
+// ─── M7 agent-session methods are DEPRECATED and throw (no deployed contract, #282) ──
+// airaccount-contract v0.27.0 confirmed there is no AgentSessionKeyValidator and no distinct agent
+// algId (Seeder CC-16). The M7 methods now fail closed (throw) instead of producing calldata / reads
+// that revert on-chain. Constructed with a dummy provider — the M7 methods throw before any contract call.
+import { SessionKeyService } from "../services/session-key-service";
+
+describe("SessionKeyService — M7 agent-session methods deprecated (throw, #282)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = new SessionKeyService({} as any, ACCOUNT_ADDR);
+  const cfg = { expiry: 9999999999, velocityLimit: 10, velocityWindow: 3600, callTargets: [], selectorAllowlist: [] };
+
+  it("encode methods fail closed with an AgentSessionKeyValidator-not-deployed error", () => {
+    expect(() => svc.encodeGrantAgentSession(SESSION_KEY, cfg)).toThrow(/no AgentSessionKeyValidator/i);
+    expect(() => svc.encodeDelegateSession(ACCOUNT_ADDR, SUB_KEY, cfg)).toThrow(/#282/);
+    expect(() => svc.encodeRevokeAgentSession(SESSION_KEY)).toThrow(/not supported/i);
   });
 
-  it("different expiry → different calldata, same selector", () => {
-    const cd1 = encodeGrantAgentSession(SESSION_KEY, { ...BASE_CFG, expiry: 1000 });
-    const cd2 = encodeGrantAgentSession(SESSION_KEY, { ...BASE_CFG, expiry: 2000 });
-    expect(cd1.slice(0, 10)).toBe(cd2.slice(0, 10));
-    expect(cd1).not.toBe(cd2);
-  });
-
-  it("callTargets changes calldata", () => {
-    const w = encodeGrantAgentSession(SESSION_KEY, { ...BASE_CFG, callTargets: [ACCOUNT_ADDR] });
-    const n = encodeGrantAgentSession(SESSION_KEY, BASE_CFG);
-    expect(w).not.toBe(n);
-  });
-});
-
-// ─── M9 CRITICAL: encodeDelegateSession — 3-param signature ──────────────────
-describe("SessionKeyService — encodeDelegateSession M9 3-param", () => {
-  it("accepts (account, subKey, subCfg) without throwing", () => {
-    const cd = encodeDelegateSession(ACCOUNT_ADDR, SUB_KEY, BASE_CFG);
-    expect(cd).toMatch(/^0x[0-9a-f]+$/i);
-  });
-
-  it("consistent function selector for same function", () => {
-    const cd1 = encodeDelegateSession(ACCOUNT_ADDR, SUB_KEY, BASE_CFG);
-    const cd2 = encodeDelegateSession(ACCOUNT_ADDR, SESSION_KEY, BASE_CFG);
-    expect(cd1.slice(0, 10)).toBe(cd2.slice(0, 10));
-    expect(cd1).not.toBe(cd2);
-  });
-
-  it("different account produces different calldata", () => {
-    const cd1 = encodeDelegateSession(ACCOUNT_ADDR, SUB_KEY, BASE_CFG);
-    const cd2 = encodeDelegateSession(PARENT_KEY, SUB_KEY, BASE_CFG);
-    expect(cd1).not.toBe(cd2);
-  });
-
-  it("narrow callTargets produce different calldata vs empty", () => {
-    const narrow = encodeDelegateSession(ACCOUNT_ADDR, SUB_KEY, { ...BASE_CFG, callTargets: [ACCOUNT_ADDR] });
-    const open   = encodeDelegateSession(ACCOUNT_ADDR, SUB_KEY, BASE_CFG);
-    expect(narrow).not.toBe(open);
-  });
-
-  it("encodeRevokeAgentSession returns valid calldata", () => {
-    expect(encodeRevokeAgentSession(SESSION_KEY)).toMatch(/^0x[0-9a-f]+$/i);
-  });
-});
-
-// ─── M9: getAgentSession decoder — 6-field agentSessions + 2-field sessionStates
-describe("getAgentSession M9 decoder logic", () => {
-  it("correctly decodes all 6 fields from agentSessions", () => {
-    const info = decodeAgentSession(
-      [9999999999n, 5n, 1800n, false, [ACCOUNT_ADDR], ["0xaabbccdd"]],
-      [7n, 1700000000n]
-    );
-    expect(info.expiry).toBe(9999999999);
-    expect(info.velocityLimit).toBe(5);
-    expect(info.velocityWindow).toBe(1800);
-    expect(info.revoked).toBe(false);
-    expect(info.callTargets).toEqual([ACCOUNT_ADDR]);
-    expect(info.selectorAllowlist).toEqual(["0xaabbccdd"]);
-  });
-
-  it("correctly decodes callCount and windowStart from sessionStates", () => {
-    const info = decodeAgentSession(
-      [9999999999n, 0n, 0n, false, [], []],
-      [42n, 1234567890n]
-    );
-    expect(info.callCount).toBe(42n);
-    expect(info.windowStart).toBe(1234567890n);
-  });
-
-  it("callCount and windowStart are bigints", () => {
-    const info = decodeAgentSession([9999999999n, 0n, 0n, false, [], []], [1n, 999n]);
-    expect(typeof info.callCount).toBe("bigint");
-    expect(typeof info.windowStart).toBe("bigint");
-  });
-
-  it("revoked=true propagates", () => {
-    const info = decodeAgentSession([1000n, 0n, 0n, true, [], []], [0n, 0n]);
-    expect(info.revoked).toBe(true);
-  });
-
-  it("isAgentSessionActive: active when future expiry + not revoked", () => {
-    const farFuture = Math.floor(Date.now() / 1000) + 86400;
-    const info = decodeAgentSession([BigInt(farFuture), 0n, 0n, false, [], []], [0n, 0n]);
-    const isActive = info.expiry > Math.floor(Date.now() / 1000) && !info.revoked;
-    expect(isActive).toBe(true);
-  });
-
-  it("isAgentSessionActive: inactive when revoked", () => {
-    const farFuture = Math.floor(Date.now() / 1000) + 86400;
-    const info = decodeAgentSession([BigInt(farFuture), 0n, 0n, true, [], []], [0n, 0n]);
-    const isActive = info.expiry > Math.floor(Date.now() / 1000) && !info.revoked;
-    expect(isActive).toBe(false);
-  });
-
-  it("isAgentSessionActive: inactive when expired", () => {
-    const past = Math.floor(Date.now() / 1000) - 3600;
-    const info = decodeAgentSession([BigInt(past), 0n, 0n, false, [], []], [0n, 0n]);
-    const isActive = info.expiry > Math.floor(Date.now() / 1000) && !info.revoked;
-    expect(isActive).toBe(false);
+  it("read methods reject with the same deprecation error", async () => {
+    await expect(svc.getAgentSession(ACCOUNT_ADDR, SESSION_KEY)).rejects.toThrow(/#282/);
+    await expect(svc.isAgentSessionActive(ACCOUNT_ADDR, SESSION_KEY)).rejects.toThrow(/#282/);
+    await expect(svc.getSessionKeyOwner(SESSION_KEY)).rejects.toThrow(/#282/);
+    await expect(svc.getDelegatedBy(ACCOUNT_ADDR, SUB_KEY)).rejects.toThrow(/#282/);
   });
 });
 

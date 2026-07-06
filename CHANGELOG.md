@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0] - 2026-07-06
+**SDK Code Integrity Hash**: `11dd7a8aea2a13f48ed0da3f5139d5f520ca4912a499009aa0f8e4833b1f5126`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Deprecate the phantom agent-session-key surface — align to the real `SessionKeyValidator` (algId 0x08).** (#282, Seeder CC-16)
+
+airaccount-contract v0.27.0 authoritatively confirmed there is **no `AgentSessionKeyValidator` contract** and **no distinct agent-session algId**: an agent session reuses `SessionKeyValidator` (algId `0x08`) with a scoped `Session`. The SDK carried a phantom `AGENT_SESSION_KEY_VALIDATOR_ABI` (`grantAgentSession`/`delegateSession`/…) whose functions exist on no deployment — calling them produced calldata/reads that revert on-chain (a silent stub).
+
+- **[DEPRECATE]** `SessionKeyService` M7 agent-session methods (`encodeGrantAgentSession`, `encodeDelegateSession`, `encodeRevokeAgentSession`, `getAgentSession`, `isAgentSessionActive`, `getSessionKeyOwner`, `getDelegatedBy`) now **fail closed** (throw a clear "no AgentSessionKeyValidator deployed (#282)" error) instead of emitting reverting calldata. Marked `@deprecated`; use the M6 methods (`grantSession`/`grantP256Session`) with a scoped `Session` for agent delegation.
+- **[DEPRECATE]** `AGENT_SESSION_KEY_VALIDATOR_ABI`, `EthereumProvider.getAgentSessionKeyValidatorContract`, and the `AgentSessionConfig`/`AgentSessionInfo` types are marked `@deprecated`. `SessionKeyService`'s 3rd constructor arg (`agentSessionKeyValidatorAddress`) is now optional and ignored.
+- **[NON-BREAKING]** Exported symbols are retained (compile-time compatible) for one minor; removal is scheduled for the next major. No caller inside the SDK used these (dead-on-arrival surface).
+- **[DOCS]** `ALG_ID` (single source of truth) confirmed matching `AAStarAirAccountBase.sol` 0x01–0x0a exactly; resolves aastar-sdk#282.
+
 ## [0.38.0] - 2026-07-06
 **SDK Code Integrity Hash**: `e1b7b6f54913689b3f127cf4394b160823ed5e67fd03fd58d44566ac582ce7c9`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
