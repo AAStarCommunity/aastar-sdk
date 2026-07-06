@@ -1,6 +1,7 @@
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
 import { type Hex, keccak256, toBytes, toHex } from 'viem';
 import { BLS_POP_DST } from './hashToField.js';
+import { encodeG2Point } from './dvtWire.js';
 
 /**
  * DVT node registration Proof-of-Possession (PoP) builder.
@@ -92,17 +93,6 @@ export function encodeG1Point(pubkey: Hex | Uint8Array): Hex {
     );
 }
 
-/** Encode a noble G2 point into the 256-byte EIP-2537 layout (`x.c0/x.c1/y.c0/y.c1`). */
-function encodeG2AffineToEip2537(point: InstanceType<typeof bls.G2.ProjectivePoint>): Hex {
-    const a = point.toAffine();
-    const out = new Uint8Array(256);
-    writeFp(out, 16, a.x.c0);
-    writeFp(out, 80, a.x.c1);
-    writeFp(out, 144, a.y.c0);
-    writeFp(out, 208, a.y.c1);
-    return toHex(out);
-}
-
 /** The complete tuple `registerWithProof(publicKey, popPoint, popSig)` consumes, plus the derived nodeId. */
 export interface DvtPop {
     /** G1 public key in 128-byte EIP-2537 layout — the `publicKey` argument. */
@@ -138,6 +128,8 @@ export function buildDvtPop(blsSecretKey: Hex): DvtPop {
 
     // popPoint = hashToCurve(publicKey, POP_DST); popSig = sk · popPoint. See module doc: the on-chain
     // pairing accepts any popPoint with popSig = sk · popPoint, so message choice is a convention only.
+    // Serialize via dvtWire.encodeG2Point (the c0-first EIP-2537 layout the pairing precompile expects,
+    // golden-vector-verified against the production DVT signer — NOT the c1-first IETF/blst order).
     const popPointG2 = bls.G2.hashToCurve(toBytes(publicKey), { DST: BLS_POP_DST }) as InstanceType<
         typeof bls.G2.ProjectivePoint
     >;
@@ -145,8 +137,8 @@ export function buildDvtPop(blsSecretKey: Hex): DvtPop {
 
     return {
         publicKey,
-        popPoint: encodeG2AffineToEip2537(popPointG2),
-        popSig: encodeG2AffineToEip2537(popSigG2),
+        popPoint: encodeG2Point(popPointG2.toRawBytes(false)),
+        popSig: encodeG2Point(popSigG2.toRawBytes(false)),
         nodeId,
     };
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
 import { keccak256, size, toBytes, toHex } from 'viem';
 import { buildDvtPop, encodeG1Point } from './dvtPop.js';
+import { encodeG2Point } from './dvtWire.js';
 
 // A fixed, in-range BLS12-381 secret scalar for deterministic vectors.
 const SK = '0x0000000000000000000000000000000000000000000000000000000000abcdef' as const;
@@ -44,6 +45,24 @@ describe('buildDvtPop', () => {
         expect(() => buildDvtPop('0x00')).toThrow(/scalar in \[1, r-1\]/);
         const rHex = toHex(bls.params.r, { size: 32 });
         expect(() => buildDvtPop(rHex)).toThrow(/scalar in \[1, r-1\]/);
+    });
+});
+
+describe('EIP-2537 G2 byte layout (precompile-order regression guard)', () => {
+    // Ground-truth vector lifted from the PRODUCTION DVT signer,
+    // YetAnotherAA-Validator/signer/src/bls.rs (`g2_to_eip2537` doctest) — bytes that the on-chain
+    // pairing precompile (0x0f/0x11) accepts today. This pins the c0-FIRST Fp2 ordering the precompile
+    // requires (x.c0 @ 16, x.c1 @ 80, y.c0 @ 144, y.c1 @ 208), NOT the c1-first IETF/blst serialize
+    // order. A self-consistent offline pairing test cannot catch a c0/c1 swap; this vector can.
+    // eslint-disable-next-line @stylistic/max-len
+    const COMPRESSED_G2 = '0x88531197560a096eeaec90e9c0eb6093bc010b7460745354c3c146589d7961cb15640b0d8c55b436871d5c0e2d9b7c3208ecb047898685515ad76c4ed47ca143e91e1e8f71f659e5c346ee4b532c8bbf5c3f376252faf0fa8b9f46bf4523c12b';
+    // eslint-disable-next-line @stylistic/max-len
+    const GOLDEN_EIP2537 = '0x0000000000000000000000000000000008ecb047898685515ad76c4ed47ca143e91e1e8f71f659e5c346ee4b532c8bbf5c3f376252faf0fa8b9f46bf4523c12b0000000000000000000000000000000008531197560a096eeaec90e9c0eb6093bc010b7460745354c3c146589d7961cb15640b0d8c55b436871d5c0e2d9b7c320000000000000000000000000000000007ccd070ad13a66af87038b017ea84cab71c9cc4f19fa2406d58e2b46c430584e049e617270778e386a11ffee28f81880000000000000000000000000000000008633c44f58a9feb8c43e5ad4b30b9b4aa7102c4fb75c97f11ec7e52027cda8d0ee58a1b0293865ba15d18dbbaa2c165';
+
+    it('encodeG2Point reproduces the production signer vector byte-for-byte', () => {
+        // dvtPop serializes popPoint/popSig through this same encoder, so this locks its layout too.
+        const point = bls.G2.ProjectivePoint.fromHex(toBytes(COMPRESSED_G2));
+        expect(encodeG2Point(point.toRawBytes(false)).toLowerCase()).toBe(GOLDEN_EIP2537.toLowerCase());
     });
 });
 

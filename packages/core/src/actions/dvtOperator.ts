@@ -1,4 +1,4 @@
-import { type Account, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from 'viem';
+import { type Account, type Address, type Hash, type Hex, type PublicClient, type WalletClient, isHex, size } from 'viem';
 import { AAStarBLSAlgorithmABI } from '../abis/index.js';
 import { buildDvtPop, type DvtPop } from '../crypto/dvtPop.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
@@ -68,6 +68,21 @@ export type DvtOperatorActions = {
 
 const ABI = AAStarBLSAlgorithmABI;
 
+/** G1 public key EIP-2537 byte length the contract enforces (`require(publicKey.length == 128)`). */
+const G1_POINT_LENGTH = 128;
+/** G2 point EIP-2537 byte length the contract enforces on popPoint/popSig (`length == 256`). */
+const G2_POINT_LENGTH = 256;
+
+/** Assert a hex value is exactly `expected` bytes, matching the contract's on-chain length guards. */
+function assertHexLength(value: Hex, expected: number, name: string): void {
+    if (!isHex(value) || size(value) !== expected) {
+        throw new Error(
+            `dvtOperator.registerWithProof: ${name} must be a ${expected}-byte EIP-2537 hex value, ` +
+            `got ${isHex(value) ? `${size(value)} bytes` : 'non-hex'} — the contract reverts on a mismatched length`
+        );
+    }
+}
+
 export const dvtOperatorActions =
     (address: Address) =>
     (client: PublicClient | WalletClient): DvtOperatorActions => ({
@@ -94,6 +109,11 @@ export const dvtOperatorActions =
                 validateRequired(publicKey, 'publicKey');
                 validateRequired(popPoint, 'popPoint');
                 validateRequired(popSig, 'popSig');
+                // Fail fast on malformed EIP-2537 lengths — the contract's require()s would otherwise
+                // revert on-chain (128-byte G1 pubkey, 256-byte G2 popPoint/popSig).
+                assertHexLength(publicKey, G1_POINT_LENGTH, 'publicKey');
+                assertHexLength(popPoint, G2_POINT_LENGTH, 'popPoint');
+                assertHexLength(popSig, G2_POINT_LENGTH, 'popSig');
                 return await (client as any).writeContract({
                     address,
                     abi: ABI,
