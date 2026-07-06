@@ -57,9 +57,13 @@ export type DvtOperatorActions = {
     registeredKeys: (args: { nodeId: Hex }) => Promise<Hex>;
     /**
      * Paginated roster. ABI: `getRegisteredNodes(uint256 offset, uint256 limit) -> (bytes32[], bytes[])`.
-     * Returns `{ nodeId, publicKey }` pairs zipped from the two parallel arrays.
+     * Returns `{ nodeId, publicKey }` pairs zipped from the two parallel arrays. The contract reverts
+     * with "Offset out of bounds" when `offset >= count` (including an empty validator at offset 0);
+     * this helper reads the count first and returns `[]` for an out-of-range page instead of throwing.
      */
     getRegisteredNodes: (args?: { offset?: bigint, limit?: bigint }) => Promise<DvtRegisteredNode[]>;
+    /** `getRegisteredNodeCount() -> uint256` — number of registered nodes. */
+    getRegisteredNodeCount: () => Promise<bigint>;
     /** `requireStake() -> bool` — whether the staked-registration path is enabled. */
     requireStake: () => Promise<boolean>;
     /** `minStake() -> uint256` — the ROLE_DVT stake floor enforced at registration. */
@@ -191,12 +195,28 @@ export const dvtOperatorActions =
             try {
                 const offset = args?.offset ?? 0n;
                 const limit = args?.limit ?? 100n;
+                // The contract reverts on `offset >= count` (incl. an empty validator at offset 0), so
+                // read the count first and short-circuit an out-of-range page to [] rather than throwing.
+                const count = await (client as PublicClient).readContract({
+                    address, abi: ABI, functionName: 'getRegisteredNodeCount', args: [],
+                }) as bigint;
+                if (offset >= count) return [];
                 const [nodeIds, publicKeys] = await (client as PublicClient).readContract({
                     address, abi: ABI, functionName: 'getRegisteredNodes', args: [offset, limit],
                 }) as [readonly Hex[], readonly Hex[]];
                 return nodeIds.map((nodeId, i) => ({ nodeId, publicKey: publicKeys[i] }));
             } catch (error) {
                 throw AAStarError.fromViemError(error as Error, 'getRegisteredNodes');
+            }
+        },
+
+        async getRegisteredNodeCount() {
+            try {
+                return await (client as PublicClient).readContract({
+                    address, abi: ABI, functionName: 'getRegisteredNodeCount', args: [],
+                }) as bigint;
+            } catch (error) {
+                throw AAStarError.fromViemError(error as Error, 'getRegisteredNodeCount');
             }
         },
 

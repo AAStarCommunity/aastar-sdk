@@ -41,3 +41,25 @@ describe('dvtOperatorActions.registerWithProof length guards (contract reverts o
         expect(writeContract.mock.calls[0][0]).toMatchObject({ functionName: 'registerWithProof', args: [G1, G2, G2] });
     });
 });
+
+describe('dvtOperatorActions.getRegisteredNodes empty-validator guard', () => {
+    it('returns [] for an empty validator instead of hitting the contract "Offset out of bounds" revert', async () => {
+        const readContract = vi.fn().mockResolvedValue(0n); // getRegisteredNodeCount -> 0
+        const dvt = dvtOperatorActions(VALIDATOR)({ readContract } as any);
+        await expect(dvt.getRegisteredNodes()).resolves.toEqual([]);
+        // Only the count read happened — the paginated getter (which would revert) was never called.
+        expect(readContract).toHaveBeenCalledOnce();
+        expect(readContract.mock.calls[0][0]).toMatchObject({ functionName: 'getRegisteredNodeCount' });
+    });
+
+    it('zips nodeIds + publicKeys when the validator has nodes', async () => {
+        const readContract = vi.fn()
+            .mockResolvedValueOnce(2n) // count
+            .mockResolvedValueOnce([['0xaa', '0xbb'], ['0x01', '0x02']]); // getRegisteredNodes
+        const dvt = dvtOperatorActions(VALIDATOR)({ readContract } as any);
+        await expect(dvt.getRegisteredNodes()).resolves.toEqual([
+            { nodeId: '0xaa', publicKey: '0x01' },
+            { nodeId: '0xbb', publicKey: '0x02' },
+        ]);
+    });
+});

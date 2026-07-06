@@ -1,5 +1,5 @@
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
-import { type Hex, keccak256, toBytes, toHex } from 'viem';
+import { type Hex, isHex, keccak256, size, toBytes, toHex } from 'viem';
 import { BLS_POP_DST } from './hashToField.js';
 import { encodeG2Point } from './dvtWire.js';
 
@@ -116,6 +116,11 @@ export interface DvtPop {
  * @throws if the secret key is out of range (0 or ≥ curve order).
  */
 export function buildDvtPop(blsSecretKey: Hex): DvtPop {
+    // Require a canonical 32-byte hex scalar: the production Rust signer rejects non-32-byte keys
+    // (signer/src/bls.rs), so accepting a short hex like `0x1` here would diverge from it.
+    if (!isHex(blsSecretKey) || size(blsSecretKey) !== 32) {
+        throw new Error('buildDvtPop: BLS secret key must be a 32-byte hex value');
+    }
     const sk = BigInt(blsSecretKey);
     if (sk <= 0n || sk >= BLS_CURVE_ORDER) {
         throw new Error('buildDvtPop: BLS secret key must be a scalar in [1, r-1] (r = BLS12-381 curve order)');

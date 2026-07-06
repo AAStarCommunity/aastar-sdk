@@ -42,9 +42,15 @@ describe('buildDvtPop', () => {
     });
 
     it('rejects out-of-range secret keys (0 and >= curve order)', () => {
-        expect(() => buildDvtPop('0x00')).toThrow(/scalar in \[1, r-1\]/);
+        const zero = toHex(0n, { size: 32 });
+        expect(() => buildDvtPop(zero)).toThrow(/scalar in \[1, r-1\]/);
         const rHex = toHex(bls.params.r, { size: 32 });
         expect(() => buildDvtPop(rHex)).toThrow(/scalar in \[1, r-1\]/);
+    });
+
+    it('rejects a non-32-byte scalar hex (diverges from the production signer otherwise)', () => {
+        expect(() => buildDvtPop('0x01')).toThrow(/32-byte hex/);
+        expect(() => buildDvtPop(('0x' + 'ab'.repeat(33)) as `0x${string}`)).toThrow(/32-byte hex/);
     });
 });
 
