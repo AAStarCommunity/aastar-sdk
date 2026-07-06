@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.0] - 2026-07-06
+**SDK Code Integrity Hash**: `e1b7b6f54913689b3f127cf4394b160823ed5e67fd03fd58d44566ac582ce7c9`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: DVT node registration SDK API — self-service `registerWithProof` + BLS Proof-of-Possession.** (#279, #288; live on-chain E2E #289)
+
+Operators can now onboard a DVT signing node through a typed SDK call instead of a hand-rolled script, against `AAStarBLSAlgorithm` (the DVT validator; airaccount-contract v0.27.0 / YetAnotherAA-Validator #165 staked-registration path).
+
+- **[FEAT]** `@aastar/core` `buildDvtPop(blsSecretKey)` → `{ publicKey (128B EIP-2537 G1), popPoint/popSig (256B EIP-2537 G2), nodeId }`, plus `encodeG1Point`. The PoP proves knowledge of the BLS secret key via `e(pk, popPoint) == e(G1, popSig)`; the on-chain `_verifyPoP` accepts any non-infinity `popPoint` given `popSig = sk·popPoint`, so the hashed message is a convention (RFC `POP_DST`), not a consensus constant. G2 uses the **c0-first** EIP-2537 layout the pairing precompile expects (golden-vector-locked against the production signer; Codex-verified).
+- **[FEAT]** `@aastar/core` `dvtOperatorActions(validator)` — `register` / `registerWithProof` / `syncNode` writes + `isRegistered` / `nodeOperator` / `operatorNode` / `registeredKeys` / `getRegisteredNodes` / `getRegisteredNodeCount` / `requireStake` / `minStake` reads. `registerWithProof` fail-fasts on non-128/256-byte args; `getRegisteredNodes` returns `[]` for an empty validator instead of hitting the contract's "Offset out of bounds" revert.
+- **[ABI]** Re-vendored `AAStarBLSAlgorithm.json` to the #165 staked-registration interface (+`registerWithProof`/`syncNode`/`nodeOperator`/`operatorNode`/`requireStake`/`minStake`; removed the legacy aggregator-cache + 2-step-ownership functions, which had no SDK references).
+- **[EVIDENCE]** Live Sepolia E2E (`tests/regression/onchain-evidence/dvt-register-e2e.ts`): a fresh operator onboarded to ROLE_DVT, `buildDvtPop` → `registerWithProof` ACCEPTED on-chain (tx `0x216a7ed5…9571ca6d`), `isRegistered==true` + `nodeOperator==operator`. UI (`app/operator/dvt-register/`) is built by YAAA on this API (Seeder CC-17).
+
 ## [0.37.3] - 2026-07-06
 **SDK Code Integrity Hash**: `fdd05d9e2dadc6fb35c93c0e1a3ea981096d5da096da43dd2537df7e332d55f3`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
