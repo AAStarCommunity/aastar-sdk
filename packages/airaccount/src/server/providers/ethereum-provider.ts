@@ -187,13 +187,15 @@ export class EthereumProvider {
   /**
    * @deprecated No `AgentSessionKeyValidator` contract is deployed (airaccount-contract v0.27.0, #282).
    * Its ABI is phantom — every function reverts on-chain — so this now FAILS CLOSED (throws) instead of
-   * handing back a contract whose reads/calls revert. Use `SessionKeyValidator` (algId 0x08) via
-   * {@link getSessionKeyValidatorContract} instead. Signature retained for one minor; removed next major.
+   * handing back a contract whose reads/calls revert. For the real `SessionKeyValidator` (algId 0x08),
+   * use {@link SessionKeyService} (M6 `grantSession`/`grantP256Session`), or bind `SESSION_KEY_VALIDATOR_ABI`
+   * directly with viem's `getContract`. Signature retained for one minor; removed next major.
    */
   getAgentSessionKeyValidatorContract(_address?: string): ViemContract {
     throw new Error(
       "getAgentSessionKeyValidatorContract is not supported: no AgentSessionKeyValidator contract is " +
-      "deployed (airaccount-contract v0.27.0, #282). Use getSessionKeyValidatorContract (SessionKeyValidator, algId 0x08)."
+      "deployed (airaccount-contract v0.27.0, #282). For the real SessionKeyValidator (algId 0x08) use " +
+      "SessionKeyService (grantSession/grantP256Session), or bind SESSION_KEY_VALIDATOR_ABI with getContract."
     );
   }
 
