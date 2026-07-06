@@ -11,6 +11,7 @@ export * from './dvt.js';
 export * from './factory.js';
 export * from './aggregator.js';
 export * from './blsAlgorithm.js';
+export * from './dvtOperator.js';
 export * from './policyRegistry.js';
 export * from './account.js';
 export * from './faucet.js';
