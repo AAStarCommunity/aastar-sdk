@@ -7,39 +7,13 @@
     },
     {
       "type": "function",
-      "name": "acceptOwnership",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "aggregateKeys",
-      "inputs": [
-        {
-          "name": "nodeIds",
-          "type": "bytes32[]",
-          "internalType": "bytes32[]"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "aggregator",
+      "name": "ROLE_DVT",
       "inputs": [],
       "outputs": [
         {
           "name": "",
-          "type": "address",
-          "internalType": "address"
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "stateMutability": "view"
@@ -64,38 +38,6 @@
     },
     {
       "type": "function",
-      "name": "cacheAggregatedKey",
-      "inputs": [
-        {
-          "name": "",
-          "type": "bytes32[]",
-          "internalType": "bytes32[]"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "computeSetHash",
-      "inputs": [
-        {
-          "name": "nodeIds",
-          "type": "bytes32[]",
-          "internalType": "bytes32[]"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
       "name": "getGasEstimate",
       "inputs": [
         {
@@ -106,7 +48,7 @@
       ],
       "outputs": [
         {
-          "name": "",
+          "name": "gasEstimate",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -119,7 +61,7 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "",
+          "name": "count",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -157,6 +99,19 @@
     },
     {
       "type": "function",
+      "name": "getSignatureFormat",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "format",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
       "name": "hashToG2",
       "inputs": [
         {
@@ -170,6 +125,25 @@
           "name": "",
           "type": "bytes",
           "internalType": "bytes"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isBootstrap",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
         }
       ],
       "stateMutability": "view"
@@ -195,8 +169,27 @@
     },
     {
       "type": "function",
-      "name": "owner",
+      "name": "minStake",
       "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "nodeOperator",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
       "outputs": [
         {
           "name": "",
@@ -208,7 +201,26 @@
     },
     {
       "type": "function",
-      "name": "pendingOwner",
+      "name": "operatorNode",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "owner",
       "inputs": [],
       "outputs": [
         {
@@ -230,6 +242,29 @@
         },
         {
           "name": "publicKey",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "registerWithProof",
+      "inputs": [
+        {
+          "name": "publicKey",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "popPoint",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "popSig",
           "type": "bytes",
           "internalType": "bytes"
         }
@@ -277,6 +312,32 @@
     },
     {
       "type": "function",
+      "name": "registry",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "requireStake",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "revokePublicKey",
       "inputs": [
         {
@@ -290,12 +351,51 @@
     },
     {
       "type": "function",
-      "name": "setAggregator",
+      "name": "setMinStake",
       "inputs": [
         {
-          "name": "agg",
+          "name": "_v",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setRegistry",
+      "inputs": [
+        {
+          "name": "_registry",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setRequireStake",
+      "inputs": [
+        {
+          "name": "_v",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "syncNode",
+      "inputs": [
+        {
+          "name": "nodeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "outputs": [],
@@ -378,7 +478,7 @@
       ],
       "outputs": [
         {
-          "name": "",
+          "name": "isValid",
           "type": "bool",
           "internalType": "bool"
         }
@@ -407,7 +507,7 @@
       ],
       "outputs": [
         {
-          "name": "",
+          "name": "isValid",
           "type": "bool",
           "internalType": "bool"
         }
@@ -416,10 +516,29 @@
     },
     {
       "type": "event",
-      "name": "AggregatorSet",
+      "name": "MinStakeSet",
       "inputs": [
         {
-          "name": "aggregator",
+          "name": "minStake",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "NodeBound",
+      "inputs": [
+        {
+          "name": "nodeId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "operator",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -429,16 +548,16 @@
     },
     {
       "type": "event",
-      "name": "OwnershipTransferStarted",
+      "name": "NodeDeactivated",
       "inputs": [
         {
-          "name": "previousOwner",
-          "type": "address",
+          "name": "nodeId",
+          "type": "bytes32",
           "indexed": true,
-          "internalType": "address"
+          "internalType": "bytes32"
         },
         {
-          "name": "newOwner",
+          "name": "operator",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -523,74 +642,61 @@
       "anonymous": false
     },
     {
-      "type": "error",
-      "name": "ArrayLengthMismatch",
-      "inputs": []
+      "type": "event",
+      "name": "RegistrySet",
+      "inputs": [
+        {
+          "name": "registry",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
     },
     {
-      "type": "error",
-      "name": "BLSPointAtInfinity",
-      "inputs": []
+      "type": "event",
+      "name": "RequireStakeSet",
+      "inputs": [
+        {
+          "name": "requireStake",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
     },
     {
-      "type": "error",
-      "name": "CacheDeprecated",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "EmptyArrays",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidKeyLength",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidMessageLength",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidNodeId",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "InvalidSignatureLength",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NoNodesProvided",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NodeAlreadyRegistered",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NodeNotRegistered",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "NotPendingOwner",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "OnlyOwner",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "PairingFailed",
-      "inputs": []
+      "type": "event",
+      "name": "SignatureValidated",
+      "inputs": [
+        {
+          "name": "messageHash",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "publicKeysCount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "isValid",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        },
+        {
+          "name": "gasUsed",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
     }
   ]
 }
