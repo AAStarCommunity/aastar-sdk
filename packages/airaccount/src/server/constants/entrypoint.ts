@@ -277,8 +277,15 @@ export const ERC20_ABI = [
 
 // ── M7 Module ABIs ───────────────────────────────────────────────
 
-// AgentSessionKeyValidator — ERC-7579 Validator module for AI agent capability delegation.
-// Supports velocity limits, selector allowlists, spend caps, and hierarchical delegation chains.
+/**
+ * @deprecated NO `AgentSessionKeyValidator` contract is deployed. airaccount-contract v0.27.0
+ * confirmed (Seeder CC-16 / #282): there is no `AgentSessionKeyValidator.sol`, no `grantAgentSession()`,
+ * and no distinct agent-session algId — agent sessions reuse `SessionKeyValidator` (algId `0x08`) with
+ * a scoped `Session`. Every function described here (`grantAgentSession`/`delegateSession`/`agentSessions`/…)
+ * is phantom: a call reverts on-chain. Use the M6 session methods on {@link SESSION_KEY_VALIDATOR_ABI}
+ * instead. Retained (deprecated) for one minor to avoid breaking imports; scheduled for removal in the
+ * next major (#282).
+ */
 export const AGENT_SESSION_KEY_VALIDATOR_ABI = [
   // ERC-7579 lifecycle
   "function onInstall(bytes calldata data) external",
@@ -375,9 +382,11 @@ export const ALG_ID = {
   SESSION_KEY: 0x08,    // Time-limited session key (SessionKeyValidator)
   CUMULATIVE_T2_WA: 0x09, // WebAuthn(device-passkey) + BLS — on-chain ALG_CUMULATIVE_T2_WA
   CUMULATIVE_T3_WA: 0x0a, // WebAuthn(device-passkey) + BLS + Guardian — on-chain ALG_CUMULATIVE_T3_WA
-  // NOTE: there is NO distinct on-chain algId for an "agent session key". The previous
-  // `AGENT_SESSION_KEY: 0x09` collided with ALG_CUMULATIVE_T2_WA (0x09) and was WRONG + unused; removed.
-  // The AgentSessionKeyValidator's actual signing algId is unresolved — see #282.
+  // NOTE: there is NO distinct on-chain algId for an "agent session key" (RESOLVED — airaccount-contract
+  // v0.27.0 confirmed, Seeder CC-16 / #282): an agent session reuses SESSION_KEY (0x08) with a scoped
+  // Session, and there is no deployed AgentSessionKeyValidator. The previous `AGENT_SESSION_KEY: 0x09`
+  // collided with ALG_CUMULATIVE_T2_WA (0x09) and was WRONG + unused; removed. ALG_ID is now the single
+  // source of truth for algIds and matches AAStarAirAccountBase.sol 0x01–0x0a exactly.
 } as const;
 
 // ── M6 继承合约 ABIs ─────────────────────────────────────────────

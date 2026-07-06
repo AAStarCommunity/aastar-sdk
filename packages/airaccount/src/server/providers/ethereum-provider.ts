@@ -185,6 +185,11 @@ export class EthereumProvider {
 
   // M7 r4 module helpers — addresses renamed to *M7r4 suffix in beta.3 to avoid ambiguity.
   // These methods are retained for backwards compatibility; callers should pass an explicit address.
+  /**
+   * @deprecated No `AgentSessionKeyValidator` contract is deployed (airaccount-contract v0.27.0, #282).
+   * The bound ABI is phantom — its functions revert on-chain. Use `SessionKeyValidator` (algId 0x08) via
+   * {@link getSessionKeyValidatorContract} instead. Removed in the next major.
+   */
   getAgentSessionKeyValidatorContract(address: string = AIRACCOUNT_ADDRESSES.sepolia.agentSessionKeyValidatorM7r4): ViemContract {
     return this.contractAt(address, AGENT_SESSION_KEY_VALIDATOR_ABI);
   }
