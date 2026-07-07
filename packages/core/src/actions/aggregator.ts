@@ -7,6 +7,17 @@ import { BLSHelpers } from '../crypto/blsSigner.js';
 /** A registered validator's on-chain BLS G1 public key point. */
 export type BLSG1Point = { x_a: Hex, x_b: Hex, y_a: Hex, y_b: Hex };
 
+/**
+ * BLSAggregator slash severity levels (SP #329 unified slash consensus). The
+ * per-level co-sign quorum is read via {@link AggregatorActions.getSlashThreshold}
+ * (bootstrap on Sepolia: WARNING 2-of-3, MINOR/MAJOR 3-of-3).
+ */
+export enum SlashLevel {
+    WARNING = 0,
+    MINOR = 1,
+    MAJOR = 2,
+}
+
 export type AggregatorActions = {
     // BLS Public Key Management
     registerBLSPublicKey: (args: { validator: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -40,7 +51,18 @@ export type AggregatorActions = {
     setMinThreshold: (args: { newThreshold: bigint, account?: Account | Address }) => Promise<Hash>;
     defaultThreshold: () => Promise<bigint>;
     minThreshold: () => Promise<bigint>;
-    
+
+    // Slash Policy Governance (CC-13 · SP #329 unified slash) — read side
+    /**
+     * The address authorised to update the slash threshold table (`slashPolicyAdmin()` view).
+     * Bootstrap on Sepolia = deployer EOA; governance moves it to a TimelockController (CC-13).
+     */
+    slashPolicyAdmin: () => Promise<Address>;
+    /** The co-sign quorum required for a given {@link SlashLevel} (`slashThresholds(uint8)` view). */
+    getSlashThreshold: (args: { slashLevel: SlashLevel | number }) => Promise<number>;
+    /** Convenience: read the whole slash threshold table (WARNING/MINOR/MAJOR) in one shot. */
+    getSlashThresholds: () => Promise<{ warning: number, minor: number, major: number }>;
+
     // Proposal & Execution
     executeProposal: (args: { proposalId: bigint, target: Address, callData: Hex, requiredThreshold: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     verifyAndExecute: (args: { proposalId: bigint, operator: Address, slashLevel: number, repUsers: Address[], newScores: bigint[], epoch: bigint, evidenceHash: Hex, proof: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -249,6 +271,54 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             }) as Promise<bigint>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'minThreshold');
+        }
+    },
+
+    // Slash Policy Governance (CC-13 · SP #329 unified slash) — read side
+    async slashPolicyAdmin() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'slashPolicyAdmin',
+                args: []
+            }) as Promise<Address>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'slashPolicyAdmin');
+        }
+    },
+
+    async getSlashThreshold({ slashLevel }) {
+        try {
+            validateRequired(slashLevel, 'slashLevel');
+            const threshold = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'slashThresholds',
+                args: [slashLevel]
+            });
+            return Number(threshold);
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getSlashThreshold');
+        }
+    },
+
+    async getSlashThresholds() {
+        try {
+            const read = (slashLevel: number) => (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'slashThresholds',
+                args: [slashLevel]
+            });
+            const [warning, minor, major] = await Promise.all([
+                read(SlashLevel.WARNING),
+                read(SlashLevel.MINOR),
+                read(SlashLevel.MAJOR)
+            ]);
+            return { warning: Number(warning), minor: Number(minor), major: Number(major) };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getSlashThresholds');
         }
     },
 
