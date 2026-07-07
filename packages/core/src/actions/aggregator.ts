@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, encodeFunctionData } from 'viem';
 import { BLSAggregatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
@@ -16,6 +16,39 @@ export enum SlashLevel {
     WARNING = 0,
     MINOR = 1,
     MAJOR = 2,
+}
+
+/**
+ * ABI-encode a BLSAggregator `setSlashPolicyAdmin(newAdmin)` call (CC-13 batch B).
+ * Returns the inner calldata to route through governance — pair it with the
+ * BLSAggregator address as the `target` of a {TimelockController} `schedule`/`execute`
+ * (see the admin `SlashGovernance` helper). The current admin is read via
+ * {@link AggregatorActions.slashPolicyAdmin}. Once handed over to a timelock, a direct
+ * EOA call to `setSlashPolicyAdmin` reverts `NotSlashPolicyAdmin`.
+ */
+export function encodeSetSlashPolicyAdmin(newAdmin: Address): Hex {
+    validateAddress(newAdmin, 'newAdmin');
+    return encodeFunctionData({
+        abi: BLSAggregatorABI,
+        functionName: 'setSlashPolicyAdmin',
+        args: [newAdmin],
+    });
+}
+
+/**
+ * ABI-encode a BLSAggregator `setSlashThreshold(slashLevel, threshold)` call (CC-13
+ * batch B). `threshold` is the co-sign quorum for the given {@link SlashLevel}. Returns
+ * the inner calldata to route through governance (same target/timelock pairing as
+ * {@link encodeSetSlashPolicyAdmin}).
+ */
+export function encodeSetSlashThreshold(slashLevel: SlashLevel | number, threshold: number): Hex {
+    validateRequired(slashLevel, 'slashLevel');
+    validateRequired(threshold, 'threshold');
+    return encodeFunctionData({
+        abi: BLSAggregatorABI,
+        functionName: 'setSlashThreshold',
+        args: [slashLevel, threshold],
+    });
 }
 
 export type AggregatorActions = {
@@ -282,7 +315,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
                 abi: BLSAggregatorABI,
                 functionName: 'slashPolicyAdmin',
                 args: []
-            }) as Promise<Address>;
+            }) as Address;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'slashPolicyAdmin');
         }

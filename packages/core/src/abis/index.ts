@@ -52,6 +52,12 @@ import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 // EXTERNAL OZ TimelockController (2-day minDelay). See actions/policyRegistry.ts.
 import PolicyRegistryABIData from './PolicyRegistry.json' with { type: 'json' };
 
+// EXTERNAL OZ TimelockController (standard @openzeppelin/contracts). The governance
+// controller that multisig/timelock-gated admin setters (e.g. BLSAggregator
+// setSlashPolicyAdmin / setSlashThreshold) are routed through — schedule() → wait
+// minDelay → execute(). See actions/timelockController.ts + admin SlashGovernance (CC-13).
+import TimelockControllerABIData from './TimelockController.json' with { type: 'json' };
+
 // x402 settlement facilitator (SuperPaymaster v5.4) — on-chain settle path for the x402
 // micropayment protocol. Verifies EIP-3009 (transferWithAuthorization) / direct-settle
 // authorizations and routes operator/facilitator fees. Sepolia: 0xFe95a77e...
@@ -136,6 +142,10 @@ export const BLSValidatorArtifact = BLSValidatorABIData;
 // + asymmetric writes (immediate tighten/freeze; timelocked loosen/unfreeze).
 export const PolicyRegistryABI = (PolicyRegistryABIData as any).abi || PolicyRegistryABIData;
 export const PolicyRegistryArtifact = PolicyRegistryABIData;
+
+// EXTERNAL OZ TimelockController — schedule/execute/cancel + getTimestamp/getMinDelay/
+// hashOperation/isOperation* (governance orchestration for policy-admin setters, CC-13).
+export const TimelockControllerABI = (TimelockControllerABIData as any).abi || TimelockControllerABIData;
 
 // X402Facilitator (SP v5.4). Settlement entrypoint for x402 micropayments: verify +
 // settle EIP-3009 authorizations (USDC-native) and direct xPNTs transfers, with
