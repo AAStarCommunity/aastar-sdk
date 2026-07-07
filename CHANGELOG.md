@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.1] - 2026-07-07
+**SDK Code Integrity Hash**: `561ab2e107aca9f632afd1ce417faa798d143587715df871acd3f849b2b3d16b`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Switch Sepolia BLSAggregator / DVTValidator to the new SP-applied addresses.** (#285/#293, Seeder CC-18)
+
+The SuperPaymaster #329 slash-consensus unification redeployed `BLSAggregator` + `DVTValidator`. The SDK's ABIs for the new 8-arg `verifyAndExecute` (+ `evidenceHash`), `queueSlashWithConsensus`, `slashThresholds`, `setSlashThreshold`, `setSlashPolicyAdmin` were already shipped in 0.37.3 (#285/#286), but the **addresses stayed on the OLD active deployment** because SP swaps its aggregator behind a 24h timelock — cutting over early would have reverted at SP. SP has now executed `applyBLSAggregator()`, so this release completes the coordinated address cut-over.
+
+- **[ADDRESS]** Sepolia `blsAggregator` `0x893b8fb7…6d11` → `0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13`; `dvtValidator` `0x9946953a…F593D` → `0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e`. Updated in `packages/core/src/addresses.ts` (CANONICAL_ADDRESSES) + `config.sepolia.json`; old addresses kept as deprecated comments.
+- **[ON-CHAIN VERIFIED]** `SP.applyBLSAggregator()` tx `0x691db4175bcce842beb1e93481573b4e843ea3e4d86793a2f07230cc611bfd26` (block 11216728); `SP.BLS_AGGREGATOR()` == new aggregator, `pendingBLSAgg` cleared, `BLSAggregator.slashThresholds(0/1/2)` == 2/3/3.
+- **[GATES]** `check:addresses` PASS, `check:abi` PASS (47 ABIs), full unit suite green, Sepolia business regression 20/20 (L1 11/11, L2 8/8). No logic changes — address-only cut-over.
+
 ## [0.39.0] - 2026-07-06
 **SDK Code Integrity Hash**: `11dd7a8aea2a13f48ed0da3f5139d5f520ca4912a499009aa0f8e4833b1f5126`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
