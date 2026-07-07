@@ -100,15 +100,14 @@ export const CANONICAL_ADDRESSES = {
     aPNTsPaymasterV4: "0xf3948753ff21D33f6A5f516621FFF245B23efa0e",  // AAStar community → aPNTs (0x696A7370)
     PNTsPaymasterV4: "0xC827747674ab6397c319e284f650D07d8c2a4a46",   // Mycelium (Anni) → pnts; on-chain verified 2026-06-28 (version PMV4-Deposit-4.5.0, isTokenSupported(pnts)==true, owner 0xEcAACb91…)
     xPNTsFactory: "0x67422d2e44a33c8dA99b3b776841bF316bD209a2",  // v5.4.1-rc.1 2026-06-27 redeploy
-    // #285 (SuperPaymaster #329 slash-consensus unify): ABIs updated to the new BLSAggregator/DVTValidator
-    // interface, but the addresses STAY on the OLD (currently-active) deployment. SP changes its aggregator
-    // behind a 24h timelock; until `SP.applyBLSAggregator()` lands, SP still recognises the OLD aggregator,
-    // so slashing against the NEW address would revert at SP. Switch to the new addresses ONLY after SP
-    // applies (SuperPaymaster will update its config + notify — coordinated in CC-13/CC-18).
-    //   NEW (pending apply): blsAggregator 0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13 · dvtValidator 0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e
-    blsAggregator: "0x893b8fb7B3d203C288b481400fE05Ade5edD6d11",  // OLD/active — new pending SP apply (#285)
+    // #285/CC-18 (SuperPaymaster #329 slash-consensus unify): switched to the NEW BLSAggregator/DVTValidator
+    // deployment. SP executed `applyBLSAggregator()` (tx 0x691db4175bcce842beb1e93481573b4e843ea3e4d86793a2f07230cc611bfd26,
+    // block 11216728); SP.BLS_AGGREGATOR now == 0xF51c…8B13 (pendingBLSAgg cleared), so SP recognises the new
+    // aggregator on-chain. DVTValidator 0x568b1486… has addValidator×3 + registerBLSPublicKey×3 (slot 1/2/3).
+    //   OLD (deprecated): blsAggregator 0x893b8fb7B3d203C288b481400fE05Ade5edD6d11 · dvtValidator 0x9946953af7aAA8F56e8dF4E46F68FFFA0c4F593D
+    blsAggregator: "0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13",  // NEW/active — SP applied (#285/CC-18)
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
-    dvtValidator: "0x9946953af7aAA8F56e8dF4E46F68FFFA0c4F593D",  // OLD/active — new pending SP apply (#285)
+    dvtValidator: "0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e",  // NEW/active — SP applied (#285/CC-18)
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
     aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89",  // AAStar aPNTs (v5.4.1-rc.1 redeploy)
     priceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",  // Sepolia Chainlink ETH/USD
