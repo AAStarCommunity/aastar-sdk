@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.2] - 2026-07-07
+**SDK Code Integrity Hash**: `636ab7520b09c72f64eca69e0e8ff543ad9c7b0bd4974fdbd1eb468f67404d7a`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: BLSAggregator slash-policy read getters + `SlashLevel` enum (CC-13 batch A).** (#295, Seeder CC-13)
+
+Read side of the multisig slash-governance API SuperPaymaster requested on CC-13, so the YAAA operator "governance config" page can render the current on-chain governance state (read-only, zero write risk). Write-side Timelock orchestration is batch B (tracked; multisig target = OZ `TimelockController`, viem-only).
+
+- **[ADD]** `aggregatorActions(blsAggregator)` gains `slashPolicyAdmin(): Promise<Address>` (`slashPolicyAdmin()` view), `getSlashThreshold({ slashLevel }): Promise<number>` (`slashThresholds(uint8)` view), and `getSlashThresholds(): Promise<{warning,minor,major}>` (reads levels 0/1/2 in one call).
+- **[ADD]** exported `SlashLevel` enum (`WARNING=0 / MINOR=1 / MAJOR=2`) matching the on-chain `uint8`.
+- **[VERIFIED]** Live Sepolia read via the SDK API against the new BLSAggregator `0xF51c…8B13`: `slashPolicyAdmin()` == `0xb5600060…adf0E` (deployer EOA — the #330 hand-over risk this surfaces), `getSlashThresholds()` == `{2,3,3}`. Unit test asserts the exact on-chain call shape + ABI entry (drift guard); Codex-reviewed clean.
+
 ## [0.39.1] - 2026-07-07
 **SDK Code Integrity Hash**: `561ab2e107aca9f632afd1ce417faa798d143587715df871acd3f849b2b3d16b`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
