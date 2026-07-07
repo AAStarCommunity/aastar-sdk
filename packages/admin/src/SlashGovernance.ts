@@ -67,6 +67,12 @@ export class SlashGovernance extends BaseClient {
      * Schedule handing the slash policy admin to `newAdmin` (usually the timelock itself,
      * or a follow-on multisig) through the timelock. `delay` defaults to the timelock's
      * `getMinDelay()`. Persist `salt` to execute later.
+     *
+     * `salt` defaults to {@link ZERO_BYTES32}. Because the operation id is derived from
+     * (target, value, data, predecessor, salt), scheduling a change with the SAME
+     * `newAdmin` and default salt while a prior identical operation is still pending or
+     * already done reverts on-chain (`TimelockUnexpectedOperationState`). For a repeat or
+     * re-issued change, pass a fresh unique `salt`.
      */
     async scheduleSetSlashPolicyAdmin(args: {
         newAdmin: Address;
@@ -104,6 +110,11 @@ export class SlashGovernance extends BaseClient {
     /**
      * Schedule updating the co-sign quorum for a {@link SlashLevel} through the timelock.
      * `delay` defaults to `getMinDelay()`. Persist `salt` to execute later.
+     *
+     * `salt` defaults to {@link ZERO_BYTES32}. Scheduling the SAME (slashLevel, threshold)
+     * with the default salt while an identical operation is still pending or done reverts
+     * on-chain (`TimelockUnexpectedOperationState`) — pass a fresh unique `salt` for a
+     * repeat change (e.g. lowering then re-raising the same level).
      */
     async scheduleSetSlashThreshold(args: {
         slashLevel: SlashLevel | number;
