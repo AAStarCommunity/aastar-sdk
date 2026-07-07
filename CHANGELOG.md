@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.3] - 2026-07-07
+**SDK Code Integrity Hash**: `039e5d641444d93e8158034e3fd0c9b799a9e1ac813028a3f54189295a4ec282`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Feature: Timelock slash-governance write orchestration + slash-policy calldata encoders (CC-13 batch B).** (#297, Seeder CC-13)
+
+Write side of the multisig slash-governance API (batch A read getters shipped in 0.39.2). Multisig target = OpenZeppelin `TimelockController` (viem-only; not Gnosis Safe). Lets ops move `slashPolicyAdmin` off the deployer EOA and manage the threshold table via `schedule()` → wait `minDelay` → `execute()`.
+
+- **[ADD]** `TimelockControllerABI` (vendored OZ) + `timelockControllerActions(address)` factory: `schedule` / `execute` / `cancel` + `getMinDelay` / `getTimestamp` / `hashOperation` / `isOperation{Pending,Ready,Done}`.
+- **[ADD]** `encodeSetSlashPolicyAdmin(newAdmin)` / `encodeSetSlashThreshold(slashLevel, threshold)` — pure calldata encoders for the inner BLSAggregator call routed through the timelock.
+- **[ADD]** `@aastar/admin` `SlashGovernance` L3 client composing the timelock + encoders: `scheduleSetSlashPolicyAdmin` / `executeSetSlashPolicyAdmin` / `getSetSlashPolicyAdminEta` + `setSlashThreshold` variants, plus read passthroughs (`getSlashPolicyAdmin` / `getSlashThresholds` / `getMinDelay`). `salt` is caller-persisted (operation id derives from it — reuse the same salt to execute; use a fresh salt for a repeat change); `delay` defaults to `getMinDelay()`.
+- **[FIX]** `aggregatorActions.slashPolicyAdmin` return cast `as Promise<Address>` → `as Address` (#295 review Low).
+- **[VERIFIED]** Live Sepolia E2E via the SDK API against the deployed OZ `TimelockController` `0x86C86c78…`: `getMinDelay()`==172800, `hashOperation()` id matches on-chain (schedule/execute/eta all key off it), `getTimestamp(id)`==0. Encoder ABI-roundtrip + orchestration tests; Codex-reviewed clean. Full on-chain slash-governance E2E remains gated on ops deploying/handing a timelock as `slashPolicyAdmin`.
+
 ## [0.39.2] - 2026-07-07
 **SDK Code Integrity Hash**: `636ab7520b09c72f64eca69e0e8ff543ad9c7b0bd4974fdbd1eb468f67404d7a`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
