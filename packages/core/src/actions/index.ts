@@ -13,6 +13,7 @@ export * from './aggregator.js';
 export * from './blsAlgorithm.js';
 export * from './dvtOperator.js';
 export * from './policyRegistry.js';
+export * from './timelockController.js';
 export * from './account.js';
 export * from './faucet.js';
 export * from './x402.js';
