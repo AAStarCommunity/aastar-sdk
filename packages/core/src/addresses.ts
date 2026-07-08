@@ -91,7 +91,7 @@ export const CANONICAL_ADDRESSES = {
     staking: "0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e",
     sbt: "0x4867B4302bf4C7818b71F55E53A3520Ee1855Aa7",
     reputationSystem: "0x4Ec2D49D75D5D4206B64387A7d6a6C3c5c90fB5A",
-    superPaymaster: "0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9",  // proxy (impl 0x0274811E...; v5.4.1-rc.1 2026-06-27 redeploy)
+    superPaymaster: "0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9",  // proxy unchanged (UUPS-upgraded to v5.4.2 impl 0xe25f88db, 2026-07-08 CC-13 double-slash fix; was v5.4.1-rc.1 impl 0x0274811E)
     paymasterFactory: "0xA936F8e3d682B0eCf280E6f5c05fF4204ee87180",
     paymasterV4: "0xf3948753ff21D33f6A5f516621FFF245B23efa0e",  // = aPNTsPaymasterV4 (AAStar)
     paymasterV4Impl: "0xc0F968625E3Ac0A2ad7f107cD5857425F672D268",

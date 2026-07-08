@@ -100,6 +100,14 @@ export type SuperPaymasterActions = {
     queueSlash: (args: { operator: Address, account?: Account | Address }) => Promise<Hash>;
     /** Cancel a queued slash (governance escape hatch); clears the pending-slash flag. */
     cancelSlash: (args: { operator: Address, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * Authoritative O(1) read of `_pendingSlash[operator]` (SuperPaymaster-5.4.2, #333/#334).
+     * `true` once a slash is queued via {@link queueSlash} and until it is executed or
+     * {@link cancelSlash}ed. Preferred over reconstructing state from slash events — used by
+     * DVT peer-failover to skip re-queuing an already-pending slash (BLS `queueSlash` reverts
+     * `SlashCooldown()` within the 1h cooldown window anyway).
+     */
+    isSlashPending: (args: { operator: Address }) => Promise<boolean>;
 
     // User & SBT Management
     updateBlockedStatus: (args: { operator: Address, users: Address[], statuses: boolean[], account?: Account | Address }) => Promise<Hash>;
@@ -1121,6 +1129,20 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             }) as bigint;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getSlashCount');
+        }
+    },
+
+    async isSlashPending({ operator }) {
+        try {
+            validateAddress(operator, 'operator');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: SuperPaymasterABI,
+                functionName: 'isSlashPending',
+                args: [operator]
+            }) as boolean;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isSlashPending');
         }
     },
 
