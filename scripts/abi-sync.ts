@@ -39,6 +39,15 @@ const LEVELS: Level[] = [
 const STANDARD_EXTERNAL = new Set(['EntryPoint', 'SenderCreator', 'UserOperationLib', 'SimpleAccount', 'SimpleAccountFactory', 'SimpleAccountV08', 'SimpleAccountFactoryV08', 'Simple7702Account', 'LegacyAccount', 'ERC20', 'abi.config']);
 // Intentional, documented divergence from the bare upstream artifact.
 const KNOWN_DRIFT = new Map<string, string>([['AAStarAirAccountV7', 'SDK ABI intentionally merges the AirAccountExtension surface (fallback→delegatecall).']]);
+// SDK ABI name collides with an UNRELATED upstream contract of the same name — the SDK tracks a
+// different source than the one abi-sync scans, so diffing against the scanned artifact is a false
+// positive. AAStarBLSAlgorithm: the SDK tracks the YetAnotherAA-Validator (DVT) contract that carries
+// `registerWithProof(pubkey,popPoint,popSig)` (CC-17 / YAAA #165). airaccount-contract also has a
+// same-named `src/validators/AAStarBLSAlgorithm.sol`, but v0.27.0 (#45 Part B) refactored it into a
+// pure Safe-owned key aggregator (aggregateKeys/cacheAggregatedKey, no registerWithProof) — a distinct
+// contract the SDK does NOT consume. YAAA isn't a configured source level (submodule availability is
+// flaky), so skip the drift check rather than diff against the wrong artifact.
+const NAME_COLLISIONS = new Set(['AAStarBLSAlgorithm']);
 
 const firstDir = (cands: string[]) => cands.map((d) => path.resolve(SDK_ROOT, d)).find((d) => fs.existsSync(d));
 const loadAbi = (file: string): any[] => { const r = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(r) ? r : r.abi || []; };
@@ -83,7 +92,7 @@ for (const lvl of LEVELS) {
 
 // (2) value-drift — SDK ABI vs upstream out/ signature sets
 for (const name of sdkAbis) {
-  if (STANDARD_EXTERNAL.has(name) || KNOWN_DRIFT.has(name)) continue;
+  if (STANDARD_EXTERNAL.has(name) || KNOWN_DRIFT.has(name) || NAME_COLLISIONS.has(name)) continue;
   const art = LEVELS.map((l) => firstDir(l.outDirs)).filter(Boolean).map((d) => findArtifact(d!, name)).find(Boolean);
   if (!art) continue;
   const sdk = loadAbi(path.join(ABIS_DIR, `${name}.json`));
