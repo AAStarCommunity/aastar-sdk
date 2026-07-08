@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.4] - 2026-07-08
+**SDK Code Integrity Hash**: `d286a9a9faa9bac694362d1b314f54756b6d891e8aa32a9d5f0ef2e7a02418ce`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Sync: SuperPaymaster ABI → v5.4.2 (CC-13 double-slash fix) + `isSlashPending` getter.** (Seeder CC-18)
+
+SuperPaymaster was UUPS-upgraded on Sepolia from v5.4.1 → **v5.4.2** (CC-13 double-slash fix). **The proxy address is unchanged** (`0x09DF0d2e…4DE9`) — this is an ABI-only refresh, no address migration.
+
+- **[ADD]** SuperPaymaster ABI: `isSlashPending(address) → bool` (view), `primeBlsSlashCooldown()`, and event `BlsSlashCooldownPrimed(uint48 floorUntil)` — synced from SuperPaymaster PR #337 / commit 61ec91cb.
+- **[ADD]** `superPaymasterActions.isSlashPending({ operator }) → boolean` — authoritative O(1) read of `_pendingSlash[operator]` (added to `ISuperPaymaster`), preferred over reconstructing state from slash events. Used by DVT peer-failover to skip re-queuing an already-pending slash.
+- **[NOTE]** Behavior change in the contract (SDK unaffected, informational): the BLS slash cooldown gate now lives in `queueSlash`'s BLS path — within the 1h cooldown window `BLS_AGGREGATOR` calling `queueSlash` reverts `SlashCooldown()`; owner/BLS cooldowns are decoupled.
+- **[VERIFIED]** `check:abi` PASS (16/16 SP contracts), `@aastar/core` build PASS, SuperPaymaster unit tests 34/34 PASS. Address book comment updated to note the v5.4.2 impl (`0xe25f88db`) behind the unchanged proxy.
+
 ## [0.39.3] - 2026-07-07
 **SDK Code Integrity Hash**: `039e5d641444d93e8158034e3fd0c9b799a9e1ac813028a3f54189295a4ec282`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
