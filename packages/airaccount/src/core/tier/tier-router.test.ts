@@ -52,4 +52,9 @@ describe("resolveTokenTier — mirrors GUARD recordTokenSpend (differs at tier2L
     // Guard recordTokenSpend: `cfg.tier2Limit == 0 || cumulative <= cfg.tier2Limit` → T2.
     expect(resolveTokenTier(500n, { tier1Limit: 100n, tier2Limit: 0n })).toBe(2);
   });
+  it("tier1==0, tier2>0: value <= tier2 → tier 2, value > tier2 → tier 3", () => {
+    // Guard: tier1==0 skips the T1 branch; `cumulative <= cfg.tier2Limit` gates T2 vs T3.
+    expect(resolveTokenTier(200n, { tier1Limit: 0n, tier2Limit: 200n })).toBe(2);
+    expect(resolveTokenTier(201n, { tier1Limit: 0n, tier2Limit: 200n })).toBe(3);
+  });
 });

@@ -6,8 +6,10 @@
  * limits behind the decision, and any hard block. Works for ETH AND any ERC-20, because the two
  * INDEPENDENT on-chain mechanisms are combined here:
  *
- *   1. Account tier (`AAStarAirAccountV7`): tier1Limit / tier2Limit → resolveTier(amount). This is
- *      what decides the SIGNATURES (Tier 3 = amount > tier2Limit = a guardian co-sign is REQUIRED).
+ *   1. Tier (decides the SIGNATURES; Tier 3 = a guardian co-sign is REQUIRED). ETH uses the ACCOUNT
+ *      tier (`AAStarAirAccountV7.requiredTier` → resolveTier); an ERC-20 uses the GUARD's per-token
+ *      tier (`AAStarGlobalGuard.recordTokenSpend` → resolveTokenTier), which differs at tier2Limit==0
+ *      (uncapped Tier-2, not Tier-3). Both evaluated against cumulative daily spend.
  *   2. Guard daily allowance (`AAStarGlobalGuard`): ETH `dailyLimit`/`remainingDailyAllowance`, or a
  *      token's `tokenConfigs[token]` + `tokenTodaySpent`. This is a SEPARATE, HARD cap —
  *      `Guard.recordSpend` reverts `DailyLimitExceeded` and a guardian does NOT bypass it. So
