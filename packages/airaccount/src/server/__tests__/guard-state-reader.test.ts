@@ -190,6 +190,19 @@ describe("GuardStateReader", () => {
       expect((await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN))!.currentTier).toBe(2);
     });
 
+    it("daily-only config (tier1=0, tier2=0, dailyLimit>0) → currentTier 1, NOT tier 3", async () => {
+      // A token with only a daily cap and no tier thresholds has no tier restriction (guard's tier
+      // block only runs when tier1||tier2 > 0). Must report T1 + the daily cap, not fall to T3.
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [0n, 0n, 1_000_000n], tokenTodaySpent: 900_000n })
+      );
+      const s = await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN);
+      expect(s).not.toBeNull();
+      expect(s!.currentTier).toBe(1);
+      expect(s!.dailyLimit).toBe(1_000_000n);
+      expect(s!.remaining).toBe(100_000n);
+    });
+
     it("tier2Limit==0 (T2-uncapped) + spent > tier1 → tier 2, matching the guard (NOT tier 3)", async () => {
       // A valid token config: tier1>0, tier2==0, daily>=tier1. Guard recordTokenSpend treats a zero
       // tier2Limit as uncapped Tier-2 — must NOT fall through to Tier-3 like the account resolver.
