@@ -42,7 +42,8 @@ const repoRoot = resolve(here, '..');
 // Only networks whose chainId exists in CANONICAL_ADDRESSES are checked; others
 // (anvil, ethereum mainnet, *-2-10 variants) have no canonical table to compare to.
 const NETWORK_CHAIN_IDS: Record<string, number> = {
-  optimism: 10,
+  // 'op-mainnet' is the canonical chain-10 config; the legacy 'optimism' alias + its stale
+  // config.optimism.json (missing paymasterV4, dead srcHash/updateTime) were removed (CC-30 G10).
   'op-mainnet': 10,
   sepolia: 11155111,
   'op-sepolia': 11155420,

@@ -31,7 +31,10 @@ interface Level {
 
 const LEVELS: Level[] = [
   { name: 'SuperPaymaster', srcDirs: ['../SuperPaymaster/contracts/src'], outDirs: ['../SuperPaymaster/out'], ignore: ['BasePaymasterUpgradeable', 'PaymasterBase', 'BLS'] },
-  { name: 'AirAccount', srcDirs: ['../airaccount-contract/src'], outDirs: ['../airaccount-contract/out'], ignore: ['AAStarAirAccountBase', 'AAStarAgentStorageLayout', 'AlgTierLib', 'ERC8004Addresses'] },
+  // AAStarBLSKeyRegistry: airaccount-contract's Safe-owned BLS key registry (CC-27 renamed from
+  // AAStarBLSAlgorithm, PR #182). The SDK does NOT consume it — it tracks the YAAA (DVT) contract
+  // instead (see NAME_COLLISIONS below) — so it is intentionally not shipped as an SDK ABI.
+  { name: 'AirAccount', srcDirs: ['../airaccount-contract/src'], outDirs: ['../airaccount-contract/out'], ignore: ['AAStarAirAccountBase', 'AAStarAgentStorageLayout', 'AlgTierLib', 'ERC8004Addresses', 'AAStarBLSKeyRegistry'] },
   { name: 'launch', srcDirs: ['../launch/contracts/src', '../../mycelium/launch/contracts/src'], outDirs: ['../launch/contracts/out', '../../mycelium/launch/contracts/out'], ignore: ['SaleContract', 'MockGToken'] },
 ];
 
@@ -45,8 +48,10 @@ const KNOWN_DRIFT = new Map<string, string>([['AAStarAirAccountV7', 'SDK ABI int
 // `registerWithProof(pubkey,popPoint,popSig)` (CC-17 / YAAA #165). airaccount-contract also has a
 // same-named `src/validators/AAStarBLSAlgorithm.sol`, but v0.27.0 (#45 Part B) refactored it into a
 // pure Safe-owned key aggregator (aggregateKeys/cacheAggregatedKey, no registerWithProof) — a distinct
-// contract the SDK does NOT consume. YAAA isn't a configured source level (submodule availability is
-// flaky), so skip the drift check rather than diff against the wrong artifact.
+// contract the SDK does NOT consume. CC-27 (airaccount PR #182, merged 2026-07-09) then renamed
+// airaccount's copy to `AAStarBLSKeyRegistry` (ignored above in the AirAccount level); the SDK keeps
+// its `AAStarBLSAlgorithm.json` pointing at the YAAA version. YAAA isn't a configured source level
+// (submodule availability is flaky), so skip the drift check rather than diff against the wrong artifact.
 const NAME_COLLISIONS = new Set(['AAStarBLSAlgorithm']);
 
 const firstDir = (cands: string[]) => cands.map((d) => path.resolve(SDK_ROOT, d)).find((d) => fs.existsSync(d));

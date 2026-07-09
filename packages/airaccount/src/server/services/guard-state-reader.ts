@@ -4,11 +4,18 @@ import { getContract, zeroAddress, type Address, type PublicClient } from "viem"
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi } from "viem";
 import { AIRACCOUNT_ABI, GLOBAL_GUARD_ABI } from "../constants/entrypoint";
+// Single source of truth for the spend→tier boundary (inclusive `<=`, matching the contracts).
+// resolveTier = account `requiredTier` semantics (ETH); resolveTokenTier = guard `recordTokenSpend`
+// semantics (ERC-20), which differ at tier2Limit==0 (uncapped Tier-2 vs Tier-3).
+import { resolveTier, resolveTokenTier } from "../../core/tier";
 
 const EXTENDED_GUARD_ABI = [
   ...GLOBAL_GUARD_ABI,
   "function todaySpent() external view returns (uint256)",
   "function tokenTodaySpent(address token) external view returns (uint256)",
+  // Per-token limits ARE readable on-chain: the public `tokenConfigs` mapping getter returns the
+  // per-token tier thresholds + daily limit (AAStarGlobalGuard). (#176 ERC20 per-token gap.)
+  "function tokenConfigs(address token) external view returns (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)",
   // approvedAlgorithms removed from the guard in v0.17.2-beta.4 — now read from the account.
   "function tier1Limit() external view returns (uint256)",
   "function tier2Limit() external view returns (uint256)",
@@ -104,11 +111,10 @@ export class GuardStateReader {
       dailyLimit: BigInt(dailyLimit as bigint),
       todaySpent: BigInt(todaySpent as bigint),
       remaining: BigInt(remaining as bigint),
-      currentTier: resolveTierFromSpend(
-        BigInt(todaySpent as bigint),
-        BigInt(tier1Limit as bigint),
-        BigInt(tier2Limit as bigint),
-      ),
+      currentTier: resolveTier(BigInt(todaySpent as bigint), {
+        tier1Limit: BigInt(tier1Limit as bigint),
+        tier2Limit: BigInt(tier2Limit as bigint),
+      }),
       tier1Limit: BigInt(tier1Limit as bigint),
       tier2Limit: BigInt(tier2Limit as bigint),
       minDailyLimit: BigInt(minDailyLimit as bigint),
@@ -129,21 +135,34 @@ export class GuardStateReader {
     if (guardAddress === zeroAddress) return null;
 
     const guard = this.guardContract(guardAddress).read as ReadMethods;
-    try {
-      const todaySpent = await guard.tokenTodaySpent([token as Address]);
-      // TokenConfig is not directly readable on-chain per token; limits are not fully implemented.
-      return {
-        token,
-        todaySpent: BigInt(todaySpent as bigint),
-        dailyLimit: 0n, // token daily limit not directly exposed
-        remaining: 0n,
-        currentTier: 1 as TierLevel,
-        tier1Limit: 0n,
-        tier2Limit: 0n,
-      };
-    } catch {
-      return null;
-    }
+    // Read the per-token config (tier1Limit, tier2Limit, dailyLimit) + today's spend. viem returns
+    // the multi-value `tokenConfigs` getter as a positional tuple. Read failures propagate (a failed
+    // read must NOT be silently reported as "unconfigured" — that would be fail-open, #176 review).
+    const [config, todaySpentRaw] = await Promise.all([
+      guard.tokenConfigs([token as Address]) as Promise<readonly [bigint, bigint, bigint]>,
+      guard.tokenTodaySpent([token as Address]),
+    ]);
+    const [tier1Limit, tier2Limit, dailyLimit] = [BigInt(config[0]), BigInt(config[1]), BigInt(config[2])];
+
+    // A successfully-decoded all-zero config = this token is not configured on the guard. NOTE: this
+    // reports "no per-token limits", NOT an allow/deny decision — under Guard strict mode an
+    // unconfigured token is BLOCKED. For the full submit-time tier + block + guardian decision use
+    // `resolveTransfer` (core/tier), which reads `blockUnconfiguredTokens`/strictMode; this reader is
+    // a pure state query for display/caching.
+    if (tier1Limit === 0n && tier2Limit === 0n && dailyLimit === 0n) return null;
+
+    const todaySpent = BigInt(todaySpentRaw as bigint);
+    const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
+    return {
+      token,
+      todaySpent,
+      dailyLimit,
+      remaining,
+      // Token tier follows the GUARD's recordTokenSpend semantics (tier2Limit==0 → uncapped T2).
+      currentTier: resolveTokenTier(todaySpent, { tier1Limit, tier2Limit }),
+      tier1Limit,
+      tier2Limit,
+    };
   }
 
   /**
@@ -158,7 +177,7 @@ export class GuardStateReader {
     if (!state) return 1; // No guard = no tier restriction
 
     const projectedSpend = state.todaySpent + amountWei;
-    return resolveTierFromSpend(projectedSpend, state.tier1Limit, state.tier2Limit);
+    return resolveTier(projectedSpend, { tier1Limit: state.tier1Limit, tier2Limit: state.tier2Limit });
   }
 
   /**
@@ -173,19 +192,3 @@ export class GuardStateReader {
   }
 }
 
-/**
- * Resolve required tier from cumulative spend vs tier thresholds.
- *
- * tier1Limit=0 means no Tier-1 cap (everything is Tier 1).
- * tier2Limit=0 means no Tier-2 cap (anything above tier1 is Tier 2).
- */
-function resolveTierFromSpend(
-  spent: bigint,
-  tier1Limit: bigint,
-  tier2Limit: bigint,
-): TierLevel {
-  if (tier1Limit === 0n) return 1;
-  if (spent < tier1Limit) return 1;
-  if (tier2Limit === 0n || spent < tier2Limit) return 2;
-  return 3;
-}

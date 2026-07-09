@@ -69,10 +69,10 @@
 - **Decision:** `@aastar/core` `CANONICAL_ADDRESSES` is the **single source of truth**. `config.{network}.json` files are dev/deploy-time overrides that must agree with it for any network that has a canonical chainId entry. `@aastar/shared-config` stays an independent external repo (out of scope for this check).
 - **Solution shipped:** `scripts/check-address-consistency.ts` (npm: `pnpm run check:addresses`) asserts every address key shared between `config.{network}.json` and `CANONICAL_ADDRESSES[chainId]` matches; wired into CI (`.github/workflows/ci.yml`).
 - **Pre-existing drift found (needs human reconciliation, NOT auto-fixed):**
-  - `config.op-sepolia.json` (chain 11155420): 14/16 address keys diverge — the file appears to be a **stale clone of `config.optimism.json`** (identical `srcHash`, holds chain-10 Optimism mainnet addresses instead of OP-Sepolia). Canonical has the genuine OP-Sepolia deployment.
+  - `config.op-sepolia.json` (chain 11155420): 14/16 address keys diverge — the file appears to be a **stale clone of the old chain-10 config** (identical `srcHash`, holds chain-10 Optimism mainnet addresses instead of OP-Sepolia). Canonical has the genuine OP-Sepolia deployment. (Historical note: `config.optimism.json` was removed in CC-30 G10 — `config.op-mainnet.json` is now the sole chain-10 file.)
   - `config.sepolia.json` `pnts`: `0x5aa8…` (config) vs `0x6a23…` (canonical, "Anni's xPNTsToken").
   - Suspected typo in canonical itself: chain-11155420 `simpleAccountFactory` = `0x91E6060…` vs the deterministic `0x91E60e0…` used on chains 10/11155111 — verify on-chain before reconciling.
-  - `config.optimism.json` and `config.op-mainnet.json` (both chain 10) are clean.
+  - `config.op-mainnet.json` (chain 10) is clean and is the sole chain-10 config (the redundant `config.optimism.json` was removed in CC-30 G10).
 
 ---
 
