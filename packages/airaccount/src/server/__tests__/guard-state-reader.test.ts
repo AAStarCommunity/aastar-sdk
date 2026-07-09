@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { zeroAddress, type PublicClient } from "viem";
-import { GuardStateReader, tierSignatureRequirements } from "../services/guard-state-reader";
+import { GuardStateReader } from "../services/guard-state-reader";
 
 const ACCOUNT_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const GUARD_ADDR = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -159,29 +159,51 @@ describe("GuardStateReader", () => {
       expect(s!.remaining).toBe(0n);
     });
 
-    it("requiredTierForToken projects spend against per-token thresholds", async () => {
-      const reader = new GuardStateReader(
-        makeClient(GUARD_ADDR, { tokenConfigs: [500_000n, 800_000n, 1_000_000n], tokenTodaySpent: 400_000n })
+    it("propagates a read failure instead of reporting the token as unconfigured (no fail-open)", async () => {
+      // A failed tokenConfigs read must NOT be swallowed into null (which callers read as "no limits").
+      const client = makeClient(GUARD_ADDR, {});
+      // Override to throw on the token read.
+      (client.readContract as unknown as { mockImplementation: (f: unknown) => void }).mockImplementation(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async ({ address, functionName }: any) => {
+          if ((address as string).toLowerCase() === ACCOUNT_ADDR.toLowerCase() && functionName === "guard") return GUARD_ADDR;
+          if (functionName === "tokenConfigs" || functionName === "tokenTodaySpent") throw new Error("rpc down");
+          throw new Error(`unexpected read: ${functionName}`);
+        }
       );
-      // 400k + 500k = 900k >= tier2 → tier 3
-      expect(await reader.requiredTierForToken(ACCOUNT_ADDR, TOKEN, 500_000n)).toBe(3);
+      const reader = new GuardStateReader(client);
+      await expect(reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN)).rejects.toThrow();
     });
 
-    it("requiredTierForToken returns 1 for an unconfigured token", async () => {
-      const reader = new GuardStateReader(makeClient(GUARD_ADDR, { tokenConfigs: [0n, 0n, 0n] }));
-      expect(await reader.requiredTierForToken(ACCOUNT_ADDR, TOKEN, 10n ** 18n)).toBe(1);
+    it("uses <= boundary (matches on-chain requiredTier): spent == tier1Limit → tier 1", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [500_000n, 800_000n, 1_000_000n], tokenTodaySpent: 500_000n })
+      );
+      // spent == tier1Limit → contract returns 1 (txValue <= tier1Limit)
+      expect((await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN))!.currentTier).toBe(1);
+    });
+
+    it("uses <= boundary: spent == tier2Limit → tier 2", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [500_000n, 800_000n, 1_000_000n], tokenTodaySpent: 800_000n })
+      );
+      expect((await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN))!.currentTier).toBe(2);
     });
   });
 
-  describe("tierSignatureRequirements (#176 fail-fast needs)", () => {
-    it("T1 = passkey only", () => {
-      expect(tierSignatureRequirements(1)).toEqual({ passkey: true, bls: false, guardian: false });
+  describe("tier boundary (#176 review: <= matches on-chain requiredTier)", () => {
+    it("getGuardState: spent == tier1Limit → tier 1 (not 2)", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { todaySpent: 500_000n, tier1Limit: 500_000n, tier2Limit: 800_000n })
+      );
+      expect((await reader.getGuardState(ACCOUNT_ADDR))!.currentTier).toBe(1);
     });
-    it("T2 = passkey + BLS", () => {
-      expect(tierSignatureRequirements(2)).toEqual({ passkey: true, bls: true, guardian: false });
-    });
-    it("T3 = passkey + BLS + guardian", () => {
-      expect(tierSignatureRequirements(3)).toEqual({ passkey: true, bls: true, guardian: true });
+    it("requiredTierForAmount: projected == tier2Limit → tier 2 (not 3)", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { todaySpent: 300_000n, tier1Limit: 500_000n, tier2Limit: 800_000n })
+      );
+      // 300k + 500k = 800k == tier2Limit → tier 2
+      expect(await reader.requiredTierForAmount(ACCOUNT_ADDR, 500_000n)).toBe(2);
     });
   });
 

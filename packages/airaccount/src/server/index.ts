@@ -58,8 +58,8 @@ export {
 export type { InstallModuleParams, UninstallModuleParams, ModuleTypeId } from "./services/module-manager";
 export { SessionKeyService, packSecp256k1SessionSignature, packP256SessionSignature } from "./services/session-key-service";
 export type { GrantSessionParams, GrantP256SessionParams, SessionInfo, AgentSessionConfig, AgentSessionInfo } from "./services/session-key-service";
-export { GuardStateReader, tierSignatureRequirements } from "./services/guard-state-reader";
-export type { GuardState, TokenGuardState, TierSignatureNeeds } from "./services/guard-state-reader";
+export { GuardStateReader } from "./services/guard-state-reader";
+export type { GuardState, TokenGuardState } from "./services/guard-state-reader";
 export { computeOapdSalt, getOapdAddress, getOapdAddressWithChainId, isOapdDeployed } from "./utils/oapd";
 export type { OapdConfig } from "./utils/oapd";
 export {

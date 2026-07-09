@@ -4,6 +4,9 @@ import { getContract, zeroAddress, type Address, type PublicClient } from "viem"
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi } from "viem";
 import { AIRACCOUNT_ABI, GLOBAL_GUARD_ABI } from "../constants/entrypoint";
+// Single source of truth for the spend→tier boundary. Matches the on-chain `requiredTier`
+// (AAStarAirAccountBase.sol: `txValue <= tierNLimit`) — a `<` variant is off-by-one at the boundary.
+import { resolveTier } from "../../core/tier";
 
 const EXTENDED_GUARD_ABI = [
   ...GLOBAL_GUARD_ABI,
@@ -107,11 +110,10 @@ export class GuardStateReader {
       dailyLimit: BigInt(dailyLimit as bigint),
       todaySpent: BigInt(todaySpent as bigint),
       remaining: BigInt(remaining as bigint),
-      currentTier: resolveTierFromSpend(
-        BigInt(todaySpent as bigint),
-        BigInt(tier1Limit as bigint),
-        BigInt(tier2Limit as bigint),
-      ),
+      currentTier: resolveTier(BigInt(todaySpent as bigint), {
+        tier1Limit: BigInt(tier1Limit as bigint),
+        tier2Limit: BigInt(tier2Limit as bigint),
+      }),
       tier1Limit: BigInt(tier1Limit as bigint),
       tier2Limit: BigInt(tier2Limit as bigint),
       minDailyLimit: BigInt(minDailyLimit as bigint),
@@ -132,47 +134,33 @@ export class GuardStateReader {
     if (guardAddress === zeroAddress) return null;
 
     const guard = this.guardContract(guardAddress).read as ReadMethods;
-    try {
-      // Read the per-token config (tier1Limit, tier2Limit, dailyLimit) + today's spend. viem returns
-      // the multi-value `tokenConfigs` getter as a positional tuple.
-      const [config, todaySpentRaw] = await Promise.all([
-        guard.tokenConfigs([token as Address]) as Promise<readonly [bigint, bigint, bigint]>,
-        guard.tokenTodaySpent([token as Address]),
-      ]);
-      const [tier1Limit, tier2Limit, dailyLimit] = [BigInt(config[0]), BigInt(config[1]), BigInt(config[2])];
+    // Read the per-token config (tier1Limit, tier2Limit, dailyLimit) + today's spend. viem returns
+    // the multi-value `tokenConfigs` getter as a positional tuple. Read failures propagate (a failed
+    // read must NOT be silently reported as "unconfigured" — that would be fail-open, #176 review).
+    const [config, todaySpentRaw] = await Promise.all([
+      guard.tokenConfigs([token as Address]) as Promise<readonly [bigint, bigint, bigint]>,
+      guard.tokenTodaySpent([token as Address]),
+    ]);
+    const [tier1Limit, tier2Limit, dailyLimit] = [BigInt(config[0]), BigInt(config[1]), BigInt(config[2])];
 
-      // All-zero config = this token is not configured on the guard.
-      if (tier1Limit === 0n && tier2Limit === 0n && dailyLimit === 0n) return null;
+    // A successfully-decoded all-zero config = this token is not configured on the guard. NOTE: this
+    // reports "no per-token limits", NOT an allow/deny decision — under Guard strict mode an
+    // unconfigured token is BLOCKED. For the full submit-time tier + block + guardian decision use
+    // `resolveTransfer` (core/tier), which reads `blockUnconfiguredTokens`/strictMode; this reader is
+    // a pure state query for display/caching.
+    if (tier1Limit === 0n && tier2Limit === 0n && dailyLimit === 0n) return null;
 
-      const todaySpent = BigInt(todaySpentRaw as bigint);
-      const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
-      return {
-        token,
-        todaySpent,
-        dailyLimit,
-        remaining,
-        currentTier: resolveTierFromSpend(todaySpent, tier1Limit, tier2Limit),
-        tier1Limit,
-        tier2Limit,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Determine the minimum tier required to send `amount` of an ERC20 token — the per-token analogue
-   * of {@link requiredTierForAmount}. Uses the token's own `tokenConfigs` thresholds (#176 ERC20 gap).
-   * Returns 1 (no restriction) if the token is unconfigured or the account has no guard.
-   */
-  async requiredTierForToken(
-    accountAddress: string,
-    token: string,
-    amount: bigint,
-  ): Promise<TierLevel> {
-    const state = await this.getTokenGuardState(accountAddress, token);
-    if (!state) return 1;
-    return resolveTierFromSpend(state.todaySpent + amount, state.tier1Limit, state.tier2Limit);
+    const todaySpent = BigInt(todaySpentRaw as bigint);
+    const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
+    return {
+      token,
+      todaySpent,
+      dailyLimit,
+      remaining,
+      currentTier: resolveTier(todaySpent, { tier1Limit, tier2Limit }),
+      tier1Limit,
+      tier2Limit,
+    };
   }
 
   /**
@@ -187,7 +175,7 @@ export class GuardStateReader {
     if (!state) return 1; // No guard = no tier restriction
 
     const projectedSpend = state.todaySpent + amountWei;
-    return resolveTierFromSpend(projectedSpend, state.tier1Limit, state.tier2Limit);
+    return resolveTier(projectedSpend, { tier1Limit: state.tier1Limit, tier2Limit: state.tier2Limit });
   }
 
   /**
@@ -202,40 +190,3 @@ export class GuardStateReader {
   }
 }
 
-/**
- * Resolve required tier from cumulative spend vs tier thresholds.
- *
- * tier1Limit=0 means no Tier-1 cap (everything is Tier 1).
- * tier2Limit=0 means no Tier-2 cap (anything above tier1 is Tier 2).
- */
-function resolveTierFromSpend(
-  spent: bigint,
-  tier1Limit: bigint,
-  tier2Limit: bigint,
-): TierLevel {
-  if (tier1Limit === 0n) return 1;
-  if (spent < tier1Limit) return 1;
-  if (tier2Limit === 0n || spent < tier2Limit) return 2;
-  return 3;
-}
-
-/** Which signature factors a given tier requires (#176): T1 = passkey; T2 += BLS; T3 += guardian ECDSA. */
-export interface TierSignatureNeeds {
-  passkey: boolean;
-  bls: boolean;
-  guardian: boolean;
-}
-
-/**
- * Map a resolved tier to the signature factors it needs. This is the fixed on-chain convention
- * (AAStarAirAccountV7.validateUserOp): Tier-1 = passkey only, Tier-2 adds the BLS factor, Tier-3
- * additionally requires guardian ECDSA co-signing. Consumers use this to know, before submitting,
- * whether a Tier-3 transfer still needs guardian signatures collected (#176 fail-fast).
- */
-export function tierSignatureRequirements(tier: TierLevel): TierSignatureNeeds {
-  return {
-    passkey: true,
-    bls: tier >= 2,
-    guardian: tier >= 3,
-  };
-}
