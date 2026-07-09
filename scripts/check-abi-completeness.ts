@@ -36,7 +36,9 @@ const UPSTREAMS: Upstream[] = [
   {
     name: 'AirAccount',
     srcDirs: ['../airaccount-contract/src'],
-    ignore: ['AAStarAirAccountBase', 'AAStarAgentStorageLayout', 'AlgTierLib', 'ERC8004Addresses'],
+    // AAStarBLSKeyRegistry: airaccount's Safe-owned BLS key registry (CC-27 rename of AAStarBLSAlgorithm,
+    // PR #182). The SDK tracks the YAAA (DVT) contract instead, so this one is intentionally not shipped.
+    ignore: ['AAStarAirAccountBase', 'AAStarAgentStorageLayout', 'AlgTierLib', 'ERC8004Addresses', 'AAStarBLSKeyRegistry'],
   },
   {
     name: 'launch (sale)',

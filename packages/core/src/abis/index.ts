@@ -15,6 +15,7 @@ import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
 import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
 import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
 import PaymasterABIData from './Paymaster.json' with { type: 'json' };
+import LivenessRegistryABIData from './LivenessRegistry.json' with { type: 'json' };
 import AAStarGlobalGuardABIData from './AAStarGlobalGuard.json' with { type: 'json' };
 import RailgunParserABIData from './RailgunParser.json' with { type: 'json' };
 import UniswapV3ParserABIData from './UniswapV3Parser.json' with { type: 'json' };
@@ -67,6 +68,11 @@ import X402FacilitatorABIData from './X402Facilitator.json' with { type: 'json' 
 // ========== Re-export ABIs - Core System ==========
 export const RegistryABI = (RegistryABIData as any).abi || RegistryABIData;
 export const RegistryArtifact = RegistryABIData;
+
+// LivenessRegistry (SuperPaymaster CC-29 DVT liveness layer). Node heartbeat / liveness-window reads
+// used by DVT peer-failover; exposed as an ABI (no wrapper — reached via viem directly).
+export const LivenessRegistryABI = (LivenessRegistryABIData as any).abi || LivenessRegistryABIData;
+export const LivenessRegistryArtifact = LivenessRegistryABIData;
 
 export const GTokenABI = (GTokenABIData as any).abi || GTokenABIData;
 export const GTokenArtifact = GTokenABIData;
