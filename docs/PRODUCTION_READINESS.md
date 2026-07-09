@@ -13,7 +13,7 @@
 | **本地 anvil** | 31337 | `config.anvil.json` | 部署脚本本地部署 | 虚拟本地 `dvt1/2/3.aw.l`（2/3 或全签） | 🟡 DVT 节点未在 SDK canonical 接线 |
 | **测试网 Sepolia** | 11155111 | `config.sepolia.json` | **SP 5.4.2 / Registry 5.4.2**（链上已验） | 实时在线 `dvt1/2/3.aastar.io` | ✅ 可发 |
 | **测试网 OP-Sepolia** | 11155420 | `config.op-sepolia.json` | canonical 已接 | （复用 live DVT） | ✅ 可发 |
-| **主网 OP** | 10 | `config.op-mainnet.json` / `config.optimism.json` | **SP 3.2.2 / Registry 3.0.2**（链上已验，**旧 V3 栈**） | 无 mainnet 节点配置 | 🔴 未就绪 |
+| **主网 OP** | 10 | `config.op-mainnet.json`（唯一权威，G10 已删冗余 `config.optimism.json`） | **SP 3.2.2 / Registry 3.0.2**（链上已验，**旧 V3 栈**） | 无 mainnet 节点配置 | 🔴 未就绪 |
 | Ethereum L1 主网 | 1 | 无 | 无部署 | 无 | ⛔ 本期不做 |
 
 > 标注：**[测]** 测试网就能发 · **[主]** 主网前必须补 · **[配]** 两网只差配置
@@ -57,7 +57,7 @@
 
 | # | Gap | 标注 |
 |---|---|---|
-| G10 | **主网 config 冗余** —— `config.op-mainnet.json` 与 `config.optimism.json` 都是 chain 10，仅 `paymasterV4` 值不同。需定哪个权威、删冗余。 | [配] |
+| ~~G10~~ ✅ **DONE** | **主网 config 去冗余** —— `config.optimism.json` 是 stale legacy（缺 paymasterV4、带 dead srcHash/updateTime、无 NetworkName 映射、无代码按名加载）→ 已删；`config.op-mainnet.json` 为 chain-10 唯一权威。同步移除 check-address 里的 dead `optimism` alias。 | [配] |
 | G11 | 主网 `aPNTs` / `paymasterV4` 是 EIP-1167 45B minimal-proxy（paymasterV4→paymasterV4Impl `0xc4dd…` 一致 ✅；aPNTs→`0xa191…`）。主网重部署 V5 后一并核对。 | [主] |
 | G12 | DVT 系列 issue #285/#279/#274/#270 对应改动已在 0.37–0.39 交付上链，issue 仅待关闭。 | [测] |
 | G13 | #220 upstream drift 告警 open —— 跑 `pnpm run upstream:check` 核对是否又有上游新 release。 | [测] |
