@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { zeroAddress, type PublicClient } from "viem";
-import { GuardStateReader } from "../services/guard-state-reader";
+import { GuardStateReader, tierSignatureRequirements } from "../services/guard-state-reader";
 
 const ACCOUNT_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const GUARD_ADDR = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -12,7 +12,7 @@ const GUARD_ADDR = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
  */
 function makeClient(
   guardAddress: string,
-  guardValues: Partial<Record<string, bigint | boolean>>
+  guardValues: Partial<Record<string, bigint | boolean | readonly bigint[]>>
 ): PublicClient {
   return {
     readContract: vi.fn().mockImplementation(
@@ -36,6 +36,11 @@ function makeClient(
             return guardValues.tier2Limit ?? 800_000n;
           case "minDailyLimit":
             return guardValues.minDailyLimit ?? 0n;
+          case "tokenConfigs":
+            // viem returns the multi-value getter as a positional tuple [tier1, tier2, dailyLimit].
+            return guardValues.tokenConfigs ?? [0n, 0n, 0n];
+          case "tokenTodaySpent":
+            return guardValues.tokenTodaySpent ?? 0n;
           case "approvedAlgorithms":
             return guardValues.approvedAlgorithms ?? true;
           default:
@@ -118,6 +123,65 @@ describe("GuardStateReader", () => {
       );
       // 400k + 50k = 450k < tier1 → tier 1
       expect(await reader.requiredTierForAmount(ACCOUNT_ADDR, 50_000n)).toBe(1);
+    });
+  });
+
+  describe("getTokenGuardState (#176 ERC20 per-token)", () => {
+    const TOKEN = "0x1111111111111111111111111111111111111111";
+
+    it("returns null when the token is not configured (all-zero config)", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [0n, 0n, 0n], tokenTodaySpent: 0n })
+      );
+      expect(await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN)).toBeNull();
+    });
+
+    it("returns per-token limits + remaining + tier from tokenConfigs", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [500_000n, 800_000n, 1_000_000n], tokenTodaySpent: 600_000n })
+      );
+      const s = await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN);
+      expect(s).not.toBeNull();
+      expect(s!.tier1Limit).toBe(500_000n);
+      expect(s!.tier2Limit).toBe(800_000n);
+      expect(s!.dailyLimit).toBe(1_000_000n);
+      expect(s!.todaySpent).toBe(600_000n);
+      expect(s!.remaining).toBe(400_000n);
+      // tier1 <= spent(600k) < tier2 → tier 2
+      expect(s!.currentTier).toBe(2);
+    });
+
+    it("clamps remaining to 0 when spend exceeds dailyLimit", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [100n, 200n, 1_000n], tokenTodaySpent: 1_500n })
+      );
+      const s = await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN);
+      expect(s!.remaining).toBe(0n);
+    });
+
+    it("requiredTierForToken projects spend against per-token thresholds", async () => {
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [500_000n, 800_000n, 1_000_000n], tokenTodaySpent: 400_000n })
+      );
+      // 400k + 500k = 900k >= tier2 → tier 3
+      expect(await reader.requiredTierForToken(ACCOUNT_ADDR, TOKEN, 500_000n)).toBe(3);
+    });
+
+    it("requiredTierForToken returns 1 for an unconfigured token", async () => {
+      const reader = new GuardStateReader(makeClient(GUARD_ADDR, { tokenConfigs: [0n, 0n, 0n] }));
+      expect(await reader.requiredTierForToken(ACCOUNT_ADDR, TOKEN, 10n ** 18n)).toBe(1);
+    });
+  });
+
+  describe("tierSignatureRequirements (#176 fail-fast needs)", () => {
+    it("T1 = passkey only", () => {
+      expect(tierSignatureRequirements(1)).toEqual({ passkey: true, bls: false, guardian: false });
+    });
+    it("T2 = passkey + BLS", () => {
+      expect(tierSignatureRequirements(2)).toEqual({ passkey: true, bls: true, guardian: false });
+    });
+    it("T3 = passkey + BLS + guardian", () => {
+      expect(tierSignatureRequirements(3)).toEqual({ passkey: true, bls: true, guardian: true });
     });
   });
 

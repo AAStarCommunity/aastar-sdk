@@ -51,7 +51,7 @@
 | G6 | **CC-13 批B slash 治理 Timelock 编排** —— 读 getter(批A)已就位；写侧 `setSlashPolicyAdmin`/`setSlashThreshold` 的 Timelock 编排 wrapper 待开发（需 OZ TimelockController ABI 进 core）。 | [主] | `@repo:sp`（slashPolicyAdmin 交多签/timelock，CC-28） |
 | G7 | **#256 GuardChecker WebAuthn algId 预检** 疑阻断 Tier-3 转账（`algIdForTier` 无 WA 分支）。主网前必复核。 | [主] | SDK 自查 |
 | G8 | **#163 buyGasless BuyIntent 签名 + relayer stuck pending** —— 影响买币路径。 | [主] | `@repo:kms` / relayer |
-| G9 | **#176 Tier2/3 额外签名收集 + tier判定/限额查询 API 缺失**（ETH+ERC20 统一）。 | [测→主] | SDK 自查 |
+| G9(部分✅) | **#176 Tier2/3 API** —— (3) 限额查询 `GuardStateReader.getGuardState` 早已 done；本轮补齐 **ERC20 per-token 限额/判档**（`getTokenGuardState` 从 stub→真读 `tokenConfigs`、新增 `requiredTierForToken`）+ `tierSignatureRequirements(tier)→{passkey,bls,guardian}`（fail-fast needs）。**剩 (2) 转账侧 Tier-3 guardian ECDSA 收集**（prepareTransfer/submitPreparedTransfer 目前 WebAuthn-only）—— 较大，需 guardian 账户链上 E2E，单列后续。 | [测]已交付 / [主]part2 | SDK 自查(part2 需链上 E2E) |
 
 ### 🟢 Housekeeping / 配置
 

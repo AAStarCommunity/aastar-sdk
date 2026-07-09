@@ -9,6 +9,9 @@ const EXTENDED_GUARD_ABI = [
   ...GLOBAL_GUARD_ABI,
   "function todaySpent() external view returns (uint256)",
   "function tokenTodaySpent(address token) external view returns (uint256)",
+  // Per-token limits ARE readable on-chain: the public `tokenConfigs` mapping getter returns the
+  // per-token tier thresholds + daily limit (AAStarGlobalGuard). (#176 ERC20 per-token gap.)
+  "function tokenConfigs(address token) external view returns (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)",
   // approvedAlgorithms removed from the guard in v0.17.2-beta.4 — now read from the account.
   "function tier1Limit() external view returns (uint256)",
   "function tier2Limit() external view returns (uint256)",
@@ -130,20 +133,46 @@ export class GuardStateReader {
 
     const guard = this.guardContract(guardAddress).read as ReadMethods;
     try {
-      const todaySpent = await guard.tokenTodaySpent([token as Address]);
-      // TokenConfig is not directly readable on-chain per token; limits are not fully implemented.
+      // Read the per-token config (tier1Limit, tier2Limit, dailyLimit) + today's spend. viem returns
+      // the multi-value `tokenConfigs` getter as a positional tuple.
+      const [config, todaySpentRaw] = await Promise.all([
+        guard.tokenConfigs([token as Address]) as Promise<readonly [bigint, bigint, bigint]>,
+        guard.tokenTodaySpent([token as Address]),
+      ]);
+      const [tier1Limit, tier2Limit, dailyLimit] = [BigInt(config[0]), BigInt(config[1]), BigInt(config[2])];
+
+      // All-zero config = this token is not configured on the guard.
+      if (tier1Limit === 0n && tier2Limit === 0n && dailyLimit === 0n) return null;
+
+      const todaySpent = BigInt(todaySpentRaw as bigint);
+      const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
       return {
         token,
-        todaySpent: BigInt(todaySpent as bigint),
-        dailyLimit: 0n, // token daily limit not directly exposed
-        remaining: 0n,
-        currentTier: 1 as TierLevel,
-        tier1Limit: 0n,
-        tier2Limit: 0n,
+        todaySpent,
+        dailyLimit,
+        remaining,
+        currentTier: resolveTierFromSpend(todaySpent, tier1Limit, tier2Limit),
+        tier1Limit,
+        tier2Limit,
       };
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Determine the minimum tier required to send `amount` of an ERC20 token — the per-token analogue
+   * of {@link requiredTierForAmount}. Uses the token's own `tokenConfigs` thresholds (#176 ERC20 gap).
+   * Returns 1 (no restriction) if the token is unconfigured or the account has no guard.
+   */
+  async requiredTierForToken(
+    accountAddress: string,
+    token: string,
+    amount: bigint,
+  ): Promise<TierLevel> {
+    const state = await this.getTokenGuardState(accountAddress, token);
+    if (!state) return 1;
+    return resolveTierFromSpend(state.todaySpent + amount, state.tier1Limit, state.tier2Limit);
   }
 
   /**
@@ -188,4 +217,25 @@ function resolveTierFromSpend(
   if (spent < tier1Limit) return 1;
   if (tier2Limit === 0n || spent < tier2Limit) return 2;
   return 3;
+}
+
+/** Which signature factors a given tier requires (#176): T1 = passkey; T2 += BLS; T3 += guardian ECDSA. */
+export interface TierSignatureNeeds {
+  passkey: boolean;
+  bls: boolean;
+  guardian: boolean;
+}
+
+/**
+ * Map a resolved tier to the signature factors it needs. This is the fixed on-chain convention
+ * (AAStarAirAccountV7.validateUserOp): Tier-1 = passkey only, Tier-2 adds the BLS factor, Tier-3
+ * additionally requires guardian ECDSA co-signing. Consumers use this to know, before submitting,
+ * whether a Tier-3 transfer still needs guardian signatures collected (#176 fail-fast).
+ */
+export function tierSignatureRequirements(tier: TierLevel): TierSignatureNeeds {
+  return {
+    passkey: true,
+    bls: tier >= 2,
+    guardian: tier >= 3,
+  };
 }
