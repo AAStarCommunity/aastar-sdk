@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.40.0] - 2026-07-09
+**SDK Code Integrity Hash**: `d211e8ede40463abba67959141088750d93fe11926c947a517ea0898fa3d8d21`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**CC-30 SDK production-readiness — independent items: upstream ABI sync + config dedup + ERC-20 tier/limit reads.** (#303, Seeder CC-30/CC-27/CC-28/CC-29)
+
+The SDK-side items from the CC-30 production-readiness audit that don't depend on any upstream mainnet deployment. (Mainnet readiness remains blocked upstream: OP-Mainnet still runs SuperPaymaster v3.2.2 vs the SDK's v5.4.2 — tracked in `docs/PRODUCTION_READINESS.md`.)
+
+- **[ADD]** `LivenessRegistryABI` — vendored the SuperPaymaster **CC-29** `LivenessRegistry` (DVT liveness) as an expose-only ABI. Clears the `check:abi` completeness gate.
+- **[SYNC]** Refreshed drifted ABIs from upstream: `xPNTsFactory` / `xPNTsToken` (**CC-28** over-issuance protection — `issuanceCap` / `backingValueUSD` / `isOverIssued` / `effectiveCapUSD` / `capRatioBps` / `industryScaleUSD` / `setTokenCategory` …), `Paymaster` (`Paymaster__GasCostExceedsCap`), `Registry` (`SBTStatusSyncFailed`). All read getters / admin setters / events / errors → reachable via the ABIs, no wrappers. Clears `check:abi-drift`.
+- **[CHORE]** **CC-27** rename: added `AAStarBLSKeyRegistry` (airaccount's renamed Safe-owned key registry) to the abi-sync ignore list — the SDK tracks the YAAA (DVT) `AAStarBLSAlgorithm`, not airaccount's.
+- **[ADD]** `GuardStateReader.getTokenGuardState` now reads real per-token limits from the guard's `tokenConfigs(address)` (was a stub returning zeros) — closes the ERC-20 slice of #176 (per-token tier/limit query).
+- **[FIX]** `resolveTokenTier` (new) mirrors the on-chain guard `AAStarGlobalGuard.recordTokenSpend` — a token with `tier2Limit == 0` is uncapped **Tier-2**, NOT Tier-3. The token path in `getTokenGuardState` and the authoritative `resolveTransfer` both now use it (previously mis-used the account-tier `resolveTier`, a latent guardian-cosign bug). Also fixed the tier boundary to inclusive `<=`, matching the contracts.
+- **[CHORE]** Removed the stale legacy `config.optimism.json` (chain 10) — `config.op-mainnet.json` is the sole authoritative chain-10 config (**CC-30 G10**).
+- **[VERIFIED]** Codex 3-round adversarial review → APPROVE (round 2 caught the token/account tier-semantics divergence). Gates: `check:abi` / `check:abi-drift` / `check:addresses` / `check:stubs` / build all PASS; unit tests `@aastar/core` 471 + `@aastar/airaccount` 872 PASS.
+
 ## [0.39.4] - 2026-07-08
 **SDK Code Integrity Hash**: `d286a9a9faa9bac694362d1b314f54756b6d891e8aa32a9d5f0ef2e7a02418ce`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
