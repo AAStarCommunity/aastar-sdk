@@ -26,6 +26,22 @@ export function resolveTier(value: bigint, config: TierConfig): TierLevel {
 }
 
 /**
+ * Determine the required tier for an ERC-20 **token** transfer. This mirrors the on-chain GUARD
+ * (`AAStarGlobalGuard.recordTokenSpend`), whose per-token semantics DIFFER from the account's
+ * `requiredTier` at `tier2Limit == 0`: the guard treats a zero tier2Limit as an UNCAPPED Tier-2
+ * (`cfg.tier2Limit == 0 || cumulative <= cfg.tier2Limit` → T2), whereas the account (and
+ * {@link resolveTier}) fall through to Tier-3. A valid token config may set `tier1Limit > 0,
+ * tier2Limit == 0` (T1-capped, T2-uncapped; `_validateTokenConfig` only requires `daily >= tier1`).
+ * Use this for the token path; use {@link resolveTier} for ETH/account-tier decisions.
+ */
+export function resolveTokenTier(value: bigint, config: TierConfig): TierLevel {
+  if (config.tier1Limit === 0n && config.tier2Limit === 0n) return 1;
+  if (config.tier1Limit > 0n && value <= config.tier1Limit) return 1;
+  if (config.tier2Limit === 0n || value <= config.tier2Limit) return 2;
+  return 3;
+}
+
+/**
  * Get the algorithm ID to use for a given tier.
  *
  * `webAuthn` selects the device-passkey (WebAuthn) cumulative variant for Tier-2/3 — the account

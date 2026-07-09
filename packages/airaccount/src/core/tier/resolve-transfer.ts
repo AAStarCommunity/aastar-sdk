@@ -23,7 +23,7 @@
  */
 import { type Address, type Hex } from 'viem';
 import { AAStarAirAccountV7ABI, GuardClient, PolicyRegistryABI } from '@aastar/core';
-import { resolveTier } from './tier-router.js';
+import { resolveTier, resolveTokenTier } from './tier-router.js';
 import type { TierLevel } from './types.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -153,13 +153,17 @@ export async function resolveTransfer(params: ResolveTransferParams): Promise<Tr
   // Unified remaining (same formula for ETH and ERC-20; fail-closed — never negative).
   const remaining = dailyLimit > todaySpent ? dailyLimit - todaySpent : 0n;
 
-  // The required tier (which signatures) comes from the account tier limits, evaluated against the
-  // CUMULATIVE daily spend (`todaySpent + amount`), NOT this transfer alone — the account's
-  // `_enforceGuard` computes `requiredTier(guard.todaySpent() + value)` (AAStarAirAccountBase.sol),
-  // so judging on `amount` alone under-estimates the tier and reverts with InsufficientTier. A
-  // guardian co-sign is enabled at Tier 3 (cumulative > tier2Limit).
+  // The required tier (which signatures) comes from the tier limits, evaluated against the CUMULATIVE
+  // daily spend (`todaySpent + amount`), NOT this transfer alone — the account's `_enforceGuard`
+  // computes `requiredTier(guard.todaySpent() + value)` (AAStarAirAccountBase.sol), so judging on
+  // `amount` alone under-estimates the tier and reverts with InsufficientTier. A guardian co-sign is
+  // enabled at Tier 3. NOTE: ETH uses the account's `requiredTier` semantics (resolveTier), but the
+  // ERC-20 path is enforced by the GUARD's `recordTokenSpend`, which differs at `tier2Limit == 0`
+  // (uncapped Tier-2, not Tier-3) — use resolveTokenTier so the SDK matches on-chain enforcement.
   const cumulative = todaySpent + amount;
-  const tier = resolveTier(cumulative, { tier1Limit, tier2Limit });
+  const tier = isEth
+    ? resolveTier(cumulative, { tier1Limit, tier2Limit })
+    : resolveTokenTier(cumulative, { tier1Limit, tier2Limit });
 
   // The Guard daily allowance is a SEPARATE, HARD cap — `Guard.recordSpend` reverts
   // `DailyLimitExceeded` when `todaySpent + amount > dailyLimit`, and a guardian does NOT bypass it

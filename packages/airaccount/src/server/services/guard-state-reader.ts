@@ -4,9 +4,10 @@ import { getContract, zeroAddress, type Address, type PublicClient } from "viem"
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi } from "viem";
 import { AIRACCOUNT_ABI, GLOBAL_GUARD_ABI } from "../constants/entrypoint";
-// Single source of truth for the spend→tier boundary. Matches the on-chain `requiredTier`
-// (AAStarAirAccountBase.sol: `txValue <= tierNLimit`) — a `<` variant is off-by-one at the boundary.
-import { resolveTier } from "../../core/tier";
+// Single source of truth for the spend→tier boundary (inclusive `<=`, matching the contracts).
+// resolveTier = account `requiredTier` semantics (ETH); resolveTokenTier = guard `recordTokenSpend`
+// semantics (ERC-20), which differ at tier2Limit==0 (uncapped Tier-2 vs Tier-3).
+import { resolveTier, resolveTokenTier } from "../../core/tier";
 
 const EXTENDED_GUARD_ABI = [
   ...GLOBAL_GUARD_ABI,
@@ -157,7 +158,8 @@ export class GuardStateReader {
       todaySpent,
       dailyLimit,
       remaining,
-      currentTier: resolveTier(todaySpent, { tier1Limit, tier2Limit }),
+      // Token tier follows the GUARD's recordTokenSpend semantics (tier2Limit==0 → uncapped T2).
+      currentTier: resolveTokenTier(todaySpent, { tier1Limit, tier2Limit }),
       tier1Limit,
       tier2Limit,
     };

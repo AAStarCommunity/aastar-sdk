@@ -189,6 +189,15 @@ describe("GuardStateReader", () => {
       );
       expect((await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN))!.currentTier).toBe(2);
     });
+
+    it("tier2Limit==0 (T2-uncapped) + spent > tier1 → tier 2, matching the guard (NOT tier 3)", async () => {
+      // A valid token config: tier1>0, tier2==0, daily>=tier1. Guard recordTokenSpend treats a zero
+      // tier2Limit as uncapped Tier-2 — must NOT fall through to Tier-3 like the account resolver.
+      const reader = new GuardStateReader(
+        makeClient(GUARD_ADDR, { tokenConfigs: [500_000n, 0n, 1_000_000n], tokenTodaySpent: 700_000n })
+      );
+      expect((await reader.getTokenGuardState(ACCOUNT_ADDR, TOKEN))!.currentTier).toBe(2);
+    });
   });
 
   describe("tier boundary (#176 review: <= matches on-chain requiredTier)", () => {
