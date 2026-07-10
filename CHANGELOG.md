@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.42.0] - 2026-07-11
+**SDK Code Integrity Hash**: `0ed6b70c80c5b40ee8a55713191b38bcccd0a28d26a0d0e64eb0b196f4063198`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**CC-36 — one-click DVT node stake + register (`onboardDvtNode`).** (#307, Seeder CC-36; KMS gap → CC-37)
+
+A reusable L2 workflow that gives the SDK's owner/operator keys a single idempotent call to bring a DVT signing node fully on-chain — the packaged form of the on-chain-proven `dvt-register-e2e` flow (CC-17). It does the one thing the DVT-side `register-node.mjs` cannot: stake an unstaked operator.
+
+- **[ADD]** `@aastar/operator` **`onboardDvtNode({ publicClient, operatorWallet, funderWallet?, blsSecretKey | pop | popSigner, dryRun? })`** — composes the existing L1 actions (`tokenActions` / `registryActions` / `dvtOperatorActions`) into one idempotent flow: optional **`funderWallet` "owner 代付"** tops up the operator's ETH + GToken → `approve` → `registerRole(ROLE_DVT)` → `registerWithProof`. **Three PoP inputs** unified on `registerWithProof`: local `blsSecretKey`, a pre-built `pop`, or a `popSigner()` callback (the forward seam for a future KMS-TEE `/pop` endpoint). **Idempotent**: short-circuits an already-registered node, resumes a same-node-unregistered slot, hard-errors on a second/foreign-node conflict. **`dryRun`** performs ZERO writes and returns a `plan`.
+- **[ADD]** `resolveEoaAccount` / `resolveEoaPrivateKey` — operator/funder EOA signer resolution from **env** or **`forge cast wallet`** (keystore password via a minimal child env, never argv). BLS node keys stay env/`--bls-secret` (cast can't hold BLS keys).
+- **[ADD]** CLI `scripts/onboard_dvt_node.ts` — the `register-node.mjs` peer, one command with `--network` / `--operator-cast` / `--funder-cast` / `--bls-secret` / `--dry-run`.
+- **Scope**: local/HSM-key nodes. KMS-TEE key-less nodes need the KMS `/pop` endpoint (BLS sk never leaves the TEE) — cross-repo gap tracked as **CC-37** (@repo:kms), wired via the `popSigner` seam.
+
+Acceptance (live Sepolia DVT validator `0x539B9681…`, `tests/regression/onchain-evidence/dvt-onboard-e2e.ts`): PATH A idempotent no-op · PATH C dryRun zero-tx guard · **PATH B fresh operator + funder 代付 full flow, register tx `0xe4e1de53ced20ceb4c0ffb860256b2d8851cd5f48fe3c1f06a14b15a1a9c3472`**.
+
+Review: Codex — **block-release → resolved** (4 fixes: dryRun now truly no-write; cast password off-argv via minimal child env; ETH gas funding independent of `requireStake`; funds against `max(validator, registry) minStake` with pre-lock fail-fast; `waitSuccess` asserts `receipt.status`). Gates: `pnpm -r build` / `pnpm -r test` all PASS (operator +7 `resolveSigner` unit tests, 34/34).
+
 ## [0.41.0] - 2026-07-10
 **SDK Code Integrity Hash**: `e3f8697feb3e8e38c793cdd41c9042194c67f454aa4445f61e529c088702ade4`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
