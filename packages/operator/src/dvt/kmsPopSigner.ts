@@ -38,6 +38,13 @@ export interface KmsPopSignerOptions {
     token?: string;
     /** Injected fetch (tests / non-browser runtimes). Defaults to the global `fetch`. */
     fetchImpl?: typeof fetch;
+    /**
+     * Opt IN to the UNPINNED path — addressing by `nodeId` with NO expected {@link publicKey} to pin
+     * against. This trusts the KMS's `node_id → key` mapping completely: a compromised KMS/MITM can make
+     * you register an attacker's node (see trust model). Only acceptable for a KMS you fully control. When
+     * `publicKey` is omitted and this is not `true`, the signer throws rather than silently trusting.
+     */
+    allowUnpinnedKmsKey?: boolean;
 }
 
 interface KmsPopResponse {
@@ -50,6 +57,15 @@ interface KmsPopResponse {
 export function kmsPopSigner(opts: KmsPopSignerOptions): () => Promise<DvtPop> {
     if (!opts.url) throw new Error('kmsPopSigner: url is required');
     if (!opts.nodeId && !opts.publicKey) throw new Error('kmsPopSigner: provide nodeId and/or publicKey');
+    // Safe by default: without an expected publicKey to pin, the KMS key mapping is trusted blindly —
+    // require an explicit opt-in rather than silently exposing the key-substitution attack.
+    if (!opts.publicKey && !opts.allowUnpinnedKmsKey) {
+        throw new Error(
+            'kmsPopSigner: no expected `publicKey` to pin against — a compromised KMS could substitute an ' +
+            "attacker's key. Pass the node's expected `publicKey`, or set `allowUnpinnedKmsKey: true` to " +
+            'deliberately trust the KMS node_id→key mapping (only for a KMS you fully control).',
+        );
+    }
     const doFetch = opts.fetchImpl ?? globalThis.fetch;
     if (!doFetch) throw new Error('kmsPopSigner: no fetch implementation available (pass opts.fetchImpl)');
     // Normalize the pinned key once up front (throws on a malformed input).

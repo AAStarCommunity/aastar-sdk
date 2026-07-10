@@ -60,11 +60,17 @@ async function main() {
   console.log(`operator  = ${operator.address}   funder = ${funderWallet ? funderWallet.account.address : '(none — operator self-funds)'}`);
   console.log(`KMS /pop  = ${KMS_POP_URL}   nodeRef = ${nodeRef}\n`);
 
+  const expectedPubkey = process.env.KMS_PUBLIC_KEY as Hex | undefined;
+  if (!expectedPubkey) {
+    console.log('⚠️  KMS_PUBLIC_KEY not set — running UNPINNED (trusting the KMS node_id→key mapping).');
+    console.log('   For the real A-board node, set KMS_PUBLIC_KEY to the node\'s known pubkey to pin it.\n');
+  }
   const popSigner = kmsPopSigner({
     url: KMS_POP_URL,
     nodeId: process.env.KMS_NODE_ID,
-    publicKey: process.env.KMS_PUBLIC_KEY as Hex | undefined,
+    publicKey: expectedPubkey,
     token: process.env.KMS_SIGNER_TOKEN,
+    allowUnpinnedKmsKey: !expectedPubkey, // pin when we know the key; else deliberately trust (with warning)
   });
 
   // Fetch + verify the PoP ONCE (kmsPopSigner pins/validates), then pass the tuple to onboardDvtNode so

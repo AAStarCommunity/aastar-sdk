@@ -39,7 +39,7 @@ describe('verifyDvtPop', () => {
 describe('kmsPopSigner', () => {
     it('returns a verified DvtPop with a locally-derived nodeId (by nodeId)', async () => {
         const fetchImpl = mkFetch({ publicKey: victim.publicKey, popPoint: victim.popPoint, popSig: victim.popSig });
-        const pop = await kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', fetchImpl })();
+        const pop = await kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true, fetchImpl })();
         expect(pop.publicKey.toLowerCase()).toBe(victim.publicKey.toLowerCase());
         expect(pop.popSig.toLowerCase()).toBe(victim.popSig.toLowerCase());
         expect(pop.nodeId).toBe(victim.nodeId);
@@ -69,7 +69,7 @@ describe('kmsPopSigner', () => {
         const last = victim.popPoint.slice(-1);
         const tampered = victim.popPoint.slice(0, -1) + (last === '0' ? '1' : '0');
         const fetchImpl = mkFetch({ publicKey: victim.publicKey, popPoint: tampered, popSig: victim.popSig });
-        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', fetchImpl })()).rejects.toThrow(
+        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true, fetchImpl })()).rejects.toThrow(
             /popPoint != hashToCurve/,
         );
     });
@@ -77,29 +77,36 @@ describe('kmsPopSigner', () => {
     it('rejects a bad popSig via the pairing check (before any stake)', async () => {
         // victim key + victim popPoint (passes the popPoint convention check) but attacker's popSig.
         const fetchImpl = mkFetch({ publicKey: victim.publicKey, popPoint: victim.popPoint, popSig: attacker.popSig });
-        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', fetchImpl })()).rejects.toThrow(
+        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true, fetchImpl })()).rejects.toThrow(
             /pairing check failed/,
         );
     });
 
     it('throws on an HTTP error from KMS', async () => {
-        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', fetchImpl: mkFetch({}, false, 503) })())
+        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true, fetchImpl: mkFetch({}, false, 503) })())
             .rejects.toThrow(/HTTP 503/);
     });
 
     it('throws on an incomplete /pop response', async () => {
-        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', fetchImpl: mkFetch({ publicKey: victim.publicKey }) })())
+        await expect(kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true, fetchImpl: mkFetch({ publicKey: victim.publicKey }) })())
             .rejects.toThrow(/missing/);
     });
 
     it('requires a url and a nodeId or publicKey', () => {
-        expect(() => kmsPopSigner({ url: '', nodeId: 'n1' })).toThrow(/url is required/);
+        expect(() => kmsPopSigner({ url: '', nodeId: 'n1', allowUnpinnedKmsKey: true })).toThrow(/url is required/);
         expect(() => kmsPopSigner({ url: 'http://board:3100' })).toThrow(/nodeId and\/or publicKey/);
+    });
+
+    it('SECURITY: nodeId-only without a pinned publicKey is refused unless explicitly opted in', () => {
+        // Default (safe): addressing by nodeId with no expected key throws rather than trusting the KMS.
+        expect(() => kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1' })).toThrow(/allowUnpinnedKmsKey/);
+        // Explicit opt-in is allowed (only for a KMS you fully control).
+        expect(() => kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true })).not.toThrow();
     });
 
     it('sends X-Signer-Token when provided', async () => {
         const fetchImpl = mkFetch({ publicKey: victim.publicKey, popPoint: victim.popPoint, popSig: victim.popSig });
-        await kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', token: 'tok', fetchImpl })();
+        await kmsPopSigner({ url: 'http://board:3100', nodeId: 'n1', allowUnpinnedKmsKey: true, token: 'tok', fetchImpl })();
         const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
         expect(init.headers).toMatchObject({ 'X-Signer-Token': 'tok' });
     });
