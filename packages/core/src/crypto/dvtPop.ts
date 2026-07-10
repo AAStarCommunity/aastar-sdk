@@ -147,3 +147,76 @@ export function buildDvtPop(blsSecretKey: Hex): DvtPop {
         nodeId,
     };
 }
+
+/**
+ * The deterministic PoP point for a public key: `hashToCurve(publicKey, POP_DST)` in the 256-byte
+ * c0-first EIP-2537 G2 layout — the SAME value {@link buildDvtPop} puts in `popPoint`, but computed with
+ * **no secret key**. Use it to CROSS-CHECK a `popPoint` produced elsewhere (e.g. a KMS-TEE `/pop` response
+ * for a key-less node) before trusting it: `popPoint` is a public deterministic function of `publicKey`, so
+ * a client can recompute and reject a mismatch, while the on-chain `_verifyPoP` pairing still gates `popSig`.
+ *
+ * @param publicKey G1 public key — 128-byte EIP-2537, 48-byte compressed, or 96-byte uncompressed.
+ */
+export function dvtPopPoint(publicKey: Hex | Uint8Array): Hex {
+    const pk = encodeG1Point(publicKey);
+    const g2 = bls.G2.hashToCurve(toBytes(pk), { DST: BLS_POP_DST }) as InstanceType<typeof bls.G2.ProjectivePoint>;
+    return encodeG2Point(g2.toRawBytes(false));
+}
+
+/** The nodeId the DVT validator derives and binds: `keccak256(publicKey)` (128-byte EIP-2537 normalized). */
+export function dvtNodeId(publicKey: Hex | Uint8Array): Hex {
+    return keccak256(encodeG1Point(publicKey));
+}
+
+/** Decode a 128-byte EIP-2537 G1 point into a validated `@noble` point (throws if off-curve). */
+function g1FromEip2537(publicKey: Hex | Uint8Array): InstanceType<typeof bls.G1.ProjectivePoint> {
+    const b = toBytes(encodeG1Point(publicKey));
+    const x = BigInt(toHex(b.slice(16, 64)));
+    const y = BigInt(toHex(b.slice(80, 128)));
+    const p = bls.G1.ProjectivePoint.fromAffine({ x, y });
+    p.assertValidity(); // on-curve + correct subgroup, else throw
+    return p;
+}
+
+/** Decode a 256-byte c0-first EIP-2537 G2 point into a validated `@noble` point (throws if off-curve). */
+function g2FromEip2537(point: Hex | Uint8Array, name: string): InstanceType<typeof bls.G2.ProjectivePoint> {
+    const b = toBytes(encodeG2Point(point));
+    const x = bls.fields.Fp2.fromBigTuple([BigInt(toHex(b.slice(16, 64))), BigInt(toHex(b.slice(80, 128)))]);
+    const y = bls.fields.Fp2.fromBigTuple([BigInt(toHex(b.slice(144, 192))), BigInt(toHex(b.slice(208, 256)))]);
+    const p = bls.G2.ProjectivePoint.fromAffine({ x, y });
+    try {
+        p.assertValidity();
+    } catch {
+        throw new Error(`verifyDvtPop: ${name} is not a valid BLS12-381 G2 point`);
+    }
+    return p;
+}
+
+/**
+ * Verify a {@link DvtPop} tuple the same way the on-chain `_verifyPoP` pairing does — WITHOUT a secret key:
+ * every point is on-curve and non-infinity, and `e(publicKey, popPoint) == e(G1_generator, popSig)` (i.e.
+ * `popSig = sk · popPoint` for the `sk` behind `publicKey`). Throws on any failure.
+ *
+ * Use this to fail fast on a malformed / incorrect PoP obtained from an external signer (e.g. a KMS-TEE
+ * `/pop` response) BEFORE spending gas or locking stake, instead of only discovering it at the on-chain
+ * register tx. NOTE: this proves knowledge of `sk` for the GIVEN `publicKey` — it does NOT tell you the
+ * key belongs to the node you intended (a self-consistent tuple for a DIFFERENT key also passes). Pin the
+ * expected `publicKey` separately for that.
+ */
+export function verifyDvtPop(pop: Pick<DvtPop, 'publicKey' | 'popPoint' | 'popSig'>): void {
+    const pk = g1FromEip2537(pop.publicKey);
+    const popPoint = g2FromEip2537(pop.popPoint, 'popPoint');
+    const popSig = g2FromEip2537(pop.popSig, 'popSig');
+    if (
+        pk.equals(bls.G1.ProjectivePoint.ZERO) ||
+        popPoint.equals(bls.G2.ProjectivePoint.ZERO) ||
+        popSig.equals(bls.G2.ProjectivePoint.ZERO)
+    ) {
+        throw new Error('verifyDvtPop: point at infinity (publicKey/popPoint/popSig must be non-infinity)');
+    }
+    const lhs = bls.pairing(pk, popPoint);
+    const rhs = bls.pairing(bls.G1.ProjectivePoint.BASE, popSig);
+    if (!bls.fields.Fp12.eql(lhs, rhs)) {
+        throw new Error('verifyDvtPop: pairing check failed — popSig is not sk·popPoint for publicKey');
+    }
+}

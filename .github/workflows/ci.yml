@@ -28,6 +28,12 @@ jobs:
       - name: Build
         run: pnpm -r build
 
+      # Hard gate: no Node-only builtin (child_process/fs/…) may be statically imported by a
+      # browser-facing @aastar/sdk subpath. Guards against regressions like the 0.42.0
+      # node:child_process leak into @aastar/sdk/operator that broke downstream browser builds.
+      - name: Check browser-safe subpaths
+        run: pnpm run check:browser
+
       # Reports config.{network}.json drift from @aastar/core CANONICAL_ADDRESSES
       # (the single source of truth for contract addresses). See P2.8.
       # ADVISORY for now (continue-on-error): there is known, documented drift

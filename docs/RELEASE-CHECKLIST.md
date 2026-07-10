@@ -38,6 +38,7 @@ consumer path**.
 
 ## 3. Static gates (all green)
 - [ ] `pnpm -r build` · `pnpm run check:addresses` · coverage 100% · `pnpm -r test` · `pnpm run upstream:check` 4/4 · `viem.getAddress` strict on every changed address.
+- [ ] **`pnpm run check:browser` (MANDATORY, run AFTER the `@aastar/sdk` build) — no Node-only builtin (`child_process`/`fs`/…) statically imported by any browser-facing subpath.** This exists because 0.42.0 shipped a `node:child_process` leak into `@aastar/sdk/operator` that broke downstream browser builds — unit tests run in Node and a narrow-import browser smoke tree-shook it out, so nothing caught it pre-publish. Never publish with this red.
 
 ## 4. On-chain E2E — FULL business-scenario set (NOT just the change), recorded
 Run the WHOLE evidence scenario set on the **released** version against the live contracts — every
