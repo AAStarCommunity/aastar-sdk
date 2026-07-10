@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.41.0] - 2026-07-10
+**SDK Code Integrity Hash**: `e3f8697feb3e8e38c793cdd41c9042194c67f454aa4445f61e529c088702ade4`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**CC-30 SDK production-readiness — community xPNTs credibility read API (CC-33) + governance Safe canonical (CC-31).** (#305, Seeder CC-33/CC-31/CC-30)
+
+Two unblocked, expose-only SDK deliverables from the CC-30 audit. On-chain read self-verified against a live Sepolia xPNTs token (dogfood the API, block 11241453).
+
+- **[ADD]** `xPNTsTokenActions` economic-credibility reads (**CC-33**): `credibilityScore` (0–100 `uint8`), `isOverIssued`, `issuedValueUSD`, `backingValueUSD`, `effectiveCapUSD` (`uint256`), plus a **`getCredibility(token)`** aggregator that pins all five reads to a SINGLE block (resolved once) so the snapshot is self-consistent — score can't drift out of sync with the USD fields. Exports the `Credibility` type. The `*USD` fields are 18-decimal fixed-point USD (verified on-chain: `12000e18` = 12000 USD; `formatUnits(v, 18)` to display, **not** wei). Community-token enumeration is already covered by `xPNTsFactoryActions().getAllTokens()`. ABIs vendored in 0.40.0 (CC-28) — no wrapper logic.
+- **[ADD]** `BlockPin` (`blockNumber` / `blockTag`) optional param threaded through `getCredibility` and the five credibility views — deterministic / historical reads.
+- **[ADD]** `COMMUNITY_SAFE` canonical constant (**CC-31**) — the Mycelium governance Safe `0x51eDf11f…E114`, same address on OP-mainnet (10) / Ethereum (1) / Sepolia (11155111). The canonical default owner-target for governance write helpers + deploy scripts, and a single source consumers read instead of hard-coding — mirrors `DVT_VALIDATOR_ADDRESS`. (The SDK owns no on-chain contracts; on-chain ownership transfer to this Safe is each contract repo's mainnet deploy action.)
+
+Review: Codex — one Low (pre-fix `getCredibility` didn't pin a block) fixed. Gates: `check:abi` / `check:addresses` PASS; `@aastar/core` 475 unit tests PASS.
+
 ## [0.40.0] - 2026-07-09
 **SDK Code Integrity Hash**: `d211e8ede40463abba67959141088750d93fe11926c947a517ea0898fa3d8d21`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
