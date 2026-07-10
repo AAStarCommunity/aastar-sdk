@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.0] - 2026-07-11
+**SDK Code Integrity Hash**: `e672dfe09c63af4e0f0757932bf177eff3e8a29e5a7dc9a1857dc1d97a81794e`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**CC-37 KMS-TEE PoP signer + fix the 0.42.0 browser-bundle regression.** (#311, Seeder CC-37)
+
+### Added — CC-37 KMS-TEE key-less node onboarding
+- **[ADD]** `@aastar/operator` **`kmsPopSigner({ url, nodeId, publicKey?, token?, allowUnpinnedKmsKey? })`** — a `popSigner` for `onboardDvtNode` that fetches a Proof-of-Possession from the KMS-TEE `/pop` endpoint (airaccount-kms v0.29.0, live on the A-board) for nodes whose BLS secret key never leaves the TEE. **Safe by default**: it PINS the expected `publicKey` (rejecting a `/pop` response for any other key — the defence against a compromised KMS/MITM registering an attacker's node); addressing by `nodeId` with no pinned key is refused unless `allowUnpinnedKmsKey: true` is set explicitly. On every response it also enforces `popPoint == hashToCurve(publicKey, BLS_POP_DST)`, runs the full pairing check (below), and derives `nodeId = keccak256(publicKey)` locally (never trusting the response).
+- **[ADD]** `@aastar/core` **`verifyDvtPop(pop)`** — verify a PoP the way on-chain `_verifyPoP` does, with NO secret key: points on-curve/non-infinity and `e(publicKey, popPoint) == e(G1, popSig)`. Lets a caller fail fast on a bad PoP before spending gas / locking stake. Plus **`dvtPopPoint(publicKey)`** / **`dvtNodeId(publicKey)`** (recompute `popPoint` / `nodeId` from a pubkey, no sk).
+- **[TEST]** `tests/regression/onchain-evidence/dvt-kms-onboard-e2e.ts` — gated live acceptance (`kmsPopSigner → onboardDvtNode → registerWithProof` for the A-board KMS-TEE node); runs when `KMS_POP_URL` is set. `@aastar/operator` unit suite +key-substitution-rejection + pairing + off-curve tests (49 pass).
+
+### Fixed — 0.42.0 browser-bundle regression
+- **[FIX]** `resolveSigner`'s Foundry-cast path (added in 0.42.0) imported `node:child_process`, which the bundled **`@aastar/sdk/operator`** subpath dragged into browser builds — a broad `export * from '@aastar/sdk/operator'` failed to bundle. The specifier is now computed at runtime so no browser bundler statically sees / externalizes the Node builtin. The Node cast path is unchanged.
+- **[CI]** **`pnpm run check:browser`** (`scripts/check-browser-safe.ts`) — a new hard CI gate + mandatory pre-publish checklist item that statically scans every browser-facing subpath's chunk closure and fails if a Node-only builtin (`child_process`/`fs`/`net`/…) is statically imported. This is the pre-publish check the CI was missing (unit tests run in Node; a narrow-import browser smoke tree-shook the leak out). Validated both ways.
+
+Review: Codex + PR-daemon, 3 rounds → APPROVE. The security chain (pin → popPoint convention → pairing → safe-by-default → CI guard) is closed.
+
+Downstream note: **browser consumers of `@aastar/sdk` should bump 0.42.0 → 0.43.0** and re-verify their build. Node-side consumers are unaffected.
+
 ## [0.42.0] - 2026-07-11
 **SDK Code Integrity Hash**: `0ed6b70c80c5b40ee8a55713191b38bcccd0a28d26a0d0e64eb0b196f4063198`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
