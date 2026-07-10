@@ -15,6 +15,7 @@ export const createMockPublicClient = (): PublicClient => {
   return {
     readContract: vi.fn(),
     getBalance: vi.fn(),
+    getBlockNumber: vi.fn().mockResolvedValue(100n),
     waitForTransactionReceipt: vi.fn(),
     chain: { id: 11155111 }, // Sepolia
   } as any;

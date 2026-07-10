@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, type BlockTag } from 'viem';
 import { GTokenABI, xPNTsTokenABI } from '../abis/index.js';
 import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
@@ -27,6 +27,38 @@ export type GTokenActions = ERC20Actions & {
     owner: (args: { token: Address }) => Promise<Address>;
     transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
+};
+
+/**
+ * Optional block pin for credibility reads — supports deterministic / historical reads.
+ * Give at most one of `blockNumber` / `blockTag`; omit both to read the latest block.
+ */
+export type BlockPin = { blockNumber?: bigint, blockTag?: BlockTag };
+
+/** Build a viem block-pin read option (at most one of blockNumber/blockTag); empty when neither is given → latest. */
+const blockPin = (blockNumber?: bigint, blockTag?: BlockTag): BlockPin =>
+    blockNumber !== undefined ? { blockNumber } : blockTag !== undefined ? { blockTag } : {};
+
+/**
+ * Economic-credibility snapshot for a community xPNTs token (CC-33).
+ *
+ * `credibilityScore` is a 0–100 trust score the token contract derives on-chain from
+ * backing vs. issuance. The three `*USD` fields are raw on-chain USD accounting integers
+ * (uint256) in the xPNTsToken contract's own USD unit — treat them as opaque integers for
+ * comparison/ratio; confirm the display decimals against the SuperPaymaster (xPNTsToken)
+ * contract before formatting for humans. They are NOT wei — do not `formatEther`.
+ */
+export type Credibility = {
+    /** 0–100 trust score (uint8) derived on-chain from backing vs. issuance. */
+    credibilityScore: number;
+    /** True when circulating (issued) value exceeds backing — the community over-issued its xPNTs. */
+    isOverIssued: boolean;
+    /** Circulating xPNTs value in the contract's USD accounting unit (raw uint256). */
+    issuedValueUSD: bigint;
+    /** Backing/collateral value in the contract's USD accounting unit (raw uint256). */
+    backingValueUSD: bigint;
+    /** Effective issuance cap in the contract's USD accounting unit (raw uint256). */
+    effectiveCapUSD: bigint;
 };
 
 // XPNTsToken Actions (extends ERC20 + aPNTs features + Spending Limits)
@@ -121,6 +153,25 @@ export type XPNTsTokenActions = ERC20Actions & {
     EXCHANGE_RATE_MAX: (args: { token: Address }) => Promise<bigint>;
     EXCHANGE_RATE_MIN: (args: { token: Address }) => Promise<bigint>;
     MAX_SINGLE_TX_LIMIT_CAP: (args: { token: Address }) => Promise<bigint>;
+
+    // --- Economic credibility (CC-33: community xPNTs credibility disclosure) ---
+    /** 0–100 on-chain trust score for a community xPNTs token. */
+    credibilityScore: (args: { token: Address } & BlockPin) => Promise<number>;
+    /** True when the community over-issued (circulating value > backing). */
+    isOverIssued: (args: { token: Address } & BlockPin) => Promise<boolean>;
+    issuedValueUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
+    backingValueUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
+    effectiveCapUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
+    /**
+     * One-shot read of the full economic-credibility snapshot ({@link Credibility}) for a
+     * community xPNTs token — the five credibility views batched at a SINGLE block so a
+     * disclosure UI reads a self-consistent snapshot (score can't drift out of sync with the
+     * USD fields). If the caller pins a block via {@link BlockPin}, all five reads use it;
+     * otherwise the current block number is resolved once and all five reads are pinned to it.
+     * Enumerate community tokens via `xPNTsFactoryActions().getAllTokens()`
+     * (or `deployedTokens`/`getDeployedCount`).
+     */
+    getCredibility: (args: { token: Address } & BlockPin) => Promise<Credibility>;
 };
 
 // Unified TokenActions (deprecated legacy support)
@@ -622,6 +673,46 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
         async MAX_SINGLE_TX_LIMIT_CAP({ token = address } = {}) {
             validateAddress(token!, 'token');
             return (client as PublicClient).readContract({ address: token!, abi, functionName: 'MAX_SINGLE_TX_LIMIT_CAP', args: [] }) as Promise<bigint>;
+        },
+
+        // --- Economic credibility (CC-33) ---
+        async credibilityScore({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<number>;
+        },
+        async isOverIssued({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<boolean>;
+        },
+        async issuedValueUSD({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<bigint>;
+        },
+        async backingValueUSD({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<bigint>;
+        },
+        async effectiveCapUSD({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<bigint>;
+        },
+        async getCredibility({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
+            validateAddress(token!, 'token');
+            // Pin all five reads to ONE block so the snapshot is self-consistent (score can't
+            // drift out of sync with the USD fields across blocks). If the caller didn't pin a
+            // block, resolve the current block number once and pin every read to it.
+            let at: { blockNumber?: bigint, blockTag?: BlockTag };
+            if (blockNumber !== undefined) at = { blockNumber };
+            else if (blockTag !== undefined) at = { blockTag };
+            else at = { blockNumber: await (client as PublicClient).getBlockNumber() };
+            const [credibilityScore, isOverIssued, issuedValueUSD, backingValueUSD, effectiveCapUSD] = await Promise.all([
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [], ...at }) as Promise<number>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [], ...at }) as Promise<boolean>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [], ...at }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [], ...at }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [], ...at }) as Promise<bigint>,
+            ]);
+            return { credibilityScore, isOverIssued, issuedValueUSD, backingValueUSD, effectiveCapUSD };
         },
     };
     return actions as XPNTsTokenActions;
