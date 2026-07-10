@@ -67,12 +67,13 @@ async function main() {
     token: process.env.KMS_SIGNER_TOKEN,
   });
 
-  // Fetch + verify the PoP once up front so a bad /pop fails loud before any staking tx.
+  // Fetch + verify the PoP ONCE (kmsPopSigner pins/validates), then pass the tuple to onboardDvtNode so
+  // the logged PoP is exactly the one registered (no second /pop fetch).
   const pop = await popSigner();
   console.log(`KMS /pop OK → publicKey=${pop.publicKey.slice(0, 18)}…  nodeId=${pop.nodeId}`);
-  console.log('  (popPoint client-verified == hashToCurve(publicKey, BLS_POP_DST))\n');
+  console.log('  (pinned + popPoint==hashToCurve + pairing verified client-side)\n');
 
-  const result = await onboardDvtNode({ publicClient, operatorWallet, funderWallet, popSigner });
+  const result = await onboardDvtNode({ publicClient, operatorWallet, funderWallet, pop });
 
   console.log('\n=== RESULT ===');
   console.log(`nodeId          = ${result.nodeId}`);
