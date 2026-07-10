@@ -20,7 +20,7 @@ Run the following command in your project root (verifies code, excludes .md):
 ```bash
 git ls-files -z | grep -zvE '\.md$' | xargs -0 sha256sum | sha256sum
 ```
-**Expected Hash for v0.42.0**: `0ed6b70c80c5b40ee8a55713191b38bcccd0a28d26a0d0e64eb0b196f4063198`
+**Expected Hash for v0.43.0**: `e672dfe09c63af4e0f0757932bf177eff3e8a29e5a7dc9a1857dc1d97a81794e`
 
 ---
 
