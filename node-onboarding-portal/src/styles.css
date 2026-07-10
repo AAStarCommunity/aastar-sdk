@@ -27,6 +27,7 @@ code { background: #20242e; padding: 1px 5px; border-radius: 4px; font-size: .9e
 .panel p { color: #c4c8d4; line-height: 1.55; font-size: 14px; }
 .muted { color: var(--muted); } .warn { color: var(--warn); font-style: normal; }
 .ok { color: var(--ok); } .danger { color: var(--err); }
+.note { background: #2a2416; border: 1px solid var(--warn); border-radius: 8px; padding: 10px 13px; font-size: 13px; }
 
 .form { display: grid; gap: 14px; margin: 8px 0 18px; }
 .form label { display: grid; gap: 5px; font-size: 13px; color: var(--muted); }

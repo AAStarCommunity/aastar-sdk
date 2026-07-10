@@ -143,6 +143,7 @@ export default function App() {
             {cfg.nodeKind === 'local' ? (
               <>
                 <p>为本地节点生成 BLS 私钥(<b>仅在浏览器生成,私钥不上送</b>)。请下载保存,写入节点镜像配置。PoP 由 SDK <code>buildDvtPop</code> 本地推导。</p>
+                <p className="note">⚠️ <b>生产节点</b>:BLS 长期签名私钥建议用 <b>HSM / 离线</b>生成并保管,浏览器生成仅适合测试/演示。密钥用 WebCrypto CSPRNG(<code>crypto.getRandomValues</code>),不发服务器、不持久化。</p>
                 <div className="row">
                   <button className="primary" disabled={busy} onClick={() => run(3, async () => {
                     const k = generateLocalBlsKey();
