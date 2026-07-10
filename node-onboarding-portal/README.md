@@ -37,3 +37,7 @@ npm run build    # tsc + vite build
   portal — a browser must not hold the owner key. The operator self-funds; when short, the dry-run surfaces
   the required GToken/ETH. A backend "sponsor" endpoint is the place to add owner-代付 later.
 - All SDK calls live in `src/lib/sdk.ts` — the single seam YAAA re-points at its own provider/config.
+- **Key generation (Low security note)**: the local BLS key is generated in-browser with the WebCrypto
+  CSPRNG (`crypto.getRandomValues`), shown for download, and never sent to a server or persisted. This is
+  fine for testing/demo, but a **production node's long-term BLS signing key should be generated on an
+  HSM / offline** and imported into the node image — not minted in a browser tab.
