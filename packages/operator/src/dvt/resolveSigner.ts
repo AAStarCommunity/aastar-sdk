@@ -67,9 +67,12 @@ export async function resolveEoaPrivateKey(source: EoaKeySource): Promise<Hex> {
         );
     }
 
-    // cast: `cast wallet private-key <args>` — dynamically import node child_process so this module
-    // stays importable in non-node bundles (the call throws there instead of failing at import time).
-    const { execFileSync } = await import('node:child_process');
+    // cast: `cast wallet private-key <args>`. This is a Node-only path. Build the module specifier at
+    // RUNTIME (Array.join — which esbuild does NOT constant-fold) so a browser bundler of
+    // @aastar/sdk/operator (which never calls this cast path) does not statically see / externalize
+    // `node:child_process` and fail the build. The magic comments tell Vite/webpack to leave it alone.
+    const nodeChildProcess = ['node', 'child_process'].join(':');
+    const { execFileSync } = (await import(/* @vite-ignore */ /* webpackIgnore: true */ nodeChildProcess)) as typeof import('node:child_process');
     const args = ['wallet', 'private-key', ...source.args];
     // Minimal child env: only what cast needs to locate/decrypt a keystore. The password goes through
     // ETH_PASSWORD (never argv → not visible in `ps`); the parent's other secrets are NOT forwarded.
