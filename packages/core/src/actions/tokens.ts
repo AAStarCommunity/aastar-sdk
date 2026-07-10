@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, type BlockTag } from 'viem';
 import { GTokenABI, xPNTsTokenABI } from '../abis/index.js';
 import { validateAddress, validateAmount, validateRequired } from '../validators/index.js';
 import { AAStarError } from '../errors/index.js';
@@ -28,6 +28,16 @@ export type GTokenActions = ERC20Actions & {
     transferOwnership: (args: { token: Address, newOwner: Address, account?: Account | Address }) => Promise<Hash>;
     renounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
 };
+
+/**
+ * Optional block pin for credibility reads — supports deterministic / historical reads.
+ * Give at most one of `blockNumber` / `blockTag`; omit both to read the latest block.
+ */
+export type BlockPin = { blockNumber?: bigint, blockTag?: BlockTag };
+
+/** Build a viem block-pin read option (at most one of blockNumber/blockTag); empty when neither is given → latest. */
+const blockPin = (blockNumber?: bigint, blockTag?: BlockTag): BlockPin =>
+    blockNumber !== undefined ? { blockNumber } : blockTag !== undefined ? { blockTag } : {};
 
 /**
  * Economic-credibility snapshot for a community xPNTs token (CC-33).
@@ -146,19 +156,22 @@ export type XPNTsTokenActions = ERC20Actions & {
 
     // --- Economic credibility (CC-33: community xPNTs credibility disclosure) ---
     /** 0–100 on-chain trust score for a community xPNTs token. */
-    credibilityScore: (args: { token: Address }) => Promise<number>;
+    credibilityScore: (args: { token: Address } & BlockPin) => Promise<number>;
     /** True when the community over-issued (circulating value > backing). */
-    isOverIssued: (args: { token: Address }) => Promise<boolean>;
-    issuedValueUSD: (args: { token: Address }) => Promise<bigint>;
-    backingValueUSD: (args: { token: Address }) => Promise<bigint>;
-    effectiveCapUSD: (args: { token: Address }) => Promise<bigint>;
+    isOverIssued: (args: { token: Address } & BlockPin) => Promise<boolean>;
+    issuedValueUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
+    backingValueUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
+    effectiveCapUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
     /**
      * One-shot read of the full economic-credibility snapshot ({@link Credibility}) for a
-     * community xPNTs token — the five credibility views batched into one call so a
-     * disclosure UI reads a consistent snapshot. Enumerate community tokens via
-     * `xPNTsFactoryActions().getAllTokens()` (or `deployedTokens`/`getDeployedCount`).
+     * community xPNTs token — the five credibility views batched at a SINGLE block so a
+     * disclosure UI reads a self-consistent snapshot (score can't drift out of sync with the
+     * USD fields). If the caller pins a block via {@link BlockPin}, all five reads use it;
+     * otherwise the current block number is resolved once and all five reads are pinned to it.
+     * Enumerate community tokens via `xPNTsFactoryActions().getAllTokens()`
+     * (or `deployedTokens`/`getDeployedCount`).
      */
-    getCredibility: (args: { token: Address }) => Promise<Credibility>;
+    getCredibility: (args: { token: Address } & BlockPin) => Promise<Credibility>;
 };
 
 // Unified TokenActions (deprecated legacy support)
@@ -663,35 +676,41 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
         },
 
         // --- Economic credibility (CC-33) ---
-        async credibilityScore({ token = address } = {}) {
+        async credibilityScore({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
             validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [] }) as Promise<number>;
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<number>;
         },
-        async isOverIssued({ token = address } = {}) {
+        async isOverIssued({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
             validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [] }) as Promise<boolean>;
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<boolean>;
         },
-        async issuedValueUSD({ token = address } = {}) {
+        async issuedValueUSD({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
             validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [] }) as Promise<bigint>;
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<bigint>;
         },
-        async backingValueUSD({ token = address } = {}) {
+        async backingValueUSD({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
             validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [] }) as Promise<bigint>;
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<bigint>;
         },
-        async effectiveCapUSD({ token = address } = {}) {
+        async effectiveCapUSD({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
             validateAddress(token!, 'token');
-            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [] }) as Promise<bigint>;
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [], ...blockPin(blockNumber, blockTag) }) as Promise<bigint>;
         },
-        async getCredibility({ token = address } = {}) {
+        async getCredibility({ token = address, blockNumber, blockTag }: { token?: Address } & BlockPin = {}) {
             validateAddress(token!, 'token');
-            // Batch the five credibility views so a disclosure UI reads one consistent snapshot.
+            // Pin all five reads to ONE block so the snapshot is self-consistent (score can't
+            // drift out of sync with the USD fields across blocks). If the caller didn't pin a
+            // block, resolve the current block number once and pin every read to it.
+            let at: { blockNumber?: bigint, blockTag?: BlockTag };
+            if (blockNumber !== undefined) at = { blockNumber };
+            else if (blockTag !== undefined) at = { blockTag };
+            else at = { blockNumber: await (client as PublicClient).getBlockNumber() };
             const [credibilityScore, isOverIssued, issuedValueUSD, backingValueUSD, effectiveCapUSD] = await Promise.all([
-                (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [] }) as Promise<number>,
-                (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [] }) as Promise<boolean>,
-                (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [] }) as Promise<bigint>,
-                (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [] }) as Promise<bigint>,
-                (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [] }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [], ...at }) as Promise<number>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [], ...at }) as Promise<boolean>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [], ...at }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [], ...at }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [], ...at }) as Promise<bigint>,
             ]);
             return { credibilityScore, isOverIssued, issuedValueUSD, backingValueUSD, effectiveCapUSD };
         },
