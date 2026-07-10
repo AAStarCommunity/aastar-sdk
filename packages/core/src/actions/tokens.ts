@@ -29,6 +29,28 @@ export type GTokenActions = ERC20Actions & {
     renounceOwnership: (args: { token: Address, account?: Account | Address }) => Promise<Hash>;
 };
 
+/**
+ * Economic-credibility snapshot for a community xPNTs token (CC-33).
+ *
+ * `credibilityScore` is a 0–100 trust score the token contract derives on-chain from
+ * backing vs. issuance. The three `*USD` fields are raw on-chain USD accounting integers
+ * (uint256) in the xPNTsToken contract's own USD unit — treat them as opaque integers for
+ * comparison/ratio; confirm the display decimals against the SuperPaymaster (xPNTsToken)
+ * contract before formatting for humans. They are NOT wei — do not `formatEther`.
+ */
+export type Credibility = {
+    /** 0–100 trust score (uint8) derived on-chain from backing vs. issuance. */
+    credibilityScore: number;
+    /** True when circulating (issued) value exceeds backing — the community over-issued its xPNTs. */
+    isOverIssued: boolean;
+    /** Circulating xPNTs value in the contract's USD accounting unit (raw uint256). */
+    issuedValueUSD: bigint;
+    /** Backing/collateral value in the contract's USD accounting unit (raw uint256). */
+    backingValueUSD: bigint;
+    /** Effective issuance cap in the contract's USD accounting unit (raw uint256). */
+    effectiveCapUSD: bigint;
+};
+
 // XPNTsToken Actions (extends ERC20 + aPNTs features + Spending Limits)
 export type XPNTsTokenActions = ERC20Actions & {
     // Mint/Burn
@@ -121,6 +143,22 @@ export type XPNTsTokenActions = ERC20Actions & {
     EXCHANGE_RATE_MAX: (args: { token: Address }) => Promise<bigint>;
     EXCHANGE_RATE_MIN: (args: { token: Address }) => Promise<bigint>;
     MAX_SINGLE_TX_LIMIT_CAP: (args: { token: Address }) => Promise<bigint>;
+
+    // --- Economic credibility (CC-33: community xPNTs credibility disclosure) ---
+    /** 0–100 on-chain trust score for a community xPNTs token. */
+    credibilityScore: (args: { token: Address }) => Promise<number>;
+    /** True when the community over-issued (circulating value > backing). */
+    isOverIssued: (args: { token: Address }) => Promise<boolean>;
+    issuedValueUSD: (args: { token: Address }) => Promise<bigint>;
+    backingValueUSD: (args: { token: Address }) => Promise<bigint>;
+    effectiveCapUSD: (args: { token: Address }) => Promise<bigint>;
+    /**
+     * One-shot read of the full economic-credibility snapshot ({@link Credibility}) for a
+     * community xPNTs token — the five credibility views batched into one call so a
+     * disclosure UI reads a consistent snapshot. Enumerate community tokens via
+     * `xPNTsFactoryActions().getAllTokens()` (or `deployedTokens`/`getDeployedCount`).
+     */
+    getCredibility: (args: { token: Address }) => Promise<Credibility>;
 };
 
 // Unified TokenActions (deprecated legacy support)
@@ -622,6 +660,40 @@ export const xPNTsTokenActions = (address?: Address) => (client: PublicClient | 
         async MAX_SINGLE_TX_LIMIT_CAP({ token = address } = {}) {
             validateAddress(token!, 'token');
             return (client as PublicClient).readContract({ address: token!, abi, functionName: 'MAX_SINGLE_TX_LIMIT_CAP', args: [] }) as Promise<bigint>;
+        },
+
+        // --- Economic credibility (CC-33) ---
+        async credibilityScore({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [] }) as Promise<number>;
+        },
+        async isOverIssued({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [] }) as Promise<boolean>;
+        },
+        async issuedValueUSD({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [] }) as Promise<bigint>;
+        },
+        async backingValueUSD({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [] }) as Promise<bigint>;
+        },
+        async effectiveCapUSD({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            return (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [] }) as Promise<bigint>;
+        },
+        async getCredibility({ token = address } = {}) {
+            validateAddress(token!, 'token');
+            // Batch the five credibility views so a disclosure UI reads one consistent snapshot.
+            const [credibilityScore, isOverIssued, issuedValueUSD, backingValueUSD, effectiveCapUSD] = await Promise.all([
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'credibilityScore', args: [] }) as Promise<number>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'isOverIssued', args: [] }) as Promise<boolean>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'issuedValueUSD', args: [] }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'backingValueUSD', args: [] }) as Promise<bigint>,
+                (client as PublicClient).readContract({ address: token!, abi, functionName: 'effectiveCapUSD', args: [] }) as Promise<bigint>,
+            ]);
+            return { credibilityScore, isOverIssued, issuedValueUSD, backingValueUSD, effectiveCapUSD };
         },
     };
     return actions as XPNTsTokenActions;

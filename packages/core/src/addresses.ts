@@ -217,6 +217,24 @@ export type CanonicalAddresses = (typeof CANONICAL_ADDRESSES)[keyof typeof CANON
 export type SupportedChainId = keyof typeof CANONICAL_ADDRESSES;
 
 /**
+ * Mycelium community governance Safe (CC-31) — the canonical production owner-target for
+ * on-chain governance across the ecosystem. Deployed at the SAME address on all three chains:
+ * OP Mainnet (10), Ethereum (1), and Sepolia (11155111).
+ *
+ * Use it as the default `newOwner`/owner-target for SDK governance write helpers
+ * (`@aastar/admin` `transferOwnership`, `SlashGovernance` Timelock orchestration) and deploy
+ * scripts, and as the single source consumers (e.g. YAAA) read instead of hard-coding the
+ * address — same pattern as `DVT_VALIDATOR_ADDRESS`.
+ *
+ * NOTE: the SDK owns/deploys no on-chain contracts, so it never transfers ownership itself.
+ * Actually pointing each contract's owner/admin at this Safe is a mainnet deploy action taken
+ * by the individual contract repos (SuperPaymaster / airaccount-contract / DVT); this constant
+ * only provides the canonical target + default. Testnet may use a test EOA/Safe; production
+ * governance must converge here.
+ */
+export const COMMUNITY_SAFE = '0x51eDf11fDb0A4F66220eFb8efA54Eca77232E114' as const;
+
+/**
  * MushroomDAO launch token-sale stack (aPoints + governance-token sale), keyed by chainId.
  *
  * Kept as a SEPARATE table from {@link CANONICAL_ADDRESSES} on purpose: these are the launch
