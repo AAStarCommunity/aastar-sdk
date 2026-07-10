@@ -3,3 +3,4 @@ export * from './ProtocolClient.js';
 export * from './OperatorLifecycle.js';
 export * from './dvt/onboardDvtNode.js';
 export * from './dvt/resolveSigner.js';
+export * from './dvt/kmsPopSigner.js';

@@ -147,3 +147,23 @@ export function buildDvtPop(blsSecretKey: Hex): DvtPop {
         nodeId,
     };
 }
+
+/**
+ * The deterministic PoP point for a public key: `hashToCurve(publicKey, POP_DST)` in the 256-byte
+ * c0-first EIP-2537 G2 layout — the SAME value {@link buildDvtPop} puts in `popPoint`, but computed with
+ * **no secret key**. Use it to CROSS-CHECK a `popPoint` produced elsewhere (e.g. a KMS-TEE `/pop` response
+ * for a key-less node) before trusting it: `popPoint` is a public deterministic function of `publicKey`, so
+ * a client can recompute and reject a mismatch, while the on-chain `_verifyPoP` pairing still gates `popSig`.
+ *
+ * @param publicKey G1 public key — 128-byte EIP-2537, 48-byte compressed, or 96-byte uncompressed.
+ */
+export function dvtPopPoint(publicKey: Hex | Uint8Array): Hex {
+    const pk = encodeG1Point(publicKey);
+    const g2 = bls.G2.hashToCurve(toBytes(pk), { DST: BLS_POP_DST }) as InstanceType<typeof bls.G2.ProjectivePoint>;
+    return encodeG2Point(g2.toRawBytes(false));
+}
+
+/** The nodeId the DVT validator derives and binds: `keccak256(publicKey)` (128-byte EIP-2537 normalized). */
+export function dvtNodeId(publicKey: Hex | Uint8Array): Hex {
+    return keccak256(encodeG1Point(publicKey));
+}
