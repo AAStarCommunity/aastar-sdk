@@ -13,10 +13,28 @@
  * so mirror that shape if it differs. Everything else (RLP → digest → assemble) is standard viem and fixed.
  */
 import {
-  keccak256, serializeTransaction, hashMessage, hashTypedData,
+  keccak256, serializeTransaction, hashMessage, hashTypedData, recoverAddress, isHex, size,
   type Address, type Hex, type LocalAccount, type SerializeTransactionFn,
 } from 'viem';
 import { toAccount } from 'viem/accounts';
+
+// secp256k1 group order — used to enforce low-S (EIP-2); high-S signatures are rejected by Ethereum nodes.
+const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+const SECP256K1_HALF_N = SECP256K1_N >> 1n;
+
+function assert32ByteHex(v: unknown, label: string): Hex {
+  if (typeof v !== 'string' || !isHex(v) || size(v as Hex) !== 32)
+    throw new Error(`kms sign: ${label} is not a 32-byte hex value (got ${String(v)})`);
+  return v as Hex;
+}
+
+/** recid 0/1, legacy 27/28, or EIP-155 (chainId*2+35+recid) → yParity ∈ {0,1}; reject anything else. */
+function toParity(vRaw: number): 0 | 1 {
+  if (vRaw === 0 || vRaw === 1) return vRaw;
+  if (vRaw === 27 || vRaw === 28) return (vRaw - 27) as 0 | 1;
+  if (vRaw >= 35) return ((vRaw - 35) & 1) as 0 | 1; // EIP-155: parity of (v - 35), NOT v & 1
+  throw new Error(`kms sign: unexpected v/recid ${vRaw}`);
+}
 
 export interface KmsKeeperAccountOpts {
   /** Keeper signer base URL, e.g. http://127.0.0.1:3100 (loopback on the board). */
@@ -29,38 +47,48 @@ export interface KmsKeeperAccountOpts {
   signPath?: string;
 }
 
-/** Parse a keeper sign response into an r/s/yParity signature viem's serializer accepts. */
+/** Parse a keeper sign response into a validated, low-S r/s/yParity signature viem's serializer accepts. */
 function parseKeeperSig(raw: unknown): { r: Hex; s: Hex; yParity: 0 | 1 } {
   // Accept: { signature|sig: '0x…65B' } | { r, s, v|yParity|recid } | a bare '0x…65B' string.
-  let r: Hex | undefined;
-  let s: Hex | undefined;
-  let vRaw: number | undefined;
+  if (raw == null || (typeof raw !== 'string' && typeof raw !== 'object'))
+    throw new Error(`kms sign: empty/invalid response ${JSON.stringify(raw)}`);
 
-  const asObj = raw as Record<string, unknown> | string;
+  let r: Hex;
+  let s: Hex;
+  let vRaw: number;
+
   const hex =
-    typeof asObj === 'string' ? asObj
-    : typeof (asObj as any).signature === 'string' ? (asObj as any).signature
-    : typeof (asObj as any).sig === 'string' ? (asObj as any).sig
+    typeof raw === 'string' ? raw
+    : typeof (raw as any).signature === 'string' ? (raw as any).signature
+    : typeof (raw as any).sig === 'string' ? (raw as any).sig
     : undefined;
 
   if (hex) {
     const h = (hex.startsWith('0x') ? hex.slice(2) : hex);
-    if (h.length !== 130) throw new Error(`kms sign: expected 65-byte signature, got ${h.length / 2} bytes`);
+    if (!/^[0-9a-fA-F]{130}$/.test(h)) throw new Error(`kms sign: expected 65-byte hex signature, got ${h.length / 2} bytes`);
     r = `0x${h.slice(0, 64)}`;
     s = `0x${h.slice(64, 128)}`;
     vRaw = parseInt(h.slice(128, 130), 16);
   } else {
-    const o = asObj as any;
-    r = o.r; s = o.s;
+    const o = raw as any;
+    r = assert32ByteHex(o.r, 'r');
+    s = assert32ByteHex(o.s, 's');
     vRaw = typeof o.yParity === 'number' ? o.yParity
       : typeof o.v === 'number' ? o.v
       : typeof o.recid === 'number' ? o.recid
-      : undefined;
+      : NaN;
+    if (Number.isNaN(vRaw)) throw new Error(`kms sign: no v/yParity/recid in ${JSON.stringify(raw)}`);
   }
-  if (!r || !s || vRaw === undefined) throw new Error(`kms sign: could not parse signature from ${JSON.stringify(raw)}`);
-  // Normalize v/recid → yParity ∈ {0,1}. 27/28 (EIP-155-free), 0/1 (recid), 0x1b/0x1c already handled.
-  const yParity = (vRaw === 27 || vRaw === 28) ? (vRaw - 27) : (vRaw & 1);
-  return { r, s, yParity: yParity as 0 | 1 };
+
+  let yParity = toParity(vRaw);
+  // Enforce low-S (EIP-2): negating a high-S value flips the recovery parity.
+  let sBig = BigInt(s);
+  if (sBig > SECP256K1_HALF_N) {
+    sBig = SECP256K1_N - sBig;
+    s = `0x${sBig.toString(16).padStart(64, '0')}`;
+    yParity = (yParity ^ 1) as 0 | 1;
+  }
+  return { r, s, yParity };
 }
 
 export function kmsKeeperAccount(opts: KmsKeeperAccountOpts): LocalAccount {
@@ -79,7 +107,13 @@ export function kmsKeeperAccount(opts: KmsKeeperAccountOpts): LocalAccount {
       body: JSON.stringify({ digest: hash }),
     });
     if (!res.ok) throw new Error(`kms /kms/sign ${res.status}: ${await res.text().catch(() => '')}`);
-    return parseKeeperSig(await res.json().catch(() => null));
+    const sig = parseKeeperSig(await res.json().catch(() => null));
+    // fail-closed: the signature MUST recover to the keeper address — else the key/recid is wrong and we
+    // must NOT broadcast a tx that would be sent from an unexpected sender.
+    const recovered = await recoverAddress({ hash, signature: sig });
+    if (recovered.toLowerCase() !== opts.address.toLowerCase())
+      throw new Error(`kms sign: signature recovers to ${recovered}, expected keeper ${opts.address} (wrong key or recid)`);
+    return sig;
   }
 
   return toAccount({
