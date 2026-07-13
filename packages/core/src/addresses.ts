@@ -136,17 +136,17 @@ export const CANONICAL_ADDRESSES = {
     // v0.27.0 DVT-unification (CC-10 Phase 1 / #274): the algId-0x01 verifier is now the unified DVT
     // validator (router.getAlgorithm(0x01)==0x539B, on-chain verified). It enforces strictly-ascending
     // nodeIds (SDK sorts them — #274) and operator registration via registerWithProof (nodeId=keccak256(pubkey)).
-    aaStarBLSAlgorithm: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",  // v0.27.0 DVT validator (algId 0x01; router.getAlgorithm(0x01) on-chain verified; validate()==0)
-    aaStarValidator: "0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c",  // v0.27.0 (ValidatorRouter; router.getAlgorithm(0x01)=DVT validator 0x539B on-chain verified)
+    aaStarBLSAlgorithm: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",  // DVT validator (algId 0x01) — UNCHANGED in v0.28.0; still mounted on the new router 0xA6bd (getAlgorithm(0x01)==0x539B on-chain verified — CC-45)
+    aaStarValidator: "0xA6bdfD17C178b43B464736408e0Fe03D5a7684eB",  // v0.28.0 (ValidatorRouter; router.getAlgorithm(0x01)=DVT validator 0x539B on-chain verified — CC-45)
     aaStarBLSAggregator: "0x35775df9a4f4dB42Ea0C46118a12dDd0cEc70609",  // v0.20.0 (SP-side aggregator; unchanged by DVT-unification)
     sessionKeyValidator: "0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f",  // v0.24.0 (algId 0x08; NEW — security fix d #164 block self-call escalation)
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0xf25621DF4c6100cdfe224054C2b09f2963bF487b",  // v0.27.0 (FACTORY_VERSION 0.27.0 on-chain verified; DVT-unification redeploy)
-    airAccountV7Impl: "0x4a76dEf9eE4EE44eF6D0B2a327a068B5B7931E1C",  // v0.27.0 (ACCOUNT_VERSION 0.27.0; factory.implementation() on-chain verified)
-    airAccountExtension: "0xEcE87546989Da7df573b107D54a0ead0aCB49923",  // v0.27.0 (DVT-unification redeploy)
-    agentRegistry: "0x239960EeA98cEC6f02608ED4Bc440b7d8442f3Da",  // v0.27.0 (DVT-unification redeploy)
+    airAccountFactoryV7: "0x778ab75636F1350c31930078208eFB02E9765ed3",  // v0.28.0 (FACTORY_VERSION 0.28.0 on-chain verified; CC-27 rename + full-stack redeploy — CC-45)
+    airAccountV7Impl: "0xcCD6DfbaeE8c4249D2F9825781ece2cb5a456d97",  // v0.28.0 (ACCOUNT_VERSION 0.28.0; factory.implementation() on-chain verified — CC-45)
+    airAccountExtension: "0x7499968EC5a162b783b5816CbEC339008F132CAC",  // v0.28.0 (isValidOwnerAuth host; CC-45)
+    agentRegistry: "0xB683dECf86C327Cc033Ac2d18d45a4D30DFdE947",  // v0.28.0 (CC-45)
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",
