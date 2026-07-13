@@ -3,6 +3,7 @@ import { MemoryStorage } from "../adapters/memory-storage";
 import { LocalWalletSigner } from "../adapters/local-wallet-signer";
 import { SilentLogger } from "../interfaces/logger";
 import { EntryPointVersion } from "../constants/entrypoint";
+import { CANONICAL_ADDRESSES } from "@aastar/core";
 
 // Hardhat account #0 — deterministic private key for tests
 const PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -642,7 +643,7 @@ describe("AccountManager", () => {
   describe("ensureValidatorRouter", () => {
     const SEPOLIA = 11155111;
     const OP_SEPOLIA = 11155420; // canonical aaStarValidator == zeroAddress (not deployed)
-    const SEPOLIA_ROUTER = "0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c"; // CANONICAL_ADDRESSES[11155111].aaStarValidator (v0.27.0 router)
+    const SEPOLIA_ROUTER = CANONICAL_ADDRESSES[11155111].aaStarValidator; // canonical Sepolia router — auto-tracks address bumps (don't hardcode)
     const ZERO = "0x0000000000000000000000000000000000000000";
     const ACC = "0xAccountForRouterWiring000000000000000001";
 
@@ -806,7 +807,7 @@ describe("AccountManager", () => {
   // ── deployAndWireValidator (Gap B — one-call deploy + setValidator) ──
   describe("deployAndWireValidator", () => {
     const SEPOLIA = 11155111;
-    const SEPOLIA_ROUTER = "0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c"; // v0.27.0 router
+    const SEPOLIA_ROUTER = CANONICAL_ADDRESSES[11155111].aaStarValidator; // canonical Sepolia router — auto-tracks address bumps (don't hardcode)
     const ZERO = "0x0000000000000000000000000000000000000000";
     const X1 = `0x${"11".repeat(32)}`;
     const Y1 = `0x${"22".repeat(32)}`;
