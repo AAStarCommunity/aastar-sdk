@@ -24,6 +24,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { onboardDvtNode, kmsPopSigner } from '@aastar/operator';
 import { CANONICAL_ADDRESSES, dvtOperatorActions } from '@aastar/core';
+import { kmsKeeperAccount } from './kmsKeeperAccount.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -45,10 +46,27 @@ async function main() {
   const c = CANONICAL_ADDRESSES[11155111];
 
   // operator = the EOA that stakes + registers (msg.sender); its key is separate from the TEE BLS key.
+  // Two operator signer modes:
+  //  (A) TEE-hosted keeper (A-board, no exportable key): set KMS_OPERATOR_ADDRESS → sign via :3100/kms/sign.
+  //      The keeper signer defaults to the same loopback + token as /pop (both live on the board).
+  //  (B) raw key (local/dev): set KMS_OPERATOR_KEY (or PRIVATE_KEY_JACK).
+  const opAddr = process.env.KMS_OPERATOR_ADDRESS as Address | undefined;
   const opKey = process.env.KMS_OPERATOR_KEY || process.env.PRIVATE_KEY_JACK;
-  if (!opKey) throw new Error('set KMS_OPERATOR_KEY (or PRIVATE_KEY_JACK) — the operator EOA for the KMS-TEE node');
-  const operator = privateKeyToAccount(norm(opKey));
-  const operatorWallet = createWalletClient({ account: operator, chain: sepolia, transport });
+  let operator: { address: Address };
+  if (opAddr) {
+    operator = kmsKeeperAccount({
+      url: process.env.KMS_OPERATOR_URL || KMS_POP_URL, // keeper /kms/sign loopback (board), defaults to /pop host
+      address: opAddr,
+      token: process.env.KMS_OPERATOR_TOKEN || process.env.KMS_SIGNER_TOKEN,
+      signPath: process.env.KMS_OPERATOR_SIGN_PATH, // default '/kms/sign'
+    });
+    console.log(`operator signer = KMS-TEE keeper (remote /kms/sign, no raw key)`);
+  } else {
+    if (!opKey) throw new Error('set KMS_OPERATOR_ADDRESS (TEE keeper) or KMS_OPERATOR_KEY (raw key) — the operator EOA');
+    operator = privateKeyToAccount(norm(opKey));
+    console.log(`operator signer = raw key`);
+  }
+  const operatorWallet = createWalletClient({ account: operator as any, chain: sepolia, transport });
 
   // optional funder (owner 代付) — tops up operator ETH + GToken for the stake.
   const funderKey = process.env.PRIVATE_KEY_JASON;
