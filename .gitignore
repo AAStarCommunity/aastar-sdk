@@ -157,6 +157,9 @@ packages/analytics/reports/daily/
 **/build
 **/*.tsbuildinfo
 
+# CodeGraph local index (tree-sitter knowledge graph, rebuilt on demand)
+.codegraph/
+
 # Prevent TS source pollution (compiled files in src or root)
 # Global ignores for generated files
 *.js

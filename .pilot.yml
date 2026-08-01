@@ -1,0 +1,21 @@
+# .pilot.yml — pilot（仓库级开发操作系统）读它取分支/清理策略。
+# 脚本不解析 YAML；由 skill 用 Read 读取后作为 flag 传给脚本，保持确定简单。
+
+base_branch: main
+# 本仓库没有 preview 集成分支：历史上所有 PR 直接 squash 进 main，
+# release/npm publish 也从 main 切。如果以后要引入 preview，改这里 + 建分支即可。
+integration_branch: main
+
+protect_patterns:
+  - release
+  - hotfix
+
+remote: origin
+
+# 远程已合并分支的删除保持关闭：GitHub 侧已开启 "automatically delete head branches"，
+# 合并后远程分支会自动消失，pilot 不需要（也不该在无人值守时）碰远程。
+allow_remote_cleanup: false
+
+docs_dir: docs/agent
+
+pr_daemon_root: ~/Dev/tools/PR-Daemon
