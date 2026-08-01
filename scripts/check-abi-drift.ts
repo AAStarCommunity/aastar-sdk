@@ -50,6 +50,16 @@ const KNOWN_DRIFT = new Map<string, string>([
   ],
 ]);
 
+// SDK ABI name collides with an UNRELATED upstream contract of the same name. The SDK tracks a
+// different source than the OUT_DIRS scanned here, so diffing against the scanned artifact is a false
+// positive. AAStarBLSAlgorithm: the SDK tracks the YetAnotherAA-Validator (DVT) contract that carries
+// `registerWithProof(pubkey,popPoint,popSig)` (CC-17 / YAAA #165). airaccount-contract also has a
+// same-named `src/validators/AAStarBLSAlgorithm.sol`, but v0.27.0 (#45 Part B) refactored it into a
+// pure Safe-owned key aggregator (aggregateKeys/cacheAggregatedKey, no registerWithProof) — a distinct
+// contract the SDK does NOT consume. YAAA isn't a scanned out/ dir, so skip rather than false-flag.
+// See CC-27 (upstream rename decision) and scripts/abi-sync.ts (same skip).
+const NAME_COLLISIONS = new Set(['AAStarBLSAlgorithm']);
+
 function loadAbi(file: string): any[] {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   return Array.isArray(raw) ? raw : raw.abi || [];
@@ -85,6 +95,11 @@ console.log('=== Upstream ABI value-drift (vs ' + OUT_DIRS.length + ' upstream o
 for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) {
   const name = file.replace(/\.json$/, '');
   if (NON_CONTRACT.has(name) || STANDARD_EXTERNAL.has(name)) continue;
+  if (NAME_COLLISIONS.has(name)) {
+    console.log(`ℹ️  ${name}: skipped — name collides with an unrelated upstream contract; SDK tracks a different source (see CC-27).`);
+    skipped++;
+    continue;
+  }
   if (KNOWN_DRIFT.has(name)) {
     console.log(`ℹ️  ${name}: known intentional drift — ${KNOWN_DRIFT.get(name)}`);
     continue;
