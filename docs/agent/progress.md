@@ -13,8 +13,8 @@
 ## 进行中 / 待回执的 PR
 | Task | PR | 状态 | 备注 |
 |:---|:---|:---|:---|
-| T4.1.1 | 待建 | PR_OPEN | pilot 规划层 + `.gitignore` 忽略 `.codegraph/` |
-| T1.1.1 | 待建 | PR_OPEN | dvt3 上链注册 evidence 脚本 |
+| T4.1.1 | #315 | PR_OPEN | pilot 规划层 + `.gitignore` 忽略 `.codegraph/` |
+| T1.1.1 | #316 | PR_OPEN | dvt3 上链注册 evidence 脚本 |
 | — | #15 | 挂起 | `[WIP] feat(m14) @aastar/react + @aastar/xiaoheishu`，已 APPROVE 但标题仍 WIP，**不建议合** |
 | — | #14 | 挂起 | Spore `@aastar/messaging` draft，CI FAILURE，正常在途 |
 

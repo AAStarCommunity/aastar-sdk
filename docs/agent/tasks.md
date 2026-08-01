@@ -18,7 +18,7 @@
 - **验收命令**：`DRY_ONLY=1 pnpm exec tsx tests/regression/onchain-evidence/dvt3-register.ts`（需 board 侧 env；无 env 时至少 `pnpm exec tsc --noEmit` 通过）
 - **涉及文件**：`tests/regression/onchain-evidence/dvt3-register.ts`
 - **风险/回滚**：真实上链且 JASON 代付 ETH+GToken —— **默认必须先 `DRY_ONLY=1` 跑一遍**，nodeId 与板子 `node_state.json` 不一致时脚本自身 abort。
-- **证据**：branch `test/dvt3-onchain-register-evidence` / PR 待建
+- **证据**：branch `test/dvt3-onchain-register-evidence` / PR #316
 
 ### T1.1.2 记录 dvt3 注册的 tx hash 到 onchain-evidence 索引  `BACKLOG`
 - **优先级**：mid
@@ -81,4 +81,4 @@
 - **目标**：让 pilot 能接管本仓库的持续开发：配置、三级规划文档、跟进账本齐备。
 - **交付物**：`.pilot.yml`、`docs/agent/{roadmap,tasks,progress,followups}.md`、`.gitignore` 忽略 `.codegraph/`
 - **验收命令**：`test -f .pilot.yml && test -f docs/agent/tasks.md && bash ~/.claude/skills/pilot/scripts/followups.sh count-open --docs-dir docs/agent`
-- **证据**：branch `chore/pilot-scaffold` / PR 待建
+- **证据**：branch `chore/pilot-scaffold` / PR #315
