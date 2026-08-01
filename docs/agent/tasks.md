@@ -8,7 +8,7 @@
 
 ## F1.1 — DVT 上链注册证据
 
-### T1.1.1 dvt3 独立节点上链注册 evidence 脚本  `PR_OPEN`
+### T1.1.1 dvt3 独立节点上链注册 evidence 脚本  `DONE`
 - **优先级**：high
 - **目标**：把 dvt3（board B，EIP-2335 keystore）在 Sepolia 完成 stake + `registerWithProof` 的一次性脚本沉淀进版本库，让这条路径可复跑、可复核。
 - **开发范围**：`tests/regression/onchain-evidence/dvt3-register.ts` —— 解密 keystore（仅内存）→ 校验 pubkey/nodeId 与 board `node_state.json` 一致 → `onboardDvtNode` dryRun 断言 nodeId 一致 → 真实上链 → 独立 re-read 复验 `isRegistered` / `nodeOperator`。
@@ -18,7 +18,7 @@
 - **验收命令**：`DRY_ONLY=1 pnpm exec tsx tests/regression/onchain-evidence/dvt3-register.ts`（需 board 侧 env；无 env 时至少 `pnpm exec tsc --noEmit` 通过）
 - **涉及文件**：`tests/regression/onchain-evidence/dvt3-register.ts`
 - **风险/回滚**：真实上链且 JASON 代付 ETH+GToken —— **默认必须先 `DRY_ONLY=1` 跑一遍**，nodeId 与板子 `node_state.json` 不一致时脚本自身 abort。
-- **证据**：branch `test/dvt3-onchain-register-evidence` / PR #316
+- **证据**：PR #316 合并进 main = `32b8f273`（2026-08-02）。评审 APPROVE；Codex PK 的 EIP-2335 控制字符剥离 Low → FU-5
 
 ### T1.1.2 记录 dvt3 注册的 tx hash 到 onchain-evidence 索引  `BACKLOG`
 - **优先级**：mid
