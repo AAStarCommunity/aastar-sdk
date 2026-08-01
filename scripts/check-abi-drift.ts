@@ -82,8 +82,19 @@ function findUpstreamArtifact(name: string): string | null {
   return null;
 }
 
+// Set REQUIRE_UPSTREAM=1 to turn "no upstream checked out" into a hard failure instead of a
+// vacuous pass. Without it this script prints PASS after comparing against zero artifacts, which
+// reads as "ABIs verified" when nothing was verified — see the note in .github/workflows/ci.yml.
+const REQUIRE_UPSTREAM = process.env.REQUIRE_UPSTREAM === '1';
+
 if (OUT_DIRS.length === 0) {
+  if (REQUIRE_UPSTREAM) {
+    console.error('FAIL: REQUIRE_UPSTREAM=1 but no upstream out/ dir is present — nothing to check against.');
+    console.error('      Check out the upstream repos as siblings and `forge build` them, or drop REQUIRE_UPSTREAM.');
+    process.exit(1);
+  }
   console.log('⚠️  no upstream out/ dirs found locally — skipping ABI value-drift check.');
+  console.log('    NOTE: this is a SKIP, not a verification. Run with REQUIRE_UPSTREAM=1 to make it fail instead.');
   process.exit(0);
 }
 

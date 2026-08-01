@@ -38,6 +38,19 @@ consumer path**.
 
 ## 3. Static gates (all green)
 - [ ] `pnpm -r build` · `pnpm run check:addresses` · coverage 100% · `pnpm -r test` · `pnpm run upstream:check` 4/4 · `viem.getAddress` strict on every changed address.
+- [ ] **The three upstream-ABI gates, run with `REQUIRE_UPSTREAM=1`:**
+      ```bash
+      REQUIRE_UPSTREAM=1 pnpm run abi:sync && \
+      REQUIRE_UPSTREAM=1 pnpm run check:abi && \
+      REQUIRE_UPSTREAM=1 pnpm run check:abi-drift
+      ```
+      These compare against the upstream repos checked out as **siblings** (`../SuperPaymaster`,
+      `../airaccount-contract`, `../../mycelium/launch`), `forge build`-ed. They are **not** CI gates
+      and cannot be: a runner has none of those repos, and without the flag all three degrade to a
+      skip-and-**pass**, printing "in sync with upstream" after comparing against zero artifacts.
+      `REQUIRE_UPSTREAM=1` turns that vacuous pass into a hard failure — **always use it here**, so a
+      forgotten `forge build` or a missing sibling checkout fails loudly instead of green-lighting a
+      release. Rationale is recorded in `.github/workflows/ci.yml`.
 - [ ] **`pnpm run check:browser` (MANDATORY, run AFTER the `@aastar/sdk` build) — no Node-only builtin (`child_process`/`fs`/…) statically imported by any browser-facing subpath.** This exists because 0.42.0 shipped a `node:child_process` leak into `@aastar/sdk/operator` that broke downstream browser builds — unit tests run in Node and a narrow-import browser smoke tree-shook it out, so nothing caught it pre-publish. Never publish with this red.
 
 ## 4. On-chain E2E — FULL business-scenario set (NOT just the change), recorded
