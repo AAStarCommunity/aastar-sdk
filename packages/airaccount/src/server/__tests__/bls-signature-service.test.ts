@@ -201,6 +201,7 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
     active?: boolean; mounted?: `0x${string}`;
     routerFails?: boolean; mountedFails?: boolean; activeFails?: () => Error;
     onChainRouter?: `0x${string}`;
+    enrolled?: boolean; treeDepth?: number; proofLen?: number; mutatedAt?: bigint;
   } = {}) =>
     vi.fn().mockImplementation(({ functionName }: any) => {
       if (functionName === "validator") {
@@ -215,13 +216,20 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
         if (opts.activeFails) throw opts.activeFails();
         return opts.active ?? false;
       }
+      if (functionName === "enrolledAccount") return opts.enrolled ?? true;
+      if (functionName === "TREE_DEPTH") return BigInt(opts.treeDepth ?? 14);
+      if (functionName === "getMerkleProof") {
+        const d = opts.treeDepth ?? 14;
+        return [1n, Array.from({ length: opts.proofLen ?? d }, (_, i) => `0x${String(i).padStart(64, "0")}`)];
+      }
+      if (functionName === "lastSetMutationBlock") return opts.mutatedAt ?? 1n;
       return 0n;
     });
 
   const makeSvc = (readContract: any, account: any = { address: ACCOUNT, validatorAddress: ROUTER }, getCode?: any) =>
     new BLSSignatureService(
       { blsSeedNodes: [] } as any,
-      { getChainId: () => 11155111, getProvider: () => ({ readContract, getCode: getCode ?? vi.fn().mockResolvedValue("0x6080") }) } as any,
+      { getChainId: () => 11155111, getProvider: () => ({ readContract, getCode: getCode ?? vi.fn().mockResolvedValue("0x6080"), getBlockNumber: vi.fn().mockResolvedValue(100n) }) } as any,
       { getBlsConfig: vi.fn().mockResolvedValue(undefined), findAccountByUserId: vi.fn().mockResolvedValue(account) } as any,
       { signMessage: vi.fn() } as any
     );
@@ -232,14 +240,53 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
       p256Signature: "0x" + "ee".repeat(64),
     });
 
-  it("THROWS naming the framing mismatch when the MOUNTED validator has committeeActive()==true", async () => {
-    await expect(call(makeSvc(chain({ active: true })))).rejects.toThrow(/committeeActive\(\) == true/);
-    await expect(call(makeSvc(chain({ active: true })))).rejects.toThrow(/FU-19/);
+  it("proceeds to COMMITTEE framing when the mounted validator has committeeActive()==true (FU-19)", async () => {
+    // No longer a dead end: the service now fetches slot+proof and packs committee framing. It gets
+    // past the guard and fails later on the DVT round-trip (no nodes mocked here).
+    const readContract = chain({ active: true, enrolled: true });
+    await expect(call(makeSvc(readContract))).rejects.not.toThrow(/refusing to sign|not run the one-time/);
+    expect(readContract.mock.calls.map(([a]: any) => a.functionName)).toContain("enrolledAccount");
+  });
+
+  // These two exercise the proof-fetch helper directly: they are checks on the committee payload
+  // itself, and routing through the full DVT pipeline would only add unrelated failure modes.
+  const framing = { mode: "committee" as const, validator: MOUNTED, treeDepth: 14 };
+  const fetchFor = (svc: BLSSignatureService, nodeIds: string[]) =>
+    (svc as any).fetchCommitteeSignersFor("t", framing, nodeIds);
+
+  it("REFUSES to pack when the validator's proof length disagrees with its own TREE_DEPTH (FU-19)", async () => {
+    // A depth/proof mismatch would be rejected by the on-chain _verifyMerkle; catching it here names
+    // the cause instead of shipping a payload that cannot verify.
+    const svc = makeSvc(chain({ active: true, enrolled: true, treeDepth: 14, proofLen: 13 }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/TREE_DEPTH|_verifyMerkle/);
+  });
+
+  it("REFUSES to pack when the committee set mutated after the proofs were read (FU-9 risk)", async () => {
+    // getMerkleProof proves against the CURRENT root while the contract verifies the FROZEN
+    // setRoot[e-1]; a mutation in between silently invalidates the proofs.
+    const svc = makeSvc(chain({ active: true, enrolled: true, mutatedAt: 999n }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/set mutated|no longer verify/);
+  });
+
+  it("returns well-formed signers when depth matches and the set is stable", async () => {
+    const svc = makeSvc(chain({ active: true, enrolled: true, mutatedAt: 1n }));
+    const signers = await fetchFor(svc, ["0x" + "01".repeat(32)]);
+    expect(signers).toHaveLength(1);
+    expect(signers[0].merkleProof).toHaveLength(14);
+  });
+
+  it("THROWS with the owner-only enrol calldata when the account is not enrolled (FU-19)", async () => {
+    // enrollInCommitteeValidator() is an OWNER tx this service has no signer for, so it hands back
+    // the exact calldata rather than dead-ending or emitting bytes that cannot validate.
+    const err = await call(makeSvc(chain({ active: true, enrolled: false }))).catch((e) => e as Error);
+    expect(err.message).toMatch(/has not run the one-time enrollInCommitteeValidator/);
+    expect(err.message).toContain(ACCOUNT);       // where to send it
+    expect(err.message).toMatch(/data: 0x[0-9a-f]{8}/); // and the calldata to send
   });
 
   it("follows the account's ON-CHAIN router -> getAlgorithm(0x01) -> that validator (H1)", async () => {
     const readContract = chain({ active: true });
-    await expect(call(makeSvc(readContract))).rejects.toThrow(new RegExp(MOUNTED));
+    await expect(call(makeSvc(readContract))).rejects.toThrow();
     const calls = readContract.mock.calls.map(([a]: any) => `${a.functionName}@${a.address}`);
     expect(calls).toContain(`validator@${ACCOUNT}`);        // asked the account itself
     expect(calls).toContain(`getAlgorithm@${ROUTER}`);      // mount followed on ITS answer
@@ -256,7 +303,7 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
     const readContract = chain({ active: true, onChainRouter: REAL_ROUTER });
     const svc = makeSvc(readContract, { address: ACCOUNT, validatorAddress: STALE });
 
-    await expect(call(svc)).rejects.toThrow(/committeeActive\(\) == true/);
+    await expect(call(svc)).rejects.not.toThrow(/refusing to sign/);
     const calls = readContract.mock.calls.map(([a]: any) => `${a.functionName}@${a.address}`);
     expect(calls).toContain(`getAlgorithm@${REAL_ROUTER}`);            // real router used
     expect(calls.some((c: string) => c.endsWith(`@${STALE}`))).toBe(false); // stale one never touched

@@ -10,6 +10,7 @@ import {
 import {
   packWebAuthnBlob,
   packBlsPayload,
+  packCommitteeBlsPayload,
   packCumulativeT2WA,
   packCumulativeT3WA,
   packEcdsaAlgId,
@@ -17,7 +18,11 @@ import {
 import {
   AAStarAirAccountV7ABI,
   AAStarCommitteeValidatorABI,
+  encodeEnrollInCommitteeValidator,
+  fetchCommitteeSigners,
   getMountedDvtValidator,
+  isAccountEnrolled,
+  type CommitteeSigner,
 } from "@aastar/core";
 import {
   AbiDecodingZeroDataError,
@@ -107,6 +112,16 @@ export function isPendingConfirmation(
 }
 
 /**
+ * Which BLS framing the validator mounted for an account will DECODE (CC-98/CC-103). Resolved from
+ * the chain before signing, never guessed from payload shape — the two framings share the leading
+ * `[nodeIdsLength]` word and differ only in per-signer stride, which is the shape-collision CC-103
+ * names as the flip-order attack root.
+ */
+type CommitteeFraming =
+  | { mode: "legacy" }
+  | { mode: "committee"; validator: `0x${string}`; treeDepth: number };
+
+/**
  * BLS signature service — extracted from NestJS BlsService.
  * Uses lazy initialization instead of onModuleInit.
  */
@@ -157,7 +172,7 @@ export class BLSSignatureService {
    * transport faults, unrecognised errors, a stripped cause chain, an unresolvable router — refuses
    * to sign. Guessing legacy is precisely how a guaranteed-rejected signature gets produced.
    */
-  private async assertNotCommitteeMode(context: string, userId: string): Promise<void> {
+  private async resolveCommitteeFraming(context: string, userId: string): Promise<CommitteeFraming> {
     const isUnset = (a?: string | null) => !a || /^0x0+$/i.test(a);
     const provider = this.ethereum.getProvider();
 
@@ -207,10 +222,12 @@ export class BLSSignatureService {
     // exactly the doomed legacy signature this guard exists to prevent. No storage compromise
     // required. The account itself is the only authority on its own set-once router.
     let router: string;
+    let accountAddress: string;
     try {
       const account = await this.storage.findAccountByUserId(userId);
       if (!account) throw new Error(`no account record for userId ${userId}`);
       if (isUnset(account.address)) throw new Error(`account record for userId ${userId} has no address`);
+      accountAddress = account.address;
       router = (await provider.readContract({
         address: account.address as `0x${string}`,
         abi: AAStarAirAccountV7ABI,
@@ -229,7 +246,7 @@ export class BLSSignatureService {
       throw fatal(`could not read getAlgorithm(0x01) from router ${router} — ${(e as Error).message}`);
     }
     // Nothing mounted at all ⇒ no DVT validator ⇒ committee framing is not reachable.
-    if (isUnset(validator)) return;
+    if (isUnset(validator)) return { mode: "legacy" };
 
     // ── 3. the framing that validator will decode
     let active: boolean;
@@ -277,20 +294,75 @@ export class BLSSignatureService {
         `[${context}] ${validator} is deployed but has no committeeActive() — pre-committee validator, ` +
         `LEGACY framing is correct`
       );
-      return;
+      return { mode: "legacy" };
     }
 
-    if (active) {
+    if (!active) return { mode: "legacy" };
+
+    // ── 4. committee mode: the account must have run the one-time owner enrolment, and the
+    // validator's TREE_DEPTH must be read (never assumed — CC-103 Q4).
+    if (!(await isAccountEnrolled(provider, validator as `0x${string}`, accountAddress as `0x${string}`))) {
       throw new Error(
-        `${context}: the validator mounted for this account (${validator}, via router ${router}) has ` +
-        `committeeActive() == true, but this path only emits LEGACY BLS framing ` +
-        `([nodeIdsLength][nodeIds][blsSig]) — the account would decode committee framing ` +
-        `([nodeIdsLength][nodeId|slot|proof][blsSig]) and reject the signature on-chain. Committee ` +
-        `support for the server tiered-signature path is FU-19; until then use the SDK-side packers ` +
-        `directly (packCumulativeT2/T3Signature with committeeSigners, or packCommitteeBlsPayload for ` +
-        `0x09/0x0a) with slot+proof from @aastar/core's fetchCommitteeSigners, on an enrolled account.`
+        `${context}: validator ${validator} is in committee mode, but account ${accountAddress} has not run ` +
+        `the one-time enrollInCommitteeValidator(). That is an OWNER transaction, which this service has no ` +
+        `signer for, so it cannot be done here. Send this calldata to the account from the owner wallet ` +
+        `(or via a UserOp), then retry:\n  to:   ${accountAddress}\n  data: ${encodeEnrollInCommitteeValidator()}`
       );
     }
+
+    let treeDepth: number;
+    try {
+      treeDepth = Number(
+        (await provider.readContract({
+          address: validator as `0x${string}`,
+          abi: AAStarCommitteeValidatorABI,
+          functionName: "TREE_DEPTH",
+        })) as bigint
+      );
+    } catch (e) {
+      throw fatal(`could not read TREE_DEPTH() from ${validator} — ${(e as Error).message}`);
+    }
+    if (!Number.isInteger(treeDepth) || treeDepth <= 0) {
+      throw fatal(`validator ${validator} reported a nonsensical TREE_DEPTH of ${treeDepth}`);
+    }
+
+    return { mode: "committee", validator: validator as `0x${string}`, treeDepth };
+  }
+
+  /**
+   * Fetch each contributing node's `slot` + Merkle proof so the aggregate can be committee-framed
+   * (FU-19). Kept separate from {@link resolveCommitteeFraming} because it needs the nodeIds, which
+   * only exist AFTER the DVT round-trip — whereas the framing decision must happen BEFORE it, so an
+   * unenrolled account or an unreadable validator fails without burning three node calls.
+   */
+  private async fetchCommitteeSignersFor(
+    context: string,
+    framing: Extract<CommitteeFraming, { mode: "committee" }>,
+    nodeIds: string[]
+  ): Promise<CommitteeSigner[]> {
+    const { signers, lastSetMutationBlock, atBlock } = await fetchCommitteeSigners(
+      this.ethereum.getProvider(),
+      framing.validator,
+      nodeIds as `0x${string}`[]
+    );
+    const bad = signers.find((s) => s.merkleProof.length !== framing.treeDepth);
+    if (bad) {
+      throw new Error(
+        `${context}: validator ${framing.validator} returned a ${bad.merkleProof.length}-element Merkle proof ` +
+        `for node ${bad.nodeId} but reports TREE_DEPTH ${framing.treeDepth} — the on-chain _verifyMerkle ` +
+        `would reject this payload, refusing to pack it`
+      );
+    }
+    // getMerkleProof proves against the CURRENT root while the contract verifies against the FROZEN
+    // setRoot[e-1]; a set mutation between snapshot and submission invalidates these proofs. Frozen-tree
+    // reconstruction is FU-9 — until then, surface the risk instead of silently shipping stale proofs.
+    if (lastSetMutationBlock > atBlock) {
+      throw new Error(
+        `${context}: the committee set mutated at block ${lastSetMutationBlock}, after the proofs were read ` +
+        `at ${atBlock} — these proofs may no longer verify against the frozen root. Refusing to pack (FU-9).`
+      );
+    }
+    return signers;
   }
 
   /** Lazy-initialize BLSManager on first use. */
@@ -534,9 +606,9 @@ export class BLSSignatureService {
       throw new Error(`P256 signature required for Tier ${tier}`);
     }
 
-    // Fail closed BEFORE the DVT round-trip if committee mode is on — this path emits legacy framing
-    // only, so co-signing first would burn 3 node calls to produce bytes the chain will reject.
-    await this.assertNotCommitteeMode("generateTieredSignature", userId);
+    // Resolve the framing BEFORE the DVT round-trip: an unenrolled account or an unreadable
+    // validator must fail without burning three node calls to produce unusable bytes.
+    const framing = await this.resolveCommitteeFraming("generateTieredSignature", userId);
 
     // Get BLS components (reuse existing generateBLSSignature for node signing + aggregation).
     // Tier-2/3 packings omit the owner ECDSA over userOpHash (aaSignature), so skip it —
@@ -549,10 +621,21 @@ export class BLSSignatureService {
     // messagePoint / messagePointSignature are intentionally NOT included: contract issue #45 Fix 1
     // removed them from the cumulative format (the account recomputes the message point on-chain), so
     // the packed signature carries only P256 + the BLS [nodeIds][blsSig] block (+ guardian for T3).
+    // Committee mode carries each signer's slot + Merkle proof; legacy carries bare nodeIds (FU-19).
+    const framedBls: Pick<CumulativeT2SignatureData, "nodeIds" | "committeeSigners" | "treeDepth"> =
+      framing.mode === "committee"
+        ? {
+            committeeSigners: await this.fetchCommitteeSignersFor(
+              "generateTieredSignature", framing, blsData.nodeIds
+            ),
+            treeDepth: framing.treeDepth,
+          }
+        : { nodeIds: blsData.nodeIds };
+
     if (tier === 2) {
       const t2Data: CumulativeT2SignatureData = {
         p256Signature,
-        nodeIds: blsData.nodeIds,
+        ...framedBls,
         blsSignature: blsData.signature,
       };
       return manager.packCumulativeT2Signature(t2Data);
@@ -569,7 +652,7 @@ export class BLSSignatureService {
 
     const t3Data: CumulativeT3SignatureData = {
       p256Signature,
-      nodeIds: blsData.nodeIds,
+      ...framedBls,
       blsSignature: blsData.signature,
       guardianSignature,
     };
@@ -610,8 +693,8 @@ export class BLSSignatureService {
     if (tier === 3 && !guardianSigner) {
       throw new Error("Guardian signer required for Tier 3 (WebAuthn)");
     }
-    // Same fail-closed committee guard as the raw-P256 path — packBlsPayload below is legacy-only.
-    await this.assertNotCommitteeMode("generateWebAuthnTieredSignature", userId);
+    // Same pre-DVT framing resolution as the raw-P256 path.
+    const framing = await this.resolveCommitteeFraming("generateWebAuthnTieredSignature", userId);
 
     // 1) On-chain passkey factor from the device assertion (verifies challenge == userOpHash,
     //    decodes DER → r/s + low-S; throws in-SDK if the assertion doesn't bind userOpHash).
@@ -623,7 +706,16 @@ export class BLSSignatureService {
       skipOwnerOpSignature: true,
       dvtRequest,
     });
-    const blsPayload = packBlsPayload(blsData.nodeIds as `0x${string}`[], blsData.signature as `0x${string}`);
+    // packCumulativeT2WA/T3WA are framing-agnostic — they take a pre-built block — so the choice is
+    // made here (FU-19).
+    const blsPayload =
+      framing.mode === "committee"
+        ? packCommitteeBlsPayload(
+            await this.fetchCommitteeSignersFor("generateWebAuthnTieredSignature", framing, blsData.nodeIds),
+            blsData.signature as `0x${string}`,
+            framing.treeDepth
+          )
+        : packBlsPayload(blsData.nodeIds as `0x${string}`[], blsData.signature as `0x${string}`);
 
     if (tier === 2) {
       return packCumulativeT2WA(waBlob, blsPayload);
