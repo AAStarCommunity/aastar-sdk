@@ -56,6 +56,26 @@ the fail-closed sentinel `type(uint256).max`. Unblocking needs BOTH `setEpochLen
 | An operator **registers** a DVT node (idempotent re-run) | `dvt-register-e2e` | `isRegistered=true`, operator owns node | ✅ **PASS** | node `0xad6e924e88001358fa3f642f55ed844da89a06fc8f37c2cf42870d5c88979f82`, operator `0x084b5F85A5149b03aDf9396C7C94D8B8F328FB36` |
 | A community **onboards** a fresh DVT node end-to-end with JASON paying (stake + registerWithProof), plus a dry-run that sends no tx | `dvt-onboard-e2e` | staked + registered; dryRun sends nothing | ✅ **PASS** | register tx `0x1e98792e9bf85faff8b130aeda6197085e149a7cbfa0237f396c88b0249076c0` |
 
+### Signer-identity guards (added after Codex review of #319)
+
+The `≥2 co-signatures` count only means "2 signers" if the ids are DISTINCT and are the ids configured
+for those endpoints — BLS aggregation is Σsig against Σpk, so two partials from the same signer pair
+perfectly (`2·sig₁` vs `2·pk₁`) and a gate that trusted each node's self-reported `nodeId` could report
+a 2-of-3 satisfied by one signer. The runner now pins the reported id to `DVT_CONFIG`'s id for that
+endpoint and rejects duplicates, aborting on ANY fault rather than routing around it.
+
+Mutation-tested against the live stack (config mutated, run, reverted):
+
+| Mutation | Expected | Result |
+|---|---|---|
+| `testnet-local` 3001 entry given a wrong `nodeId` | abort with an identity fault | ✅ `E2E FAILED: … reported nodeId 0x1f5e41c6… but DVT_CONFIG pins 0xdeadbeef… for that endpoint` |
+| two config entries pointed at the same node | abort as a duplicate signer | ✅ `E2E FAILED: … already seen from another endpoint` |
+| unmutated config | PASS | ✅ 3/3 distinct, `validate(new)=0` |
+
+A first attempt put these `throw`s inside the per-node `try`, where the existing `catch` swallowed them
+into a warning and the run still passed on the remaining endpoints — the mutation run is what exposed
+that, and the faults are now collected and asserted after the loop.
+
 ### Negative controls
 
 | Check | Expected | Result |

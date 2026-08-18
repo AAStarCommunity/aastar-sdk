@@ -212,10 +212,17 @@ async function main() {
     // getDvtConfig (not getDvtRelayerUrls) — these are CO-SIGN endpoints, and testnet-local is
     // deliberately relay:false so localhost never leaks into the gasless relay pool.
     const dvtEnvName = process.env.AASTAR_DVT_ENV ?? DVT_CONFIG.active;
-    const tunnels = getDvtConfig().dvtNodes.map((n) => n.url);
+    const dvtNodes = getDvtConfig().dvtNodes;
+    const tunnels = dvtNodes.map((n) => n.url);
     console.log(`     DVT env=${dvtEnvName} -> ${tunnels.join('  ')}`);
     const signed: { nodeId: Hex; signature: Hex }[] = [];
-    for (const url of tunnels) {
+    // Guard against a 2-of-3 that is really 1-of-1. BLS aggregation is Σsig against Σpk, so two
+    // partials from the SAME signer pair perfectly (2·sig₁ vs 2·pk₁) and this gate would report
+    // green on one signer. Trusting each node's SELF-REPORTED nodeId is what makes that reachable,
+    // so: pin the reported id to the id configured for that endpoint, and reject duplicates.
+    const seenNodeIds = new Set<string>();
+    const identityFaults: string[] = [];
+    for (const { url, nodeId: expectedNodeId } of dvtNodes) {
         try {
             const res = await fetch(`${url}/signature/sign`, {
                 method: 'POST', headers: { 'content-type': 'application/json' },
@@ -233,11 +240,39 @@ async function main() {
                 c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [norm(body.nodeId)] })
             )) as boolean;
             if (!registered) { console.warn(`    ! ${url} nodeId not registered`); continue; }
-            signed.push({ nodeId: norm(body.nodeId), signature: norm(body.signature) });
+            // Identity problems are recorded, NOT thrown here: this try/catch swallows throws into a
+            // per-node warning, which would quietly demote "a node is impersonating another" to a
+            // skipped endpoint. Collected and asserted after the loop so the gate aborts loudly.
+            const reported = norm(body.nodeId);
+            if (reported !== norm(expectedNodeId)) {
+                identityFaults.push(
+                    `${url} reported nodeId ${reported} but DVT_CONFIG pins ${norm(expectedNodeId)} for that endpoint`
+                );
+                continue;
+            }
+            if (seenNodeIds.has(reported)) {
+                identityFaults.push(`${url} reported nodeId ${reported}, already seen from another endpoint`);
+                continue;
+            }
+            seenNodeIds.add(reported);
+            signed.push({ nodeId: reported, signature: norm(body.signature) });
             console.log(`    ${url.replace('https://', '')}  nodeId=${norm(body.nodeId).slice(0, 16)}…  registered`);
         } catch (e) { console.warn(`    ! ${url} ${(e as Error).message.slice(0, 80)}`); }
     }
+    // Abort on ANY identity fault, even if the remaining endpoints could still make quorum. A node
+    // whose reported identity does not match the configured one — or that duplicates another — means
+    // the signer set is not what this gate claims to be exercising, and a release gate must not pass
+    // by quietly routing around it.
+    if (identityFaults.length > 0) {
+        throw new Error(
+            `DVT signer identity fault(s), refusing to aggregate:\n  - ${identityFaults.join('\n  - ')}\n` +
+            `An aggregate of k partials from fewer than k DISTINCT signers still pairs (2·sig₁ vs 2·pk₁), ` +
+            `so an unverified signer set would report a quorum that does not exist.`
+        );
+    }
     if (signed.length < 2) throw new Error(`need >= 2 registered node co-signatures, got ${signed.length}`);
+    // Belt and braces: the count above is only meaningful because the ids are distinct.
+    if (seenNodeIds.size !== signed.length) throw new Error('signer set is not distinct — aborting');
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
     const blsSignature = encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex);
     const nodeIds = signed.map((s) => s.nodeId);
