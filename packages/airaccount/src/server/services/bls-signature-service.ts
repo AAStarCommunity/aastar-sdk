@@ -14,6 +14,19 @@ import {
   packCumulativeT3WA,
   packEcdsaAlgId,
 } from "../../migration/viem/bls-packing";
+import {
+  AAStarAirAccountV7ABI,
+  AAStarCommitteeValidatorABI,
+  getMountedDvtValidator,
+} from "@aastar/core";
+import {
+  AbiDecodingZeroDataError,
+  BaseError,
+  ContractFunctionZeroDataError,
+  HttpRequestError,
+  RpcRequestError,
+  TimeoutError,
+} from "viem";
 import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter } from "../interfaces/storage-adapter";
@@ -109,6 +122,175 @@ export class BLSSignatureService {
     logger?: ILogger
   ) {
     this.logger = logger ?? new ConsoleLogger("[BLSSignatureService]");
+  }
+
+  /**
+   * Fail closed when the DVT validator MOUNTED FOR THIS ACCOUNT is in COMMITTEE mode (CC-98/CC-103).
+   *
+   * The cumulative packers CAN emit committee framing (FU-18), but this service always hands them
+   * bare `nodeIds` — it has no committee-signer plumbing (slot + Merkle proof fetch, and the
+   * one-time owner-only `enrollInCommitteeValidator()` tx it cannot send on the user's behalf).
+   * Under `committeeActive() == true` the account decodes committee framing, so a legacy-framed
+   * composite is guaranteed to be REJECTED on-chain. Throwing beats returning those bytes: the
+   * whole point of FU-18 was that a wrong-framing payload fails as an opaque `validateUserOp != 0`
+   * far from its cause. Full committee support for this path is FU-19.
+   *
+   * EVERYTHING here is derived from the CHAIN — never from the static address book, never from the
+   * storage record (Codex review, rounds 2-3). Two earlier revisions were wrong in the same way,
+   * trusting a local copy of state the chain owns:
+   *   - `CANONICAL_ADDRESSES` as both the validator to read and a "does this chain have committee
+   *     infra" precondition, so a non-canonical deployment WITH committee infra bypassed the guard;
+   *   - the persisted `account.validatorAddress`, which `AccountManager.ensureValidatorRouter()`
+   *     lets an owner legitimately outdate (it sends `setValidator` without writing back), so a
+   *     stale record could name a legacy router while the account really runs on a committee one.
+   * The authoritative chain is therefore read end to end:
+   *
+   *   account.validator()      = the account's own set-once router (on-chain, not the record)
+   *     -> getAlgorithm(0x01)  = the validator actually mounted for THIS account
+   *     -> committeeActive()   = the framing it will decode
+   *
+   * Fail-closed boundary: allowing legacy signing to proceed is the dangerous direction, so it needs
+   * a POSITIVE reason. Exactly one thing earns it — the contract answering, at the ABI level, that it
+   * has no `committeeActive()` (a pre-committee validator, which every legacy deployment is, and for
+   * which legacy framing is correct) — corroborated by `getCode` so that an empty response from a
+   * codeless address, which decodes identically, cannot pass as that answer. Everything else —
+   * transport faults, unrecognised errors, a stripped cause chain, an unresolvable router — refuses
+   * to sign. Guessing legacy is precisely how a guaranteed-rejected signature gets produced.
+   */
+  private async assertNotCommitteeMode(context: string, userId: string): Promise<void> {
+    const isUnset = (a?: string | null) => !a || /^0x0+$/i.test(a);
+    const provider = this.ethereum.getProvider();
+
+    // Deciding "the contract answered 'no such function'" is the ONLY branch that allows legacy
+    // signing to proceed, so it is identified POSITIVELY and everything else fails closed (Codex
+    // review r3). An earlier revision asked the inverse — "is this a transport fault?" — and allowed
+    // legacy for anything unrecognised; a wrapper/proxy that rethrows as a plain Error, or that
+    // drops viem's cause chain, then lands in the allow branch and emits a doomed signature. The
+    // provider surface here is an injectable client, so that is not hypothetical.
+    //
+    // readContract wraps EVERYTHING (transport faults included) in ContractFunctionExecutionError,
+    // so the wrapper type alone proves nothing: require a genuine ABI-level outcome in the chain AND
+    // the absence of any transport fault.
+    const isAbiLevelAnswer = (e: unknown) => {
+      if (!(e instanceof BaseError)) return false;
+      const transport = e.walk(
+        (x) => x instanceof HttpRequestError || x instanceof TimeoutError || x instanceof RpcRequestError
+      );
+      if (transport) return false;
+      // ZERO-DATA ONLY. A revert is NOT evidence the function is absent (Codex review r4, High):
+      // viem raises ContractFunctionRevertedError for a genuine `execution reverted`, so a deployed
+      // COMMITTEE validator whose committeeActive() reverts — bad state, access control, a proxy
+      // quirk, an implementation bug — would be misread as "pre-committee, legacy is fine" and the
+      // service would emit doomed legacy framing having never learned the mode. getCode() cannot
+      // rescue that: it proves code exists, not what the code does. Only an empty return supports
+      // the conclusion "this contract has no such function".
+      return !!e.walk(
+        (x) => x instanceof ContractFunctionZeroDataError || x instanceof AbiDecodingZeroDataError
+      );
+    };
+
+    const fatal = (detail: string) =>
+      new Error(
+        `${context}: cannot confirm the DVT validator's framing mode, refusing to sign. This path only ` +
+        `emits LEGACY BLS framing ([nodeIdsLength][nodeIds][blsSig]) — if the account's validator is in ` +
+        `committee mode it decodes ([nodeIdsLength][nodeId|slot|proof][blsSig]) and the signature is ` +
+        `rejected on-chain. Guessing legacy here would produce exactly that silent failure, so this ` +
+        `fails closed. Cause: ${detail}`
+      );
+
+    // ── 1. the account's router — read from the ACCOUNT ON-CHAIN, never from storage.
+    // The persisted `validatorAddress` is NOT authoritative (Codex review r3, High): the supported
+    // `AccountManager.ensureValidatorRouter(..., { router })` path sends `setValidator(router)` and
+    // returns WITHOUT writing the new value back to the record. So an owner can legitimately move an
+    // account onto another router while storage still names the old one — and if the real router
+    // mounts a committee validator while the stale one does not, trusting storage silently emits
+    // exactly the doomed legacy signature this guard exists to prevent. No storage compromise
+    // required. The account itself is the only authority on its own set-once router.
+    let router: string;
+    try {
+      const account = await this.storage.findAccountByUserId(userId);
+      if (!account) throw new Error(`no account record for userId ${userId}`);
+      if (isUnset(account.address)) throw new Error(`account record for userId ${userId} has no address`);
+      router = (await provider.readContract({
+        address: account.address as `0x${string}`,
+        abi: AAStarAirAccountV7ABI,
+        functionName: "validator",
+      })) as string;
+      if (isUnset(router)) throw new Error(`account ${account.address} has no validator router set on-chain`);
+    } catch (e) {
+      throw fatal(`could not resolve the account's validator router — ${(e as Error).message}`);
+    }
+
+    // ── 2. what is mounted at algId 0x01 on that router
+    let validator: string;
+    try {
+      validator = await getMountedDvtValidator(provider, router as `0x${string}`);
+    } catch (e) {
+      throw fatal(`could not read getAlgorithm(0x01) from router ${router} — ${(e as Error).message}`);
+    }
+    // Nothing mounted at all ⇒ no DVT validator ⇒ committee framing is not reachable.
+    if (isUnset(validator)) return;
+
+    // ── 3. the framing that validator will decode
+    let active: boolean;
+    try {
+      active = (await provider.readContract({
+        address: validator as `0x${string}`,
+        abi: AAStarCommitteeValidatorABI,
+        functionName: "committeeActive",
+      })) as boolean;
+    } catch (e) {
+      if (!isAbiLevelAnswer(e)) {
+        throw fatal(
+          `could not read committeeActive() from ${validator}, and the failure is not a recognisable ` +
+          `ABI-level answer (so "this validator has no committeeActive()" cannot be concluded from it) ` +
+          `— ${(e as Error).message}`
+        );
+      }
+      // A contract-level failure is ambiguous between two very different situations, and only one of
+      // them makes legacy framing safe:
+      //   (a) a real, deployed, PRE-COMMITTEE validator with no committeeActive() function — legacy
+      //       is correct, and every legacy deployment lands here, so this must not throw; versus
+      //   (b) an address with NO CODE, where the empty return decodes the same way. That is not an
+      //       answer, it means we are reading the wrong thing, and treating it as "legacy" would be
+      //       a silent fail-open — exactly the failure class this guard exists to close.
+      // So confirm there is a contract there before trusting the empty answer.
+      let deployed: boolean;
+      try {
+        const code = await provider.getCode({ address: validator as `0x${string}` });
+        deployed = !!code && code !== "0x";
+      } catch (codeErr) {
+        throw fatal(
+          `committeeActive() on ${validator} failed (${(e as Error).message}) and the follow-up ` +
+          `getCode check could not run — ${(codeErr as Error).message}`
+        );
+      }
+      if (!deployed) {
+        throw fatal(
+          `the router's algId 0x01 points at ${validator}, which has NO CODE — the empty response is not ` +
+          `evidence of a pre-committee validator, it means the mounted address is wrong or the RPC is ` +
+          `serving a different chain`
+        );
+      }
+      // A deployed contract that has no committeeActive(): pre-committee validator, legacy is correct.
+      this.logger.debug?.(
+        `[${context}] ${validator} is deployed but has no committeeActive() — pre-committee validator, ` +
+        `LEGACY framing is correct`
+      );
+      return;
+    }
+
+    if (active) {
+      throw new Error(
+        `${context}: the validator mounted for this account (${validator}, via router ${router}) has ` +
+        `committeeActive() == true, but this path only emits LEGACY BLS framing ` +
+        `([nodeIdsLength][nodeIds][blsSig]) — the account would decode committee framing ` +
+        `([nodeIdsLength][nodeId|slot|proof][blsSig]) and reject the signature on-chain. Committee ` +
+        `support for the server tiered-signature path is FU-19; until then use the SDK-side packers ` +
+        `directly (packCumulativeT2/T3Signature with committeeSigners, or packCommitteeBlsPayload for ` +
+        `0x09/0x0a) with slot+proof from @aastar/core's fetchCommitteeSigners, on an enrolled account.`
+      );
+    }
   }
 
   /** Lazy-initialize BLSManager on first use. */
@@ -352,6 +534,10 @@ export class BLSSignatureService {
       throw new Error(`P256 signature required for Tier ${tier}`);
     }
 
+    // Fail closed BEFORE the DVT round-trip if committee mode is on — this path emits legacy framing
+    // only, so co-signing first would burn 3 node calls to produce bytes the chain will reject.
+    await this.assertNotCommitteeMode("generateTieredSignature", userId);
+
     // Get BLS components (reuse existing generateBLSSignature for node signing + aggregation).
     // Tier-2/3 packings omit the owner ECDSA over userOpHash (aaSignature), so skip it —
     // saves one owner signature (and one WebAuthn ceremony gesture under the KMS ceremony path).
@@ -424,6 +610,8 @@ export class BLSSignatureService {
     if (tier === 3 && !guardianSigner) {
       throw new Error("Guardian signer required for Tier 3 (WebAuthn)");
     }
+    // Same fail-closed committee guard as the raw-P256 path — packBlsPayload below is legacy-only.
+    await this.assertNotCommitteeMode("generateWebAuthnTieredSignature", userId);
 
     // 1) On-chain passkey factor from the device assertion (verifies challenge == userOpHash,
     //    decodes DER → r/s + low-S; throws in-SDK if the assertion doesn't bind userOpHash).

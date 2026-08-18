@@ -33,7 +33,7 @@ import {
   type Hex,
 } from "viem";
 import { ALG_ECDSA } from "../../core/tier/types";
-import { sortNodeIdsAscending } from "@aastar/core";
+import { sortNodeIdsAscending, encodeCommitteeBLSBlock, type CommitteeSigner } from "@aastar/core";
 import { bls12_381 as bls } from "@noble/curves/bls12-381.js";
 import { p256 } from "@noble/curves/nist.js";
 
@@ -80,6 +80,39 @@ export function packSignature(data: BLSSignatureData): Hex {
 }
 
 /**
+ * Build the BLS block for a cumulative packer from whichever framing the caller supplied,
+ * enforcing that exactly one is present (CC-103/FU-18 — mirrors `dvtWire.ts`'s `buildBLSBlock`:
+ * the account decides legacy-vs-committee from `committeeValidator.committeeActive()`, never
+ * from the payload shape, so an ambiguous call here would silently encode for the wrong mode).
+ *
+ * Legacy   : `[nodeIdsLength(32)][ nodeId(32) × k ][blsSig(256)]` (via {@link packBlsPayload}).
+ * Committee: `[nodeIdsLength(32)][ (nodeId‖slot‖proof)(perSigner) × k ][blsSig(256)]` (via
+ * `@aastar/core`'s `encodeCommitteeBLSBlock` — the single source of truth for the committee wire,
+ * shared with `dvtWire.ts`'s account-level encoders).
+ */
+function buildCumulativeBlsBlock(
+  fn: string,
+  nodeIds: string[] | undefined,
+  committeeSigners: readonly CommitteeSigner[] | undefined,
+  blsSignature: string,
+  treeDepth: number | undefined
+): Hex {
+  if (nodeIds !== undefined && committeeSigners !== undefined) {
+    throw new Error(
+      `${fn}: pass either nodeIds (legacy) or committeeSigners (committee), not both — the account ` +
+      `picks its framing from committeeActive(), so an ambiguous call would encode for the wrong mode`
+    );
+  }
+  if (committeeSigners !== undefined) {
+    return encodeCommitteeBLSBlock(committeeSigners, blsSignature as Hex, treeDepth);
+  }
+  if (nodeIds === undefined) {
+    throw new Error(`${fn}: must pass nodeIds (legacy framing) or committeeSigners (committee framing)`);
+  }
+  return packBlsPayload(nodeIds as Hex[], blsSignature as Hex);
+}
+
+/**
  * Pack cumulative Tier 2 signature (algId 0x04): P256 + BLS.
  *
  * Format (MUST match `_validateCumulativeTier2` in AAStarAirAccountBase.sol — issue #45 Fix 1
@@ -87,27 +120,23 @@ export function packSignature(data: BLSSignatureData): Hex {
  * message point on-chain via hash_to_curve(userOpHash) and verifies the pairing against THAT,
  * so the owner messagePointSignature is redundant and the bytes must NOT be present, or the
  * account's strict-length BLS-payload parse rejects the signature):
- *   [algId=0x04 (1)] [P256 r (32)] [P256 s (32)]
- *   [nodeIdsLength (32)] [nodeIds (N×32)]
- *   [blsAggregateSig (256)]
+ *   [algId=0x04 (1)] [P256 r (32)] [P256 s (32)] [blsBlock]
+ * where blsBlock is legacy `[nodeIdsLength(32)][nodeIds(N×32)][blsAggregateSig(256)]` or, when
+ * `committeeSigners` is supplied (CC-103/FU-18), the committee framing — see
+ * {@link buildCumulativeBlsBlock}.
  */
 export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex {
-  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]); // #274: strict-ascending wire order
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
-  const nodeIdsBytes = encodePacked(
-    Array(nodeIds.length).fill("bytes32"),
-    nodeIds
+  const blsBlock = buildCumulativeBlsBlock(
+    "packCumulativeT2Signature",
+    data.nodeIds,
+    data.committeeSigners,
+    data.blsSignature,
+    data.treeDepth
   );
 
   return encodePacked(
-    ["bytes1", "bytes", "bytes", "bytes", "bytes"],
-    [
-      "0x04",
-      data.p256Signature as Hex,
-      nodeIdsLength,
-      nodeIdsBytes,
-      data.blsSignature as Hex,
-    ]
+    ["bytes1", "bytes", "bytes"],
+    ["0x04", data.p256Signature as Hex, blsBlock]
   );
 }
 
@@ -118,28 +147,21 @@ export function packCumulativeT2Signature(data: CumulativeT2SignatureData): Hex 
  * embedded messagePoint + messagePointSignature were removed by issue #45 Fix 1. The account reads
  * the guardian signature from the LAST 65 bytes and the BLS payload from sigData[64 : len-65], so
  * any extra bytes between the BLS aggregate and the guardian signature break verification):
- *   [algId=0x05 (1)] [P256 r (32)] [P256 s (32)]
- *   [nodeIdsLength (32)] [nodeIds (N×32)]
- *   [blsAggregateSig (256)] [guardianECDSA (65)]
+ *   [algId=0x05 (1)] [P256 r (32)] [P256 s (32)] [blsBlock] [guardianECDSA (65)]
+ * where blsBlock is legacy or committee framing — see {@link buildCumulativeBlsBlock} (CC-103/FU-18).
  */
 export function packCumulativeT3Signature(data: CumulativeT3SignatureData): Hex {
-  const nodeIds = sortNodeIdsAscending(data.nodeIds as Hex[]); // #274: strict-ascending wire order
-  const nodeIdsLength = encodePacked(["uint256"], [BigInt(nodeIds.length)]);
-  const nodeIdsBytes = encodePacked(
-    Array(nodeIds.length).fill("bytes32"),
-    nodeIds
+  const blsBlock = buildCumulativeBlsBlock(
+    "packCumulativeT3Signature",
+    data.nodeIds,
+    data.committeeSigners,
+    data.blsSignature,
+    data.treeDepth
   );
 
   return encodePacked(
-    ["bytes1", "bytes", "bytes", "bytes", "bytes", "bytes"],
-    [
-      "0x05",
-      data.p256Signature as Hex,
-      nodeIdsLength,
-      nodeIdsBytes,
-      data.blsSignature as Hex,
-      data.guardianSignature as Hex,
-    ]
+    ["bytes1", "bytes", "bytes", "bytes"],
+    ["0x05", data.p256Signature as Hex, blsBlock, data.guardianSignature as Hex]
   );
 }
 
@@ -317,17 +339,37 @@ export function packCumulativeT3WA(waBlob: Hex, blsPayload: Hex, guardianSig: He
   ]);
 }
 
-// #274 nodeId strict-ascending sort lives in @aastar/core (crypto/dvtWire) — the single source shared by
-// the core dvtWire encoders and these airaccount packers. Re-exported so ./bls-packing consumers keep it.
-export { sortNodeIdsAscending };
+// #274 nodeId strict-ascending sort and the CC-103/FU-18 committee block encoder live in @aastar/core
+// (crypto/dvtWire) — the single source shared by the core dvtWire encoders and these airaccount packers.
+// Re-exported so ./bls-packing consumers keep them.
+export { sortNodeIdsAscending, encodeCommitteeBLSBlock };
+export type { CommitteeSigner };
 
-/** Build the BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`.
+/** Build the LEGACY BLS payload block shared by the cumulative formats: `[nodeIdsLength(32)][nodeIds(N×32)][blsSig(256)]`.
  *  nodeIds are sorted strictly ascending + dedup-checked before packing (#274). */
 export function packBlsPayload(nodeIds: readonly Hex[], blsSignature: Hex): Hex {
   const sorted = sortNodeIdsAscending(nodeIds);
   const nodeIdsLength = encodePacked(["uint256"], [BigInt(sorted.length)]);
   const nodeIdsBytes = encodePacked(Array(sorted.length).fill("bytes32"), sorted);
   return concat([nodeIdsLength, nodeIdsBytes, blsSignature]);
+}
+
+/**
+ * Build the COMMITTEE-framed BLS payload block (CC-103/FU-18) — the counterpart to
+ * {@link packBlsPayload} for `committeeActive() == true`. Used directly by callers of the WebAuthn
+ * cumulative packers ({@link packCumulativeT2WA}/{@link packCumulativeT3WA}, which take a pre-built
+ * `blsPayload` and are framing-agnostic), and internally by {@link packCumulativeT2Signature}/
+ * {@link packCumulativeT3Signature} when `committeeSigners` is supplied.
+ *
+ * Thin wrapper over `@aastar/core`'s `encodeCommitteeBLSBlock` — kept here so this module has one
+ * place for "the BLS payload block, either framing" rather than half living in `@aastar/core`.
+ */
+export function packCommitteeBlsPayload(
+  signers: readonly CommitteeSigner[],
+  blsSignature: Hex,
+  treeDepth?: number
+): Hex {
+  return encodeCommitteeBLSBlock(signers, blsSignature, treeDepth);
 }
 
 /**

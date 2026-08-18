@@ -20,6 +20,7 @@ export {
   packCumulativeT2WA,
   packCumulativeT3WA,
   packBlsPayload,
+  packCommitteeBlsPayload,
   ALG_CUMULATIVE_T2_WA,
   ALG_CUMULATIVE_T3_WA,
 } from "./migration/viem/bls-packing";

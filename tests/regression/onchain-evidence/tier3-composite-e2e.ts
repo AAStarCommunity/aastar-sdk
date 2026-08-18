@@ -37,7 +37,6 @@ import {
     createWalletClient,
     http,
     concat,
-    encodePacked,
     numberToHex,
     keccak256,
     toBytes,
@@ -60,6 +59,11 @@ import {
     airAccountActions,
     airAccountFactoryActions,
     entryPointActions,
+    getCommitteeState,
+    isAccountEnrolled,
+    fetchCommitteeSigners,
+    assertCommitteeSubmittable,
+    type CommitteeSigner,
 } from '@aastar/core';
 // SDK packer UNDER TEST (the #234-fixed cumulative format) + the message-point helper used to build a
 // REALISTIC negative control (so the old-format rejection isolates the length/format, not bad inputs).
@@ -171,6 +175,27 @@ async function main() {
         console.log(`     setP256Key tx=${tx} status=${r.status}`);
     } else {
         console.log(`     p256Key already set (x=${curX.slice(0, 14)}…)`);
+    }
+
+    // ── (0d) Pick legacy vs COMMITTEE framing from committeeActive() (CC-103/FU-18) ──────────────
+    // The cumulative 0x05 path is verified by the SAME AAStarBLSAlgorithm/AAStarCommitteeValidator
+    // contract as the ALG_BLS (0x01) triple path (both read CANONICAL_ADDRESSES[...].aaStarBLSAlgorithm)
+    // — so once the validator owner flips committeeActive() on-chain, EVERY algorithm it verifies,
+    // cumulative included, must submit committee framing or be rejected. This is exactly the failure
+    // this account hit before FU-18: committeeActive() flipped true and the legacy-only packer started
+    // getting rejected. Never guess the framing — read committeeActive() and, if on, enroll + fetch
+    // real slot/Merkle proofs, mirroring cc103-committee-positive-e2e.ts.
+    const committeeState = await withRpcFallback((c) => getCommitteeState(c, BLS_VERIFIER));
+    console.log(`\n[0d] committeeActive() = ${committeeState.active}${committeeState.active ? ` (requiredQuorum=${committeeState.requiredQuorum}, treeDepth=${committeeState.treeDepth})` : ''}`);
+    if (committeeState.active) {
+        if (!(await withRpcFallback((c) => isAccountEnrolled(c, BLS_VERIFIER, account)))) {
+            const tx = await walletClient.writeContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'enrollInCommitteeValidator', chain: sepolia });
+            const r = await withRpcFallback((c) => c.waitForTransactionReceipt({ hash: tx }));
+            console.log(`     enrollInCommitteeValidator tx=${tx} status=${r.status}`);
+            if (r.status !== 'success') throw new Error('enrollInCommitteeValidator reverted');
+        } else {
+            console.log('     already enrolled in committee validator');
+        }
     }
 
     // ── (1) Build a v0.7 PackedUserOperation + authoritative userOpHash ─────────────────────────
@@ -310,13 +335,26 @@ async function main() {
     const nodeIds = signed.map((s) => s.nodeId);
     console.log(`[3] aggregated ${signed.length} BLS co-signatures (256B), nodeIds=${nodeIds.length}`);
 
+    // ── (3b) COMMITTEE framing: fetch slot + Merkle proof per signer (FU-18) ────────────────────
+    let committeeSigners: CommitteeSigner[] | undefined;
+    if (committeeState.active) {
+        const finalState = await withRpcFallback((c) => assertCommitteeSubmittable(c, BLS_VERIFIER, account, signed.length));
+        const { signers } = await withRpcFallback((c) => fetchCommitteeSigners(c, BLS_VERIFIER, nodeIds));
+        committeeSigners = signers;
+        console.log(`[3b] committee framing: ${signers.length} signer(s), treeDepth=${finalState.treeDepth}, requiredQuorum=${finalState.requiredQuorum}`);
+    }
+
     // ── (4) Guardian EIP-191 personal_sign over userOpHash (65B) ────────────────────────────────
     const guardianSignature = await guardianWallet.signMessage({ account: guardian, message: { raw: userOpHash } });
     console.log(`[4] guardian sig = ${guardianSignature.slice(0, 22)}… (${(guardianSignature.length - 2) / 2}B)`);
 
-    // ── (5) Pack the 0x05 composite with the SDK's (#234-fixed) packer ──────────────────────────
-    const composite = packCumulativeT3Signature({ p256Signature, nodeIds, blsSignature, guardianSignature }) as Hex;
-    console.log(`\n[5] SDK packCumulativeT3Signature = ${(composite.length - 2) / 2} bytes (algId=0x${composite.slice(2, 4)})`);
+    // ── (5) Pack the 0x05 composite with the SDK's (#234-fixed, FU-18 committee-aware) packer ────
+    // Never both nodeIds and committeeSigners (packCumulativeT3Signature throws on that) — the
+    // framing was decided once, in [0d], from committeeActive(), not re-derived from the payload.
+    const composite = (committeeSigners
+        ? packCumulativeT3Signature({ p256Signature, committeeSigners, treeDepth: committeeState.treeDepth, blsSignature, guardianSignature })
+        : packCumulativeT3Signature({ p256Signature, nodeIds, blsSignature, guardianSignature })) as Hex;
+    console.log(`\n[5] SDK packCumulativeT3Signature = ${(composite.length - 2) / 2} bytes (algId=0x${composite.slice(2, 4)}, framing=${committeeSigners ? 'COMMITTEE' : 'legacy'})`);
 
     // ── (6) On-chain oracle: validateUserOp from the EntryPoint (eth_call) ───────────────────────
     async function validate(sigBytes: Hex): Promise<bigint | 'revert'> {
@@ -338,31 +376,48 @@ async function main() {
     // keccak256(messagePoint) — exactly the two fields #45 removed. Every component is individually
     // VALID, so the ONLY difference from the accepted composite is the extra 321 bytes. The rejection
     // therefore isolates the length/format drift (not bad inputs) — addresses #235 review F2.
-    const nodeIdsLen = numberToHex(BigInt(nodeIds.length), { size: 32 });
-    const nodeIdsBytes = nodeIds.length ? (concat(nodeIds) as Hex) : ('0x' as Hex);
+    //
+    // Built by splicing into the ACCEPTED `composite` rather than hand-rebuilding [nodeIdsLen|nodeIds]:
+    // `composite` already carries whichever BLS block framing [5] chose (legacy or committee), so this
+    // negative isolates the messagePoint/mpSig drift under EITHER framing instead of silently reverting
+    // to legacy bytes that committee mode would reject for an unrelated reason (framing, not length).
     const realMessagePoint = (await generateMessagePoint(userOpHash)) as Hex; // 256B EIP-2537 G2
     const realMpSig = await walletClient.signMessage({ account: owner, message: { raw: keccak256(realMessagePoint) } }); // 65B owner ECDSA
-    const oldFormat = encodePacked(
-        ['bytes1', 'bytes', 'bytes', 'bytes', 'bytes', 'bytes', 'bytes', 'bytes'],
-        ['0x05', p256Signature, nodeIdsLen, nodeIdsBytes, blsSignature, realMessagePoint, realMpSig, guardianSignature]
-    ) as Hex;
+    const compositeSansGuardian = composite.slice(0, composite.length - 130) as Hex; // drop trailing 65B guardian sig
+    const oldFormat = concat([compositeSansGuardian, realMessagePoint, realMpSig, guardianSignature]) as Hex;
     const oldResult = await validate(oldFormat);
     console.log(`[7] validateUserOp(OLD format, real messagePoint+mpSig, +321B) = ${oldResult}  -> ${oldResult !== 0n ? '✅ rejected (isolates the length/format drift)' : '❌ accepted (UNEXPECTED)'}`);
 
-    console.log('\n┌─────────────────── EVIDENCE (Tier-3 composite, #234) ───────────────────');
+    // ── (8) Negative: LEGACY framing MUST be rejected while committeeActive() is on (FU-18) ───────
+    // Mirrors cc103-committee-positive-e2e.ts's negative control — proves the account really is
+    // routing this algId through committeeActive() too, not just accepting committee bytes as an
+    // oversized legacy blob.
+    let legacyResult: bigint | 'revert' | undefined;
+    if (committeeSigners) {
+        const legacyUnderCommittee = packCumulativeT3Signature({ p256Signature, nodeIds, blsSignature, guardianSignature }) as Hex;
+        legacyResult = await validate(legacyUnderCommittee);
+        console.log(`[8] validateUserOp(LEGACY framing while committeeActive()) = ${legacyResult}  -> ${legacyResult !== 0n ? '✅ rejected' : '❌ accepted (UNEXPECTED)'}`);
+    }
+
+    console.log('\n┌─────────────────── EVIDENCE (Tier-3 composite, #234 / FU-18) ───────────');
     console.log(`│ account        : ${account}`);
     console.log(`│ owner / guardian: ${owner.address} / ${guardian.address}`);
     console.log(`│ p256 passkey x : ${p256X}`);
     console.log(`│ userOpHash     : ${userOpHash}`);
     console.log(`│ nodeIds        : ${nodeIds.join(', ')}`);
+    console.log(`│ framing        : ${committeeSigners ? `COMMITTEE (${committeeSigners.length} signer(s))` : 'legacy'}`);
     console.log(`│ composite bytes: ${(composite.length - 2) / 2} (algId 0x05)`);
     console.log(`│ validate(new)  : ${accepted}  ${accepted === 0n ? '= 0 ✅ ACCEPTED' : '❌'}`);
     console.log(`│ validate(old)  : ${oldResult}  ${oldResult !== 0n ? '✅ rejected' : '❌ accepted'}`);
+    if (legacyResult !== undefined) {
+        console.log(`│ validate(legacy under committee): ${legacyResult}  ${legacyResult !== 0n ? '✅ rejected' : '❌ accepted'}`);
+    }
     console.log('└──────────────────────────────────────────────────────────────────────────');
 
     if (accepted !== 0n) throw new Error('FAIL: SDK-packed 0x05 composite was NOT accepted on-chain');
     if (oldResult === 0n) throw new Error('FAIL: old (messagePoint) format was accepted — fix is not load-bearing');
-    console.log('\n🎉 PASS — Tier-3 composite ACCEPTED on-chain; old pre-#234 format rejected.');
+    if (legacyResult === 0n) throw new Error('FAIL: LEGACY framing was accepted while committeeActive() is on — framing is not being enforced');
+    console.log('\n🎉 PASS — Tier-3 composite ACCEPTED on-chain; old pre-#234 format rejected' + (committeeSigners ? '; legacy framing rejected under committee mode.' : '.'));
 }
 
 main().catch((e) => { console.error(`\n❌ E2E FAILED: ${e.message}`); process.exit(1); });
