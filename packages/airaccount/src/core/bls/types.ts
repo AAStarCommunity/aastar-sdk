@@ -1,3 +1,5 @@
+import type { CommitteeSigner } from "@aastar/core";
+
 export interface BLSNode {
   index?: number;
   nodeId: string;
@@ -32,8 +34,16 @@ export interface BLSConfig {
  */
 export interface CumulativeT2SignatureData {
   p256Signature: string; // 64 bytes: [r(32)][s(32)]
-  nodeIds: string[];
+  /** Explicit bytes32 node IDs — LEGACY framing (`committeeActive() == false`). Mutually exclusive with {@link committeeSigners}. */
+  nodeIds?: string[];
   blsSignature: string; // EIP-2537 aggregate BLS signature
+  /**
+   * COMMITTEE framing (`committeeActive() == true`, CC-98/CC-103, FU-18): each signer carries its
+   * `slot` + Merkle proof against the frozen committee set root. Mutually exclusive with {@link nodeIds}.
+   */
+  committeeSigners?: readonly CommitteeSigner[];
+  /** Validator `TREE_DEPTH()`. Read it on-chain; defaults to 14 (`COMMITTEE_TREE_DEPTH_DEFAULT`) when `committeeSigners` is used. */
+  treeDepth?: number;
   // NOTE: messagePoint / messagePointSignature were removed from the on-chain cumulative format by
   // contract issue #45 Fix 1 (the account recomputes the message point from userOpHash and the owner
   // messagePointSignature is redundant). They are intentionally absent here — re-adding them would

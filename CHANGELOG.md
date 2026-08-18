@@ -2,6 +2,69 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.0] - 2026-08-18
+**SDK Code Integrity Hash**: `691e896e7f57c01bec14ced14aaecda7dad7031e2952389db5df9ad044e403fe`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Committee framing for the cumulative signature family, and the server path that emits it.** `0.44.0/0.44.1` shipped the committee wire in `@aastar/core` (`dvtWire.ts`) — but the cumulative packers in `@aastar/airaccount` are a SECOND implementation of the same concept and were left legacy-only. With `committeeActive() == true` live on Sepolia, **0.44.1's `packCumulativeT2/T3Signature` produces signatures the chain rejects.** This release fixes that path.
+
+### Fixed — cumulative packers were still emitting LEGACY framing (FU-18)
+
+CC-103 named six affected signature types; only the `dvtWire.ts` family (`0x01`/`0x04`/`0x05`) had been converted. Evidence it was real: after dvt flipped `committeeActive=true`, `tier3-composite-e2e` got past node registration and had its `0x05` **rejected** — exactly what this branch's own negative control predicts.
+
+- **[FIX]** `packCumulativeT2Signature` / `packCumulativeT3Signature` accept `committeeSigners` (mutually exclusive with `nodeIds`; neither is an error). The BLS block routes through a shared builder that delegates to `@aastar/core`'s `encodeCommitteeBLSBlock` — **no committee bytes are constructed in `@aastar/airaccount`**, which is the whole point given how this bug happened.
+- **[ADD]** `packCommitteeBlsPayload` — the committee counterpart to `packBlsPayload` for the `0x09`/`0x0a` WebAuthn callers. The WA packers themselves need no change: they take a pre-built block and are framing-agnostic.
+- **Legacy output is byte-identical.** The pre-existing golden parity vectors pass untouched.
+- **`weighted 0x07` deliberately NOT changed.** CC-103 lists it, but it resolves to `WeightedSignatureService` governance calls signed by plain owner ECDSA — no `nodeIds`, no BLS block, nothing to reframe.
+
+### Added — the server tiered-signature path now emits committee framing (FU-19)
+
+Found in self-review: `BLSSignatureService` has chain access and always handed the packers bare `nodeIds`, so under committee mode it silently produced signatures destined for on-chain rejection — the same gap, one layer up. Fixing the packer while leaving this would be fixing the tool and not the caller.
+
+- **[ADD]** `resolveCommitteeFraming` returns `legacy | { committee, validator, treeDepth }`; both tiered paths consume it (raw-P256 `0x04`/`0x05` passes `committeeSigners`, WebAuthn `0x09`/`0x0a` builds via `packCommitteeBlsPayload`). `TREE_DEPTH` is read from the mounted validator, never assumed (CC-103 Q4). Resolved BEFORE the DVT round-trip, so a bad state fails without burning three node calls.
+- **[ADD]** `encodeEnrollInCommitteeValidator()` in `@aastar/core`. `enrollInCommitteeValidator()` is an OWNER-only tx the server cannot send; rather than dead-ending, the SDK throws with the target address **and the calldata**, so whoever holds the owner wallet can execute it and retry.
+- **[ADD]** Two payload safety checks: a proof length disagreeing with the validator's own `TREE_DEPTH` is refused (on-chain `_verifyMerkle` would reject it anyway); and a committee-set mutation after the proofs were read is refused, because `getMerkleProof` proves against the CURRENT root while the contract verifies the FROZEN `setRoot[e-1]` — surfacing the FU-9 risk at the point it bites instead of shipping stale proofs.
+
+### Security — fail-closed semantics, hardened over four adversarial review rounds
+
+Nothing about the framing decision is inferred from local state:
+
+- **Not the static address book.** An earlier revision used `CANONICAL_ADDRESSES` both as the validator to read and as a "does this chain have committee infra" precondition — so a non-canonical deployment WITH committee infra bypassed the guard entirely.
+- **Not the storage record.** `AccountManager.ensureValidatorRouter()` sends `setValidator()` **without writing back**, so an owner can legitimately outdate `account.validatorAddress`; a stale legacy router would mask a real committee one. Reachable through the supported public API, no storage compromise needed. The guard now always reads the account's own on-chain `validator()`.
+- **Allowing legacy requires a POSITIVE reason.** Only an ABI-level **zero-data** answer (`ContractFunctionZeroDataError` / `AbiDecodingZeroDataError`) counts as "this validator has no `committeeActive()`", corroborated by `getCode` so an empty response from a codeless address cannot pass as that answer. A **revert is not** that answer — a committee validator reverting on state or access control would otherwise be read as pre-committee. Transport faults, unknown errors and cause-stripped rethrows all refuse to sign.
+
+> **`legacy` framing is NOT deprecated.** Framing is per-validator state. Accounts on the pre-committee whole-set validator (`0x539B…`) stay on legacy permanently — that contract has no `committeeActive()` at all. Treating an unreadable mode as committee would break every legacy deployment.
+
+### Evidence — REAL transaction, not a simulation
+
+`docs/onchain-evidence/fu18-cumulative-committee-framing-2026-08-18.md`
+
+```
+EntryPoint.handleOps  tx 0xca6c0b69f80e3622009038a7d586a3cf5c00a316257ca03cc314cbd6a9fa5b75
+receipt   status=success  block=11515238  gasUsed=739947
+UserOpEvent  success=true  actualGasUsed=877846  actualGasCost=0.002672405766704878 ETH
+account   0x0533A3505d26aD19Cfd77Cb57ED835F7a88068A5
+framing   COMMITTEE, 3 signers, TREE_DEPTH=14, quorum=2, 1954 bytes (algId 0x05)
+```
+
+`UserOperationEvent.success == true` is the load-bearing assertion — a mined tx alone proves inclusion, not that validation passed and the call ran.
+
+Same account, by `eth_call`, with the negative controls:
+
+```
+validateUserOp(0x05 committee)                 = 0  ACCEPTED
+validateUserOp(old messagePoint format, +321B) = 1  rejected
+validateUserOp(LEGACY framing under committee) = 1  rejected
+```
+
+The last one is what makes the design provable: same signers, same aggregate, packed legacy → rejected. Without it, the positive would be consistent with the account ignoring framing entirely.
+
+**Gas shape** (committee costs materially more than legacy): `verificationGasLimit` 900k — k Merkle proofs on top of the BLS pairing; `preVerificationGas` 200k — a 1954-byte signature is expensive calldata.
+
+### Tests
+
+`@aastar/airaccount` 884 → **917**, `@aastar/core` **529**. 22 packer tests use hand-built golden bytes derived from the CC-103 wire spec (comparing against the encoder they delegate to would be tautological) plus exact per-field offsets and 7 malformed-signer cases. 22 guard/FU-19 tests cover all three chain reads, stale-record divergence, both zero-data shapes, `getCode` three ways, and 11 fail-closed paths — the revert case is mutation-verified.
+
 ## [0.44.1] - 2026-08-18
 **SDK Code Integrity Hash**: `3be811fca2b6fe5463a2e860fc8fc88f7d3394c9770a4f167536919be80e5311`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

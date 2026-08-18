@@ -136,7 +136,7 @@ export const CANONICAL_ADDRESSES = {
     // v0.27.0 DVT-unification (CC-10 Phase 1 / #274): the algId-0x01 verifier is now the unified DVT
     // validator (router.getAlgorithm(0x01)==0x539B, on-chain verified). It enforces strictly-ascending
     // nodeIds (SDK sorts them — #274) and operator registration via registerWithProof (nodeId=keccak256(pubkey)).
-    aaStarBLSAlgorithm: "0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64",  // v0.31.0 algId 0x01 = the CC-98 COMMITTEE validator (dvt #237), NOT the legacy whole-set 0x539B. committeeActive()==false today, so it decodes legacy framing; see the DVT-node caveat in the header note.
+    aaStarBLSAlgorithm: "0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64",  // v0.31.0 algId 0x01 = the CC-98 COMMITTEE validator (dvt #237), NOT the legacy whole-set 0x539B. committeeActive()==true since 2026-08-18 (dvt set epochLength=64 + snapshotEpoch, requiredQuorum=2) → it decodes COMMITTEE framing; encode with committeeSigners, never bare nodeIds. Read committeeActive() rather than trusting this note.
     aaStarValidator: "0xA15127e8601e77De7C655bf04ca75cccD8C968f0",  // v0.31.0 ValidatorRouter. getAlgorithm(0x01)=committee validator 0x1A8Db639, (0x08)=0x6b04 — both on-chain verified.
     aaStarBLSAggregator: "0x35775df9a4f4dB42Ea0C46118a12dDd0cEc70609",  // v0.20.0 (SP-side aggregator; unchanged by DVT-unification)
     sessionKeyValidator: "0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f",  // v0.24.0 (algId 0x08; NEW — security fix d #164 block self-call escalation)

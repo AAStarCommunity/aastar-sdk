@@ -1,5 +1,5 @@
-import type { Address, Hex, PublicClient } from 'viem';
-import { AAStarCommitteeValidatorABI, AAStarValidatorABI } from '../abis/index.js';
+import { encodeFunctionData, type Address, type Hex, type PublicClient } from 'viem';
+import { AAStarAirAccountV7ABI, AAStarCommitteeValidatorABI, AAStarValidatorABI } from '../abis/index.js';
 import {
     COMMITTEE_QUORUM_UNAVAILABLE,
     assertCommitteeQuorum,
@@ -170,4 +170,21 @@ export async function assertCommitteeSubmittable(
     }
     assertCommitteeQuorum(signerCount, state.requiredQuorum);
     return state;
+}
+
+/**
+ * Calldata for the account's one-time, OWNER-ONLY `enrollInCommitteeValidator()`.
+ *
+ * A server-side signer cannot send this on a user's behalf — it is a transaction from the account
+ * owner. So rather than dead-ending when an unenrolled account needs committee framing, the SDK
+ * hands back the exact calldata for whoever does hold the owner wallet (the app's own flow, a
+ * UserOp, a Safe, a manual send) to execute against the account address (FU-19).
+ *
+ * Enrollment is idempotent-by-necessity: check {@link isAccountEnrolled} first and skip when true.
+ */
+export function encodeEnrollInCommitteeValidator(): Hex {
+    return encodeFunctionData({
+        abi: AAStarAirAccountV7ABI,
+        functionName: 'enrollInCommitteeValidator',
+    });
 }
