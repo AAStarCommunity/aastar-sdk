@@ -50,6 +50,8 @@ import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES,
+    DVT_CONFIG,
+    getDvtConfig,
     EntryPointABI,
     AAStarAirAccountV7ABI,
     AAStarBLSAlgorithmABI,
@@ -61,7 +63,7 @@ import {
 } from '@aastar/core';
 // SDK packer UNDER TEST (the #234-fixed cumulative format) + the message-point helper used to build a
 // REALISTIC negative control (so the old-format rejection isolates the length/format, not bad inputs).
-import { packCumulativeT3Signature, generateMessagePoint } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { packCumulativeT3Signature, generateMessagePoint, packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -190,31 +192,119 @@ async function main() {
     console.log(`[2] P256 sig (r||s) = ${p256Signature.slice(0, 26)}… (${(p256Signature.length - 2) / 2}B)`);
 
     // ── (3) DVT node co-signatures over userOpHash → aggregate ──────────────────────────────────
-    const ownerAuth = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    // #257/#261: the DVT forwards ownerAuth verbatim to account.isValidOwnerAuth(userOpHash, ownerAuth),
+    // which selects its verification branch from the LEADING TAG BYTE and rejects anything that is not
+    // exactly 66 bytes. This used to send the bare 65-byte signature, so every node answered
+    // 403 "owner authorization required" — verified on-chain: raw 65B -> 0xffffffff (rejected),
+    // 0x01||sig -> 0xa0cf00cf (accepted). Use the SDK packer rather than re-deriving the frame here.
+    const ownerAuth = packOwnerAuthEcdsa(
+        await walletClient.signMessage({ account: owner, message: { raw: userOpHash } })
+    );
     const userOpRpc = {
         sender: userOp.sender, nonce: numberToHex(userOp.nonce), initCode: userOp.initCode, callData: userOp.callData,
         accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas),
         gasFees: userOp.gasFees, paymasterAndData: userOp.paymasterAndData, signature: userOp.signature,
     };
-    const tunnels = ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io'];
+    // Resolved from DVT_CONFIG, not hardcoded: `AASTAR_DVT_ENV=testnet-local` swaps the public
+    // tunnels for locally-run nodes (same registered BLS keys, so the aggregate still verifies)
+    // when dvt1/2/3.aastar.io are unreachable. Previously these three URLs were inline, which made
+    // the run un-redirectable and left this mandatory release gate hostage to the tunnel.
+    // getDvtConfig (not getDvtRelayerUrls) — these are CO-SIGN endpoints, and testnet-local is
+    // deliberately relay:false so localhost never leaks into the gasless relay pool.
+    const dvtEnvName = process.env.AASTAR_DVT_ENV ?? DVT_CONFIG.active;
+    const dvtNodes = getDvtConfig().dvtNodes;
+    const tunnels = dvtNodes.map((n) => n.url);
+    console.log(`     DVT env=${dvtEnvName} -> ${tunnels.join('  ')}`);
     const signed: { nodeId: Hex; signature: Hex }[] = [];
-    for (const url of tunnels) {
+    // Defence in depth on "the signer set is what this gate claims". BLS aggregation is Σsig against
+    // Σpk, so k partials from fewer than k DISTINCT signers still pair (2·sig₁ vs 2·pk₁).
+    //
+    // FIRST line of defence is on-chain and already covers the repeated-id form: AAStarValidator.sol
+    // :236-242 rejects non-ascending nodeIds precisely to block "one node inflating the aggregate by
+    // repeating itself", and the SDK sorts before submitting (bls-packing sortNodeIdsAscending, #274).
+    // So a duplicate id does not slip through to a green — it makes validateUserOp return 1.
+    //
+    // What these checks add is (a) failing HERE, with an actionable message, instead of as an opaque
+    // validate()=1 downstream, (b) catching config drift, and (c) the one form the chain cannot see:
+    // the SAME KEY registered under TWO nodeIds. registerPublicKey (AAStarValidator.sol:826-843)
+    // enforces only !isRegistered[nodeId] — nothing stops one pubkey being registered twice while
+    // requireStake is false, which is exactly how these bootstrap nodes were registered. Two distinct,
+    // registered, ascending ids backed by one key pair as 2·pk₁ and WOULD go green. Signatures catch
+    // it: BLS is deterministic over (key, message), so one key yields byte-identical partials.
+    const seenNodeIds = new Set<string>();
+    const seenSignatures = new Set<string>();
+    const identityFaults: string[] = [];
+    for (const { url, nodeId: expectedNodeId } of dvtNodes) {
         try {
             const res = await fetch(`${url}/signature/sign`, {
                 method: 'POST', headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ userOp: userOpRpc, ownerAuth }),
             });
-            const body = await res.json().catch(() => ({}));
-            if (!res.ok || !body.nodeId || !body.signature) { console.warn(`    ! ${url} -> ${res.status}`); continue; }
+            const raw = await res.text();
+            const body = (() => { try { return JSON.parse(raw); } catch { return {} as any; } })();
+            if (!res.ok || !body.nodeId || !body.signature) {
+                // Print the node's reason. A bare status code (esp. 403 from the owner-auth gate)
+                // gives the operator nothing to act on and sent us guessing more than once.
+                console.warn(`    ! ${url} -> ${res.status} ${raw.slice(0, 200)}`);
+                continue;
+            }
+            // Identity problems are recorded, NOT thrown here: this try/catch swallows throws into a
+            // per-node warning, which would quietly demote "a node is impersonating another" to a
+            // skipped endpoint. Collected and asserted after the loop so the gate aborts loudly.
+            // Checked BEFORE the isRegistered RPC: an impostor should not cost a round trip, and it
+            // keeps the two "wrong identity" cases from being handled inconsistently.
+            const reported = norm(body.nodeId);
+            if (reported !== norm(expectedNodeId)) {
+                identityFaults.push(
+                    `${url} reported nodeId ${reported} but DVT_CONFIG pins ${norm(expectedNodeId)} for that ` +
+                    `endpoint — either that endpoint is serving another node's identity, OR DVT_CONFIG is ` +
+                    `stale (see the refresh note at packages/core/src/dvt.ts, CC-12: operators re-registering ` +
+                    `on 0x539B get new keccak256-derived ids, and these pinned values are v0.20 fallbacks)`
+                );
+                continue;
+            }
+            if (seenNodeIds.has(reported)) {
+                identityFaults.push(`${url} reported nodeId ${reported}, already seen from another endpoint`);
+                continue;
+            }
+            const sig = norm(body.signature);
+            if (seenSignatures.has(sig)) {
+                identityFaults.push(
+                    `${url} returned a partial byte-identical to another endpoint's — BLS is deterministic ` +
+                    `over (key, message), so this is ONE key behind two nodeIds, not two signers`
+                );
+                continue;
+            }
             const registered = (await withRpcFallback((c) =>
-                c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [norm(body.nodeId)] })
+                c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [reported] })
             )) as boolean;
             if (!registered) { console.warn(`    ! ${url} nodeId not registered`); continue; }
-            signed.push({ nodeId: norm(body.nodeId), signature: norm(body.signature) });
+            seenNodeIds.add(reported);
+            seenSignatures.add(sig);
+            signed.push({ nodeId: reported, signature: sig });
             console.log(`    ${url.replace('https://', '')}  nodeId=${norm(body.nodeId).slice(0, 16)}…  registered`);
         } catch (e) { console.warn(`    ! ${url} ${(e as Error).message.slice(0, 80)}`); }
     }
+    // Abort on ANY identity fault, even if the remaining endpoints could still make quorum. A node
+    // whose reported identity does not match the configured one — or that duplicates another — means
+    // the signer set is not what this gate claims to be exercising, and a release gate must not pass
+    // by quietly routing around it.
+    if (identityFaults.length > 0) {
+        throw new Error(
+            `DVT signer identity fault(s), refusing to aggregate:\n  - ${identityFaults.join('\n  - ')}\n` +
+            `An aggregate of k partials from fewer than k DISTINCT signers still pairs (2·sig₁ vs 2·pk₁), ` +
+            `so an unverified signer set would report a quorum that does not exist.`
+        );
+    }
     if (signed.length < 2) throw new Error(`need >= 2 registered node co-signatures, got ${signed.length}`);
+    // Belt and braces. Reachable only if a node returned a truthy-but-non-string signature (norm
+    // throws inside the push expression after the adds), so it does NOT claim to know the cause.
+    if (seenNodeIds.size !== signed.length || seenSignatures.size !== signed.length) {
+        throw new Error(
+            `collected ${signed.length} partial(s) but ${seenNodeIds.size} id(s) / ${seenSignatures.size} ` +
+            `signature(s) were accepted — inconsistent state, aborting fail-closed`
+        );
+    }
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
     const blsSignature = encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex);
     const nodeIds = signed.map((s) => s.nodeId);

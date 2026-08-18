@@ -298,6 +298,50 @@ export function getLaunchSaleAddresses(chainId: number): LaunchSaleAddresses | u
 }
 
 /**
+ * airaccount-contract v0.31.0 per-proposal COMMITTEE stack (CC-98 / CC-103).
+ *
+ * Deliberately a SEPARATE group rather than a canonical bump: upstream published only these four
+ * addresses, while the canonical Sepolia AirAccount block carries eleven. Folding four new ones
+ * into canonical would silently produce a half-v0.31.0 / half-v0.28.0 stack with nothing marking
+ * the seam. Canonical stays whole at v0.28.0 until the full v0.31.0 stack is published; committee
+ * work resolves addresses from here. Same reasoning as {@link LAUNCH_SALE_ADDRESSES}.
+ */
+export interface CommitteeStackAddresses {
+  /** AAStarAirAccountFactoryV7 — v0.31.0. `FACTORY_VERSION() == "0.31.0"` (on-chain verified). */
+  factory: Address;
+  /** ValidatorRouter — `getAlgorithm(0x01)` resolves to {@link committeeValidator} (on-chain verified). */
+  router: Address;
+  /** AAStarCommitteeValidator (YetAnotherAA-Validator #237), mounted at algId 0x01 on {@link router}. */
+  committeeValidator: Address;
+  /** Account implementation — `ACCOUNT_VERSION() == "0.31.0"`; `factory.implementation()` matches. */
+  accountImpl: Address;
+  /** Upstream's already-enrolled reference account, for read-only conformance checks. */
+  referenceEnrolledAccount: Address;
+}
+
+export const COMMITTEE_STACK_ADDRESSES: Record<number, CommitteeStackAddresses> = {
+  // --- Sepolia (Chain ID: 11155111) ---
+  // Every value below was read back on-chain (block 11512118) before being written here, not copied
+  // from the cross-repo task comment:
+  //   router.getAlgorithm(0x01) == 0x1A8Db639…   factory.FACTORY_VERSION() == "0.31.0"
+  //   factory.implementation()  == 0x4873b7C1…   accountImpl.ACCOUNT_VERSION() == "0.31.0"
+  //   committeeValidator.TREE_DEPTH() == 14       committeeValidator.activeCount() == 3
+  //   referenceEnrolledAccount.validator() == router; enrolledAccount(ref) == true
+  11155111: {
+    factory: "0x25C1E9F9120a406581f93bA82f7Cfd6805512791",
+    router: "0xA15127e8601e77De7C655bf04ca75cccD8C968f0",
+    committeeValidator: "0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64",
+    accountImpl: "0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad",
+    referenceEnrolledAccount: "0xf249d5708cC3e1Dff42F5B36935FF270BeC403A0",
+  },
+};
+
+/** Resolve the v0.31.0 committee stack for a chain, or `undefined` if it is not deployed there. */
+export function getCommitteeStackAddresses(chainId: number): CommitteeStackAddresses | undefined {
+  return COMMITTEE_STACK_ADDRESSES[chainId];
+}
+
+/**
  * Chain IDs that have a canonical address book in {@link CANONICAL_ADDRESSES}.
  *
  * @example

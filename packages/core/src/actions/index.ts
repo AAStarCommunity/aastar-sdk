@@ -28,4 +28,5 @@ export * from './initConfig.js';
 export * from './agentRegistry.js';
 export * from './sessionKeyValidator.js';
 export * from './forceExit.js';
+export * from './committee.js';
 // validators.ts legacy removed

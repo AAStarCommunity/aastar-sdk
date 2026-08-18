@@ -70,6 +70,7 @@ import {
     blsAlgorithmActions,
     getDefaultDvtNodes,
 } from '@aastar/core';
+import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -255,7 +256,13 @@ async function main() {
     console.log(`\n[2] EntryPoint.getUserOpHash = ${userOpHash}`);
 
     // ── (3) ownerAuth = JASON's EIP-191 personal_sign over the userOpHash ─────────────────────
-    const ownerAuth = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    // #257/#261: the DVT forwards ownerAuth verbatim to account.isValidOwnerAuth, which picks its
+    // branch from the LEADING TAG BYTE and rejects anything not exactly 66 bytes — a bare 65-byte
+    // signature gets 403 "owner authorization required" from every node. Verified on-chain:
+    // raw 65B -> 0xffffffff (rejected), 0x01||sig -> 0xa0cf00cf (accepted).
+    // Keep BOTH forms: the node wants the tagged 66B, on-chain signature material wants the raw 65B.
+    const ownerSig65 = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    const ownerAuth = packOwnerAuthEcdsa(ownerSig65);
     console.log(`\n[3] ownerAuth (JASON EIP-191 personal_sign) = ${ownerAuth.slice(0, 26)}… (${(ownerAuth.length - 2) / 2} bytes)`);
 
     // ── (4) Collect DVT-node co-signatures (live) — resolve tunnel→nodeId dynamically ─────────
@@ -323,7 +330,7 @@ async function main() {
     // ── (8) Negative control: same op, JASON owner ECDSA (algId 0x02) → MUST be rejected ──────
     // approvedAlgIds=[0x01] excludes ECDSA, so even a VALID owner ECDSA sig is rejected by the
     // account's algId-whitelist gate (validateUserOp returns 1 = SIG_VALIDATION_FAILED).
-    const ecdsaSig = concat([numberToHex(ALG_ECDSA, { size: 1 }), ownerAuth]); // [0x02][65-byte owner sig] = 66B
+    const ecdsaSig = concat([numberToHex(ALG_ECDSA, { size: 1 }), ownerSig65]); // [0x02][65-byte owner sig] = 66B
     const ecdsaUserOp = { ...userOp, signature: ecdsaSig };
     console.log(`\n[8] Negative control: validateUserOp with owner ECDSA (0x02||raw-65), simulated from EntryPoint …`);
     let ecdsaValidation: bigint | null = null;

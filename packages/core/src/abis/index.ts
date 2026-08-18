@@ -198,6 +198,10 @@ import ForceExitModuleABIData from './ForceExitModule.json' with { type: 'json' 
 import AirAccountDelegateABIData from './AirAccountDelegate.json' with { type: 'json' };
 import AAStarValidatorABIData from './AAStarValidator.json' with { type: 'json' };
 import AAStarBLSAlgorithmABIData from './AAStarBLSAlgorithm.json' with { type: 'json' };
+// CC-98 / CC-103 per-proposal committee validator (YetAnotherAA-Validator #237). Mounted at
+// algId 0x01 on the v0.31.0 router 0xA15127e8… (on-chain verified). Supersedes the whole-set
+// AAStarBLSAlgorithm for accounts on that router; the two coexist on different routers.
+import AAStarCommitteeValidatorABIData from './AAStarCommitteeValidator.json' with { type: 'json' };
 import AAStarBLSAggregatorABIData from './AAStarBLSAggregator.json' with { type: 'json' };
 import CalldataParserRegistryABIData from './CalldataParserRegistry.json' with { type: 'json' };
 import AirAccountExtensionABIData from './AirAccountExtension.json' with { type: 'json' };
@@ -238,6 +242,9 @@ export const AAStarValidatorArtifact = AAStarValidatorABIData;
 // AirAccount BLS primitives (EIP-2537 pairing). NOT the same as SuperPaymaster's
 // BLSAggregator.json / BLSValidator.json above.
 export const AAStarBLSAlgorithmABI = (AAStarBLSAlgorithmABIData as any).abi || AAStarBLSAlgorithmABIData;
+export const AAStarCommitteeValidatorABI =
+    (AAStarCommitteeValidatorABIData as any).abi || AAStarCommitteeValidatorABIData;
+export const AAStarCommitteeValidatorArtifact = AAStarCommitteeValidatorABIData;
 export const AAStarBLSAlgorithmArtifact = AAStarBLSAlgorithmABIData;
 
 export const AAStarBLSAggregatorABI = (AAStarBLSAggregatorABIData as any).abi || AAStarBLSAggregatorABIData;

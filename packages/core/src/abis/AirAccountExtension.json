@@ -599,6 +599,24 @@
     },
     {
       "type": "function",
+      "name": "proposeP256GuardianAddition",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "y",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "proposeRecovery",
       "inputs": [
         {
@@ -1188,6 +1206,25 @@
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GuardianAdditionProposed",
+      "inputs": [
+        {
+          "name": "guardian",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "executeAfter",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1859,6 +1896,16 @@
           "internalType": "bytes32"
         }
       ]
+    },
+    {
+      "type": "error",
+      "name": "GuardianAdditionNotProposed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardianAdditionTimelockNotExpired",
+      "inputs": []
     },
     {
       "type": "error",
