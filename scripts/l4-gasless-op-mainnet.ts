@@ -96,21 +96,34 @@ function createCsvRecorder(outPath: string, format: CsvFormat) {
         l1FeeWei: bigint;
         l2ExecutionFeeWei: bigint;
         totalCostWei: bigint;
+        /** `undefined` = not measured. v1/v2 keep emitting '0' for back-compat; v3 emits ''. */
         xpntsConsumed?: string;
         tokenName?: string;
     }) => {
         const timestamp = new Date().toISOString();
-        const xpntsConsumed = params.xpntsConsumed ?? '0';
+        const measuredXpnts = params.xpntsConsumed;              // undefined = not measured
+        const xpntsConsumed = measuredXpnts ?? '0';               // v1/v2 legacy default
         const tokenName = params.tokenName ?? 'N/A';
 
         if (format === 'v3') {
             const totalCostEth = formatEther(params.totalCostWei);
-            // SettlementRate is computed HERE because both operands are already in hand at the point
-            // the row is written — pushing the division downstream is what let xPNTsConsumed be read
-            // as a constant. Guarded: a zero-cost row would otherwise emit Infinity/NaN into the CSV.
+            // SettlementRate is computed HERE because both operands are already in hand where the row
+            // is written — pushing the division downstream is what let xPNTsConsumed be read as a
+            // constant. Empty string when it cannot be computed, never a fabricated number:
+            //   - xPNTs was never measured  -> '' (NOT 0, which would look like a real observation)
+            //   - zero total cost           -> '' (division by zero)
+            // Done in bigint wei rather than Number(formatEther(...)) so the ratio does not
+            // round-trip through floating point.
             const settlementRate =
-                params.totalCostWei > 0n ? (Number(xpntsConsumed) / Number(totalCostEth)).toFixed(4) : '';
-            const row = `${timestamp},${params.label},${params.txHash},${params.gasUsed.toString()},${params.gasUsed.toString()},${params.actualGasUsed?.toString() ?? ''},${params.effectiveGasPriceWei?.toString() ?? ''},${params.l2ExecutionFeeWei.toString()},${params.l1FeeWei.toString()},${params.totalCostWei.toString()},${totalCostEth},${settlementRate},${xpntsConsumed},${tokenName}\n`;
+                measuredXpnts !== undefined && params.totalCostWei > 0n
+                    ? (() => {
+                          const xpntsWei = parseEther(measuredXpnts);      // xPNTs are 18-decimal
+                          const SCALE = 10_000n;                          // 4 dp, integer math
+                          const scaled = (xpntsWei * SCALE) / params.totalCostWei;
+                          return `${scaled / SCALE}.${(scaled % SCALE).toString().padStart(4, '0')}`;
+                      })()
+                    : '';
+            const row = `${timestamp},${params.label},${params.txHash},${params.gasUsed.toString()},${params.gasUsed.toString()},${params.actualGasUsed?.toString() ?? ''},${params.effectiveGasPriceWei?.toString() ?? ''},${params.l2ExecutionFeeWei.toString()},${params.l1FeeWei.toString()},${params.totalCostWei.toString()},${totalCostEth},${settlementRate},${measuredXpnts ?? ''},${tokenName}\n`;
             fs.appendFileSync(outPath, row);
         } else if (format === 'v2') {
             const row = `${timestamp},${params.label},${params.txHash},${params.gasUsed.toString()},${params.l2ExecutionFeeWei.toString()},${params.l1FeeWei.toString()},${params.totalCostWei.toString()},${formatEther(params.totalCostWei)},${xpntsConsumed},${tokenName}\n`;
@@ -191,15 +204,18 @@ async function waitAndCheckReceipt(
         // answerable without reading the collector.
         const txGasUsed = BigInt(receipt.receipt.gasUsed);
         const erc4337ActualGasUsed =
-            receipt.actualGasUsed !== undefined ? BigInt(receipt.actualGasUsed) : undefined;
+            receipt.actualGasUsed != null ? BigInt(receipt.actualGasUsed) : undefined;
         const effectiveGasPriceWei =
-            receipt.receipt.effectiveGasPrice !== undefined ? BigInt(receipt.receipt.effectiveGasPrice) : undefined;
+            receipt.receipt.effectiveGasPrice != null ? BigInt(receipt.receipt.effectiveGasPrice) : undefined;
         const l2ExecutionFeeWei = BigInt(receipt.actualGasCost);
         const l1FeeWei = receipt.receipt.l1Fee ? BigInt(receipt.receipt.l1Fee) : 0n;
         const totalCostWei = l2ExecutionFeeWei + l1FeeWei;
         const totalCostStr = formatEther(totalCostWei);
         
-        let xpntsConsumed = '0';
+        // undefined = NOT MEASURED (no token/user address, or the reads fell back). Distinct from a
+        // measured zero: emitting '0' for both makes a fabricated SettlementRate=0.0000 byte-identical
+        // to a genuine zero-consumption row, contaminating the very CV statistic this schema exists for.
+        let xpntsConsumed: string | undefined;
         if (tokenAddress && userAddress) {
              const debtAfter = await publicClient.readContract({
                 address: tokenAddress,
@@ -375,8 +391,16 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
 
     const defaultOut = path.resolve(__dirname, '../packages/analytics/data/gasless_data_collection.csv');
     const outCsv = getArg('--out-csv') || defaultOut;
-    const csvFormatArg = (getArg('--csv-format') as CsvFormat | undefined) || (outCsv.endsWith('_v2.csv') ? 'v2' : 'v1');
-    const csvFormat: CsvFormat = csvFormatArg === 'v2' ? 'v2' : 'v1';
+    const inferred: CsvFormat = outCsv.endsWith('_v3.csv') ? 'v3' : outCsv.endsWith('_v2.csv') ? 'v2' : 'v1';
+    const csvFormatArg = getArg('--csv-format') ?? inferred;
+    // Validate, never coerce. This spends real ETH on mainnet: silently downgrading an unrecognised
+    // (or newer) --csv-format to v1 produces a file with the wrong schema for transactions that
+    // cannot be re-run. An earlier version of this line collapsed everything that was not 'v2' to
+    // 'v1', which made the whole v3 schema unreachable through every path in the repo.
+    if (csvFormatArg !== 'v1' && csvFormatArg !== 'v2' && csvFormatArg !== 'v3') {
+        throw new Error(`--csv-format must be one of v1 | v2 | v3, got "${csvFormatArg}"`);
+    }
+    const csvFormat: CsvFormat = csvFormatArg;
     const record = createCsvRecorder(outCsv, csvFormat);
 
     const state = loadState(networkName);
