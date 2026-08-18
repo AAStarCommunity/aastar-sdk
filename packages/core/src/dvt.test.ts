@@ -1,5 +1,22 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { DVT_CONFIG, getDvtConfig, getDvtRelayerUrls, getDvtRelayerUrlsForChain, checkDvtConnectivity } from './dvt.js';
+
+/**
+ * `getDvtConfig()` / `getDvtRelayerUrls()` with no argument honour AASTAR_DVT_ENV, so any assertion
+ * about the DEFAULT environment is only meaningful with that variable unset. CI never sets it, which
+ * is why this was invisible — but `AASTAR_DVT_ENV=testnet-local` is now the documented way to run
+ * DVT-dependent E2E against local nodes, so a developer with it exported in their shell would see
+ * these fail for no reason. Clear it per-test and restore it.
+ */
+let savedDvtEnv: string | undefined;
+beforeEach(() => {
+  savedDvtEnv = process.env.AASTAR_DVT_ENV;
+  delete process.env.AASTAR_DVT_ENV;
+});
+afterEach(() => {
+  if (savedDvtEnv === undefined) delete process.env.AASTAR_DVT_ENV;
+  else process.env.AASTAR_DVT_ENV = savedDvtEnv;
+});
 
 describe('DVT config', () => {
   it('defaults to the sepolia environment with 3 nodes', () => {
