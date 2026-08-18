@@ -57,10 +57,30 @@ the account, enrolls via `enrollInCommitteeValidator()` when needed, fetches per
 Merkle proof with `fetchCommitteeSigners`, and only then packs. Under `committeeActive() == false`
 it emits byte-identical legacy output (pinned by the pre-existing golden parity vectors).
 
-## Scope note
+## REAL on-chain execution — `EntryPoint.handleOps`
 
-`validateUserOp` is asserted via `eth_call` from the EntryPoint — the same evidence form as
-`cc103-committee-positive-e2e.ts`. A `handleOps` on-chain transaction is NOT part of this run.
+The eth_call above proves the account ACCEPTS the signature; it does not prove the op EXECUTES.
+`tests/regression/onchain-evidence/tier3-committee-handleops.ts` closes that gap on the SAME account
+(same factory/salt/config, so it is not a lookalike):
+
+```
+handleOps tx  0xca6c0b69f80e3622009038a7d586a3cf5c00a316257ca03cc314cbd6a9fa5b75
+receipt       status=success  block=11515238  gasUsed=739947
+UserOpEvent   success=true  actualGasUsed=877846  actualGasCost=0.002672405766704878 ETH
+userOpHash    0xe9b393cc9a4df6169396b167c9af3a4bf6c5243a138f5e1fc22b5ee14cfba79b
+framing       COMMITTEE, 3 signers, TREE_DEPTH=14, quorum=2, 1954 bytes (algId 0x05)
+callData      execute(owner, 0, 0x)  — benign 0-ETH self-call; the payload is not the point
+deposit       depositTo tx 0x7e7af6bd548b45bffc9368eed4b6b69974e83ab91f3c13af19c69e54833281da
+explorer      https://sepolia.etherscan.io/tx/0xca6c0b69f80e3622009038a7d586a3cf5c00a316257ca03cc314cbd6a9fa5b75
+```
+
+`UserOperationEvent.success == true` is the assertion that matters — a mined transaction alone would
+only prove the bundle was included, not that validation passed and the call ran. The runner also
+re-checks `validateUserOp == 0` by eth_call BEFORE submitting, so a doomed op never costs gas.
+
+Gas note: `verificationGasLimit` is 900k because committee framing verifies k Merkle proofs on top of
+the BLS pairing, and `preVerificationGas` is 200k because a 1954-byte signature is expensive calldata.
+Legacy framing needs materially less on both counts.
 
 ## Environment
 
