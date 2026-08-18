@@ -78,10 +78,17 @@ type FnChange = { contract: string; kind: 'function' | 'event' | 'error'; sig: s
 const report = { missing: [] as { level: string; contract: string; copiedFrom?: string }[], drifted: [] as string[], changes: [] as FnChange[], newContracts: [] as string[] };
 const log = (m: string) => { if (!JSON_OUT) console.log(m); };
 
+// REQUIRE_UPSTREAM=1 turns "no upstream checked out" into a hard failure instead of a vacuous
+// pass. Without it this script prints "ABIs complete + in sync with upstream" after comparing
+// against zero artifacts — see the note in .github/workflows/ci.yml.
+const REQUIRE_UPSTREAM = process.env.REQUIRE_UPSTREAM === '1';
+let scannedLevels = 0;
+
 for (const lvl of LEVELS) {
   const src = firstDir(lvl.srcDirs);
   const out = firstDir(lvl.outDirs);
   if (!src || !out) { log(`⚠️  ${lvl.name}: src/out not found locally — skipped`); continue; }
+  scannedLevels++;
   log(`\n📦 ${lvl.name}`);
 
   // (1) completeness — concrete contracts missing from the SDK
@@ -115,10 +122,22 @@ for (const name of sdkAbis) {
   }
 }
 
+// Checked BEFORE the --json / --fix early exits: with no upstream, `--fix` would otherwise
+// report "applied fixes" and `--json` an empty all-clear report, both having done nothing.
+if (scannedLevels === 0 && REQUIRE_UPSTREAM) {
+  console.error(`FAIL: REQUIRE_UPSTREAM=1 but none of the ${LEVELS.length} upstream levels is checked out — nothing was compared.`);
+  process.exit(1);
+}
+
 if (JSON_OUT) { console.log(JSON.stringify(report, null, 2)); process.exit(0); }
 
 const problems = report.missing.length + report.drifted.length;
 log(`\n${report.missing.length} missing · ${report.drifted.length} drifted · ${report.changes.length} fn/event/error change(s).`);
 if (FIX) { log('✅ applied fixes (review `git diff packages/core/src/abis/`, add exports for any new contract, then run abi:triage).'); process.exit(0); }
 if (problems > 0) { console.error('\nRun `pnpm run abi:sync --fix` to refresh ABIs, then `pnpm run abi:triage` to decide wrapping.'); process.exit(1); }
+if (scannedLevels === 0) {
+  log('⚠️  no upstream checked out — this run compared NOTHING.');
+  log('    It is a SKIP, not a verification. Run with REQUIRE_UPSTREAM=1 to make it fail instead.');
+  process.exit(0);
+}
 log('PASS: ABIs complete + in sync with upstream.');

@@ -34,16 +34,46 @@ jobs:
       - name: Check browser-safe subpaths
         run: pnpm run check:browser
 
-      # Reports config.{network}.json drift from @aastar/core CANONICAL_ADDRESSES
+      # Hard gate: config.{network}.json must agree with @aastar/core CANONICAL_ADDRESSES
       # (the single source of truth for contract addresses). See P2.8.
-      # ADVISORY for now (continue-on-error): there is known, documented drift
-      # (config.op-sepolia.json is a stale OP-mainnet copy; a sepolia `pnts`
-      # mismatch; a suspected canonical simpleAccountFactory typo) that needs
-      # on-chain verification before reconciling. Flip to a hard gate (remove
-      # continue-on-error) once `pnpm run check:addresses` passes clean.
-      - name: Check contract-address consistency (advisory)
-        continue-on-error: true
+      # Was advisory (continue-on-error) while known drift was being reconciled — the stale
+      # OP-mainnet copy in config.op-sepolia.json, a sepolia `pnts` mismatch, a suspected
+      # canonical simpleAccountFactory typo. All resolved; verified clean across chains
+      # 10 / 11155111 / 11155420, so it is now a blocking gate as that note intended.
+      - name: Check contract-address consistency
         run: pnpm run check:addresses
+
+      # Hard gate: no silent stub (a contract-coupled write path that returns success without
+      # actually submitting) may ship in packages/*/src. Guards the class of bug behind #169,
+      # where a roleData='0x' stub reached production as a bare on-chain revert.
+      - name: Check for silent stubs
+        run: pnpm run check:stubs
 
       - name: Run unit tests
         run: pnpm -r test
+
+      # ---------------------------------------------------------------------------------
+      # DELIBERATELY NOT IN CI: abi:sync / check:abi / check:abi-drift
+      #
+      # These three compare the SDK's vendored ABIs against the upstream contract repos —
+      # SuperPaymaster, airaccount-contract, mycelium/launch — which must be checked out as
+      # SIBLING directories and `forge build`-ed. A GitHub Actions runner has none of them,
+      # so all three find nothing to compare against and exit 0. Measured on a clean
+      # `git archive` checkout with no siblings, they used to report:
+      #
+      #   check:abi-drift → "no upstream out/ dirs found locally — skipping"     → exit 0
+      #   check:abi       → "source not found locally — skipped" ×3, then PASS   → exit 0
+      #   abi:sync        → "0 missing · 0 drifted · PASS: ABIs ... in sync"     → exit 0
+      #
+      # Wiring them in as-is would produce a green "ABIs verified against upstream" signal
+      # from a run that compared against zero artifacts — worse than having no gate, because
+      # it is actively misleading. (upstream-watch.yml documents the same constraint for the
+      # full radar.) They stay a LOCAL / pre-release gate, per docs/RELEASE-CHECKLIST.md.
+      #
+      # Two changes now make that impossible to mistake for verification:
+      #   * with no upstream present they no longer print PASS — they say explicitly that the
+      #     run compared NOTHING and is a SKIP;
+      #   * REQUIRE_UPSTREAM=1 turns "no upstream present" into a hard failure (exit 1).
+      # The release checklist sets that flag. If these are ever to become real CI gates, the
+      # runner must first check out and build the upstream repos, then set REQUIRE_UPSTREAM=1.
+      # ---------------------------------------------------------------------------------

@@ -75,7 +75,13 @@ function concreteContracts(dir: string): string[] {
   return [...new Set(out)];
 }
 
+// Set REQUIRE_UPSTREAM=1 to turn "no upstream checked out" into a hard failure instead of a
+// vacuous pass. Without it this script prints PASS after inspecting zero upstream contracts,
+// which reads as "ABIs complete" when nothing was inspected — see .github/workflows/ci.yml.
+const REQUIRE_UPSTREAM = process.env.REQUIRE_UPSTREAM === '1';
+
 let totalMissing = 0;
+let scannedUpstreams = 0;
 console.log('=== Upstream ABI completeness (SDK has ' + sdkAbis.size + ' ABIs) ===\n');
 
 for (const up of UPSTREAMS) {
@@ -84,6 +90,7 @@ for (const up of UPSTREAMS) {
     console.log(`⚠️  ${up.name}: source not found locally (${up.srcDirs.join(' | ')}) — skipped`);
     continue;
   }
+  scannedUpstreams++;
   const contracts = concreteContracts(dir).filter((c) => !(up.ignore ?? []).includes(c));
   const present = contracts.filter((c) => sdkAbis.has(c));
   const missing = contracts.filter((c) => !sdkAbis.has(c));
@@ -99,5 +106,14 @@ for (const up of UPSTREAMS) {
 if (totalMissing > 0) {
   console.error(`FAIL: ${totalMissing} upstream contract ABI(s) missing from the SDK. Copy them into ${ABIS_DIR.replace(SDK_ROOT + '/', '')} (+ export in abis/index.ts).`);
   process.exit(1);
+}
+if (scannedUpstreams === 0) {
+  if (REQUIRE_UPSTREAM) {
+    console.error(`FAIL: REQUIRE_UPSTREAM=1 but none of the ${UPSTREAMS.length} upstream sources is checked out — nothing was inspected.`);
+    process.exit(1);
+  }
+  console.log('⚠️  no upstream source checked out — this run inspected NOTHING.');
+  console.log('    It is a SKIP, not a verification. Run with REQUIRE_UPSTREAM=1 to make it fail instead.');
+  process.exit(0);
 }
 console.log('PASS: every concrete upstream contract present locally has an SDK ABI.');
