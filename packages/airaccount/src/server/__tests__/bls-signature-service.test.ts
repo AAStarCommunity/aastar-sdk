@@ -197,13 +197,31 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
   /** A wrapper/proxy that rethrew and lost viem's cause chain — NOT a usable answer. */
   const opaqueRethrow = () => new Error("RPC failed");
 
+  const HEAD = 100n;
+  const ROOT_A = ("0x" + "aa".repeat(32)) as `0x${string}`;
+  const ROOT_B = ("0x" + "bb".repeat(32)) as `0x${string}`;
+
+  // The fake HONOURS `blockNumber` (review r5 [Medium]). The previous one destructured only
+  // `functionName`, so a pinned read could be made to answer with state from a LATER block — which is
+  // impossible on a real chain, and was the sole reason the old FU-9 block-comparison test "passed"
+  // against a guard that could never fire. Any read pinned to a block must answer with state as of
+  // that block; a suite that cannot express that cannot catch pin regressions at all.
   const chain = (opts: {
     active?: boolean; mounted?: `0x${string}`;
     routerFails?: boolean; mountedFails?: boolean; activeFails?: () => Error;
     onChainRouter?: `0x${string}`;
-    enrolled?: boolean; treeDepth?: number; proofLen?: number; mutatedAt?: bigint;
+    enrolled?: boolean; treeDepth?: number; proofLen?: number;
+    /** epochSetRoot(e-1); differs from runningRoot when the set moved since the snapshot. */
+    frozenRoot?: `0x${string}`;
+    epoch?: bigint;
+    /** slotPlusOne per nodeId; 0n == not a member. Default: member at the slot getMerkleProof reports. */
+    slotPlusOne?: bigint;
+    requiredQuorum?: bigint;
   } = {}) =>
-    vi.fn().mockImplementation(({ functionName }: any) => {
+    vi.fn().mockImplementation(({ functionName, blockNumber }: any) => {
+      if (blockNumber !== undefined && blockNumber > HEAD) {
+        throw new Error(`fake RPC: read pinned to future block ${blockNumber} (head is ${HEAD})`);
+      }
       if (functionName === "validator") {
         if (opts.routerFails) throw transportFault();
         return opts.onChainRouter ?? ROUTER;
@@ -222,14 +240,19 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
         const d = opts.treeDepth ?? 14;
         return [1n, Array.from({ length: opts.proofLen ?? d }, (_, i) => `0x${String(i).padStart(64, "0")}`)];
       }
-      if (functionName === "lastSetMutationBlock") return opts.mutatedAt ?? 1n;
+      if (functionName === "slotPlusOne") return opts.slotPlusOne ?? 2n; // getMerkleProof reports slot 1
+      if (functionName === "runningRoot") return ROOT_A;
+      if (functionName === "currentEpoch") return opts.epoch ?? 5n;
+      if (functionName === "epochSetRoot") return opts.frozenRoot ?? ROOT_A; // matches runningRoot by default
+      if (functionName === "requiredQuorum") return opts.requiredQuorum ?? 1n;
+      if (functionName === "lastSetMutationBlock") return 1n;
       return 0n;
     });
 
   const makeSvc = (readContract: any, account: any = { address: ACCOUNT, validatorAddress: ROUTER }, getCode?: any) =>
     new BLSSignatureService(
       { blsSeedNodes: [] } as any,
-      { getChainId: () => 11155111, getProvider: () => ({ readContract, getCode: getCode ?? vi.fn().mockResolvedValue("0x6080"), getBlockNumber: vi.fn().mockResolvedValue(100n) }) } as any,
+      { getChainId: () => 11155111, getProvider: () => ({ readContract, getCode: getCode ?? vi.fn().mockResolvedValue("0x6080"), getBlockNumber: vi.fn().mockResolvedValue(HEAD) }) } as any,
       { getBlsConfig: vi.fn().mockResolvedValue(undefined), findAccountByUserId: vi.fn().mockResolvedValue(account) } as any,
       { signMessage: vi.fn() } as any
     );
@@ -261,11 +284,49 @@ describe("committee fail-closed guard (FU-18 / FU-19)", () => {
     await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/TREE_DEPTH|_verifyMerkle/);
   });
 
-  it("REFUSES to pack when the committee set mutated after the proofs were read (FU-9 risk)", async () => {
-    // getMerkleProof proves against the CURRENT root while the contract verifies the FROZEN
-    // setRoot[e-1]; a mutation in between silently invalidates the proofs.
-    const svc = makeSvc(chain({ active: true, enrolled: true, mutatedAt: 999n }));
-    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/set mutated|no longer verify/);
+  it("REFUSES to pack when the set moved since the snapshot — roots, not block numbers (FU-9, r5 High)", async () => {
+    // The previous guard compared `lastSetMutationBlock > atBlock` and was DEAD CODE: core reads
+    // lastSetMutationBlock PINNED to atBlock, and a value read at block N cannot report a mutation
+    // later than N. It only ever went green because the old fake ignored the pin. Roots are what
+    // _verifyMerkle actually checks, so they are what gets compared.
+    const svc = makeSvc(chain({ active: true, enrolled: true, frozenRoot: ROOT_B }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/set has moved|would not verify/);
+  });
+
+  it("the OLD block-number guard could not have fired — pin-honest fake proves it (r5 regression lock)", async () => {
+    // Guards the *reasoning*, not just the new code: with a fake that honours `blockNumber`, no
+    // honest chain state can make a pinned lastSetMutationBlock exceed the head it was pinned to.
+    // If someone reinstates a block-comparison guard, this documents why it is not a protection.
+    const readContract = chain({ active: true, enrolled: true });
+    expect(() => readContract({ functionName: "lastSetMutationBlock", blockNumber: HEAD + 1n }))
+      .toThrow(/future block/);
+    expect(readContract({ functionName: "lastSetMutationBlock", blockNumber: HEAD })).toBeLessThanOrEqual(HEAD);
+  });
+
+  it("REFUSES to pack for a NON-MEMBER nodeId — slot 0 is indistinguishable from a real slot-0 member", async () => {
+    const svc = makeSvc(chain({ active: true, enrolled: true, slotPlusOne: 0n }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/NOT a member/);
+  });
+
+  it("REFUSES to pack when slotPlusOne disagrees with the slot getMerkleProof reported", async () => {
+    // getMerkleProof says slot 1 (fake), so slotPlusOne must be 2. 7 means they disagree.
+    const svc = makeSvc(chain({ active: true, enrolled: true, slotPlusOne: 7n }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/slot mismatch/);
+  });
+
+  it("REFUSES to pack an UNDER-QUORUM aggregate (production was skipping this; evidence scripts were not)", async () => {
+    const svc = makeSvc(chain({ active: true, enrolled: true, requiredQuorum: 3n }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/only 1 committee signer/);
+  });
+
+  it("REFUSES to pack when requiredQuorum() returns the fail-closed sentinel", async () => {
+    const svc = makeSvc(chain({ active: true, enrolled: true, requiredQuorum: (1n << 256n) - 1n }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/fail-closed sentinel/);
+  });
+
+  it("REFUSES to pack when currentEpoch() is 0 — no frozen e-1 snapshot exists", async () => {
+    const svc = makeSvc(chain({ active: true, enrolled: true, epoch: 0n }));
+    await expect(fetchFor(svc, ["0x" + "01".repeat(32)])).rejects.toThrow(/currentEpoch\(\) == 0/);
   });
 
   it("returns well-formed signers when depth matches and the set is stable", async () => {

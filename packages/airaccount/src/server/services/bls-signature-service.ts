@@ -18,6 +18,7 @@ import {
 import {
   AAStarAirAccountV7ABI,
   AAStarCommitteeValidatorABI,
+  assertCommitteeQuorum,
   encodeEnrollInCommitteeValidator,
   fetchCommitteeSigners,
   getMountedDvtValidator,
@@ -31,6 +32,7 @@ import {
   HttpRequestError,
   RpcRequestError,
   TimeoutError,
+  type Hex,
 } from "viem";
 import { TierLevel } from "../../core/tier";
 import { EthereumProvider } from "../providers/ethereum-provider";
@@ -340,30 +342,86 @@ export class BLSSignatureService {
     framing: Extract<CommitteeFraming, { mode: "committee" }>,
     nodeIds: string[]
   ): Promise<CommitteeSigner[]> {
-    const { signers, lastSetMutationBlock, atBlock } = await fetchCommitteeSigners(
-      this.ethereum.getProvider(),
-      framing.validator,
-      nodeIds as `0x${string}`[]
-    );
-    const bad = signers.find((s) => s.merkleProof.length !== framing.treeDepth);
-    if (bad) {
+    const provider = this.ethereum.getProvider();
+    const validator = framing.validator;
+    const read = (functionName: string, args: readonly unknown[] = []) =>
+      provider.readContract({ address: validator, abi: AAStarCommitteeValidatorABI, functionName, args: args as never });
+
+    const { signers } = await fetchCommitteeSigners(provider, validator, nodeIds as `0x${string}`[]);
+
+    // ── proof shape ────────────────────────────────────────────────────────────────────────────
+    const badLen = signers.find((s) => s.merkleProof.length !== framing.treeDepth);
+    if (badLen) {
       throw new Error(
-        `${context}: validator ${framing.validator} returned a ${bad.merkleProof.length}-element Merkle proof ` +
-        `for node ${bad.nodeId} but reports TREE_DEPTH ${framing.treeDepth} — the on-chain _verifyMerkle ` +
+        `${context}: validator ${validator} returned a ${badLen.merkleProof.length}-element Merkle proof ` +
+        `for node ${badLen.nodeId} but reports TREE_DEPTH ${framing.treeDepth} — the on-chain _verifyMerkle ` +
         `would reject this payload, refusing to pack it`
       );
     }
-    // getMerkleProof proves against the CURRENT root while the contract verifies against the FROZEN
-    // setRoot[e-1]; a set mutation between snapshot and submission invalidates these proofs. Frozen-tree
-    // reconstruction is FU-9 — until then, surface the risk instead of silently shipping stale proofs.
-    if (lastSetMutationBlock > atBlock) {
+
+    // ── membership ─────────────────────────────────────────────────────────────────────────────
+    // Length alone proves nothing about WHO the proof is for. `getMerkleProof` on a NON-member
+    // returns slot 0, whose bytes are indistinguishable from a legitimate slot-0 member — so a
+    // length-only check happily packs a payload that dies as an opaque `validateUserOp != 0`
+    // on-chain, which is the exact failure class FU-18/FU-19 exist to eliminate. `slotPlusOne`
+    // is the validator's own membership oracle (0 == not a member) and doubles as an authoritative
+    // cross-check on the slot we are about to sign over.
+    const slots = (await Promise.all(signers.map((s) => read("slotPlusOne", [s.nodeId])))) as bigint[];
+    signers.forEach((s, i) => {
+      const plusOne = slots[i];
+      if (plusOne === 0n) {
+        throw new Error(
+          `${context}: node ${s.nodeId} is NOT a member of the committee set on ${validator} ` +
+          `(slotPlusOne == 0). getMerkleProof returns slot 0 for non-members, which is byte-identical ` +
+          `to a legitimate slot-0 member, so this would have packed and failed opaquely on-chain.`
+        );
+      }
+      if (plusOne - 1n !== BigInt(s.slot)) {
+        throw new Error(
+          `${context}: slot mismatch for node ${s.nodeId} — getMerkleProof says ${s.slot}, ` +
+          `slotPlusOne says ${plusOne - 1n}. The proof would authenticate the wrong leaf.`
+        );
+      }
+    });
+
+    // ── FU-9: are these proofs provably the ones the contract will verify against? ──────────────
+    // getMerkleProof proves against runningRoot() (the CURRENT set), while _verifyMerkle checks the
+    // FROZEN epochSetRoot(e-1). If those two differ, the set has moved since the snapshot and every
+    // proof here is stale.
+    //
+    // A previous revision compared BLOCK NUMBERS (`lastSetMutationBlock > atBlock`) and was DEAD CODE:
+    // `fetchCommitteeSigners` reads lastSetMutationBlock pinned to `atBlock`, and a storage value read
+    // at block N can never report a mutation later than N, so the condition was structurally always
+    // false. Worse, the unit test's fake ignored the `blockNumber` pin, so a guard that could not fire
+    // was reported green — code, comment and a passing test all asserting a protection that did not
+    // exist. Roots are compared instead because they are the thing the contract actually checks.
+    const [runningRoot, epoch] = (await Promise.all([read("runningRoot"), read("currentEpoch")])) as [Hex, bigint];
+    if (epoch === 0n) {
       throw new Error(
-        `${context}: the committee set mutated at block ${lastSetMutationBlock}, after the proofs were read ` +
-        `at ${atBlock} — these proofs may no longer verify against the frozen root. Refusing to pack (FU-9).`
+        `${context}: validator ${validator} reports currentEpoch() == 0, so there is no frozen e-1 ` +
+        `snapshot for _verifyMerkle to check these proofs against. Refusing to pack.`
       );
     }
+    const frozenRoot = (await read("epochSetRoot", [epoch - 1n])) as Hex;
+    if (runningRoot.toLowerCase() !== frozenRoot.toLowerCase()) {
+      throw new Error(
+        `${context}: the committee set has moved since the epoch-${epoch - 1n} snapshot — getMerkleProof ` +
+        `proves against runningRoot ${runningRoot}, but _verifyMerkle checks epochSetRoot(${epoch - 1n}) ` +
+        `= ${frozenRoot}. These proofs would not verify. Refusing to pack (FU-9).`
+      );
+    }
+
+    // ── quorum ─────────────────────────────────────────────────────────────────────────────────
+    // The production signing path was checking only active + enrolled — 2 of the 4 conditions the
+    // evidence scripts check via assertCommitteeSubmittable. Packing an under-quorum aggregate, or
+    // packing at all while requiredQuorum() returns the COMMITTEE_QUORUM_UNAVAILABLE sentinel (this
+    // module's own fail-closed marker meaning committee validation cannot succeed AT ALL), wastes
+    // gas on a guaranteed on-chain rejection. assertCommitteeQuorum names both causes.
+    assertCommitteeQuorum(signers.length, (await read("requiredQuorum")) as bigint);
+
     return signers;
   }
+
 
   /** Lazy-initialize BLSManager on first use. */
   private async ensureInitialized(): Promise<BLSManager> {
