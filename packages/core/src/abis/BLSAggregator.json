@@ -135,6 +135,29 @@
     },
     {
       "type": "function",
+      "name": "executeGuardianSlash",
+      "inputs": [
+        {
+          "name": "fraudProofId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "guiltyGuardians",
+          "type": "address[]",
+          "internalType": "address[]"
+        },
+        {
+          "name": "fraudProof",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "executeProposal",
       "inputs": [
         {
@@ -187,6 +210,19 @@
     },
     {
       "type": "function",
+      "name": "fraudProofVerifier",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getBLSPublicKey",
       "inputs": [
         {
@@ -230,6 +266,30 @@
         },
         {
           "name": "isActive",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "guardianSlashed",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
           "type": "bool",
           "internalType": "bool"
         }
@@ -290,6 +350,25 @@
           "name": "",
           "type": "uint256",
           "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "proposalSignersCommitment",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "stateMutability": "view"
@@ -455,6 +534,19 @@
           "name": "_newThreshold",
           "type": "uint256",
           "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setFraudProofVerifier",
+      "inputs": [
+        {
+          "name": "verifier",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "outputs": [],
@@ -786,6 +878,69 @@
     },
     {
       "type": "event",
+      "name": "FraudProofVerifierUpdated",
+      "inputs": [
+        {
+          "name": "oldAddr",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newAddr",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GuardianSlashSkipped",
+      "inputs": [
+        {
+          "name": "fraudProofId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardian",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GuardianSlashed",
+      "inputs": [
+        {
+          "name": "fraudProofId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "guardian",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "OwnershipTransferred",
       "inputs": [
         {
@@ -1056,6 +1211,11 @@
     },
     {
       "type": "error",
+      "name": "EmptyGuiltyGuardians",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "EmptySignerMask",
       "inputs": []
     },
@@ -1069,6 +1229,11 @@
           "internalType": "bytes4"
         }
       ]
+    },
+    {
+      "type": "error",
+      "name": "FraudProofVerifierNotSet",
+      "inputs": []
     },
     {
       "type": "error",
@@ -1095,6 +1260,17 @@
       "type": "error",
       "name": "InvalidBLSKeyNotOnCurve",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidFraudProof",
+      "inputs": [
+        {
+          "name": "fraudProofId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
     },
     {
       "type": "error",

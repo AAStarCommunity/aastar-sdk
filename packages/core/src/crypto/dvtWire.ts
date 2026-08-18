@@ -164,6 +164,147 @@ export function sortNodeIdsAscending(nodeIds: readonly Hex[]): Hex[] {
     return sorted;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// CC-98 / CC-103 — per-proposal COMMITTEE framing of the BLS block
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One committee signer's membership proof, accompanying its share of the aggregate BLS signature.
+ *
+ * `slot` and `merkleProof` authenticate `nodeId` against the FROZEN committee set root
+ * `setRoot[e-1]` held by `AAStarCommitteeValidator`. They are NOT signed over — the BLS message is
+ * still `bytes(userOpHash)` exactly as in legacy (authoritative: CC-103, dvt from
+ * `AAStarValidator.sol` + `bls.util.ts`; DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_`).
+ */
+export interface CommitteeSigner {
+    /** `bytes32` node id (`keccak256(EIP-2537 G1 pubkey)`). */
+    nodeId: Hex;
+    /** Leaf index of `nodeId` in the frozen committee set. */
+    slot: bigint | number;
+    /** `TREE_DEPTH` sibling hashes, leaf→root order. Length must equal the validator's TREE_DEPTH. */
+    merkleProof: readonly Hex[];
+}
+
+/**
+ * The validator's Merkle tree depth. `AAStarCommitteeValidator.TREE_DEPTH` is a `public constant`
+ * = 14, giving `perSigner = 64 + 14*32 = 512`. Exported only as the DEFAULT for offline/test use:
+ * production callers should read `TREE_DEPTH()` from the mounted validator and pass it through, so
+ * a depth change upstream does not silently produce mis-shaped payloads here (CC-103 Q4 — raised by
+ * KMS, endorsed by airaccount-contract, accepted by dvt).
+ */
+export const COMMITTEE_TREE_DEPTH_DEFAULT = 14 as const;
+
+/** Byte length of one committee signer entry: `nodeId(32) ‖ slot(32) ‖ proof(depth×32)`. */
+export function committeePerSignerLength(treeDepth: number = COMMITTEE_TREE_DEPTH_DEFAULT): number {
+    if (!Number.isInteger(treeDepth) || treeDepth <= 0) {
+        throw new Error(`committeePerSignerLength: treeDepth must be a positive integer, got ${treeDepth}`);
+    }
+    return 2 * NODE_ID_LENGTH + treeDepth * NODE_ID_LENGTH;
+}
+
+/**
+ * Sentinel returned by `AAStarCommitteeValidator.requiredQuorum()` when committee validation cannot
+ * be satisfied at all — `epochLength == 0` (committee off) or the `e-1` snapshot is missing/stale.
+ *
+ * NOT documented in the CC-103 wire spec, which describes `requiredQuorum()` only as `⌈2·m_e/3⌉`;
+ * found by reading it back on-chain (it returned `type(uint256).max` on the live validator) and
+ * confirmed in `AAStarCommitteeValidator.sol:385`. A caller that compares `k >= requiredQuorum()`
+ * without special-casing this can never pass, so {@link assertCommitteeQuorum} rejects it with a
+ * message naming the real cause instead of an impossible-quorum error.
+ */
+export const COMMITTEE_QUORUM_UNAVAILABLE = (1n << 256n) - 1n;
+
+/**
+ * Guard the collected signer count against the validator's live quorum.
+ *
+ * @param signerCount Number of committee signers whose partials are in the aggregate.
+ * @param requiredQuorum Value read from `AAStarCommitteeValidator.requiredQuorum()`.
+ */
+export function assertCommitteeQuorum(signerCount: number, requiredQuorum: bigint): void {
+    if (requiredQuorum === COMMITTEE_QUORUM_UNAVAILABLE) {
+        throw new Error(
+            'assertCommitteeQuorum: validator returned the fail-closed sentinel type(uint256).max — committee ' +
+            'validation cannot succeed right now. Either committee mode is off (epochLength == 0) or the ' +
+            'previous epoch has no usable pinned snapshot (needs snapshotEpoch()). Do not submit a committee ' +
+            'payload until requiredQuorum() returns a real value.'
+        );
+    }
+    if (requiredQuorum === 0n) {
+        throw new Error('assertCommitteeQuorum: requiredQuorum() returned 0, which is never a valid quorum');
+    }
+    if (BigInt(signerCount) < requiredQuorum) {
+        throw new Error(
+            `assertCommitteeQuorum: only ${signerCount} committee signer(s) collected, validator requires ` +
+            `${requiredQuorum} — aggregate would be rejected on-chain`
+        );
+    }
+}
+
+/**
+ * Encode the committee-framed BLS block:
+ * ```
+ * [nodeIdsLength(32)][ (nodeId(32) ‖ slot(32) ‖ merkleProof(depth×32)) × k ][ blsSig(256) ]
+ * ```
+ * versus the legacy block `[nodeIdsLength(32)][ nodeId(32) × k ][ blsSig(256) ]`.
+ *
+ * `nodeIdsLength` stays the SIGNER COUNT `k` (not a byte length) and stays in the same position, so
+ * the two framings differ only in the per-signer stride — which is why the account must decide
+ * legacy-vs-committee from `committeeValidator.committeeActive()` rather than from the payload
+ * shape (the shape-collision that CC-103 calls out as the flip-order attack root).
+ *
+ * **`accountId` is never included.** The account prepends `address(this)` itself before calling
+ * `validate()`; a submitter-supplied `accountId` would let an attacker shop for an account whose
+ * committee draw favours their own nodes, breaking the 2/3 assumption outright (CC-103 §二, "命门 B2").
+ *
+ * Signers are emitted in STRICTLY ASCENDING `nodeId` order, carrying each signer's `slot`/`proof`
+ * with it, for the same reason legacy sorts ids (#274).
+ */
+export function encodeCommitteeBLSBlock(
+    signers: readonly CommitteeSigner[],
+    blsSig: Hex | Uint8Array,
+    treeDepth: number = COMMITTEE_TREE_DEPTH_DEFAULT
+): Hex {
+    if (signers.length === 0) {
+        throw new Error('encodeCommitteeBLSBlock: signers must be a non-empty list');
+    }
+    signers.forEach((s, i) => {
+        if (!isHex(s.nodeId) || size(s.nodeId) !== NODE_ID_LENGTH) {
+            throw new Error(`encodeCommitteeBLSBlock: signers[${i}].nodeId must be a 32-byte hex value, got ${s.nodeId}`);
+        }
+        if (s.merkleProof.length !== treeDepth) {
+            throw new Error(
+                `encodeCommitteeBLSBlock: signers[${i}].merkleProof has ${s.merkleProof.length} element(s), ` +
+                `validator TREE_DEPTH is ${treeDepth} — the on-chain _verifyMerkle rejects any other length`
+            );
+        }
+        s.merkleProof.forEach((p, j) => {
+            if (!isHex(p) || size(p) !== NODE_ID_LENGTH) {
+                throw new Error(`encodeCommitteeBLSBlock: signers[${i}].merkleProof[${j}] must be a 32-byte hex value`);
+            }
+        });
+        const slot = BigInt(s.slot);
+        if (slot < 0n || slot >= 1n << BigInt(treeDepth)) {
+            throw new Error(
+                `encodeCommitteeBLSBlock: signers[${i}].slot ${slot} is outside [0, 2^${treeDepth}) — ` +
+                `a slot that wide cannot address a leaf of a depth-${treeDepth} tree`
+            );
+        }
+    });
+
+    // Same ordering rule as legacy (#274): strictly ascending, distinct. sortNodeIdsAscending throws
+    // on duplicates, so run the ids through it and then reorder the full entries to match.
+    const order = sortNodeIdsAscending(signers.map((s) => s.nodeId));
+    const byId = new Map(signers.map((s) => [BigInt(s.nodeId), s]));
+    const sorted = order.map((id) => byId.get(BigInt(id))!);
+
+    const parts: Hex[] = [numberToHex(sorted.length, { size: 32 })];
+    for (const s of sorted) {
+        parts.push(s.nodeId, numberToHex(BigInt(s.slot), { size: 32 }), ...s.merkleProof);
+    }
+    parts.push(encodeG2Point(blsSig));
+    return concat(parts);
+}
+
 /** Validate that every nodeId is a 32-byte hex value, then return them STRICTLY ASCENDING (#274). */
 function validateNodeIds(nodeIds: Hex[], fn: string): Hex[] {
     if (nodeIds.length === 0) {
@@ -218,12 +359,51 @@ export interface DVTAccountSignatureParams {
     tier: DVTTier;
     /** P256 primary signature, as `{ r, s }` (each 32 bytes) or a 64-byte `r‖s` hex value. */
     p256: { r: Hex; s: Hex } | Hex;
-    /** Explicit `bytes32` node IDs of the contributing signers, in signing/aggregation order. */
-    nodeIds: Hex[];
+    /**
+     * Explicit `bytes32` node IDs of the contributing signers. LEGACY framing
+     * (`committeeActive() == false`). Mutually exclusive with {@link committeeSigners}.
+     */
+    nodeIds?: Hex[];
+    /**
+     * COMMITTEE framing (`committeeActive() == true`, CC-98/CC-103): each signer carries its `slot`
+     * and Merkle proof against the frozen set root. Mutually exclusive with {@link nodeIds}.
+     */
+    committeeSigners?: readonly CommitteeSigner[];
+    /** Validator `TREE_DEPTH()`. Read it on-chain; defaults to {@link COMMITTEE_TREE_DEPTH_DEFAULT}. */
+    treeDepth?: number;
     /** Aggregate BLS G2 signature (256-byte EIP-2537, or 96/192-byte zkcrypto). */
     blsSig: Hex | Uint8Array;
     /** REQUIRED for T3 (0x05): the trailing 65-byte guardian ECDSA signature. Forbidden for T2. */
     guardianSig?: Hex;
+}
+
+/**
+ * Build the BLS block for whichever framing the caller supplied, enforcing that exactly one is.
+ *
+ * Legacy   : `[nodeIdsLength(32)][ nodeId(32) × k ][ blsSig(256) ]`
+ * Committee: `[nodeIdsLength(32)][ (nodeId ‖ slot ‖ proof)(perSigner) × k ][ blsSig(256) ]`
+ */
+function buildBLSBlock(
+    fn: string,
+    nodeIds: Hex[] | undefined,
+    committeeSigners: readonly CommitteeSigner[] | undefined,
+    blsSig: Hex | Uint8Array,
+    treeDepth?: number
+): Hex {
+    if (nodeIds !== undefined && committeeSigners !== undefined) {
+        throw new Error(
+            `${fn}: pass either nodeIds (legacy) or committeeSigners (committee), not both — the account picks ` +
+            `its framing from committeeActive(), so an ambiguous call would encode for the wrong mode`
+        );
+    }
+    if (committeeSigners !== undefined) {
+        return encodeCommitteeBLSBlock(committeeSigners, blsSig, treeDepth ?? COMMITTEE_TREE_DEPTH_DEFAULT);
+    }
+    if (nodeIds === undefined) {
+        throw new Error(`${fn}: must pass nodeIds (legacy framing) or committeeSigners (committee framing)`);
+    }
+    const ids = validateNodeIds(nodeIds, fn);
+    return concat([numberToHex(ids.length, { size: 32 }), ...ids, encodeG2Point(blsSig)]);
 }
 
 /**
@@ -236,7 +416,7 @@ export interface DVTAccountSignatureParams {
  * `nodeIdsLength` is a 32-byte big-endian `uint256` count of `nodeIds`.
  */
 export function encodeDVTAccountSignature(params: DVTAccountSignatureParams): Hex {
-    const { tier, p256, nodeIds, blsSig, guardianSig } = params;
+    const { tier, p256, nodeIds, committeeSigners, treeDepth, blsSig, guardianSig } = params;
 
     if (tier !== DVT_TIER_T2 && tier !== DVT_TIER_T3) {
         throw new Error(`encodeDVTAccountSignature: tier must be 0x04 (T2) or 0x05 (T3), got ${tier}`);
@@ -244,28 +424,30 @@ export function encodeDVTAccountSignature(params: DVTAccountSignatureParams): He
 
     const tierByte = numberToHex(tier, { size: 1 });
     const p256Bytes = normalizeP256(p256);
-    const ids = validateNodeIds(nodeIds, 'encodeDVTAccountSignature');
-    const nodeIdsLength = numberToHex(ids.length, { size: 32 });
-    const sig = encodeG2Point(blsSig);
+    const blsBlock = buildBLSBlock('encodeDVTAccountSignature', nodeIds, committeeSigners, blsSig, treeDepth);
 
     if (tier === DVT_TIER_T3) {
         if (guardianSig === undefined || !isHex(guardianSig) || size(guardianSig) !== GUARDIAN_SIG_LENGTH) {
             throw new Error('encodeDVTAccountSignature: T3 (0x05) requires a 65-byte guardian ECDSA signature');
         }
-        return concat([tierByte, p256Bytes, nodeIdsLength, ...ids, sig, guardianSig]);
+        return concat([tierByte, p256Bytes, blsBlock, guardianSig]);
     }
 
     // T2 (0x04): no guardian segment.
     if (guardianSig !== undefined) {
         throw new Error('encodeDVTAccountSignature: T2 (0x04) must not carry a guardian signature — use tier 0x05 for T3');
     }
-    return concat([tierByte, p256Bytes, nodeIdsLength, ...ids, sig]);
+    return concat([tierByte, p256Bytes, blsBlock]);
 }
 
 /** Parameters for {@link encodeBLSAccountSignature}. */
 export interface BLSAccountSignatureParams {
-    /** Explicit `bytes32` node IDs of the contributing signers, in signing/aggregation order. */
-    nodeIds: Hex[];
+    /** Explicit `bytes32` node IDs — LEGACY framing. Mutually exclusive with {@link committeeSigners}. */
+    nodeIds?: Hex[];
+    /** COMMITTEE framing (CC-98/CC-103). Mutually exclusive with {@link nodeIds}. */
+    committeeSigners?: readonly CommitteeSigner[];
+    /** Validator `TREE_DEPTH()`. Read it on-chain; defaults to {@link COMMITTEE_TREE_DEPTH_DEFAULT}. */
+    treeDepth?: number;
     /** Aggregate BLS G2 signature (256-byte EIP-2537, or 96/192-byte zkcrypto). */
     blsSig: Hex | Uint8Array;
     /**
@@ -289,13 +471,11 @@ export interface BLSAccountSignatureParams {
  * it is distinct from the verifier-level `validate` which checks the aggregate alone.)
  */
 export function encodeBLSAccountSignature(params: BLSAccountSignatureParams): Hex {
-    const { nodeIds, blsSig, ownerSig } = params;
-    const ids = validateNodeIds(nodeIds, 'encodeBLSAccountSignature');
+    const { nodeIds, committeeSigners, treeDepth, blsSig, ownerSig } = params;
     if (!isHex(ownerSig) || size(ownerSig) !== GUARDIAN_SIG_LENGTH) {
         throw new Error('encodeBLSAccountSignature: ownerSig must be a 65-byte ECDSA signature (r‖s‖v)');
     }
     const algByte = numberToHex(ALG_BLS, { size: 1 });
-    const nodeIdsLength = numberToHex(ids.length, { size: 32 });
-    const sig = encodeG2Point(blsSig);
-    return concat([algByte, nodeIdsLength, ...ids, sig, ownerSig]);
+    const blsBlock = buildBLSBlock('encodeBLSAccountSignature', nodeIds, committeeSigners, blsSig, treeDepth);
+    return concat([algByte, blsBlock, ownerSig]);
 }
