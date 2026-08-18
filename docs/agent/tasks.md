@@ -63,14 +63,19 @@
 
 ## F3.1 — 四道同步门禁常绿
 
-### T3.1.1 把四道 sync gate 固化进 CI  `READY`
+### T3.1.1 把 sync gate 固化进 CI（范围经实测修正）  `PR_OPEN`
 - **优先级**：high
-- **目标**：`abi:sync` / `check:abi` / `check:abi-drift` / `check:addresses` 四道（2026-08-01 实测均 PASS）进 CI 硬门禁，防止再次悄悄变红。
-- **开发范围**：CI workflow；`check:browser` 已是硬门禁，本任务补齐另外四道。
-- **明确不做**：不改门禁脚本自身逻辑。
-- **依赖**：无
-- **验收命令**：`pnpm run abi:sync && pnpm run check:abi && pnpm run check:abi-drift && pnpm run check:addresses`（本地四连绿）+ CI 上同样四步存在
-- **涉及文件**：`.github/workflows/*`
+- **原目标**：四道（`abi:sync` / `check:abi` / `check:abi-drift` / `check:addresses`）全进 CI 硬门禁。
+- **⚠️ 实测推翻了原目标**：在 `git archive` 造的干净 CI checkout（无 sibling 上游仓）里跑，**三道 ABI 门禁全部 skip-and-PASS** —— `check:abi-drift` 打 "no upstream out/ dirs — skipping"、`check:abi` 三个上游全 skipped、`abi:sync` 直接打 "0 missing · 0 drifted · PASS: ABIs complete + in sync with upstream"。它们要拿 sibling 目录里 `forge build` 出来的 `out/` 比对，runner 上根本没有。**照原样接进 CI = 一个拿零个产物比出来的绿灯**，比没有门禁更坏（`upstream-watch.yml` 对 full radar 记过同一约束）。
+- **修正后的交付**：
+  1. `check:addresses` 从 advisory（`continue-on-error`）翻成**硬门禁** —— 它自足（只比 `config.*.json` ↔ `CANONICAL_ADDRESSES`），且已 passes clean，ci.yml 原注释本就写着"passes clean 后翻硬"
+  2. `check:stubs` 新增为**硬门禁** —— 同样自足，护 #169 那类静默 stub
+  3. 三道 ABI 门禁加 `REQUIRE_UPSTREAM=1`：**上游缺席从 skip-and-pass 变成硬失败**，杜绝真空绿；`RELEASE-CHECKLIST §3` 改为必须带此 flag 跑
+  4. ci.yml 里写明这三道**故意不进 CI** 的理由 + 将来若要进 CI 的前提（runner 先 checkout+build 上游，再置 flag）
+- **明确不做**：不在 CI 里 checkout/build 上游合约仓（成本高、部分仓私有）——若要做是独立 task
+- **验收命令**：`REQUIRE_UPSTREAM=1 pnpm run abi:sync && REQUIRE_UPSTREAM=1 pnpm run check:abi && REQUIRE_UPSTREAM=1 pnpm run check:abi-drift && pnpm run check:addresses && pnpm run check:stubs`（本机全绿）；且干净 checkout 里带 flag 跑三道 ABI 门禁必须 **exit 1**
+- **涉及文件**：`.github/workflows/ci.yml`、`scripts/{abi-sync,check-abi-completeness,check-abi-drift}.ts`、`docs/RELEASE-CHECKLIST.md`
+- **证据**：branch `chore/ci-sync-gates` / PR 待建
 
 ---
 
