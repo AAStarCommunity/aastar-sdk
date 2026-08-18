@@ -6,7 +6,7 @@
  * @aastar/core SDK (`dvtWire` encoder + @noble G2 aggregation, ABIs + addresses from @aastar/core)
  * can assemble the DVT verifier proof from the THREE real DVT nodes' co-signatures (reachable via
  * Cloudflare tunnels), and that the CANONICAL v0.20.0 `AAStarBLSAlgorithm`
- * (CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm = 0xAF525A16…) ACCEPTS it (`validate(...) == 0`).
+ * (CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm = 0x539B…, v0.27.0 DVT-unification) ACCEPTS it (`validate(...) == 0`).
  * Nothing is mocked: the nodes co-sign, the proof is built locally by the SDK, and the on-chain
  * pairing check is the oracle.
  *
@@ -68,7 +68,7 @@ import {
     airAccountFactoryActions,
     entryPointActions,
     blsAlgorithmActions,
-    getDefaultDvtNodes,
+    getDvtConfig,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -81,15 +81,25 @@ const FACTORY = getAddress(CANONICAL_ADDRESSES[SEPOLIA].airAccountFactoryV7);
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEPOLIA].entryPoint); // EntryPoint v0.7
 
 // Hard-pin the verifier so a stale address book can never silently retarget this acceptance test.
-const EXPECTED_VERIFIER = getAddress('0xAF525A161CB17e0A1b6254ef0B8d8473bdA05174');
+// RETARGETED v0.20.0 (0xAF525A16…) -> v0.27.0 DVT-unification (0x539B…), deliberately and with the
+// guard kept: canonical's algId-0x01 verifier moved at v0.27.0 (#274 / CC-10), and this runner's own
+// premise is that the CANONICAL verifier accepts the SDK-assembled proof. The old contract is still
+// live on-chain, so the pin was not "broken" — it was aimed at a superseded target, which is exactly
+// the case this guard is meant to force a human to look at rather than let a config edit slide by.
+// The three DVT nodes are registered on 0x539B (isRegistered verified on-chain).
+const EXPECTED_VERIFIER = getAddress('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC');
 if (VERIFIER !== EXPECTED_VERIFIER) {
     throw new Error(`VERIFIER drift: CANONICAL_ADDRESSES[${SEPOLIA}].aaStarBLSAlgorithm=${VERIFIER} != ${EXPECTED_VERIFIER}`);
 }
 
-// AAStar's always-on testnet DVT nodes (dvt1/2/3.aastar.io) — the SDK default config
+// Node endpoints come from DVT_CONFIG, the ONE list AASTAR_DVT_ENV can switch. getDefaultDvtNodes
+// (crypto/dvtNodes.ts) is a second, non-switchable copy that always returns the public tunnels, so
+// this runner used to be unreachable whenever the cloudflared tunnel was down. (The duplicate source
+// of truth itself is tracked separately.)
+// AAStar's always-on testnet DVT nodes — the SDK default config
 // (YetAnotherAA-Validator #93). tunnel→nodeId is resolved DYNAMICALLY from each node's
 // /signature/sign response (we do NOT assume the order).
-const TUNNELS = getDefaultDvtNodes(SEPOLIA).map((n) => n.url);
+const TUNNELS = getDvtConfig().dvtNodes.map((n) => n.url);
 
 // algId constants (AAStarAirAccountBase.sol): ALG_BLS=0x01, ALG_ECDSA=0x02, ALG_P256=0x03.
 const ALG_BLS = 0x01;

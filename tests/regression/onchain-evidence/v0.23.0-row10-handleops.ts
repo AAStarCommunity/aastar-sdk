@@ -23,7 +23,7 @@ import * as path from 'path';
 import { bls12_381 as noble } from '@noble/curves/bls12-381';
 import {
     createPublicClient, createWalletClient, http, concat, numberToHex, parseEther, formatEther,
-    encodeFunctionData, decodeEventLog, getAddress, recoverMessageAddress, type Address, type Hex, type PublicClient,
+    encodeFunctionData, decodeEventLog, getAddress, recoverMessageAddress, type Address, type Hex, type PublicClient, keccak256, toBytes,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
@@ -31,6 +31,8 @@ import {
     CANONICAL_ADDRESSES, EntryPointABI, AAStarAirAccountV7ABI, AAStarBLSAlgorithmABI,
     encodeDVTVerifierProof, encodeBLSAccountSignature, encodeG2Point, entryPointActions,
     getDvtConfig,
+    airAccountFactoryActions,
+    buildInitConfig,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -40,7 +42,16 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 const SEP = 11155111;
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEP].entryPoint);
-const ACC10 = getAddress('0xA063c7B5810fc2f9f0e5198376c83b6B57c80d0c');
+// The BLS-only account this runner drives. It used to be the recorded v0.20.0 account
+// 0xA063c7B5…, which is now UNUSABLE: ACCOUNT_VERSION 0.20.0 predates isValidOwnerAuth (added
+// v0.23.0, #159), so the call REVERTS and the DVT node's owner-gate fails closed with 403 no
+// matter how ownerAuth is framed — verified against both accounts on-chain. Derive the same
+// current-generation BLS-only account dvt-realnode-e2e deploys (identical factory/salt/config),
+// so this runner proves the SAME account through EntryPoint.handleOps that the other proves via
+// the validate() view, and neither is pinned to a superseded contract generation.
+const FACTORY = getAddress(CANONICAL_ADDRESSES[11155111].airAccountFactoryV7);
+const BLS_ONLY_SALT = BigInt(keccak256(toBytes('dvt-v0.20-cross-repo-e2e/bls-only/2026-06')));
+const BLS_ONLY_CONFIG = buildInitConfig({ guardians: [], dailyLimit: 10n ** 18n, approvedAlgIds: [0x01] });
 // AAStar's always-on testnet DVT nodes (dvt1/2/3.aastar.io) — the SDK default config.
 // getDefaultDvtNodes (crypto/dvtNodes.ts) is a SECOND node list that AASTAR_DVT_ENV does not reach,
 // so it always returns the public tunnels. Read DVT_CONFIG instead — the one list the env override
@@ -79,6 +90,16 @@ async function main() {
     if (pk && !pk.startsWith('0x')) pk = `0x${pk}`;
     const owner = privateKeyToAccount(pk as Hex);
     const wallet = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const ACC10 = (await rpc((c) =>
+        airAccountFactoryActions(FACTORY)(c).getAddress({ owner: owner.address, salt: BLS_ONLY_SALT, config: BLS_ONLY_CONFIG })
+    )) as Address;
+    const acctCode = await rpc((c) => c.getCode({ address: ACC10 }));
+    if (!acctCode || acctCode === '0x') {
+        throw new Error(
+            `BLS-only account ${ACC10} is not deployed — run dvt-realnode-e2e.ts first (it deploys this ` +
+            `exact account from the same factory/salt/config), then re-run this handleOps proof`
+        );
+    }
     console.log(`Row 10 handleOps — account ${ACC10}, owner ${owner.address}`);
 
     // (1) Real UserOp: callData = execute(owner, 0, 0x) (benign 0-ETH transfer to owner EOA).

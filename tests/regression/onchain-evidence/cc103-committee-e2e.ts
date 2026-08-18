@@ -27,6 +27,11 @@ import {
     AAStarCommitteeValidatorABI,
     COMMITTEE_QUORUM_UNAVAILABLE,
     DVT_TIER_T2,
+    assertCommitteeSubmittable,
+    fetchCommitteeSigners,
+    getCommitteeState,
+    getMountedDvtValidator,
+    isAccountEnrolled,
     encodeCommitteeBLSBlock,
     encodeDVTAccountSignature,
     getCommitteeStackAddresses,
@@ -205,6 +210,72 @@ async function main() {
         blsSig,
     ]);
     check(legacy === legacyExpected, 'legacy T2 bytes identical to the pre-committee layout');
+
+    // ── 7. the SDK reader module against the LIVE validator ───────────────────────────────────
+    // actions/committee.ts is unit-tested against a stubbed client, which by construction cannot
+    // catch an ABI mismatch, a renamed getter, or a changed return shape. These calls do.
+    console.log('\n[7] actions/committee.ts against the live validator');
+
+    const mounted = await getMountedDvtValidator(pc, stack.router);
+    check(
+        mounted.toLowerCase() === stack.committeeValidator.toLowerCase(),
+        'getMountedDvtValidator resolves algId 0x01 to the committee validator',
+        mounted
+    );
+
+    const state = await getCommitteeState(pc, stack.committeeValidator);
+    check(state.treeDepth === treeDepth, 'getCommitteeState.treeDepth matches the raw read', `${state.treeDepth}`);
+    check(state.perSignerBytes === perSigner, 'getCommitteeState.perSignerBytes derived from it', `${state.perSignerBytes}`);
+    check(state.active === active, 'getCommitteeState.active matches committeeActive()', `${state.active}`);
+    check(state.activeCount === activeCount, 'getCommitteeState.activeCount matches', `${state.activeCount}`);
+    check(
+        state.quorumUsable === (quorum !== COMMITTEE_QUORUM_UNAVAILABLE),
+        'getCommitteeState.quorumUsable flags the fail-closed sentinel',
+        `${state.quorumUsable}`
+    );
+
+    const enrolled = await isAccountEnrolled(pc, stack.committeeValidator, stack.referenceEnrolledAccount);
+    check(enrolled, 'isAccountEnrolled sees the upstream reference account as enrolled');
+    const notEnrolled = await isAccountEnrolled(pc, stack.committeeValidator, stack.router);
+    check(!notEnrolled, 'isAccountEnrolled returns false for a never-enrolled address (negative)');
+
+    const fetched = await fetchCommitteeSigners(pc, stack.committeeValidator, nodeIds);
+    check(fetched.signers.length === nodeIds.length, 'fetchCommitteeSigners returns one signer per node');
+    let fetchedOk = fetched.signers.length > 0;
+    for (const s of fetched.signers) {
+        if (s.merkleProof.length !== treeDepth) fetchedOk = false;
+        // The proofs it shapes must be the SAME ones that fold to the live root — i.e. the helper
+        // did not mix up which slot/proof belongs to which nodeId.
+        if (foldMerkle(BigInt(s.slot), s.nodeId, s.merkleProof) !== runningRoot) fetchedOk = false;
+    }
+    check(fetchedOk, 'every fetched signer folds to the live runningRoot (slot/proof not mixed up)');
+    check(
+        typeof fetched.lastSetMutationBlock === 'bigint' && fetched.atBlock >= fetched.lastSetMutationBlock,
+        'fetchCommitteeSigners reports the staleness signal',
+        `atBlock=${fetched.atBlock} lastMutation=${fetched.lastSetMutationBlock}`
+    );
+
+    // Encoding what the reader produced must give the same bytes as the hand-built path above.
+    const fromReader = encodeCommitteeBLSBlock(fetched.signers, blsSig, state.treeDepth);
+    check(fromReader === blockHex, 'encodeCommitteeBLSBlock(reader output) == encode(hand-built)');
+
+    // assertCommitteeSubmittable must REFUSE while committee mode is off — this is the live proof
+    // that the guard fires, not a stubbed one.
+    let refused = '';
+    try {
+        await assertCommitteeSubmittable(pc, stack.committeeValidator, stack.referenceEnrolledAccount, 3);
+    } catch (e: any) {
+        refused = e?.message ?? '';
+    }
+    if (active) {
+        check(refused === '', 'assertCommitteeSubmittable passes while committee is ON');
+    } else {
+        check(
+            /committeeActive\(\) is false/.test(refused),
+            'assertCommitteeSubmittable REFUSES while committee is off, naming the cause',
+            refused.slice(0, 80)
+        );
+    }
 
     // ── verdict ───────────────────────────────────────────────────────────────────────────────
     console.log('\n─────────────────────────────────────────────────────────────');
