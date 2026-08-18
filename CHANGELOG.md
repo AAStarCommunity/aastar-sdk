@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.44.1] - 2026-08-18
+**SDK Code Integrity Hash**: `3be811fca2b6fe5463a2e860fc8fc88f7d3394c9770a4f167536919be80e5311`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**Test + on-chain-evidence release for the CC-103 surface. NO runtime code changed relative to 0.44.0** — `git diff v0.44.0..v0.44.1 -- 'packages/*/src/**'` touches only `.test.ts` files. Cut so the evidence has a citable tag.
+
+### Added — coverage for what 0.44.0 shipped untested (#321)
+
+0.44.0 introduced a whole module (`actions/committee.ts`), a config environment and four vendored ABIs with no tests of their own. `@aastar/core` 494 → **529** tests. Every assertion was mutation-checked — a test that cannot fail proves nothing.
+
+- **[TEST]** `actions/committee.ts` (16). A stubbed `PublicClient` that records **how** it was called: `perSignerBytes` must derive from the CHAIN-read `TREE_DEPTH` (asserted at 14 **and** 20, so hardcoding 512 fails — CC-103 Q4 is the point of reading it); `getCommitteeState` pins every read to ONE block so the fields cannot straddle an epoch rollover; the `requiredQuorum` sentinel surfaces as `quorumUsable=false`; `fetchCommitteeSigners` keeps each signer's OWN slot/proof (a mix-up yields a well-formed payload whose proofs authenticate the wrong signers); `assertCommitteeSubmittable` reports committee-off BEFORE enrollment. Mutations confirmed red: unpin the block · hardcode `perSigner=512` · `quorumUsable` always true · force `slot=0`.
+- **[TEST]** `DVT_CONFIG.testnet-local` (5). The load-bearing one asserts **the nodeIds are IDENTICAL to sepolia's** — a local stack must sign with keys REGISTERED on the validator, so minting fresh ids makes every aggregate unverifiable and registering them would enlarge the shared production validator's node set. The test exists so that "fix" cannot be made silently. Also locks `relay:false`.
+- **[TEST]** `COMMITTEE_STACK_ADDRESSES` (4), including one asserting it stays SEPARATE from canonical.
+- **[TEST]** ABI exports (10). Vendored ABIs fail silently, and `abi:sync` cannot see `AAStarAirAccountV7` at all because it sits in `KNOWN_DRIFT` — which is exactly what hid `enrollInCommitteeValidator` going missing. Asserts the committee reader's functions, **both** CC-104 epoch controls (`setEpochLength` AND `snapshotEpoch`), the merged Extension surface, and the CC-89 guardian-slash additions.
+- **[E2E]** `cc103-committee-e2e` now drives the reader module against the LIVE validator — unit tests stub the client, which by construction cannot catch an ABI mismatch or a changed return shape. 13/13 PASS, including that the fetched proofs fold to the live `runningRoot` and that `assertCommitteeSubmittable` genuinely REFUSES while committee mode is off.
+
+### Fixed — the last two red evidence runners; **20/20 now pass**
+
+- **[FIX]** `dvt-realnode-e2e` pinned `EXPECTED_VERIFIER` to the v0.20.0 verifier while canonical's algId-0x01 verifier moved to `0x539B…` at v0.27.0. The old contract is still live on-chain, so the pin was aimed at a *superseded* target — exactly the case the guard exists to put in front of a human. Retargeted deliberately, **guard kept**. It then could not reach any node because it read `getDefaultDvtNodes`, a second node list `AASTAR_DVT_ENV` cannot switch; now reads `DVT_CONFIG`.
+- **[FIX]** `v0.23.0-row10-handleops` drove account `0xA063c7B5…`, `ACCOUNT_VERSION 0.20.0`, which **predates `isValidOwnerAuth`** (v0.23.0, #159): the call reverts, so the DVT owner-gate fails closed with 403 regardless of `ownerAuth` framing — proven by reading both accounts on-chain. Now derives the same current-generation BLS-only account `dvt-realnode-e2e` deploys, so one runner proves that account through `EntryPoint.handleOps` and the other via the `validate()` view. Evidence: handleOps tx `0x7f7d36247ddd976f1cb40c0588470cdaa138f654d1406f3b221003c673e670b7`, `UserOperationEvent success=true`.
+- **[FIX]** `dvt.test.ts` depended on `AASTAR_DVT_ENV` being unset. CI never sets it, so this was invisible — but 0.44.0 made `AASTAR_DVT_ENV=testnet-local` the documented way to run DVT E2E locally, turning a theoretical fragility into a likely one. Cleared per-test and restored; verified green with the variable unset, `testnet-local`, and `sepolia`.
+
+### Evidence
+
+`docs/onchain-evidence/cc103-dvt-testnet-local-2026-08-18.md` — committee-wire conformance against the live validator, the DVT regression set on locally-hosted nodes, negative controls, and the mutation results for the signer-identity guards.
+
 ## [0.44.0] - 2026-08-18
 **SDK Code Integrity Hash**: `b51105a1c2ac049b6257f08346c5c65224a16afa699d1532f9d01f727292650d`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
