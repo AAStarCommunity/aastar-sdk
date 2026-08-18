@@ -17,4 +17,4 @@
 - [x] FU-11 · A · src=RELEASE §4 regression 2026-08-18 · 2026-08-18 · tier3-composite-e2e 是 RELEASE-CHECKLIST 点名的强制 re-green runner（本次改了 T2/T3 编码器），因 dvt1/2/3 HTTP 530 无法执行。节点恢复后必须补跑并把结果记进 docs/onchain-evidence，才算发版门禁齐全 · done=PR#319
 - [ ] FU-12 · B · src=CC-103 e2e · 2026-08-18 · core 有两份 DVT 节点清单：dvt.ts 的 DVT_CONFIG（AASTAR_DVT_ENV 可切）和 crypto/dvtNodes.ts 的 DEFAULT_DVT_NODES（不可切，getDefaultDvtNodes 恒返回公网隧道）。重复真相源，应收敛成一份
 - [ ] FU-13 · B · src=CC-103 e2e · 2026-08-18 · dvt-realnode-e2e.ts 硬 pin EXPECTED_VERIFIER=0xAF525A16…（v0.20.0），而 canonical 自 v0.27.0 DVT-unification 起是 0x539B → 该 drift guard 恒抛。是有意的护栏，需人决定这个验收测试是跟随 canonical 重定向还是废弃，不该静默改
-- [ ] FU-14 · B · src=CC-103 e2e · 2026-08-18 · v0.23.0-row10-handleops.ts 对本地节点仍 403 owner authorization required（ownerAuth 编码已修正）→ 该脚本用的账户与 tier3 不同，疑为账户侧 isValidOwnerAuth 缺失/owner 不匹配，待单独定位
+- [ ] FU-14 · B · src=CC-103 e2e · 2026-08-18 · v0.23.0-row10-handleops.ts 恒 403：其账户 0xA063c7B5…（ACCOUNT_VERSION 0.20.0）早于 isValidOwnerAuth（v0.23.0/#159 才加）→ 函数 revert，节点 owner-gate fail-closed。ownerAuth 编码修正也救不了，需把 runner 重定向到 v0.23.0+ 账户（根因已链上证实）
