@@ -77,3 +77,52 @@ describe('checkDvtConnectivity', () => {
     expect(r.errors[0]).toMatch(/unreachable/);
   });
 });
+
+describe('testnet-local environment (CC-103 / tunnel outage fallback)', () => {
+  const sepolia = DVT_CONFIG.environments.sepolia!;
+  const local = DVT_CONFIG.environments['testnet-local']!;
+
+  it('is configured and points at the loopback co-sign ports', () => {
+    expect(local.dvtNodes.map((n) => n.url)).toEqual([
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:3002',
+      'http://127.0.0.1:3003',
+    ]);
+  });
+
+  it('SAFETY: nodeIds are IDENTICAL to sepolia — a local node must sign with REGISTERED keys', () => {
+    // On-chain verification pairs the aggregate against the public keys registered on the
+    // validator. Minting fresh ids/keys for a local stack makes every aggregate unverifiable, and
+    // registering them would enlarge the shared production validator's node set. This assertion
+    // exists so that "fix" cannot be made silently.
+    expect(local.dvtNodes.map((n) => n.nodeId)).toEqual(sepolia.dvtNodes.map((n) => n.nodeId));
+  });
+
+  it('targets the same validator + entryPoint as sepolia (only transport differs)', () => {
+    expect(local.validator).toBe(sepolia.validator);
+    expect(local.entryPoint).toBe(sepolia.entryPoint);
+    expect(local.chainId).toBe(sepolia.chainId);
+  });
+
+  it('is relay:false so localhost cannot leak into the gasless relay pool', () => {
+    expect(local.capabilities.relay).toBe(false);
+    expect(local.capabilities.dvtSigning).toBe(true);
+    // getDvtRelayerUrlsForChain picks the relay-capable env for the chain — it must still be sepolia.
+    expect(getDvtRelayerUrlsForChain(11155111)).toEqual(sepolia.dvtNodes.map((n) => n.url));
+  });
+
+  it('AASTAR_DVT_ENV=testnet-local switches resolution without touching the default', () => {
+    const prev = process.env.AASTAR_DVT_ENV;
+    process.env.AASTAR_DVT_ENV = 'testnet-local';
+    try {
+      expect(getDvtConfig().dvtNodes[0].url).toBe('http://127.0.0.1:3001');
+      expect(getDvtRelayerUrls()).toEqual(local.dvtNodes.map((n) => n.url));
+      // An explicit argument still wins over the env var.
+      expect(getDvtConfig('sepolia').dvtNodes[0].url).toBe('https://dvt1.aastar.io');
+    } finally {
+      if (prev === undefined) delete process.env.AASTAR_DVT_ENV;
+      else process.env.AASTAR_DVT_ENV = prev;
+    }
+    expect(DVT_CONFIG.active).toBe('sepolia');
+  });
+});
