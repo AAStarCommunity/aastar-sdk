@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.44.0] - 2026-08-18
+**SDK Code Integrity Hash**: `b51105a1c2ac049b6257f08346c5c65224a16afa699d1532f9d01f727292650d`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+**CC-103 committee per-signer BLS wire + airaccount-contract v0.31.0 upstream sync + CI gate hardening.** (#317, #319; Seeder CC-103/CC-104)
+
+### Added — CC-98/CC-103 per-proposal committee signature framing
+- **[ADD]** `@aastar/core` **`encodeCommitteeBLSBlock(signers, blsSig, treeDepth?)`** — the committee framing of the BLS block, alongside the unchanged legacy one:
+  ```
+  legacy    [nodeIdsLength(32)][ nodeId(32)                          × k ][blsSig(256)]
+  committee [nodeIdsLength(32)][ nodeId(32)‖slot(32)‖proof(d×32)     × k ][blsSig(256)]
+  ```
+  `nodeIdsLength` stays the SIGNER COUNT in the same position — only the stride differs, which is exactly why callers must take the framing from `committeeActive()` and never from the payload shape. **`accountId` is never emitted**: the account prepends `address(this)` itself, and a submitter-supplied `accountId` would let an attacker shop for a favourable committee draw (CC-103 §二).
+- **[ADD]** **`CommitteeSigner`** `{ nodeId, slot, merkleProof }`, **`committeePerSignerLength(depth)`**, **`COMMITTEE_TREE_DEPTH_DEFAULT`**, **`assertCommitteeQuorum(k, requiredQuorum)`**, **`COMMITTEE_QUORUM_UNAVAILABLE`**.
+- **[ADD]** `encodeDVTAccountSignature` / `encodeBLSAccountSignature` accept **either** `nodeIds` (legacy) **or** `committeeSigners` — never both, never neither. **Legacy output is byte-identical to 0.43.0.**
+- **[ADD]** `@aastar/core` committee reads — **`getMountedDvtValidator`**, **`getCommitteeState`**, **`isAccountEnrolled`**, **`fetchCommitteeSigners`**, **`assertCommitteeSubmittable`**. State reads are pinned to a single block so `active` / `requiredQuorum` / `activeCount` cannot straddle an epoch rollover.
+- **[ADD]** **`COMMITTEE_STACK_ADDRESSES`** / **`getCommitteeStackAddresses(chainId)`** — the v0.31.0 stack as a SEPARATE group, not a canonical bump: upstream published four addresses while canonical Sepolia carries eleven, so folding them in would silently produce a half-v0.31.0 stack with nothing marking the seam. Every value was read back on-chain before being written.
+- **[ADD]** `AAStarCommitteeValidator` ABI (YetAnotherAA-Validator #237).
+
+### Fixed — upstream drift the gates could not see
+- **[FIX]** `AAStarAirAccountV7` ABI was missing **`enrollInCommitteeValidator`** and **`proposeGuardianAddition`** while `abi:sync` stayed green — V7 sits in `KNOWN_DRIFT` for its intentional Extension merge, and the whitelist masked genuine upstream additions (same blind-spot class as the #301/#302 name collision). Added surgically; the 33 SDK-only entries are preserved.
+- **[FIX]** `AirAccountExtension` + `BLSAggregator` ABIs refreshed — includes CC-89 guardian-slash 4.3.0 (`executeGuardianSlash`, `fraudProofVerifier`, `proposalSignersCommitment`).
+
+### Changed — CI gates stop passing vacuously (#317)
+- **[CI]** **`check:addresses`** promoted from advisory to a **hard gate** (it is self-contained and now passes clean on chains 10 / 11155111 / 11155420), and **`check:stubs`** added as a hard gate.
+- **[FIX]** `abi:sync` / `check:abi` / `check:abi-drift` no longer print `PASS` when no upstream repo is checked out — measured on a clean checkout, all three used to report success having compared against **zero** artifacts. They now say explicitly that the run verified NOTHING, and **`REQUIRE_UPSTREAM=1`** turns a missing upstream into a hard failure. `docs/RELEASE-CHECKLIST.md` §3 requires that flag. They remain deliberately out of CI (a runner has none of the sibling contract repos) with the reasoning recorded in `ci.yml`.
+
+### Fixed — regression runners
+- **[FIX]** `ownerAuth` framing in four evidence runners: the DVT forwards it verbatim to `account.isValidOwnerAuth`, which selects its branch from the leading TAG byte and rejects anything not exactly 66 bytes. They were sending the bare 65-byte signature (`isValidOwnerAuth(raw 65B) = 0xffffffff`, `0x01‖sig = 0xa0cf00cf`, verified on-chain). **The production path was never affected** — `transfer-manager.ts` already uses `packOwnerAuthEcdsa`; only the runners had re-derived the frame by hand.
+- **[ADD]** **`DVT_CONFIG.environments["testnet-local"]`** — locally-run DVT nodes, selected with `AASTAR_DVT_ENV=testnet-local`, so DVT-dependent E2E survives the public tunnels being down. The `nodeId`s are **identical** to `sepolia` on purpose: on-chain verification checks the aggregate against the keys REGISTERED on the validator, so a local instance must sign with the already-registered keys. `relay:false` keeps localhost out of the gasless relay pool.
+- **[FIX]** `tier3-composite-e2e` pins each node's reported `nodeId` to the id `DVT_CONFIG` holds for that endpoint, rejects duplicate ids, and **rejects duplicate signature bytes** — BLS is deterministic over `(key, message)`, so one key behind two `nodeId`s yields byte-identical partials. That last case is the one the chain cannot see: `registerPublicKey` enforces only `!isRegistered[nodeId]`, so `Σpk = 2·pk₁` against `2·sig₁` pairs and would validate green with a single signer. (The repeated-**id** form was already blocked on-chain by `AAStarValidator.sol:236-242`.)
+- **[FIX]** `x402-direct-settle-e2e` derived its nonce from constants only, so every run produced the same value — the first execution consumed it and every run after reverted `NonceAlreadyUsed()`. Fresh nonce per run; the facilitator's custom errors are declared so a revert reports its name instead of a bare selector.
+- **[FIX]** `beta1-sponsored-gasless` checks the funder's balance before `depositFor`, so a shortfall reports the numbers instead of a raw `ERC20InsufficientBalance` selector that read like a paymaster failure.
+
+Evidence: `docs/onchain-evidence/cc103-dvt-testnet-local-2026-08-18.md` — committee-wire conformance against the live validator (real Merkle proofs folding to the on-chain `runningRoot`), four DVT runners green against locally-hosted nodes, negative controls, and the mutation results for the signer-identity guards.
+
+Review: PR-daemon + Codex, 5 rounds → APPROVE. Round 4 retracted its own earlier finding (the repeated-id hole was already closed on-chain) and found the real residual one (same key under two `nodeId`s); the release-evidence narrative was corrected rather than softened.
+
+Downstream note: **no breaking changes.** `committeeActive() == false` keeps every existing path byte-identical; committee framing is opt-in via `committeeSigners`.
+
 ## [0.43.0] - 2026-07-11
 **SDK Code Integrity Hash**: `e672dfe09c63af4e0f0757932bf177eff3e8a29e5a7dc9a1857dc1d97a81794e`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
