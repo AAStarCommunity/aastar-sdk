@@ -216,11 +216,23 @@ async function main() {
     const tunnels = dvtNodes.map((n) => n.url);
     console.log(`     DVT env=${dvtEnvName} -> ${tunnels.join('  ')}`);
     const signed: { nodeId: Hex; signature: Hex }[] = [];
-    // Guard against a 2-of-3 that is really 1-of-1. BLS aggregation is Σsig against Σpk, so two
-    // partials from the SAME signer pair perfectly (2·sig₁ vs 2·pk₁) and this gate would report
-    // green on one signer. Trusting each node's SELF-REPORTED nodeId is what makes that reachable,
-    // so: pin the reported id to the id configured for that endpoint, and reject duplicates.
+    // Defence in depth on "the signer set is what this gate claims". BLS aggregation is Σsig against
+    // Σpk, so k partials from fewer than k DISTINCT signers still pair (2·sig₁ vs 2·pk₁).
+    //
+    // FIRST line of defence is on-chain and already covers the repeated-id form: AAStarValidator.sol
+    // :236-242 rejects non-ascending nodeIds precisely to block "one node inflating the aggregate by
+    // repeating itself", and the SDK sorts before submitting (bls-packing sortNodeIdsAscending, #274).
+    // So a duplicate id does not slip through to a green — it makes validateUserOp return 1.
+    //
+    // What these checks add is (a) failing HERE, with an actionable message, instead of as an opaque
+    // validate()=1 downstream, (b) catching config drift, and (c) the one form the chain cannot see:
+    // the SAME KEY registered under TWO nodeIds. registerPublicKey (AAStarValidator.sol:826-843)
+    // enforces only !isRegistered[nodeId] — nothing stops one pubkey being registered twice while
+    // requireStake is false, which is exactly how these bootstrap nodes were registered. Two distinct,
+    // registered, ascending ids backed by one key pair as 2·pk₁ and WOULD go green. Signatures catch
+    // it: BLS is deterministic over (key, message), so one key yields byte-identical partials.
     const seenNodeIds = new Set<string>();
+    const seenSignatures = new Set<string>();
     const identityFaults: string[] = [];
     for (const { url, nodeId: expectedNodeId } of dvtNodes) {
         try {
@@ -236,17 +248,18 @@ async function main() {
                 console.warn(`    ! ${url} -> ${res.status} ${raw.slice(0, 200)}`);
                 continue;
             }
-            const registered = (await withRpcFallback((c) =>
-                c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [norm(body.nodeId)] })
-            )) as boolean;
-            if (!registered) { console.warn(`    ! ${url} nodeId not registered`); continue; }
             // Identity problems are recorded, NOT thrown here: this try/catch swallows throws into a
             // per-node warning, which would quietly demote "a node is impersonating another" to a
             // skipped endpoint. Collected and asserted after the loop so the gate aborts loudly.
+            // Checked BEFORE the isRegistered RPC: an impostor should not cost a round trip, and it
+            // keeps the two "wrong identity" cases from being handled inconsistently.
             const reported = norm(body.nodeId);
             if (reported !== norm(expectedNodeId)) {
                 identityFaults.push(
-                    `${url} reported nodeId ${reported} but DVT_CONFIG pins ${norm(expectedNodeId)} for that endpoint`
+                    `${url} reported nodeId ${reported} but DVT_CONFIG pins ${norm(expectedNodeId)} for that ` +
+                    `endpoint — either that endpoint is serving another node's identity, OR DVT_CONFIG is ` +
+                    `stale (see the refresh note at packages/core/src/dvt.ts, CC-12: operators re-registering ` +
+                    `on 0x539B get new keccak256-derived ids, and these pinned values are v0.20 fallbacks)`
                 );
                 continue;
             }
@@ -254,8 +267,21 @@ async function main() {
                 identityFaults.push(`${url} reported nodeId ${reported}, already seen from another endpoint`);
                 continue;
             }
+            const sig = norm(body.signature);
+            if (seenSignatures.has(sig)) {
+                identityFaults.push(
+                    `${url} returned a partial byte-identical to another endpoint's — BLS is deterministic ` +
+                    `over (key, message), so this is ONE key behind two nodeIds, not two signers`
+                );
+                continue;
+            }
+            const registered = (await withRpcFallback((c) =>
+                c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [reported] })
+            )) as boolean;
+            if (!registered) { console.warn(`    ! ${url} nodeId not registered`); continue; }
             seenNodeIds.add(reported);
-            signed.push({ nodeId: reported, signature: norm(body.signature) });
+            seenSignatures.add(sig);
+            signed.push({ nodeId: reported, signature: sig });
             console.log(`    ${url.replace('https://', '')}  nodeId=${norm(body.nodeId).slice(0, 16)}…  registered`);
         } catch (e) { console.warn(`    ! ${url} ${(e as Error).message.slice(0, 80)}`); }
     }
@@ -271,8 +297,14 @@ async function main() {
         );
     }
     if (signed.length < 2) throw new Error(`need >= 2 registered node co-signatures, got ${signed.length}`);
-    // Belt and braces: the count above is only meaningful because the ids are distinct.
-    if (seenNodeIds.size !== signed.length) throw new Error('signer set is not distinct — aborting');
+    // Belt and braces. Reachable only if a node returned a truthy-but-non-string signature (norm
+    // throws inside the push expression after the adds), so it does NOT claim to know the cause.
+    if (seenNodeIds.size !== signed.length || seenSignatures.size !== signed.length) {
+        throw new Error(
+            `collected ${signed.length} partial(s) but ${seenNodeIds.size} id(s) / ${seenSignatures.size} ` +
+            `signature(s) were accepted — inconsistent state, aborting fail-closed`
+        );
+    }
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
     const blsSignature = encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex);
     const nodeIds = signed.map((s) => s.nodeId);
