@@ -66,11 +66,30 @@ function loadAbi(file: string): any[] {
 }
 
 /** name(intype1,intype2,…) for each entry of `kind` — the selector-determining signature. */
+/**
+ * Render a parameter type, EXPANDING tuples into their component types.
+ *
+ * Using the bare `type` field renders every struct as the literal string "tuple", so a struct that
+ * gains, loses or reorders fields produces an IDENTICAL signature and this gate reports no drift.
+ * That is not hypothetical: airaccount-contract #161 added tier1Limit/tier2Limit to InitConfig
+ * (8 -> 10 fields) and `getAddress(address,uint256,tuple,bytes32,bytes32)` matched on both sides,
+ * so the gate stayed green while `createAccount`/`getAddress` reverted on-chain against the new
+ * factory. Expanding components is what makes a breaking struct change visible.
+ */
+function renderType(i: any): string {
+  if (typeof i?.type === 'string' && i.type.startsWith('tuple') && Array.isArray(i.components)) {
+    // Preserve any array suffix: tuple[] -> (a,b)[], tuple[2] -> (a,b)[2].
+    const suffix = i.type.slice('tuple'.length);
+    return `(${i.components.map(renderType).join(',')})${suffix}`;
+  }
+  return i?.type ?? '?';
+}
+
 function sigSet(abi: any[], kind: string): Set<string> {
   return new Set(
     abi
       .filter((e) => e.type === kind && e.name)
-      .map((e) => `${e.name}(${(e.inputs || []).map((i: any) => i.type).join(',')})`),
+      .map((e) => `${e.name}(${(e.inputs || []).map(renderType).join(',')})`),
   );
 }
 

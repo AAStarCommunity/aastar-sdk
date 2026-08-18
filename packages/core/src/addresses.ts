@@ -136,17 +136,17 @@ export const CANONICAL_ADDRESSES = {
     // v0.27.0 DVT-unification (CC-10 Phase 1 / #274): the algId-0x01 verifier is now the unified DVT
     // validator (router.getAlgorithm(0x01)==0x539B, on-chain verified). It enforces strictly-ascending
     // nodeIds (SDK sorts them — #274) and operator registration via registerWithProof (nodeId=keccak256(pubkey)).
-    aaStarBLSAlgorithm: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",  // DVT validator (algId 0x01) — UNCHANGED in v0.28.0; still mounted on the new router 0xA6bd (getAlgorithm(0x01)==0x539B on-chain verified — CC-45)
-    aaStarValidator: "0xA6bdfD17C178b43B464736408e0Fe03D5a7684eB",  // v0.28.0 (ValidatorRouter; router.getAlgorithm(0x01)=DVT validator 0x539B on-chain verified — CC-45)
+    aaStarBLSAlgorithm: "0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64",  // v0.31.0 algId 0x01 = the CC-98 COMMITTEE validator (dvt #237), NOT the legacy whole-set 0x539B. committeeActive()==false today, so it decodes legacy framing; see the DVT-node caveat in the header note.
+    aaStarValidator: "0xA15127e8601e77De7C655bf04ca75cccD8C968f0",  // v0.31.0 ValidatorRouter. getAlgorithm(0x01)=committee validator 0x1A8Db639, (0x08)=0x6b04 — both on-chain verified.
     aaStarBLSAggregator: "0x35775df9a4f4dB42Ea0C46118a12dDd0cEc70609",  // v0.20.0 (SP-side aggregator; unchanged by DVT-unification)
     sessionKeyValidator: "0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f",  // v0.24.0 (algId 0x08; NEW — security fix d #164 block self-call escalation)
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0x778ab75636F1350c31930078208eFB02E9765ed3",  // v0.28.0 (FACTORY_VERSION 0.28.0 on-chain verified; CC-27 rename + full-stack redeploy — CC-45)
-    airAccountV7Impl: "0xcCD6DfbaeE8c4249D2F9825781ece2cb5a456d97",  // v0.28.0 (ACCOUNT_VERSION 0.28.0; factory.implementation() on-chain verified — CC-45)
-    airAccountExtension: "0x7499968EC5a162b783b5816CbEC339008F132CAC",  // v0.28.0 (isValidOwnerAuth host; CC-45)
-    agentRegistry: "0xB683dECf86C327Cc033Ac2d18d45a4D30DFdE947",  // v0.28.0 (CC-45)
+    airAccountFactoryV7: "0x25C1E9F9120a406581f93bA82f7Cfd6805512791",  // v0.31.0 (FACTORY_VERSION 0.31.0 on-chain verified; CC-48 -> b72c8868). #161 InitConfig carries tier1Limit/tier2Limit.
+    airAccountV7Impl: "0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad",  // v0.31.0 (ACCOUNT_VERSION 0.31.0; factory.implementation() matches — on-chain verified)
+    airAccountExtension: "0x79b90Ed6CB97ec48cfDA86399752C58Bbc59D90a",  // v0.31.0 (isValidOwnerAuth host; selector/magic 0xa0cf00cf unchanged since v0.23.0)
+    agentRegistry: "0x37fc74EaeC81fEdD92876c8713405118Ebc0306e",  // v0.31.0
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",
@@ -297,49 +297,6 @@ export function getLaunchSaleAddresses(chainId: number): LaunchSaleAddresses | u
   return LAUNCH_SALE_ADDRESSES[chainId];
 }
 
-/**
- * airaccount-contract v0.31.0 per-proposal COMMITTEE stack (CC-98 / CC-103).
- *
- * Deliberately a SEPARATE group rather than a canonical bump: upstream published only these four
- * addresses, while the canonical Sepolia AirAccount block carries eleven. Folding four new ones
- * into canonical would silently produce a half-v0.31.0 / half-v0.28.0 stack with nothing marking
- * the seam. Canonical stays whole at v0.28.0 until the full v0.31.0 stack is published; committee
- * work resolves addresses from here. Same reasoning as {@link LAUNCH_SALE_ADDRESSES}.
- */
-export interface CommitteeStackAddresses {
-  /** AAStarAirAccountFactoryV7 — v0.31.0. `FACTORY_VERSION() == "0.31.0"` (on-chain verified). */
-  factory: Address;
-  /** ValidatorRouter — `getAlgorithm(0x01)` resolves to {@link committeeValidator} (on-chain verified). */
-  router: Address;
-  /** AAStarCommitteeValidator (YetAnotherAA-Validator #237), mounted at algId 0x01 on {@link router}. */
-  committeeValidator: Address;
-  /** Account implementation — `ACCOUNT_VERSION() == "0.31.0"`; `factory.implementation()` matches. */
-  accountImpl: Address;
-  /** Upstream's already-enrolled reference account, for read-only conformance checks. */
-  referenceEnrolledAccount: Address;
-}
-
-export const COMMITTEE_STACK_ADDRESSES: Record<number, CommitteeStackAddresses> = {
-  // --- Sepolia (Chain ID: 11155111) ---
-  // Every value below was read back on-chain (block 11512118) before being written here, not copied
-  // from the cross-repo task comment:
-  //   router.getAlgorithm(0x01) == 0x1A8Db639…   factory.FACTORY_VERSION() == "0.31.0"
-  //   factory.implementation()  == 0x4873b7C1…   accountImpl.ACCOUNT_VERSION() == "0.31.0"
-  //   committeeValidator.TREE_DEPTH() == 14       committeeValidator.activeCount() == 3
-  //   referenceEnrolledAccount.validator() == router; enrolledAccount(ref) == true
-  11155111: {
-    factory: "0x25C1E9F9120a406581f93bA82f7Cfd6805512791",
-    router: "0xA15127e8601e77De7C655bf04ca75cccD8C968f0",
-    committeeValidator: "0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64",
-    accountImpl: "0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad",
-    referenceEnrolledAccount: "0xf249d5708cC3e1Dff42F5B36935FF270BeC403A0",
-  },
-};
-
-/** Resolve the v0.31.0 committee stack for a chain, or `undefined` if it is not deployed there. */
-export function getCommitteeStackAddresses(chainId: number): CommitteeStackAddresses | undefined {
-  return COMMITTEE_STACK_ADDRESSES[chainId];
-}
 
 /**
  * Chain IDs that have a canonical address book in {@link CANONICAL_ADDRESSES}.

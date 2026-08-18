@@ -28,6 +28,14 @@ export type InitConfig = {
     minDailyLimit: bigint;
     initialTokens: readonly Address[];
     initialTokenConfigs: readonly TokenConfig[];
+    /**
+     * NATIVE-ETH tier ceilings, added to InitConfig by airaccount-contract #161 (v0.29.0) — the
+     * struct went 8 -> 10 fields, a BREAKING ABI change. `0` = unconfigured (pre-#161 behaviour),
+     * but the fields must be PRESENT: viem encodes a missing field as `undefined` and the v0.29.0+
+     * factory reverts on createAccount/getAddress.
+     */
+    tier1Limit: bigint;
+    tier2Limit: bigint;
 };
 
 // pendingModuleInstall() tuple result.

@@ -57,6 +57,16 @@ export interface BuildInitConfigParams {
     initialTokens?: readonly Address[];
     /** Per-token tier configs, index-aligned with `initialTokens`. Defaults to none. */
     initialTokenConfigs?: readonly TokenConfig[];
+    /**
+     * NATIVE-ETH tier-1 ceiling (wei). airaccount-contract #161 (v0.29.0) folded the ETH tiers into
+     * InitConfig — before that they lived in separate storage slots set via `setTierLimits`, so the
+     * struct went 8 -> 10 fields and became a BREAKING ABI change. `0` = unconfigured, which keeps
+     * the pre-#161 behaviour; the field must still be PRESENT or viem encodes `undefined` and
+     * `createAccount` / `getAddress` revert.
+     */
+    tier1Limit?: bigint;
+    /** NATIVE-ETH tier-2 ceiling (wei). Same #161 note as {@link tier1Limit}; `0` = unconfigured. */
+    tier2Limit?: bigint;
 }
 
 function isZero32(v: Hex): boolean {
@@ -124,5 +134,9 @@ export function buildInitConfig(params: BuildInitConfigParams): InitConfig {
         minDailyLimit: params.minDailyLimit ?? 0n,
         initialTokens: params.initialTokens ?? [],
         initialTokenConfigs: params.initialTokenConfigs ?? [],
+        // #161: always emitted, defaulting to 0 (= unconfigured). Omitting them entirely is what
+        // makes viem encode `undefined` against the v0.29.0+ factory and revert.
+        tier1Limit: params.tier1Limit ?? 0n,
+        tier2Limit: params.tier2Limit ?? 0n,
     };
 }

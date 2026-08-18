@@ -56,7 +56,15 @@ const NAME_COLLISIONS = new Set(['AAStarBLSAlgorithm']);
 
 const firstDir = (cands: string[]) => cands.map((d) => path.resolve(SDK_ROOT, d)).find((d) => fs.existsSync(d));
 const loadAbi = (file: string): any[] => { const r = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(r) ? r : r.abi || []; };
-const sigSet = (abi: any[], kind: string) => new Set(abi.filter((e) => e.type === kind && e.name).map((e) => `${e.name}(${(e.inputs || []).map((i: any) => i.type).join(',')})`));
+// Tuples are EXPANDED into their components. Rendering a struct as the bare string "tuple" makes a
+// struct that gains/loses/reorders fields produce an identical signature — airaccount-contract #161
+// grew InitConfig 8 -> 10 fields and this comparison stayed silent while createAccount reverted
+// on-chain. Same fix as scripts/check-abi-drift.ts; both compare independently, so both need it.
+const renderType = (i: any): string =>
+  typeof i?.type === 'string' && i.type.startsWith('tuple') && Array.isArray(i.components)
+    ? `(${i.components.map(renderType).join(',')})${i.type.slice('tuple'.length)}`
+    : (i?.type ?? '?');
+const sigSet = (abi: any[], kind: string) => new Set(abi.filter((e) => e.type === kind && e.name).map((e) => `${e.name}(${(e.inputs || []).map(renderType).join(',')})`));
 
 function concreteContracts(dir: string): string[] {
   const out: string[] = [];
