@@ -50,6 +50,8 @@ import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES,
+    DVT_CONFIG,
+    getDvtConfig,
     EntryPointABI,
     AAStarAirAccountV7ABI,
     AAStarBLSAlgorithmABI,
@@ -196,7 +198,15 @@ async function main() {
         accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas),
         gasFees: userOp.gasFees, paymasterAndData: userOp.paymasterAndData, signature: userOp.signature,
     };
-    const tunnels = ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io'];
+    // Resolved from DVT_CONFIG, not hardcoded: `AASTAR_DVT_ENV=testnet-local` swaps the public
+    // tunnels for locally-run nodes (same registered BLS keys, so the aggregate still verifies)
+    // when dvt1/2/3.aastar.io are unreachable. Previously these three URLs were inline, which made
+    // the run un-redirectable and left this mandatory release gate hostage to the tunnel.
+    // getDvtConfig (not getDvtRelayerUrls) — these are CO-SIGN endpoints, and testnet-local is
+    // deliberately relay:false so localhost never leaks into the gasless relay pool.
+    const dvtEnvName = process.env.AASTAR_DVT_ENV ?? DVT_CONFIG.active;
+    const tunnels = getDvtConfig().dvtNodes.map((n) => n.url);
+    console.log(`     DVT env=${dvtEnvName} -> ${tunnels.join('  ')}`);
     const signed: { nodeId: Hex; signature: Hex }[] = [];
     for (const url of tunnels) {
         try {

@@ -53,6 +53,40 @@ export const DVT_CONFIG: DvtConfig = {
       ],
       capabilities: { dvtSigning: true, relay: true, keeper: true },
     },
+    /**
+     * Local mirror of the Sepolia nodes, for running DVT-dependent E2E when the public tunnels
+     * are down (dvt1/2/3.aastar.io returned HTTP 530 on 2026-08-18 — the cloudflared tunnel, not
+     * the nodes: the services bind 127.0.0.1:3001-3003 and the tunnel container forwards to them).
+     *
+     * The `nodeId`s are IDENTICAL to `sepolia` ON PURPOSE, and that is the whole point: on-chain
+     * verification checks the aggregate against the PUBLIC KEYS REGISTERED ON THE VALIDATOR, so a
+     * local instance must sign with the ALREADY-REGISTERED BLS private keys. Freshly generated
+     * "test" keys would need registering on 0x539B — which is the shared production whole-set
+     * validator, so that would enlarge its node set for everyone. Reuse, never mint.
+     *
+     * Same key signing in two places does not conflict: BLS is deterministic over (key, message),
+     * so both produce byte-identical partials.
+     *
+     * Bring the nodes up (DVT repo, no tunnel/autoheal):
+     *   docker compose -f docker-compose.testnet.yml up dvt-node-1 dvt-node-2 dvt-node-3
+     * Then point the SDK at them for the run:
+     *   AASTAR_DVT_ENV=testnet-local pnpm exec tsx tests/regression/onchain-evidence/tier3-composite-e2e.ts
+     *
+     * Mirrors the DVT repo's `deploy/sdk-dvt-config.testnet.json` `environments` block.
+     */
+    "testnet-local": {
+      chainId: 11155111,
+      validator: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",
+      entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+      dvtNodes: [
+        { url: "http://127.0.0.1:3001", nodeId: "0x1f5e41c69465733eeb19341d95853ee6d9295a9e6698f5398d70e509be8f326d" },
+        { url: "http://127.0.0.1:3002", nodeId: "0xe3a4a3af3973b65bc95dd962e767e17592dfb331f3544209676271b188fd9f80" },
+        { url: "http://127.0.0.1:3003", nodeId: "0x96d64ba8240694153c757707732a11ff175380065ddacb6406094c9d5fa5cfce" },
+      ],
+      // relay:false — this environment exists for local co-signing only. Leaving it true would let
+      // getDvtRelayerUrlsForChain hand localhost URLs to the gasless relay pool for chain 11155111.
+      capabilities: { dvtSigning: true, relay: false, keeper: false },
+    },
     // Mainnet not yet deployed — fill this block + set `active: "mainnet"` for a zero-code switch.
     mainnet: null,
   },

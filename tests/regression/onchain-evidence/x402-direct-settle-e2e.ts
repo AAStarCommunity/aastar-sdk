@@ -34,6 +34,12 @@ const ERC20 = parseAbi([
 const FAC_ABI = parseAbi([
   "function settleX402PaymentDirect(address from, address to, address asset, uint256 amount, uint256 maxFee, uint256 validBefore, bytes32 nonce, bytes signature) returns (bytes32)",
   "function facilitatorFeeBPS() view returns (uint256)",
+  // Custom errors. Without these viem cannot decode a revert and reports a bare selector — which is
+  // exactly how the NonceAlreadyUsed() failure below hid as an opaque "0x1fb09b80" for a whole run.
+  "error NonceAlreadyUsed()",
+  "error InvalidSignature()",
+  "error AuthorizationExpired()",
+  "error NotApprovedFacilitator()",
 ]);
 
 async function main() {
@@ -49,7 +55,11 @@ async function main() {
   const amount = parseUnits("10", 18);
   const maxFee = parseUnits("1", 18);
   const validBefore = 4102444800n; // year 2100, well in the future (no Date.now needed for correctness)
-  const nonce = keccak256(toHex(`x402-e2e-${validBefore}-${anni.address}-${bob}`));
+  // FRESH nonce per run. This used to be keccak256 over constants only (validBefore/payer/recipient),
+  // so it was the SAME value on every run: the first execution consumed it on-chain and every run
+  // after that reverted with NonceAlreadyUsed() — a test that could pass exactly once, ever. The
+  // facilitator's nonce is replay protection, so a run needs its own.
+  const nonce = keccak256(crypto.getRandomValues(new Uint8Array(32)));
 
   console.log(`\n💸 x402 direct-settle E2E (Sepolia)`);
   console.log(`   payer(Anni)=${anni.address} facilitator(Jason)=${jason.address} to(Bob)=${bob}`);

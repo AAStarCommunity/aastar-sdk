@@ -154,6 +154,16 @@ async function main() {
         console.log(`   Allowance already sufficient (${formatUnits(allowance, 18)}).`);
     }
     const depositBefore = await PaymasterClient.getDepositedBalance(publicClient, PAYMASTER_V4, sender, GAS_TOKEN);
+    // Check the funder can cover it BEFORE calling, so a shortfall reports itself instead of
+    // surfacing as a bare ERC20InsufficientBalance selector that reads like a paymaster failure.
+    const funderBalance = await tokenActions(GAS_TOKEN)(publicClient).balanceOf({ token: GAS_TOKEN, account: owner.address });
+    if (funderBalance < DEPOSIT_AMOUNT) {
+        throw new Error(
+            `funder ${owner.address} holds ${formatUnits(funderBalance, 18)} gas token(s), needs ` +
+            `${formatUnits(DEPOSIT_AMOUNT, 18)} to credit the account's paymaster deposit — top up ${GAS_TOKEN}. ` +
+            `This is a FUNDING shortfall, not a paymaster/SDK failure.`
+        );
+    }
     const depositHash = await PaymasterClient.depositFor(walletClient, PAYMASTER_V4, sender, GAS_TOKEN, DEPOSIT_AMOUNT);
     await assertOk('depositFor', depositHash as Hex);
     const depositAfterCredit = await PaymasterClient.getDepositedBalance(publicClient, PAYMASTER_V4, sender, GAS_TOKEN);
