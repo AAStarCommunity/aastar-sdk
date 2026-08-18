@@ -25,9 +25,11 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, EntryPointABI, buildInitConfig, airAccountFactoryActions, entryPointActions,
+    getDvtConfig,
 } from '@aastar/core';
 // The SDK discovery UNDER TEST (#257).
 import { BLSManager } from '../../../packages/airaccount/src/core/bls/bls.manager';
+import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -35,7 +37,9 @@ const SEPOLIA = 11155111;
 const FACTORY = getAddress(CANONICAL_ADDRESSES[SEPOLIA].airAccountFactoryV7);
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEPOLIA].entryPoint);
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3].filter(Boolean) as string[];
-const SEEDS = ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io'];
+// Resolved from DVT_CONFIG so AASTAR_DVT_ENV=testnet-local can point this at locally-run nodes
+// (same registered BLS keys) when the public tunnels are down. Was hardcoded.
+const SEEDS = getDvtConfig().dvtNodes.map((n) => n.url);
 const SALT = BigInt(keccak256(toBytes('dvt-v0.20-cross-repo-e2e/bls-only/2026-06'))); // same account as dvt-realnode-e2e
 const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 const ALG_BLS = 0x01;
@@ -72,7 +76,13 @@ async function main() {
     const nonce = (await entryPointActions(ENTRY_POINT)(c).getNonce({ sender: account, key: 0n })) as bigint;
     const userOp = { sender: account, nonce, initCode: '0x', callData: '0x', accountGasLimits: ZERO32, preVerificationGas: 0n, gasFees: ZERO32, paymasterAndData: '0x', signature: '0x' };
     const userOpHash = (await c.readContract({ address: ENTRY_POINT, abi: EntryPointABI, functionName: 'getUserOpHash', args: [userOp] })) as Hex;
-    const ownerAuth = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    // #257/#261: the DVT forwards ownerAuth verbatim to account.isValidOwnerAuth, which picks its
+    // branch from the LEADING TAG BYTE and rejects anything not exactly 66 bytes — a bare 65-byte
+    // signature gets 403 "owner authorization required" from every node. Verified on-chain:
+    // raw 65B -> 0xffffffff (rejected), 0x01||sig -> 0xa0cf00cf (accepted).
+    // Keep BOTH forms: the node wants the tagged 66B, on-chain signature material wants the raw 65B.
+    const ownerSig65 = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    const ownerAuth = packOwnerAuthEcdsa(ownerSig65);
     // The exact body the SDK's _coordinateBlsAggregate / buildDvtRequest now send.
     const rpcUserOp = { sender: userOp.sender, nonce: numberToHex(nonce), initCode: '0x', callData: '0x', accountGasLimits: ZERO32, preVerificationGas: numberToHex(0n), gasFees: ZERO32, paymasterAndData: '0x', signature: '0x' };
     console.log(`[2] userOpHash = ${userOpHash.slice(0, 22)}…  ownerAuth = ${ownerAuth.slice(0, 22)}… (${(ownerAuth.length - 2) / 2}B)`);

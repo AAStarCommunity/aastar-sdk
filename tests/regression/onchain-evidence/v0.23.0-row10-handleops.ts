@@ -30,8 +30,9 @@ import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, EntryPointABI, AAStarAirAccountV7ABI, AAStarBLSAlgorithmABI,
     encodeDVTVerifierProof, encodeBLSAccountSignature, encodeG2Point, entryPointActions,
-    getDefaultDvtNodes,
+    getDvtConfig,
 } from '@aastar/core';
+import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 const VERIFIER = getAddress(CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm);
 
@@ -41,7 +42,10 @@ const SEP = 11155111;
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEP].entryPoint);
 const ACC10 = getAddress('0xA063c7B5810fc2f9f0e5198376c83b6B57c80d0c');
 // AAStar's always-on testnet DVT nodes (dvt1/2/3.aastar.io) — the SDK default config.
-const TUNNELS = getDefaultDvtNodes(SEP).map((n) => n.url);
+// getDefaultDvtNodes (crypto/dvtNodes.ts) is a SECOND node list that AASTAR_DVT_ENV does not reach,
+// so it always returns the public tunnels. Read DVT_CONFIG instead — the one list the env override
+// actually switches. (The duplicate source of truth is tracked separately.)
+const TUNNELS = getDvtConfig().dvtNodes.map((n) => n.url);
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3]
     .map((s) => (s || '').replace(/^['"]|['"]$/g, '')).filter(Boolean) as string[];
 const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient;
@@ -98,10 +102,16 @@ async function main() {
     console.log(`userOpHash = ${userOpHash}`);
 
     // (3) ownerAuth + DVT co-sigs.
-    const ownerAuth = await wallet.signMessage({ account: owner, message: { raw: userOpHash } });
+    // #257/#261: the DVT forwards ownerAuth verbatim to account.isValidOwnerAuth, which picks its
+    // branch from the LEADING TAG BYTE and rejects anything not exactly 66 bytes — a bare 65-byte
+    // signature gets 403 "owner authorization required" from every node. Verified on-chain:
+    // raw 65B -> 0xffffffff (rejected), 0x01||sig -> 0xa0cf00cf (accepted).
+    // Keep BOTH forms: the node wants the tagged 66B, on-chain signature material wants the raw 65B.
+    const ownerSig65 = await wallet.signMessage({ account: owner, message: { raw: userOpHash } });
+    const ownerAuth = packOwnerAuthEcdsa(ownerSig65);
     // DIAGNOSTIC: confirm the owner ECDSA the contract's _validateTripleSignature will recover (L935-937)
     // resolves to owner() — isolates an owner-sig fault from a BLS fault when validateUserOp==1.
-    const recoveredOwner = await recoverMessageAddress({ message: { raw: userOpHash }, signature: ownerAuth as Hex });
+    const recoveredOwner = await recoverMessageAddress({ message: { raw: userOpHash }, signature: ownerSig65 as Hex });
     console.log(`ownerAuth recovers to ${recoveredOwner} (owner=${owner.address}, match=${recoveredOwner.toLowerCase() === owner.address.toLowerCase()})`);
     const userOpRpc = { sender: userOp.sender, nonce: numberToHex(userOp.nonce), initCode: userOp.initCode, callData: userOp.callData, accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas), gasFees: userOp.gasFees, paymasterAndData: userOp.paymasterAndData, signature: userOp.signature };
     // Collect co-sigs, GATING on isRegistered (the verifier aggregates registeredKeys(nodeId)); a
@@ -142,7 +152,7 @@ async function main() {
     const sig = encodeBLSAccountSignature({
         nodeIds: signed.map((s) => s.nodeId),
         blsSig: aggSig,
-        ownerSig: ownerAuth as Hex,
+        ownerSig: ownerSig65 as Hex,
     });
     const signedUserOp = { ...userOp, signature: sig };
 

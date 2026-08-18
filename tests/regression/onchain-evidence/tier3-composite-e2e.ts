@@ -63,7 +63,7 @@ import {
 } from '@aastar/core';
 // SDK packer UNDER TEST (the #234-fixed cumulative format) + the message-point helper used to build a
 // REALISTIC negative control (so the old-format rejection isolates the length/format, not bad inputs).
-import { packCumulativeT3Signature, generateMessagePoint } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { packCumulativeT3Signature, generateMessagePoint, packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -192,7 +192,14 @@ async function main() {
     console.log(`[2] P256 sig (r||s) = ${p256Signature.slice(0, 26)}… (${(p256Signature.length - 2) / 2}B)`);
 
     // ── (3) DVT node co-signatures over userOpHash → aggregate ──────────────────────────────────
-    const ownerAuth = await walletClient.signMessage({ account: owner, message: { raw: userOpHash } });
+    // #257/#261: the DVT forwards ownerAuth verbatim to account.isValidOwnerAuth(userOpHash, ownerAuth),
+    // which selects its verification branch from the LEADING TAG BYTE and rejects anything that is not
+    // exactly 66 bytes. This used to send the bare 65-byte signature, so every node answered
+    // 403 "owner authorization required" — verified on-chain: raw 65B -> 0xffffffff (rejected),
+    // 0x01||sig -> 0xa0cf00cf (accepted). Use the SDK packer rather than re-deriving the frame here.
+    const ownerAuth = packOwnerAuthEcdsa(
+        await walletClient.signMessage({ account: owner, message: { raw: userOpHash } })
+    );
     const userOpRpc = {
         sender: userOp.sender, nonce: numberToHex(userOp.nonce), initCode: userOp.initCode, callData: userOp.callData,
         accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas),
@@ -214,8 +221,14 @@ async function main() {
                 method: 'POST', headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ userOp: userOpRpc, ownerAuth }),
             });
-            const body = await res.json().catch(() => ({}));
-            if (!res.ok || !body.nodeId || !body.signature) { console.warn(`    ! ${url} -> ${res.status}`); continue; }
+            const raw = await res.text();
+            const body = (() => { try { return JSON.parse(raw); } catch { return {} as any; } })();
+            if (!res.ok || !body.nodeId || !body.signature) {
+                // Print the node's reason. A bare status code (esp. 403 from the owner-auth gate)
+                // gives the operator nothing to act on and sent us guessing more than once.
+                console.warn(`    ! ${url} -> ${res.status} ${raw.slice(0, 200)}`);
+                continue;
+            }
             const registered = (await withRpcFallback((c) =>
                 c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [norm(body.nodeId)] })
             )) as boolean;
