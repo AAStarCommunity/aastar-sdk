@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.45.0] - 2026-08-18
-**SDK Code Integrity Hash**: `b11e45f3c3d1962f31ea9b1bb9d9f512f5a6b072e4577050dafa9b88bd8e62a0`
+**SDK Code Integrity Hash**: `691e896e7f57c01bec14ced14aaecda7dad7031e2952389db5df9ad044e403fe`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
 
 **Committee framing for the cumulative signature family, and the server path that emits it.** `0.44.0/0.44.1` shipped the committee wire in `@aastar/core` (`dvtWire.ts`) — but the cumulative packers in `@aastar/airaccount` are a SECOND implementation of the same concept and were left legacy-only. With `committeeActive() == true` live on Sepolia, **0.44.1's `packCumulativeT2/T3Signature` produces signatures the chain rejects.** This release fixes that path.
