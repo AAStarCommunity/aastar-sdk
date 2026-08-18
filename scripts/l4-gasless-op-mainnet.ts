@@ -52,13 +52,28 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- Logging Helper ---
-type CsvFormat = 'v1' | 'v2';
+type CsvFormat = 'v1' | 'v2' | 'v3';
 
 function createCsvRecorder(outPath: string, format: CsvFormat) {
     const headersV1 = 'Timestamp,Label,TxHash,GasUsed(L2),L1Fee(Wei),TotalCost(ETH),xPNTsConsumed,TokenName\n';
     const headersV2 =
         'Timestamp,Label,TxHash,GasUsed(L2),L2ExecutionFee(Wei),L1DataFee(Wei),TotalCost(Wei),TotalCost(ETH),xPNTsConsumed,TokenName\n';
-    const headers = format === 'v2' ? headersV2 : headersV1;
+    // v3 (CC-92 / CC-93). v1 and v2 are left BYTE-IDENTICAL on purpose: archived CSVs are pinned by
+    // published papers and must keep reading under the schema they were written with. v3 only ADDS.
+    //
+    //   TxGasUsed          — self-naming alias of GasUsed(L2). The old column stays and carries the
+    //                        same value; renaming it would make one name mean two things across
+    //                        files, which is the exact failure CC-92 is about.
+    //   ActualGasUsed      — ERC-4337 receipt.actualGasUsed. Previously ABSENT, so downstream had to
+    //                        subtract or go to a different file to get it. No derivation now.
+    //   EffectiveGasPriceWei — the exogenous input. Without it a derived column that moves 476x
+    //                        between two collection windows looks like an outlier (CC-93).
+    //   SettlementRate     — xPNTsConsumed / TotalCost(ETH). THIS is the mechanism constant
+    //                        (CV 5% vs xPNTsConsumed's 297%); xPNTsConsumed is gas*gasPrice*R and
+    //                        must not be cited as a per-operation constant.
+    const headersV3 =
+        'Timestamp,Label,TxHash,GasUsed(L2),TxGasUsed,ActualGasUsed,EffectiveGasPriceWei,L2ExecutionFee(Wei),L1DataFee(Wei),TotalCost(Wei),TotalCost(ETH),SettlementRate,xPNTsConsumed,TokenName\n';
+    const headers = format === 'v3' ? headersV3 : format === 'v2' ? headersV2 : headersV1;
 
     if (fs.existsSync(outPath)) {
         const firstLine = fs.readFileSync(outPath, 'utf-8').split('\n')[0] + '\n';
@@ -72,7 +87,12 @@ function createCsvRecorder(outPath: string, format: CsvFormat) {
     return (params: {
         label: string;
         txHash: string;
+        /** receipt.receipt.gasUsed — the TRANSACTION's gas. NOT ERC-4337 actualGasUsed. */
         gasUsed: bigint;
+        /** receipt.actualGasUsed — the ERC-4337 figure. Optional so v1/v2 callers are unaffected. */
+        actualGasUsed?: bigint;
+        /** receipt.receipt.effectiveGasPrice — the exogenous input every derived column depends on. */
+        effectiveGasPriceWei?: bigint;
         l1FeeWei: bigint;
         l2ExecutionFeeWei: bigint;
         totalCostWei: bigint;
@@ -83,7 +103,16 @@ function createCsvRecorder(outPath: string, format: CsvFormat) {
         const xpntsConsumed = params.xpntsConsumed ?? '0';
         const tokenName = params.tokenName ?? 'N/A';
 
-        if (format === 'v2') {
+        if (format === 'v3') {
+            const totalCostEth = formatEther(params.totalCostWei);
+            // SettlementRate is computed HERE because both operands are already in hand at the point
+            // the row is written — pushing the division downstream is what let xPNTsConsumed be read
+            // as a constant. Guarded: a zero-cost row would otherwise emit Infinity/NaN into the CSV.
+            const settlementRate =
+                params.totalCostWei > 0n ? (Number(xpntsConsumed) / Number(totalCostEth)).toFixed(4) : '';
+            const row = `${timestamp},${params.label},${params.txHash},${params.gasUsed.toString()},${params.gasUsed.toString()},${params.actualGasUsed?.toString() ?? ''},${params.effectiveGasPriceWei?.toString() ?? ''},${params.l2ExecutionFeeWei.toString()},${params.l1FeeWei.toString()},${params.totalCostWei.toString()},${totalCostEth},${settlementRate},${xpntsConsumed},${tokenName}\n`;
+            fs.appendFileSync(outPath, row);
+        } else if (format === 'v2') {
             const row = `${timestamp},${params.label},${params.txHash},${params.gasUsed.toString()},${params.l2ExecutionFeeWei.toString()},${params.l1FeeWei.toString()},${params.totalCostWei.toString()},${formatEther(params.totalCostWei)},${xpntsConsumed},${tokenName}\n`;
             fs.appendFileSync(outPath, row);
         } else {
@@ -156,7 +185,15 @@ async function waitAndCheckReceipt(
         console.log(`   🎉 [${label}] SUCCESS!`);
         console.log(`   🔗 Link: https://optimistic.etherscan.io/tx/${txHash}`);
         
-        const actualGasUsed = BigInt(receipt.receipt.gasUsed);
+        // NAMING (CC-92 root cause): receipt.receipt.gasUsed is the TRANSACTION's gas — txGasUsed.
+        // This was called `actualGasUsed`, which is the name of a DIFFERENT ERC-4337 field sitting on
+        // the same object. That mislabel is where "which metric is this column?" stopped being
+        // answerable without reading the collector.
+        const txGasUsed = BigInt(receipt.receipt.gasUsed);
+        const erc4337ActualGasUsed =
+            receipt.actualGasUsed !== undefined ? BigInt(receipt.actualGasUsed) : undefined;
+        const effectiveGasPriceWei =
+            receipt.receipt.effectiveGasPrice !== undefined ? BigInt(receipt.receipt.effectiveGasPrice) : undefined;
         const l2ExecutionFeeWei = BigInt(receipt.actualGasCost);
         const l1FeeWei = receipt.receipt.l1Fee ? BigInt(receipt.receipt.l1Fee) : 0n;
         const totalCostWei = l2ExecutionFeeWei + l1FeeWei;
@@ -194,12 +231,14 @@ async function waitAndCheckReceipt(
             }
         }
 
-        console.log(`   📊 DATA [${label}]: L2Gas=${actualGasUsed}, TotalCost=${totalCostStr} ETH`);
+        console.log(`   📊 DATA [${label}]: txGas=${txGasUsed}, actualGas=${erc4337ActualGasUsed ?? 'n/a'}, gasPrice=${effectiveGasPriceWei ?? 'n/a'} wei, TotalCost=${totalCostStr} ETH`);
         
         record({
             label,
             txHash,
-            gasUsed: actualGasUsed,
+            gasUsed: txGasUsed,
+            actualGasUsed: erc4337ActualGasUsed,
+            effectiveGasPriceWei,
             l1FeeWei,
             l2ExecutionFeeWei,
             totalCostWei,
