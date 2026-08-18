@@ -5,8 +5,6 @@ import {
   isSupportedChainId,
   listSupportedChainIds,
   describeSupportedChains,
-  COMMITTEE_STACK_ADDRESSES,
-  getCommitteeStackAddresses,
 } from './addresses.js';
 
 describe('canonical address resolution', () => {
@@ -62,36 +60,40 @@ describe('canonical address resolution', () => {
   });
 });
 
-describe('COMMITTEE_STACK_ADDRESSES (airaccount-contract v0.31.0, CC-103)', () => {
-  it('resolves the Sepolia committee stack', () => {
-    const s = getCommitteeStackAddresses(11155111)!;
-    expect(s.router).toBe('0xA15127e8601e77De7C655bf04ca75cccD8C968f0');
-    expect(s.committeeValidator).toBe('0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64');
-    expect(s.factory).toBe('0x25C1E9F9120a406581f93bA82f7Cfd6805512791');
-    expect(s.accountImpl).toBe('0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad');
+describe('Sepolia canonical is the airaccount-contract v0.31.0 stack (CC-48)', () => {
+  const s = CANONICAL_ADDRESSES[11155111];
+
+  it('points at the v0.31.0 factory / router / impl / extension', () => {
+    expect(s.airAccountFactoryV7).toBe('0x25C1E9F9120a406581f93bA82f7Cfd6805512791');
+    expect(s.aaStarValidator).toBe('0xA15127e8601e77De7C655bf04ca75cccD8C968f0');
+    expect(s.airAccountV7Impl).toBe('0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad');
+    expect(s.airAccountExtension).toBe('0x79b90Ed6CB97ec48cfDA86399752C58Bbc59D90a');
   });
 
-  it('returns undefined for a chain with no committee deployment', () => {
-    expect(getCommitteeStackAddresses(10)).toBeUndefined();
-    expect(getCommitteeStackAddresses(11155420)).toBeUndefined();
+  it('algId 0x01 is the CC-98 COMMITTEE validator, not the legacy whole-set one', () => {
+    // The v0.31.0 router mounts dvt #237 at 0x01 (on-chain verified). Anything still expecting the
+    // legacy 0x539B whole-set validator here is reading a superseded stack.
+    expect(s.aaStarBLSAlgorithm).toBe('0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64');
+    expect(s.aaStarBLSAlgorithm).not.toBe('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC');
   });
 
-  it('stays SEPARATE from canonical — canonical must not silently become a mixed stack', () => {
-    // Upstream published 4 of the ~11 addresses in the Sepolia AirAccount block. Folding them into
-    // CANONICAL_ADDRESSES would leave a half-v0.31.0 / half-v0.28.0 stack with nothing marking the
-    // seam, so canonical keeps pointing at the whole v0.28.0 stack until the rest is published.
-    const canonical = CANONICAL_ADDRESSES[11155111];
-    const committee = getCommitteeStackAddresses(11155111)!;
-    expect(canonical.aaStarValidator).not.toBe(committee.router);
-    expect(canonical.airAccountFactoryV7).not.toBe(committee.factory);
-    expect(canonical.aaStarBLSAlgorithm).not.toBe(committee.committeeValidator);
+  it('keeps the components v0.31.0 explicitly REUSES from v0.29.0', () => {
+    expect(s.sessionKeyValidator).toBe('0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f');
+    expect(s.forceExitModule).toBe('0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc');
+    expect(s.airAccountDelegate).toBe('0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0');
+    expect(s.calldataParserRegistry).toBe('0x7dEea4544446826601014bD94d0F6432A67496F5');
   });
 
-  it('every address is a distinct, well-formed 20-byte value', () => {
-    for (const [chainId, stack] of Object.entries(COMMITTEE_STACK_ADDRESSES)) {
-      const vals = Object.values(stack);
-      for (const v of vals) expect(v, `${chainId} ${v}`).toMatch(/^0x[0-9a-fA-F]{40}$/);
-      expect(new Set(vals.map((v) => v.toLowerCase())).size).toBe(vals.length);
+  it('is a WHOLE stack — no v0.28.0 leftovers in the account block', () => {
+    // The transitional COMMITTEE_STACK_ADDRESSES group existed only because upstream had published
+    // 4 of 12 addresses. It is gone; this asserts canonical did not keep a half-migrated seam.
+    for (const stale of [
+      '0x778ab75636F1350c31930078208eFB02E9765ed3', // v0.28.0 factory
+      '0xcCD6DfbaeE8c4249D2F9825781ece2cb5a456d97', // v0.28.0 impl
+      '0x7499968EC5a162b783b5816CbEC339008F132CAC', // v0.28.0 extension
+      '0xA6bdfD17C178b43B464736408e0Fe03D5a7684eB', // v0.28.0 router
+    ]) {
+      expect(Object.values(s)).not.toContain(stale);
     }
   });
 });

@@ -25,6 +25,7 @@ import { concat, createPublicClient, http, keccak256, numberToHex, size, toHex, 
 import { sepolia } from 'viem/chains';
 import {
     AAStarCommitteeValidatorABI,
+    CANONICAL_ADDRESSES,
     COMMITTEE_QUORUM_UNAVAILABLE,
     DVT_TIER_T2,
     assertCommitteeSubmittable,
@@ -34,7 +35,6 @@ import {
     isAccountEnrolled,
     encodeCommitteeBLSBlock,
     encodeDVTAccountSignature,
-    getCommitteeStackAddresses,
     type CommitteeSigner,
 } from '@aastar/core';
 
@@ -44,8 +44,16 @@ const RPC = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL;
 if (!RPC) throw new Error('missing SEPOLIA_RPC_URL / RPC_URL in .env.sepolia');
 
 const pc = createPublicClient({ chain: sepolia, transport: http(RPC) });
-const stack = getCommitteeStackAddresses(sepolia.id);
-if (!stack) throw new Error('no committee stack registered for Sepolia');
+// The v0.31.0 stack IS canonical now (airaccount-contract published all 12 addresses on CC-48;
+// the transitional COMMITTEE_STACK_ADDRESSES group existed only while they were incomplete).
+const canonical = CANONICAL_ADDRESSES[sepolia.id];
+const stack = {
+    factory: canonical.airAccountFactoryV7 as Address,
+    router: canonical.aaStarValidator as Address,
+    committeeValidator: canonical.aaStarBLSAlgorithm as Address,
+    accountImpl: canonical.airAccountV7Impl as Address,
+    referenceEnrolledAccount: '0xf249d5708cC3e1Dff42F5B36935FF270BeC403A0' as Address,
+};
 
 let failures = 0;
 const ok = (label: string, detail = '') => console.log(`  PASS  ${label}${detail ? ' — ' + detail : ''}`);

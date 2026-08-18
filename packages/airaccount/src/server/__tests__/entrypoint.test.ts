@@ -82,16 +82,21 @@ describe("EntryPoint constants", () => {
   // fails instead of silently agreeing while reverting on-chain. These selectors were confirmed against
   // live Sepolia factory 0x99C9300d52EDD9f4B7135DEd1811fBa6FFa1DDC6 (createAccount/getAddress both mined
   // status=0x1 in the #118 evidence run).
-  describe("AIRACCOUNT_FACTORY_ABI selector parity with the deployed v0.22.0 factory", () => {
+  describe("AIRACCOUNT_FACTORY_ABI selector parity with the deployed v0.29.0 factory", () => {
     const parsed = parseAbi(AIRACCOUNT_FACTORY_ABI) as readonly AbiFunction[];
     const json = AAStarAirAccountFactoryV7ABI as readonly AbiFunction[];
 
-    // Known-good selectors of the deployed v0.22.0 factory (createAccount 8-arg: +ownerP256X/Y, nonce,
-    // deadline, ownerSig; getAddress / getAddressWithChainId 5-arg: +ownerP256X/Y).
+    // Re-pinned v0.22.0 -> v0.29.0. airaccount-contract #161 added tier1Limit/tier2Limit to
+    // InitConfig (8 -> 10 fields), which changes every selector that takes the struct. These three
+    // tests FAILED on the sync and were right to — that is the guard doing its job, not noise.
+    //
+    // The new values are not locally derived and trusted: getAddress(...) was called on the LIVE
+    // v0.29.0 factory 0x65C30aCA… with the 10-field config and returned an address, which a wrong
+    // selector cannot do (it would revert). See CC-48.
     const DEPLOYED_SELECTORS: Record<string, `0x${string}`> = {
-      getAddress: "0xbd4bcf83",
-      createAccount: "0x5f6314a2",
-      getAddressWithChainId: "0xaf799fc6",
+      getAddress: "0x2f9f643b",
+      createAccount: "0xa72b4cab",
+      getAddressWithChainId: "0x0ce14167",
     };
 
     for (const [name, expected] of Object.entries(DEPLOYED_SELECTORS)) {

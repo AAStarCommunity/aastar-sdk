@@ -226,10 +226,16 @@ export const AIRACCOUNT_ABI = [
 // stays uint256. The selector is part of the type string, so even an EMPTY initialTokenConfigs must
 // declare (uint128,uint128,uint256) — declaring (uint256,uint256,uint256) yields the WRONG getAddress/
 // createAccount selector and reverts on the live v0.20.0 factory. Verified vs the canonical JSON ABI.
+// ⚠️ HAND-MAINTAINED MIRROR of packages/core/src/abis/AAStarAirAccountFactoryV7.json.
+// `abi:sync` does NOT touch this file — it only manages core's JSON artifacts — so an upstream
+// struct change lands there and silently leaves this copy stale. airaccount-contract #161 grew
+// InitConfig 8 -> 10 fields (native-ETH tier1Limit/tier2Limit) and this mirror kept the 8-field
+// shape, which encodes a DIFFERENT selector than the deployed v0.29.0 factory.
+// If you change the config tuple here, update core's JSON too — and vice versa.
 export const AIRACCOUNT_FACTORY_ABI = [
   // Full config creation
-  "function createAccount(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config, bytes32 ownerP256X, bytes32 ownerP256Y, uint256 nonce, uint256 deadline, bytes ownerSig) external returns (address)",
-  "function getAddress(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config, bytes32 ownerP256X, bytes32 ownerP256Y) external view returns (address)",
+  "function createAccount(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs, uint256 tier1Limit, uint256 tier2Limit) config, bytes32 ownerP256X, bytes32 ownerP256Y, uint256 nonce, uint256 deadline, bytes ownerSig) external returns (address)",
+  "function getAddress(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs, uint256 tier1Limit, uint256 tier2Limit) config, bytes32 ownerP256X, bytes32 ownerP256Y) external view returns (address)",
   // Default guardian setup (requires guardian acceptance sigs — M5.3+)
   "function createAccountWithDefaults(address owner, uint256 salt, address guardian1, bytes guardian1Sig, address guardian2, bytes guardian2Sig, uint256 dailyLimit) external returns (address)",
   "function getAddressWithDefaults(address owner, uint256 salt, address guardian1, address guardian2, uint256 dailyLimit) external view returns (address)",
@@ -246,7 +252,7 @@ export const AIRACCOUNT_FACTORY_ABI = [
   "function defaultHookModule() external view returns (address)",
   // M7.4 ERC-7828 chain-qualified address helpers
   "function getChainQualifiedAddress(address account) external view returns (bytes32)",
-  "function getAddressWithChainId(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs) config, bytes32 ownerP256X, bytes32 ownerP256Y) external view returns (address account, bytes32 chainQualified)",
+  "function getAddressWithChainId(address owner, uint256 salt, (address[3] guardians, bytes32[3] guardianP256X, bytes32[3] guardianP256Y, uint256 dailyLimit, uint8[] approvedAlgIds, uint256 minDailyLimit, address[] initialTokens, (uint128 tier1Limit, uint128 tier2Limit, uint256 dailyLimit)[] initialTokenConfigs, uint256 tier1Limit, uint256 tier2Limit) config, bytes32 ownerP256X, bytes32 ownerP256Y) external view returns (address account, bytes32 chainQualified)",
   // Events
   "event AccountCreated(address indexed account, address indexed owner, uint256 salt)",
 ];
