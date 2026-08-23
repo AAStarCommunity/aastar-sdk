@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "pnpm -r build",
+    "repcredit:e2e": "tsx scripts/repcredit-e2e.ts",
+    "repcredit:typecheck": "tsc -p scripts/tsconfig.repcredit.json",
     "keeper": "tsx scripts/keeper.ts",
     "keeper:sepolia": "tsx scripts/keeper.ts --network sepolia",
     "keeper:op-sepolia": "tsx scripts/keeper.ts --network op-sepolia",
