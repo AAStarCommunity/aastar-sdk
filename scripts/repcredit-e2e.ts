@@ -1,15 +1,17 @@
 /**
  * RepCredit paper evidence orchestrator.
  *
- * Runs a fresh Prague Anvil chain and the real cross-repository path:
+ * Runs either a fresh Prague Anvil chain or an isolated Sepolia deployment and
+ * the real cross-repository path:
  * YAAA structured BLS co-signing -> DVT -> Registry -> AirAccount UserOperation
  * -> EntryPoint -> SuperPaymaster -> xPNT burn or debt/automatic repayment.
- * It also measures m={3,7,13} x B={1,10,50,100} x {Registry,DVT}, 10 times
- * per cell from an identical EVM snapshot.
+ * Local mode also measures s={3,7,13} x B={1,10,50,100} x {Registry,DVT},
+ * 10 times per cell from an identical EVM snapshot.
  *
- * No .env file or live-network key is read. The only private material is
- * deterministic local test material created in a temporary directory and
- * deleted on exit.
+ * This script never reads .env files. In Sepolia mode, the caller injects one
+ * authorized experiment key and RPC URL through the process environment; both
+ * are redacted from evidence output. Fresh validator keys are generated in a
+ * temporary directory and deleted after their residual ETH is returned.
  */
 
 import {
@@ -46,7 +48,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   closeSync,
   copyFileSync,
@@ -54,6 +56,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -67,14 +70,14 @@ import { createServer } from "node:net";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const ZERO_BYTES32 = `0x${"00".repeat(32)}` as Hex;
-const DEPLOYER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as Address;
-const CHAIN_ID = 31_337;
+const LOCAL_DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as Hex;
 const DEFAULT_PORT = 18_547;
 const DEFAULT_NODE_PORT = 29_301;
 const ROLE_DVT = keccak256(stringToHex("DVT"));
 const DVT_STAKE = parseEther("30");
 const VALIDATOR_GT = parseEther("40");
-const USER_OP_GAS_PRICE = 1_000_000_000n;
+let userOpMaxFeePerGas = 1_000_000_000n;
+let userOpPriorityFeePerGas = 1_000_000_000n;
 
 type Deployment = Record<string, Address>;
 type AirDeployment = {
@@ -130,6 +133,16 @@ const worktreeRoot = resolve(process.env.REPCREDIT_WORKTREE_ROOT ?? join(sdkDir,
 const superPaymasterDir = resolve(process.env.REPCREDIT_SUPERPAYMASTER_DIR ?? join(worktreeRoot, "SuperPaymaster"));
 const yaaaDir = resolve(process.env.REPCREDIT_YAAA_DIR ?? join(worktreeRoot, "YetAnotherAA-Validator"));
 const airDir = resolve(process.env.REPCREDIT_AIRACCOUNT_DIR ?? join(worktreeRoot, "airaccount-contract"));
+const networkMode = process.env.REPCREDIT_NETWORK_MODE ?? "local";
+if (!["local", "sepolia"].includes(networkMode)) throw new Error("REPCREDIT_NETWORK_MODE must be local or sepolia");
+const isSepolia = networkMode === "sepolia";
+const chainId = isSepolia ? 11_155_111 : 31_337;
+const livePrivateKey = process.env.REPCREDIT_PRIVATE_KEY as Hex | undefined;
+if (isSepolia && (!livePrivateKey || !/^0x[0-9a-fA-F]{64}$/.test(livePrivateKey))) {
+  throw new Error("Sepolia mode requires REPCREDIT_PRIVATE_KEY as a 32-byte hex key");
+}
+const deployerAccount = privateKeyToAccount(isSepolia ? livePrivateKey! : LOCAL_DEPLOYER_KEY);
+const DEPLOYER = deployerAccount.address;
 const outputDirRaw = process.env.REPCREDIT_OUTPUT_DIR ?? "";
 if (!outputDirRaw || !outputDirRaw.startsWith("/")) {
   throw new Error("REPCREDIT_OUTPUT_DIR must be a new absolute directory");
@@ -152,16 +165,22 @@ if (!Number.isInteger(port) || port < 1024 || port > 65_535) throw new Error("in
 if (!Number.isInteger(nodePort) || nodePort < 1024 || nodePort + nodeCount > 65_535) throw new Error("invalid node port range");
 if (![3, 13].includes(nodeCount)) throw new Error("REPCREDIT_NODE_COUNT must be 3 (smoke) or 13 (full)");
 if (!skipMeasurements && nodeCount !== 13) throw new Error("full measurements require 13 nodes");
+if (isSepolia && (!skipMeasurements || nodeCount !== 3)) {
+  throw new Error("Sepolia evidence requires three nodes and REPCREDIT_SKIP_MEASUREMENTS=true");
+}
 
-const rpcUrl = `http://127.0.0.1:${port}`;
-const localChain = defineChain({
-  id: CHAIN_ID,
-  name: "RepCredit Anvil Prague",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+const rpcUrl = isSepolia ? (process.env.REPCREDIT_RPC_URL ?? "") : `http://127.0.0.1:${port}`;
+if (!rpcUrl) throw new Error("Sepolia mode requires REPCREDIT_RPC_URL");
+const experimentChain = defineChain({
+  id: chainId,
+  name: isSepolia ? "RepCredit Sepolia Evidence" : "RepCredit Anvil Prague",
+  nativeCurrency: isSepolia
+    ? { name: "Sepolia Ether", symbol: "ETH", decimals: 18 }
+    : { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [rpcUrl] } },
 });
-const publicClient = createPublicClient({ chain: localChain, transport: http(rpcUrl) });
-const deployerWallet = createWalletClient({ account: DEPLOYER, chain: localChain, transport: http(rpcUrl) });
+const publicClient = createPublicClient({ chain: experimentChain, transport: http(rpcUrl) });
+const deployerWallet = createWalletClient({ account: deployerAccount, chain: experimentChain, transport: http(rpcUrl) });
 const children: ChildProcess[] = [];
 const tempRoot = mkdtempSync(join(tmpdir(), "repcredit-e2e-"));
 
@@ -280,7 +299,7 @@ async function revertSnapshot(id: string): Promise<void> {
 async function waitRpc(): Promise<void> {
   for (let i = 0; i < 100; i++) {
     try {
-      if (await publicClient.getChainId() === CHAIN_ID) return;
+      if (await publicClient.getChainId() === chainId) return;
     } catch { /* not ready */ }
     await new Promise(resolveWait => setTimeout(resolveWait, 100));
   }
@@ -306,8 +325,8 @@ async function waitNode(url: string): Promise<void> {
   throw new Error(`YAAA node did not start at ${url}`);
 }
 
-function loadDeployment(): Deployment {
-  const parsed = JSON.parse(readFileSync(join(superPaymasterDir, "deployments/config.anvil.json"), "utf8"));
+function loadDeployment(path: string): Deployment {
+  const parsed = JSON.parse(readFileSync(path, "utf8"));
   const required = [
     "entryPoint", "registry", "gToken", "staking", "superPaymaster", "aPNTs",
     "dvtValidator", "blsAggregator", "agentIdentityRegistry",
@@ -343,36 +362,58 @@ function emptyG2() {
   };
 }
 
+const sepValidatorAccounts = new Map<number, PrivateKeyAccount>();
+
 function validatorAccount(slot: number): PrivateKeyAccount {
-  return privateKeyToAccount(keccak256(stringToHex(`repcredit-local-validator-${slot}`)));
+  if (!isSepolia) return privateKeyToAccount(keccak256(stringToHex(`repcredit-local-validator-${slot}`)));
+  const existing = sepValidatorAccounts.get(slot);
+  if (existing) return existing;
+  const created = privateKeyToAccount(toHex(Uint8Array.from(randomBytes(32))));
+  sepValidatorAccounts.set(slot, created);
+  return created;
 }
 
 function validatorWallet(account: PrivateKeyAccount) {
-  return createWalletClient({ account, chain: localChain, transport: http(rpcUrl) });
+  return createWalletClient({ account, chain: experimentChain, transport: http(rpcUrl) });
 }
 
 async function setupValidators(deployment: Deployment, keyRoot: string): Promise<PrivateKeyAccount[]> {
   const validators: PrivateKeyAccount[] = [];
+  const records: Record<string, unknown>[] = [];
   for (let slot = 1; slot <= nodeCount; slot++) {
     const account = validatorAccount(slot);
     const wallet = validatorWallet(account);
     validators.push(account);
-    await waitReceipt(await (deployerWallet as any).sendTransaction({ to: account.address, value: parseEther("2") }));
-    await sendContract(deployerWallet, deployment.gToken, GTokenABI as Abi, "mint", [account.address, VALIDATOR_GT]);
-    await sendContract(wallet, deployment.gToken, GTokenABI as Abi, "approve", [deployment.staking, VALIDATOR_GT]);
+    const funding = await waitReceipt(await (deployerWallet as any).sendTransaction({
+      to: account.address,
+      value: isSepolia ? parseEther("0.01") : parseEther("2"),
+    }));
+    const mint = await sendContract(deployerWallet, deployment.gToken, GTokenABI as Abi, "mint", [account.address, VALIDATOR_GT]);
+    const approve = await sendContract(wallet, deployment.gToken, GTokenABI as Abi, "approve", [deployment.staking, VALIDATOR_GT]);
     const roleData = encodeAbiParameters([{ type: "uint256" }], [DVT_STAKE]);
-    await sendContract(wallet, deployment.registry, RegistryABI as Abi, "registerRole", [ROLE_DVT, account.address, roleData]);
-    await sendContract(deployerWallet, deployment.dvtValidator, DVTValidatorABI as Abi, "addValidator", [account.address]);
+    const registerRole = await sendContract(wallet, deployment.registry, RegistryABI as Abi, "registerRole", [ROLE_DVT, account.address, roleData]);
+    const addValidator = await sendContract(deployerWallet, deployment.dvtValidator, DVTValidatorABI as Abi, "addValidator", [account.address]);
     const nodeState = JSON.parse(readFileSync(join(keyRoot, `node${slot}`, "node_state.json"), "utf8"));
     if (!isAddress(account.address) || typeof nodeState.publicKey !== "string") throw new Error(`invalid node state ${slot}`);
-    await sendContract(
+    const registerBls = await sendContract(
       deployerWallet,
       deployment.blsAggregator,
       BLSAggregatorABI as Abi,
       "registerBLSPublicKey",
       [account.address, g1Tuple(nodeState.publicKey as Hex), slot, emptyG2()],
     );
+    records.push({
+      slot,
+      validator: account.address,
+      funding: receiptRecord(funding),
+      mintGToken: receiptRecord(mint),
+      approveStake: receiptRecord(approve),
+      registerRole: receiptRecord(registerRole),
+      addValidator: receiptRecord(addValidator),
+      registerBlsKey: receiptRecord(registerBls),
+    });
   }
+  writeJsonExclusive(join(rawDir, "validator-setup.json"), records);
   return validators;
 }
 
@@ -414,7 +455,7 @@ function proposal(proposalId: bigint, users: Address[], scores: bigint[], epoch:
       { type: "uint256" }, { type: "address" }, { type: "uint8" },
       { type: "address[]" }, { type: "uint256[]" }, { type: "uint256" }, { type: "uint256" },
     ],
-    [proposalId, ZERO_ADDRESS, 0, users, scores, epoch, BigInt(CHAIN_ID)],
+    [proposalId, ZERO_ADDRESS, 0, users, scores, epoch, BigInt(chainId)],
   ));
   return {
     schemaVersion: "repcredit-reputation-v1",
@@ -424,7 +465,7 @@ function proposal(proposalId: bigint, users: Address[], scores: bigint[], epoch:
     users,
     scores: scores.map(String),
     epoch: epoch.toString(),
-    chainId: String(CHAIN_ID),
+    chainId: String(chainId),
     messageHash,
   };
 }
@@ -500,7 +541,7 @@ async function buildUserOp(
     callData,
     accountGasLimits: pack128(500_000n, 250_000n),
     preVerificationGas: 100_000n,
-    gasFees: pack128(USER_OP_GAS_PRICE, USER_OP_GAS_PRICE),
+    gasFees: pack128(userOpPriorityFeePerGas, userOpMaxFeePerGas),
     paymasterAndData,
     signature: "0x",
   };
@@ -554,7 +595,7 @@ async function runE2E(
     functionName: "getUserOpHash",
     args: [userOp],
   }) as Hex;
-  const maxCost = 1_650_000n * USER_OP_GAS_PRICE;
+  const maxCost = 1_650_000n * userOpMaxFeePerGas;
   const preDryRun = await publicClient.readContract({
     address: deployment.superPaymaster,
     abi: SuperPaymasterABI,
@@ -583,7 +624,7 @@ async function runE2E(
   const contribution = proposal(created.id, [air.contracts.account], [100n], 1n);
   const signed = await signAndAggregate(nodes, contribution, 3);
 
-  const wrongChain = { ...contribution, chainId: String(CHAIN_ID + 1) };
+  const wrongChain = { ...contribution, chainId: String(chainId + 1) };
   const wrongChainResult = await postJson(`${nodes[0]}/repcredit/sign`, wrongChain);
   const tamperedMessage = { ...contribution, messageHash: keccak256(stringToHex("tampered")) };
   const tamperedMessageResult = await postJson(`${nodes[0]}/repcredit/sign`, tamperedMessage);
@@ -748,22 +789,27 @@ async function runE2E(
     counterAfter: await counterNumber(air.contracts.counter),
   };
 
-  // Exited-validator liveness negative, isolated and rolled back.
-  const exitSnapshot = await snapshot();
-  const exitCreated = await createDvtProposal(deployment, validator0);
-  const exitProposal = proposal(exitCreated.id, [syntheticUser(9_999)], [100n], 99n);
-  const exitSigned = await signAndAggregate(nodes, exitProposal, 3);
-  await rpc("evm_increaseTime", [31 * 24 * 60 * 60]);
-  await rpc("evm_mine");
-  await sendContract(validator0, deployment.registry, RegistryABI as Abi, "exitRole", [ROLE_DVT]);
-  const exitData = encodeFunctionData({
-    abi: DVTValidatorABI,
-    functionName: "executeWithProof",
-    args: [exitCreated.id, exitProposal.users, [100n], 99n, exitSigned.aggregate.proof],
-  });
-  const exitedReceipt = await sendExpectedRevert(validator1, deployment.dvtValidator, exitData);
-  e2e.exitedValidatorNegative = receiptRecord(exitedReceipt);
-  await revertSnapshot(exitSnapshot);
+  // The exited-validator check needs time travel and snapshot rollback, so it is
+  // part of the controlled local experiment rather than the public-chain run.
+  if (!isSepolia) {
+    const exitSnapshot = await snapshot();
+    const exitCreated = await createDvtProposal(deployment, validator0);
+    const exitProposal = proposal(exitCreated.id, [syntheticUser(9_999)], [100n], 99n);
+    const exitSigned = await signAndAggregate(nodes, exitProposal, 3);
+    await rpc("evm_increaseTime", [31 * 24 * 60 * 60]);
+    await rpc("evm_mine");
+    await sendContract(validator0, deployment.registry, RegistryABI as Abi, "exitRole", [ROLE_DVT]);
+    const exitData = encodeFunctionData({
+      abi: DVTValidatorABI,
+      functionName: "executeWithProof",
+      args: [exitCreated.id, exitProposal.users, [100n], 99n, exitSigned.aggregate.proof],
+    });
+    const exitedReceipt = await sendExpectedRevert(validator1, deployment.dvtValidator, exitData);
+    e2e.exitedValidatorNegative = receiptRecord(exitedReceipt);
+    await revertSnapshot(exitSnapshot);
+  } else {
+    e2e.exitedValidatorNegative = { status: "not-run", reason: "public chain has no snapshot/time-travel isolation" };
+  }
 
   if (await counterNumber(air.contracts.counter) !== 2n) throw new Error("Counter must equal two after Arms A and B");
   writeJsonExclusive(join(rawDir, "e2e.json"), e2e);
@@ -778,7 +824,10 @@ function hexReason(value: Hex): string {
 
 function sanitizeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/0x[a-fA-F0-9]{64}/g, "0x<redacted-32-byte-value>").slice(0, 2_000);
+  return message
+    .split(rpcUrl).join("[REDACTED_RPC_URL]")
+    .replace(/0x[a-fA-F0-9]{64}/g, "0x<redacted-32-byte-value>")
+    .slice(0, 2_000);
 }
 
 async function balanceOf(token: Address, user: Address): Promise<bigint> {
@@ -929,24 +978,106 @@ async function runMeasurements(
   return summary;
 }
 
+async function verifyPublicDeployment(deployment: Deployment) {
+  const latest = await publicClient.getBlock();
+  const addresses = Object.entries(deployment);
+  const codeBytes: Record<string, number> = {};
+  for (const [name, address] of addresses) {
+    const code = await publicClient.getBytecode({ address });
+    if (!code || code === "0x") throw new Error(`${name} ${address} has no deployed bytecode`);
+    codeBytes[name] = (code.length - 2) / 2;
+  }
+  const preflight = {
+    schemaVersion: 1,
+    networkMode,
+    chainId: await publicClient.getChainId(),
+    deployer: DEPLOYER,
+    deployerBalanceWei: (await publicClient.getBalance({ address: DEPLOYER })).toString(),
+    observedGasPriceWei: (await publicClient.getGasPrice()).toString(),
+    latestBlock: { number: latest.number.toString(), hash: latest.hash },
+    entryPoint: deployment.entryPoint,
+    codeBytes,
+  };
+  writeJsonExclusive(join(rawDir, "network-preflight.json"), preflight);
+  return preflight;
+}
+
+async function refundValidatorEth(validators: PrivateKeyAccount[]) {
+  const records: Record<string, unknown>[] = [];
+  for (const account of validators) {
+    const before = await publicClient.getBalance({ address: account.address });
+    const reserve = 63_000n * await publicClient.getGasPrice();
+    if (before <= reserve) {
+      records.push({ validator: account.address, balanceBeforeWei: before, status: "below-refund-reserve" });
+      continue;
+    }
+    const receipt = await waitReceipt(await (validatorWallet(account) as any).sendTransaction({
+      to: DEPLOYER,
+      value: before - reserve,
+      gas: 21_000n,
+    }));
+    records.push({
+      validator: account.address,
+      balanceBeforeWei: before,
+      returnedValueWei: before - reserve,
+      receipt: receiptRecord(receipt),
+      balanceAfterWei: await publicClient.getBalance({ address: account.address }),
+    });
+  }
+  writeJsonExclusive(join(rawDir, "validator-refunds.json"), records);
+}
+
+function redactEvidenceSecrets(root: string, secrets: string[]): void {
+  const activeSecrets = secrets.filter(secret => secret.length > 0);
+  const visit = (path: string): void => {
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) {
+        visit(child);
+        continue;
+      }
+      let content = readFileSync(child, "utf8");
+      let redacted = content;
+      for (const secret of activeSecrets) redacted = redacted.split(secret).join("[REDACTED]");
+      if (redacted !== content) writeFileSync(child, redacted);
+      content = readFileSync(child, "utf8");
+      for (const secret of activeSecrets) {
+        if (content.includes(secret)) throw new Error(`secret remained in evidence file ${child}`);
+      }
+    }
+  };
+  visit(root);
+}
+
 async function main(): Promise<void> {
   assertRepo(superPaymasterDir, "foundry.toml");
   assertRepo(yaaaDir, "package.json");
   assertRepo(airDir, "foundry.toml");
   assertRepo(sdkDir, "pnpm-workspace.yaml");
-  await assertPortAvailable(port);
+  if (!isSepolia) await assertPortAvailable(port);
   for (let slot = 0; slot < nodeCount; slot++) await assertPortAvailable(nodePort + slot);
+
+  if (isSepolia) {
+    await waitRpc();
+    const observedGasPrice = await publicClient.getGasPrice();
+    userOpPriorityFeePerGas = 1_000_000n;
+    userOpMaxFeePerGas = observedGasPrice * 2n;
+  }
 
   const manifest: Record<string, unknown> = {
     schemaVersion: 1,
     startedAt: new Date().toISOString(),
-    command: "pnpm repcredit:e2e",
+    command: isSepolia ? "pnpm repcredit:e2e:sepolia" : "pnpm repcredit:e2e",
     safety: {
-      localOnlyChainId: CHAIN_ID,
-      hardfork: "prague",
+      networkMode,
+      chainId,
+      hardfork: isSepolia ? "public-Sepolia" : "prague",
       mockPrecompiles: false,
       analyticalGasCorrection: false,
-      envFilesRead: false,
+      envFilesReadByRunner: false,
+      callerAuthorizedEnvironment: isSepolia,
+      isolatedFreshDeployment: true,
+      freshValidatorKeys: isSepolia,
       secretsWritten: false,
     },
     repositories: Object.fromEntries([
@@ -960,55 +1091,101 @@ async function main(): Promise<void> {
       branch: git(path, "branch", "--show-current"),
       porcelainAtStart: git(path, "status", "--short"),
     }])),
-    parameters: { rpcUrl, nodePort, nodeCount, skipMeasurements, measurementSmoke },
+    parameters: {
+      rpcUrl: isSepolia ? "[REDACTED]" : rpcUrl,
+      nodePort,
+      nodeCount,
+      skipMeasurements,
+      measurementSmoke,
+      userOpMaxFeePerGas,
+      userOpPriorityFeePerGas,
+    },
   };
   writeJsonExclusive(join(outputDir, "manifest-start.json"), manifest);
 
-  const anvilFd = openSync(join(logDir, "anvil.log"), "wx");
-  const anvil = spawn("anvil", ["--port", String(port), "--chain-id", String(CHAIN_ID), "--hardfork", "prague"], {
-    env: safeEnv({}),
-    stdio: ["ignore", anvilFd, anvilFd],
-  });
-  anvil.once("exit", () => closeSync(anvilFd));
-  children.push(anvil);
-  await waitRpc();
+  if (!isSepolia) {
+    const anvilFd = openSync(join(logDir, "anvil.log"), "wx");
+    const anvil = spawn("anvil", ["--port", String(port), "--chain-id", String(chainId), "--hardfork", "prague"], {
+      env: safeEnv({}),
+      stdio: ["ignore", anvilFd, anvilFd],
+    });
+    anvil.once("exit", () => closeSync(anvilFd));
+    children.push(anvil);
+    await waitRpc();
+  }
 
-  runLogged("superpaymaster-deploy", "forge", [
-    "script", "contracts/script/v3/DeployAnvil.s.sol:DeployAnvil", "--rpc-url", rpcUrl, "--broadcast",
-  ], superPaymasterDir, {
-    REPCREDIT_EVIDENCE_MODE: "true",
-    DEPLOY_TIME: "2026-08-23T23:35:00+07:00",
-  });
-  const deployment = loadDeployment();
-  copyFileSync(join(superPaymasterDir, "deployments/config.anvil.json"), join(rawDir, "superpaymaster-deployment.json"));
-  if ((await publicClient.getChainId()) !== CHAIN_ID) throw new Error("chain id changed after deploy");
+  const superPaymasterConfig = isSepolia
+    ? join(superPaymasterDir, "deployments/repcredit-e2e/sepolia-20260824.json")
+    : join(superPaymasterDir, "deployments/config.anvil.json");
+  if (isSepolia) {
+    const entryPoint = process.env.REPCREDIT_ENTRYPOINT ?? "";
+    const ethUsdFeed = process.env.REPCREDIT_ETH_USD_FEED ?? "";
+    if (!isAddress(entryPoint) || !isAddress(ethUsdFeed)) {
+      throw new Error("Sepolia mode requires valid REPCREDIT_ENTRYPOINT and REPCREDIT_ETH_USD_FEED addresses");
+    }
+    mkdirSync(dirname(superPaymasterConfig), { recursive: true });
+    runLogged("superpaymaster-deploy", "forge", [
+      "script", "contracts/script/v3/DeployRepCreditSepolia.s.sol:DeployRepCreditSepolia",
+      "--rpc-url", rpcUrl, "--broadcast", "--slow",
+    ], superPaymasterDir, {
+      DEPLOYER_PRIVATE_KEY: livePrivateKey!,
+      ENTRY_POINT: entryPoint,
+      ETH_USD_FEED: ethUsdFeed,
+      REPCREDIT_SEPOLIA_CONFIG: superPaymasterConfig,
+      REPCREDIT_ENTRYPOINT_DEPOSIT_WEI: "10000000000000000",
+    });
+  } else {
+    runLogged("superpaymaster-deploy", "forge", [
+      "script", "contracts/script/v3/DeployAnvil.s.sol:DeployAnvil", "--rpc-url", rpcUrl, "--broadcast",
+    ], superPaymasterDir, {
+      REPCREDIT_EVIDENCE_MODE: "true",
+      DEPLOY_TIME: "2026-08-23T23:35:00+07:00",
+    });
+  }
+  const deployment = loadDeployment(superPaymasterConfig);
+  copyFileSync(superPaymasterConfig, join(rawDir, "superpaymaster-deployment.json"));
+  if (isSepolia) {
+    const broadcastPath = join(superPaymasterDir, "broadcast/DeployRepCreditSepolia.s.sol/11155111/run-latest.json");
+    if (!existsSync(broadcastPath)) throw new Error("Sepolia Forge broadcast receipt file is missing");
+    copyFileSync(broadcastPath, join(rawDir, "superpaymaster-broadcast.json"));
+  }
+  if ((await publicClient.getChainId()) !== chainId) throw new Error("chain id changed after deploy");
   if ((await publicClient.readContract({
     address: deployment.blsAggregator, abi: BLSAggregatorABI, functionName: "defaultThreshold",
   }) as bigint) !== 3n) throw new Error("RepCredit default threshold is not three");
 
   const airOutput = join(rawDir, "airaccount-deployment.json");
   runLogged("airaccount-build", "forge", ["build"], airDir);
-  runLogged("airaccount-deploy", "pnpm", ["repcredit:deploy:local"], airDir, {
+  runLogged("airaccount-deploy", "pnpm", [isSepolia ? "repcredit:deploy:sepolia" : "repcredit:deploy:local"], airDir, {
     REPCREDIT_RPC_URL: rpcUrl,
     REPCREDIT_ENTRYPOINT: deployment.entryPoint,
     REPCREDIT_OUTPUT: airOutput,
+    ...(isSepolia ? { REPCREDIT_PRIVATE_KEY: livePrivateKey! } : {}),
   });
   const air = JSON.parse(readFileSync(airOutput, "utf8")) as AirDeployment;
   if (air.version !== "0.31.0") throw new Error(`unexpected AirAccount version ${air.version}`);
 
   runLogged("yaaa-build", "npm", ["run", "build"], yaaaDir);
   const keyRoot = join(tempRoot, "nodes");
-  runLogged("yaaa-generate-local-keys", "node", ["scripts/e2e/gen-repcredit-nodes.mjs", keyRoot, String(nodeCount)], yaaaDir);
+  runLogged("yaaa-generate-ephemeral-keys", "node", ["scripts/e2e/gen-repcredit-nodes.mjs", keyRoot, String(nodeCount)], yaaaDir);
   const validators = await setupValidators(deployment, keyRoot);
   const nodes = await startNodes(deployment, keyRoot);
 
+  await verifyPublicDeployment(deployment);
   await runE2E(deployment, air, validators, nodes);
   if (!skipMeasurements) await runMeasurements(deployment, validators, nodes);
+  if (isSepolia) await refundValidatorEth(validators);
+
+  if (isSepolia) redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
 
   const materialFiles = [
     join(rawDir, "superpaymaster-deployment.json"),
+    ...(isSepolia ? [join(rawDir, "superpaymaster-broadcast.json")] : []),
     join(rawDir, "airaccount-deployment.json"),
+    join(rawDir, "network-preflight.json"),
+    join(rawDir, "validator-setup.json"),
     join(rawDir, "e2e.json"),
+    ...(isSepolia ? [join(rawDir, "validator-refunds.json")] : []),
     ...(skipMeasurements ? [] : [join(rawDir, "measurements.jsonl"), join(derivedDir, "measurement-summary.json")]),
   ];
   const completed = {

@@ -10,6 +10,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "repcredit:e2e": "tsx scripts/repcredit-e2e.ts",
+    "repcredit:e2e:sepolia": "REPCREDIT_NETWORK_MODE=sepolia REPCREDIT_NODE_COUNT=3 REPCREDIT_SKIP_MEASUREMENTS=true tsx scripts/repcredit-e2e.ts",
     "repcredit:typecheck": "tsc -p scripts/tsconfig.repcredit.json",
     "keeper": "tsx scripts/keeper.ts",
     "keeper:sepolia": "tsx scripts/keeper.ts --network sepolia",
