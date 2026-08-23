@@ -273,7 +273,11 @@ async function sendExpectedRevert(
   address: Address,
   data: Hex,
 ): Promise<TransactionReceipt> {
-  const hash = await (wallet as any).sendTransaction({ to: address, data, gas: 8_000_000n });
+  const hash = await (wallet as any).sendTransaction({
+    to: address,
+    data,
+    gas: isSepolia ? 4_000_000n : 8_000_000n,
+  });
   return waitReceipt(hash, "reverted");
 }
 
@@ -386,7 +390,7 @@ async function setupValidators(deployment: Deployment, keyRoot: string): Promise
     validators.push(account);
     const funding = await waitReceipt(await (deployerWallet as any).sendTransaction({
       to: account.address,
-      value: isSepolia ? parseEther("0.01") : parseEther("2"),
+      value: isSepolia ? parseEther("0.02") : parseEther("2"),
     }));
     const mint = await sendContract(deployerWallet, deployment.gToken, GTokenABI as Abi, "mint", [account.address, VALIDATOR_GT]);
     const approve = await sendContract(wallet, deployment.gToken, GTokenABI as Abi, "approve", [deployment.staking, VALIDATOR_GT]);
@@ -1205,11 +1209,13 @@ async function main(): Promise<void> {
 try {
   await main();
 } catch (error) {
+  if (isSepolia) redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
+  const sanitized = sanitizeError(error);
   writeJsonExclusive(join(outputDir, "failure.json"), {
     failedAt: new Date().toISOString(),
-    error: sanitizeError(error),
+    error: sanitized,
   });
-  throw error;
+  throw new Error(sanitized);
 } finally {
   await Promise.all(children.reverse().map(child => new Promise<void>(resolveExit => {
     if (child.exitCode !== null || child.signalCode !== null) return resolveExit();
