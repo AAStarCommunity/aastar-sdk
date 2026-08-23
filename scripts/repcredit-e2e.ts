@@ -552,7 +552,7 @@ async function buildUserOp(
     args: [userOp],
   }) as Hex;
   const rawSignature = await (deployerWallet as any).signMessage({
-    account: DEPLOYER,
+    account: deployerAccount,
     message: { raw: userOpHash },
   }) as Hex;
   userOp.signature = concat(["0x02", rawSignature]);
