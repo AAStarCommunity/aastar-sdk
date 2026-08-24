@@ -119,6 +119,34 @@ describe('assertHttpRejections', () => {
     expect(() => assertHttpRejections({ duplicateSlot: { ok: false, status: 500 } }))
       .toThrow(/server fault is not proof/);
   });
+
+  // Since YAAA 840bfdc every /repcredit endpoint sits behind a mandatory HMAC gate. An
+  // unauthenticated control gets a 4xx from the GUARD, so the old "any 4xx is a rejection" rule
+  // would have marked a suite that never reached the service as fully passing.
+  it('fails when the admission guard refused before the service saw the request', () => {
+    const guardResponses = [
+      { status: 401, body: { message: 'missing X-RepCredit-Timestamp/X-RepCredit-Auth headers' } },
+      { status: 403, body: { message: 'HMAC verification failed' } },
+      { status: 403, body: { message: 'auth token already used' } },
+      { status: 403, body: { message: 'RepCredit experiment signing is disabled' } },
+      { status: 503, body: { message: 'RepCredit experiment signing is armed but the server secret is unset' } },
+      { status: 413, body: { message: 'request body exceeds 65536 bytes' } },
+      { status: 403, body: { message: 'RepCredit experiment endpoints accept loopback callers only' } },
+    ];
+    for (const response of guardResponses) {
+      expect(() => assertHttpRejections({ wrongChain: { ok: false, ...response } }))
+        .toThrow(NegativeControlFailure);
+    }
+  });
+
+  it('still accepts a genuine service-level rejection', () => {
+    expect(() =>
+      assertHttpRejections({
+        wrongChain: { ok: false, status: 400, body: { message: 'chainId does not match the local RPC' } },
+        tamperedMessage: { ok: false, status: 400, body: { message: 'messageHash does not match the recomputed hash' } },
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe('assertRevertedNotOutOfGas', () => {

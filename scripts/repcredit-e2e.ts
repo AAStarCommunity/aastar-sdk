@@ -29,6 +29,7 @@ import {
 // ships in the published @aastar/sdk bundle and is drift-checked as a production interface (CC-50 B1/H2).
 import { MockAgentIdentityRegistryABI, RepCreditCounterABI } from "./repcredit/abis/index.js";
 import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
+import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.js";
 import {
   assertHttpRejections,
   assertRevertedNotOutOfGas,
@@ -201,6 +202,22 @@ const experimentChain = defineChain({
 const publicClient = createPublicClient({ chain: experimentChain, transport: http(rpcUrl) });
 const deployerWallet = createWalletClient({ account: deployerAccount, chain: experimentChain, transport: http(rpcUrl) });
 const children: ChildProcess[] = [];
+/**
+ * Per-node HMAC secrets for the YAAA experiment endpoints (CC-49 BLOCKER-1, synced from
+ * YetAnotherAA-Validator 840bfdc). Minted here with the OS CSPRNG, handed to each node through
+ * its ENVIRONMENT only — never argv, which `ps` exposes to every local user — and fed to the
+ * evidence redactor so a secret cannot survive into the sealed artefacts.
+ */
+const experimentSecrets = new ExperimentSecrets();
+/**
+ * Address of the PRODUCTION (audit) BLSAggregator on the target chain, forwarded to every node so
+ * it can refuse to co-sign with a key that is live there (CC-49 HIGH-A / MEDIUM-C). Never defaulted
+ * here: guessing it is exactly the failure mode DVT closed.
+ */
+const auditBlsAggregatorAddress = process.env.REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS ?? "";
+if (auditBlsAggregatorAddress && !isAddress(auditBlsAggregatorAddress)) {
+  throw new Error("REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS must be a checksummed address");
+}
 const tempRoot = mkdtempSync(join(tmpdir(), "repcredit-e2e-"));
 /**
  * Deployment config this run staged OUTSIDE the SDK, inside the SuperPaymaster checkout. It must be
@@ -480,6 +497,9 @@ async function startNodes(deployment: Deployment, keyRoot: string): Promise<stri
   for (let slot = 1; slot <= nodeCount; slot++) {
     const portForNode = nodePort + slot - 1;
     const url = `http://127.0.0.1:${portForNode}`;
+    // One secret per node, not one for the run: a shared secret would let a co-sign request
+    // captured at one node be replayed at its peers, which is the property the quorum must not have.
+    const experimentSecret = experimentSecrets.issue(url);
     const logPath = join(logDir, `yaaa-node-${slot}.log`);
     mkdirSync(join(keyRoot, `node${slot}`, "data"), { recursive: true });
     const fd = openSync(logPath, "wx");
@@ -495,6 +515,14 @@ async function startNodes(deployment: Deployment, keyRoot: string): Promise<stri
         REPCREDIT_EXPERIMENT_SIGNING: "true",
         REPCREDIT_BLS_AGGREGATOR_ADDRESS: deployment.blsAggregator,
         REPCREDIT_VALIDATOR_SLOT: String(slot),
+        // Mandatory since YAAA 840bfdc: armed without a secret, every /repcredit request is 503.
+        REPCREDIT_EXPERIMENT_AUTH_SECRET: experimentSecret,
+        // YAAA's in-flight CC-49 round 2 (MEDIUM-C) refuses to arm unless the AUDIT aggregator is
+        // named EXPLICITLY, because the built-in default is a Sepolia address that means nothing on
+        // another chain. Passed through when set; on a chain with no production aggregator at all
+        // (local Prague) DVT still has to say what the experiment should name here — see the
+        // blocker note in the CC-49/CC-50 threads. Against committed 840bfdc this is optional.
+        ...(auditBlsAggregatorAddress ? { AUDIT_BLS_AGGREGATOR_ADDRESS: auditBlsAggregatorAddress } : {}),
       }),
       stdio: ["ignore", fd, fd],
     });
@@ -555,15 +583,17 @@ function slashProposal(
   };
 }
 
+/**
+ * POST to a guarded `/repcredit/*` endpoint.
+ *
+ * Every request carries a per-node HMAC over the exact bytes sent, and every attempt (retries
+ * included) mints a fresh timestamp + token because the node accepts each token only once. Non-2xx
+ * responses come back as DATA so the negative controls can inspect them; an unreachable node throws.
+ * Sending unsigned would now fail uniformly with 401/403 — the failure that would make every
+ * negative control "pass" for the wrong reason (see `assertHttpRejections`).
+ */
 async function postJson<T>(url: string, body: unknown): Promise<{ ok: boolean; status: number; body: T | any }> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  let parsed: unknown;
-  try { parsed = await response.json(); } catch { parsed = await response.text(); }
-  return { ok: response.ok, status: response.status, body: parsed };
+  return postSignedJson<T>(url, experimentSecrets.forEndpoint(url), body);
 }
 
 async function signAndAggregate(nodes: string[], value: Proposal, m: number) {
@@ -1208,14 +1238,22 @@ async function runMeasurements(
 
 function deployFraudVerifier(deployment: Deployment): Address {
   const contractsDir = join(yaaaDir, "contracts");
+  // RPC endpoint via the environment instead of argv: a provider-keyed URL on the command line is
+  // readable by every local user through `ps` (CC-50 L1).
+  //
+  // It MUST be FOUNDRY_ETH_RPC_URL, not ETH_RPC_URL. Verified against foundry 1.7.1 on this
+  // machine: with only ETH_RPC_URL set, `forge script --broadcast` prints "If you wish to simulate
+  // on-chain transactions pass a RPC URL", writes no broadcast file and exits 0 — a silent
+  // downgrade to a dry run. FOUNDRY_ETH_RPC_URL (the config-key env override for `eth_rpc_url`)
+  // broadcasts normally. The runner still fails closed if this ever regresses: every forge step is
+  // followed by a hard existence check on its broadcast/config output.
   runLogged("overissue-verifier-deploy", "forge", [
     "script",
     "script/DeployOverIssueVerifier.s.sol:DeployOverIssueVerifier",
-    "--rpc-url",
-    rpcUrl,
     "--broadcast",
     "--slow",
   ], contractsDir, {
+    FOUNDRY_ETH_RPC_URL: rpcUrl,
     AGGREGATOR: deployment.blsAggregator,
     EXPECTED_AGGREGATOR: deployment.blsAggregator,
     EXPECTED_CHAIN_ID: String(chainId),
@@ -1506,6 +1544,24 @@ async function refundValidatorEth(validators: PrivateKeyAccount[]) {
   writeJsonExclusive(join(rawDir, "validator-refunds.json"), records);
 }
 
+/**
+ * Secrets that must never survive into the sealed evidence.
+ *
+ * The experiment auth secrets are redacted in BOTH network modes: they are minted per run in local
+ * mode too, and `logs/` holds each node's stdout. The RPC URL and deployer key stay Sepolia-only —
+ * in local mode they are `http://127.0.0.1:PORT` and the well-known anvil key, and scrubbing those
+ * would delete load-bearing, non-secret detail from the local evidence.
+ */
+function evidenceSecrets(): string[] {
+  return [...experimentSecrets.values(), ...(isSepolia ? [rpcUrl, livePrivateKey!] : [])];
+}
+
+/** Redact every run secret from everything written under outputDir so far. Safe to call twice. */
+function redactEvidence(): void {
+  if (!existsSync(outputDir)) return;
+  redactEvidenceSecrets(outputDir, evidenceSecrets());
+}
+
 function redactEvidenceSecrets(root: string, secrets: string[]): void {
   const activeSecrets = secrets.filter(secret => secret.length > 0);
   const visit = (path: string): void => {
@@ -1619,8 +1675,9 @@ async function main(): Promise<void> {
     mkdirSync(dirname(superPaymasterConfig), { recursive: true });
     runLogged("superpaymaster-deploy", "forge", [
       "script", "contracts/script/v3/DeployRepCreditSepolia.s.sol:DeployRepCreditSepolia",
-      "--rpc-url", rpcUrl, "--broadcast", "--slow",
+      "--broadcast", "--slow",
     ], superPaymasterDir, {
+      FOUNDRY_ETH_RPC_URL: rpcUrl,
       DEPLOYER_PRIVATE_KEY: livePrivateKey!,
       ENTRY_POINT: entryPoint,
       ETH_USD_FEED: ethUsdFeed,
@@ -1629,8 +1686,9 @@ async function main(): Promise<void> {
     });
   } else {
     runLogged("superpaymaster-deploy", "forge", [
-      "script", "contracts/script/v3/DeployAnvil.s.sol:DeployAnvil", "--rpc-url", rpcUrl, "--broadcast",
+      "script", "contracts/script/v3/DeployAnvil.s.sol:DeployAnvil", "--broadcast",
     ], superPaymasterDir, {
+      FOUNDRY_ETH_RPC_URL: rpcUrl,
       REPCREDIT_EVIDENCE_MODE: "true",
       DEPLOY_TIME: "2026-08-23T23:35:00+07:00",
     });
@@ -1674,7 +1732,7 @@ async function main(): Promise<void> {
   await runGuardianExitSlashCompetition(deployment, fraudVerifier, validators, nodes);
   if (isSepolia) await refundValidatorEth(validators);
 
-  if (isSepolia) redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
+  redactEvidence();
 
   const materialFiles = [
     join(rawDir, "superpaymaster-deployment.json"),
@@ -1742,8 +1800,7 @@ async function cleanup(): Promise<void> {
  * the one exit path that used to skip it entirely, because a signal never reaches `finally`.
  */
 function redactOnExit(): void {
-  if (!isSepolia || !existsSync(outputDir)) return;
-  redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
+  redactEvidence();
 }
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
@@ -1764,7 +1821,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
 try {
   await main();
 } catch (error) {
-  if (isSepolia) redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
+  redactEvidence();
   const sanitized = sanitizeError(error);
   writeJsonExclusive(join(outputDir, "failure.json"), {
     failedAt: new Date().toISOString(),

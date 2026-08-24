@@ -59,6 +59,7 @@
     "upstream:versions": "tsx scripts/upstream/upstream-radar.ts --versions",
     "check:abi": "tsx scripts/check-abi-completeness.ts",
     "check:abi-drift": "tsx scripts/check-abi-drift.ts",
+    "check:abi-drift:strict": "tsx scripts/check-abi-drift.ts --strict",
     "abi:sync": "tsx scripts/abi-sync.ts",
     "abi:triage": "tsx scripts/abi-triage.ts",
     "address:sync": "tsx scripts/address-sync.ts",

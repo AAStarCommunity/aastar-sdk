@@ -164,6 +164,23 @@ REPCREDIT_OUTPUT_DIR=/absolute/new/directory pnpm repcredit:e2e
 bash packages/analytics/scripts/run_paper7_exclusive_data.sh --network anvil --cycles 5
 ```
 
+#### YAAA experiment endpoints now require authentication
+
+Since YetAnotherAA-Validator `840bfdc`, every `/repcredit/*` endpoint sits behind a mandatory
+HMAC gate (CC-49 BLOCKER-1). The runner handles this itself: it mints one CSPRNG secret **per
+validator**, passes it to that node as `REPCREDIT_EXPERIMENT_AUTH_SECRET` through the child
+**environment** (never argv — `ps` is world-readable), signs the exact request bytes, and mints a
+fresh token for every attempt because each token is single-use. Nothing extra to configure.
+
+One optional variable, deliberately **not** defaulted:
+
+| Variable | When you need it | Why there is no default |
+|---|---|---|
+| `REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS` | YAAA's in-flight CC-49 round 2 refuses to arm unless the production (audit) aggregator is named explicitly | Guessing it is the failure DVT closed: the built-in fallback is a Sepolia address that is meaningless on another chain |
+
+The RPC endpoint reaches `forge` through `FOUNDRY_ETH_RPC_URL` rather than `--rpc-url`, so a
+provider-keyed URL never appears in `ps` output.
+
 ### Output Structure
 
 ```text

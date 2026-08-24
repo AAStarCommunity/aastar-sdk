@@ -27,6 +27,64 @@ All notable changes to this project will be documented in this file.
   and pins each by sha256 + upstream commit, with an `upstreamMerged` flag. The runner verifies the
   pins before it touches a chain.
 
+### Second round (CC-50 / CC-49 `[from:docs]`) — YAAA auth sync, strict drift gate, RPC off argv
+
+**The ABI drift gate could still pass vacuously.** Its only hard-failure mode for missing inputs
+was "no upstream `out/` directory at all". An upstream that had been `forge clean`ed still leaves
+`out/` present for the OTHER repos, so `Registry` / `BLSAggregator` dropped into `skipped` and the
+gate printed PASS after checking 12 ABIs where a good run checks 30.
+
+- New strict mode: `pnpm run check:abi-drift:strict` (also `--strict` / `STRICT_ABI_DRIFT=1`, and
+  the existing `REQUIRE_UPSTREAM=1` now implies it). It fails **per expected contract**: any SDK
+  ABI whose contract is declared in an upstream `src/` tree but has no `out/` artifact is a
+  failure, not a skip. Sources are the right oracle — `forge clean` removes `out/`, never `src/`.
+- A `MUST_VERIFY` list (`Registry`, `BLSAggregator`, `DVTValidator`, `SuperPaymaster`) fails strict
+  mode when any of them was not actually compared, for any reason.
+- Both modes now print the full **checked / skipped-with-reason inventory** and a must-verify
+  table. A lenient run that skipped an expected artifact says so instead of printing a bare PASS.
+
+**YAAA 840bfdc made the experiment endpoints mandatory-auth; the runner had to follow.** Every
+`/repcredit/*` call now goes through `scripts/repcredit/experiment-auth.ts`:
+
+- one **CSPRNG secret per validator** (not per run — a shared secret would let a co-sign request
+  captured at one node be replayed at its peers), injected through the child process
+  **environment**, never argv;
+- HMAC over the **exact bytes sent**: the body is serialised once and that same string is both
+  signed and transmitted;
+- **every retry mints a new timestamp + token**, because the node accepts each token exactly once;
+  retries are limited to transport failures and 502/504 (a 4xx is a decision, and the gate's 503
+  cases do not heal on retry);
+- secrets are excluded from argv, manifest, evidence and errors, and are now redacted from the
+  output tree in **both** network modes (`logs/` holds each node's stdout; the previous redaction
+  ran only on Sepolia).
+- `assertHttpRejections` now rejects a **guard-level** refusal. With mandatory auth, an
+  unauthenticated control gets a 4xx from the admission guard without the service ever validating
+  it — under the old "any 4xx is a rejection" rule an entire negative-control suite could pass
+  while proving nothing.
+
+**RPC URL off the command line (CC-50 L1).** All three `forge script` invocations pass the endpoint
+through `FOUNDRY_ETH_RPC_URL` instead of `--rpc-url`, so a provider-keyed URL is no longer visible
+to every local user via `ps`. It must be `FOUNDRY_ETH_RPC_URL`: verified on foundry 1.7.1 that with
+only `ETH_RPC_URL` set, `forge script --broadcast` prints "If you wish to simulate on-chain
+transactions pass a RPC URL", writes no broadcast file and **exits 0** — a silent downgrade to a
+dry run. Each forge step is still followed by a hard existence check on its output.
+
+**Tests** — `scripts/repcredit/experiment-auth.test.ts` (19): client behaviour with the expected
+HMAC recomputed independently from `node:crypto`; a pin on the upstream guard's header names and
+`${timestamp}.${rawBody}` preimage; and a **real YAAA HTTP integration suite** that boots the
+actual `dist/main.js` against a throwaway anvil and exercises the live guard — unsigned (401),
+wrong secret (403), stale timestamp (401), body mutated after signing (403), replay (403), the
+happy path, and `ps` inspection proving the secret never reaches the command line. It skips loudly
+when the sibling checkout is absent; `REPCREDIT_YAAA_HTTP_TEST=1` turns that skip into a failure.
+
+**New optional env var** — `REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS` is forwarded to each node as
+`AUDIT_BLS_AGGREGATOR_ADDRESS`. YAAA's in-flight CC-49 round 2 refuses to arm without it. Never
+defaulted here: guessing it is the exact failure DVT closed.
+
+> ⛔️ **Still deferred, deliberately:** the SuperPaymaster aggregator **domain tag / hash schema**
+> (CC-49 HIGH-A) is not final, and the announced change will alter the on-chain slash preimage and
+> therefore the YAAA hash builder. No ABI, hash builder or domain constant is synced ahead of it.
+
 ### Fixed — the negative controls could not fail (CC-50 H1)
 
 Four "this attack must be rejected" controls wrote their sentinel `throw` **inside** the `try` that

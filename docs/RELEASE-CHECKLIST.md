@@ -42,7 +42,7 @@ consumer path**.
       ```bash
       REQUIRE_UPSTREAM=1 pnpm run abi:sync && \
       REQUIRE_UPSTREAM=1 pnpm run check:abi && \
-      REQUIRE_UPSTREAM=1 pnpm run check:abi-drift
+      pnpm run check:abi-drift:strict
       ```
       These compare against the upstream repos checked out as **siblings** (`../SuperPaymaster`,
       `../airaccount-contract`, `../../mycelium/launch`), `forge build`-ed. They are **not** CI gates
@@ -51,6 +51,15 @@ consumer path**.
       `REQUIRE_UPSTREAM=1` turns that vacuous pass into a hard failure — **always use it here**, so a
       forgotten `forge build` or a missing sibling checkout fails loudly instead of green-lighting a
       release. Rationale is recorded in `.github/workflows/ci.yml`.
+
+      `check:abi-drift:strict` (`--strict`; `REQUIRE_UPSTREAM=1` implies it) closes the finer hole:
+      the flag alone only catches "**no** upstream `out/` at all", and an upstream that was
+      `forge clean`ed still leaves the other repos' `out/` in place — so `Registry` /
+      `BLSAggregator` slid into `skipped` and the gate printed PASS after checking 12 ABIs instead
+      of 30 (CC-50). Strict mode fails per contract whose upstream `src/` declares it but whose
+      artifact is missing, fails when any `MUST_VERIFY` contract was not actually compared, and
+      prints the full checked / skipped-with-reason inventory. **Read the `checked N` line** — a
+      PASS with a shrunken count is not a verification.
 - [ ] **`pnpm run check:browser` (MANDATORY, run AFTER the `@aastar/sdk` build) — no Node-only builtin (`child_process`/`fs`/…) statically imported by any browser-facing subpath.** This exists because 0.42.0 shipped a `node:child_process` leak into `@aastar/sdk/operator` that broke downstream browser builds — unit tests run in Node and a narrow-import browser smoke tree-shook it out, so nothing caught it pre-publish. Never publish with this red.
 
 ## 4. On-chain E2E — FULL business-scenario set (NOT just the change), recorded

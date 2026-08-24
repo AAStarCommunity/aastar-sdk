@@ -82,10 +82,17 @@ jobs:
       # it is actively misleading. (upstream-watch.yml documents the same constraint for the
       # full radar.) They stay a LOCAL / pre-release gate, per docs/RELEASE-CHECKLIST.md.
       #
-      # Two changes now make that impossible to mistake for verification:
+      # Three changes now make that impossible to mistake for verification:
       #   * with no upstream present they no longer print PASS — they say explicitly that the
       #     run compared NOTHING and is a SKIP;
-      #   * REQUIRE_UPSTREAM=1 turns "no upstream present" into a hard failure (exit 1).
-      # The release checklist sets that flag. If these are ever to become real CI gates, the
-      # runner must first check out and build the upstream repos, then set REQUIRE_UPSTREAM=1.
+      #   * REQUIRE_UPSTREAM=1 turns "no upstream present" into a hard failure (exit 1);
+      #   * `pnpm run check:abi-drift:strict` (= --strict) fails PER EXPECTED CONTRACT. The
+      #     coarse "is any out/ dir present?" test was not enough: an upstream that had been
+      #     `forge clean`ed still has its out/ dir for OTHER repos, so Registry/BLSAggregator
+      #     silently dropped into `skipped` and the gate printed PASS after checking 12 ABIs
+      #     instead of 30 (CC-50). Strict mode fails when a contract declared in an upstream
+      #     src/ tree has no artifact, and when anything in MUST_VERIFY was not compared; both
+      #     runs now print the full checked/skipped inventory either way.
+      # The release checklist sets these flags. If these are ever to become real CI gates, the
+      # runner must first check out and build the upstream repos, then run the strict variant.
       # ---------------------------------------------------------------------------------

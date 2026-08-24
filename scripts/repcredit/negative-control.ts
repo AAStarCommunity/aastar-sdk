@@ -146,14 +146,61 @@ export async function expectViewRejected(
 }
 
 /**
- * Assert that a set of HTTP responses were ALL refused by the node.
+ * Rejections produced by the YAAA admission GUARD (`RepCreditExperimentGuard`, CC-49
+ * BLOCKER-1) rather than by the RepCredit service's own validation.
  *
- * `!response.ok` alone is too weak: a node that 500s on everything makes every control "pass".
- * A refusal must be a client-side rejection (4xx). A 5xx means the node broke, which is not
- * evidence that it validated anything.
+ * This distinction became load-bearing the moment the endpoints grew mandatory HMAC auth: a
+ * malformed-auth request is refused with 401/403 — also a 4xx — *before the service ever sees
+ * the proposal*. A negative control that accidentally sends unauthenticated (or replayed)
+ * requests would then "pass" every case while proving nothing about chain-id binding, message
+ * rebinding, threshold or signature validation. A guard rejection is a BROKEN CONTROL, not
+ * evidence.
+ */
+const GUARD_REJECTIONS: { pattern: RegExp; why: string }[] = [
+  { pattern: /experiment signing is disabled/i, why: 'the node is not armed' },
+  { pattern: /server secret is unset/i, why: 'the node is armed without a secret' },
+  { pattern: /request body exceeds/i, why: 'the request exceeded the guard body limit' },
+  { pattern: /loopback callers only/i, why: 'the guard refused a non-loopback source' },
+  { pattern: /missing X-RepCredit/i, why: 'the request carried no auth headers' },
+  { pattern: /auth timestamp outside/i, why: 'the auth timestamp was outside the window' },
+  { pattern: /HMAC verification failed/i, why: 'the HMAC did not verify' },
+  { pattern: /auth token already used/i, why: 'the auth token was replayed' },
+  { pattern: /replay cache is full/i, why: 'the guard replay cache is full' },
+];
+
+function extractMessage(body: unknown): string {
+  if (typeof body === 'string') return body;
+  if (body && typeof body === 'object' && 'message' in body) {
+    const message = (body as { message: unknown }).message;
+    return Array.isArray(message) ? message.join('; ') : String(message ?? '');
+  }
+  return '';
+}
+
+/** Why this rejection came from the admission guard rather than from RepCredit validation, or null. */
+function guardRejectionReason(status: number, body: unknown): string | null {
+  // 401 is only ever produced by the guard: the RepCredit service rejects with 400/403.
+  if (status === 401) return 'the guard rejected it before the service saw it (HTTP 401)';
+  if (status === 413) return 'the guard rejected the request body size (HTTP 413)';
+  const message = extractMessage(body);
+  for (const { pattern, why } of GUARD_REJECTIONS) {
+    if (pattern.test(message)) return why;
+  }
+  return null;
+}
+
+/**
+ * Assert that a set of HTTP responses were ALL refused by the node's RepCredit VALIDATION.
+ *
+ * Three ways this check can be too weak, all closed here:
+ *   - `!response.ok` alone: a node that 500s on everything makes every control "pass", so a
+ *     refusal must be a client-side rejection (4xx);
+ *   - a 5xx means the node broke, which is not evidence that it validated anything;
+ *   - a guard/auth rejection never reaches the service, so it proves nothing about the
+ *     property under test (see GUARD_REJECTIONS).
  */
 export function assertHttpRejections(
-  results: Record<string, { ok: boolean; status: number }>,
+  results: Record<string, { ok: boolean; status: number; body?: unknown }>,
 ): void {
   for (const [label, result] of Object.entries(results)) {
     if (result.ok) {
@@ -162,6 +209,14 @@ export function assertHttpRejections(
     if (result.status >= 500) {
       throw new NegativeControlFailure(
         `${label}: node returned HTTP ${result.status} — a server fault is not proof that the request was validated`,
+      );
+    }
+    const guardReason = guardRejectionReason(result.status, result.body);
+    if (guardReason) {
+      throw new NegativeControlFailure(
+        `${label}: the request was refused by the experiment admission guard because ${guardReason} — ` +
+          `the RepCredit service never validated it, so this control proves nothing. Re-send the ` +
+          `control with valid per-node HMAC auth (scripts/repcredit/experiment-auth.ts).`,
       );
     }
   }
