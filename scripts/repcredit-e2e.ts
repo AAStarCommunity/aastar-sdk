@@ -37,6 +37,7 @@ import {
   executeSlashMessageHash,
   reputationMessageHash,
 } from "./repcredit/bls-domain.js";
+import { decodeGuardianSlashCase } from "./repcredit/guardian-slash-case.js";
 import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
 import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.js";
 import {
@@ -1812,12 +1813,21 @@ async function runGuardianExitSlashCompetition(
       args: [guardian, ROLE_DVT],
     })
   ));
-  const slashCase = await publicClient.readContract({
-    address: deployment.blsAggregator,
-    abi: BLSAggregatorABI,
-    functionName: "guardianSlashCases",
-    args: [fraudProofId],
-  });
+  // Decoded BY NAME, never written to evidence as a positional array (CC-50 round-9 / B2). Upstream
+  // reshapes this struct from 5 outputs to 7 in BLSAggregator 4.8.0 — fraudProofHash inserted at
+  // index 1, verifier appended — and every member is statically sized, so calling the new contract
+  // with the old vendored ABI decodes without reverting and writes mislabelled fields into
+  // security-controls.json. `decodeGuardianSlashCase` fails closed on both the ABI shape and the
+  // returned arity instead.
+  const slashCase = decodeGuardianSlashCase(
+    BLSAggregatorABI as Abi,
+    await publicClient.readContract({
+      address: deployment.blsAggregator,
+      abi: BLSAggregatorABI,
+      functionName: "guardianSlashCases",
+      args: [fraudProofId],
+    }),
+  );
   if (pendingAfter.some(count => count !== 0n) || locksAfter.some(lock => (lock as readonly unknown[])[0] !== 0n)) {
     throw new Error("executed fraud case did not release pending counts and slash every DVT lock");
   }

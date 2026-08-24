@@ -65,9 +65,17 @@ jobs:
       # regression they lock down is CC-50 H1, where every control had its sentinel throw inside
       # its own try/catch, so an attack that SUCCEEDED was recorded as evidence and the run
       # still reported "passed". `pnpm -r test` does not reach scripts/, hence a separate step.
+      #
+      # REPCREDIT_UPSTREAM_ARTIFACTS=absent: this runner has no sibling SuperPaymaster /
+      # airaccount-contract checkouts (see the rationale block below). The REAL must-verify pin
+      # check now FAILS on a missing artifact instead of reporting "0/4 measured" and staying
+      # green (CC-50 round-9 LOW), so an environment without upstreams has to declare itself.
+      # The result is a SKIPPED test, visible in the vitest summary — never a PASS. Release runs
+      # (docs/RELEASE-CHECKLIST.md) do NOT set it, so there the check must measure 4/4.
       - name: RepCredit negative-control reverse tests
         env:
           REPCREDIT_ANVIL_TEST: '1'
+          REPCREDIT_UPSTREAM_ARTIFACTS: 'absent'
         run: pnpm run repcredit:test
 
       # Type-checks the evidence runner and its fixtures. It is not part of any package build.
@@ -183,4 +191,6 @@ jobs:
           REPCREDIT_ANVIL_TEST: '1'
           REPCREDIT_YAAA_DIR: ${{ github.workspace }}/YetAnotherAA-Validator
           REPCREDIT_YAAA_REV: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
+          # Same reason as the unit-test job: no sibling contract checkouts on this runner.
+          REPCREDIT_UPSTREAM_ARTIFACTS: 'absent'
         run: pnpm run repcredit:test

@@ -280,6 +280,279 @@ function repoProvenanceFor(somePath: string): RepoProvenance | null {
   return provenance;
 }
 
+// ---------------------------------------------------------------------------------------------
+// BYTE ATTRIBUTION TO THE PINNED REVISION (CC-50 round-9 MEDIUM)
+//
+// Round-8 nailed down WHICH path a must-verify artifact must have been compiled from (a reviewed
+// constant in `scripts/upstream-abi-pin.json`). It never established that the BYTES at that path
+// are bytes the pinned revision actually contains. The whole in-repo test was
+// `path.resolve(root, rel).startsWith(root + sep)` — a string prefix — and `readFileSync` then
+// followed whatever the path pointed at. An independent reviewer measured `--strict` exit 0, an
+// unconditional PASS and `Attributed to committed upstream revision(s): SuperPaymaster@…` on an
+// upstream that had committed `contracts/src/core/Registry.sol` as a SYMLINK to a file outside the
+// repo: solc hashed the target's bytes, the gate re-hashed the same target's bytes, and the
+// revision named in the green sentence contained only the link.
+//
+// So attribution is now proved, not inferred, and every link is a separate falsifiable check:
+//
+//   1. WHAT THE WORKING-TREE PATH IS — `lstat` (never `stat`: following the link is the bypass).
+//      A symlink, directory, fifo or device is rejected outright, whatever it points at.
+//   2. WHERE IT REALLY IS — `realpath` of the file must be under `realpath` of the repo root, so a
+//      path that leaves the tree through any intermediate directory link is caught too.
+//   3. WHAT THE PINNED TREE SAYS THAT PATH IS — `git ls-tree -r <pinnedRevision>` must have the
+//      path as a REGULAR blob (mode 100644/100755). Mode 120000 (symlink) and 160000 (submodule
+//      gitlink) are rejected: `git show <rev>:<path>` prints a symlink's target text quite happily,
+//      so the mode has to be read explicitly rather than inferred from the content.
+//   4. THE BYTES THEMSELVES — `git cat-file blob <oid>` (what `git show <rev>:<path>` yields) must
+//      be byte-identical to the working-tree file this run read.
+//
+// Only then is the artifact's `metadata.sources[path].keccak256` compared, and it is compared
+// against the PINNED blob's bytes — the ones the run just proved the revision contains — rather
+// than against whatever the working tree happened to hand over. Any failure keeps the entry out of
+// `verified`, so strict fails closed and the PASS may not claim attribution.
+// ---------------------------------------------------------------------------------------------
+
+/** One `git ls-tree` record: the file mode, the object type, and the object id. */
+type TreeEntry = { mode: string; type: string; oid: string };
+
+const treeCache = new Map<string, Map<string, TreeEntry> | null>();
+
+/** The full recursive tree of `revision`: repo-relative path -> entry. null when the rev is absent. */
+function pinnedTree(root: string, revision: string): Map<string, TreeEntry> | null {
+  const key = `${root}@${revision}`;
+  const cached = treeCache.get(key);
+  if (cached !== undefined) return cached;
+  let raw: string;
+  try {
+    // -z: NUL-separated, unquoted paths. Without it git quotes anything non-ASCII and the map keys
+    // would silently stop matching the artifact's source paths.
+    raw = git(root, ['ls-tree', '-r', '-z', revision]);
+  } catch {
+    treeCache.set(key, null);
+    return null;
+  }
+  const tree = new Map<string, TreeEntry>();
+  for (const record of raw.split('\0')) {
+    if (!record) continue;
+    const tab = record.indexOf('\t');
+    if (tab < 0) continue;
+    const [mode, type, oid] = record.slice(0, tab).split(/\s+/);
+    tree.set(record.slice(tab + 1), { mode, type, oid });
+  }
+  treeCache.set(key, tree);
+  return tree;
+}
+
+const blobCache = new Map<string, Uint8Array | null>();
+
+/**
+ * The bytes of one git object — exactly what `git show <revision>:<path>` writes.
+ *
+ * `Uint8Array`, not `Buffer`: this file is inside the repcredit tsc project now, and under the
+ * repo's `lib: ESNext` a Node `Buffer` and a `Uint8Array` are not mutually assignable
+ * (CC-50 round-9 LOW). Everything downstream — viem's `keccak256`, the byte comparison — wants the
+ * plain array anyway.
+ */
+function pinnedBlob(root: string, oid: string): Uint8Array | null {
+  const key = `${root}@${oid}`;
+  const cached = blobCache.get(key);
+  if (cached !== undefined) return cached;
+  let bytes: Uint8Array | null;
+  try {
+    bytes = new Uint8Array(execFileSync('git', ['-C', root, 'cat-file', 'blob', oid], { maxBuffer: 64 * 1024 * 1024 }));
+  } catch {
+    bytes = null;
+  }
+  blobCache.set(key, bytes);
+  return bytes;
+}
+
+/** Byte-for-byte equality. Written out rather than `Buffer.equals` for the same typing reason. */
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+const realRootCache = new Map<string, string>();
+
+function canonicalRoot(root: string): string {
+  const cached = realRootCache.get(root);
+  if (cached !== undefined) return cached;
+  let real: string;
+  try {
+    real = fs.realpathSync.native(root);
+  } catch {
+    real = root;
+  }
+  realRootCache.set(root, real);
+  return real;
+}
+
+/** Where a pinned path was found: which repo, at which revision, and through which gitlink(s). */
+type Located = { root: string; revision: string; entry: TreeEntry; via: string | null };
+
+/** How many nested submodule hops a source path may take before this run gives up. */
+const MAX_SUBMODULE_DEPTH = 3;
+
+/**
+ * Find `relative` in `revision`'s tree, following PINNED submodule gitlinks when it is not a direct
+ * entry.
+ *
+ * Foundry dependencies live in submodules (`contracts/lib/chainlink-brownie-contracts/...`), and
+ * `ls-tree -r` does not recurse into them — it records the gitlink and stops. Refusing those bytes
+ * outright would be wrong in the other direction: the superproject's pinned revision DOES fix them,
+ * via the exact commit id recorded in the gitlink, so the chain stays cryptographic end to end:
+ *
+ *     superproject@<pinned rev>  ->  gitlink oid  ->  blob in the submodule  ->  bytes
+ *
+ * What is still refused is a gitlink AT the source path itself: a submodule pointer is not a file
+ * solc can compile, and `git show <rev>:<path>` on one prints a pointer, not source.
+ */
+function locatePinnedEntry(
+  root: string,
+  revision: string,
+  relative: string,
+  depth = 0,
+): Located | { label: string; why: string } {
+  const short = revision.slice(0, 12);
+  const tree = pinnedTree(root, revision);
+  if (!tree) {
+    return {
+      label: 'PINNED REVISION UNAVAILABLE',
+      why:
+        `revision ${short} is not present in ${path.basename(root)}, so nothing can be attributed to it` +
+        `${depth ? ' (reached through a submodule gitlink — the submodule checkout is missing or stale)' : ''}`,
+    };
+  }
+  const direct = tree.get(relative);
+  if (direct) return { root, revision, entry: direct, via: null };
+
+  const segments = relative.split('/');
+  for (let i = segments.length - 1; i > 0; i -= 1) {
+    const prefix = segments.slice(0, i).join('/');
+    // `ls-tree -r` lists blobs and gitlinks only, so a hit on a directory prefix can ONLY be a
+    // submodule. Anything else means this path simply is not in the tree.
+    const gitlink = tree.get(prefix);
+    if (!gitlink) continue;
+    if (gitlink.type !== 'commit' && gitlink.mode !== '160000') break;
+    if (depth >= MAX_SUBMODULE_DEPTH) {
+      return {
+        label: 'SOURCE ABSENT FROM PINNED REVISION',
+        why: `${relative} is nested more than ${MAX_SUBMODULE_DEPTH} submodules deep; refusing to keep descending`,
+      };
+    }
+    const nested = locatePinnedEntry(
+      path.join(root, prefix),
+      gitlink.oid,
+      segments.slice(i).join('/'),
+      depth + 1,
+    );
+    if ('label' in nested) return nested;
+    const hop = `${prefix}@${gitlink.oid.slice(0, 12)}`;
+    return { ...nested, via: nested.via ? `${hop} -> ${nested.via}` : hop };
+  }
+  return { label: 'SOURCE ABSENT FROM PINNED REVISION', why: `${relative} does not exist in ${short}` };
+}
+
+/** Bytes this run proved belong to the pinned revision, or the reason it could not prove that. */
+type Attribution = { bytes: Uint8Array } | { label: string; why: string };
+
+function attributeToPinnedRevision(repoRoot: string, relative: string, revision: string | null): Attribution {
+  const file = path.resolve(repoRoot, relative);
+  // 1. WHAT THE PATH IS. `lstat`, never `stat`: `stat` answers for the link TARGET, which is the
+  //    question this check exists to refuse.
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(file);
+  } catch {
+    return { label: 'WORKTREE SOURCE MISSING', why: `${relative} is not on disk in this checkout` };
+  }
+  if (stat.isSymbolicLink()) {
+    let target = '<unreadable>';
+    try {
+      target = fs.readlinkSync(file);
+    } catch {
+      /* the link is there; where it points is a detail of the message, not of the verdict */
+    }
+    return {
+      label: 'WORKTREE SOURCE NOT A REGULAR FILE',
+      why:
+        `${relative} is a symbolic link -> ${target}. Its bytes belong to whatever it points at, so a ` +
+        `revision that contains the LINK does not contain them — however perfectly they hash`,
+    };
+  }
+  if (!stat.isFile()) {
+    return { label: 'WORKTREE SOURCE NOT A REGULAR FILE', why: `${relative} is not a regular file` };
+  }
+  // 2. WHERE IT REALLY IS. A prefix test over the unresolved path cannot see a link anywhere in the
+  //    chain; `realpath` collapses every one of them (and normalises macOS /tmp -> /private/tmp).
+  let real: string;
+  try {
+    real = fs.realpathSync.native(file);
+  } catch {
+    return { label: 'WORKTREE SOURCE MISSING', why: `${relative} could not be resolved on disk` };
+  }
+  const root = canonicalRoot(repoRoot);
+  if (real !== root && !real.startsWith(root + path.sep)) {
+    return {
+      label: 'WORKTREE SOURCE ESCAPES THE REPO',
+      why: `${relative} resolves to ${real}, which is outside ${root} — this repo's revision cannot attest to it`,
+    };
+  }
+  // 3. WHAT THE PINNED TREE SAYS THAT PATH IS.
+  if (!revision) {
+    return {
+      label: 'NO PINNED REVISION',
+      why:
+        `${relative} cannot be attributed: scripts/upstream-abi-pin.json declares no revision for the repo ` +
+        `this artifact came from`,
+    };
+  }
+  const short = revision.slice(0, 12);
+  const located = locatePinnedEntry(repoRoot, revision, relative);
+  if ('label' in located) return located;
+  const { entry } = located;
+  const through = located.via ? ` (through pinned submodule ${located.via})` : '';
+  if (entry.type !== 'blob' || (entry.mode !== '100644' && entry.mode !== '100755')) {
+    const kind =
+      entry.mode === '120000'
+        ? 'a SYMLINK'
+        : entry.mode === '160000' || entry.type === 'commit'
+          ? 'a SUBMODULE gitlink'
+          : `${entry.type} with mode ${entry.mode}`;
+    return {
+      label: 'PINNED TREE ENTRY NOT A REGULAR BLOB',
+      why:
+        `${relative} is ${kind} in ${short}${through}, not a regular file blob — \`git show ${short}:${relative}\` ` +
+        `would print its target/pointer, not the source the artifact was compiled from`,
+    };
+  }
+  // 4. THE BYTES THEMSELVES.
+  const pinned = pinnedBlob(located.root, entry.oid);
+  if (!pinned) {
+    return {
+      label: 'PINNED BLOB UNREADABLE',
+      why: `git could not read blob ${entry.oid.slice(0, 12)} for ${relative} at ${short}${through}`,
+    };
+  }
+  let onDisk: Uint8Array;
+  try {
+    onDisk = new Uint8Array(fs.readFileSync(file));
+  } catch {
+    return { label: 'WORKTREE SOURCE MISSING', why: `${relative} could not be read` };
+  }
+  if (!bytesEqual(onDisk, pinned)) {
+    return {
+      label: 'WORKTREE BYTES NOT IN PINNED REVISION',
+      why:
+        `${relative} on disk (${onDisk.length} byte(s)) differs from blob ${entry.oid.slice(0, 12)} at ${short}` +
+        `${through} (${pinned.length} byte(s)) — whatever the artifact hashes, it is not what ${short} contains`,
+    };
+  }
+  return { bytes: pinned };
+}
+
 /** A `metadata.sources[path].keccak256` this run can actually compare against on-disk bytes. */
 const SOLC_SOURCE_HASH = /^0x[0-9a-f]{64}$/i;
 
@@ -296,6 +569,12 @@ type SourceVerification = {
   unverifiable: string[];
   /** resolves outside the repo root — real bytes exist somewhere, but not in the repo we attribute to */
   external: string[];
+  /**
+   * On disk and in-repo by path, but this run could NOT prove its bytes belong to the pinned
+   * revision: a symlink, a path that leaves the tree through `realpath`, a tree entry that is not a
+   * regular blob, or working-tree bytes that differ from the pinned blob (CC-50 round-9 MEDIUM).
+   */
+  unattributed: { file: string; label: string; why: string }[];
   dirty: string[];
   /** the source declaring THIS contract, per the artifact's own compilationTarget/sourceName */
   mainSource: string | null;
@@ -411,6 +690,12 @@ function verifyArtifactSources(
   declaredOnly: boolean,
   /** the upstream repo label this artifact is attributed to, matched against the pinned `repo` */
   repoLabel: string | null,
+  /**
+   * The revision `scripts/upstream-abi-pin.json` pins this repo to. Every must-verify source must
+   * be proved to be a regular blob in THIS revision whose bytes equal the working-tree file
+   * (CC-50 round-9). Null when the repo declares no pin — itself a gap.
+   */
+  pinnedRevision: string | null,
 ): SourceVerification {
   // `git status --porcelain` lines are "XY <path>" (and "R  old -> new"); we only need the paths.
   const dirtySet = new Set(
@@ -423,6 +708,7 @@ function verifyArtifactSources(
     unresolved: [],
     unverifiable: [],
     external: [],
+    unattributed: [],
     dirty: [],
     mainSource: null,
     mainSourceProblem: null,
@@ -453,6 +739,7 @@ function verifyArtifactSources(
   const unresolved: string[] = [];
   const unverifiable: string[] = [];
   const external: string[] = [];
+  const unattributed: { file: string; label: string; why: string }[] = [];
   for (const [relative, entry] of Object.entries<any>(sources)) {
     // No usable hash => nothing to compare against, wherever the file lives. This must be decided
     // BEFORE the in-repo test: an entry with no `keccak256` used to be counted and then skipped.
@@ -473,7 +760,25 @@ function verifyArtifactSources(
       continue;
     }
     if (dirtySet.has(relative)) dirty.push(relative);
-    const actual = keccak256(fs.readFileSync(file));
+    // CC-50 round-9. For a must-verify artifact the bytes that get hashed must be bytes this run
+    // PROVED the pinned revision contains — see `attributeToPinnedRevision`. Everything else keeps
+    // reading the working tree: those contracts do not gate the release and paying four `git`
+    // invocations per source across the whole ABI inventory buys nothing they are allowed to claim.
+    let bytes: Uint8Array;
+    if (declaredOnly) {
+      const attributed = attributeToPinnedRevision(repoRoot, relative, pinnedRevision);
+      if ('label' in attributed) {
+        // A path that is simply absent stays in the pre-existing bucket: "not on disk" and "on disk
+        // but not attributable" are different findings and must not be collapsed.
+        if (attributed.label === 'WORKTREE SOURCE MISSING') unresolved.push(relative);
+        else unattributed.push({ file: relative, label: attributed.label, why: attributed.why });
+        continue;
+      }
+      bytes = attributed.bytes;
+    } else {
+      bytes = new Uint8Array(fs.readFileSync(file));
+    }
+    const actual = keccak256(bytes);
     if (actual.toLowerCase() !== declared.toLowerCase()) mismatched.push(relative);
     else verified.push(relative);
   }
@@ -529,7 +834,11 @@ function verifyArtifactSources(
           ? 'the artifact records no usable keccak256 for it'
           : external.includes(mainSource)
             ? 'it resolves OUTSIDE the repo this artifact is attributed to'
-            : 'the artifact does not record it under metadata.sources at all';
+            : unattributed.find((e) => e.file === mainSource)
+              ? `its bytes were NOT attributed to the pinned revision (${
+                  unattributed.find((e) => e.file === mainSource)!.label
+                })`
+              : 'the artifact does not record it under metadata.sources at all';
     mainSourceProblem = `${mainSource} — ${why}`;
   }
 
@@ -540,6 +849,7 @@ function verifyArtifactSources(
     unresolved,
     unverifiable,
     external,
+    unattributed,
     dirty,
     mainSource,
     mainSourceProblem,
@@ -640,6 +950,8 @@ const checkedProvenance: {
   sources: SourceVerification;
 }[] = [];
 const skippedEntries: Skipped[] = [];
+/** How many individual source paths a per-contract list prints before collapsing into a count. */
+const SOURCE_LIST_CAP = 5;
 /** Drift measured against an artifact whose sources are uncommitted upstream — reported, not failed (lenient). */
 const unattributableDrift: { name: string; problems: string[]; dirtySources: string[] }[] = [];
 /** Never drift-checked BY DESIGN (standard/external, or not a contract) — listed so the inventory adds up. */
@@ -694,7 +1006,15 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     abiSha256: createHash('sha256').update(JSON.stringify(ups)).digest('hex'),
     repo,
     sources: repo
-      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths, name, MUST_VERIFY.has(name), repo.label)
+      ? verifyArtifactSources(
+          up,
+          repo.root,
+          repo.dirtyPaths,
+          name,
+          MUST_VERIFY.has(name),
+          repo.label,
+          PIN.repos?.[repo.label]?.revision ?? null,
+        )
       : {
           sourceCount: 0,
           verified: [],
@@ -702,6 +1022,7 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
           unresolved: ['<no git repo>'],
           unverifiable: [],
           external: [],
+          unattributed: [],
           dirty: [],
           mainSource: null,
           mainSourceProblem: 'the artifact resolves to no git checkout, so no source could be attributed',
@@ -764,7 +1085,8 @@ for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b
   const src = entry.sources;
   // Say what was COMPARED, never how many entries were seen: `N source(s)` used to include
   // entries that carried no comparable hash at all (CC-50 round-6 MEDIUM).
-  const uncovered = src.unresolved.length + src.unverifiable.length + src.external.length;
+  const uncovered =
+    src.unresolved.length + src.unverifiable.length + src.external.length + src.unattributed.length;
   // A green tick on the same row whose next line reads "MAIN SOURCE UNDECLARED" is a report at war
   // with itself — the same shape round-7 MEDIUM-2 removed from the PASS sentence (CC-50 round-8
   // LOW-2). Strict already exits 1 on these, but the row must not read as verified either.
@@ -781,6 +1103,12 @@ for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b
   for (const file of src.unresolved) console.log(`       ? ${file} (named by the artifact, not on disk)`);
   for (const file of src.unverifiable) console.log(`       ? ${file} (no usable keccak256 in the artifact)`);
   for (const file of src.external) console.log(`       ? ${file} (resolves outside this repo)`);
+  for (const entry of src.unattributed.slice(0, SOURCE_LIST_CAP)) {
+    console.log(`       ? ${entry.file} (${entry.label})`);
+  }
+  if (src.unattributed.length > SOURCE_LIST_CAP) {
+    console.log(`       ? … and ${src.unattributed.length - SOURCE_LIST_CAP} further unattributed source(s)`);
+  }
   if (src.mainSourceProblem) console.log(`       ⚠️  ${src.mainSourceGapLabel}: ${src.mainSourceProblem}`);
 }
 console.log(`--- skipped (${skippedEntries.length}) ---`);
@@ -794,9 +1122,29 @@ console.log(excludedEntries.length ? excludedEntries.map((e) => e.name).sort().j
 const expectedMissing = skippedEntries.filter((e) => e.expected);
 const mustVerifyMissing = [...MUST_VERIFY.entries()].filter(([name]) => !checkedSet.has(name));
 
+/**
+ * Every must-verify contract's provenance gaps, computed BEFORE the `--- must-verify ---` section
+ * so that section can report them (CC-50 round-9 LOW-1). It used to tick a contract green for
+ * having been COMPARED while the `MUST-VERIFY PROVENANCE INCOMPLETE` block a few lines below listed
+ * that same contract — a reader got a green tick and its own contradiction on one screen. Same
+ * shape round-8 LOW-2 removed from the `checked` table; this section was simply missed.
+ */
+const mustVerifyGapsByName = new Map(
+  checkedProvenance
+    .filter((e) => MUST_VERIFY.has(e.name))
+    .map((e) => [e.name, provenanceGaps(e)] as const),
+);
+
 console.log('\n--- must-verify ---');
 for (const [name, why] of MUST_VERIFY) {
-  console.log(`  ${checkedSet.has(name) ? '✅' : '❌'} ${name} — ${why}`);
+  const gaps = mustVerifyGapsByName.get(name);
+  if (!checkedSet.has(name)) {
+    console.log(`  ❌ ${name} — NOT COMPARED — ${why}`);
+  } else if (gaps?.length) {
+    console.log(`  ⚠️  ${name} — compared, provenance INCOMPLETE (${gaps.length} gap(s), listed below) — ${why}`);
+  } else {
+    console.log(`  ✅ ${name} — ${why}`);
+  }
 }
 
 console.log(
@@ -985,6 +1333,21 @@ function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   if (src.mainSourceProblem) {
     gaps.push(`${src.mainSourceGapLabel}: ${src.mainSourceProblem}`);
   }
+  // CC-50 round-9 MEDIUM. "In a directory under the repo root" was a string prefix; it never
+  // established that the pinned REVISION contains these bytes. A committed symlink to a file
+  // outside the repo satisfied every earlier link in the chain — solc hashed the target, the gate
+  // re-hashed the target, and the revision named in the green sentence held only the link.
+  if (src.unattributed.length) {
+    for (const entry of src.unattributed.slice(0, SOURCE_LIST_CAP)) {
+      gaps.push(`SOURCE NOT ATTRIBUTED TO PINNED REVISION: ${entry.label} — ${entry.why}`);
+    }
+    if (src.unattributed.length > SOURCE_LIST_CAP) {
+      gaps.push(
+        `SOURCE NOT ATTRIBUTED TO PINNED REVISION: … and ${src.unattributed.length - SOURCE_LIST_CAP} ` +
+          `further source(s) — ${src.unattributed.slice(SOURCE_LIST_CAP).map((e) => e.file).join(', ')}`,
+      );
+    }
+  }
   if (src.mismatched.length) gaps.push(`ARTIFACT ⇄ SOURCE MISMATCH: ${src.mismatched.join(', ')}`);
   if (!PIN.contracts?.[entry.name]?.abiSha256) {
     gaps.push(`NO VENDORED ABI PIN: scripts/upstream-abi-pin.json declares no abiSha256 for ${entry.name}`);
@@ -1006,15 +1369,15 @@ const nonMustSourceCaveats = checkedProvenance
   .filter((entry) => !MUST_VERIFY.has(entry.name))
   .filter((entry) => {
     const src = entry.sources;
-    const uncovered = src.unresolved.length + src.unverifiable.length + src.external.length;
+    const uncovered =
+      src.unresolved.length + src.unverifiable.length + src.external.length + src.unattributed.length;
     return Boolean(uncovered || src.mismatched.length || src.mainSourceProblem);
   })
   .map((entry) => entry.name)
   .sort();
 
-const mustVerifyGaps = checkedProvenance
-  .filter((e) => MUST_VERIFY.has(e.name))
-  .map((e) => ({ name: e.name, gaps: provenanceGaps(e) }))
+const mustVerifyGaps = [...mustVerifyGapsByName]
+  .map(([name, gaps]) => ({ name, gaps }))
   .filter((e) => e.gaps.length > 0);
 
 if (mustVerifyGaps.length) {
@@ -1131,10 +1494,16 @@ if (expectedMissing.length) {
   // ENFORCED for the must-verify set, so every other artifact with a gap is named right here rather
   // than folded into a blanket "every artifact" (CC-50 round-7 MEDIUM-2).
   printNonMustCaveat();
+  // The attribution sentence is a claim about BYTES, so it may only appear when every must-verify
+  // source was proved to be a regular blob in the pinned revision (CC-50 round-9 MEDIUM). Strict
+  // already exits 1 before reaching here on any gap; this makes that a property of the sentence
+  // rather than of the control flow above it.
   console.log(
-    STRICT
+    STRICT && mustVerifyFullyAttributed
       ? `      Attributed to committed upstream revision(s): ${pinned || '(none pinned)'}.`
-      : `      Upstream revision(s) seen: ${
+      : STRICT
+        ? '      NOT attributed: the must-verify provenance chain did not hold (see above).'
+        : `      Upstream revision(s) seen: ${
           usedRepos.map((r) => `${r.label}@${(r.revision ?? 'unknown').slice(0, 8)}${r.dirtyPaths.length ? '(DIRTY)' : ''}`).join(', ') || '(none)'
         }.`,
   );

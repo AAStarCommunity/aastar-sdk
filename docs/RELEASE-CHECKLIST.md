@@ -110,10 +110,27 @@ consumer path**.
       checkout's verified source set. **Moving a must-verify contract upstream means updating that
       pin in the same commit that re-syncs the ABI** — deliberately a reviewable diff here, not a
       basename/`sourceName`/regex guess derived from the artifact itself.
+
+      Round-9 made attribution a proof rather than an inference. "Is this source in the repo?" was a
+      `startsWith(repoRoot + sep)` string test, and the read that followed obeyed symlinks — so a
+      committed symlink to a file OUTSIDE the upstream repo exited `--strict` 0 with the
+      unconditional PASS and `Attributed to committed upstream revision(s): …`, over a revision
+      containing only the link. Each must-verify source must now be, all four at once: a **regular
+      file** in the working tree (`lstat`, so a symlink is refused whatever it points at), with a
+      **`realpath` under the repo root**, recorded in `git ls-tree -r <pinnedRevision>` as a
+      **regular blob** (mode `100644`/`100755` — `120000` symlinks and `160000` gitlinks refused),
+      whose `git cat-file blob` bytes are **byte-identical** to the file this run read. The solc
+      `keccak256` is then compared against those pinned bytes. Anything short of that keeps the
+      source out of `verified`, fails `--strict`
+      (`SOURCE NOT ATTRIBUTED TO PINNED REVISION: <label>`), and **suppresses the
+      `Attributed to committed upstream revision(s)` sentence**. Sources inside a **pinned
+      submodule** are followed through the gitlink (`superproject@rev -> gitlink oid -> blob`) —
+      still cryptographic, and required, since foundry deps live there.
 - [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
       ```bash
       pnpm run repcredit:typecheck && \
       pnpm run repcredit:abi:check && \
+      pnpm run lint:repcredit && \
       REPCREDIT_YAAA_HTTP_TEST=1 \
         REPCREDIT_YAAA_DIR=../YetAnotherAA-Validator \
         pnpm run repcredit:test
@@ -124,6 +141,23 @@ consumer path**.
       itself, and `repcredit:test` still reports green. `REPCREDIT_YAAA_HTTP_TEST=1` converts every
       one of those into a failure. The same job runs in CI (`repcredit-yaaa-http`) against a pinned
       upstream ref; run it here too, because the release is cut from a local checkout.
+
+      **Do NOT set `REPCREDIT_UPSTREAM_ARTIFACTS=absent` in a release run.** CI sets it because a
+      GitHub runner has no sibling contract checkouts; here the sibling repos ARE present and
+      `forge build`-ed, so the REAL must-verify pin check must measure **4/4** against real
+      artifacts. A missing artifact is a failure (round-9 LOW); the variable only converts that into
+      a visible SKIP, never into a pass, and using it here would hide the one assertion in that file
+      made against real data.
+
+      `repcredit:typecheck` now also covers `scripts/check-abi-drift.ts` — the release gate itself,
+      with this repo's `target/lib: ESNext`. Do not report a typecheck result for it from ad-hoc
+      `tsc` flags; that claim was not reproducible in round 8.
+
+      `lint:repcredit` is the only real lint in this repo. `pnpm run lint` also runs `pnpm -r lint`,
+      which is a **no-op** (`None of the selected packages has a "lint" script`) — do not report it
+      as an effective gate. `lint:repcredit` currently enables exactly two rules
+      (`no-restricted-imports`, `@typescript-eslint/no-unused-vars`), so a green here carries
+      correspondingly little information.
 
       **The reviewed YAAA revision lives in this repo**, not in your shell:
       `scripts/upstream-abi-pin.json` → `services["YetAnotherAA-Validator"].revision`. In required

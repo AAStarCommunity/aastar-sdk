@@ -45,7 +45,17 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -84,12 +94,35 @@ const UNCONDITIONAL_PASS = `and all ${CONTRACTS.length} must-verify artifacts ha
  */
 const OVERSTATED_PASS = 'every artifact hash-matches the sources it records';
 
+/**
+ * The strict-mode sentence that names the revision the ABIs are attributed to. It is a claim about
+ * BYTES, so it may only be printed when every must-verify source was proved to be a regular blob in
+ * the pinned revision whose content equals the file this run read (CC-50 round-9 MEDIUM).
+ */
+const ATTRIBUTED_SENTENCE = 'Attributed to committed upstream revision(s)';
+
+/**
+ * The REAL pin check needs the sibling upstream checkouts. A missing artifact is a FAILURE, never a
+ * `0/4` green (CC-50 round-9 LOW): the whole point of that case is that it is the only assertion in
+ * this file made against real data, so silently measuring nothing is exactly the vacuous PASS the
+ * gate exists to remove.
+ *
+ * An environment that genuinely has no upstreams — GitHub Actions, per the rationale block in
+ * .github/workflows/ci.yml — must SAY SO by setting `REPCREDIT_UPSTREAM_ARTIFACTS=absent`. That
+ * marks the test SKIPPED (visible in the run summary and in the skipped count), which is a
+ * different signal from PASSED. Nothing infers absence on its own.
+ */
+const UPSTREAM_ARTIFACTS_ABSENT = process.env.REPCREDIT_UPSTREAM_ARTIFACTS === 'absent';
+
 /** Identical on both sides, so the signature-set comparison is never the thing that fails. */
 function abiFor(name: string): unknown[] {
   return [
     { type: 'function', name: `ping${name}`, stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   ];
 }
+
+/** A dependency source that lives in a submodule, not in the superproject's own tree. */
+const DEP_SOURCE = '// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\nlibrary DepLib { }\n';
 
 function sourceFor(name: string): string {
   return `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\ncontract ${name} {\n    function ping${name}() external pure returns (uint256) { return 1; }\n}\n`;
@@ -142,12 +175,34 @@ type Bypass =
   /** the artifact simply is not there */
   | 'missing-artifact'
   /** the SDK's vendored ABI genuinely differs from a clean, committed upstream */
-  | 'real-drift';
+  | 'real-drift'
+  // ---------------------------------------------------------------------------------------
+  // CC-50 round-9 MEDIUM: BYTE ATTRIBUTION. Everything above settles WHICH path the artifact
+  // must have come from. These settle whether the pinned REVISION actually contains the bytes
+  // at that path — the link that was only ever a `startsWith(repoRoot + sep)` string test with
+  // a `readFileSync` that follows links.
+  // ---------------------------------------------------------------------------------------
+  /** the pinned source is a COMMITTED symlink to a file outside the repo (the measured bypass) */
+  | 'worktree-source-symlink-outside'
+  /** the same, pointing INSIDE the repo — a realpath-prefix mitigation alone would pass this */
+  | 'worktree-source-symlink-inside'
+  /** the pinned source is a regular file on disk that the pinned revision does not track at all */
+  | 'source-untracked-gitignored'
+  /** worktree has a regular file; the PINNED revision has that path as a symlink */
+  | 'pinned-entry-symlink'
+  /** worktree has a regular file; the PINNED revision has that path as a submodule gitlink */
+  | 'pinned-entry-submodule'
+  /** worktree file and artifact agree perfectly, but those bytes are not in the pinned revision */
+  | 'worktree-bytes-differ-from-pinned-blob'
+  /** POSITIVE: a source inside a PINNED submodule is attributed through the gitlink */
+  | 'source-in-pinned-submodule';
 
 type Fixture = { root: string; sdkRoot: string; upstreamRoot: string };
 
 function git(root: string, args: string[]): string {
-  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  // advice.addEmbeddedRepo off: the submodule fixtures add a nested repo on purpose and the hint
+  // is 15 lines of stderr per case.
+  return execFileSync('git', ['-c', 'advice.addEmbeddedRepo=false', '-C', root, ...args], { encoding: 'utf8' });
 }
 
 /**
@@ -167,6 +222,75 @@ function buildFixture(bypass: Bypass): Fixture {
   for (const name of CONTRACTS) {
     writeFileSync(join(srcDir, `${name}.sol`), sourceFor(name));
   }
+
+  // ---------------------------------------------------------------------------------------
+  // CC-50 round-9. Shape `contracts/src/Registry.sol` ITSELF. Every case below leaves the whole
+  // rest of the chain intact — clean checkout, HEAD == pin (except where noted), exactly one
+  // compilation target whose key is byte-exact the pinned path and whose value is `Registry`,
+  // and an artifact whose keccak256 matches the bytes a naive `readFileSync` returns. That is
+  // what makes the byte-attribution link provably the only thing that can fail.
+  // ---------------------------------------------------------------------------------------
+  const registrySol = join(srcDir, 'Registry.sol');
+  /** What `contracts/src/Registry.sol` finally holds — the bytes the artifact must record. */
+  let registryContent = sourceFor('Registry');
+  if (bypass === 'worktree-source-symlink-outside') {
+    // The measured bypass: the pinned path is a committed symlink whose target is OUTSIDE the
+    // repo. solc hashes the target's bytes, the gate re-hashed the same target's bytes, and the
+    // revision named in `Attributed to committed upstream revision(s)` holds only the link.
+    const outside = join(root, 'outside');
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, 'Registry.sol'), sourceFor('Registry'));
+    rmSync(registrySol);
+    symlinkSync('../../../outside/Registry.sol', registrySol);
+  }
+  if (bypass === 'worktree-source-symlink-inside') {
+    // Same shape, target INSIDE the repo and itself committed. A realpath-prefix check — the
+    // narrow mitigation proposed for round 9 — would pass this: the resolved path really is under
+    // the repo root and the bytes really are in the revision, just not at the pinned path.
+    writeFileSync(join(srcDir, 'Registry.impl.sol'), sourceFor('Registry'));
+    rmSync(registrySol);
+    symlinkSync('Registry.impl.sol', registrySol);
+  }
+  if (bypass === 'pinned-entry-symlink' || bypass === 'pinned-entry-submodule') {
+    // Committed FIRST as a non-blob, then replaced by a regular file in a second commit that
+    // becomes HEAD. The pin below stays on the first commit, which is the only way a working tree
+    // can hold a regular file while the pinned tree holds a symlink/gitlink without being dirty.
+    writeFileSync(join(srcDir, 'Registry.impl.sol'), sourceFor('Registry'));
+    rmSync(registrySol);
+    if (bypass === 'pinned-entry-symlink') {
+      symlinkSync('Registry.impl.sol', registrySol);
+    } else {
+      // A nested git repo at that path is exactly what a submodule looks like on disk, and the
+      // parent records it as a 160000 gitlink.
+      mkdirSync(registrySol, { recursive: true });
+      writeFileSync(join(registrySol, 'placeholder.txt'), 'nested repo standing in for a submodule\n');
+      git(registrySol, ['init', '-q', '-b', 'main']);
+      git(registrySol, ['config', 'user.email', 'fixture@example.invalid']);
+      git(registrySol, ['config', 'user.name', 'fixture']);
+      git(registrySol, ['add', '-A']);
+      git(registrySol, ['commit', '-q', '-m', 'nested']);
+    }
+  }
+  if (bypass === 'worktree-bytes-differ-from-pinned-blob') {
+    // First commit carries one revision of the file; the second (HEAD) carries another. The
+    // artifact is built from the SECOND, so artifact ⇄ working tree agree byte for byte — and the
+    // pinned revision still does not contain those bytes.
+    writeFileSync(registrySol, sourceFor('Registry'));
+  }
+  if (bypass === 'source-in-pinned-submodule') {
+    // POSITIVE. Foundry dependencies live in submodules and `ls-tree -r` stops at the gitlink, so
+    // a gate that only looked for a direct tree entry would reject every artifact that records a
+    // lib source. The superproject's pinned revision DOES fix these bytes — through the exact
+    // commit id in the gitlink — so attribution must follow it.
+    const dep = join(upstreamRoot, 'contracts/lib/dep');
+    mkdirSync(dep, { recursive: true });
+    writeFileSync(join(dep, 'Dep.sol'), DEP_SOURCE);
+    git(dep, ['init', '-q', '-b', 'main']);
+    git(dep, ['config', 'user.email', 'fixture@example.invalid']);
+    git(dep, ['config', 'user.name', 'fixture']);
+    git(dep, ['add', '-A']);
+    git(dep, ['commit', '-q', '-m', 'dep']);
+  }
   // A fifth contract that IS checked but is NOT in MUST_VERIFY, so its provenance gap can never
   // fail the gate — only the PASS wording can report it honestly.
   // Both PASS-scope cases carry the same non-must-verify gap; only one of them ALSO makes the run
@@ -184,6 +308,12 @@ function buildFixture(bypass: Bypass): Fixture {
   // Foundry repos gitignore `out/`; without this the build products themselves would read as
   // uncommitted changes and every case would fail for the wrong reason.
   writeFileSync(join(upstreamRoot, '.gitignore'), 'out/\n');
+  if (bypass === 'source-untracked-gitignored') {
+    // A regular file, in-repo, correct bytes, and the checkout stays CLEAN — because the pinned
+    // path is gitignored, so the revision tracks nothing at all there. The generated-code shape,
+    // and the purest form of "these bytes are not in that revision": the blob does not exist.
+    appendFileSync(join(upstreamRoot, '.gitignore'), 'contracts/src/Registry.sol\n');
+  }
 
   if (bypass !== 'no-git-repo') {
     git(upstreamRoot, ['init', '-q', '-b', 'main']);
@@ -191,6 +321,29 @@ function buildFixture(bypass: Bypass): Fixture {
     git(upstreamRoot, ['config', 'user.name', 'fixture']);
     git(upstreamRoot, ['add', '-A']);
     git(upstreamRoot, ['commit', '-q', '-m', 'fixture upstream']);
+  }
+
+  // CC-50 round-9. A working tree can only hold a REGULAR file at a path whose pinned tree holds a
+  // symlink/gitlink — or hold bytes the pinned tree does not have — if the pin names an EARLIER
+  // commit. So these three cases pin the commit just made and then move HEAD on. That necessarily
+  // also raises `UNUSABLE CHECKOUT` (pin != HEAD); the assertions below name the new gap
+  // specifically, and the symlink/untracked cases above have no such companion at all.
+  let pinnedRevisionOverride: string | null = null;
+  if (
+    bypass === 'pinned-entry-symlink' ||
+    bypass === 'pinned-entry-submodule' ||
+    bypass === 'worktree-bytes-differ-from-pinned-blob'
+  ) {
+    pinnedRevisionOverride = git(upstreamRoot, ['rev-parse', 'HEAD']).trim();
+    if (bypass === 'worktree-bytes-differ-from-pinned-blob') {
+      registryContent = `${sourceFor('Registry')}// the revision the artifact was actually built from\n`;
+      writeFileSync(registrySol, registryContent);
+    } else {
+      rmSync(registrySol, { recursive: true, force: true });
+      writeFileSync(registrySol, registryContent);
+    }
+    git(upstreamRoot, ['add', '-A']);
+    git(upstreamRoot, ['commit', '-q', '-m', 'replace with a regular file']);
   }
 
   // Artifacts. `metadata.sources[rel].keccak256` is solc's own hash of the input file; the script
@@ -201,7 +354,7 @@ function buildFixture(bypass: Bypass): Fixture {
     const outDir = join(upstreamRoot, 'out', `${name}.sol`);
     mkdirSync(outDir, { recursive: true });
     const sources: Record<string, unknown> = {
-      [rel]: { keccak256: keccak256(toBytes(sourceFor(name))) },
+      [rel]: { keccak256: keccak256(toBytes(name === 'Registry' ? registryContent : sourceFor(name))) },
     };
     // solc's own answer to "which source declares this contract" — what the coverage gate reads.
     let metadata: unknown = { sources, settings: { compilationTarget: { [rel]: name } } };
@@ -272,6 +425,14 @@ function buildFixture(bypass: Bypass): Fixture {
           settings: { compilationTarget: { [rel]: name, [sibling]: name } },
         };
       }
+    }
+    if (bypass === 'source-in-pinned-submodule' && name === 'Registry') {
+      // An extra recorded source that lives in the submodule, with its true keccak256. Attribution
+      // has to walk superproject@rev -> gitlink oid -> blob to reach it.
+      metadata = {
+        sources: { ...sources, 'contracts/lib/dep/Dep.sol': { keccak256: keccak256(toBytes(DEP_SOURCE)) } },
+        settings: { compilationTarget: { [rel]: name } },
+      };
     }
     if (bypass === 'no-metadata-sources' && name === 'Registry') metadata = undefined;
     if (bypass === 'unhashable-source-entry' && name === 'Registry') {
@@ -387,7 +548,10 @@ function buildFixture(bypass: Bypass): Fixture {
 
   const repos: Record<string, { revision: string; why: string }> = {};
   if (bypass !== 'no-git-repo') {
-    repos[UPSTREAM_LABEL] = { revision: git(upstreamRoot, ['rev-parse', 'HEAD']).trim(), why: 'fixture' };
+    repos[UPSTREAM_LABEL] = {
+      revision: pinnedRevisionOverride ?? git(upstreamRoot, ['rev-parse', 'HEAD']).trim(),
+      why: 'fixture',
+    };
   }
   if (bypass === 'pin-repo-mismatch') {
     // A fully pinned SECOND repo, so `pinnedSourceFor` accepts the pin and the only thing left to
@@ -730,6 +894,140 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
   }
 
   // ---------------------------------------------------------------------------------------
+  // CC-50 round-9 MEDIUM: BYTE ATTRIBUTION TO THE PINNED REVISION.
+  //
+  // Round-8 fixed WHICH path a must-verify artifact must come from. Whether the pinned REVISION
+  // contains the bytes at that path was still a `path.resolve(root, rel).startsWith(root + sep)`
+  // string test followed by a `readFileSync` that happily follows links. An independent reviewer
+  // measured `--strict` exit 0, the unconditional PASS and
+  // `Attributed to committed upstream revision(s): SuperPaymaster@…` against an upstream whose
+  // `contracts/src/core/Registry.sol` was a COMMITTED SYMLINK to a file outside the repo.
+  //
+  // The four attribution checks are asserted one at a time, and the first two need NO help from
+  // any other broken link: the checkout is clean, HEAD IS the pinned revision, the artifact
+  // records exactly one compilation target whose key is byte-exact the pinned path, and its
+  // keccak256 matches what a naive read returns. Only the new gate can be what fails.
+  // ---------------------------------------------------------------------------------------
+  const attributionBypasses: Array<{
+    bypass: Bypass;
+    what: string;
+    label: string;
+    because: string;
+    /** These two need an earlier pin than HEAD, so `UNUSABLE CHECKOUT` legitimately co-fires. */
+    pinBehindHead?: boolean;
+    /** Asserted absent — the narrower mitigations that would NOT have caught this case. */
+    notLabel?: string;
+  }> = [
+    {
+      bypass: 'worktree-source-symlink-outside',
+      what: 'a COMMITTED symlink whose target is outside the repo (the measured exit-0 bypass)',
+      label: 'WORKTREE SOURCE NOT A REGULAR FILE',
+      because: 'is a symbolic link -> ../../../outside/Registry.sol',
+    },
+    {
+      bypass: 'worktree-source-symlink-inside',
+      what: 'a committed symlink whose target is INSIDE the repo and itself committed',
+      label: 'WORKTREE SOURCE NOT A REGULAR FILE',
+      because: 'is a symbolic link -> Registry.impl.sol',
+      // The realpath-prefix mitigation proposed with the finding would have passed this one: the
+      // resolved path IS under the repo root. A symlink is refused for what it is, not for where
+      // it points.
+      notLabel: 'WORKTREE SOURCE ESCAPES THE REPO',
+    },
+    {
+      bypass: 'source-untracked-gitignored',
+      what: 'a regular, correctly-hashing file the pinned revision does not track at all',
+      label: 'SOURCE ABSENT FROM PINNED REVISION',
+      because: 'contracts/src/Registry.sol does not exist in',
+    },
+    {
+      bypass: 'pinned-entry-symlink',
+      what: 'a regular working-tree file whose PINNED tree entry is a symlink',
+      label: 'PINNED TREE ENTRY NOT A REGULAR BLOB',
+      because: 'is a SYMLINK in',
+      pinBehindHead: true,
+    },
+    {
+      bypass: 'pinned-entry-submodule',
+      what: 'a regular working-tree file whose PINNED tree entry is a submodule gitlink',
+      label: 'PINNED TREE ENTRY NOT A REGULAR BLOB',
+      because: 'is a SUBMODULE gitlink in',
+      pinBehindHead: true,
+    },
+    {
+      bypass: 'worktree-bytes-differ-from-pinned-blob',
+      what: 'working-tree bytes the artifact matches exactly but the pinned revision does not hold',
+      label: 'WORKTREE BYTES NOT IN PINNED REVISION',
+      because: 'on disk',
+      pinBehindHead: true,
+    },
+  ];
+
+  for (const { bypass, what, label, because, pinBehindHead, notLabel } of attributionBypasses) {
+    it(`ATTRIBUTION: ${what} fails strict`, () => {
+      withFixture(bypass, (lenient, strict) => {
+        // The bytes themselves are never the problem: whatever a naive read returns hashes to
+        // exactly what the artifact records, so the pre-round-9 chain saw nothing wrong.
+        expect(strict.output).not.toContain('ARTIFACT ⇄ SOURCE MISMATCH');
+        expect(strict.output).not.toContain('MAIN SOURCE UNDECLARED');
+        expect(strict.output).not.toContain('MAIN SOURCE AMBIGUOUS');
+        expect(strict.output).not.toContain('MAIN SOURCE PATH NOT PINNED');
+        expect(strict.output).not.toMatch(/Registry\s+\w{16}\s+✅/);
+        if (!pinBehindHead) {
+          // Clean checkout, HEAD == pin: the new gate is provably the only failing link.
+          expect(strict.output).not.toContain('UPSTREAM NOT PINNED/CLEAN');
+          expect(strict.output).not.toContain('UNUSABLE CHECKOUT');
+        }
+        if (notLabel) expect(strict.output).not.toContain(notLabel);
+
+        expect(strict.status, strict.output).toBe(1);
+        expect(strict.output).toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
+        expect(strict.output).toContain(`SOURCE NOT ATTRIBUTED TO PINNED REVISION: ${label}`);
+        expect(strict.output).toContain(because);
+        // The green sentence AND the attribution sentence are both claims this run cannot make.
+        expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
+        expect(strict.output).not.toContain(OVERSTATED_PASS);
+        expect(strict.output).not.toContain(ATTRIBUTED_SENTENCE);
+        // The must-verify roll-call may not tick it green either (round-9 LOW-1).
+        expect(strict.output).toMatch(/⚠️  Registry — compared, provenance INCOMPLETE/);
+
+        expect(lenient.status, lenient.output).toBe(0);
+        expect(lenient.output).not.toContain(UNCONDITIONAL_PASS);
+        expect(lenient.output).toContain('INCOMPLETE PROVENANCE');
+        expect(lenient.output).toContain('LENIENT MODE');
+      });
+    }, 120_000);
+  }
+
+  it('ATTRIBUTION positive: a regular tracked blob at the pinned path is attributed and passes strict', () => {
+    withFixture('none', (lenient, strict) => {
+      expect(strict.status, strict.output).toBe(0);
+      expect(strict.output).toContain(UNCONDITIONAL_PASS);
+      expect(strict.output).toContain(ATTRIBUTED_SENTENCE);
+      // Attributed, not merely compared: the row is green and the roll-call ticks it.
+      expect(strict.output).toMatch(/Registry\s+\w{16}\s+✅ 1 source\(s\) verified/);
+      expect(strict.output).toContain('✅ Registry —');
+      expect(strict.output).not.toContain('SOURCE NOT ATTRIBUTED TO PINNED REVISION');
+      expect(lenient.status, lenient.output).toBe(0);
+    });
+  }, 120_000);
+
+  it('ATTRIBUTION positive: a source inside a PINNED submodule is attributed through the gitlink', () => {
+    // `git ls-tree -r` stops at a gitlink, so a gate that only accepted direct tree entries would
+    // reject every foundry artifact that records a `contracts/lib/**` source — which is most of
+    // them. The superproject's pinned revision does fix those bytes, through the commit id in the
+    // gitlink, so the chain stays cryptographic: superproject@rev -> gitlink oid -> blob.
+    withFixture('source-in-pinned-submodule', (lenient, strict) => {
+      expect(strict.status, strict.output).toBe(0);
+      expect(strict.output).toMatch(/Registry\s+\w{16}\s+✅ 2 source\(s\) verified/);
+      expect(strict.output).toContain(UNCONDITIONAL_PASS);
+      expect(strict.output).toContain(ATTRIBUTED_SENTENCE);
+      expect(strict.output).not.toContain('SOURCE NOT ATTRIBUTED TO PINNED REVISION');
+      expect(lenient.status, lenient.output).toBe(0);
+    });
+  }, 120_000);
+
+  // ---------------------------------------------------------------------------------------
   // CC-50 round-7 MEDIUM-2: PASS scope. Source coverage is enforced for MUST_VERIFY only, so the
   // green sentence may only speak for that set — and anything else with a gap must be named.
   // ---------------------------------------------------------------------------------------
@@ -815,7 +1113,7 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
   // regardless is the BINDING: the artifact declares exactly this path, and this path is the file
   // that carries the contract.
   // ---------------------------------------------------------------------------------------
-  it('REAL: each shipped must-verify pin is byte-exact the real artifact\'s single compilation target', () => {
+  it.skipIf(UPSTREAM_ARTIFACTS_ABSENT)('REAL: each shipped must-verify pin is byte-exact the real artifact\'s single compilation target', () => {
     const pin = JSON.parse(readFileSync(join(SDK_REPO, 'scripts/upstream-abi-pin.json'), 'utf8'));
     let measured = 0;
     for (const name of CONTRACTS) {
@@ -831,12 +1129,16 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
 
       const repoRoot = resolve(SDK_REPO, '..', entry.repo);
       const artifactPath = join(repoRoot, 'out', `${name}.sol`, `${name}.json`);
-      if (!existsSync(artifactPath)) {
-        // Loud skip, never a silent one: this is exactly the "vacuous PASS" shape the gate exists
-        // to remove, so it must be visible in the test output.
-        console.warn(`REAL pin check SKIPPED for ${name}: no artifact at ${artifactPath}`);
-        continue;
-      }
+      // A FAILURE, not a warning and not a `continue` (CC-50 round-9 LOW). This used to
+      // `console.warn` and carry on, so a run with no sibling checkouts reported `0/4 measured`
+      // and stayed green — the one assertion in this file made against real data degrading into
+      // the exact vacuous PASS the gate exists to remove. Declare absence with
+      // REPCREDIT_UPSTREAM_ARTIFACTS=absent (a visible SKIP) or build the upstream.
+      expect(
+        existsSync(artifactPath),
+        `no artifact at ${artifactPath} — run \`forge build\` in ${entry.repo}, or set ` +
+          'REPCREDIT_UPSTREAM_ARTIFACTS=absent to declare this environment has no upstream checkouts',
+      ).toBe(true);
       const artifact = JSON.parse(readFileSync(artifactPath, 'utf8'));
       const target = artifact?.metadata?.settings?.compilationTarget;
       const entries = Object.entries(target ?? {});
@@ -854,6 +1156,8 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       expect(readFileSync(sourceFile, 'utf8')).toMatch(new RegExp(`^\\s*contract\\s+${name}\\b`, 'm'));
       measured += 1;
     }
+    // The count is asserted, not merely printed: a green here now means all four were measured.
+    expect(measured, 'must-verify contracts measured against a real artifact').toBe(CONTRACTS.length);
     console.log(`REAL pin check: ${measured}/${CONTRACTS.length} must-verify contracts measured against a real artifact.`);
   }, 30_000);
 

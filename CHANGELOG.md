@@ -159,6 +159,107 @@ Smaller items from the same round:
   `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
   There is no acceptable state in which those four go unverified.
 
+### Ninth round (CC-50 `[from:docs]` on ed662994) — the pinned revision must actually CONTAIN those bytes
+
+**"In the repo" was a string prefix, and the read followed symlinks (MEDIUM).** Round eight settled
+WHICH path a must-verify artifact must have been compiled from. Whether the pinned *revision*
+contains the bytes at that path was still decided by
+`path.resolve(repoRoot, rel).startsWith(repoRoot + path.sep)`, after which `fs.readFileSync`
+followed whatever the path pointed at. An independent reviewer committed
+`contracts/src/core/Registry.sol` as a **symlink to a file outside the repo** and measured
+`--strict` **exit 0**, the unconditional PASS, and
+`Attributed to committed upstream revision(s): SuperPaymaster@…` — over a revision that contains
+only the link. solc hashed the target, the gate re-hashed the same target, and every link in the
+chain agreed.
+
+Attribution is now **proved**, not inferred. For every source of a must-verify artifact:
+
+1. `lstat` (never `stat` — following the link is the bypass): the working-tree entry must be a
+   **regular file**. A symlink is refused for what it *is*, not for where it points, so the
+   in-repo-target variant is refused too — a `realpath`-prefix mitigation alone would pass that one.
+2. `realpath` of the file must be under `realpath` of the repo root, catching a link anywhere in
+   the chain of parent directories.
+3. `git ls-tree -r <pinnedRevision>` must record that path as a **regular blob** (mode
+   `100644`/`100755`). Mode `120000` (symlink) and `160000` (submodule gitlink) are refused: `git
+   show <rev>:<path>` prints a symlink's target text quite happily, so the mode has to be read
+   explicitly rather than inferred from content.
+4. `git cat-file blob <oid>` — what `git show <rev>:<path>` yields — must be **byte-identical** to
+   the working-tree file this run read.
+
+Only then is `metadata.sources[path].keccak256` compared, and it is compared against the **pinned
+blob's** bytes rather than whatever the working tree handed over. Any failure keeps the entry out of
+`verified`, so it never counts as coverage, the contract lands in `MUST-VERIFY PROVENANCE
+INCOMPLETE`, `--strict` fails closed, and the `Attributed to committed upstream revision(s)`
+sentence is not printed (`SOURCE NOT ATTRIBUTED TO PINNED REVISION: <label>`).
+
+- **Submodules are followed, not refused.** Foundry dependencies live in submodules and `ls-tree -r`
+  stops at the gitlink, so a direct-entry-only lookup would reject every artifact recording a
+  `contracts/lib/**` source — 1 of `SuperPaymaster`'s 31. The superproject's pinned revision *does*
+  fix those bytes, through the exact commit id in the gitlink, so the chain stays cryptographic:
+  `superproject@rev -> gitlink oid -> blob`. What is still refused is a gitlink **at** the source
+  path itself, which is not a file solc can compile.
+- **Eight new regressions (33 total in this file).** Six negative: a committed symlink pointing
+  outside the repo (the measured bypass); one pointing inside; a regular, correctly-hashing file the
+  pinned revision does not track at all (gitignored — clean checkout, HEAD *is* the pin, so the new
+  gate is provably the only failing link); a regular working-tree file whose pinned tree entry is a
+  symlink; the same with a submodule gitlink; and working-tree bytes the artifact matches exactly
+  but the pinned revision does not hold. Two positive: a regular tracked blob, and a source inside a
+  pinned submodule. The last three negatives necessarily pin a commit behind HEAD — the only way a
+  clean tree can disagree with its pinned tree — so `UNUSABLE CHECKOUT` legitimately co-fires there
+  and the assertions name the new gap specifically; the first three have no companion gap at all.
+- **Mutation-verified on a copy** (repo file untouched, sha256 re-checked after each round):
+  disabling the symlink refusal turns exactly the two symlink cases red; dropping the tree-mode
+  check turns exactly the symlink-in-tree and gitlink-in-tree cases red; dropping the byte
+  comparison turns exactly the differing-bytes case red; making an absent path resolve turns exactly
+  the untracked case red; restoring the old green tick in `--- must-verify ---` turns all six red.
+  The `mustVerifyFullyAttributed` guard on the attribution sentence changes no test — `--strict`
+  already exits before reaching it. It is kept as a property of the sentence rather than of the
+  control flow above it, and is reported here as redundant, not as a checked control.
+- **Measured on the real siblings** (SuperPaymaster `fc0ca825`, pinned `03713feb`; airaccount
+  `29caffc7`): `SuperPaymaster` now attributes **31/31** sources (the chainlink submodule source was
+  the 1 previously uncovered), `Registry` **17/17** and `DVTValidator` **7/7** — all against the
+  pinned revision, not merely against the working tree. `BLSAggregator` reports
+  `WORKTREE BYTES NOT IN PINNED REVISION` for its own source because repo:sp is mid-round on that
+  file: that is B2, correctly fail-closed, not a false positive.
+
+**Three report / gate honesty fixes.**
+
+- `--- must-verify ---` printed `✅ <name>` for a contract that had merely been **compared**, in the
+  same run whose `MUST-VERIFY PROVENANCE INCOMPLETE` block listed that same contract a few lines
+  below. It now prints `⚠️  <name> — compared, provenance INCOMPLETE (N gap(s), listed below)`, and
+  `❌ … — NOT COMPARED` when it was never checked (round-9 LOW-1). Same shape round-8 LOW-2 removed
+  from the `checked` table; this section was missed.
+- The **REAL** must-verify pin check `console.warn`-ed and continued on a missing sibling artifact,
+  so a run with no upstream checkouts reported `0/4 measured` and stayed **green** — the one
+  assertion in that file made against real data degrading into the vacuous PASS the gate exists to
+  remove. A missing artifact is now a **failure**, and `measured` is asserted to be 4. An
+  environment that genuinely has no upstreams must declare itself with
+  `REPCREDIT_UPSTREAM_ARTIFACTS=absent`, which marks the test **skipped** (visible in the vitest
+  summary) and never passed; `.github/workflows/ci.yml` sets it on both jobs, release runs do not
+  (round-9 LOW).
+- `scripts/check-abi-drift.ts` **belonged to no tsc project**, so the `tsc --noEmit --strict` pass
+  reported for it in round 8 was not reproducible: under this repo's own `target/lib: ESNext` a Node
+  `Buffer` is not assignable to viem's `Uint8Array` parameter and it errored. It is now in
+  `scripts/tsconfig.repcredit.json`, so `pnpm run repcredit:typecheck` covers it with the repo
+  settings, and the byte paths carry `Uint8Array` throughout (round-9 LOW).
+
+**`guardianSlashCases` 5 → 7 tuple, decoded by name (B2 consumption point).** Upstream reshapes this
+struct in BLSAggregator 4.8.0 — `fraudProofHash` inserted at index 1, `verifier` appended. Every
+member is statically sized, so calling the new contract with the 5-output vendored ABI would **not**
+revert: viem decodes seven words as five and `security-controls.json` records `deadline` where
+`fraudProofHash` is. The runner wrote that raw array straight into the evidence file, where nothing
+says what any slot meant. `scripts/repcredit/guardian-slash-case.ts` now decodes it into a **named**
+object and fails closed on both the ABI shape (the vendored outputs must still be the reviewed names
+in the reviewed order) and the returned arity, with five regressions including the exact 4.8.0
+layout. This does not pre-empt B2 — no upstream ABI was synced — it makes the re-vendor a reviewed
+edit in one file instead of a silent mislabelling.
+
+**Honest note on `lint`.** `pnpm run lint` still runs `pnpm -r lint` first, which is a **no-op**
+(`None of the selected packages has a "lint" script`). The real lint is `lint:repcredit`: 12 files,
+0 errors, 0 warnings, and `--print-config` shows only **two** rules actually enabled
+(`no-restricted-imports`, `@typescript-eslint/no-unused-vars`). Recorded as-is, per
+[from:docs] round-9 — not widened in this round.
+
 ### Eighth round (CC-50 `[from:docs]` on a9172fd1) — the declaration's PATH must be one this repo reviewed
 
 **Round seven forced the declaration's VALUE and never looked at its KEY (MEDIUM).** A must-verify
