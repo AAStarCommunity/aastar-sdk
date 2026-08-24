@@ -52,12 +52,22 @@ jobs:
       - name: Run unit tests
         run: pnpm -r test
 
+      # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
+      # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
+      # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the
+      # regression is worthless if it is allowed to skip — REPCREDIT_ANVIL_TEST=1 below makes a
+      # missing anvil a failure.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       # Hard gate: the RepCredit evidence runner's negative controls must be falsifiable.
       # These tests break each guarded security property and assert the control throws — the
       # regression they lock down is CC-50 H1, where every control had its sentinel throw inside
       # its own try/catch, so an attack that SUCCEEDED was recorded as evidence and the run
       # still reported "passed". `pnpm -r test` does not reach scripts/, hence a separate step.
       - name: RepCredit negative-control reverse tests
+        env:
+          REPCREDIT_ANVIL_TEST: '1'
         run: pnpm run repcredit:test
 
       # Type-checks the evidence runner and its fixtures. It is not part of any package build.
@@ -127,7 +137,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: AAStarCommunity/YetAnotherAA-Validator
-          ref: df9c8a35267d82801ac9a8fc9ace42abffdc7d1e
+          ref: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
           path: YetAnotherAA-Validator
           token: ${{ secrets.YAAA_CHECKOUT_TOKEN }}
 
@@ -164,6 +174,7 @@ jobs:
         working-directory: aastar-sdk
         env:
           REPCREDIT_YAAA_HTTP_TEST: '1'
+          REPCREDIT_ANVIL_TEST: '1'
           REPCREDIT_YAAA_DIR: ${{ github.workspace }}/YetAnotherAA-Validator
-          REPCREDIT_YAAA_REV: df9c8a35267d82801ac9a8fc9ace42abffdc7d1e
+          REPCREDIT_YAAA_REV: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
         run: pnpm run repcredit:test

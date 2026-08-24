@@ -36,6 +36,7 @@ import {
   postSignedJson,
   requestTargetOf,
 } from './experiment-auth.js';
+import { REJECTION_CODES, assertHttpRejections, classifyHttpRejection } from './negative-control.js';
 
 /**
  * Independent reimplementation of the guard's v2 preimage; never calls the code under test.
@@ -116,6 +117,22 @@ describe('experiment auth client', () => {
   it('signs the request target as sent on the wire — path plus query, never the origin', () => {
     expect(requestTargetOf('http://127.0.0.1:29301/repcredit/sign')).toBe('/repcredit/sign');
     expect(requestTargetOf('http://127.0.0.1:29301/repcredit/slash/aggregate?x=1')).toBe('/repcredit/slash/aggregate?x=1');
+  });
+
+  /** LOW-2: the collision that survived the per-call clock — two SEPARATE posts, same ms, same body. */
+  it('mints a distinct token across two separate calls that land in the same millisecond', async () => {
+    const frozen = () => 1_700_000_000_000;
+    const sent: string[] = [];
+    const fetchImpl = (async (_url: string, init: any) => {
+      sent.push(init.headers[HEADER_AUTH]);
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    const secret = generateExperimentSecret();
+    const body = { proposalId: '1' };
+    await postSignedJson('http://127.0.0.1:1/repcredit/sign', secret, body, { now: frozen, fetchImpl });
+    await postSignedJson('http://127.0.0.1:1/repcredit/sign', secret, body, { now: frozen, fetchImpl });
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).not.toBe(sent[1]);
   });
 
   it('mints a distinct token even when two attempts land in the same millisecond', async () => {
@@ -380,19 +397,39 @@ const httpPort = Number(process.env.REPCREDIT_TEST_NODE_PORT ?? 18996);
  *
  * A clean tree is still not enough — `dist/` can predate the pinned commit. A stale artifact runs
  * an OLDER guard than the one the pin verified, so every case in this suite would be testing
- * something other than what the report claims. The marker below is the round-3 scheme header: it
- * exists in the pinned source and cannot exist in a build made before it. This deliberately does
- * NOT rebuild the sibling checkout — writing into another repository's tree while its owner is
- * working there is not this gate's business.
+ * something other than what the report claims. This deliberately does NOT rebuild the sibling
+ * checkout — writing into another repository's tree while its owner is working there is not this
+ * gate's business.
+ *
+ * WHAT THIS CAN AND CANNOT PROVE (CC-50 round-3 LOW-3, widened round-4). The markers below are
+ * "not older than" witnesses, one per upstream round, each a string that CANNOT exist in a build
+ * made before the revision that introduced it:
+ *
+ *   - `X-RepCredit-Scheme`               → round 3 (versioned HMAC scheme header)
+ *   - `REPCREDIT_AUTH_SCHEME_UNSUPPORTED` → `e0b5efe` (the versioned error-code table)
+ *
+ * That is a LOWER BOUND, not an identity: it still cannot prove the artifact was built from
+ * exactly the pinned commit, only that it is at least that new. Making it exact needs the upstream
+ * to stamp its own revision into the build — see the ABI-side equivalent, which achieves identity
+ * because foundry artifacts record `metadata.sources[*].keccak256` (scripts/check-abi-drift.ts).
+ * A `nest build` records nothing comparable, so this stays a bound until DVT stamps one.
  */
+const ARTIFACT_MARKERS: { marker: string; since: string }[] = [
+  { marker: HEADER_SCHEME, since: 'the round-3 versioned HMAC scheme' },
+  { marker: 'REPCREDIT_AUTH_SCHEME_UNSUPPORTED', since: 'the e0b5efe structured error-code table' },
+];
+
 function artifactMatchesPin(): string | null {
   if (!existsSync(nodeEntry)) return `no build artifact at ${nodeEntry}`;
   // `nest build` emits file-per-file, so the guard lands at the mirrored path; a bundled build
   // would instead inline it into main.js. Check the mirrored path when it exists, else the bundle.
   const compiledGuard = join(yaaaDir, 'dist', GUARD_PATH.replace(/^src\//, '').replace(/\.ts$/, '.js'));
   const artifact = existsSync(compiledGuard) ? compiledGuard : nodeEntry;
-  if (!readFileSync(artifact, 'utf8').includes(HEADER_SCHEME)) {
-    return `the build artifact at ${artifact} predates the pinned revision (no ${HEADER_SCHEME} support) — run \`npm run build\` in the YAAA checkout`;
+  const compiled = readFileSync(artifact, 'utf8');
+  for (const { marker, since } of ARTIFACT_MARKERS) {
+    if (!compiled.includes(marker)) {
+      return `the build artifact at ${artifact} predates the pinned revision (no "${marker}", i.e. it was built before ${since}) — run \`npm run build\` in the YAAA checkout`;
+    }
   }
   return null;
 }
@@ -452,6 +489,13 @@ describe('real YAAA /repcredit HTTP guard', () => {
         REPCREDIT_BLS_AGGREGATOR_ADDRESS: '0x1111111111111111111111111111111111111111',
         REPCREDIT_VALIDATOR_SLOT: '1',
         REPCREDIT_EXPERIMENT_AUTH_SECRET: secret,
+        // Throwaway devnet (chain 31337) with nothing deployed. Upstream refuses to arm on the
+        // INHERITED Sepolia default for AUDIT_BLS_AGGREGATOR_ADDRESS, and refuses this
+        // acknowledgement outright on any chain that carries real deployments — so the only way
+        // past `requireArmed()` here is to state explicitly that this chain hosts no production
+        // aggregator. Without it every request stops at REPCREDIT_AGGREGATOR_POLICY_VIOLATION and
+        // the service's own validation is never reached.
+        REPCREDIT_NO_PRODUCTION_AGGREGATOR: 'true',
       },
       stdio: 'ignore',
     });
@@ -635,5 +679,60 @@ describe('real YAAA /repcredit HTTP guard', () => {
     requireLive(ctx);
     const args = execFileSync('ps', ['-o', 'command=', '-p', String(node!.pid)], { encoding: 'utf8' });
     expect(args).not.toContain(secret);
+  }, 20_000);
+
+  /**
+   * The structured error envelope, verified against the REAL node rather than a fixture.
+   *
+   * YAAA `e0b5efe` ships a versioned, append-only error-code table so the SDK can stop branching on
+   * English prose. This asserts three things the SDK now depends on, end to end over HTTP:
+   *
+   *   1. the node really emits `{ errorCodeVersion, errorCode, category }` on a service refusal;
+   *   2. the SDK's classifier reads it and lands on SERVICE_VALIDATION (the evidence-bearing class);
+   *   3. REQUIRE MODE bites — the SAME response with the envelope removed FAILS the control instead
+   *      of silently degrading to prose matching (CC-50 round-4 LOW-1).
+   *
+   * A `chainId` mismatch is used because `validateRepCreditProposal` runs before any on-chain read,
+   * so the case is reachable on a bare anvil with nothing deployed.
+   */
+  it('emits the versioned structured error envelope the SDK now requires', async ctx => {
+    requireLive(ctx);
+    const localChainId = 31337;
+    const result = await postSignedJson<any>(endpoint, secret, {
+      schemaVersion: 'repcredit-reputation-v1',
+      proposalId: '3',
+      operator: '0x0000000000000000000000000000000000000000',
+      slashLevel: 0,
+      users: ['0x0000000000000000000000000000000000000001'],
+      scores: ['100'],
+      epoch: '1',
+      chainId: String(localChainId + 1),
+      messageHash: `0x${'11'.repeat(32)}`,
+    });
+
+    console.info(`[envelope] HTTP ${result.status} ${JSON.stringify(result.body)}`);
+    expect(result.status).toBe(400);
+    expect(result.body?.errorCodeVersion).toBe(1);
+    expect(result.body?.errorCode).toBe('REPCREDIT_PROPOSAL_INVALID');
+    expect(result.body?.category).toBe('validation');
+
+    const control = {
+      demonstrates: 'the node rebinds chainId to its own RPC and refuses a foreign one',
+      upstreamCode: 'REPCREDIT_PROPOSAL_INVALID',
+      reason: /chainId mismatch: request=/i,
+    };
+    expect(() => assertHttpRejections({ wrongChain: result }, { wrongChain: control })).not.toThrow();
+    expect(classifyHttpRejection(result.status, result.body).code).toBe(REJECTION_CODES.SERVICE_VALIDATION);
+
+    // Same real response, envelope stripped: require mode must refuse to fall back to prose.
+    const stripped = { ...(result.body as Record<string, unknown>) };
+    delete stripped.errorCode;
+    delete stripped.category;
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: { ok: false, status: result.status, body: stripped } },
+        { wrongChain: control },
+      ),
+    ).toThrow(/requires the structured error code REPCREDIT_PROPOSAL_INVALID/);
   }, 20_000);
 });

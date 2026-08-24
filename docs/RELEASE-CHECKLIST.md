@@ -60,6 +60,22 @@ consumer path**.
       artifact is missing, fails when any `MUST_VERIFY` contract was not actually compared, and
       prints the full checked / skipped-with-reason inventory. **Read the `checked N` line** — a
       PASS with a shrunken count is not a verification.
+
+      Strict mode additionally binds PROVENANCE (CC-50 round-4), because "checked 30, here are
+      their sha256s" still could not say *green against what*: the gate once printed all four
+      MUST_VERIFY ✅ while the SuperPaymaster worktree had 23 uncommitted changes, `Registry.sol`
+      and `BLSAggregator.sol` among them. The chain it now enforces, end to end:
+
+      | link | how |
+      |---|---|
+      | SDK ABI ⇄ upstream artifact | signature-set comparison (the original drift check) |
+      | artifact ⇄ on-disk source | solc `metadata.sources[*].keccak256` recomputed over the working tree |
+      | source ⇄ committed revision | `git status --porcelain` must be empty |
+      | revision ⇄ reviewed revision | `scripts/upstream-abi-pin.json` → `repos[].revision` |
+      | vendored copy ⇄ reviewed copy | `scripts/upstream-abi-pin.json` → `contracts[].abiSha256` |
+
+      Break any link and `--strict` exits 1. **Re-syncing an ABI and updating the pin file are the
+      same commit** — that is what makes an ABI swap a reviewable diff instead of a silent one.
 - [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
       ```bash
       pnpm run repcredit:typecheck && \
@@ -80,6 +96,20 @@ consumer path**.
       the checkout is at a different one. The upstream checkout must also be **clean**: the guard
       pin reads the committed blob via `git show`, and a dirty tree makes the built `dist/`
       unattributable, so both are refused rather than silently accepted (CC-50).
+
+      Set `REPCREDIT_ANVIL_TEST=1` as well. It makes the real-anvil `extractRevertData` regression
+      a failure rather than a skip when `anvil` is not on PATH. That suite drives REAL viem against
+      a REAL chain because the bug it locks down — reading the contract address / decoded args
+      instead of the revert bytes on the `readContract` path — is invisible to hand-built error
+      objects, and it silently disabled one of the two accepted outcomes of the post-slash BLS
+      liveness control (CC-50 round-4 HIGH-1).
+
+      **Two prerequisites of the CI half live OUTSIDE this repo and cannot be verified from it**
+      (reviewer INFO, CC-50 round-3): the `repcredit-yaaa-http` job must be a **required** status
+      check on the branch protection rule, and `secrets.YAAA_CHECKOUT_TOKEN` must be present. The
+      main `test` job's `repcredit:test` step has no YAAA checkout, so it skips the 9 real-HTTP
+      cases and exits 0 — the strength of the whole chain is those two settings. Confirm both
+      before cutting a release.
 - [ ] **`pnpm run check:browser` (MANDATORY, run AFTER the `@aastar/sdk` build) — no Node-only builtin (`child_process`/`fs`/…) statically imported by any browser-facing subpath.** This exists because 0.42.0 shipped a `node:child_process` leak into `@aastar/sdk/operator` that broke downstream browser builds — unit tests run in Node and a narrow-import browser smoke tree-shook it out, so nothing caught it pre-publish. Never publish with this red.
 
 ## 4. On-chain E2E — FULL business-scenario set (NOT just the change), recorded

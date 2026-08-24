@@ -1,0 +1,31 @@
+{
+  "$comment": "Upstream ABI provenance pin (CC-50 round-4 MEDIUM-1). `check:abi-drift --strict` binds every must-verify ABI to a CLEAN, NAMED upstream revision: repos[].revision must match the sibling checkout's HEAD, that checkout must have no uncommitted changes, and each artifact must still hash-match the sources it records in its solc metadata. contracts[].abiSha256 pins the SDK's own vendored copy, so re-syncing an ABI without updating this file is a hard failure rather than a silent swap. Update it in the SAME commit that re-syncs an ABI.",
+  "repos": {
+    "SuperPaymaster": {
+      "revision": "03713febef863a7e3bafe13b0f955fa1f0d85683",
+      "why": "Registry 5.7.0 / BLSAggregator 4.6.0 \u2014 the CC-48 protocol candidate (versioned BLS domain separation, PoP validator binding, combined-path removal) the RepCredit evidence run encodes against."
+    },
+    "airaccount-contract": {
+      "revision": "29caffc78fbfcfb1d6675886fcc09654898c747b",
+      "why": "AirAccount v0.29.0 surface used by the ERC-4337 lifecycle arms of the evidence run."
+    }
+  },
+  "contracts": {
+    "Registry": {
+      "abiSha256": "21b4dc5c8c45d35ac1a4c3db4be550c77e3884d8d20f4bd774107a879648ebb4",
+      "why": "credit policy + reputation quorum entry point"
+    },
+    "BLSAggregator": {
+      "abiSha256": "ff0a2736826a05616266338533bab93e47a7e2e956753aa127059ad93d7715aa",
+      "why": "domain/tag schema, slash + reputation quorum, guardian exit"
+    },
+    "DVTValidator": {
+      "abiSha256": "f5861b0563a82cf8cd6bd04528ee747bca7604bde8b97ae2486a7f63f903ab8c",
+      "why": "executeWithProof path"
+    },
+    "SuperPaymaster": {
+      "abiSha256": "4f5216110a509492983c0f89ce1cbac562cee43ab3f9b8c1c924d3f29c287928",
+      "why": "gasless lifecycle sponsor"
+    }
+  }
+}

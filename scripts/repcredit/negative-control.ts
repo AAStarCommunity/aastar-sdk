@@ -132,37 +132,88 @@ export function errorSelector(abi: Abi, name: string): Hex {
 }
 
 /**
- * Best-effort extraction of raw revert data from a viem error graph.
+ * Whole bytes, at least a 4-byte selector. Revert data is ALWAYS a whole number of bytes; a
+ * value with an odd nibble count is a message fragment, not ABI-encoded return data.
+ */
+const REVERT_BYTES = /^0x([0-9a-fA-F]{2})+$/;
+
+function revertBytes(value: unknown): Hex | null {
+  if (typeof value !== 'string' || !REVERT_BYTES.test(value) || value.length < 10) return null;
+  return value.toLowerCase() as Hex;
+}
+
+/** `error.cause` chain, outermost first. Equivalent to viem's `BaseError.walk()` traversal. */
+function causeChain(error: unknown): Record<string, unknown>[] {
+  const chain: Record<string, unknown>[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    chain.push(current as Record<string, unknown>);
+    current = (current as Record<string, unknown>).cause;
+  }
+  return chain;
+}
+
+/**
+ * Raw revert data out of a REAL viem error graph — structured fields only.
  *
- * Structured fields are preferred; the string fallback is last because a message can also contain
- * an address. A wrong extraction can only produce a selector MISMATCH, i.e. a control failure —
- * never a false pass.
+ * THE BUG THIS EXISTS TO PREVENT (CC-50 round-4 HIGH-1)
+ * ----------------------------------------------------
+ * The previous version breadth-searched every `data`/`message`/`shortMessage`/`metaMessages`
+ * field and, failing that, scraped the first `0x…` run out of any string it had collected. On
+ * `publicClient.call` (no ABI) that happened to work. On `publicClient.readContract` (ABI) it
+ * silently returned the WRONG BYTES, because viem's ABI-aware error graph is shaped differently:
+ *
+ *   ContractFunctionExecutionError.message   contains "Contract Call:\n  address: 0x…"  ← the
+ *                                            CONTRACT ADDRESS, 20 clean bytes, scraped first
+ *   ContractFunctionRevertedError.data       is the DECODED {abiItem, errorName, args} object,
+ *                                            not hex — so the structured branch never matched
+ *   ContractFunctionRevertedError.metaMessages contains the formatted decoded ARGS ("0x1111…")
+ *   ContractFunctionRevertedError.raw        ← the actual revert bytes, never read
+ *
+ * Measured on real anvil + viem 2.43.3, a `KeyNotActive(address)` revert produced the contract
+ * address (undecodable case) or the decoded argument (decodable case) instead of the selector.
+ * The post-slash BLS liveness control therefore saw selector `0x00000000` and could only ever be
+ * satisfied by its OTHER branch (`verify` returning false) — a control with an unreachable path,
+ * the same defect class as the sentinel-inside-try bug this module exists to kill.
+ *
+ * So: NO string scraping, at all. Only fields whose contract is "these are the bytes the contract
+ * returned" are read. An address, a decoded argument or a transaction's calldata can never be
+ * mistaken for revert data because those fields are never consulted. When nothing structured is
+ * available the answer is `null`, which fails the control loudly — never a wrong-but-plausible
+ * selector, never a false pass.
  */
 export function extractRevertData(error: unknown): Hex | null {
-  const seen = new Set<unknown>();
-  const queue: unknown[] = [error];
-  const strings: string[] = [];
-  while (queue.length) {
-    const current = queue.shift();
-    if (typeof current === 'string') {
-      strings.push(current);
-      continue;
-    }
-    if (!current || typeof current !== 'object' || seen.has(current)) continue;
-    seen.add(current);
-    const record = current as Record<string, unknown>;
-    const data = record.data;
-    if (typeof data === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(data)) return data.toLowerCase() as Hex;
-    for (const key of ['data', 'cause', 'error', 'raw', 'details', 'shortMessage', 'message', 'metaMessages']) {
-      const value = record[key];
-      if (Array.isArray(value)) queue.push(...value);
-      else if (value !== undefined) queue.push(value);
+  const chain = causeChain(error);
+
+  // 1. ABI-aware path (readContract / simulateContract / writeContract). viem sets `raw` to the
+  //    exact bytes the contract returned, whether or not its ABI could decode them.
+  for (const node of chain) {
+    if (node.name !== 'ContractFunctionRevertedError') continue;
+    const raw = revertBytes(node.raw);
+    if (raw) return raw;
+    // `signature` is viem's own 4-byte selector for a revert its ABI could NOT decode. It is a
+    // structured field (AbiErrorSignatureNotFoundError.signature), not scraped prose.
+    const signature = revertBytes(node.signature);
+    if (signature) return signature;
+    // The ABI-aware node exists but carries no bytes ⇒ the revert genuinely had empty data.
+    // Stop here rather than falling through to a sibling field that means something else.
+    return null;
+  }
+
+  // 2. No ABI on the path (`publicClient.call`, estimateGas, raw RPC). Mirrors viem's own
+  //    `getRevertErrorData()`: the bytes sit on a cause as `data`, either hex or `{ data: hex }`.
+  for (const node of chain) {
+    const direct = revertBytes(node.data);
+    if (direct) return direct;
+    const nested = node.data;
+    if (nested && typeof nested === 'object') {
+      const inner = revertBytes((nested as Record<string, unknown>).data);
+      if (inner) return inner;
     }
   }
-  for (const text of strings) {
-    const match = /0x[0-9a-fA-F]{8,}/.exec(text);
-    if (match) return match[0].toLowerCase() as Hex;
-  }
+
   return null;
 }
 
@@ -402,12 +453,36 @@ function extractUpstreamCode(body: unknown): string | null {
   return null;
 }
 
+/**
+ * The node's own coarse classification (`auth` | `prerequisite` | `validation` | `infrastructure`),
+ * shipped in the versioned envelope from YAAA `e0b5efe` (`src/common/error-codes.ts`).
+ *
+ * This is the signal that finally makes the taxonomy an INTERFACE rather than an inference.
+ * Upstream's contract: codes are append-only, `category` is exhaustive and never changes meaning,
+ * and HTTP status never contradicts the category. So when a category is present it decides the
+ * class — with one deliberate exception, see `classifyHttpRejection`.
+ */
+const UPSTREAM_CATEGORY_TO_CODE: Record<string, RejectionCode> = {
+  auth: 'GUARD_AUTH',
+  prerequisite: 'SERVICE_PREREQUISITE',
+  validation: 'SERVICE_VALIDATION',
+  infrastructure: 'INFRASTRUCTURE',
+};
+
+function extractUpstreamCategory(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const value = (body as Record<string, unknown>).category;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 export type Classification = {
   code: RejectionCode;
   /** Human explanation used in failure messages. */
   detail: string;
   /** Structured code the node returned, when it returned one. */
   upstreamCode: string | null;
+  /** The node's own category, when it returned one. */
+  upstreamCategory: string | null;
   message: string;
 };
 
@@ -418,9 +493,33 @@ export type Classification = {
 export function classifyHttpRejection(status: number, body: unknown): Classification {
   const message = extractMessage(body);
   const upstreamCode = extractUpstreamCode(body);
-  const of = (code: RejectionCode, detail: string): Classification => ({ code, detail, upstreamCode, message });
+  const upstreamCategory = extractUpstreamCategory(body);
+  const of = (code: RejectionCode, detail: string): Classification =>
+    ({ code, detail, upstreamCode, upstreamCategory, message });
 
   if (status >= 200 && status < 300) return of(REJECTION_CODES.ACCEPTED, `the node accepted the request (HTTP ${status})`);
+
+  // Structured envelope present: the node states its own category, so stop inferring one.
+  if (upstreamCategory !== null) {
+    const mapped = UPSTREAM_CATEGORY_TO_CODE[upstreamCategory];
+    if (!mapped) {
+      return of(REJECTION_CODES.UNKNOWN, `the node returned an unrecognised category "${upstreamCategory}" (HTTP ${status})`);
+    }
+    // THE ONE PLACE WE DO NOT DEFER. `validation` is the only evidence-bearing class, so it is
+    // also the only one worth mislabelling. The service raises its own validation failures as
+    // BadRequestException; every admission/prerequisite refusal is 401/403/413 and every
+    // dependency failure is 5xx. A "validation" label on any other status is a contradiction
+    // between two upstream signals — default-deny rather than believe the convenient one.
+    if (mapped === REJECTION_CODES.SERVICE_VALIDATION && status !== 400) {
+      return of(
+        REJECTION_CODES.UNKNOWN,
+        `the node labelled this category="validation" but answered HTTP ${status}; only the service's ` +
+          `own HTTP 400 is evidence-bearing (errorCode=${upstreamCode ?? 'none'})`,
+      );
+    }
+    return of(mapped, `the node reported category="${upstreamCategory}" errorCode=${upstreamCode ?? 'none'} (HTTP ${status})`);
+  }
+
   if (status >= 500) {
     return of(REJECTION_CODES.SERVER_FAULT, `the node returned HTTP ${status}; a server fault is not proof of validation`);
   }
@@ -503,14 +602,26 @@ export function assertHttpRejections(
           `run must fail rather than record it as evidence. Node said: ${verdict.message || '(no message)'}`,
       );
     }
-    if (expectation.upstreamCode && verdict.upstreamCode) {
+    if (expectation.upstreamCode) {
+      // REQUIRE MODE (CC-50 round-4 LOW-1). Declaring a code means the code is the contract. The
+      // previous `&& verdict.upstreamCode` silently degraded to prose matching when the node sent
+      // no code — so "the node stopped emitting structured errors" read as a pass, which is the
+      // same class of soft failure the whole taxonomy exists to remove.
+      if (!verdict.upstreamCode) {
+        throw new NegativeControlFailure(
+          `${label}: this control requires the structured error code ${expectation.upstreamCode}, but the ` +
+            `node returned no errorCode at all (HTTP ${result.status}). Falling back to prose here would ` +
+            `make the control depend on wording again. Node said: ${verdict.message || '(no message)'}`,
+        );
+      }
       if (verdict.upstreamCode !== expectation.upstreamCode) {
         throw new NegativeControlFailure(
           `${label}: the node returned error code ${verdict.upstreamCode}, not the expected ` +
             `${expectation.upstreamCode} — a different rule fired than the one under test.`,
         );
       }
-      continue; // structured code matched exactly; prose is advisory only
+      // The code identifies the RULE; the prose still has to name the same thing, so a code that
+      // covers several rules (REPCREDIT_AGGREGATION_INVALID covers five) cannot stand in for them.
     }
     if (!expectation.reason.test(verdict.message)) {
       throw new NegativeControlFailure(

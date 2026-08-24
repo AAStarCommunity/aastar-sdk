@@ -14,9 +14,11 @@
  *
  * Run: pnpm run check:abi-drift   (sibling repos must be present + freshly `forge build`-ed)
  */
+import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { keccak256 } from 'viem';
 
 const SDK_ROOT = process.cwd();
 const ABIS_DIR = path.join(SDK_ROOT, 'packages/core/src/abis');
@@ -115,6 +117,141 @@ const SRC_DIRS: { label: string; dir: string }[] = [
   .map((e) => ({ ...e, dir: path.resolve(SDK_ROOT, e.dir) }))
   .filter((e) => fs.existsSync(e.dir));
 
+
+// ---------------------------------------------------------------------------------------------
+// UPSTREAM PROVENANCE (CC-50 round-4 MEDIUM-1)
+//
+// "checked 30 ABIs, here are their sha256s" still cannot say WHICH upstream revision produced
+// them. A gate that reports green off a colleague's uncommitted edits is the next layer of the
+// same vacuous-PASS problem strict mode was added to remove — measured for real: this script
+// printed all four MUST_VERIFY ✅ while the SuperPaymaster worktree had 23 uncommitted changes,
+// including Registry.sol and BLSAggregator.sol themselves.
+//
+// The chain this now establishes, end to end:
+//
+//   SDK ABI  ==(signature sets)==>  upstream artifact
+//   artifact ==(solc metadata keccak256 of every source file)==>  on-disk source
+//   source   ==(git status clean)==>  the committed revision
+//   revision ==(scripts/upstream-abi-pin.json)==>  the revision that was reviewed
+//
+// Break any link and strict/release mode fails. The solc metadata hash is what makes the middle
+// link cryptographic rather than a timestamp heuristic: a stale artifact (built before the last
+// source edit) and a "too new" artifact (built from sources that were since reverted) both show
+// up as a keccak mismatch, in either direction.
+// ---------------------------------------------------------------------------------------------
+
+type RepoProvenance = {
+  label: string;
+  root: string;
+  revision: string | null;
+  dirtyPaths: string[];
+  /** Why this checkout cannot be used as a pinned reference, or null when it can. */
+  unusable: string | null;
+};
+
+const PIN_FILE = path.join(SDK_ROOT, 'scripts/upstream-abi-pin.json');
+
+type Pin = {
+  repos?: Record<string, { revision: string; why?: string }>;
+  contracts?: Record<string, { abiSha256: string; why?: string }>;
+};
+
+function loadPin(): Pin {
+  if (!fs.existsSync(PIN_FILE)) return {};
+  return JSON.parse(fs.readFileSync(PIN_FILE, 'utf8')) as Pin;
+}
+
+const PIN = loadPin();
+
+function git(root: string, args: string[]): string {
+  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+}
+
+const repoCache = new Map<string, RepoProvenance>();
+
+/** git repo that owns `somePath`, with its revision and working-tree state. */
+function repoProvenanceFor(somePath: string): RepoProvenance | null {
+  let root: string;
+  try {
+    root = git(path.dirname(somePath), ['rev-parse', '--show-toplevel']).trim();
+  } catch {
+    return null;
+  }
+  const cached = repoCache.get(root);
+  if (cached) return cached;
+  const label = path.basename(root);
+  let provenance: RepoProvenance;
+  try {
+    const revision = git(root, ['rev-parse', 'HEAD']).trim();
+    const dirtyPaths = git(root, ['status', '--porcelain'])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    provenance = { label, root, revision, dirtyPaths, unusable: null };
+    const declared = PIN.repos?.[label]?.revision;
+    if (declared && !revision.startsWith(declared)) {
+      provenance.unusable = `pinned at ${declared} (scripts/upstream-abi-pin.json) but the checkout is at ${revision}`;
+    } else if (dirtyPaths.length) {
+      provenance.unusable =
+        `${dirtyPaths.length} uncommitted change(s) — the artifacts in out/ cannot be attributed to ` +
+        `revision ${revision.slice(0, 8)}`;
+    }
+  } catch (error) {
+    provenance = { label, root, revision: null, dirtyPaths: [], unusable: `not a usable git checkout: ${String(error)}` };
+  }
+  repoCache.set(root, provenance);
+  return provenance;
+}
+
+/**
+ * Verify a foundry artifact against the sources it records.
+ *
+ * `metadata.sources[path].keccak256` is solc's own hash of each input file, so recomputing it over
+ * the working tree proves the artifact was compiled from EXACTLY these bytes. Nothing here trusts
+ * an mtime.
+ */
+function verifyArtifactSources(
+  artifactPath: string,
+  repoRoot: string,
+  dirtyPaths: string[],
+): { sourceCount: number; mismatched: string[]; unresolved: string[]; dirty: string[] } {
+  // `git status --porcelain` lines are "XY <path>" (and "R  old -> new"); we only need the paths.
+  const dirtySet = new Set(
+    dirtyPaths.map((line) => line.replace(/^\S+\s+/, '').split(' -> ').pop()!.replace(/^"|"$/g, '')),
+  );
+  const dirty: string[] = [];
+  const mismatched: string[] = [];
+  const unresolved: string[] = [];
+  let sourceCount = 0;
+  let metadata: any;
+  try {
+    metadata = JSON.parse(fs.readFileSync(artifactPath, 'utf8')).metadata;
+  } catch {
+    return { sourceCount: 0, unresolved: ['<artifact is not readable JSON>'], mismatched, dirty };
+  }
+  const sources = metadata?.sources;
+  if (!sources || typeof sources !== 'object') {
+    return { sourceCount: 0, unresolved: ['<artifact carries no solc metadata.sources>'], mismatched, dirty };
+  }
+  for (const [relative, entry] of Object.entries<any>(sources)) {
+    const file = path.resolve(repoRoot, relative);
+    // Sources outside the repo (remappings into node_modules/lib) are the dependency's problem,
+    // not this repo's revision — count them as resolved-elsewhere rather than as a mismatch.
+    if (!file.startsWith(repoRoot + path.sep)) continue;
+    if (!fs.existsSync(file)) {
+      unresolved.push(relative);
+      continue;
+    }
+    sourceCount++;
+    if (dirtySet.has(relative)) dirty.push(relative);
+    const actual = keccak256(fs.readFileSync(file));
+    if (typeof entry?.keccak256 === 'string' && actual.toLowerCase() !== entry.keccak256.toLowerCase()) {
+      mismatched.push(relative);
+    }
+  }
+  return { sourceCount, mismatched, unresolved, dirty };
+}
+
 /**
  * ABIs that MUST be verified against a real upstream artifact in strict mode.
  *
@@ -198,8 +335,18 @@ const checkedNames: string[] = [];
  * run can say WHICH artifacts those were — a PASS that cannot name its inputs is the same class of
  * claim as the vacuous PASS strict mode exists to prevent.
  */
-const checkedProvenance: { name: string; artifact: string; abiSha256: string }[] = [];
+const checkedProvenance: {
+  name: string;
+  artifact: string;
+  abiSha256: string;
+  /** Upstream git revision + working-tree state the artifact is attributed to. */
+  repo: RepoProvenance | null;
+  /** solc-metadata source verification: does the artifact match the sources on disk? */
+  sources: { sourceCount: number; mismatched: string[]; unresolved: string[]; dirty: string[] };
+}[] = [];
 const skippedEntries: Skipped[] = [];
+/** Drift measured against an artifact whose sources are uncommitted upstream — reported, not failed (lenient). */
+const unattributableDrift: { name: string; problems: string[]; dirtySources: string[] }[] = [];
 /** Never drift-checked BY DESIGN (standard/external, or not a contract) — listed so the inventory adds up. */
 const excludedEntries: { name: string; reason: string }[] = [];
 console.log('=== Upstream ABI value-drift (vs ' + OUT_DIRS.length + ' upstream out/ dir(s)) ===');
@@ -243,13 +390,19 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
   checkedNames.push(name);
   const sdk = loadAbi(path.join(ABIS_DIR, file));
   const ups = loadAbi(up);
-  checkedProvenance.push({
+  const repo = repoProvenanceFor(up);
+  const provenance = {
     name,
     artifact: up,
     // Hash the ABI itself, not the artifact file: bytecode/metadata churn on every rebuild and
     // would make the digest useless for answering "did the interface change?".
     abiSha256: createHash('sha256').update(JSON.stringify(ups)).digest('hex'),
-  });
+    repo,
+    sources: repo
+      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths)
+      : { sourceCount: 0, mismatched: [], unresolved: ['<no git repo>'], dirty: [] },
+  };
+  checkedProvenance.push(provenance);
   const problems: string[] = [];
   for (const kind of ['function', 'event', 'error']) {
     const a = sigSet(sdk, kind);
@@ -260,19 +413,57 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     if (goneUpstream.length) problems.push(`${kind} in SDK but gone upstream: ${goneUpstream.join(', ')}`);
   }
   if (problems.length) {
-    drift++;
-    console.log(`❌ ${name}`);
-    for (const p of problems) console.log(`   ${p}`);
+    // A diff against an artifact built from UNCOMMITTED upstream sources is not evidence that the
+    // SDK's copy is stale — it is the same "cannot attribute this artifact" problem one layer up,
+    // and the sibling repo's owner is mid-round more often than not. Report it, do not fail the
+    // lenient run on it; strict mode still fails, both here and on the dirty-checkout gate below.
+    const unattributable = provenance.sources.dirty;
+    if (unattributable.length) {
+      unattributableDrift.push({ name, problems, dirtySources: unattributable });
+      console.log(`⚠️  ${name}: differs from an UNATTRIBUTABLE artifact (built from uncommitted upstream sources)`);
+      for (const p of problems) console.log(`   ${p}`);
+      console.log(`   uncommitted: ${unattributable.join(', ')}`);
+    } else {
+      drift++;
+      console.log(`❌ ${name}`);
+      for (const p of problems) console.log(`   ${p}`);
+    }
   }
 }
 
 // ---- Inventory. Printed on every run, pass or fail: a bare "PASS" cannot tell you WHAT was
 // verified, and that ambiguity is precisely what made a 12-contract run look like a 30-contract one.
 const checkedSet = new Set(checkedNames);
-console.log(`\n--- checked (${checkedNames.length}) — contract, upstream artifact, abi sha256 ---`);
+
+// ---- Upstream revisions FIRST: a reader must be able to answer "green against what?" before
+// reading a single sha256. Same discipline as the YAAA pin in the RepCredit suite.
+const usedRepos = [...new Map(
+  checkedProvenance.filter((e) => e.repo).map((e) => [e.repo!.root, e.repo!]),
+).values()].sort((a, b) => a.label.localeCompare(b.label));
+console.log(`\n--- upstream revisions (${usedRepos.length}) ---`);
+if (!usedRepos.length) console.log('  (none — no artifact resolved to a git checkout)');
+for (const repo of usedRepos) {
+  const declared = PIN.repos?.[repo.label]?.revision;
+  const state = repo.dirtyPaths.length ? `DIRTY: ${repo.dirtyPaths.length} change(s)` : 'clean';
+  console.log(
+    `  ${repo.label} @ ${repo.revision ?? 'unknown'} (${state})` +
+      `${declared ? `  pinned=${declared.slice(0, 12)}` : '  [NO PIN DECLARED]'}`,
+  );
+  if (repo.unusable) console.log(`     ⚠️  ${repo.unusable}`);
+}
+
+console.log(`\n--- checked (${checkedNames.length}) — contract, abi sha256, artifact⇄source, upstream artifact ---`);
 if (!checkedProvenance.length) console.log('(none)');
 for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b.name))) {
-  console.log(`  ${entry.name}  ${entry.abiSha256.slice(0, 16)}  ${entry.artifact}`);
+  const src = entry.sources;
+  const binding = src.mismatched.length
+    ? `❌ ${src.mismatched.length}/${src.sourceCount} source(s) DIFFER from the artifact`
+    : src.unresolved.length
+      ? `⚠️  ${src.unresolved.length} source(s) unresolved`
+      : `✅ ${src.sourceCount} source(s)`;
+  console.log(`  ${entry.name}  ${entry.abiSha256.slice(0, 16)}  ${binding}  ${entry.artifact}`);
+  for (const file of src.mismatched) console.log(`       ✗ ${file}`);
+  for (const file of src.unresolved) console.log(`       ? ${file}`);
 }
 console.log(`--- skipped (${skippedEntries.length}) ---`);
 for (const entry of skippedEntries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -303,6 +494,100 @@ if (drift > 0) {
   );
   failed = true;
 }
+// ---- Provenance gates. All of these are the SAME failure in different clothing: an ABI the run
+// cannot attribute to a reviewed, committed upstream revision. Gated on strict/release because a
+// developer mid-edit in a sibling repo must still be able to run the lenient check; the release
+// checklist and CI use --strict.
+const artifactSourceMismatch = checkedProvenance.filter((e) => e.sources.mismatched.length);
+if (artifactSourceMismatch.length) {
+  const message =
+    `ARTIFACT ⇄ SOURCE MISMATCH: ${artifactSourceMismatch.length} artifact(s) were NOT built from the ` +
+    `sources now on disk (solc metadata keccak256 disagrees) — the artifact is stale or the sources moved:`;
+  if (STRICT) console.error(`\n${message}`);
+  else console.log(`\n⚠️  ${message}`);
+  for (const entry of artifactSourceMismatch) {
+    const line = `  - ${entry.name}: ${entry.sources.mismatched.join(', ')}`;
+    if (STRICT) console.error(line);
+    else console.log(line);
+  }
+  if (STRICT) {
+    console.error('  Re-run `forge build` in the upstream checkout so the artifact matches its source.');
+    failed = true;
+  }
+}
+
+const unpinnedOrDirty = usedRepos.filter((repo) => repo.unusable);
+if (unpinnedOrDirty.length) {
+  const message =
+    `UPSTREAM NOT PINNED/CLEAN: ${unpinnedOrDirty.length} upstream checkout(s) cannot back a release-grade ABI claim:`;
+  if (STRICT) console.error(`\n${message}`);
+  else console.log(`\n⚠️  ${message}`);
+  for (const repo of unpinnedOrDirty) {
+    const line = `  - ${repo.label} @ ${repo.revision ?? 'unknown'}: ${repo.unusable}`;
+    if (STRICT) console.error(line);
+    else console.log(line);
+  }
+  if (STRICT) {
+    console.error('  Commit (or stash) the upstream changes and update scripts/upstream-abi-pin.json to the reviewed revision.');
+    failed = true;
+  }
+}
+
+if (unattributableDrift.length) {
+  const message =
+    `UNATTRIBUTABLE DRIFT: ${unattributableDrift.length} contract(s) differ from an upstream artifact ` +
+    `built from UNCOMMITTED sources — the diff describes someone's work in progress, not the SDK:`;
+  if (STRICT) console.error(`\n${message}`);
+  else console.log(`\n⚠️  ${message}`);
+  for (const entry of unattributableDrift) {
+    const line = `  - ${entry.name} (uncommitted: ${entry.dirtySources.join(', ')})`;
+    if (STRICT) console.error(line);
+    else console.log(line);
+  }
+  if (STRICT) failed = true;
+  else console.log('    Not failing the lenient run. `--strict` (release) requires a clean upstream checkout.');
+}
+
+// Self-consistency of the SDK's OWN committed copy against its OWN committed pin. Deliberately
+// NOT gated on strict: it needs no upstream checkout at all, and "the vendored ABI is still the
+// one that was reviewed" must hold on every run, including one where the sibling repos are absent.
+{
+  const pinnedContracts = Object.entries(PIN.contracts ?? {});
+  const contractPinMismatch = pinnedContracts.flatMap(([name, expected]) => {
+    const file = path.join(ABIS_DIR, `${name}.json`);
+    if (!fs.existsSync(file)) return [`${name}: pinned, but packages/core/src/abis/${name}.json is missing`];
+    const actual = createHash('sha256').update(JSON.stringify(loadAbi(file))).digest('hex');
+    return actual === expected.abiSha256
+      ? []
+      : [`${name}: vendored ABI sha256 ${actual.slice(0, 16)} != pinned ${expected.abiSha256.slice(0, 16)}`];
+  });
+  if (contractPinMismatch.length) {
+    console.error(`\nVENDORED ABI PIN MISMATCH: ${contractPinMismatch.length} contract(s):`);
+    for (const line of contractPinMismatch) console.error(`  - ${line}`);
+    console.error('  Update scripts/upstream-abi-pin.json in the same commit that re-syncs the ABI.');
+    failed = true;
+  } else if (pinnedContracts.length) {
+    console.log(`\n✅ vendored ABI pin: ${pinnedContracts.length} contract(s) match scripts/upstream-abi-pin.json.`);
+  }
+}
+
+// A MUST_VERIFY contract whose repo declares no pin is unattributable by construction: it would
+// pass today and pass again tomorrow against a different, unreviewed revision.
+if (STRICT) {
+  const unpinnedMustVerify = checkedProvenance.filter(
+    (e) => MUST_VERIFY.has(e.name) && e.repo && !PIN.repos?.[e.repo.label]?.revision,
+  );
+  if (unpinnedMustVerify.length) {
+    console.error(
+      `\nNO UPSTREAM PIN: ${unpinnedMustVerify.length} must-verify contract(s) come from a repo with no ` +
+        `declared revision in scripts/upstream-abi-pin.json:`,
+    );
+    for (const entry of unpinnedMustVerify) console.error(`  - ${entry.name} (${entry.repo!.label})`);
+    failed = true;
+  }
+
+}
+
 if (STRICT && expectedMissing.length) {
   console.error(`\nMISSING ARTIFACTS: ${expectedMissing.length} contract(s) are declared in an upstream src/ tree but have no out/ artifact:`);
   for (const entry of expectedMissing) console.error(`  - ${entry.name}: ${entry.reason}`);
@@ -326,5 +611,31 @@ if (expectedMissing.length) {
       `(see the skipped list). Re-run with --strict to make that a failure.`,
   );
 } else {
-  console.log('\nPASS: every checked SDK ABI matches its upstream out/ artifact, and every expected artifact was present.');
+  const pinned = usedRepos
+    .filter((repo) => PIN.repos?.[repo.label]?.revision)
+    .map((repo) => `${repo.label}@${repo.revision!.slice(0, 8)}`)
+    .join(', ');
+  // Say exactly what held. A blanket "everything matches" after downgrading a diff to a warning is
+  // the same overstatement as a PASS that will not name its `checked N`.
+  const caveats: string[] = [];
+  if (unattributableDrift.length) {
+    caveats.push(`${unattributableDrift.length} contract(s) differed from an UNATTRIBUTABLE artifact (see above)`);
+  }
+  if (artifactSourceMismatch.length) {
+    caveats.push(`${artifactSourceMismatch.length} artifact(s) did not hash-match their sources`);
+  }
+  console.log(
+    caveats.length
+      ? `\nPASS (with caveats): ${checkedNames.length - unattributableDrift.length}/${checkedNames.length} ` +
+        `checked SDK ABI(s) match a hash-verified upstream artifact; ${caveats.join('; ')}.`
+      : '\nPASS: every checked SDK ABI matches its upstream out/ artifact, every expected artifact was present, ' +
+        'and every artifact hash-matches the sources it records.',
+  );
+  console.log(
+    STRICT
+      ? `      Attributed to committed upstream revision(s): ${pinned || '(none pinned)'}.`
+      : `      Upstream revision(s) seen: ${
+          usedRepos.map((r) => `${r.label}@${(r.revision ?? 'unknown').slice(0, 8)}${r.dirtyPaths.length ? '(DIRTY)' : ''}`).join(', ') || '(none)'
+        }. Run --strict to require a clean, pinned checkout.`,
+  );
 }

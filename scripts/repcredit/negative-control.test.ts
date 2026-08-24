@@ -234,20 +234,96 @@ describe('assertHttpRejections — rejection taxonomy', () => {
 
   // Forward compatibility with the structured error code YAAA has been asked to emit: when the
   // body carries one it is matched EXACTLY and prose is not consulted.
-  it('prefers a structured upstream error code over prose when the node emits one', () => {
-    const coded = { demonstrates: 'chain-id rebinding', reason: /never matches/, upstreamCode: 'REPCREDIT_CHAIN_ID_MISMATCH' };
+  /**
+   * The structured-code contract, as YAAA `e0b5efe` actually ships it. A code names the RULE
+   * FAMILY (`REPCREDIT_AGGREGATION_INVALID` covers threshold, duplicate slot AND bad signature),
+   * so it narrows the control but does not identify it — the declared prose still has to match.
+   */
+  const coded = {
+    demonstrates: 'chain-id rebinding',
+    reason: /chainId mismatch/,
+    upstreamCode: 'REPCREDIT_PROPOSAL_INVALID',
+  };
+  const codedBody = (extra: Record<string, unknown>) => ({
+    ok: false as const,
+    status: 400,
+    body: { errorCodeVersion: 1, category: 'validation', ...extra },
+  });
+
+  it('accepts the declared code together with the declared reason', () => {
     expect(() =>
       assertHttpRejections(
-        { wrongChain: { ok: false, status: 400, body: { errorCode: 'REPCREDIT_CHAIN_ID_MISMATCH', message: 'whatever' } } },
+        { wrongChain: codedBody({ errorCode: 'REPCREDIT_PROPOSAL_INVALID', message: 'chainId mismatch: request=1' }) },
         { wrongChain: coded },
       ),
     ).not.toThrow();
+  });
+
+  it('FAILS on a different code — a different rule fired', () => {
     expect(() =>
       assertHttpRejections(
-        { wrongChain: { ok: false, status: 400, body: { errorCode: 'REPCREDIT_DUPLICATE_SLOT', message: 'whatever' } } },
+        { wrongChain: codedBody({ errorCode: 'REPCREDIT_AGGREGATION_INVALID', message: 'chainId mismatch: request=1' }) },
         { wrongChain: coded },
       ),
-    ).toThrow(/not the expected REPCREDIT_CHAIN_ID_MISMATCH/);
+    ).toThrow(/not the expected REPCREDIT_PROPOSAL_INVALID/);
+  });
+
+  it('FAILS when the code matches but the rule inside that family does not', () => {
+    // Same family, different rule: exactly the case a code alone cannot distinguish.
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: codedBody({ errorCode: 'REPCREDIT_PROPOSAL_INVALID', message: 'messageHash does not match' }) },
+        { wrongChain: coded },
+      ),
+    ).toThrow(/not for the reason this control demonstrates/);
+  });
+
+  /**
+   * CC-50 round-4 LOW-1. Before this, a control that DECLARED a code and got none silently fell
+   * back to prose — so "the node stopped emitting structured errors" read as a pass.
+   */
+  it('REQUIRE MODE: FAILS when a declared code is absent from the response', () => {
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: { ok: false, status: 400, body: { message: 'chainId mismatch: request=1' } } },
+        { wrongChain: coded },
+      ),
+    ).toThrow(/requires the structured error code REPCREDIT_PROPOSAL_INVALID/);
+  });
+
+  describe('the upstream category envelope decides the class', () => {
+    const classify = (status: number, body: unknown) => classifyHttpRejection(status, body).code;
+
+    it('maps every category YAAA defines', () => {
+      expect(classify(403, { category: 'auth', errorCode: 'REPCREDIT_NOT_ARMED' })).toBe(REJECTION_CODES.GUARD_AUTH);
+      expect(classify(403, { category: 'prerequisite', errorCode: 'REPCREDIT_SLOT_NOT_ACTIVE' }))
+        .toBe(REJECTION_CODES.SERVICE_PREREQUISITE);
+      expect(classify(400, { category: 'validation', errorCode: 'REPCREDIT_PROPOSAL_INVALID' }))
+        .toBe(REJECTION_CODES.SERVICE_VALIDATION);
+      expect(classify(503, { category: 'infrastructure', errorCode: 'REPCREDIT_RPC_UNAVAILABLE' }))
+        .toBe(REJECTION_CODES.INFRASTRUCTURE);
+    });
+
+    /**
+     * The one place the SDK does NOT defer to the node. `validation` is the only evidence-bearing
+     * class, so it is the only one worth mislabelling — and a 403 labelled "validation" is two
+     * upstream signals contradicting each other. Default-deny.
+     */
+    it('refuses a "validation" label on any status other than 400', () => {
+      expect(classify(403, { category: 'validation', errorCode: 'REPCREDIT_PROPOSAL_INVALID' }))
+        .toBe(REJECTION_CODES.UNKNOWN);
+      expect(classify(503, { category: 'validation', errorCode: 'REPCREDIT_PROPOSAL_INVALID' }))
+        .toBe(REJECTION_CODES.UNKNOWN);
+    });
+
+    it('refuses a category it does not recognise rather than guessing', () => {
+      expect(classify(400, { category: 'something-new', errorCode: 'X' })).toBe(REJECTION_CODES.UNKNOWN);
+    });
+
+    it('still classifies a body with no envelope, so an older node degrades to a failure not a pass', () => {
+      expect(classify(403, { message: 'configured validator slot 2 is not active' }))
+        .toBe(REJECTION_CODES.SERVICE_PREREQUISITE);
+    });
   });
 
   it('MUTATION BASELINE: the old "any non-guard 4xx is evidence" rule passed all four false greens', () => {

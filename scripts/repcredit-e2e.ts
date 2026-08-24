@@ -28,6 +28,15 @@ import {
 // Experiment-only mocks. These deliberately do NOT come from @aastar/core: anything exported there
 // ships in the published @aastar/sdk bundle and is drift-checked as a production interface (CC-50 B1/H2).
 import { MockAgentIdentityRegistryABI, RepCreditCounterABI } from "./repcredit/abis/index.js";
+import {
+  BLS_DOMAIN_NAME,
+  TAG_EXECUTE_SLASH,
+  TAG_QUEUE_SLASH,
+  TAG_REPUTATION,
+  blsDomainSeparator,
+  executeSlashMessageHash,
+  reputationMessageHash,
+} from "./repcredit/bls-domain.js";
 import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
 import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.js";
 import {
@@ -116,6 +125,15 @@ const REVERT = {
     selectors: [errorSelector(BLSAggregatorABI as Abi, "GuardianExitBlockedBySlash")],
   },
   /**
+   * BLSAggregator 4.6.0 timelocks verifier rotation. `applyFraudProofVerifier()` before the delay
+   * has run must revert with exactly this error — an `Unauthorized`/`NoPendingVerifierRotation`
+   * would mean the control never reached the delay check at all.
+   */
+  verifierRotationNotReady: {
+    describe: "BLSAggregator.VerifierRotationNotReady",
+    selectors: [errorSelector(BLSAggregatorABI as Abi, "VerifierRotationNotReady")],
+  },
+  /**
    * Post-slash liveness: `verify` is expected to return false. If it reverts instead, only a
    * revert that means "this signer set is no longer a valid quorum" counts.
    */
@@ -139,25 +157,42 @@ const REVERT = {
  * unset on purpose: YAAA does not emit structured codes yet (asked for in CC-50). The moment it
  * does, filling these in makes the match exact and prose-independent.
  */
+/**
+ * The HTTP negative controls, each pinned to the STRUCTURED error code the node emits.
+ *
+ * `upstreamCode` is required, not advisory: YAAA `e0b5efe` ships a versioned, append-only code
+ * table (`src/modules/repcredit/repcredit-errors.ts`) precisely so the SDK stops branching on
+ * English. A node that answers without a code now FAILS the control instead of quietly falling
+ * back to prose (CC-50 round-4 LOW-1).
+ *
+ * `reason` is still declared and still checked, because a code identifies the RULE FAMILY, not the
+ * rule: `REPCREDIT_AGGREGATION_INVALID` covers threshold, duplicate slot and bad signature alike,
+ * so three controls share it. Code + reason together is what keeps them distinguishable.
+ */
 const HTTP_CONTROLS = {
   wrongChainResult: {
     demonstrates: "the node rebinds chainId to its own RPC and refuses a foreign one",
+    upstreamCode: "REPCREDIT_PROPOSAL_INVALID",
     reason: /chainId mismatch: request=/i,
   },
   tamperedMessageResult: {
     demonstrates: "the node recomputes messageHash and refuses a caller-supplied one",
+    upstreamCode: "REPCREDIT_PROPOSAL_INVALID",
     reason: /messageHash does not match the locally recomputed/i,
   },
   belowThresholdResult: {
     demonstrates: "the node refuses to aggregate below the requested threshold",
+    upstreamCode: "REPCREDIT_AGGREGATION_INVALID",
     reason: /response\(s\), need|valid unique slot\(s\), need/i,
   },
   duplicateSlotResult: {
     demonstrates: "the node refuses a quorum padded with a repeated slot",
+    upstreamCode: "REPCREDIT_AGGREGATION_INVALID",
     reason: /duplicate validator slot/i,
   },
   badSignatureResult: {
     demonstrates: "the node verifies each signature before aggregating",
+    upstreamCode: "REPCREDIT_AGGREGATION_INVALID",
     reason: /returned an invalid signature|returned malformed BLS material/i,
   },
 } as const;
@@ -178,7 +213,7 @@ type AirDeployment = {
   transactions: Record<string, unknown>;
 };
 type Proposal = {
-  schemaVersion: "repcredit-reputation-v1";
+  schemaVersion: "repcredit-reputation-v2";
   proposalId: string;
   operator: Address;
   slashLevel: number;
@@ -189,7 +224,7 @@ type Proposal = {
   messageHash: Hex;
 };
 type SlashProposal = {
-  schemaVersion: "repcredit-slash-v1";
+  schemaVersion: "repcredit-slash-v2";
   proposalId: string;
   operator: Address;
   slashLevel: number;
@@ -641,16 +676,152 @@ async function startNodes(deployment: Deployment, keyRoot: string): Promise<stri
   return urls;
 }
 
+
+/**
+ * BLS consensus domain, resolved against the DEPLOYED aggregator.
+ *
+ * The preimage builders themselves live in `scripts/repcredit/bls-domain.ts` (documented and
+ * unit-pinned there); this file only binds them to the contract this run will be verified by.
+ */
+/**
+ * Resolved once against the DEPLOYED aggregator, never assumed. Everything that builds a signed
+ * preimage reads this, and reading it before `resolveBlsDomain` has run is a hard error rather
+ * than a silently-zero domain.
+ */
+let blsDomain: Hex | null = null;
+
+function requireBlsDomain(): Hex {
+  if (!blsDomain) {
+    throw new Error(
+      "BLS domain separator was not resolved before a proposal was built — refusing to sign against " +
+        "an unbound preimage. resolveBlsDomain() must run after deployment and before any co-sign.",
+    );
+  }
+  return blsDomain;
+}
+
+/**
+ * Bind the runner's preimage schema to the contract it will actually be verified by.
+ *
+ * Three independent checks, all of which must agree:
+ *   1. the domain separator recomputed locally equals `blsAggregator.domainSeparator()`;
+ *   2. each locally-derived TAG equals the constant the deployed contract exposes;
+ *   3. a real proposal's hash, built by `proposal()`, equals
+ *      `blsAggregator.reputationMessageHash(...)` computed on-chain.
+ *
+ * (3) is the one that cannot be satisfied by a coincidence: it round-trips the exact encoding
+ * through the contract. Without it, "the SDK implements the documented schema" and "the SDK
+ * implements the DEPLOYED schema" are two different claims — and the second is the one that
+ * decides whether a 45-minute evidence run ends in a signature or in a revert.
+ */
+async function resolveBlsDomain(deployment: Deployment): Promise<void> {
+  const read = (functionName: string, args: unknown[] = []) =>
+    publicClient.readContract({
+      address: deployment.blsAggregator,
+      abi: BLSAggregatorABI,
+      functionName,
+      args: args as never,
+    });
+
+  const [onChainDomain, onChainName, registry, tagReputation, tagExecuteSlash, tagQueueSlash] = (await Promise.all([
+    read("domainSeparator"),
+    read("DOMAIN_NAME"),
+    read("REGISTRY"),
+    read("TAG_REPUTATION"),
+    read("TAG_EXECUTE_SLASH"),
+    read("TAG_QUEUE_SLASH"),
+  ])) as [Hex, Hex, Address, Hex, Hex, Hex];
+
+  const mismatches: string[] = [];
+  if (onChainName.toLowerCase() !== BLS_DOMAIN_NAME.toLowerCase()) {
+    mismatches.push(`DOMAIN_NAME: contract=${onChainName} runner=${BLS_DOMAIN_NAME}`);
+  }
+  if (tagReputation.toLowerCase() !== TAG_REPUTATION.toLowerCase()) {
+    mismatches.push(`TAG_REPUTATION: contract=${tagReputation} runner=${TAG_REPUTATION}`);
+  }
+  if (tagExecuteSlash.toLowerCase() !== TAG_EXECUTE_SLASH.toLowerCase()) {
+    mismatches.push(`TAG_EXECUTE_SLASH: contract=${tagExecuteSlash} runner=${TAG_EXECUTE_SLASH}`);
+  }
+  if (tagQueueSlash.toLowerCase() !== TAG_QUEUE_SLASH.toLowerCase()) {
+    mismatches.push(`TAG_QUEUE_SLASH: contract=${tagQueueSlash} runner=${TAG_QUEUE_SLASH}`);
+  }
+
+  const localDomain = blsDomainSeparator(chainId, deployment.blsAggregator, registry);
+  if (localDomain.toLowerCase() !== onChainDomain.toLowerCase()) {
+    mismatches.push(`domainSeparator(): contract=${onChainDomain} runner=${localDomain}`);
+  }
+  if (mismatches.length) {
+    throw new Error(
+      `BLS domain schema does not match the deployed BLSAggregator at ${deployment.blsAggregator}:\n  ` +
+        mismatches.join("\n  ") +
+        "\nThe vendored ABI and the domain constants must be re-synced from the deployed revision " +
+        "(scripts/upstream-abi-pin.json) before any signature is produced.",
+    );
+  }
+  blsDomain = onChainDomain;
+
+  // Round-trip a real proposal through the contract's own hasher.
+  const probe = proposal(0n, [deployment.blsAggregator], [1n], 0n);
+  const onChainHash = (await read("reputationMessageHash", [0n, [deployment.blsAggregator], [1n], 0n])) as Hex;
+  if (probe.messageHash.toLowerCase() !== onChainHash.toLowerCase()) {
+    throw new Error(
+      `reputation preimage mismatch: runner=${probe.messageHash} contract=${onChainHash}. The runner's ` +
+        "field order/encoding differs from BLSAggregator._reputationMessageHash — any quorum it " +
+        "gathers would be rejected on-chain.",
+    );
+  }
+  console.log(`[domain] BLSAggregator ${deployment.blsAggregator} domainSeparator=${onChainDomain} (registry ${registry})`);
+}
+
+/**
+ * The co-signing YAAA node rebuilds the preimage ITSELF and refuses to sign a hash it did not
+ * reproduce. So the schema is a THREE-party contract (contract ⇄ SDK ⇄ DVT node), and a run where
+ * only two of the three moved produces a uniform, uninformative 400 forty minutes in. This
+ * asserts the third party at startup, out of git at the pinned revision — never the working tree.
+ */
+function assertYaaaPreimageSchema(yaaaDir: string): void {
+  let rev: string;
+  try {
+    rev = git(yaaaDir, "rev-parse", "HEAD");
+  } catch (error) {
+    throw new Error(`cannot resolve the YAAA revision at ${yaaaDir}: ${String(error)}`);
+  }
+  // Searched across the whole committed src/ tree rather than one file: DVT is free to put the
+  // domain constants wherever it likes, and a pin that hard-codes a path would go red on a rename
+  // (a false blocker) as readily as on a real one.
+  const markers = ["SuperPaymaster.BLS.Reputation.v1", "SuperPaymaster.BLS.ExecuteSlash.v1"];
+  const missing = markers.filter(marker => {
+    try {
+      // Out of git at the committed revision, never the working tree: a colleague's in-progress
+      // edit in another repository must neither satisfy nor break this assertion.
+      // `git grep` exits 1 with no match, which the helper surfaces as a throw.
+      git(yaaaDir, "grep", "-l", "-F", marker, rev, "--", "src/");
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (missing.length) {
+    throw new Error(
+      `BLOCKED — the pinned YAAA revision ${rev.slice(0, 8)} still builds the PRE-domain RepCredit ` +
+        `preimage (nothing under src/ mentions ${missing.join(", ")}).\n` +
+        "SuperPaymaster 03713feb (BLSAggregator 4.6.0) moved every signed hash to " +
+        "keccak256(abi.encode(domainSeparator(), <TAG>, …)). Until DVT lands the matching change, the " +
+        "nodes will refuse every proposal this runner builds ('messageHash mismatch') and no quorum " +
+        "signature can be produced. This is a cross-repo lockstep blocker (CC-50 B2 / CC-49 HIGH-A), " +
+        "not a runner bug — do not work around it by reverting the runner to the old preimage, which " +
+        "would produce signatures the deployed contract rejects.",
+    );
+  }
+  console.log(`[pin] YAAA ${rev.slice(0, 8)} implements the domain-separated preimage schema`);
+}
+
 function proposal(proposalId: bigint, users: Address[], scores: bigint[], epoch: bigint): Proposal {
-  const messageHash = keccak256(encodeAbiParameters(
-    [
-      { type: "uint256" }, { type: "address" }, { type: "uint8" },
-      { type: "address[]" }, { type: "uint256[]" }, { type: "uint256" }, { type: "uint256" },
-    ],
-    [proposalId, ZERO_ADDRESS, 0, users, scores, epoch, BigInt(chainId)],
-  ));
+  const messageHash = reputationMessageHash(requireBlsDomain(), proposalId, users, scores, epoch);
   return {
-    schemaVersion: "repcredit-reputation-v1",
+    // v2 = domain-separated preimage (SP 03713feb / BLSAggregator 4.6.0). The version travels with
+    // the proposal so a node built against v1 rejects it by shape instead of by hash mismatch.
+    schemaVersion: "repcredit-reputation-v2",
     proposalId: proposalId.toString(),
     operator: ZERO_ADDRESS,
     slashLevel: 0,
@@ -669,16 +840,11 @@ function slashProposal(
   epoch: bigint,
   evidenceHash: Hex,
 ): SlashProposal {
-  const messageHash = keccak256(encodeAbiParameters(
-    [
-      { type: "uint256" }, { type: "address" }, { type: "uint8" },
-      { type: "address[]" }, { type: "uint256[]" }, { type: "uint256" },
-      { type: "uint256" }, { type: "bytes32" },
-    ],
-    [proposalId, operator, slashLevel, [], [], epoch, BigInt(chainId), evidenceHash],
-  ));
+  const messageHash = executeSlashMessageHash(
+    requireBlsDomain(), proposalId, operator, slashLevel, epoch, evidenceHash,
+  );
   return {
-    schemaVersion: "repcredit-slash-v1",
+    schemaVersion: "repcredit-slash-v2",
     proposalId: proposalId.toString(),
     operator,
     slashLevel,
@@ -979,6 +1145,26 @@ async function runE2E(
     HTTP_CONTROLS,
   );
 
+  // DISCRIMINATING POWER (CC-50 round-4). "The tampered call reverts with
+  // SignatureVerificationFailed" is only evidence if the UNTAMPERED call does NOT. Once the domain
+  // schema moved (SP 03713feb), any preimage disagreement — tampered or not — produces that same
+  // selector, and the control would keep "passing" while proving nothing. So assert the honest
+  // proposal simulates cleanly first, in the same state, against the same quorum proof.
+  const honestCall = encodeFunctionData({
+    abi: DVTValidatorABI,
+    functionName: "executeWithProof",
+    args: [created.id, contribution.users, [100n], 1n, signed.aggregate.proof],
+  });
+  try {
+    await publicClient.call({ account: validators[0].address, to: deployment.dvtValidator, data: honestCall });
+  } catch (error) {
+    throw new Error(
+      "the UNTAMPERED proposal does not simulate: the tampered-score control cannot distinguish a " +
+        "rejected tamper from a quorum that never verified at all (preimage/domain mismatch?). " +
+        `Reason: ${sanitizeError(error)}`,
+    );
+  }
+
   const tamperedCall = encodeFunctionData({
     abi: DVTValidatorABI,
     functionName: "executeWithProof",
@@ -1221,17 +1407,22 @@ async function runMeasurements(
   const mValues = measurementSmoke ? [3] : [3, 7, 13];
   const batchSizes = measurementSmoke ? [1] : [1, 10, 50, 100];
   const repetitions = measurementSmoke ? 2 : 10;
-  const productionCap = await publicClient.readContract({
-    address: deployment.registry,
-    abi: RegistryABI,
-    functionName: "maxAggregateCreditUpliftPerProposal",
-  }) as bigint;
+  // Registry 5.7.0 folded the per-proposal cap, the total-exposure cap and the exposure baseline
+  // into one setter (`setCreditPolicy`), so the harness must save and restore ALL THREE — restoring
+  // only the per-proposal cap would silently leave the measurement's relaxed total cap in place for
+  // every later arm, including the ones that assert the cap fires.
+  const readRegistryUint = (functionName: string) =>
+    publicClient.readContract({ address: deployment.registry, abi: RegistryABI, functionName }) as Promise<bigint>;
+  const productionCap = await readRegistryUint("maxAggregateCreditUpliftPerProposal");
+  const productionTotalCap = await readRegistryUint("maxTotalCreditExposure");
+  const productionExposure = await readRegistryUint("totalCreditExposure");
   const relaxCap = await sendContract(
     deployerWallet,
     deployment.registry,
     RegistryABI as Abi,
-    "setMaxAggregateCreditUpliftPerProposal",
-    [(1n << 256n) - 1n],
+    "setCreditPolicy",
+    // applyBaseline=false: the harness relaxes the CAPS, it must not rewrite accrued exposure.
+    [(1n << 256n) - 1n, (1n << 256n) - 1n, 0n, false],
   );
   await sendContract(deployerWallet, deployment.registry, RegistryABI as Abi, "setReputationSource", [DEPLOYER, true]);
   const validator0 = validatorWallet(validators[0]);
@@ -1323,15 +1514,21 @@ async function runMeasurements(
     deployerWallet,
     deployment.registry,
     RegistryABI as Abi,
-    "setMaxAggregateCreditUpliftPerProposal",
-    [productionCap],
+    "setCreditPolicy",
+    // applyBaseline=true restores the exposure counter the measurement arms moved, so the later
+    // cap controls run against the same accounting state the run started with.
+    [productionCap, productionTotalCap, productionExposure, true],
   );
-  const restoredCap = await publicClient.readContract({
-    address: deployment.registry,
-    abi: RegistryABI,
-    functionName: "maxAggregateCreditUpliftPerProposal",
-  }) as bigint;
-  if (restoredCap !== productionCap) throw new Error("measurement harness did not restore aggregate uplift cap");
+  const restoredCap = await readRegistryUint("maxAggregateCreditUpliftPerProposal");
+  const restoredTotalCap = await readRegistryUint("maxTotalCreditExposure");
+  const restoredExposure = await readRegistryUint("totalCreditExposure");
+  if (restoredCap !== productionCap || restoredTotalCap !== productionTotalCap || restoredExposure !== productionExposure) {
+    throw new Error(
+      "measurement harness did not restore the Registry credit policy: " +
+        `perProposal ${restoredCap} (want ${productionCap}), total ${restoredTotalCap} ` +
+        `(want ${productionTotalCap}), exposure ${restoredExposure} (want ${productionExposure})`,
+    );
+  }
   const summary = {
     schemaVersion: 1,
     design: {
@@ -1447,13 +1644,74 @@ async function runGuardianExitSlashCompetition(
     "executeWithProof",
     [created.id, [], [], epoch, signed.aggregate.proof],
   );
-  const armVerifier = await sendContract(
-    deployerWallet,
-    deployment.blsAggregator,
-    BLSAggregatorABI as Abi,
-    "setFraudProofVerifier",
-    [verifier],
-  );
+  // BLSAggregator 4.6.0 replaced the instant `setFraudProofVerifier(address)` with a timelocked
+  // rotation: propose -> VERIFIER_ROTATION_DELAY (4 days) -> apply. That is a real governance
+  // property, so the run exercises it rather than routing around it — including the negative half,
+  // which is what the delay is FOR.
+  const rotationDelay = await publicClient.readContract({
+    address: deployment.blsAggregator,
+    abi: BLSAggregatorABI,
+    functionName: "VERIFIER_ROTATION_DELAY",
+  }) as bigint;
+  const currentVerifier = await publicClient.readContract({
+    address: deployment.blsAggregator,
+    abi: BLSAggregatorABI,
+    functionName: "fraudProofVerifier",
+  }) as Address;
+
+  let proposeVerifier: TransactionReceipt | null = null;
+  let armVerifier: TransactionReceipt | null = null;
+  let prematureApply: string | null = null;
+  if (getAddress(currentVerifier) === getAddress(verifier)) {
+    // Already armed at deploy time — nothing to rotate, and nothing to prove about the delay.
+    console.log(`[verifier] fraud-proof verifier already armed at ${verifier}`);
+  } else if (isSepolia) {
+    // No time travel on a public chain. Failing here is the honest outcome: silently skipping the
+    // fraud-proof arm would produce an evidence bundle that LOOKS complete and is not.
+    throw new Error(
+      `the fraud-proof verifier on ${deployment.blsAggregator} is ${currentVerifier}, but this run needs ` +
+        `${verifier}. BLSAggregator 4.6.0 gates that rotation behind VERIFIER_ROTATION_DELAY ` +
+        `(${rotationDelay}s), which a single Sepolia run cannot wait out. Propose the rotation at least ` +
+        "that long before the run, or deploy the aggregator with the verifier already armed.",
+    );
+  } else {
+    proposeVerifier = await sendContract(
+      deployerWallet,
+      deployment.blsAggregator,
+      BLSAggregatorABI as Abi,
+      "proposeFraudProofVerifier",
+      [verifier],
+    );
+    // NEGATIVE CONTROL: the delay must actually bind. Applying immediately has to revert with
+    // VerifierRotationNotReady — anything else means the timelock is decorative.
+    prematureApply = await expectCallRejected(
+      "premature fraud-proof verifier rotation",
+      () => publicClient.call({
+        account: DEPLOYER,
+        to: deployment.blsAggregator,
+        data: encodeFunctionData({ abi: BLSAggregatorABI, functionName: "applyFraudProofVerifier", args: [] }),
+      }),
+      sanitizeError,
+      { revert: REVERT.verifierRotationNotReady },
+    );
+    await rpc("evm_increaseTime", [Number(rotationDelay) + 1]);
+    await rpc("evm_mine");
+    armVerifier = await sendContract(
+      deployerWallet,
+      deployment.blsAggregator,
+      BLSAggregatorABI as Abi,
+      "applyFraudProofVerifier",
+      [],
+    );
+    const armedVerifier = await publicClient.readContract({
+      address: deployment.blsAggregator,
+      abi: BLSAggregatorABI,
+      functionName: "fraudProofVerifier",
+    }) as Address;
+    if (getAddress(armedVerifier) !== getAddress(verifier)) {
+      throw new Error(`fraud-proof verifier rotation did not land: ${armedVerifier} != ${verifier}`);
+    }
+  }
 
   const claimedSigners = validators.slice(0, 3).map(item => item.address)
     .sort((a, b) => BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
@@ -1600,7 +1858,10 @@ async function runGuardianExitSlashCompetition(
     verifierAccepted,
     createProposal: receiptRecord(created.receipt),
     executeSlashOnlyProposal: receiptRecord(executeProposal),
-    armVerifier: receiptRecord(armVerifier),
+    // Both null when the verifier was already armed at deploy time (nothing was rotated).
+    proposeVerifier: proposeVerifier ? receiptRecord(proposeVerifier) : null,
+    armVerifier: armVerifier ? receiptRecord(armVerifier) : null,
+    prematureVerifierRotationError: prematureApply,
     requestExit: receiptRecord(requestExit),
     exitRequest,
     queueSlash: receiptRecord(queueSlash),
@@ -1722,6 +1983,10 @@ async function main(): Promise<void> {
 
   assertRepo(superPaymasterDir, "foundry.toml");
   assertRepo(yaaaDir, "package.json");
+  // Cross-repo lockstep, checked BEFORE a single contract is deployed: the co-signing node builds
+  // the preimage itself, so a YAAA revision that predates the domain separation cannot produce a
+  // usable quorum no matter how correct the SDK and the contract are.
+  assertYaaaPreimageSchema(yaaaDir);
   assertRepo(airDir, "foundry.toml");
   assertRepo(sdkDir, "pnpm-workspace.yaml");
   if (!isSepolia) await assertPortAvailable(port);
@@ -1832,6 +2097,9 @@ async function main(): Promise<void> {
   if ((await publicClient.readContract({
     address: deployment.blsAggregator, abi: BLSAggregatorABI, functionName: "defaultThreshold",
   }) as bigint) !== 3n) throw new Error("RepCredit default threshold is not three");
+  // Binds every preimage this run signs to the aggregator that will verify it. Must precede any
+  // call to proposal()/slashProposal() — those throw rather than sign against an unbound domain.
+  await resolveBlsDomain(deployment);
 
   const airOutput = join(rawDir, "airaccount-deployment.json");
   runLogged("airaccount-build", "forge", ["build"], airDir);

@@ -133,12 +133,17 @@ export function computeAuthHeaders(
 }
 
 /**
- * Strictly increasing millisecond stamp (CC-50 round-3 LOW).
+ * Strictly increasing millisecond stamp (CC-50 round-3 LOW, widened round-4 LOW-2).
  *
  * Token uniqueness must not rest on `Date.now()` happening to advance: two attempts inside the
  * same millisecond over the same body produce the SAME preimage and therefore the same token,
  * which the node rejects as a replay — a retry that can never succeed. One millisecond of forward
  * drift is far inside the guard's forward-skew allowance.
+ *
+ * The clock is per (clock source), NOT per call: it used to be constructed inside `postSignedJson`,
+ * so `last` reset on every call and two SEPARATE posts of the same body to the same node landing in
+ * the same millisecond still collided. The runner has no such call shape today, but "the collision
+ * only happens across calls" is not a property worth depending on.
  */
 function makeMonotonicClock(now: () => number): () => number {
   let last = -1;
@@ -147,6 +152,20 @@ function makeMonotonicClock(now: () => number): () => number {
     last = value;
     return value;
   };
+}
+
+/** Process-wide clock for the default `Date.now()` source. Injected sources get their own. */
+const defaultStamp = makeMonotonicClock(() => Date.now());
+const injectedStamps = new WeakMap<() => number, () => number>();
+
+function stampFor(now: () => number): () => number {
+  if (now === Date.now) return defaultStamp;
+  let stamp = injectedStamps.get(now);
+  if (!stamp) {
+    stamp = makeMonotonicClock(now);
+    injectedStamps.set(now, stamp);
+  }
+  return stamp;
 }
 
 export type SignedPostResult<T> = { ok: boolean; status: number; body: T | any };
@@ -188,11 +207,11 @@ export async function postSignedJson<T>(
   const {
     retries = 2,
     retryDelayMs = 250,
-    now = () => Date.now(),
+    now = Date.now,
     fetchImpl = fetch,
     sleep = defaultSleep,
   } = options;
-  const stamp = makeMonotonicClock(now);
+  const stamp = stampFor(now);
   const requestTarget = requestTargetOf(url);
 
   // Serialise ONCE. This exact string is what gets signed and what gets sent.
