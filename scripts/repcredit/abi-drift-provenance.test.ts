@@ -70,6 +70,10 @@ type Bypass =
   | 'unresolved-source'
   /** metadata only names sources OUTSIDE the repo, so nothing in-repo is hashed */
   | 'zero-in-repo-sources'
+  /** the contract's own source entry carries NO comparable keccak256 (urls-only / null) */
+  | 'unhashable-source-entry'
+  /** the contract's own source lives outside the repo; an UNRELATED in-repo source is hashed instead */
+  | 'main-source-outside-repo'
   /** out/ belongs to no git checkout */
   | 'no-git-repo'
   /** artifact was built before the last (committed) source edit */
@@ -121,18 +125,48 @@ function buildFixture(bypass: Bypass): Fixture {
     const rel = `contracts/src/${name}.sol`;
     const outDir = join(upstreamRoot, 'out', `${name}.sol`);
     mkdirSync(outDir, { recursive: true });
-    const sources: Record<string, { keccak256: string }> = {
+    const sources: Record<string, unknown> = {
       [rel]: { keccak256: keccak256(toBytes(sourceFor(name))) },
     };
-    let metadata: unknown = { sources };
+    // solc's own answer to "which source declares this contract" — what the coverage gate reads.
+    let metadata: unknown = { sources, settings: { compilationTarget: { [rel]: name } } };
     if (bypass === 'no-metadata-sources' && name === 'Registry') metadata = undefined;
+    if (bypass === 'unhashable-source-entry' && name === 'Registry') {
+      // The file is in-repo and on disk, and it IS the contract's own source — but the artifact
+      // records no hash for it, so there is nothing to compare. The old code counted the entry
+      // (`sourceCount++`) and only then tested `typeof entry?.keccak256 === 'string'`, so this
+      // printed "✅ 1 source(s)" over a file whose bytes were never read.
+      metadata = {
+        sources: { [rel]: { urls: ['bzz-raw://deadbeef'], license: 'MIT' } },
+        settings: { compilationTarget: { [rel]: name } },
+      };
+    }
+    if (bypass === 'main-source-outside-repo' && name === 'Registry') {
+      // Registry's own source resolves OUTSIDE the repo (a vendored/remapped tree), while an
+      // unrelated in-repo source is recorded with a correct hash. Counting alone gives
+      // sourceCount = 1 and a green tick, though not one byte of Registry.sol was verified.
+      const sibling = 'contracts/src/BLSAggregator.sol';
+      metadata = {
+        sources: {
+          [sibling]: { keccak256: keccak256(toBytes(sourceFor('BLSAggregator'))) },
+          '../vendor/Registry.sol': { keccak256: keccak256(toBytes(sourceFor('Registry'))) },
+        },
+        settings: { compilationTarget: { '../vendor/Registry.sol': 'Registry' } },
+      };
+    }
     if (bypass === 'unresolved-source' && name === 'Registry') {
-      metadata = { sources: { 'contracts/src/Ghost.sol': { keccak256: keccak256(toBytes('ghost')) } } };
+      metadata = {
+        sources: { 'contracts/src/Ghost.sol': { keccak256: keccak256(toBytes('ghost')) } },
+        settings: { compilationTarget: { 'contracts/src/Ghost.sol': name } },
+      };
     }
     if (bypass === 'zero-in-repo-sources' && name === 'Registry') {
       // Resolves OUTSIDE the repo root, so the script skips it as "the dependency's problem" and
       // ends up having hashed nothing at all for this contract.
-      metadata = { sources: { '../vendor/Outside.sol': { keccak256: keccak256(toBytes('outside')) } } };
+      metadata = {
+        sources: { '../vendor/Outside.sol': { keccak256: keccak256(toBytes('outside')) } },
+        settings: { compilationTarget: { '../vendor/Outside.sol': name } },
+      };
     }
     writeFileSync(
       join(outDir, `${name}.json`),
@@ -213,7 +247,7 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       expect(strict.output).toContain('Attributed to committed upstream revision(s): SuperPaymaster@');
       expect(strict.output).not.toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
       // Sanity: it really did hash the sources rather than skipping them.
-      expect(strict.output).toMatch(/Registry\s+\w{16}\s+✅ 1 source\(s\)/);
+      expect(strict.output).toMatch(/Registry\s+\w{16}\s+✅ 1 source\(s\) verified/);
     });
   }, 120_000);
 
@@ -247,10 +281,59 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
   it('BYPASS 1c: an artifact that records ZERO in-repo sources fails strict (sourceCount = 0)', () => {
     withFixture('zero-in-repo-sources', (_lenient, strict) => {
       // Nothing is "unresolved" here — the old code would print a green ✅ 0 source(s) tick.
-      expect(strict.output).toMatch(/Registry\s+\w{16}\s+✅ 0 source\(s\)/);
+      expect(strict.output).toMatch(/Registry\s+\w{16}\s+⚠️  0 source\(s\) verified, 1 not covered/);
       expect(strict.status, strict.output).toBe(1);
       expect(strict.output).toContain('NO SOURCE HASHES');
       expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+    });
+  }, 120_000);
+
+  // ---------------------------------------------------------------------------------------
+  // CC-50 round-6 MEDIUM: `sourceCount` was a COUNT, not COVERAGE. Both cases below exited 0
+  // under --strict and printed the unqualified PASS while the must-verify contract's own
+  // source was never compared. They are independent: (a) breaks the entry, (b) breaks which
+  // file the entry points at.
+  // ---------------------------------------------------------------------------------------
+  it('COVERAGE a: a source entry with no comparable keccak256 is a gap, not a counted ✅', () => {
+    withFixture('unhashable-source-entry', (lenient, strict) => {
+      // The fixture really is the reported shape: in-repo, on disk, and the ONLY source recorded.
+      expect(strict.output).toContain('contracts/src/Registry.sol (no usable keccak256 in the artifact)');
+      // It must never be counted as verified — that tick was the false claim.
+      expect(strict.output).not.toMatch(/Registry\s+\w{16}\s+✅ 1 source\(s\) verified/);
+      expect(strict.status, strict.output).toBe(1);
+      expect(strict.output).toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
+      expect(strict.output).toContain('carry no usable keccak256');
+      // Zero bytes were compared, so the "no source hashes" claim must fire too.
+      expect(strict.output).toContain('NO SOURCE HASHES');
+      expect(strict.output).toContain('MAIN SOURCE NOT VERIFIED');
+      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.status, lenient.output).toBe(0);
+      expect(lenient.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.output).toContain('LENIENT MODE');
+    });
+  }, 120_000);
+
+  it('COVERAGE b: an unrelated in-repo source cannot stand in for the contract\'s own source', () => {
+    withFixture('main-source-outside-repo', (lenient, strict) => {
+      // The fixture reproduces the bypass exactly: one in-repo source IS verified, so a
+      // count-based rule sees `sourceCount = 1` and ticks green…
+      expect(strict.output).toMatch(/Registry\s+\w{16}\s+⚠️  1 source\(s\) verified, 1 not covered/);
+      // …and the only entry it reports as NOT covered is Registry's own source, i.e. the one
+      // source that was verified is the unrelated sibling.
+      expect(strict.output).toContain('../vendor/Registry.sol (resolves outside this repo)');
+      // …while Registry.sol itself was never hashed. Coverage, not counting:
+      expect(strict.status, strict.output).toBe(1);
+      expect(strict.output).toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
+      expect(strict.output).toContain(
+        'MAIN SOURCE NOT VERIFIED: ../vendor/Registry.sol — it resolves OUTSIDE the repo this artifact is attributed to',
+      );
+      // NO SOURCE HASHES must NOT be what saves us here — one source really was verified, which
+      // is precisely why the count-based rule let this through.
+      expect(strict.output).not.toContain('NO SOURCE HASHES');
+      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.status, lenient.output).toBe(0);
+      expect(lenient.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.output).toContain('LENIENT MODE');
     });
   }, 120_000);
 

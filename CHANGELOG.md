@@ -159,6 +159,51 @@ Smaller items from the same round:
   `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
   There is no acceptable state in which those four go unverified.
 
+### Sixth round (CC-50 `[from:docs]` on 55979499) — source hashes are COVERAGE, not a count
+
+**`sourceCount` counted entries; it did not prove the contract was verified.** Round five made
+`sourceCount === 0` a hard failure, but any count `≥ 1` stopped the questioning — the run never
+asked *which* file that count referred to. An independent reviewer reproduced two artifacts on
+which `--strict` exits 0 and prints the unqualified *"every artifact hash-matches the sources it
+records"* while **not one byte** of the `MUST_VERIFY` contract's own source was hashed:
+
+1. **the entry carries no comparable hash.** `verifyArtifactSources` did `sourceCount++` and only
+   *then* tested `typeof entry?.keccak256 === 'string'`, so `{ "urls": [...] }` or
+   `{ "keccak256": null }` counted as one verified source and the comparison was skipped — the tick
+   `✅ 1 source(s)` was printed over a file that was never read.
+2. **the count came from an unrelated file.** A source resolving outside the repo was skipped as
+   "the dependency's problem", so an artifact whose own `Registry.sol` sits in a vendored/remapped
+   tree, next to one correctly-hashed sibling source, produced `sourceCount = 1` and a green run
+   with `Registry.sol` itself unverified.
+
+- **Every entry now lands in exactly one bucket** — `verified` / `mismatched` / `unresolved` /
+  `unverifiable` (no usable `keccak256`: absent, `null`, or not 32 bytes of hex) / `external`
+  (outside the repo the artifact is attributed to) — and **only `verified` counts**. For a
+  must-verify contract each non-empty bucket is its own named gap, so an entry that *cannot* be
+  compared is reported as un-verified rather than as verified.
+- **A must-verify artifact must prove its OWN source was verified.** The main source is taken from
+  the artifact's own metadata (`settings.compilationTarget` for this contract name, then
+  `sourceName`, then an unambiguous `<Name>.sol`) and must be present in the verified set;
+  otherwise `MAIN SOURCE NOT VERIFIED` names it and why. Verifying *a* source and verifying *this
+  contract* are different claims, and only the second one licenses the PASS sentence.
+- The `checked` table no longer prints a bare `N source(s)`: it reports `N source(s) verified` plus
+  how many were **not covered**, and lists each uncovered entry with its reason.
+- **Two independent synthetic regressions** in `scripts/repcredit/abi-drift-provenance.test.ts`
+  (10 cases total), one per bypass, each asserting *both* halves — that the fixture really
+  reproduces the counted-but-unverified state (case b asserts `NO SOURCE HASHES` is **absent**,
+  because one source genuinely was verified, which is exactly why counting let it through) and
+  that `--strict` now fails without printing the unqualified PASS.
+
+**`pnpm -r lint` was a vacuous gate (INFO-1).** No `packages/*/package.json` defines a `lint`
+script, so it printed *"None of the selected packages has a lint script"* and exited 0 — and the
+repo-root `.eslintrc.js` cannot be loaded by the installed ESLint 9 at all (CommonJS
+`module.exports` under `"type": "module"`), so there was no working lint anywhere to fall back on.
+New `scripts/eslint.repcredit.config.mjs` + `pnpm run lint:repcredit` give the files this branch
+owns a lint that actually runs (12 files, built from the two `@typescript-eslint` packages already
+in `devDependencies`, verified non-vacuous against a planted `parseAbi` import and an unused
+variable). Root `lint` now chains into it. Migrating the rest of the monorepo to flat config is out
+of scope here and remains open.
+
 ### Fifth round (CC-50 `[from:docs]` on 249be89e) — strict provenance can no longer pass on MISSING provenance
 
 **The chain was enforced only where it was BROKEN, not where it was ABSENT.** An independent

@@ -203,53 +203,168 @@ function repoProvenanceFor(somePath: string): RepoProvenance | null {
   return provenance;
 }
 
+/** A `metadata.sources[path].keccak256` this run can actually compare against on-disk bytes. */
+const SOLC_SOURCE_HASH = /^0x[0-9a-f]{64}$/i;
+
+/** What `verifyArtifactSources` established, per source entry, for one artifact. */
+type SourceVerification = {
+  /** in-repo entries that were on disk and hash-compared (matched + mismatched) */
+  sourceCount: number;
+  /** in-repo entries whose on-disk bytes hash to exactly the keccak256 the artifact records */
+  verified: string[];
+  mismatched: string[];
+  /** named by the artifact, in-repo, but not on disk */
+  unresolved: string[];
+  /** the artifact records no usable keccak256 for these, so they can never be compared */
+  unverifiable: string[];
+  /** resolves outside the repo root — real bytes exist somewhere, but not in the repo we attribute to */
+  external: string[];
+  dirty: string[];
+  /** the source declaring THIS contract, per the artifact's own compilationTarget/sourceName */
+  mainSource: string | null;
+  /** null once `mainSource` is in `verified`; otherwise why the contract's own source was not verified */
+  mainSourceProblem: string | null;
+};
+
+/**
+ * The source file that declares THIS contract, taken from the artifact's own metadata.
+ *
+ * solc writes `settings.compilationTarget = { "<path>": "<ContractName>" }` — the authoritative
+ * answer, and the one an attacker-shaped artifact cannot omit without being caught by the
+ * "does not name its own source" gap below. `sourceName` and a `<Name>.sol` basename are fallbacks
+ * for non-foundry artifact shapes.
+ */
+function mainSourceOf(artifact: any, metadata: any, name: string, sources: Record<string, any>): string | null {
+  const target = metadata?.settings?.compilationTarget;
+  if (target && typeof target === 'object') {
+    const exact = Object.entries<any>(target).find(([, contract]) => contract === name);
+    if (exact) return exact[0];
+    const only = Object.keys(target);
+    if (only.length === 1) return only[0];
+  }
+  if (typeof artifact?.sourceName === 'string' && artifact.sourceName) return artifact.sourceName;
+  const byBasename = Object.keys(sources).filter((rel) => path.basename(rel) === `${name}.sol`);
+  return byBasename.length === 1 ? byBasename[0] : null;
+}
+
 /**
  * Verify a foundry artifact against the sources it records.
  *
  * `metadata.sources[path].keccak256` is solc's own hash of each input file, so recomputing it over
  * the working tree proves the artifact was compiled from EXACTLY these bytes. Nothing here trusts
  * an mtime.
+ *
+ * COUNTING IS NOT COVERAGE (CC-50 round-6 MEDIUM). The previous shape incremented one counter per
+ * in-repo entry and only compared the ones that happened to carry a `keccak256` string, so an entry
+ * of `{ "urls": [...] }` or `{ "keccak256": null }` — and any source resolving outside the repo —
+ * silently became "1 source(s) ✅" while ZERO bytes of that file were ever hashed. Every entry now
+ * lands in exactly one bucket, and only `verified` means "compared and matched".
  */
 function verifyArtifactSources(
   artifactPath: string,
   repoRoot: string,
   dirtyPaths: string[],
-): { sourceCount: number; mismatched: string[]; unresolved: string[]; dirty: string[] } {
+  name: string,
+): SourceVerification {
   // `git status --porcelain` lines are "XY <path>" (and "R  old -> new"); we only need the paths.
   const dirtySet = new Set(
     dirtyPaths.map((line) => line.replace(/^\S+\s+/, '').split(' -> ').pop()!.replace(/^"|"$/g, '')),
   );
-  const dirty: string[] = [];
-  const mismatched: string[] = [];
-  const unresolved: string[] = [];
-  let sourceCount = 0;
-  let metadata: any;
+  const empty = (over: Partial<SourceVerification>): SourceVerification => ({
+    sourceCount: 0,
+    verified: [],
+    mismatched: [],
+    unresolved: [],
+    unverifiable: [],
+    external: [],
+    dirty: [],
+    mainSource: null,
+    mainSourceProblem: null,
+    ...over,
+  });
+  let artifact: any;
   try {
-    metadata = JSON.parse(fs.readFileSync(artifactPath, 'utf8')).metadata;
+    artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
   } catch {
-    return { sourceCount: 0, unresolved: ['<artifact is not readable JSON>'], mismatched, dirty };
+    return empty({
+      unresolved: ['<artifact is not readable JSON>'],
+      mainSourceProblem: 'the artifact is not readable JSON, so it names no source for this contract',
+    });
   }
+  const metadata = artifact?.metadata;
   const sources = metadata?.sources;
   if (!sources || typeof sources !== 'object') {
-    return { sourceCount: 0, unresolved: ['<artifact carries no solc metadata.sources>'], mismatched, dirty };
+    return empty({
+      unresolved: ['<artifact carries no solc metadata.sources>'],
+      mainSourceProblem: 'the artifact carries no solc metadata.sources, so it records no source for this contract',
+    });
   }
+
+  const dirty: string[] = [];
+  const verified: string[] = [];
+  const mismatched: string[] = [];
+  const unresolved: string[] = [];
+  const unverifiable: string[] = [];
+  const external: string[] = [];
   for (const [relative, entry] of Object.entries<any>(sources)) {
+    // No usable hash => nothing to compare against, wherever the file lives. This must be decided
+    // BEFORE the in-repo test: an entry with no `keccak256` used to be counted and then skipped.
+    const declared = typeof entry?.keccak256 === 'string' ? entry.keccak256.trim() : '';
+    if (!SOLC_SOURCE_HASH.test(declared)) {
+      unverifiable.push(relative);
+      continue;
+    }
     const file = path.resolve(repoRoot, relative);
-    // Sources outside the repo (remappings into node_modules/lib) are the dependency's problem,
-    // not this repo's revision — count them as resolved-elsewhere rather than as a mismatch.
-    if (!file.startsWith(repoRoot + path.sep)) continue;
+    // Sources outside the repo (remappings into node_modules/lib) belong to a different tree, so
+    // this repo's revision cannot attest to them. Recorded, never counted as verification.
+    if (!file.startsWith(repoRoot + path.sep)) {
+      external.push(relative);
+      continue;
+    }
     if (!fs.existsSync(file)) {
       unresolved.push(relative);
       continue;
     }
-    sourceCount++;
     if (dirtySet.has(relative)) dirty.push(relative);
     const actual = keccak256(fs.readFileSync(file));
-    if (typeof entry?.keccak256 === 'string' && actual.toLowerCase() !== entry.keccak256.toLowerCase()) {
-      mismatched.push(relative);
-    }
+    if (actual.toLowerCase() !== declared.toLowerCase()) mismatched.push(relative);
+    else verified.push(relative);
   }
-  return { sourceCount, mismatched, unresolved, dirty };
+
+  // Coverage, not counting: the artifact must prove ITS OWN contract source was verified. A green
+  // built purely out of unrelated in-repo sources (a vendored/remapped `<Name>.sol` next to a
+  // correctly-hashed sibling) is exactly the "1 source(s) ✅ on a file never compared" bypass.
+  const mainSource = mainSourceOf(artifact, metadata, name, sources);
+  let mainSourceProblem: string | null = null;
+  const verifiedSet = new Set(verified);
+  if (!mainSource) {
+    mainSourceProblem =
+      `the artifact does not name its own contract source (no metadata.settings.compilationTarget ` +
+      `entry for ${name}, no sourceName, no unambiguous ${name}.sol)`;
+  } else if (!verifiedSet.has(mainSource)) {
+    const why = mismatched.includes(mainSource)
+      ? 'its on-disk bytes do NOT hash to the keccak256 the artifact records'
+      : unresolved.includes(mainSource)
+        ? 'it is not on disk in this checkout'
+        : unverifiable.includes(mainSource)
+          ? 'the artifact records no usable keccak256 for it'
+          : external.includes(mainSource)
+            ? 'it resolves OUTSIDE the repo this artifact is attributed to'
+            : 'the artifact does not record it under metadata.sources at all';
+    mainSourceProblem = `${mainSource} — ${why}`;
+  }
+
+  return {
+    sourceCount: verified.length + mismatched.length,
+    verified,
+    mismatched,
+    unresolved,
+    unverifiable,
+    external,
+    dirty,
+    mainSource,
+    mainSourceProblem,
+  };
 }
 
 /**
@@ -342,7 +457,7 @@ const checkedProvenance: {
   /** Upstream git revision + working-tree state the artifact is attributed to. */
   repo: RepoProvenance | null;
   /** solc-metadata source verification: does the artifact match the sources on disk? */
-  sources: { sourceCount: number; mismatched: string[]; unresolved: string[]; dirty: string[] };
+  sources: SourceVerification;
 }[] = [];
 const skippedEntries: Skipped[] = [];
 /** Drift measured against an artifact whose sources are uncommitted upstream — reported, not failed (lenient). */
@@ -399,8 +514,18 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     abiSha256: createHash('sha256').update(JSON.stringify(ups)).digest('hex'),
     repo,
     sources: repo
-      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths)
-      : { sourceCount: 0, mismatched: [], unresolved: ['<no git repo>'], dirty: [] },
+      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths, name)
+      : {
+          sourceCount: 0,
+          verified: [],
+          mismatched: [],
+          unresolved: ['<no git repo>'],
+          unverifiable: [],
+          external: [],
+          dirty: [],
+          mainSource: null,
+          mainSourceProblem: 'the artifact resolves to no git checkout, so no source could be attributed',
+        },
   };
   checkedProvenance.push(provenance);
   const problems: string[] = [];
@@ -456,14 +581,20 @@ console.log(`\n--- checked (${checkedNames.length}) — contract, abi sha256, ar
 if (!checkedProvenance.length) console.log('(none)');
 for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b.name))) {
   const src = entry.sources;
+  // Say what was COMPARED, never how many entries were seen: `N source(s)` used to include
+  // entries that carried no comparable hash at all (CC-50 round-6 MEDIUM).
+  const uncovered = src.unresolved.length + src.unverifiable.length + src.external.length;
   const binding = src.mismatched.length
     ? `❌ ${src.mismatched.length}/${src.sourceCount} source(s) DIFFER from the artifact`
-    : src.unresolved.length
-      ? `⚠️  ${src.unresolved.length} source(s) unresolved`
-      : `✅ ${src.sourceCount} source(s)`;
+    : uncovered
+      ? `⚠️  ${src.verified.length} source(s) verified, ${uncovered} not covered`
+      : `✅ ${src.verified.length} source(s) verified`;
   console.log(`  ${entry.name}  ${entry.abiSha256.slice(0, 16)}  ${binding}  ${entry.artifact}`);
   for (const file of src.mismatched) console.log(`       ✗ ${file}`);
-  for (const file of src.unresolved) console.log(`       ? ${file}`);
+  for (const file of src.unresolved) console.log(`       ? ${file} (named by the artifact, not on disk)`);
+  for (const file of src.unverifiable) console.log(`       ? ${file} (no usable keccak256 in the artifact)`);
+  for (const file of src.external) console.log(`       ? ${file} (resolves outside this repo)`);
+  if (src.mainSourceProblem) console.log(`       ⚠️  contract source NOT verified: ${src.mainSourceProblem}`);
 }
 console.log(`--- skipped (${skippedEntries.length}) ---`);
 for (const entry of skippedEntries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -594,10 +725,22 @@ let vendoredPinHolds = true;
 //
 //   repo  ->  declared pin  ->  clean revision matching that pin  ->  artifact
 //         ->  a non-empty, fully resolved set of source hashes that the artifact matches
+//         ->  the artifact's OWN contract source among them
 //         ->  the vendored ABI sha256 this repo committed
 //
 // Anything less and strict/release fails, and the final PASS line is not allowed to claim the
 // artifacts hash-match their sources.
+//
+// ROUND-6 (CC-50): the source-hash link was a COUNT, not COVERAGE. `sourceCount` was incremented
+// for every in-repo entry and the comparison was then made conditional, so two shapes reached
+// `--strict` exit 0 with the unqualified PASS while ZERO bytes of the must-verify contract were
+// hashed: (a) an entry carrying no comparable `keccak256` (`{ "urls": [...] }`, `null`) counted as
+// one verified source; (b) the contract's own source resolving OUTSIDE the repo — silently skipped
+// as "the dependency's problem" — while an unrelated in-repo source supplied the count. So every
+// entry now lands in exactly one bucket (verified / mismatched / unresolved / unverifiable /
+// external) and only `verified` counts, and a must-verify artifact must additionally prove that
+// the source solc names as ITS OWN (metadata.settings.compilationTarget, sourceName) is in that
+// verified set. Verifying *a* source and verifying *this contract* are different claims.
 // ---------------------------------------------------------------------------------------------
 function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   const gaps: string[] = [];
@@ -616,13 +759,35 @@ function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   }
   const src = entry.sources;
   if (src.unresolved.length) {
-    gaps.push(`SOURCE HASHES INCOMPLETE: ${src.unresolved.length} unresolved — ${src.unresolved.join(', ')}`);
+    gaps.push(`SOURCE HASHES INCOMPLETE: ${src.unresolved.length} named but not on disk — ${src.unresolved.join(', ')}`);
   }
-  if (src.sourceCount === 0) {
+  // Counting an entry the run could never compare is how a green was printed over zero verified
+  // bytes: `{ "urls": [...] }` and `{ "keccak256": null }` both incremented the old counter and
+  // then skipped the comparison (CC-50 round-6 MEDIUM (a)).
+  if (src.unverifiable.length) {
     gaps.push(
-      'NO SOURCE HASHES: the artifact records no in-repo source this run could hash, so ' +
+      `SOURCE HASHES INCOMPLETE: ${src.unverifiable.length} entry/entries carry no usable keccak256 ` +
+        `(missing, null, or not a 32-byte hex hash), so they can never be compared — ${src.unverifiable.join(', ')}`,
+    );
+  }
+  // A source outside the repo is not "the dependency's problem" for a MUST-VERIFY contract: this
+  // repo's pinned revision cannot attest to bytes it does not contain.
+  if (src.external.length) {
+    gaps.push(
+      `SOURCE HASHES INCOMPLETE: ${src.external.length} source(s) resolve OUTSIDE the repo this ` +
+        `artifact is attributed to, so its revision cannot attest to them — ${src.external.join(', ')}`,
+    );
+  }
+  if (!src.verified.length) {
+    gaps.push(
+      'NO SOURCE HASHES: the artifact records no in-repo source this run could hash and match, so ' +
         '"the artifact matches the sources it records" was never established',
     );
+  }
+  // COVERAGE, not count (CC-50 round-6 MEDIUM (b)): verifying some unrelated in-repo source says
+  // nothing about THIS contract. Its own declared source must be in the verified set.
+  if (src.mainSourceProblem) {
+    gaps.push(`MAIN SOURCE NOT VERIFIED: ${src.mainSourceProblem}`);
   }
   if (src.mismatched.length) gaps.push(`ARTIFACT ⇄ SOURCE MISMATCH: ${src.mismatched.join(', ')}`);
   if (!PIN.contracts?.[entry.name]?.abiSha256) {
