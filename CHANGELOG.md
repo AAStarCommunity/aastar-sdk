@@ -85,6 +85,80 @@ defaulted here: guessing it is the exact failure DVT closed.
 > (CC-49 HIGH-A) is not final, and the announced change will alter the on-chain slash preimage and
 > therefore the YAAA hash builder. No ABI, hash builder or domain constant is synced ahead of it.
 
+### Third round (CC-50 `[from:docs]` on 1e512187) — rejection taxonomy, revert selectors, upstream pin
+
+**A negative control was still allowed to pass on a failure that proved nothing.** An independent
+reviewer showed with a probe that YAAA's RepCredit *service* raises `ForbiddenException` (403)
+before it inspects a single caller field — for an unarmed node, an inactive validator slot, and
+(per request, transiently) for either of two RPC failures inside its audit-slot scan. Under the
+previous "any non-guard 4xx is a rejection" rule, five controls firing during a moment of RPC
+turbulence would all have been written into the evidence as "chain-id binding / message rebinding
+/ threshold / duplicate slot / bad signature verified", while the service validated nothing.
+
+- HTTP controls are now judged **positively and default-deny**. `classifyHttpRejection` sorts every
+  response into a stable taxonomy — `SERVICE_VALIDATION` (the only evidence-bearing class),
+  `GUARD_AUTH`, `SERVICE_PREREQUISITE`, `INFRASTRUCTURE`, `SERVER_FAULT`, `ACCEPTED`, `UNKNOWN` —
+  and each control declares the class **and the specific rule** it must produce. Anything else,
+  including anything unclassifiable, fails the run.
+  The structural half of the classification is the HTTP status, which upstream assigns by exception
+  type (validation → 400, prerequisite/admission → 403, guard → 401/403/413/503), so "403 is never
+  evidence" holds independently of message wording; prose only sharpens the failure message, and
+  message drift degrades to `UNKNOWN` (a failure) rather than to a false pass. `upstreamCode` is
+  wired for the structured error code YAAA has been asked to emit, and takes precedence when present.
+- The reviewer's four real 403 bodies are pinned as regressions, alongside a **mutation baseline**
+  that re-runs the old predicate and demonstrates it accepted all four.
+- **All four on-chain controls now assert the revert they exist to demonstrate**, by 4-byte
+  selector: `Registry.AggregateCreditUpliftExceeded`, `BLSAggregator.SignatureVerificationFailed`,
+  `BLSAggregator.GuardianExitBlockedBySlash`, and — for the post-slash liveness view — an explicit
+  `false` or one of the reverts that mean the signer set is no longer a valid quorum. Selectors are
+  **derived from the vendored ABI** (`errorSelector`), never hand-typed, so a renamed or removed
+  upstream error is a loud startup failure. This matters precisely because CC-50 **B2** is open: a
+  stale ABI also produces a revert, and "any revert counts" would have recorded that as the rule
+  firing. An undecodable revert, an unknown selector and an out-of-gas failure all fail.
+
+**The upstream contract pin read another repository's working tree.** It `readFileSync`-ed the
+sibling checkout's live copy of the YAAA guard, so the gate flipped red the moment DVT began its
+next round, and when green could not say which revision it was green against.
+
+- The pin now reads the guard **out of git at a committed revision** (`git show <rev>:<path>`),
+  prints that revision, and refuses a dirty upstream checkout. `REPCREDIT_YAAA_REV` declares the
+  expected commit and fails on a mismatch. The real-HTTP suite additionally refuses a `dist/` that
+  predates the pinned revision — a stale artifact runs an older guard than the one just verified.
+- CI gained a dedicated **`repcredit-yaaa-http`** job that checks out the pinned upstream ref,
+  builds it, and runs the suite with `REPCREDIT_YAAA_HTTP_TEST=1`: a missing checkout, a missing or
+  stale artifact, or a node that will not boot now **fail** instead of skipping. `docs/RELEASE-CHECKLIST.md`
+  requires the same command pre-release.
+
+**Synced to YAAA `df9c8a35`: the auth preimage is now v2.** Upstream binds the method and the
+request target into the HMAC and versions the scheme header; there is no v1 fallback. The client
+sends `X-RepCredit-Scheme: v2` and signs `v2\nMETHOD\nREQUEST-TARGET\nTIMESTAMP\nRAW-BODY`,
+byte-for-byte with `buildRepCreditAuthPreimage`. The preimage field order is pinned against the
+committed upstream source, and the real-node suite proves the client gets through the live v2 guard
+(including a token minted for a different endpoint being refused). Nothing here was anticipated
+ahead of upstream: the SDK does not invent schema versions.
+
+Also picked up upstream's **devnet escape** for key isolation: local Prague runs pass
+`REPCREDIT_NO_PRODUCTION_AGGREGATOR=true` (upstream refuses it on any chain carrying real
+deployments), while Sepolia now **hard-fails at startup** unless
+`REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS` is set — guessing that address is the failure mode DVT
+just closed. `REPCREDIT_FORBIDDEN_AGGREGATORS` is forwarded when set.
+
+Smaller items from the same round:
+
+- `sanitizeError` now scrubs the per-node experiment secrets explicitly. They are bare 64-character
+  hex with no `0x` prefix, so the existing `0x`-anchored rule never matched them.
+- `failure.json` is written **before** the redaction sweep instead of after — it was the one file
+  on the failure path the redactor never saw.
+- Retry tokens no longer depend on `Date.now()` advancing: two attempts inside the same millisecond
+  over the same body produced an identical preimage, hence an identical token, which the node
+  rejects as a replay — a retry that could never succeed.
+- `check:abi-drift` now prints, for every verified contract, the upstream artifact path and the
+  **sha256 of its normalised ABI**. "checked 30" only means something if the run can name its inputs.
+- The `MUST_VERIFY` failure is **no longer gated on strict mode**. `check:abi-drift` — the command
+  people actually type — could exit 0 with `Registry`, `BLSAggregator`, `DVTValidator` and
+  `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
+  There is no acceptable state in which those four go unverified.
+
 ### Fixed — the negative controls could not fail (CC-50 H1)
 
 Four "this attack must be rejected" controls wrote their sentinel `throw` **inside** the `try` that

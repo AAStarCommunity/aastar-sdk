@@ -14,6 +14,7 @@
  *
  * Run: pnpm run check:abi-drift   (sibling repos must be present + freshly `forge build`-ed)
  */
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -191,6 +192,13 @@ type Skipped = { name: string; reason: string; expected: boolean };
 
 let drift = 0;
 const checkedNames: string[] = [];
+/**
+ * What each verified contract was actually compared against (CC-50 round-3 LOW): the upstream
+ * artifact path plus the sha256 of its normalised ABI. "checked 30" only means something if the
+ * run can say WHICH artifacts those were — a PASS that cannot name its inputs is the same class of
+ * claim as the vacuous PASS strict mode exists to prevent.
+ */
+const checkedProvenance: { name: string; artifact: string; abiSha256: string }[] = [];
 const skippedEntries: Skipped[] = [];
 /** Never drift-checked BY DESIGN (standard/external, or not a contract) — listed so the inventory adds up. */
 const excludedEntries: { name: string; reason: string }[] = [];
@@ -235,6 +243,13 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
   checkedNames.push(name);
   const sdk = loadAbi(path.join(ABIS_DIR, file));
   const ups = loadAbi(up);
+  checkedProvenance.push({
+    name,
+    artifact: up,
+    // Hash the ABI itself, not the artifact file: bytecode/metadata churn on every rebuild and
+    // would make the digest useless for answering "did the interface change?".
+    abiSha256: createHash('sha256').update(JSON.stringify(ups)).digest('hex'),
+  });
   const problems: string[] = [];
   for (const kind of ['function', 'event', 'error']) {
     const a = sigSet(sdk, kind);
@@ -254,8 +269,11 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
 // ---- Inventory. Printed on every run, pass or fail: a bare "PASS" cannot tell you WHAT was
 // verified, and that ambiguity is precisely what made a 12-contract run look like a 30-contract one.
 const checkedSet = new Set(checkedNames);
-console.log(`\n--- checked (${checkedNames.length}) ---`);
-console.log(checkedNames.length ? checkedNames.sort().join(', ') : '(none)');
+console.log(`\n--- checked (${checkedNames.length}) — contract, upstream artifact, abi sha256 ---`);
+if (!checkedProvenance.length) console.log('(none)');
+for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b.name))) {
+  console.log(`  ${entry.name}  ${entry.abiSha256.slice(0, 16)}  ${entry.artifact}`);
+}
 console.log(`--- skipped (${skippedEntries.length}) ---`);
 for (const entry of skippedEntries.sort((a, b) => a.name.localeCompare(b.name))) {
   console.log(`  ${entry.expected ? '⚠️ ' : '  '}${entry.name}: ${entry.reason}`);
@@ -291,8 +309,12 @@ if (STRICT && expectedMissing.length) {
   console.error('  Run `forge build` in the upstream checkout. In strict mode an unverified ABI is a failure, not a skip.');
   failed = true;
 }
-if (STRICT && mustVerifyMissing.length) {
-  console.error(`\nMUST-VERIFY NOT VERIFIED: ${mustVerifyMissing.length} contract(s) that strict mode requires were never compared:`);
+// Deliberately NOT gated on strict mode. There is no acceptable state in which these four went
+// unverified, and `check:abi-drift` (without the suffix) is the command people actually type and
+// the one the CI rationale note names — leaving it green with all four unverified reproduced the
+// exact false signal strict mode was added to remove.
+if (mustVerifyMissing.length) {
+  console.error(`\nMUST-VERIFY NOT VERIFIED: ${mustVerifyMissing.length} contract(s) that must always be compared were not:`);
   for (const [name, why] of mustVerifyMissing) console.error(`  - ${name} (${why})`);
   failed = true;
 }

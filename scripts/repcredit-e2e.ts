@@ -33,6 +33,7 @@ import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.j
 import {
   assertHttpRejections,
   assertRevertedNotOutOfGas,
+  errorSelector,
   expectCallRejected,
   expectViewRejected,
 } from "./repcredit/negative-control.js";
@@ -85,6 +86,82 @@ const DEFAULT_PORT = 18_547;
 const DEFAULT_NODE_PORT = 29_301;
 const ROLE_DVT = keccak256(stringToHex("DVT"));
 const DVT_STAKE = parseEther("30");
+
+/**
+ * Revert selectors each on-chain negative control is allowed to be satisfied by (CC-50 round-3
+ * MEDIUM-1). Derived from the ABI the runner actually encodes with — never hand-typed — so a
+ * renamed/removed upstream error is a loud startup failure instead of a control that quietly
+ * accepts some other revert. While CC-50 B2 is open the vendored Registry/BLSAggregator copies are
+ * known-stale; that is precisely why "any revert counts" is not acceptable here: an encoding
+ * mismatch against a newer deployment also reverts.
+ */
+const REVERT = {
+  /** Registry enforces the per-proposal aggregate uplift cap and bubbles through the typed call. */
+  aggregateUpliftCap: {
+    describe: "Registry.AggregateCreditUpliftExceeded",
+    selectors: [errorSelector(RegistryABI as Abi, "AggregateCreditUpliftExceeded")],
+  },
+  /**
+   * A tampered score changes the recomputed message hash, so the BLS pairing in
+   * `BLSAggregator._checkSignatures` fails. Only that revert demonstrates the binding: any other
+   * (bad proposal id, inactive slot, stale-ABI encoding) would mean the quorum was never tested.
+   */
+  tamperedScore: {
+    describe: "BLSAggregator.SignatureVerificationFailed",
+    selectors: [errorSelector(BLSAggregatorABI as Abi, "SignatureVerificationFailed")],
+  },
+  /** Registry.exitRole(ROLE_DVT) -> BLSAggregator.consumeGuardianExit, which bubbles unwrapped. */
+  guardianExitBlocked: {
+    describe: "BLSAggregator.GuardianExitBlockedBySlash",
+    selectors: [errorSelector(BLSAggregatorABI as Abi, "GuardianExitBlockedBySlash")],
+  },
+  /**
+   * Post-slash liveness: `verify` is expected to return false. If it reverts instead, only a
+   * revert that means "this signer set is no longer a valid quorum" counts.
+   */
+  postSlashLiveness: {
+    describe: "BLSAggregator.{SignatureVerificationFailed,KeyNotActive,UnknownValidatorSlot,EmptySignerMask}",
+    selectors: [
+      errorSelector(BLSAggregatorABI as Abi, "SignatureVerificationFailed"),
+      errorSelector(BLSAggregatorABI as Abi, "KeyNotActive"),
+      errorSelector(BLSAggregatorABI as Abi, "UnknownValidatorSlot"),
+      errorSelector(BLSAggregatorABI as Abi, "EmptySignerMask"),
+    ],
+  },
+} as const;
+
+/**
+ * What each HTTP negative control must produce. Anything else — the admission guard, an unarmed
+ * node, an inactive slot, a transient RPC failure inside the node, a 5xx — fails the run instead
+ * of being recorded as "the property was verified" (CC-50 round-3 HIGH).
+ *
+ * `reason` pins the specific validation in YAAA's `repcredit-consensus.ts`. `upstreamCode` is left
+ * unset on purpose: YAAA does not emit structured codes yet (asked for in CC-50). The moment it
+ * does, filling these in makes the match exact and prose-independent.
+ */
+const HTTP_CONTROLS = {
+  wrongChainResult: {
+    demonstrates: "the node rebinds chainId to its own RPC and refuses a foreign one",
+    reason: /chainId mismatch: request=/i,
+  },
+  tamperedMessageResult: {
+    demonstrates: "the node recomputes messageHash and refuses a caller-supplied one",
+    reason: /messageHash does not match the locally recomputed/i,
+  },
+  belowThresholdResult: {
+    demonstrates: "the node refuses to aggregate below the requested threshold",
+    reason: /response\(s\), need|valid unique slot\(s\), need/i,
+  },
+  duplicateSlotResult: {
+    demonstrates: "the node refuses a quorum padded with a repeated slot",
+    reason: /duplicate validator slot/i,
+  },
+  badSignatureResult: {
+    demonstrates: "the node verifies each signature before aggregating",
+    reason: /returned an invalid signature|returned malformed BLS material/i,
+  },
+} as const;
+
 const VALIDATOR_GT = parseEther("40");
 let userOpMaxFeePerGas = 1_000_000_000n;
 let userOpPriorityFeePerGas = 1_000_000_000n;
@@ -210,13 +287,40 @@ const children: ChildProcess[] = [];
  */
 const experimentSecrets = new ExperimentSecrets();
 /**
+ * Key-isolation configuration for the YAAA nodes (CC-49 HIGH-A / MEDIUM-C, upstream df9c8a35).
+ *
  * Address of the PRODUCTION (audit) BLSAggregator on the target chain, forwarded to every node so
- * it can refuse to co-sign with a key that is live there (CC-49 HIGH-A / MEDIUM-C). Never defaulted
- * here: guessing it is exactly the failure mode DVT closed.
+ * it can refuse to co-sign with a key that is live there.
+ *
+ * An armed node refuses to sign unless it can prove the local BLS key is active on NO aggregator
+ * that guards real stake. Upstream offers exactly two ways to satisfy that, and the runner must
+ * pick the right one per network rather than inventing a third:
+ *
+ *   - a chain that HOSTS production aggregators (Sepolia): name them, and the node scans every
+ *     slot on each before every signature;
+ *   - a throwaway chain that hosts none at all (local Prague anvil): the documented devnet escape
+ *     `REPCREDIT_NO_PRODUCTION_AGGREGATOR=true`, which upstream itself REFUSES on any chain id
+ *     carrying real deployments (1/10/137/8453/42161/11155111), so it cannot be misused to skip
+ *     the scan on Sepolia.
+ *
+ * Sepolia therefore has no default here: guessing the aggregator address is the failure mode DVT
+ * just closed, so an unset value is a startup error, not an assumption.
  */
 const auditBlsAggregatorAddress = process.env.REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS ?? "";
 if (auditBlsAggregatorAddress && !isAddress(auditBlsAggregatorAddress)) {
   throw new Error("REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS must be a checksummed address");
+}
+/** Extra aggregators the experiment key must not sit on; UNIONed upstream with the audit address. */
+const forbiddenAggregators = process.env.REPCREDIT_FORBIDDEN_AGGREGATORS ?? "";
+if (isSepolia && !auditBlsAggregatorAddress) {
+  // Upstream accepts a deny-list only IN ADDITION to an explicit audit address, so a deny-list
+  // alone would still be refused at arm time — fail here with the actionable message instead.
+  throw new Error(
+    "Sepolia hosts production BLSAggregator deployments, so the experiment nodes must be told which " +
+      "aggregator to isolate the experiment key against: set REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS " +
+      "(optionally plus REPCREDIT_FORBIDDEN_AGGREGATORS). Refusing to run with an unverifiable " +
+      "isolation claim.",
+  );
 }
 const tempRoot = mkdtempSync(join(tmpdir(), "repcredit-e2e-"));
 /**
@@ -517,12 +621,14 @@ async function startNodes(deployment: Deployment, keyRoot: string): Promise<stri
         REPCREDIT_VALIDATOR_SLOT: String(slot),
         // Mandatory since YAAA 840bfdc: armed without a secret, every /repcredit request is 503.
         REPCREDIT_EXPERIMENT_AUTH_SECRET: experimentSecret,
-        // YAAA's in-flight CC-49 round 2 (MEDIUM-C) refuses to arm unless the AUDIT aggregator is
-        // named EXPLICITLY, because the built-in default is a Sepolia address that means nothing on
-        // another chain. Passed through when set; on a chain with no production aggregator at all
-        // (local Prague) DVT still has to say what the experiment should name here — see the
-        // blocker note in the CC-49/CC-50 threads. Against committed 840bfdc this is optional.
+        // Key isolation (see `auditBlsAggregatorAddress` above). Explicit on both paths: upstream
+        // refuses to arm on an inherited default, and the runner refuses to guess one.
         ...(auditBlsAggregatorAddress ? { AUDIT_BLS_AGGREGATOR_ADDRESS: auditBlsAggregatorAddress } : {}),
+        ...(forbiddenAggregators ? { REPCREDIT_FORBIDDEN_AGGREGATORS: forbiddenAggregators } : {}),
+        // Local Prague only: a throwaway chain hosts no production aggregator to isolate against.
+        // Upstream refuses this acknowledgement on any chain id carrying real deployments, and the
+        // Sepolia path above never reaches it.
+        ...(!isSepolia && !auditBlsAggregatorAddress ? { REPCREDIT_NO_PRODUCTION_AGGREGATOR: "true" } : {}),
       }),
       stdio: ["ignore", fd, fd],
     });
@@ -745,6 +851,7 @@ async function runAggregateUpliftCapAttack(
     "aggregate uplift cap (simulation)",
     () => publicClient.call({ account: validator.address, to: deployment.dvtValidator, data: executeData }),
     sanitizeError,
+    { revert: REVERT.aggregateUpliftCap },
   );
   const rejected = await sendExpectedRevert(wallet, deployment.dvtValidator, executeData, "aggregate uplift cap (tx)");
   const cap = await publicClient.readContract({
@@ -867,9 +974,10 @@ async function runE2E(
     responses: corrupted,
     threshold: 3,
   });
-  assertHttpRejections({
-    wrongChainResult, tamperedMessageResult, belowThresholdResult, duplicateSlotResult, badSignatureResult,
-  });
+  assertHttpRejections(
+    { wrongChainResult, tamperedMessageResult, belowThresholdResult, duplicateSlotResult, badSignatureResult },
+    HTTP_CONTROLS,
+  );
 
   const tamperedCall = encodeFunctionData({
     abi: DVTValidatorABI,
@@ -880,6 +988,7 @@ async function runE2E(
     "tampered score (on-chain simulation)",
     () => publicClient.call({ account: validators[0].address, to: deployment.dvtValidator, data: tamperedCall }),
     sanitizeError,
+    { revert: REVERT.tamperedScore },
   );
 
   const reputationReceipt = await sendContract(
@@ -1048,11 +1157,25 @@ function hexReason(value: Hex): string {
   } catch { return value; }
 }
 
+/**
+ * Scrub every run secret out of an error string.
+ *
+ * The 32-byte-hex rule requires an `0x` prefix, which covers the deployer private key but NOT the
+ * per-node experiment secrets: those are `randomBytes(32).toString("hex")`, i.e. bare 64-character
+ * hex with no prefix (CC-50 round-3 LOW). They are therefore substituted explicitly, before the
+ * generic rules, so a secret that ever reaches an error message cannot survive into `failure.json`,
+ * a log line or a thrown stack.
+ */
 function sanitizeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message
-    .split(rpcUrl).join("[REDACTED_RPC_URL]")
+  let scrubbed = message;
+  for (const secret of experimentSecrets.values()) {
+    if (secret) scrubbed = scrubbed.split(secret).join("[REDACTED_EXPERIMENT_SECRET]");
+  }
+  if (rpcUrl) scrubbed = scrubbed.split(rpcUrl).join("[REDACTED_RPC_URL]");
+  return scrubbed
     .replace(/0x[a-fA-F0-9]{64}/g, "0x<redacted-32-byte-value>")
+    .replace(/\b[a-fA-F0-9]{64}\b/g, "<redacted-32-byte-value>")
     .slice(0, 2_000);
 }
 
@@ -1397,6 +1520,7 @@ async function runGuardianExitSlashCompetition(
     "guardian exit while slash pending (simulation)",
     () => publicClient.call({ account: exitingGuardian.address, to: deployment.registry, data: exitData }),
     sanitizeError,
+    { revert: REVERT.guardianExitBlocked },
   );
   const blockedExit = await sendExpectedRevert(exitingWallet, deployment.registry, exitData, "guardian exit while slash pending (tx)");
   const locksBefore = await Promise.all(guiltyGuardians.map(guardian =>
@@ -1459,6 +1583,7 @@ async function runGuardianExitSlashCompetition(
       args: [value.messageHash, signerMask, 3n, signed.aggregate.sigG2],
     }),
     sanitizeError,
+    { revert: REVERT.postSlashLiveness },
   );
   const postSlashLivenessError = postSlashLiveness.reason;
 
@@ -1821,12 +1946,15 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
 try {
   await main();
 } catch (error) {
-  redactEvidence();
   const sanitized = sanitizeError(error);
+  // failure.json is written BEFORE the redaction sweep, not after: writing it afterwards left the
+  // one file produced on the failure path as the only file the redactor never saw (CC-50 round-3
+  // LOW). `sanitizeError` already scrubs it, so this is defence in depth, in the right order.
   writeJsonExclusive(join(outputDir, "failure.json"), {
     failedAt: new Date().toISOString(),
     error: sanitized,
   });
+  redactEvidence();
   throw new Error(sanitized);
 } finally {
   await cleanup();

@@ -7,12 +7,13 @@
  * `/repcredit/*` endpoint. The gate is mandatory and fail-closed, so the previous
  * "POST plain JSON" orchestration no longer works at all:
  *
+ *   0. scheme       X-RepCredit-Scheme must be "v2" (YAAA df9c8a35; no v1 fallback)     (401)
  *   1. armed        REPCREDIT_EXPERIMENT_SIGNING=true, else 403
  *   2. secret       armed without REPCREDIT_EXPERIMENT_AUTH_SECRET rejects every request (503)
  *   3. body size    bounded before any HMAC work (413)
  *   4. source       loopback only unless REPCREDIT_ALLOW_REMOTE=true (403)
  *   5. HMAC         X-RepCredit-Timestamp + X-RepCredit-Auth =
- *                     hex HMAC-SHA256(secret, `${timestamp}.${rawBody}`)   (401/403)
+ *                     hex HMAC-SHA256(secret, "v2\nMETHOD\nTARGET\nTS\nBODY")   (401/403)
  *   6. replay       each auth token is accepted AT MOST ONCE (403)
  *
  * THE TWO PROPERTIES THIS FILE EXISTS TO GUARANTEE
@@ -35,8 +36,58 @@ import { createHmac, randomBytes } from 'node:crypto';
 
 /** Header carrying the caller's millisecond unix timestamp. Must match the YAAA guard. */
 export const HEADER_TIMESTAMP = 'X-RepCredit-Timestamp';
-/** Header carrying hex HMAC-SHA256(secret, `${timestamp}.${rawBody}`). Must match the YAAA guard. */
+/** Header carrying hex HMAC-SHA256(secret, {@link buildAuthPreimage}). Must match the YAAA guard. */
 export const HEADER_AUTH = 'X-RepCredit-Auth';
+/** Header carrying the preimage scheme version. Mandatory since YAAA df9c8a35 — there is no v1 fallback. */
+export const HEADER_SCHEME = 'X-RepCredit-Scheme';
+/**
+ * Wire version of the HMAC preimage, pinned to YAAA `REPCREDIT_AUTH_SCHEME`.
+ *
+ * v1 signed `${timestamp}.${rawBody}` only, so a captured token was in principle movable between
+ * the four `/repcredit/*` endpoints. v2 binds the METHOD and the REQUEST TARGET as well, so a
+ * token authorises exactly one call on exactly one endpoint. This is a byte-for-byte sync with
+ * the upstream commit — the SDK does not invent or extend the schema (CC-50/CC-49).
+ */
+export const REPCREDIT_AUTH_SCHEME = 'v2';
+
+/**
+ * The exact bytes both sides HMAC:
+ *
+ *   v2 \n METHOD \n REQUEST-TARGET \n TIMESTAMP-MS \n RAW-BODY
+ *
+ * Newline-joined with the raw body LAST, so no field can be shifted into another by choosing a
+ * value that contains the separator. REQUEST-TARGET is the path (+query, if any) exactly as it
+ * goes on the request line, which is what express reports as `req.originalUrl`.
+ *
+ * Mirrors `buildRepCreditAuthPreimage` in YetAnotherAA-Validator
+ * `src/modules/repcredit/repcredit-experiment.guard.ts`; `experiment-auth.test.ts` pins that
+ * source at a committed revision so an upstream change cannot pass silently.
+ */
+export function buildAuthPreimage(input: {
+  method: string;
+  requestTarget: string;
+  timestampMs: number | string;
+  rawBody: string;
+}): string {
+  return [
+    REPCREDIT_AUTH_SCHEME,
+    String(input.method).toUpperCase(),
+    input.requestTarget,
+    String(input.timestampMs),
+    input.rawBody,
+  ].join('\n');
+}
+
+/**
+ * Request target exactly as it goes on the wire: path plus query string, no origin.
+ *
+ * Signing the full URL (or a normalised path) instead would produce a preimage the node cannot
+ * reproduce, and the failure would surface as an opaque 403 rather than as a mismatch.
+ */
+export function requestTargetOf(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.pathname}${parsed.search}`;
+}
 
 /**
  * Distinct error type so the runner can tell "the node refused us" from "we could not reach the
@@ -68,14 +119,33 @@ export function generateExperimentSecret(): string {
  */
 export function computeAuthHeaders(
   secret: string,
-  timestampMs: number,
-  rawBody: string,
+  input: { method: string; requestTarget: string; timestampMs: number; rawBody: string },
 ): Record<string, string> {
   if (!secret) throw new ExperimentAuthError('refusing to sign a RepCredit request with an empty secret');
-  const ts = String(timestampMs);
+  const ts = String(input.timestampMs);
   return {
+    [HEADER_SCHEME]: REPCREDIT_AUTH_SCHEME,
     [HEADER_TIMESTAMP]: ts,
-    [HEADER_AUTH]: createHmac('sha256', secret).update(`${ts}.${rawBody}`).digest('hex'),
+    [HEADER_AUTH]: createHmac('sha256', secret)
+      .update(buildAuthPreimage({ ...input, timestampMs: ts }))
+      .digest('hex'),
+  };
+}
+
+/**
+ * Strictly increasing millisecond stamp (CC-50 round-3 LOW).
+ *
+ * Token uniqueness must not rest on `Date.now()` happening to advance: two attempts inside the
+ * same millisecond over the same body produce the SAME preimage and therefore the same token,
+ * which the node rejects as a replay — a retry that can never succeed. One millisecond of forward
+ * drift is far inside the guard's forward-skew allowance.
+ */
+function makeMonotonicClock(now: () => number): () => number {
+  let last = -1;
+  return () => {
+    const value = Math.max(now(), last + 1);
+    last = value;
+    return value;
   };
 }
 
@@ -122,6 +192,8 @@ export async function postSignedJson<T>(
     fetchImpl = fetch,
     sleep = defaultSleep,
   } = options;
+  const stamp = makeMonotonicClock(now);
+  const requestTarget = requestTargetOf(url);
 
   // Serialise ONCE. This exact string is what gets signed and what gets sent.
   const raw = JSON.stringify(body);
@@ -136,7 +208,7 @@ export async function postSignedJson<T>(
     // token exactly once, so reusing the previous attempt's headers would be rejected as a replay.
     const headers = {
       'content-type': 'application/json',
-      ...computeAuthHeaders(secret, now(), raw),
+      ...computeAuthHeaders(secret, { method: 'POST', requestTarget, timestampMs: stamp(), rawBody: raw }),
     };
     let response: Response;
     try {

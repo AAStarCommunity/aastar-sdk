@@ -7,10 +7,15 @@
  * pattern silently passed, and the replacement does not.
  */
 import { describe, expect, it } from 'vitest';
+import { keccak256, toHex } from 'viem';
+import type { Abi } from 'viem';
 import {
   NegativeControlFailure,
+  REJECTION_CODES,
   assertHttpRejections,
   assertRevertedNotOutOfGas,
+  classifyHttpRejection,
+  errorSelector,
   expectCallRejected,
   expectViewRejected,
 } from './negative-control.js';
@@ -105,19 +110,30 @@ describe('expectViewRejected — the bool-returning view case', () => {
   });
 });
 
-describe('assertHttpRejections', () => {
-  it('accepts 4xx refusals', () => {
-    expect(() => assertHttpRejections({ tamperedMessage: { ok: false, status: 400 } })).not.toThrow();
+describe('assertHttpRejections — rejection taxonomy', () => {
+  const WRONG_CHAIN = {
+    demonstrates: 'chain-id rebinding',
+    reason: /chainId mismatch: request=/i,
+  };
+  const controls = { wrongChain: WRONG_CHAIN };
+
+  it('accepts the service validation the control actually targets', () => {
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: { ok: false, status: 400, body: { message: 'chainId mismatch: request=11155111, local=31337' } } },
+        controls,
+      ),
+    ).not.toThrow();
   });
 
   it('fails when the node ACCEPTED an invalid request', () => {
-    expect(() => assertHttpRejections({ belowThreshold: { ok: true, status: 200 } }))
-      .toThrow(/ACCEPTED the invalid request/);
+    expect(() => assertHttpRejections({ wrongChain: { ok: true, status: 200 } }, controls))
+      .toThrow(/got ACCEPTED/);
   });
 
   it('fails when the node 5xx-ed — a broken node is not a validating node', () => {
-    expect(() => assertHttpRejections({ duplicateSlot: { ok: false, status: 500 } }))
-      .toThrow(/server fault is not proof/);
+    expect(() => assertHttpRejections({ wrongChain: { ok: false, status: 500 } }, controls))
+      .toThrow(/got SERVER_FAULT/);
   });
 
   // Since YAAA 840bfdc every /repcredit endpoint sits behind a mandatory HMAC gate. An
@@ -134,18 +150,221 @@ describe('assertHttpRejections', () => {
       { status: 403, body: { message: 'RepCredit experiment endpoints accept loopback callers only' } },
     ];
     for (const response of guardResponses) {
-      expect(() => assertHttpRejections({ wrongChain: { ok: false, ...response } }))
+      expect(() => assertHttpRejections({ wrongChain: { ok: false, ...response } }, controls))
         .toThrow(NegativeControlFailure);
     }
   });
 
-  it('still accepts a genuine service-level rejection', () => {
+  /**
+   * THE CC-50 round-3 HIGH, as an executable regression.
+   *
+   * These are the four real 403 bodies an independent reviewer fed to the previous implementation;
+   * all four were ACCEPTED AS EVIDENCE. The first two are per-request and transient (they fire
+   * whenever the node's audit-slot scan hits RPC turbulence), so on a live Sepolia run all five
+   * controls could come back like this and the evidence would claim every security property was
+   * verified while the service inspected nothing.
+   */
+  const REVIEWER_FALSE_GREENS: { why: string; message: string }[] = [
+    {
+      why: 'transient RPC during the audit-slot scan',
+      message:
+        'could not determine whether the local BLS key is active at audit aggregator slot 3 — ' +
+        'refusing to sign on an indeterminate isolation check',
+    },
+    {
+      why: 'transient RPC reading the audit aggregator',
+      message:
+        'cannot read the audit aggregator at 0x174b60bB462b00550F0EC7Bc35Fe39dDB6310158 — refusing ' +
+        'to sign without a verifiable production aggregator to isolate against',
+    },
+    {
+      why: 'node not armed for audit isolation',
+      message: 'AUDIT_BLS_AGGREGATOR_ADDRESS is required when armed',
+    },
+    {
+      why: 'validator slot not active',
+      message: 'configured validator slot 3 is not active',
+    },
+  ];
+
+  it.each(REVIEWER_FALSE_GREENS)('fails on a service prerequisite/infra 403 ($why)', ({ message }) => {
+    expect(() => assertHttpRejections({ wrongChain: { ok: false, status: 403, body: { message } } }, controls))
+      .toThrow(/INFRASTRUCTURE|SERVICE_PREREQUISITE/);
+  });
+
+  it('classifies each reviewer 403 as never-evidence rather than as validation', () => {
+    for (const { message } of REVIEWER_FALSE_GREENS) {
+      const verdict = classifyHttpRejection(403, { message });
+      expect(verdict.code).not.toBe(REJECTION_CODES.SERVICE_VALIDATION);
+    }
+    // ...and the control's own target still classifies as validation, so this is not a blanket ban.
+    expect(classifyHttpRejection(400, { message: 'chainId mismatch: request=1, local=31337' }).code)
+      .toBe(REJECTION_CODES.SERVICE_VALIDATION);
+  });
+
+  it('fails on an UNATTRIBUTABLE 403 — default-deny, not default-accept', () => {
     expect(() =>
-      assertHttpRejections({
-        wrongChain: { ok: false, status: 400, body: { message: 'chainId does not match the local RPC' } },
-        tamperedMessage: { ok: false, status: 400, body: { message: 'messageHash does not match the recomputed hash' } },
-      }),
+      assertHttpRejections({ wrongChain: { ok: false, status: 403, body: { message: 'nope' } } }, controls),
+    ).toThrow(NegativeControlFailure);
+  });
+
+  it('fails on any other unclassifiable 4xx', () => {
+    for (const status of [404, 405, 429]) {
+      expect(() => assertHttpRejections({ wrongChain: { ok: false, status, body: {} } }, controls))
+        .toThrow(/got UNKNOWN/);
+    }
+  });
+
+  // MEDIUM-1's HTTP half: the right class is not enough, it must be the right RULE.
+  it('fails when the service refused for a DIFFERENT validation than the one under test', () => {
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: { ok: false, status: 400, body: { message: 'duplicate validator slot 2' } } },
+        controls,
+      ),
+    ).toThrow(/not for the reason this control demonstrates/);
+  });
+
+  it('fails when a declared control never ran, and when a result has no declaration', () => {
+    expect(() => assertHttpRejections({}, controls)).toThrow(/never executed/);
+    expect(() =>
+      assertHttpRejections({ mystery: { ok: false, status: 400, body: {} } }, controls),
+    ).toThrow(/no expectation was declared/);
+  });
+
+  // Forward compatibility with the structured error code YAAA has been asked to emit: when the
+  // body carries one it is matched EXACTLY and prose is not consulted.
+  it('prefers a structured upstream error code over prose when the node emits one', () => {
+    const coded = { demonstrates: 'chain-id rebinding', reason: /never matches/, upstreamCode: 'REPCREDIT_CHAIN_ID_MISMATCH' };
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: { ok: false, status: 400, body: { errorCode: 'REPCREDIT_CHAIN_ID_MISMATCH', message: 'whatever' } } },
+        { wrongChain: coded },
+      ),
     ).not.toThrow();
+    expect(() =>
+      assertHttpRejections(
+        { wrongChain: { ok: false, status: 400, body: { errorCode: 'REPCREDIT_DUPLICATE_SLOT', message: 'whatever' } } },
+        { wrongChain: coded },
+      ),
+    ).toThrow(/not the expected REPCREDIT_CHAIN_ID_MISMATCH/);
+  });
+
+  it('MUTATION BASELINE: the old "any non-guard 4xx is evidence" rule passed all four false greens', () => {
+    // The exact predicate the previous implementation used, kept here so the regression is
+    // demonstrated rather than asserted.
+    const oldRuleAccepts = (status: number, message: string) =>
+      status < 500 && status !== 401 && status !== 413 &&
+      !/experiment signing is disabled|server secret is unset|request body exceeds|loopback callers only|missing X-RepCredit|auth timestamp outside|HMAC verification failed|auth token already used|replay cache is full/i.test(message);
+    for (const { message } of REVIEWER_FALSE_GREENS) {
+      expect(oldRuleAccepts(403, message)).toBe(true);   // the defect
+      expect(() => assertHttpRejections({ wrongChain: { ok: false, status: 403, body: { message } } }, controls))
+        .toThrow(NegativeControlFailure);                 // the fix
+    }
+  });
+});
+
+describe('errorSelector / revert expectations', () => {
+  const abi = [
+    { type: 'error', name: 'AggregateCreditUpliftExceeded', inputs: [{ type: 'uint256' }, { type: 'uint256' }] },
+    { type: 'error', name: 'SignatureVerificationFailed', inputs: [] },
+    {
+      type: 'error',
+      name: 'WithTuple',
+      inputs: [{ type: 'tuple', components: [{ type: 'address' }, { type: 'uint8' }] }],
+    },
+  ] as unknown as Abi;
+
+  const selectorOf = (signature: string) => keccak256(toHex(signature)).slice(0, 10);
+
+  /**
+   * Independent vectors, not recomputed with the same expression the implementation uses:
+   * `Unauthorized()` and OpenZeppelin v5's `OwnableUnauthorizedAccount(address)` have published
+   * selectors, so these prove the derivation itself rather than its self-consistency.
+   */
+  it('matches published selectors (golden vectors)', () => {
+    const golden = [
+      { type: 'error', name: 'Unauthorized', inputs: [] },
+      { type: 'error', name: 'OwnableUnauthorizedAccount', inputs: [{ type: 'address' }] },
+    ] as unknown as Abi;
+    expect(errorSelector(golden, 'Unauthorized')).toBe('0x82b42900');
+    expect(errorSelector(golden, 'OwnableUnauthorizedAccount')).toBe('0x118cdaa7');
+  });
+
+  it('derives the selector from the ABI, expanding tuples', () => {
+    expect(errorSelector(abi, 'AggregateCreditUpliftExceeded')).toBe(selectorOf('AggregateCreditUpliftExceeded(uint256,uint256)'));
+    expect(errorSelector(abi, 'SignatureVerificationFailed')).toBe(selectorOf('SignatureVerificationFailed()'));
+    expect(errorSelector(abi, 'WithTuple')).toBe(selectorOf('WithTuple((address,uint8))'));
+  });
+
+  // The stale-ABI tripwire: CC-50 B2 is open, so this is the state the runner must fail loudly in.
+  it('throws when the vendored ABI no longer declares the error', () => {
+    expect(() => errorSelector(abi, 'SomeErrorTheUpstreamRenamed')).toThrow(/does not declare error/);
+  });
+
+  const upliftSelector = selectorOf('AggregateCreditUpliftExceeded(uint256,uint256)');
+  const expectation = { describe: 'Registry.AggregateCreditUpliftExceeded', selectors: [upliftSelector as `0x${string}`] };
+  const revertWith = (data: string) => Object.assign(new Error('execution reverted'), { data });
+
+  it('accepts the declared selector', async () => {
+    await expect(
+      expectCallRejected('uplift cap', async () => { throw revertWith(`${upliftSelector}${'00'.repeat(64)}`); }, sanitize, {
+        revert: expectation,
+      }),
+    ).resolves.toContain('execution reverted');
+  });
+
+  it('FAILS when a different rule reverted — "any revert" is not evidence', async () => {
+    await expect(
+      expectCallRejected('uplift cap', async () => { throw revertWith(`${selectorOf('Unauthorized()')}`); }, sanitize, {
+        revert: expectation,
+      }),
+    ).rejects.toThrow(/only demonstrates its security property/);
+  });
+
+  it('FAILS when no revert data can be extracted at all', async () => {
+    await expect(
+      expectCallRejected('uplift cap', async () => { throw new Error('execution reverted'); }, sanitize, {
+        revert: expectation,
+      }),
+    ).rejects.toThrow(/no revert data could be extracted/);
+  });
+
+  it('FAILS on an undecodable revert (stale ABI shape)', async () => {
+    await expect(
+      expectCallRejected(
+        'uplift cap',
+        async () => { throw new Error('The contract function reverted with an unknown signature 0xdeadbeef'); },
+        sanitize,
+        { revert: expectation },
+      ),
+    ).rejects.toThrow(/could not decode|only demonstrates/);
+  });
+
+  it('requires the INNER selector when the revert is wrapped', async () => {
+    const wrapper = selectorOf('ProposalExecutionFailed(uint256,bytes)') as `0x${string}`;
+    const wrapped = {
+      describe: 'ProposalExecutionFailed(AggregateCreditUpliftExceeded)',
+      selectors: [wrapper],
+      innerSelectors: [upliftSelector as `0x${string}`],
+    };
+    await expect(
+      expectCallRejected('uplift cap', async () => { throw revertWith(`${wrapper}${upliftSelector.slice(2)}`); }, sanitize, { revert: wrapped }),
+    ).resolves.toBeTruthy();
+    await expect(
+      expectCallRejected('uplift cap', async () => { throw revertWith(`${wrapper}${'ab'.repeat(32)}`); }, sanitize, { revert: wrapped }),
+    ).rejects.toThrow(/inner selectors/);
+  });
+
+  it('applies the same rule to a view that reverts', async () => {
+    await expect(
+      expectViewRejected('post-slash liveness', async () => { throw revertWith(selectorOf('Unauthorized()')); }, sanitize, {
+        revert: expectation,
+      }),
+    ).rejects.toThrow(NegativeControlFailure);
+    // Returning false is still the primary accepted outcome and is not affected by the matcher.
+    await expect(expectViewRejected('post-slash liveness', async () => false, sanitize, { revert: expectation }))
+      .resolves.toMatchObject({ outcome: 'returned-false' });
   });
 });
 

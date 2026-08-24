@@ -96,3 +96,74 @@ jobs:
       # The release checklist sets these flags. If these are ever to become real CI gates, the
       # runner must first check out and build the upstream repos, then run the strict variant.
       # ---------------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------------
+  # The RepCredit experiment client talks to a REAL YAAA node over HTTP. Its guard-auth
+  # suite is the only thing that proves the SDK's HMAC client actually gets past the
+  # upstream admission gate — and that suite is worthless if it is allowed to skip.
+  #
+  # CC-50 round 3 [from:docs]: "CI/RELEASE 必须设置 REPCREDIT_YAAA_HTTP_TEST=1 …
+  # 缺 YAAA checkout/artifact/HTTP 套件时 fail 而非 skip." So this job checks the
+  # upstream out at a pinned ref, builds it, and runs the suite with the require flag:
+  # a missing checkout, a missing build artifact, an artifact that predates the pinned
+  # revision, or a node that will not boot all FAIL the job instead of skipping.
+  #
+  # The checkout is a separate job (not a step of `test`) so that the SDK's own gates
+  # keep reporting independently of upstream availability — an upstream outage must be
+  # visible as "the upstream gate failed", never as "everything is green".
+  # ---------------------------------------------------------------------------------
+  repcredit-yaaa-http:
+    name: RepCredit YAAA HTTP guard (real node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: aastar-sdk
+
+      # Pinned by ref on purpose: the suite verifies the SDK against a DECLARED upstream
+      # revision, and REPCREDIT_YAAA_REV below makes a silent ref move a hard failure
+      # rather than a quietly-different verification.
+      - name: Check out the pinned YetAnotherAA-Validator revision
+        uses: actions/checkout@v5
+        with:
+          repository: AAStarCommunity/YetAnotherAA-Validator
+          ref: df9c8a35267d82801ac9a8fc9ace42abffdc7d1e
+          path: YetAnotherAA-Validator
+          token: ${{ secrets.YAAA_CHECKOUT_TOKEN }}
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: '10.32.1'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: aastar-sdk/pnpm-lock.yaml
+
+      # anvil: the suite boots a throwaway chain for the node to point at.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install SDK dependencies
+        working-directory: aastar-sdk
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the pinned YAAA node
+        working-directory: YetAnotherAA-Validator
+        run: |
+          npm ci
+          npm run build
+
+      # The artifact must exist: without it the suite would skip, which is precisely the
+      # failure mode this job exists to remove.
+      - name: Assert the YAAA build artifact exists
+        run: test -f YetAnotherAA-Validator/dist/main.js
+
+      - name: RepCredit tests with the real YAAA HTTP suite REQUIRED
+        working-directory: aastar-sdk
+        env:
+          REPCREDIT_YAAA_HTTP_TEST: '1'
+          REPCREDIT_YAAA_DIR: ${{ github.workspace }}/YetAnotherAA-Validator
+          REPCREDIT_YAAA_REV: df9c8a35267d82801ac9a8fc9ace42abffdc7d1e
+        run: pnpm run repcredit:test

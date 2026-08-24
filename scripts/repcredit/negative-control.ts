@@ -21,6 +21,9 @@
  * the security property it guards is broken.
  */
 
+import { keccak256, toHex } from 'viem';
+import type { Abi } from 'viem';
+
 /** Thrown when a negative control does not hold. Distinct type so the runner cannot mistake it for a transport error. */
 export class NegativeControlFailure extends Error {
   constructor(message: string) {
@@ -39,6 +42,13 @@ const NON_SECURITY_FAILURES: { pattern: RegExp; why: string }[] = [
   { pattern: /ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i, why: 'transport error' },
   { pattern: /nonce too low|nonce too high|replacement transaction underpriced/i, why: 'nonce problem' },
   { pattern: /timeout|timed out/i, why: 'timed out' },
+  // A revert whose selector the vendored ABI cannot decode proves nothing: while CC-50 B2 is open
+  // the SDK's Registry/BLSAggregator copies are known-stale, so "reverted with an unknown error"
+  // is exactly the shape a STALE-ABI encoding bug takes. It must never read as "the rule fired".
+  {
+    pattern: /unable to decode signature|does not match any error|unknown (custom )?error|invalid opcode|reverted with an unknown/i,
+    why: 'reverted with an error the ABI could not decode',
+  },
 ];
 
 function assertSecurityRejection(label: string, reason: string): void {
@@ -55,6 +65,31 @@ function assertSecurityRejection(label: string, reason: string): void {
   }
 }
 
+export type Hex = `0x${string}`;
+
+/**
+ * The exact revert a control is allowed to be satisfied by, expressed as 4-byte selectors that
+ * are DERIVED FROM THE VENDORED ABI (see {@link errorSelector}) rather than hand-typed.
+ *
+ * Why selectors and not prose: `publicClient.call` has no ABI, so viem cannot name the custom
+ * error — the message is just "execution reverted" plus raw data. Matching prose there is either
+ * vacuous or matches the wrong revert. Deriving the selector from the ABI also means that when
+ * CC-50 B2 finally lands and the upstream renames/removes the error, `errorSelector` throws at
+ * startup instead of the control quietly accepting some other revert.
+ */
+export type RevertExpectation = {
+  /** Human description of the accepted revert, used in failure messages. */
+  describe: string;
+  /** The revert data must START with one of these selectors. */
+  selectors: readonly Hex[];
+  /**
+   * For wrapper errors (e.g. `BLSAggregator.ProposalExecutionFailed(uint256,bytes)`), one of these
+   * selectors must ALSO appear inside the returned data — otherwise the wrapper would accept any
+   * inner failure at all.
+   */
+  innerSelectors?: readonly Hex[];
+};
+
 export type RejectionOptions = {
   /**
    * Pattern the sanitized rejection reason must match. Use it where the expected revert reason /
@@ -62,7 +97,104 @@ export type RejectionOptions = {
    * control is supposed to demonstrate.
    */
   reasonMatches?: RegExp;
+  /** Selector-level expectation. Any other revert — including an undecodable one — fails. */
+  revert?: RevertExpectation;
 };
+
+/** Solidity type of one ABI parameter, with tuples expanded — needed to rebuild an error signature. */
+function abiParamType(param: { type: string; components?: readonly any[] }): string {
+  if (param.type.startsWith('tuple')) {
+    const inner = (param.components ?? []).map(abiParamType).join(',');
+    return `(${inner})${param.type.slice('tuple'.length)}`;
+  }
+  return param.type;
+}
+
+/**
+ * 4-byte selector of a custom error, read out of the ABI the runner actually encodes with.
+ *
+ * Throws when the ABI does not declare the error. That is deliberate and load-bearing: it is how
+ * a stale vendored ABI (CC-50 B2) turns into a loud startup failure rather than a negative
+ * control that silently accepts the wrong revert.
+ */
+export function errorSelector(abi: Abi, name: string): Hex {
+  const entry = abi.find((item: any) => item.type === 'error' && item.name === name) as
+    | { name: string; inputs?: readonly any[] }
+    | undefined;
+  if (!entry) {
+    throw new NegativeControlFailure(
+      `the vendored ABI does not declare error ${name}() — the negative control that expects it ` +
+        `cannot be evaluated. Re-sync the ABI (CC-50 B2) before trusting this run.`,
+    );
+  }
+  const signature = `${name}(${(entry.inputs ?? []).map(abiParamType).join(',')})`;
+  return keccak256(toHex(signature)).slice(0, 10) as Hex;
+}
+
+/**
+ * Best-effort extraction of raw revert data from a viem error graph.
+ *
+ * Structured fields are preferred; the string fallback is last because a message can also contain
+ * an address. A wrong extraction can only produce a selector MISMATCH, i.e. a control failure —
+ * never a false pass.
+ */
+export function extractRevertData(error: unknown): Hex | null {
+  const seen = new Set<unknown>();
+  const queue: unknown[] = [error];
+  const strings: string[] = [];
+  while (queue.length) {
+    const current = queue.shift();
+    if (typeof current === 'string') {
+      strings.push(current);
+      continue;
+    }
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    const record = current as Record<string, unknown>;
+    const data = record.data;
+    if (typeof data === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(data)) return data.toLowerCase() as Hex;
+    for (const key of ['data', 'cause', 'error', 'raw', 'details', 'shortMessage', 'message', 'metaMessages']) {
+      const value = record[key];
+      if (Array.isArray(value)) queue.push(...value);
+      else if (value !== undefined) queue.push(value);
+    }
+  }
+  for (const text of strings) {
+    const match = /0x[0-9a-fA-F]{8,}/.exec(text);
+    if (match) return match[0].toLowerCase() as Hex;
+  }
+  return null;
+}
+
+function assertRevertMatches(label: string, error: unknown, reason: string, expectation: RevertExpectation): void {
+  const data = extractRevertData(error);
+  if (!data) {
+    throw new NegativeControlFailure(
+      `${label}: expected ${expectation.describe}, but no revert data could be extracted from the ` +
+        `failure — an undecodable rejection is not evidence. Reason: ${reason}`,
+    );
+  }
+  const selector = data.slice(0, 10) as Hex;
+  if (!expectation.selectors.includes(selector)) {
+    throw new NegativeControlFailure(
+      `${label}: reverted with selector ${selector}, but this control only demonstrates its ` +
+        `security property when it reverts with ${expectation.describe} ` +
+        `(${expectation.selectors.join(', ')}). A different revert — including one produced by a ` +
+        `stale ABI encoding — proves nothing. Reason: ${reason}`,
+    );
+  }
+  if (expectation.innerSelectors?.length) {
+    const body = data.slice(10);
+    const found = expectation.innerSelectors.some(inner => body.includes(inner.slice(2)));
+    if (!found) {
+      throw new NegativeControlFailure(
+        `${label}: reverted with the expected wrapper ${selector}, but none of the required inner ` +
+          `selectors (${expectation.innerSelectors.join(', ')}) appear in its return data — the ` +
+          `wrapper alone does not identify which rule fired. Reason: ${reason}`,
+      );
+    }
+  }
+}
 
 /**
  * Assert that `call` is REJECTED (reverts / throws), and return the sanitized reason for evidence.
@@ -78,16 +210,19 @@ export async function expectCallRejected(
 ): Promise<string> {
   let succeeded = false;
   let reason = '';
+  let raw: unknown;
   try {
     await call();
     succeeded = true;
   } catch (error) {
+    raw = error;
     reason = sanitize(error);
   }
   if (succeeded) {
     throw new NegativeControlFailure(`${label}: expected rejection, but the call SUCCEEDED`);
   }
   assertSecurityRejection(label, reason);
+  if (options.revert) assertRevertMatches(label, raw, reason, options.revert);
   if (options.reasonMatches && !options.reasonMatches.test(reason)) {
     throw new NegativeControlFailure(
       `${label}: rejected, but not with the expected reason ${options.reasonMatches} — got: ${reason}`,
@@ -123,18 +258,29 @@ export async function expectViewRejected(
   label: string,
   read: () => Promise<unknown>,
   sanitize: (error: unknown) => string,
+  options: RejectionOptions = {},
 ): Promise<ViewRejection> {
   let returned: unknown;
   let didReturn = false;
   let reason = '';
+  let raw: unknown;
   try {
     returned = await read();
     didReturn = true;
   } catch (error) {
+    raw = error;
     reason = sanitize(error);
   }
   if (!didReturn) {
     assertSecurityRejection(label, reason);
+    // A revert is only accepted when it is one the control declared: a view that reverts for an
+    // unrelated reason (stale ABI, wrong args, dead node) is not proof that the key was ejected.
+    if (options.revert) assertRevertMatches(label, raw, reason, options.revert);
+    if (options.reasonMatches && !options.reasonMatches.test(reason)) {
+      throw new NegativeControlFailure(
+        `${label}: reverted, but not with the expected reason ${options.reasonMatches} — got: ${reason}`,
+      );
+    }
     return { outcome: 'reverted', reason };
   }
   if (returned === false) {
@@ -146,16 +292,63 @@ export async function expectViewRejected(
 }
 
 /**
- * Rejections produced by the YAAA admission GUARD (`RepCreditExperimentGuard`, CC-49
- * BLOCKER-1) rather than by the RepCredit service's own validation.
+ * TAXONOMY OF WHY A `/repcredit/*` REQUEST WAS REFUSED (CC-50 round-3 HIGH).
+ * ------------------------------------------------------------------------
+ * A negative control is only evidence when the RepCredit service refused the request BECAUSE IT
+ * VALIDATED IT. Everything else — the admission guard, the node's own prerequisites, a flaky RPC
+ * read inside the node, a server fault — is a BROKEN CONTROL, and must fail the run.
  *
- * This distinction became load-bearing the moment the endpoints grew mandatory HMAC auth: a
- * malformed-auth request is refused with 401/403 — also a 4xx — *before the service ever sees
- * the proposal*. A negative control that accidentally sends unauthenticated (or replayed)
- * requests would then "pass" every case while proving nothing about chain-id binding, message
- * rebinding, threshold or signature validation. A guard rejection is a BROKEN CONTROL, not
- * evidence.
+ * The previous rule ("any non-guard 4xx counts") was too weak in a way an independent reviewer
+ * reproduced with a probe: YAAA's service raises `ForbiddenException` (403) BEFORE it looks at a
+ * single caller field, for at least four reasons, two of which are per-request and transient:
+ *
+ *   - `cannot read the audit aggregator at <addr>`                     ← transient RPC
+ *   - `could not determine whether the local BLS key is active at ...` ← transient RPC
+ *   - `AUDIT_BLS_AGGREGATOR_ADDRESS is required when armed`            ← not armed for isolation
+ *   - `configured validator slot N is not active`                      ← slot not active
+ *
+ * On Sepolia, five controls fired at a moment of RPC turbulence would all have come back 403 and
+ * been written into the evidence as "chain-id binding / message rebinding / threshold / duplicate
+ * slot / bad signature all verified" — while the service looked at nothing.
+ *
+ * The rule is now POSITIVE and default-deny:
+ *   1. every control declares the outcome it must produce;
+ *   2. every response is classified into this stable taxonomy;
+ *   3. only the declared code + declared reason passes. Anything unclassifiable is `UNKNOWN`,
+ *      and `UNKNOWN` fails.
+ *
+ * The structural half of the classification is the HTTP status, which YAAA assigns by exception
+ * type and is far more stable than prose: the RepCredit service reports its own validation
+ * failures as `BadRequestException` (400); every prerequisite/admission refusal it raises is a
+ * `ForbiddenException` (403); the guard answers 401/403/413/503. So "403 is never evidence" holds
+ * structurally, independent of message wording.
+ *
+ * The prose patterns below only ever make a failure message more specific — they can never
+ * promote a response into the evidence-bearing class. That is why message drift upstream degrades
+ * to `UNKNOWN` (a failure), not to a false pass. `upstreamCode` is wired for the structured error
+ * code YAAA has been asked to emit (CC-50 -> repo:dvt); when the body carries one it is matched
+ * exactly and prose is not consulted at all.
  */
+export const REJECTION_CODES = {
+  /** The node ACCEPTED the invalid request. */
+  ACCEPTED: 'ACCEPTED',
+  /** The RepCredit service validated the proposal and refused it. The ONLY evidence-bearing class. */
+  SERVICE_VALIDATION: 'SERVICE_VALIDATION',
+  /** `RepCreditExperimentGuard`: unsigned / bad HMAC / stale ts / replay / body limit / not loopback. */
+  GUARD_AUTH: 'GUARD_AUTH',
+  /** The service refused before validating: not armed, isolation unconfigured, slot inactive. */
+  SERVICE_PREREQUISITE: 'SERVICE_PREREQUISITE',
+  /** The service could not complete an on-chain read and fail-closed. Says nothing about the proposal. */
+  INFRASTRUCTURE: 'INFRASTRUCTURE',
+  /** 5xx — the node broke. */
+  SERVER_FAULT: 'SERVER_FAULT',
+  /** Anything we cannot attribute. Default-deny: an unattributable rejection is never evidence. */
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+export type RejectionCode = (typeof REJECTION_CODES)[keyof typeof REJECTION_CODES];
+
+/** Guard-produced refusals (CC-49 BLOCKER-1). Never reach the service, so never evidence. */
 const GUARD_REJECTIONS: { pattern: RegExp; why: string }[] = [
   { pattern: /experiment signing is disabled/i, why: 'the node is not armed' },
   { pattern: /server secret is unset/i, why: 'the node is armed without a secret' },
@@ -166,6 +359,28 @@ const GUARD_REJECTIONS: { pattern: RegExp; why: string }[] = [
   { pattern: /HMAC verification failed/i, why: 'the HMAC did not verify' },
   { pattern: /auth token already used/i, why: 'the auth token was replayed' },
   { pattern: /replay cache is full/i, why: 'the guard replay cache is full' },
+  { pattern: /must be "?RepCredit-HMAC/i, why: 'the auth scheme header was missing or wrong' },
+];
+
+/**
+ * Service refusals raised BEFORE any caller field is inspected. Split from INFRASTRUCTURE only so
+ * the failure message names the right thing to fix — both classes fail the control.
+ */
+const PREREQUISITE_REJECTIONS: { pattern: RegExp; why: string }[] = [
+  { pattern: /AUDIT_BLS_AGGREGATOR_ADDRESS is required when armed/i, why: 'the node is not configured for audit isolation' },
+  { pattern: /is not active|is not registered at validator slot/i, why: 'the configured validator slot is not active on-chain' },
+  { pattern: /REPCREDIT_VALIDATOR_SLOT must be in/i, why: 'the node has an out-of-range validator slot' },
+  { pattern: /local BLS public key is malformed/i, why: 'the node has no usable local BLS key' },
+  { pattern: /experiment key|byte-valid production slash/i, why: 'the node refused to reuse a production-registered key' },
+  { pattern: /does not (expose|implement).*interface|interface on this chain/i, why: 'the audit aggregator address does not answer the expected interface' },
+  { pattern: /BLS signer did not return compact signature material/i, why: 'the local BLS signer failed' },
+];
+
+/** Fail-closed refusals caused by an on-chain READ failing inside the node. Transient, per request. */
+const INFRASTRUCTURE_REJECTIONS: { pattern: RegExp; why: string }[] = [
+  { pattern: /cannot read the audit aggregator/i, why: 'the node could not read the audit aggregator (RPC)' },
+  { pattern: /could not determine whether the local BLS key is active/i, why: 'the node could not resolve the audit-slot scan (RPC)' },
+  { pattern: /refusing to sign without a verifiable production aggregator/i, why: 'the node could not verify the audit aggregator (RPC)' },
 ];
 
 function extractMessage(body: unknown): string {
@@ -177,46 +392,131 @@ function extractMessage(body: unknown): string {
   return '';
 }
 
-/** Why this rejection came from the admission guard rather than from RepCredit validation, or null. */
-function guardRejectionReason(status: number, body: unknown): string | null {
-  // 401 is only ever produced by the guard: the RepCredit service rejects with 400/403.
-  if (status === 401) return 'the guard rejected it before the service saw it (HTTP 401)';
-  if (status === 413) return 'the guard rejected the request body size (HTTP 413)';
-  const message = extractMessage(body);
-  for (const { pattern, why } of GUARD_REJECTIONS) {
-    if (pattern.test(message)) return why;
+/** Structured error code, if the node emits one. Preferred over prose when present. */
+function extractUpstreamCode(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  for (const key of ['errorCode', 'code', 'repcreditErrorCode']) {
+    const value = (body as Record<string, unknown>)[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
   }
   return null;
 }
 
+export type Classification = {
+  code: RejectionCode;
+  /** Human explanation used in failure messages. */
+  detail: string;
+  /** Structured code the node returned, when it returned one. */
+  upstreamCode: string | null;
+  message: string;
+};
+
 /**
- * Assert that a set of HTTP responses were ALL refused by the node's RepCredit VALIDATION.
+ * Classify one `/repcredit/*` response. Structural first (status), prose only to explain.
+ * Unrecognised shapes land in `UNKNOWN`, which callers must treat as a failure.
+ */
+export function classifyHttpRejection(status: number, body: unknown): Classification {
+  const message = extractMessage(body);
+  const upstreamCode = extractUpstreamCode(body);
+  const of = (code: RejectionCode, detail: string): Classification => ({ code, detail, upstreamCode, message });
+
+  if (status >= 200 && status < 300) return of(REJECTION_CODES.ACCEPTED, `the node accepted the request (HTTP ${status})`);
+  if (status >= 500) {
+    return of(REJECTION_CODES.SERVER_FAULT, `the node returned HTTP ${status}; a server fault is not proof of validation`);
+  }
+  // 401/413 are guard-only; 503 is the guard's "armed without a secret"/"replay cache full" and is
+  // caught by the 5xx branch above with an equally fatal verdict.
+  if (status === 401) return of(REJECTION_CODES.GUARD_AUTH, 'the admission guard rejected it before the service saw it (HTTP 401)');
+  if (status === 413) return of(REJECTION_CODES.GUARD_AUTH, 'the admission guard rejected the request body size (HTTP 413)');
+
+  for (const { pattern, why } of GUARD_REJECTIONS) {
+    if (pattern.test(message)) return of(REJECTION_CODES.GUARD_AUTH, why);
+  }
+  for (const { pattern, why } of INFRASTRUCTURE_REJECTIONS) {
+    if (pattern.test(message)) return of(REJECTION_CODES.INFRASTRUCTURE, why);
+  }
+  for (const { pattern, why } of PREREQUISITE_REJECTIONS) {
+    if (pattern.test(message)) return of(REJECTION_CODES.SERVICE_PREREQUISITE, why);
+  }
+  // 403 that we could not attribute: the RepCredit service raises ForbiddenException only for
+  // prerequisites/isolation, never for proposal validation, so an unrecognised 403 is a node-side
+  // refusal of unknown origin — never evidence.
+  if (status === 403) {
+    return of(
+      REJECTION_CODES.SERVICE_PREREQUISITE,
+      'HTTP 403 — the RepCredit service only answers 403 for admission/prerequisite failures, never for proposal validation',
+    );
+  }
+  if (status === 400) return of(REJECTION_CODES.SERVICE_VALIDATION, 'the RepCredit service validated the request and refused it (HTTP 400)');
+  return of(REJECTION_CODES.UNKNOWN, `unattributable HTTP ${status}`);
+}
+
+/**
+ * What one HTTP negative control must produce to count as evidence.
  *
- * Three ways this check can be too weak, all closed here:
- *   - `!response.ok` alone: a node that 500s on everything makes every control "pass", so a
- *     refusal must be a client-side rejection (4xx);
- *   - a 5xx means the node broke, which is not evidence that it validated anything;
- *   - a guard/auth rejection never reaches the service, so it proves nothing about the
- *     property under test (see GUARD_REJECTIONS).
+ * `reason` is required: the reviewer's MEDIUM-1 was that a control which accepts "any rejection"
+ * cannot tell the rule it is testing from a different rule firing first.
+ */
+export type HttpControlExpectation = {
+  /** What this control demonstrates, for the failure message. */
+  demonstrates: string;
+  /** The message the service's own validation must produce. */
+  reason: RegExp;
+  /** Structured code to require once YAAA emits one; matched exactly, in preference to `reason`. */
+  upstreamCode?: string;
+  /** Override for a control that legitimately targets something other than service validation. */
+  code?: RejectionCode;
+};
+
+export type HttpResult = { ok: boolean; status: number; body?: unknown };
+
+/**
+ * Assert every HTTP negative control was refused by the RepCredit service's own validation, for
+ * the specific reason that control exists to demonstrate.
+ *
+ * Default-deny in three directions: an undeclared result fails, a declared control with no result
+ * fails, and any classification other than the declared one fails.
  */
 export function assertHttpRejections(
-  results: Record<string, { ok: boolean; status: number; body?: unknown }>,
+  results: Record<string, HttpResult>,
+  expectations: Record<string, HttpControlExpectation>,
 ): void {
-  for (const [label, result] of Object.entries(results)) {
-    if (result.ok) {
-      throw new NegativeControlFailure(`${label}: node ACCEPTED the invalid request (HTTP ${result.status})`);
-    }
-    if (result.status >= 500) {
+  for (const label of Object.keys(results)) {
+    if (!expectations[label]) {
       throw new NegativeControlFailure(
-        `${label}: node returned HTTP ${result.status} — a server fault is not proof that the request was validated`,
+        `${label}: no expectation was declared for this negative control — an unclassified control ` +
+          `cannot be evidence. Declare its target rejection alongside the others.`,
       );
     }
-    const guardReason = guardRejectionReason(result.status, result.body);
-    if (guardReason) {
+  }
+  for (const [label, expectation] of Object.entries(expectations)) {
+    const result = results[label];
+    if (!result) {
+      throw new NegativeControlFailure(`${label}: declared as a negative control but never executed`);
+    }
+    const wanted = expectation.code ?? REJECTION_CODES.SERVICE_VALIDATION;
+    const verdict = classifyHttpRejection(result.status, result.body);
+    if (verdict.code !== wanted) {
       throw new NegativeControlFailure(
-        `${label}: the request was refused by the experiment admission guard because ${guardReason} — ` +
-          `the RepCredit service never validated it, so this control proves nothing. Re-send the ` +
-          `control with valid per-node HMAC auth (scripts/repcredit/experiment-auth.ts).`,
+        `${label}: expected ${wanted} (${expectation.demonstrates}) but got ${verdict.code} — ` +
+          `${verdict.detail}. This control did NOT demonstrate ${expectation.demonstrates}; the ` +
+          `run must fail rather than record it as evidence. Node said: ${verdict.message || '(no message)'}`,
+      );
+    }
+    if (expectation.upstreamCode && verdict.upstreamCode) {
+      if (verdict.upstreamCode !== expectation.upstreamCode) {
+        throw new NegativeControlFailure(
+          `${label}: the node returned error code ${verdict.upstreamCode}, not the expected ` +
+            `${expectation.upstreamCode} — a different rule fired than the one under test.`,
+        );
+      }
+      continue; // structured code matched exactly; prose is advisory only
+    }
+    if (!expectation.reason.test(verdict.message)) {
+      throw new NegativeControlFailure(
+        `${label}: the service rejected it, but not for the reason this control demonstrates ` +
+          `(${expectation.demonstrates}, expected ${expectation.reason}). A different validation ` +
+          `firing first proves nothing about this property. Node said: ${verdict.message || '(no message)'}`,
       );
     }
   }

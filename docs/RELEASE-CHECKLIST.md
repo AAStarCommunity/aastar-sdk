@@ -60,6 +60,26 @@ consumer path**.
       artifact is missing, fails when any `MUST_VERIFY` contract was not actually compared, and
       prints the full checked / skipped-with-reason inventory. **Read the `checked N` line** — a
       PASS with a shrunken count is not a verification.
+- [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
+      ```bash
+      pnpm run repcredit:typecheck && \
+      pnpm run repcredit:abi:check && \
+      REPCREDIT_YAAA_HTTP_TEST=1 \
+        REPCREDIT_YAAA_DIR=../YetAnotherAA-Validator \
+        REPCREDIT_YAAA_REV=<the upstream commit under test> \
+        pnpm run repcredit:test
+      ```
+      **The flag is not optional here.** Without it, a missing YAAA checkout, a missing/stale
+      `dist/main.js`, or a node that fails to boot makes the entire real-HTTP suite — the only
+      thing that proves the SDK's HMAC client gets past the upstream admission gate — `it.skip`
+      itself, and `repcredit:test` still reports green. `REPCREDIT_YAAA_HTTP_TEST=1` converts every
+      one of those into a failure. The same job runs in CI (`repcredit-yaaa-http`) against a pinned
+      upstream ref; run it here too, because the release is cut from a local checkout.
+
+      `REPCREDIT_YAAA_REV` declares which upstream commit the run verified against, and fails if
+      the checkout is at a different one. The upstream checkout must also be **clean**: the guard
+      pin reads the committed blob via `git show`, and a dirty tree makes the built `dist/`
+      unattributable, so both are refused rather than silently accepted (CC-50).
 - [ ] **`pnpm run check:browser` (MANDATORY, run AFTER the `@aastar/sdk` build) — no Node-only builtin (`child_process`/`fs`/…) statically imported by any browser-facing subpath.** This exists because 0.42.0 shipped a `node:child_process` leak into `@aastar/sdk/operator` that broke downstream browser builds — unit tests run in Node and a narrow-import browser smoke tree-shook it out, so nothing caught it pre-publish. Never publish with this red.
 
 ## 4. On-chain E2E — FULL business-scenario set (NOT just the change), recorded

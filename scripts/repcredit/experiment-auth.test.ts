@@ -16,7 +16,7 @@
  *      REPCREDIT_YAAA_HTTP_TEST=1 to turn that skip into a failure, so "we did not run it" can
  *      never be mistaken for "it passed".
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,16 +26,28 @@ import {
   ExperimentAuthError,
   ExperimentSecrets,
   HEADER_AUTH,
+  HEADER_SCHEME,
   HEADER_TIMESTAMP,
+  REPCREDIT_AUTH_SCHEME,
   assertSecretsAbsent,
   computeAuthHeaders,
   generateExperimentSecret,
+  buildAuthPreimage,
   postSignedJson,
+  requestTargetOf,
 } from './experiment-auth.js';
 
-/** Independent reimplementation of the guard's preimage; never calls the code under test. */
-const expectedHmac = (secret: string, ts: number | string, rawBody: string) =>
-  createHmac('sha256', secret).update(`${ts}.${rawBody}`).digest('hex');
+/**
+ * Independent reimplementation of the guard's v2 preimage; never calls the code under test.
+ * Kept literal (not built from `buildAuthPreimage`) so a bug in the helper cannot validate itself.
+ */
+const expectedHmac = (
+  secret: string,
+  ts: number | string,
+  rawBody: string,
+  target = '/repcredit/sign',
+  method = 'POST',
+) => createHmac('sha256', secret).update(['v2', method, target, String(ts), rawBody].join('\n')).digest('hex');
 
 type Captured = { url: string; headers: Record<string, string>; body: string };
 
@@ -69,6 +81,7 @@ describe('experiment auth client', () => {
     // The bytes on the wire, not a re-serialisation of the object.
     expect(sent.body).toBe(JSON.stringify(body));
     expect(sent.headers[HEADER_TIMESTAMP]).toBe('1700000000000');
+    expect(sent.headers[HEADER_SCHEME]).toBe(REPCREDIT_AUTH_SCHEME);
     expect(sent.headers[HEADER_AUTH]).toBe(expectedHmac(secret, 1_700_000_000_000, sent.body));
     expect(sent.headers['content-type']).toBe('application/json');
   });
@@ -79,8 +92,44 @@ describe('experiment auth client', () => {
     const body = { b: 1, a: 2 };
     const sentBytes = JSON.stringify(body);
     const reSerialised = JSON.stringify({ a: 2, b: 1 });
-    const headers = computeAuthHeaders(secret, 1_700_000_000_000, sentBytes);
+    const input = { method: 'POST', requestTarget: '/repcredit/sign', timestampMs: 1_700_000_000_000 };
+    const headers = computeAuthHeaders(secret, { ...input, rawBody: sentBytes });
     expect(headers[HEADER_AUTH]).not.toBe(expectedHmac(secret, 1_700_000_000_000, reSerialised));
+  });
+
+  // v2 binds the verb and the request target (YAAA df9c8a35). A token minted for one endpoint
+  // must not authenticate another — that is the whole point of the scheme bump.
+  it('binds the method and the request target into the preimage (v2)', () => {
+    const secret = generateExperimentSecret();
+    const raw = JSON.stringify({ proposalId: '1' });
+    const base = { timestampMs: 1_700_000_000_000, rawBody: raw };
+    const sign = computeAuthHeaders(secret, { ...base, method: 'POST', requestTarget: '/repcredit/sign' });
+    const aggregate = computeAuthHeaders(secret, { ...base, method: 'POST', requestTarget: '/repcredit/aggregate' });
+    const asGet = computeAuthHeaders(secret, { ...base, method: 'GET', requestTarget: '/repcredit/sign' });
+    expect(sign[HEADER_AUTH]).not.toBe(aggregate[HEADER_AUTH]);
+    expect(sign[HEADER_AUTH]).not.toBe(asGet[HEADER_AUTH]);
+    // Byte-for-byte against the upstream preimage, rebuilt independently.
+    expect(sign[HEADER_AUTH]).toBe(expectedHmac(secret, 1_700_000_000_000, raw, '/repcredit/sign'));
+    expect(aggregate[HEADER_AUTH]).toBe(expectedHmac(secret, 1_700_000_000_000, raw, '/repcredit/aggregate'));
+  });
+
+  it('signs the request target as sent on the wire — path plus query, never the origin', () => {
+    expect(requestTargetOf('http://127.0.0.1:29301/repcredit/sign')).toBe('/repcredit/sign');
+    expect(requestTargetOf('http://127.0.0.1:29301/repcredit/slash/aggregate?x=1')).toBe('/repcredit/slash/aggregate?x=1');
+  });
+
+  it('mints a distinct token even when two attempts land in the same millisecond', async () => {
+    // Token uniqueness must not depend on Date.now() advancing: a frozen clock would otherwise
+    // produce an identical preimage, which the node rejects as a replay — an unretryable retry.
+    const secret = generateExperimentSecret();
+    const { impl, calls } = recordingFetch([{ status: 502 }, { status: 502 }, { status: 200, body: {} }]);
+    await postSignedJson('http://127.0.0.1:1/repcredit/sign', secret, { a: 1 }, {
+      fetchImpl: impl,
+      now: () => 1_700_000_000_000, // frozen
+      sleep: async () => {},
+    });
+    const tokens = calls.map(call => call.headers[HEADER_AUTH]);
+    expect(new Set(tokens).size).toBe(tokens.length);
   });
 
   it('mints a new timestamp and token on every retry', async () => {
@@ -144,7 +193,9 @@ describe('experiment auth client', () => {
   });
 
   it('refuses to sign with an empty secret instead of sending unauthenticated', () => {
-    expect(() => computeAuthHeaders('', Date.now(), '{}')).toThrow(ExperimentAuthError);
+    expect(() =>
+      computeAuthHeaders('', { method: 'POST', requestTarget: '/repcredit/sign', timestampMs: Date.now(), rawBody: '{}' }),
+    ).toThrow(ExperimentAuthError);
   });
 
   it('issues one distinct high-entropy secret per node and refuses unknown nodes', () => {
@@ -169,36 +220,149 @@ describe('experiment auth client', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Upstream contract pin
+// 2. Upstream contract pin — against a COMMITTED revision, never a dirty workspace
 // ---------------------------------------------------------------------------
 
+/**
+ * CC-50 round-3 MEDIUM-2.
+ *
+ * The previous version of this pin `readFileSync`-ed the sibling checkout's WORKING COPY of the
+ * guard. That made the SDK's own gate a function of whether someone in another repository had
+ * unsaved edits: it flipped red the moment DVT started its third round (binding method +
+ * requestTarget into the preimage and versioning the header scheme), and when it was green it
+ * could not say WHICH upstream revision it was green against.
+ *
+ * Everything upstream is now read out of git at a committed revision:
+ *   - the revision is resolved once and PRINTED, so a pass states what it verified;
+ *   - the guard source comes from `git show <rev>:<path>`, never from the working tree;
+ *   - a dirty upstream checkout makes the real-HTTP suite unusable (the built `dist/` cannot be
+ *     attributed to any revision), and REPCREDIT_YAAA_HTTP_TEST=1 turns that into a failure;
+ *   - REPCREDIT_YAAA_REV declares the expected commit; a mismatch always fails.
+ */
 const yaaaDir = resolve(
   process.env.REPCREDIT_YAAA_DIR ?? join(process.cwd(), '..', 'YetAnotherAA-Validator'),
 );
-const guardSource = join(yaaaDir, 'src/modules/repcredit/repcredit-experiment.guard.ts');
+const GUARD_PATH = 'src/modules/repcredit/repcredit-experiment.guard.ts';
+const forceHttp = process.env.REPCREDIT_YAAA_HTTP_TEST === '1';
+
+type UpstreamPin = {
+  present: boolean;
+  rev: string | null;
+  dirty: boolean;
+  dirtyPaths: string[];
+  declaredRev: string | null;
+  /** Why the upstream cannot be used as a pinned reference, or null when it can. */
+  unusable: string | null;
+};
+
+function resolveUpstreamPin(): UpstreamPin {
+  const declaredRev = process.env.REPCREDIT_YAAA_REV ?? null;
+  const base: UpstreamPin = { present: false, rev: null, dirty: false, dirtyPaths: [], declaredRev, unusable: null };
+  if (!existsSync(join(yaaaDir, GUARD_PATH))) {
+    return { ...base, unusable: `no YAAA checkout at ${yaaaDir} (set REPCREDIT_YAAA_DIR)` };
+  }
+  let rev: string;
+  let porcelain: string;
+  try {
+    rev = execFileSync('git', ['-C', yaaaDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    porcelain = execFileSync('git', ['-C', yaaaDir, 'status', '--porcelain'], { encoding: 'utf8' });
+  } catch (error) {
+    return { ...base, present: true, unusable: `${yaaaDir} is not a usable git checkout: ${String(error)}` };
+  }
+  const dirtyPaths = porcelain.split('\n').map(line => line.trim()).filter(Boolean);
+  const pin: UpstreamPin = { present: true, rev, dirty: dirtyPaths.length > 0, dirtyPaths, declaredRev, unusable: null };
+  if (declaredRev && !rev.startsWith(declaredRev)) {
+    return { ...pin, unusable: `REPCREDIT_YAAA_REV=${declaredRev} but the checkout is at ${rev}` };
+  }
+  if (pin.dirty) {
+    return { ...pin, unusable: `the YAAA checkout at ${rev.slice(0, 8)} has ${dirtyPaths.length} uncommitted change(s)` };
+  }
+  return pin;
+}
+
+const pin = resolveUpstreamPin();
+
+/** Guard source AS COMMITTED at the pinned revision. Never the working tree. */
+function committedGuardSource(): string {
+  return execFileSync('git', ['-C', yaaaDir, 'show', `${pin.rev}:${GUARD_PATH}`], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+}
 
 describe('YAAA guard contract pin', () => {
-  const available = existsSync(guardSource);
-  const gate = available ? it : it.skip;
-
-  it('reports whether the upstream guard source was available to pin against', () => {
-    if (!available && process.env.REPCREDIT_YAAA_HTTP_TEST === '1') {
+  it('states the upstream revision it is pinned against', () => {
+    const where = pin.rev ? `${pin.rev} (${pin.dirty ? `DIRTY: ${pin.dirtyPaths.length} change(s)` : 'clean'})` : 'absent';
+    console.info(`[pin] YAAA ${yaaaDir} @ ${where}`);
+    if (pin.unusable && forceHttp) {
       throw new Error(
-        `REPCREDIT_YAAA_HTTP_TEST=1 but the YAAA guard source is missing at ${guardSource}. ` +
-          'Set REPCREDIT_YAAA_DIR to the checkout.',
+        `REPCREDIT_YAAA_HTTP_TEST=1 requires a clean, pinned YAAA checkout, but ${pin.unusable}. ` +
+          'Run this gate against a clean checkout/worktree (CI checks one out) or declare ' +
+          'REPCREDIT_YAAA_REV for the revision under test.',
       );
+    }
+    if (!pin.rev) {
+      console.warn(`[skip] YAAA guard contract pin: ${pin.unusable}`);
     }
     expect(true).toBe(true);
   });
 
-  gate('still uses the same header names and HMAC preimage', () => {
-    const source = readFileSync(guardSource, 'utf8');
+  it('still uses the same header names and scheme version at the pinned revision', ctx => {
+    if (!pin.rev) {
+      if (forceHttp) throw new Error(`REPCREDIT_YAAA_HTTP_TEST=1 but ${pin.unusable}`);
+      ctx.skip();
+      return;
+    }
+    // Read from git, so a colleague's in-progress edit in another repository can neither break
+    // nor silently satisfy this assertion.
+    const source = committedGuardSource();
     expect(source).toContain(`HEADER_TIMESTAMP = "${HEADER_TIMESTAMP}"`);
     expect(source).toContain(`HEADER_AUTH = "${HEADER_AUTH}"`);
-    // The preimage. If DVT adds the announced aggregator domain tag, this string changes and this
-    // assertion is the thing that tells us to resync — see the CC-49 blocker note.
-    expect(source).toContain('createHmac("sha256", this.secret).update(`${ts}.${rawBody}`)');
+    expect(source).toContain(`HEADER_SCHEME = "${HEADER_SCHEME}"`);
+    expect(source).toContain(`REPCREDIT_AUTH_SCHEME = "${REPCREDIT_AUTH_SCHEME}"`);
     expect(source).toContain('auth token already used');
+  });
+
+  /**
+   * The preimage itself, field by field. This is the assertion that told us to resync: it went red
+   * the moment DVT committed the v2 scheme (method + request target), instead of the whole evidence
+   * run failing later with an opaque 401.
+   */
+  it('pins the exact v2 preimage field order', ctx => {
+    if (!pin.rev) {
+      if (forceHttp) throw new Error(`REPCREDIT_YAAA_HTTP_TEST=1 but ${pin.unusable}`);
+      ctx.skip();
+      return;
+    }
+    const source = committedGuardSource();
+    const builder = source.slice(source.indexOf('export function buildRepCreditAuthPreimage'));
+    const body = builder.slice(0, builder.indexOf('}\n'));
+    const fields = ['REPCREDIT_AUTH_SCHEME', 'String(input.method).toUpperCase()', 'input.requestTarget', 'String(input.timestampMs)', 'input.rawBody'];
+    let cursor = -1;
+    for (const field of fields) {
+      const at = body.indexOf(field, cursor + 1);
+      expect(at, `${field} must appear, in order, in the upstream preimage`).toBeGreaterThan(cursor);
+      cursor = at;
+    }
+    expect(body).toContain('join("\\n")');
+    // ...and the client reproduces it byte-for-byte.
+    expect(buildAuthPreimage({ method: 'post', requestTarget: '/repcredit/sign', timestampMs: 7, rawBody: '{}' }))
+      .toBe(['v2', 'POST', '/repcredit/sign', '7', '{}'].join('\n'));
+  });
+
+  /**
+   * The next schema change gets the same treatment: this fails loudly rather than letting the
+   * runner sign with a version the node no longer accepts. The SDK never invents a version ahead
+   * of upstream (CC-50/CC-49).
+   */
+  it('has not moved past the scheme version the client implements', ctx => {
+    if (!pin.rev) {
+      if (forceHttp) throw new Error(`REPCREDIT_YAAA_HTTP_TEST=1 but ${pin.unusable}`);
+      ctx.skip();
+      return;
+    }
+    const match = /REPCREDIT_AUTH_SCHEME = "([^"]+)"/.exec(committedGuardSource());
+    expect(match?.[1]).toBe(REPCREDIT_AUTH_SCHEME);
   });
 });
 
@@ -209,8 +373,32 @@ describe('YAAA guard contract pin', () => {
 const nodeEntry = join(yaaaDir, 'dist/main.js');
 const anvilPort = Number(process.env.REPCREDIT_TEST_ANVIL_PORT ?? 18997);
 const httpPort = Number(process.env.REPCREDIT_TEST_NODE_PORT ?? 18996);
-const canRunHttp = existsSync(nodeEntry);
-const forceHttp = process.env.REPCREDIT_YAAA_HTTP_TEST === '1';
+/**
+ * The real-HTTP suite runs the sibling's BUILD ARTIFACT. It is therefore only meaningful when the
+ * upstream checkout is clean and pinned: a dist built from a dirty tree cannot be attributed to any
+ * revision, and its red/green would just mirror another repository's work in progress.
+ *
+ * A clean tree is still not enough — `dist/` can predate the pinned commit. A stale artifact runs
+ * an OLDER guard than the one the pin verified, so every case in this suite would be testing
+ * something other than what the report claims. The marker below is the round-3 scheme header: it
+ * exists in the pinned source and cannot exist in a build made before it. This deliberately does
+ * NOT rebuild the sibling checkout — writing into another repository's tree while its owner is
+ * working there is not this gate's business.
+ */
+function artifactMatchesPin(): string | null {
+  if (!existsSync(nodeEntry)) return `no build artifact at ${nodeEntry}`;
+  // `nest build` emits file-per-file, so the guard lands at the mirrored path; a bundled build
+  // would instead inline it into main.js. Check the mirrored path when it exists, else the bundle.
+  const compiledGuard = join(yaaaDir, 'dist', GUARD_PATH.replace(/^src\//, '').replace(/\.ts$/, '.js'));
+  const artifact = existsSync(compiledGuard) ? compiledGuard : nodeEntry;
+  if (!readFileSync(artifact, 'utf8').includes(HEADER_SCHEME)) {
+    return `the build artifact at ${artifact} predates the pinned revision (no ${HEADER_SCHEME} support) — run \`npm run build\` in the YAAA checkout`;
+  }
+  return null;
+}
+
+const artifactProblem = pin.unusable ?? artifactMatchesPin();
+const canRunHttp = artifactProblem === null;
 
 async function waitFor(check: () => Promise<boolean>, attempts: number, delayMs: number): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
@@ -287,16 +475,20 @@ describe('real YAAA /repcredit HTTP guard', () => {
   });
 
   it('has a live node to test against (or is explicitly allowed to skip)', () => {
+    if (artifactProblem && forceHttp) {
+      throw new Error(`REPCREDIT_YAAA_HTTP_TEST=1 but the pinned YAAA node is not runnable: ${artifactProblem}`);
+    }
     if (!booted && forceHttp) {
       throw new Error(
-        `REPCREDIT_YAAA_HTTP_TEST=1 but no YAAA node came up. entry=${nodeEntry} exists=${canRunHttp}. ` +
-          'Build the sibling checkout (pnpm build) and make sure anvil is on PATH.',
+        `REPCREDIT_YAAA_HTTP_TEST=1 but no YAAA node came up. entry=${nodeEntry} usable=${canRunHttp}` +
+          `${artifactProblem ? ` (${artifactProblem})` : ''}. Build the pinned sibling checkout (pnpm build) ` +
+          'and make sure anvil is on PATH.',
       );
     }
     if (!booted) {
       // Visible in the test output: this suite did NOT verify anything this run.
       console.warn(
-        `[skip] real YAAA HTTP guard tests: node not booted (entry present: ${canRunHttp}). ` +
+        `[skip] real YAAA HTTP guard tests: not runnable (${artifactProblem}). ` +
           'Set REPCREDIT_YAAA_HTTP_TEST=1 to make this a failure.',
       );
     }
@@ -316,7 +508,8 @@ describe('real YAAA /repcredit HTTP guard', () => {
   const post = async (body: string, headers: Record<string, string>) => {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...headers },
+      // The scheme header is mandatory upstream; individual cases override it to test the gate.
+      headers: { 'content-type': 'application/json', [HEADER_SCHEME]: REPCREDIT_AUTH_SCHEME, ...headers },
       body,
     });
     let parsed: any;
@@ -329,7 +522,7 @@ describe('real YAAA /repcredit HTTP guard', () => {
   const proposal = () => JSON.stringify({ schemaVersion: 'repcredit-reputation-v1', proposalId: '1' });
 
   /** Messages only the admission guard produces. Anything else means the service answered. */
-  const GUARD_MESSAGE = /missing X-RepCredit|HMAC verification failed|timestamp outside|already used|replay cache is full|signing is disabled|server secret is unset|body exceeds|loopback callers only/i;
+  const GUARD_MESSAGE = /missing X-RepCredit|X-RepCredit-Scheme must be|HMAC verification failed|timestamp outside|already used|replay cache is full|signing is disabled|server secret is unset|body exceeds|loopback callers only|raw request body unavailable/i;
   const expectPastTheGuard = (result: { status: number; body: any }) => {
     // Not a status assertion on purpose: the RepCredit SERVICE legitimately answers 400 or 403
     // depending on which of its own checks fires first, and DVT is still changing those (the
@@ -346,13 +539,42 @@ describe('real YAAA /repcredit HTTP guard', () => {
     expect(String(result.body?.message)).toMatch(/missing X-RepCredit/i);
   }, 20_000);
 
-    it('rejects a wrong secret', async ctx => {
+    it('rejects a request with no scheme header (v2 is mandatory upstream)', async ctx => {
+    requireLive(ctx);
+    const raw = proposal();
+    const ts = Date.now();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        [HEADER_TIMESTAMP]: String(ts),
+        [HEADER_AUTH]: expectedHmac(secret, ts, raw, requestTargetOf(endpoint)),
+      },
+      body: raw,
+    });
+    expect(response.status).toBe(401);
+  }, 20_000);
+
+  it('rejects a token minted for a DIFFERENT endpoint (v2 binds the request target)', async ctx => {
     requireLive(ctx);
     const raw = proposal();
     const ts = Date.now();
     const result = await post(raw, {
       [HEADER_TIMESTAMP]: String(ts),
-      [HEADER_AUTH]: expectedHmac(randomBytes(32).toString('hex'), ts, raw),
+      // Signed for /repcredit/aggregate, sent to /repcredit/sign.
+      [HEADER_AUTH]: expectedHmac(secret, ts, raw, '/repcredit/aggregate'),
+    });
+    expect(result.status).toBe(403);
+    expect(String(result.body?.message)).toMatch(/HMAC verification failed/i);
+  }, 20_000);
+
+  it('rejects a wrong secret', async ctx => {
+    requireLive(ctx);
+    const raw = proposal();
+    const ts = Date.now();
+    const result = await post(raw, {
+      [HEADER_TIMESTAMP]: String(ts),
+      [HEADER_AUTH]: expectedHmac(randomBytes(32).toString('hex'), ts, raw, requestTargetOf(endpoint)),
     });
     expect(result.status).toBe(403);
     expect(String(result.body?.message)).toMatch(/HMAC verification failed/i);
@@ -362,7 +584,10 @@ describe('real YAAA /repcredit HTTP guard', () => {
     requireLive(ctx);
     const raw = proposal();
     const ts = Date.now() - 10 * 60_000;
-    const result = await post(raw, { [HEADER_TIMESTAMP]: String(ts), [HEADER_AUTH]: expectedHmac(secret, ts, raw) });
+    const result = await post(raw, {
+      [HEADER_TIMESTAMP]: String(ts),
+      [HEADER_AUTH]: expectedHmac(secret, ts, raw, requestTargetOf(endpoint)),
+    });
     expect(result.status).toBe(401);
     expect(String(result.body?.message)).toMatch(/timestamp outside/i);
   }, 20_000);
@@ -371,7 +596,10 @@ describe('real YAAA /repcredit HTTP guard', () => {
     requireLive(ctx);
     const raw = proposal();
     const ts = Date.now();
-    const headers = { [HEADER_TIMESTAMP]: String(ts), [HEADER_AUTH]: expectedHmac(secret, ts, raw) };
+    const headers = {
+      [HEADER_TIMESTAMP]: String(ts),
+      [HEADER_AUTH]: expectedHmac(secret, ts, raw, requestTargetOf(endpoint)),
+    };
     const result = await post(`${raw} `, headers); // one byte of trailing whitespace
     expect(result.status).toBe(403);
     expect(String(result.body?.message)).toMatch(/HMAC verification failed/i);
@@ -381,7 +609,10 @@ describe('real YAAA /repcredit HTTP guard', () => {
     requireLive(ctx);
     const raw = proposal();
     const ts = Date.now();
-    const headers = { [HEADER_TIMESTAMP]: String(ts), [HEADER_AUTH]: expectedHmac(secret, ts, raw) };
+    const headers = {
+      [HEADER_TIMESTAMP]: String(ts),
+      [HEADER_AUTH]: expectedHmac(secret, ts, raw, requestTargetOf(endpoint)),
+    };
 
     const first = await post(raw, headers);
     expectPastTheGuard(first);
@@ -402,7 +633,6 @@ describe('real YAAA /repcredit HTTP guard', () => {
 
     it('never puts the secret on the node process command line', async ctx => {
     requireLive(ctx);
-    const { execFileSync } = await import('node:child_process');
     const args = execFileSync('ps', ['-o', 'command=', '-p', String(node!.pid)], { encoding: 'utf8' });
     expect(args).not.toContain(secret);
   }, 20_000);
