@@ -159,6 +159,54 @@ Smaller items from the same round:
   `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
   There is no acceptable state in which those four go unverified.
 
+### Seventh round (CC-50 `[from:docs]` on b2399ebf) — the artifact must DECLARE its own source; the PASS may only speak for what it enforced
+
+**The main source was still guessable (MEDIUM-1).** Round six required a must-verify artifact to
+prove *its own* source was verified, but resolved which file that was through a fallback chain:
+`settings.compilationTarget` → a **single-key** target (whatever contract it names) → `sourceName`
+→ an unambiguous `<Name>.sol`. An independent reviewer measured **four** artifact shapes in which
+`--strict` exits 0 and prints the unconditional PASS while `contracts/src/Registry.sol` is never
+hashed, because the chain walked past the one authoritative answer and landed on a correctly-hashed
+but **unrelated** in-repo sibling:
+
+1. `compilationTarget` has one entry and it names a **different** contract;
+2. `compilationTarget` names several targets, **none** of them this contract, and `sourceName`
+   points at a verified sibling;
+3. no `compilationTarget` at all, `sourceName` points at a verified sibling;
+4. `compilationTarget` is a **string** (malformed) — a broken declaration was *weaker* than none,
+   since the whole block was skipped and `sourceName` took over.
+
+An artifact that declares a compilation target and does not claim this contract has told us it is
+not the artifact for it; guessing past that statement is the bypass.
+
+- For a `MUST_VERIFY` contract the declaration is now the **only** accepted answer: `metadata.
+  settings.compilationTarget` must be a non-empty object with **exactly one** entry whose value
+  equals the contract name. Missing, malformed, claiming nothing, or claiming it **more than once**
+  each fail closed as `MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`. The `sourceName` and
+  `<Name>.sol` guesses are gone from that path — they survive only for contracts outside
+  `MUST_VERIFY`, which never reach the release gate.
+- **Five new synthetic regressions** (16 cases total), one per shape plus the double-claim. Each
+  keeps the rest of the chain intact — clean, committed, pinned upstream; every recorded source
+  in-repo, on disk and correctly hashed — and asserts the run still prints `✅ N source(s) verified`
+  with **no** `SOURCE HASHES INCOMPLETE` / `NO SOURCE HASHES` / mismatch, so the declaration gate is
+  provably the only thing that fails. Mutation-verified: restoring the fallback chain turns exactly
+  those five red and nothing else.
+
+**The green sentence contradicted its own report (MEDIUM-2).** Source coverage is enforced for the
+`MUST_VERIFY` set only — 26 of the 30 currently checked contracts are outside it — yet the
+unconditional PASS claimed *"every artifact hash-matches the sources it records"*. The reviewer
+reproduced a single run that printed `GasTokenFactory … ⚠️ 0 source(s) verified, 1 not covered` in
+its own `checked` table and then that sentence, exiting 0.
+
+- The unconditional PASS now says **`and all N must-verify artifacts hash-match every source they
+  record`** — the claim the run actually enforced.
+- Any **checked but non-must-verify** artifact with an unestablished artifact⇄source binding is
+  named on its own line: `NOT RELEASE-SCOPE CAVEAT: N further checked artifact(s) … compared by ABI
+  only`. It does not fail the gate (it never did), it is no longer swallowed by a blanket claim.
+- Pinned by a sixteenth regression, and the retired sentence is asserted **absent** from every case
+  including the baseline, so it cannot come back. Mutation-verified in both halves: restoring the
+  old wording turns the baseline red, dropping only the caveat line turns the scope case red.
+
 ### Sixth round (CC-50 `[from:docs]` on 55979499) — source hashes are COVERAGE, not a count
 
 **`sourceCount` counted entries; it did not prove the contract was verified.** Round five made

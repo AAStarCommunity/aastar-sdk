@@ -84,10 +84,20 @@ consumer path**.
       `--strict` could exit 0 having hashed zero source bytes, print `--- upstream revisions (0) ---`,
       tick all four MUST_VERIFY, and still claim *"every artifact hash-matches the sources it
       records"*. Every one of those is now a hard failure for a MUST_VERIFY contract
-      (`MUST-VERIFY PROVENANCE INCOMPLETE`), and the unqualified PASS sentence is only printed when
+      (`MUST-VERIFY PROVENANCE INCOMPLETE`), and the unconditional PASS sentence is only printed when
       the whole chain held for all of them. `scripts/repcredit/abi-drift-provenance.test.ts` builds
       a synthetic upstream repo per case and pins both halves: that the fixture reproduces the
       bypassed state, and that the run now fails on it.
+
+      Round-7 removed the last guess and the last overclaim. A MUST_VERIFY artifact must **declare**
+      its own source — `metadata.settings.compilationTarget` must be a non-empty object with exactly
+      one entry whose value is the contract name; missing / malformed / claiming nothing / claiming
+      it twice all fail closed (`MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`), with no
+      `sourceName` or `<Name>.sol` fallback to land on an unrelated but correctly-hashed sibling.
+      And because source coverage is enforced for MUST_VERIFY only, the green sentence now reads
+      *"all N must-verify artifacts hash-match every source they record"* and any other checked
+      artifact with an unestablished binding is printed as an explicit
+      `NOT RELEASE-SCOPE CAVEAT` line — **a PASS never claims more than the run enforced.**
 - [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
       ```bash
       pnpm run repcredit:typecheck && \

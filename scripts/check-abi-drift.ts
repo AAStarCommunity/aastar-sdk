@@ -224,27 +224,77 @@ type SourceVerification = {
   mainSource: string | null;
   /** null once `mainSource` is in `verified`; otherwise why the contract's own source was not verified */
   mainSourceProblem: string | null;
+  /** how `mainSourceProblem` is reported: the artifact never claimed the contract, or the chain broke */
+  mainSourceGapLabel: string;
 };
 
 /**
  * The source file that declares THIS contract, taken from the artifact's own metadata.
  *
- * solc writes `settings.compilationTarget = { "<path>": "<ContractName>" }` — the authoritative
- * answer, and the one an attacker-shaped artifact cannot omit without being caught by the
- * "does not name its own source" gap below. `sourceName` and a `<Name>.sol` basename are fallbacks
- * for non-foundry artifact shapes.
+ * solc writes `settings.compilationTarget = { "<path>": "<ContractName>" }` — its own answer to
+ * "which file declares this contract". For a MUST-VERIFY contract that declaration is the ONLY
+ * accepted answer (`declaredOnly`): it must be a non-empty object with EXACTLY ONE entry whose
+ * value is this contract's name.
+ *
+ * Round-6 kept three guesses behind it — a single-key target naming a DIFFERENT contract,
+ * `sourceName`, and an unambiguous `<Name>.sol` basename — and an independent reviewer measured
+ * all of them exiting 0 under `--strict` with the unconditional PASS while ZERO bytes of the
+ * contract's own source were hashed (CC-50 round-7 MEDIUM-1). An artifact that declares a
+ * compilation target and does not claim this contract has said it is not the artifact for it;
+ * guessing past that is the bypass, not a convenience. Missing / malformed / unclaimed / claimed
+ * more than once all fail closed here.
+ *
+ * The guesses survive for contracts OUTSIDE `MUST_VERIFY` (non-foundry artifact shapes still get a
+ * best-effort main source in the report), where they cannot reach the release gate: only
+ * must-verify contracts are fed to `provenanceGaps`.
  */
-function mainSourceOf(artifact: any, metadata: any, name: string, sources: Record<string, any>): string | null {
+function mainSourceOf(
+  artifact: any,
+  metadata: any,
+  name: string,
+  sources: Record<string, any>,
+  declaredOnly: boolean,
+): { source: string | null; declarationProblem: string | null; declarationLabel: string } {
   const target = metadata?.settings?.compilationTarget;
-  if (target && typeof target === 'object') {
-    const exact = Object.entries<any>(target).find(([, contract]) => contract === name);
-    if (exact) return exact[0];
-    const only = Object.keys(target);
-    if (only.length === 1) return only[0];
+  const isTargetObject = Boolean(target) && typeof target === 'object' && !Array.isArray(target);
+  const claims = isTargetObject ? Object.entries<any>(target).filter(([, contract]) => contract === name) : [];
+  if (claims.length === 1) return { source: claims[0][0], declarationProblem: null, declarationLabel: '' };
+
+  if (declaredOnly) {
+    if (claims.length > 1) {
+      return {
+        source: null,
+        declarationProblem:
+          `metadata.settings.compilationTarget claims ${name} ${claims.length} times ` +
+          `(${claims.map(([rel]) => rel).join(', ')}), so the artifact does not identify ONE source for it`,
+        declarationLabel: 'MAIN SOURCE AMBIGUOUS',
+      };
+    }
+    const why = !isTargetObject
+      ? target === undefined || target === null
+        ? 'the artifact declares no metadata.settings.compilationTarget'
+        : `metadata.settings.compilationTarget is ${Array.isArray(target) ? 'an array' : typeof target}, ` +
+          'not the { "<path>": "<ContractName>" } object solc writes'
+      : !Object.keys(target).length
+        ? 'metadata.settings.compilationTarget is empty'
+        : `metadata.settings.compilationTarget names ${Object.keys(target).length} target(s) and NONE of them ` +
+          `is ${name} (${Object.entries<any>(target).map(([rel, c]) => `${rel} => ${String(c)}`).join(', ')})`;
+    return {
+      source: null,
+      // No sourceName / basename fallback: a must-verify artifact that will not name its own
+      // compilation target is a gap, and guessing one hides it behind a green tick.
+      declarationProblem: `${why} — a must-verify artifact must declare exactly one compilation target for ${name}`,
+      declarationLabel: 'MAIN SOURCE UNDECLARED',
+    };
   }
-  if (typeof artifact?.sourceName === 'string' && artifact.sourceName) return artifact.sourceName;
-  const byBasename = Object.keys(sources).filter((rel) => path.basename(rel) === `${name}.sol`);
-  return byBasename.length === 1 ? byBasename[0] : null;
+
+  const fallback = (): string | null => {
+    if (isTargetObject && Object.keys(target).length === 1) return Object.keys(target)[0];
+    if (typeof artifact?.sourceName === 'string' && artifact.sourceName) return artifact.sourceName;
+    const byBasename = Object.keys(sources).filter((rel) => path.basename(rel) === `${name}.sol`);
+    return byBasename.length === 1 ? byBasename[0] : null;
+  };
+  return { source: fallback(), declarationProblem: null, declarationLabel: '' };
 }
 
 /**
@@ -265,6 +315,8 @@ function verifyArtifactSources(
   repoRoot: string,
   dirtyPaths: string[],
   name: string,
+  /** must-verify contracts get NO main-source guessing — see `mainSourceOf` */
+  declaredOnly: boolean,
 ): SourceVerification {
   // `git status --porcelain` lines are "XY <path>" (and "R  old -> new"); we only need the paths.
   const dirtySet = new Set(
@@ -280,6 +332,7 @@ function verifyArtifactSources(
     dirty: [],
     mainSource: null,
     mainSourceProblem: null,
+    mainSourceGapLabel: 'MAIN SOURCE NOT VERIFIED',
     ...over,
   });
   let artifact: any;
@@ -334,10 +387,17 @@ function verifyArtifactSources(
   // Coverage, not counting: the artifact must prove ITS OWN contract source was verified. A green
   // built purely out of unrelated in-repo sources (a vendored/remapped `<Name>.sol` next to a
   // correctly-hashed sibling) is exactly the "1 source(s) ✅ on a file never compared" bypass.
-  const mainSource = mainSourceOf(artifact, metadata, name, sources);
+  const declared = mainSourceOf(artifact, metadata, name, sources, declaredOnly);
+  const mainSource = declared.source;
   let mainSourceProblem: string | null = null;
+  let mainSourceGapLabel = 'MAIN SOURCE NOT VERIFIED';
   const verifiedSet = new Set(verified);
-  if (!mainSource) {
+  if (declared.declarationProblem) {
+    // The artifact never claimed this contract. Reported as its own gap kind so a reader can tell
+    // "the chain broke" from "the artifact refuses to say which file this contract came from".
+    mainSourceProblem = declared.declarationProblem;
+    mainSourceGapLabel = declared.declarationLabel;
+  } else if (!mainSource) {
     mainSourceProblem =
       `the artifact does not name its own contract source (no metadata.settings.compilationTarget ` +
       `entry for ${name}, no sourceName, no unambiguous ${name}.sol)`;
@@ -364,6 +424,7 @@ function verifyArtifactSources(
     dirty,
     mainSource,
     mainSourceProblem,
+    mainSourceGapLabel,
   };
 }
 
@@ -514,7 +575,7 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     abiSha256: createHash('sha256').update(JSON.stringify(ups)).digest('hex'),
     repo,
     sources: repo
-      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths, name)
+      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths, name, MUST_VERIFY.has(name))
       : {
           sourceCount: 0,
           verified: [],
@@ -525,6 +586,7 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
           dirty: [],
           mainSource: null,
           mainSourceProblem: 'the artifact resolves to no git checkout, so no source could be attributed',
+          mainSourceGapLabel: 'MAIN SOURCE NOT VERIFIED',
         },
   };
   checkedProvenance.push(provenance);
@@ -594,7 +656,7 @@ for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b
   for (const file of src.unresolved) console.log(`       ? ${file} (named by the artifact, not on disk)`);
   for (const file of src.unverifiable) console.log(`       ? ${file} (no usable keccak256 in the artifact)`);
   for (const file of src.external) console.log(`       ? ${file} (resolves outside this repo)`);
-  if (src.mainSourceProblem) console.log(`       ⚠️  contract source NOT verified: ${src.mainSourceProblem}`);
+  if (src.mainSourceProblem) console.log(`       ⚠️  ${src.mainSourceGapLabel}: ${src.mainSourceProblem}`);
 }
 console.log(`--- skipped (${skippedEntries.length}) ---`);
 for (const entry of skippedEntries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -787,7 +849,7 @@ function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   // COVERAGE, not count (CC-50 round-6 MEDIUM (b)): verifying some unrelated in-repo source says
   // nothing about THIS contract. Its own declared source must be in the verified set.
   if (src.mainSourceProblem) {
-    gaps.push(`MAIN SOURCE NOT VERIFIED: ${src.mainSourceProblem}`);
+    gaps.push(`${src.mainSourceGapLabel}: ${src.mainSourceProblem}`);
   }
   if (src.mismatched.length) gaps.push(`ARTIFACT ⇄ SOURCE MISMATCH: ${src.mismatched.join(', ')}`);
   if (!PIN.contracts?.[entry.name]?.abiSha256) {
@@ -795,6 +857,26 @@ function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   }
   return gaps;
 }
+
+/**
+ * Checked contracts OUTSIDE the must-verify set whose artifact⇄source binding is NOT established.
+ *
+ * These do not gate the release — `provenanceGaps` is only applied to `MUST_VERIFY` — but the final
+ * PASS used to claim "every artifact hash-matches the sources it records" in the same run whose own
+ * `checked` table printed `⚠️  0 source(s) verified, 1 not covered` a few lines above (CC-50 round-7
+ * MEDIUM-2). A green that contradicts its own report is worse than a narrower green: the sentence is
+ * now scoped to the must-verify set and every remaining artifact with a gap is named as an explicit
+ * out-of-release-scope caveat.
+ */
+const nonMustSourceCaveats = checkedProvenance
+  .filter((entry) => !MUST_VERIFY.has(entry.name))
+  .filter((entry) => {
+    const src = entry.sources;
+    const uncovered = src.unresolved.length + src.unverifiable.length + src.external.length;
+    return Boolean(uncovered || src.mismatched.length || src.mainSourceProblem);
+  })
+  .map((entry) => entry.name)
+  .sort();
 
 const mustVerifyGaps = checkedProvenance
   .filter((e) => MUST_VERIFY.has(e.name))
@@ -892,8 +974,18 @@ if (expectedMissing.length) {
       ? `\nPASS (with caveats): ${checkedNames.length - unattributableDrift.length}/${checkedNames.length} ` +
         `checked SDK ABI(s) match an upstream artifact; ${caveats.join('; ')}.`
       : '\nPASS: every checked SDK ABI matches its upstream out/ artifact, every expected artifact was present, ' +
-        'and every artifact hash-matches the sources it records.',
+        `and all ${MUST_VERIFY.size} must-verify artifacts hash-match every source they record.`,
   );
+  // Never let the green sentence contradict the `checked` table above it: source coverage is only
+  // ENFORCED for the must-verify set, so every other artifact with a gap is named right here rather
+  // than folded into a blanket "every artifact" (CC-50 round-7 MEDIUM-2).
+  if (nonMustSourceCaveats.length) {
+    console.log(
+      `      NOT RELEASE-SCOPE CAVEAT: ${nonMustSourceCaveats.length} further checked artifact(s) are outside the ` +
+        'must-verify set and their artifact⇄source binding is NOT established — they were compared by ABI only: ' +
+        `${nonMustSourceCaveats.join(', ')}.`,
+    );
+  }
   console.log(
     STRICT
       ? `      Attributed to committed upstream revision(s): ${pinned || '(none pinned)'}.`

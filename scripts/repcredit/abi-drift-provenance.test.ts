@@ -24,6 +24,12 @@
  * still shows "0 source(s)" / "upstream revisions (0)" — otherwise the case would be testing
  * something else), and that the run now fails and refuses to print the unqualified PASS.
  *
+ * Round six added the two COVERAGE cases (a counted entry that carries no comparable hash; a count
+ * that came from an unrelated file), and round seven the five DECLARATION cases plus the PASS-SCOPE
+ * case: an artifact whose `settings.compilationTarget` is missing / malformed / claims another
+ * contract / claims this one twice must not have a main source guessed for it, and the green
+ * sentence may only speak for the MUST_VERIFY set it actually enforces.
+ *
  * The already-working links (stale artifact, missing artifact, drift) are pinned here too, so a
  * later edit cannot trade one gate away for another.
  */
@@ -41,24 +47,33 @@ const SDK_REPO = resolve(HERE, '../..');
 const SCRIPT = join(SDK_REPO, 'scripts/check-abi-drift.ts');
 const TSX = join(SDK_REPO, 'node_modules/.bin/tsx');
 
-/** The exact sentence a run may only print when the whole chain held. */
-const UNQUALIFIED_PASS = 'and every artifact hash-matches the sources it records';
-
 /**
  * Every contract in the script's MUST_VERIFY set. A fixture missing one of these would fail for
  * "MUST-VERIFY NOT VERIFIED" instead of the reason under test, so all four are always present.
  */
 const CONTRACTS = ['Registry', 'BLSAggregator', 'DVTValidator', 'SuperPaymaster'] as const;
-type Contract = (typeof CONTRACTS)[number];
+
+/** A checked contract that is NOT must-verify — used by the PASS-scope case. */
+const NON_MUST_CONTRACT = 'GasTokenFactory';
+
+/** The exact sentence a run may only print when the whole must-verify chain held. */
+const UNCONDITIONAL_PASS = `and all ${CONTRACTS.length} must-verify artifacts hash-match every source they record`;
+
+/**
+ * The round-6 sentence. It claimed source verification for EVERY checked artifact while only the
+ * must-verify set is ever enforced, so a run could print it a few lines under its own
+ * "0 source(s) verified, 1 not covered" (CC-50 round-7 MEDIUM-2). It must never reappear.
+ */
+const OVERSTATED_PASS = 'every artifact hash-matches the sources it records';
 
 /** Identical on both sides, so the signature-set comparison is never the thing that fails. */
-function abiFor(name: Contract): unknown[] {
+function abiFor(name: string): unknown[] {
   return [
     { type: 'function', name: `ping${name}`, stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   ];
 }
 
-function sourceFor(name: Contract): string {
+function sourceFor(name: string): string {
   return `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\ncontract ${name} {\n    function ping${name}() external pure returns (uint256) { return 1; }\n}\n`;
 }
 
@@ -74,6 +89,18 @@ type Bypass =
   | 'unhashable-source-entry'
   /** the contract's own source lives outside the repo; an UNRELATED in-repo source is hashed instead */
   | 'main-source-outside-repo'
+  /** compilationTarget has ONE entry and it names a DIFFERENT contract (round-6 single-key fallback) */
+  | 'target-single-key-other-contract'
+  /** compilationTarget names several targets, none of them this contract; `sourceName` decoys */
+  | 'target-claims-nothing'
+  /** no compilationTarget at all; `sourceName` points at an unrelated, correctly-hashed sibling */
+  | 'target-missing-sourcename-decoy'
+  /** compilationTarget is a string, not solc's object; the whole block used to be skipped */
+  | 'target-malformed'
+  /** two compilationTarget entries both claim this contract — the artifact identifies no ONE source */
+  | 'target-claims-twice'
+  /** a CHECKED but non-must-verify contract with zero source coverage (PASS-scope wording) */
+  | 'non-must-source-gap'
   /** out/ belongs to no git checkout */
   | 'no-git-repo'
   /** artifact was built before the last (committed) source edit */
@@ -106,6 +133,11 @@ function buildFixture(bypass: Bypass): Fixture {
   for (const name of CONTRACTS) {
     writeFileSync(join(srcDir, `${name}.sol`), sourceFor(name));
   }
+  // A fifth contract that IS checked but is NOT in MUST_VERIFY, so its provenance gap can never
+  // fail the gate — only the PASS wording can report it honestly.
+  if (bypass === 'non-must-source-gap') {
+    writeFileSync(join(srcDir, `${NON_MUST_CONTRACT}.sol`), sourceFor(NON_MUST_CONTRACT));
+  }
   // Foundry repos gitignore `out/`; without this the build products themselves would read as
   // uncommitted changes and every case would fail for the wrong reason.
   writeFileSync(join(upstreamRoot, '.gitignore'), 'out/\n');
@@ -130,6 +162,54 @@ function buildFixture(bypass: Bypass): Fixture {
     };
     // solc's own answer to "which source declares this contract" — what the coverage gate reads.
     let metadata: unknown = { sources, settings: { compilationTarget: { [rel]: name } } };
+    // Only the decoy cases set it: a hardhat-shaped `sourceName` the round-6 fallback chain trusted
+    // whenever compilationTarget did not hand back an answer.
+    let sourceName: string | undefined;
+
+    // ---------------------------------------------------------------------------------------
+    // CC-50 round-7 MEDIUM-1. Four artifact shapes in which compilationTarget exists-but-does-not-
+    // claim / is missing / is malformed, plus one in which it claims the contract TWICE. Round-6
+    // resolved a main source anyway (single key -> `sourceName` -> `<Name>.sol`), landed on an
+    // UNRELATED but correctly-hashed in-repo sibling, and exited 0 under --strict with the
+    // unconditional PASS while `contracts/src/Registry.sol` was never hashed.
+    // ---------------------------------------------------------------------------------------
+    const sibling = `contracts/src/${'BLSAggregator'}.sol`;
+    const siblingSource = { keccak256: keccak256(toBytes(sourceFor('BLSAggregator'))) };
+    if (name === 'Registry') {
+      if (bypass === 'target-single-key-other-contract') {
+        // ONE key, and it says this artifact compiled BLSAggregator. Round-6: `only.length === 1`.
+        metadata = {
+          sources: { [sibling]: siblingSource },
+          settings: { compilationTarget: { [sibling]: 'BLSAggregator' } },
+        };
+      }
+      if (bypass === 'target-claims-nothing') {
+        const dvt = 'contracts/src/DVTValidator.sol';
+        metadata = {
+          sources: { [sibling]: siblingSource, [dvt]: { keccak256: keccak256(toBytes(sourceFor('DVTValidator'))) } },
+          settings: { compilationTarget: { [sibling]: 'BLSAggregator', [dvt]: 'DVTValidator' } },
+        };
+        sourceName = sibling;
+      }
+      if (bypass === 'target-missing-sourcename-decoy') {
+        metadata = { sources: { [sibling]: siblingSource } };
+        sourceName = sibling;
+      }
+      if (bypass === 'target-malformed') {
+        // A string where solc writes an object: round-6's `typeof target === 'object'` guard fell
+        // straight through to `sourceName`, so a malformed declaration was WEAKER than none.
+        metadata = { sources: { [sibling]: siblingSource }, settings: { compilationTarget: rel } };
+        sourceName = sibling;
+      }
+      if (bypass === 'target-claims-twice') {
+        // Both entries are in-repo and hash correctly, so nothing else in the chain complains —
+        // the artifact simply does not identify ONE source for Registry. Round-6 took the first.
+        metadata = {
+          sources: { [rel]: { keccak256: keccak256(toBytes(sourceFor(name))) }, [sibling]: siblingSource },
+          settings: { compilationTarget: { [rel]: name, [sibling]: name } },
+        };
+      }
+    }
     if (bypass === 'no-metadata-sources' && name === 'Registry') metadata = undefined;
     if (bypass === 'unhashable-source-entry' && name === 'Registry') {
       // The file is in-repo and on disk, and it IS the contract's own source — but the artifact
@@ -170,7 +250,23 @@ function buildFixture(bypass: Bypass): Fixture {
     }
     writeFileSync(
       join(outDir, `${name}.json`),
-      JSON.stringify({ abi: abiFor(name), bytecode: { object: '0x60006000fd' }, metadata }, null, 2),
+      JSON.stringify(
+        { abi: abiFor(name), bytecode: { object: '0x60006000fd' }, metadata, ...(sourceName ? { sourceName } : {}) },
+        null,
+        2,
+      ),
+    );
+  }
+
+  if (bypass === 'non-must-source-gap') {
+    // Checked (vendored ABI + upstream artifact) but outside MUST_VERIFY, and carrying NO
+    // metadata.sources at all: zero source coverage that the release gate does not — and should
+    // not — fail on. The PASS sentence is the only thing that can misreport it.
+    const outDir = join(upstreamRoot, 'out', `${NON_MUST_CONTRACT}.sol`);
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(
+      join(outDir, `${NON_MUST_CONTRACT}.json`),
+      JSON.stringify({ abi: abiFor(NON_MUST_CONTRACT), bytecode: { object: '0x60006000fd' } }, null, 2),
     );
   }
 
@@ -185,6 +281,15 @@ function buildFixture(bypass: Bypass): Fixture {
     writeFileSync(join(abisDir, `${name}.json`), JSON.stringify(vendored, null, 2));
     contracts[name] = {
       abiSha256: createHash('sha256').update(JSON.stringify(vendored)).digest('hex'),
+      why: 'fixture',
+    };
+  }
+
+  if (bypass === 'non-must-source-gap') {
+    const abi = abiFor(NON_MUST_CONTRACT);
+    writeFileSync(join(abisDir, `${NON_MUST_CONTRACT}.json`), JSON.stringify(abi, null, 2));
+    contracts[NON_MUST_CONTRACT] = {
+      abiSha256: createHash('sha256').update(JSON.stringify(abi)).digest('hex'),
       why: 'fixture',
     };
   }
@@ -242,8 +347,11 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
     withFixture('none', (lenient, strict) => {
       expect(strict.status, strict.output).toBe(0);
       expect(lenient.status, lenient.output).toBe(0);
-      // The unqualified sentence is allowed here, and ONLY here.
-      expect(strict.output).toContain(UNQUALIFIED_PASS);
+      // The unconditional sentence is allowed here, and ONLY here — scoped to must-verify, never
+      // the round-6 "every artifact" overstatement.
+      expect(strict.output).toContain(UNCONDITIONAL_PASS);
+      expect(strict.output).not.toContain(OVERSTATED_PASS);
+      expect(strict.output).not.toContain('NOT RELEASE-SCOPE CAVEAT');
       expect(strict.output).toContain('Attributed to committed upstream revision(s): SuperPaymaster@');
       expect(strict.output).not.toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
       // Sanity: it really did hash the sources rather than skipping them.
@@ -260,10 +368,10 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       expect(strict.output).toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
       expect(strict.output).toContain('SOURCE HASHES INCOMPLETE');
       expect(strict.output).toContain('NO SOURCE HASHES');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
       // Lenient stays usable for a developer mid-edit, but must not overstate what it checked.
       expect(lenient.status, lenient.output).toBe(0);
-      expect(lenient.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.output).not.toContain(UNCONDITIONAL_PASS);
       expect(lenient.output).toContain('INCOMPLETE PROVENANCE');
       expect(lenient.output).toContain('LENIENT MODE');
     });
@@ -274,7 +382,7 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       expect(strict.output).toContain('contracts/src/Ghost.sol');
       expect(strict.status, strict.output).toBe(1);
       expect(strict.output).toContain('SOURCE HASHES INCOMPLETE');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
     });
   }, 120_000);
 
@@ -284,7 +392,7 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       expect(strict.output).toMatch(/Registry\s+\w{16}\s+⚠️  0 source\(s\) verified, 1 not covered/);
       expect(strict.status, strict.output).toBe(1);
       expect(strict.output).toContain('NO SOURCE HASHES');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
     });
   }, 120_000);
 
@@ -306,9 +414,9 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       // Zero bytes were compared, so the "no source hashes" claim must fire too.
       expect(strict.output).toContain('NO SOURCE HASHES');
       expect(strict.output).toContain('MAIN SOURCE NOT VERIFIED');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
       expect(lenient.status, lenient.output).toBe(0);
-      expect(lenient.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.output).not.toContain(UNCONDITIONAL_PASS);
       expect(lenient.output).toContain('LENIENT MODE');
     });
   }, 120_000);
@@ -330,10 +438,105 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       // NO SOURCE HASHES must NOT be what saves us here — one source really was verified, which
       // is precisely why the count-based rule let this through.
       expect(strict.output).not.toContain('NO SOURCE HASHES');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
       expect(lenient.status, lenient.output).toBe(0);
-      expect(lenient.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.output).not.toContain(UNCONDITIONAL_PASS);
       expect(lenient.output).toContain('LENIENT MODE');
+    });
+  }, 120_000);
+
+  // ---------------------------------------------------------------------------------------
+  // CC-50 round-7 MEDIUM-1: the main source must come from the artifact's OWN declaration.
+  // Every case below was measured exiting 0 under --strict on b2399ebf with the unconditional
+  // PASS, because `mainSourceOf` kept guessing after compilationTarget declined to answer.
+  // Each fixture keeps the rest of the chain intact (clean, committed, pinned upstream; every
+  // recorded source in-repo, on disk and correctly hashed) so ONLY the declaration gate can be
+  // what fails — that is the mutation proof.
+  // ---------------------------------------------------------------------------------------
+  const declarationBypasses: Array<{ bypass: Bypass; what: string; label: string; expectRow: RegExp; because: string }> = [
+    {
+      bypass: 'target-single-key-other-contract',
+      what: 'a single-key compilationTarget naming a DIFFERENT contract',
+      label: 'MAIN SOURCE UNDECLARED',
+      expectRow: /Registry\s+\w{16}\s+✅ 1 source\(s\) verified/,
+      because: 'NONE of them is Registry',
+    },
+    {
+      bypass: 'target-claims-nothing',
+      what: 'a compilationTarget that claims other contracts, with sourceName decoying',
+      label: 'MAIN SOURCE UNDECLARED',
+      expectRow: /Registry\s+\w{16}\s+✅ 2 source\(s\) verified/,
+      because: 'names 2 target(s) and NONE of them is Registry',
+    },
+    {
+      bypass: 'target-missing-sourcename-decoy',
+      what: 'no compilationTarget at all, with sourceName decoying',
+      label: 'MAIN SOURCE UNDECLARED',
+      expectRow: /Registry\s+\w{16}\s+✅ 1 source\(s\) verified/,
+      because: 'declares no metadata.settings.compilationTarget',
+    },
+    {
+      bypass: 'target-malformed',
+      what: 'a malformed (string) compilationTarget',
+      label: 'MAIN SOURCE UNDECLARED',
+      expectRow: /Registry\s+\w{16}\s+✅ 1 source\(s\) verified/,
+      because: 'compilationTarget is string',
+    },
+    {
+      bypass: 'target-claims-twice',
+      what: 'a compilationTarget that claims this contract TWICE',
+      label: 'MAIN SOURCE AMBIGUOUS',
+      expectRow: /Registry\s+\w{16}\s+✅ 2 source\(s\) verified/,
+      because: 'claims Registry 2 times',
+    },
+  ];
+
+  for (const { bypass, what, label, expectRow, because } of declarationBypasses) {
+    it(`DECLARATION: ${what} fails strict instead of resolving an unrelated source`, () => {
+      withFixture(bypass, (lenient, strict) => {
+        // The fixture really is the green-looking shape: every source the artifact records WAS
+        // hashed and matched, so counting/coverage-by-count sees nothing wrong…
+        expect(strict.output).toMatch(expectRow);
+        expect(strict.output).not.toContain('NO SOURCE HASHES');
+        expect(strict.output).not.toContain('SOURCE HASHES INCOMPLETE');
+        expect(strict.output).not.toContain('ARTIFACT ⇄ SOURCE MISMATCH');
+        // …and yet Registry.sol itself was never attributed. Fail closed, do not guess:
+        expect(strict.status, strict.output).toBe(1);
+        expect(strict.output).toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
+        expect(strict.output).toContain(label);
+        expect(strict.output).toContain(because);
+        expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
+        expect(strict.output).not.toContain(OVERSTATED_PASS);
+        // Lenient stays usable, but must not print a green it did not earn.
+        expect(lenient.status, lenient.output).toBe(0);
+        expect(lenient.output).not.toContain(UNCONDITIONAL_PASS);
+        expect(lenient.output).toContain('INCOMPLETE PROVENANCE');
+        expect(lenient.output).toContain('LENIENT MODE');
+      });
+    }, 120_000);
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // CC-50 round-7 MEDIUM-2: PASS scope. Source coverage is enforced for MUST_VERIFY only, so the
+  // green sentence may only speak for that set — and anything else with a gap must be named.
+  // ---------------------------------------------------------------------------------------
+  it('SCOPE: a checked NON-must-verify artifact with zero source coverage passes, but is named as a non-release-scope caveat', () => {
+    withFixture('non-must-source-gap', (lenient, strict) => {
+      // The fixture reproduces the reported self-contradiction: the checked table says this
+      // artifact verified nothing…
+      expect(strict.output).toMatch(/GasTokenFactory\s+\w{16}\s+⚠️  0 source\(s\) verified, 1 not covered/);
+      // …while the must-verify set really is complete, so the run legitimately exits 0.
+      expect(strict.status, strict.output).toBe(0);
+      expect(strict.output).not.toContain('MUST-VERIFY PROVENANCE INCOMPLETE');
+      // The green may only claim what was enforced, and must not fold the gap into "every artifact".
+      expect(strict.output).toContain(UNCONDITIONAL_PASS);
+      expect(strict.output).not.toContain(OVERSTATED_PASS);
+      expect(strict.output).toContain(
+        'NOT RELEASE-SCOPE CAVEAT: 1 further checked artifact(s) are outside the must-verify set',
+      );
+      expect(strict.output).toContain('GasTokenFactory');
+      expect(lenient.status, lenient.output).toBe(0);
+      expect(lenient.output).toContain('NOT RELEASE-SCOPE CAVEAT');
     });
   }, 120_000);
 
@@ -343,9 +546,9 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       expect(strict.output).toContain('--- upstream revisions (0) ---');
       expect(strict.status, strict.output).toBe(1);
       expect(strict.output).toContain('NO UPSTREAM PROVENANCE');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
       expect(lenient.status, lenient.output).toBe(0);
-      expect(lenient.output).not.toContain(UNQUALIFIED_PASS);
+      expect(lenient.output).not.toContain(UNCONDITIONAL_PASS);
     });
   }, 120_000);
 
@@ -353,7 +556,7 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
     withFixture('stale-artifact', (_lenient, strict) => {
       expect(strict.status, strict.output).toBe(1);
       expect(strict.output).toContain('ARTIFACT ⇄ SOURCE MISMATCH');
-      expect(strict.output).not.toContain(UNQUALIFIED_PASS);
+      expect(strict.output).not.toContain(UNCONDITIONAL_PASS);
     });
   }, 120_000);
 
