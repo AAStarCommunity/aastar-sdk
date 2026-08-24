@@ -4,6 +4,7 @@ import {
     AAStarCommitteeValidatorABI,
     BLSAggregatorABI,
     AirAccountExtensionABI,
+    RegistryABI,
 } from './index.js';
 
 type AbiEntry = { type: string; name?: string; inputs?: { type: string }[] };
@@ -80,16 +81,32 @@ describe('AAStarAirAccountV7 ABI — the KNOWN_DRIFT blind spot', () => {
     });
 });
 
-describe('guardian-slash surface (SuperPaymaster CC-89 4.3.0)', () => {
-    it('BLSAggregator carries the executeGuardianSlash / fraud-proof additions', () => {
+describe('guardian-slash surface (SuperPaymaster CC-89 4.4.0)', () => {
+    it('BLSAggregator carries the bounded exit and two-phase fraud-proof additions', () => {
         for (const f of [
             'executeGuardianSlash',
+            'queueGuardianSlash',
             'fraudProofVerifier',
             'setFraudProofVerifier',
             'guardianSlashed',
             'proposalSignersCommitment',
+            'requestGuardianExit',
+            'cancelGuardianExit',
+            'consumeGuardianExit',
+            'guardianExitRequests',
+            'guardianSlashCases',
+            'pendingGuardianSlashCount',
         ]) {
             expect(fns(BLSAggregatorABI), `missing ${f}`).toContain(f);
+        }
+    });
+
+    it('Registry carries the proposal-scoped aggregate uplift cap', () => {
+        for (const f of [
+            'maxAggregateCreditUpliftPerProposal',
+            'setMaxAggregateCreditUpliftPerProposal',
+        ]) {
+            expect(fns(RegistryABI), `missing ${f}`).toContain(f);
         }
     });
 

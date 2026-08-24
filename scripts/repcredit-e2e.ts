@@ -20,6 +20,7 @@ import {
   DVTValidatorABI,
   EntryPointABI,
   GTokenABI,
+  GTokenStakingABI,
   MockAgentIdentityRegistryABI,
   RegistryABI,
   RepCreditCounterABI,
@@ -99,6 +100,16 @@ type Proposal = {
   scores: string[];
   epoch: string;
   chainId: string;
+  messageHash: Hex;
+};
+type SlashProposal = {
+  schemaVersion: "repcredit-slash-v1";
+  proposalId: string;
+  operator: Address;
+  slashLevel: number;
+  epoch: string;
+  chainId: string;
+  evidenceHash: Hex;
   messageHash: Hex;
 };
 type CoSignResponse = {
@@ -183,6 +194,30 @@ const publicClient = createPublicClient({ chain: experimentChain, transport: htt
 const deployerWallet = createWalletClient({ account: deployerAccount, chain: experimentChain, transport: http(rpcUrl) });
 const children: ChildProcess[] = [];
 const tempRoot = mkdtempSync(join(tmpdir(), "repcredit-e2e-"));
+const fraudVerifierAbi = [
+  {
+    type: "function",
+    name: "evidenceHash",
+    stateMutability: "pure",
+    inputs: [
+      { name: "disputedToken", type: "address" },
+      { name: "operator", type: "address" },
+      { name: "epoch", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "verify",
+    stateMutability: "view",
+    inputs: [
+      { name: "fraudProofId", type: "uint256" },
+      { name: "guiltyGuardians", type: "address[]" },
+      { name: "fraudProof", type: "bytes" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const satisfies Abi;
 
 function safeEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
   return {
@@ -474,6 +509,33 @@ function proposal(proposalId: bigint, users: Address[], scores: bigint[], epoch:
   };
 }
 
+function slashProposal(
+  proposalId: bigint,
+  operator: Address,
+  slashLevel: number,
+  epoch: bigint,
+  evidenceHash: Hex,
+): SlashProposal {
+  const messageHash = keccak256(encodeAbiParameters(
+    [
+      { type: "uint256" }, { type: "address" }, { type: "uint8" },
+      { type: "address[]" }, { type: "uint256[]" }, { type: "uint256" },
+      { type: "uint256" }, { type: "bytes32" },
+    ],
+    [proposalId, operator, slashLevel, [], [], epoch, BigInt(chainId), evidenceHash],
+  ));
+  return {
+    schemaVersion: "repcredit-slash-v1",
+    proposalId: proposalId.toString(),
+    operator,
+    slashLevel,
+    epoch: epoch.toString(),
+    chainId: String(chainId),
+    evidenceHash,
+    messageHash,
+  };
+}
+
 async function postJson<T>(url: string, body: unknown): Promise<{ ok: boolean; status: number; body: T | any }> {
   const response = await fetch(url, {
     method: "POST",
@@ -504,6 +566,29 @@ async function signAndAggregate(nodes: string[], value: Proposal, m: number) {
   return { responses, aggregate: aggregated.body as Aggregate, signMs, aggregateMs };
 }
 
+async function signAndAggregateSlash(nodes: string[], value: SlashProposal, m: number) {
+  const signStart = performance.now();
+  const signed = await Promise.all(nodes.slice(0, m).map(url =>
+    postJson<CoSignResponse>(`${url}/repcredit/slash/sign`, value)
+  ));
+  const signMs = performance.now() - signStart;
+  for (const response of signed) {
+    if (!response.ok) throw new Error(`YAAA slash sign failed ${response.status}: ${JSON.stringify(response.body)}`);
+  }
+  const responses = signed.map(item => item.body as CoSignResponse);
+  const aggregateStart = performance.now();
+  const aggregated = await postJson<Aggregate>(`${nodes[0]}/repcredit/slash/aggregate`, {
+    proposal: value,
+    responses,
+    threshold: m,
+  });
+  const aggregateMs = performance.now() - aggregateStart;
+  if (!aggregated.ok) {
+    throw new Error(`YAAA slash aggregate failed ${aggregated.status}: ${JSON.stringify(aggregated.body)}`);
+  }
+  return { responses, aggregate: aggregated.body as Aggregate, signMs, aggregateMs };
+}
+
 async function createDvtProposal(deployment: Deployment, wallet: ReturnType<typeof createWalletClient>): Promise<{ id: bigint; receipt: TransactionReceipt }> {
   const id = await publicClient.readContract({
     address: deployment.dvtValidator,
@@ -512,6 +597,24 @@ async function createDvtProposal(deployment: Deployment, wallet: ReturnType<type
   }) as bigint;
   const receipt = await sendContract(wallet, deployment.dvtValidator, DVTValidatorABI as Abi, "createProposal", [
     ZERO_ADDRESS, 0, "repcredit-contribution",
+  ]);
+  return { id, receipt };
+}
+
+async function createDvtSlashProposal(
+  deployment: Deployment,
+  wallet: ReturnType<typeof createWalletClient>,
+  operator: Address,
+  slashLevel: number,
+  evidenceHash: Hex,
+): Promise<{ id: bigint; receipt: TransactionReceipt }> {
+  const id = await publicClient.readContract({
+    address: deployment.dvtValidator,
+    abi: DVTValidatorABI,
+    functionName: "nextProposalId",
+  }) as bigint;
+  const receipt = await sendContract(wallet, deployment.dvtValidator, DVTValidatorABI as Abi, "createProposal", [
+    operator, slashLevel, "repcredit-guardian-exit-slash-race", evidenceHash,
   ]);
   return { id, receipt };
 }
@@ -574,6 +677,64 @@ function eventNames(receipt: TransactionReceipt, abi: Abi): string[] {
   return names;
 }
 
+async function runAggregateUpliftCapAttack(
+  deployment: Deployment,
+  validator: PrivateKeyAccount,
+  nodes: string[],
+) {
+  const wallet = validatorWallet(validator);
+  const created = await createDvtProposal(deployment, wallet);
+  const users = [syntheticUser(8_001), syntheticUser(8_002)];
+  const value = proposal(created.id, users, [100n, 100n], 701n);
+  const signed = await signAndAggregate(nodes, value, 3);
+  const executeData = encodeFunctionData({
+    abi: DVTValidatorABI,
+    functionName: "executeWithProof",
+    args: [created.id, users, [100n, 100n], 701n, signed.aggregate.proof],
+  });
+  let simulationError = "";
+  try {
+    await publicClient.call({ account: validator.address, to: deployment.dvtValidator, data: executeData });
+    throw new Error("aggregate uplift attack unexpectedly simulated successfully");
+  } catch (error) {
+    simulationError = sanitizeError(error);
+  }
+  const rejected = await sendExpectedRevert(wallet, deployment.dvtValidator, executeData);
+  const cap = await publicClient.readContract({
+    address: deployment.registry,
+    abi: RegistryABI,
+    functionName: "maxAggregateCreditUpliftPerProposal",
+  }) as bigint;
+  const postState = await Promise.all(users.map(async user => ({
+    user,
+    reputation: await publicClient.readContract({
+      address: deployment.registry,
+      abi: RegistryABI,
+      functionName: "globalReputation",
+      args: [user],
+    }) as bigint,
+    creditLimit: await publicClient.readContract({
+      address: deployment.registry,
+      abi: RegistryABI,
+      functionName: "getCreditLimit",
+      args: [user],
+    }) as bigint,
+  })));
+  if (cap !== parseEther("600") || postState.some(item => item.reputation !== 0n || item.creditLimit !== 0n)) {
+    throw new Error("aggregate uplift cap did not preserve atomic zero state");
+  }
+  return {
+    configuredCapWei: cap,
+    attemptedAggregateUpliftWei: parseEther("1200"),
+    proposal: value,
+    signerMask: signed.aggregate.signerMask,
+    createProposal: receiptRecord(created.receipt),
+    simulationError,
+    rejectedExecution: receiptRecord(rejected),
+    postState,
+  };
+}
+
 async function runE2E(
   deployment: Deployment,
   air: AirDeployment,
@@ -583,6 +744,12 @@ async function runE2E(
   const validator0 = validatorWallet(validators[0]);
   const validator1 = validatorWallet(validators[1]);
   const e2e: Record<string, unknown> = {};
+
+  e2e.aggregateUpliftCapAttack = await runAggregateUpliftCapAttack(
+    deployment,
+    validators[0],
+    nodes,
+  );
 
   e2e.agentRegistration = receiptRecord(await sendContract(
     deployerWallet,
@@ -802,6 +969,15 @@ async function runE2E(
     const exitSigned = await signAndAggregate(nodes, exitProposal, 3);
     await rpc("evm_increaseTime", [31 * 24 * 60 * 60]);
     await rpc("evm_mine");
+    const exitNotice = await sendContract(
+      validator0,
+      deployment.blsAggregator,
+      BLSAggregatorABI as Abi,
+      "requestGuardianExit",
+      [],
+    );
+    await rpc("evm_increaseTime", [2 * 24 * 60 * 60]);
+    await rpc("evm_mine");
     await sendContract(validator0, deployment.registry, RegistryABI as Abi, "exitRole", [ROLE_DVT]);
     const exitData = encodeFunctionData({
       abi: DVTValidatorABI,
@@ -809,7 +985,10 @@ async function runE2E(
       args: [exitCreated.id, exitProposal.users, [100n], 99n, exitSigned.aggregate.proof],
     });
     const exitedReceipt = await sendExpectedRevert(validator1, deployment.dvtValidator, exitData);
-    e2e.exitedValidatorNegative = receiptRecord(exitedReceipt);
+    e2e.exitedValidatorNegative = {
+      exitNotice: receiptRecord(exitNotice),
+      rejectedExecution: receiptRecord(exitedReceipt),
+    };
     await revertSnapshot(exitSnapshot);
   } else {
     e2e.exitedValidatorNegative = { status: "not-run", reason: "public chain has no snapshot/time-travel isolation" };
@@ -876,6 +1055,18 @@ async function runMeasurements(
   const mValues = measurementSmoke ? [3] : [3, 7, 13];
   const batchSizes = measurementSmoke ? [1] : [1, 10, 50, 100];
   const repetitions = measurementSmoke ? 2 : 10;
+  const productionCap = await publicClient.readContract({
+    address: deployment.registry,
+    abi: RegistryABI,
+    functionName: "maxAggregateCreditUpliftPerProposal",
+  }) as bigint;
+  const relaxCap = await sendContract(
+    deployerWallet,
+    deployment.registry,
+    RegistryABI as Abi,
+    "setMaxAggregateCreditUpliftPerProposal",
+    [(1n << 256n) - 1n],
+  );
   await sendContract(deployerWallet, deployment.registry, RegistryABI as Abi, "setReputationSource", [DEPLOYER, true]);
   const validator0 = validatorWallet(validators[0]);
   let cellIndex = 0;
@@ -962,6 +1153,19 @@ async function runMeasurements(
       }
     }
   }
+  const restoreCap = await sendContract(
+    deployerWallet,
+    deployment.registry,
+    RegistryABI as Abi,
+    "setMaxAggregateCreditUpliftPerProposal",
+    [productionCap],
+  );
+  const restoredCap = await publicClient.readContract({
+    address: deployment.registry,
+    abi: RegistryABI,
+    functionName: "maxAggregateCreditUpliftPerProposal",
+  }) as bigint;
+  if (restoredCap !== productionCap) throw new Error("measurement harness did not restore aggregate uplift cap");
   const summary = {
     schemaVersion: 1,
     design: {
@@ -975,11 +1179,260 @@ async function runMeasurements(
       directRegistrySourceNote: "fresh-chain owner-authorized measurement harness; no impersonation",
       dvtPath: "DVTValidator.executeWithProof -> BLSAggregator.verifyAndExecute -> Registry.batchUpdateGlobalReputation",
       maxValidators: 13,
+      aggregateUpliftCapHarness: {
+        productionCapWei: productionCap,
+        rationale: "temporarily relaxed only for factorial batch measurement; restored before security experiment",
+        relaxReceipt: receiptRecord(relaxCap),
+        restoreReceipt: receiptRecord(restoreCap),
+        restoredCapWei: restoredCap,
+      },
     },
     cells,
   };
   writeJsonExclusive(join(derivedDir, "measurement-summary.json"), summary);
   return summary;
+}
+
+function deployFraudVerifier(deployment: Deployment): Address {
+  const contractsDir = join(yaaaDir, "contracts");
+  runLogged("overissue-verifier-deploy", "forge", [
+    "script",
+    "script/DeployOverIssueVerifier.s.sol:DeployOverIssueVerifier",
+    "--rpc-url",
+    rpcUrl,
+    "--broadcast",
+    "--slow",
+  ], contractsDir, {
+    AGGREGATOR: deployment.blsAggregator,
+    EXPECTED_AGGREGATOR: deployment.blsAggregator,
+    EXPECTED_CHAIN_ID: String(chainId),
+    DEPLOYER_PRIVATE_KEY: isSepolia ? livePrivateKey! : LOCAL_DEPLOYER_KEY,
+  });
+  const broadcastPath = join(
+    contractsDir,
+    `broadcast/DeployOverIssueVerifier.s.sol/${chainId}/run-latest.json`,
+  );
+  if (!existsSync(broadcastPath)) throw new Error("OverIssue verifier Forge broadcast file is missing");
+  const broadcast = JSON.parse(readFileSync(broadcastPath, "utf8")) as {
+    transactions?: Array<{ contractName?: string; contractAddress?: string; transactionType?: string }>;
+  };
+  const create = broadcast.transactions?.find(tx =>
+    tx.contractName === "OverIssueFraudProofVerifier"
+      && tx.transactionType === "CREATE"
+      && isAddress(tx.contractAddress ?? "")
+  );
+  if (!create?.contractAddress) throw new Error("OverIssue verifier address missing from Forge broadcast");
+  copyFileSync(broadcastPath, join(rawDir, "overissue-verifier-broadcast.json"));
+  return getAddress(create.contractAddress);
+}
+
+async function runGuardianExitSlashCompetition(
+  deployment: Deployment,
+  verifier: Address,
+  validators: PrivateKeyAccount[],
+  nodes: string[],
+) {
+  const operator = ZERO_ADDRESS;
+  const slashLevel = 1;
+  const epoch = 9_001n;
+  const overIssued = await publicClient.readContract({
+    address: deployment.aPNTs,
+    abi: xPNTsTokenABI,
+    functionName: "isOverIssued",
+  }) as boolean;
+  if (overIssued) throw new Error("fresh aPNTs is over-issued; cannot construct a truthful false-slash proof");
+
+  const localEvidenceHash = keccak256(encodeAbiParameters(
+    [{ type: "string" }, { type: "address" }, { type: "address" }, { type: "uint256" }],
+    ["DVT_OVERISSUE_EVIDENCE_V1", deployment.aPNTs, operator, epoch],
+  ));
+  const verifierEvidenceHash = await publicClient.readContract({
+    address: verifier,
+    abi: fraudVerifierAbi as Abi,
+    functionName: "evidenceHash",
+    args: [deployment.aPNTs, operator, epoch],
+  }) as Hex;
+  if (localEvidenceHash.toLowerCase() !== verifierEvidenceHash.toLowerCase()) {
+    throw new Error("off-chain evidence hash does not match the deployed verifier");
+  }
+
+  const proposer = validatorWallet(validators[0]);
+  const created = await createDvtSlashProposal(
+    deployment,
+    proposer,
+    operator,
+    slashLevel,
+    localEvidenceHash,
+  );
+  const value = slashProposal(created.id, operator, slashLevel, epoch, localEvidenceHash);
+  const signed = await signAndAggregateSlash(nodes, value, 3);
+  const executeProposal = await sendContract(
+    proposer,
+    deployment.dvtValidator,
+    DVTValidatorABI as Abi,
+    "executeWithProof",
+    [created.id, [], [], epoch, signed.aggregate.proof],
+  );
+  const armVerifier = await sendContract(
+    deployerWallet,
+    deployment.blsAggregator,
+    BLSAggregatorABI as Abi,
+    "setFraudProofVerifier",
+    [verifier],
+  );
+
+  const claimedSigners = validators.slice(0, 3).map(item => item.address)
+    .sort((a, b) => BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
+  const guiltyGuardians = [...claimedSigners];
+  const signerMask = BigInt(signed.aggregate.signerMask);
+  const fraudProofId = BigInt(keccak256(encodeAbiParameters(
+    [{ type: "string" }, { type: "uint256" }],
+    ["GUARDIAN_FRAUD_V1", created.id],
+  )));
+  const fraudProof = encodeAbiParameters(
+    [
+      { type: "uint256" }, { type: "address" }, { type: "uint8" },
+      { type: "uint256" }, { type: "address" }, { type: "uint256" },
+      { type: "address[]" },
+    ],
+    [created.id, operator, slashLevel, epoch, deployment.aPNTs, signerMask, claimedSigners],
+  );
+  const verifierAccepted = await publicClient.readContract({
+    address: verifier,
+    abi: fraudVerifierAbi as Abi,
+    functionName: "verify",
+    args: [fraudProofId, guiltyGuardians, fraudProof],
+  }) as boolean;
+  if (!verifierAccepted) throw new Error("real OverIssue verifier rejected the constructed fraud proof");
+
+  const exitingGuardian = validators[0];
+  const exitingWallet = validatorWallet(exitingGuardian);
+  const requestExit = await sendContract(
+    exitingWallet,
+    deployment.blsAggregator,
+    BLSAggregatorABI as Abi,
+    "requestGuardianExit",
+    [],
+  );
+  const exitRequest = await publicClient.readContract({
+    address: deployment.blsAggregator,
+    abi: BLSAggregatorABI,
+    functionName: "guardianExitRequests",
+    args: [exitingGuardian.address],
+  });
+  const queueSlash = await sendContract(
+    deployerWallet,
+    deployment.blsAggregator,
+    BLSAggregatorABI as Abi,
+    "queueGuardianSlash",
+    [fraudProofId, guiltyGuardians, fraudProof],
+  );
+  const pendingBefore = await Promise.all(guiltyGuardians.map(guardian =>
+    publicClient.readContract({
+      address: deployment.blsAggregator,
+      abi: BLSAggregatorABI,
+      functionName: "pendingGuardianSlashCount",
+      args: [guardian],
+    }) as Promise<bigint>
+  ));
+  if (pendingBefore.some(count => count !== 1n)) throw new Error("queued fraud case did not freeze every accused guardian");
+
+  const exitData = encodeFunctionData({
+    abi: RegistryABI,
+    functionName: "exitRole",
+    args: [ROLE_DVT],
+  });
+  let exitSimulationError = "";
+  try {
+    await publicClient.call({ account: exitingGuardian.address, to: deployment.registry, data: exitData });
+    throw new Error("guardian exit unexpectedly simulated while slash was pending");
+  } catch (error) {
+    exitSimulationError = sanitizeError(error);
+  }
+  const blockedExit = await sendExpectedRevert(exitingWallet, deployment.registry, exitData);
+  const locksBefore = await Promise.all(guiltyGuardians.map(guardian =>
+    publicClient.readContract({
+      address: deployment.staking,
+      abi: GTokenStakingABI,
+      functionName: "roleLocks",
+      args: [guardian, ROLE_DVT],
+    })
+  ));
+  const executeSlash = await sendContract(
+    deployerWallet,
+    deployment.blsAggregator,
+    BLSAggregatorABI as Abi,
+    "executeGuardianSlash",
+    [fraudProofId, guiltyGuardians, fraudProof],
+  );
+  const pendingAfter = await Promise.all(guiltyGuardians.map(guardian =>
+    publicClient.readContract({
+      address: deployment.blsAggregator,
+      abi: BLSAggregatorABI,
+      functionName: "pendingGuardianSlashCount",
+      args: [guardian],
+    }) as Promise<bigint>
+  ));
+  const locksAfter = await Promise.all(guiltyGuardians.map(guardian =>
+    publicClient.readContract({
+      address: deployment.staking,
+      abi: GTokenStakingABI,
+      functionName: "roleLocks",
+      args: [guardian, ROLE_DVT],
+    })
+  ));
+  const slashCase = await publicClient.readContract({
+    address: deployment.blsAggregator,
+    abi: BLSAggregatorABI,
+    functionName: "guardianSlashCases",
+    args: [fraudProofId],
+  });
+  if (pendingAfter.some(count => count !== 0n) || locksAfter.some(lock => (lock as readonly unknown[])[0] !== 0n)) {
+    throw new Error("executed fraud case did not release pending counts and slash every DVT lock");
+  }
+
+  let postSlashLivenessError = "";
+  try {
+    await publicClient.readContract({
+      address: deployment.blsAggregator,
+      abi: BLSAggregatorABI,
+      functionName: "verify",
+      args: [value.messageHash, signerMask, 3n, signed.aggregate.sigG2],
+    });
+    throw new Error("slashed guardian set unexpectedly remained BLS-eligible");
+  } catch (error) {
+    postSlashLivenessError = sanitizeError(error);
+  }
+
+  const evidence = {
+    verifier,
+    tokenOverIssuedAtProofTime: overIssued,
+    evidenceHash: localEvidenceHash,
+    proposal: value,
+    signerMask: signed.aggregate.signerMask,
+    signerSlots: signed.aggregate.slots,
+    claimedSigners,
+    guiltyGuardians,
+    fraudProofId: fraudProofId.toString(),
+    verifierAccepted,
+    createProposal: receiptRecord(created.receipt),
+    executeSlashOnlyProposal: receiptRecord(executeProposal),
+    armVerifier: receiptRecord(armVerifier),
+    requestExit: receiptRecord(requestExit),
+    exitRequest,
+    queueSlash: receiptRecord(queueSlash),
+    pendingBefore,
+    exitSimulationError,
+    blockedExit: receiptRecord(blockedExit),
+    locksBefore,
+    executeSlash: receiptRecord(executeSlash),
+    slashCase,
+    pendingAfter,
+    locksAfter,
+    postSlashLivenessError,
+  };
+  writeJsonExclusive(join(rawDir, "security-controls.json"), evidence);
+  return evidence;
 }
 
 async function verifyPublicDeployment(deployment: Deployment) {
@@ -1174,10 +1627,12 @@ async function main(): Promise<void> {
   runLogged("yaaa-generate-ephemeral-keys", "node", ["scripts/e2e/gen-repcredit-nodes.mjs", keyRoot, String(nodeCount)], yaaaDir);
   const validators = await setupValidators(deployment, keyRoot);
   const nodes = await startNodes(deployment, keyRoot);
+  const fraudVerifier = deployFraudVerifier(deployment);
 
   await verifyPublicDeployment(deployment);
   await runE2E(deployment, air, validators, nodes);
   if (!skipMeasurements) await runMeasurements(deployment, validators, nodes);
+  await runGuardianExitSlashCompetition(deployment, fraudVerifier, validators, nodes);
   if (isSepolia) await refundValidatorEth(validators);
 
   if (isSepolia) redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
@@ -1189,6 +1644,8 @@ async function main(): Promise<void> {
     join(rawDir, "network-preflight.json"),
     join(rawDir, "validator-setup.json"),
     join(rawDir, "e2e.json"),
+    join(rawDir, "overissue-verifier-broadcast.json"),
+    join(rawDir, "security-controls.json"),
     ...(isSepolia ? [join(rawDir, "validator-refunds.json")] : []),
     ...(skipMeasurements ? [] : [join(rawDir, "measurements.jsonl"), join(derivedDir, "measurement-summary.json")]),
   ];
