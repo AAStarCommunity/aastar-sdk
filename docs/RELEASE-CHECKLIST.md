@@ -73,6 +73,7 @@ consumer path**.
       | source ⇄ committed revision | `git status --porcelain` must be empty |
       | revision ⇄ reviewed revision | `scripts/upstream-abi-pin.json` → `repos[].revision` |
       | vendored copy ⇄ reviewed copy | `scripts/upstream-abi-pin.json` → `contracts[].abiSha256` |
+      | contract ⇄ reviewed source file | `scripts/upstream-abi-pin.json` → `contracts[].repo` + `contracts[].sourcePath` |
 
       Break any link and `--strict` exits 1. **Re-syncing an ABI and updating the pin file are the
       same commit** — that is what makes an ABI swap a reviewable diff instead of a silent one.
@@ -100,6 +101,15 @@ consumer path**.
       *"all N must-verify artifacts hash-match every source they record"* and any other checked
       artifact with an unestablished binding is printed as an explicit
       `NOT RELEASE-SCOPE CAVEAT` line — **a PASS never claims more than the run enforced.**
+
+      Round-8 closed the other half of that declaration: round-7 forced the target's VALUE and never
+      looked at its KEY, so `{ "contracts/src/Unrelated.sol": "Registry" }` passed `--strict` with
+      zero bytes of the real `Registry.sol` hashed — the artifact a rename or a move leaves behind.
+      The single compilation target's path must now be **byte-exact** the reviewed
+      `contracts[<name>].sourcePath`, inside `contracts[<name>].repo`, and in that clean pinned
+      checkout's verified source set. **Moving a must-verify contract upstream means updating that
+      pin in the same commit that re-syncs the ABI** — deliberately a reviewable diff here, not a
+      basename/`sourceName`/regex guess derived from the artifact itself.
 - [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
       ```bash
       pnpm run repcredit:typecheck && \

@@ -159,6 +159,63 @@ Smaller items from the same round:
   `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
   There is no acceptable state in which those four go unverified.
 
+### Eighth round (CC-50 `[from:docs]` on a9172fd1) — the declaration's PATH must be one this repo reviewed
+
+**Round seven forced the declaration's VALUE and never looked at its KEY (MEDIUM).** A must-verify
+artifact had to declare exactly one compilation target whose value is the contract name — but which
+FILE that key named was never compared with anything. An independent reviewer measured
+
+```json
+"compilationTarget": { "contracts/src/Unrelated.sol": "Registry" }
+```
+
+exiting 0 under `--strict` with the unconditional PASS, while `contracts/src/Registry.sol` was never
+hashed and did not appear anywhere in the output. This is the same failure as round-6 and round-7 —
+a green over zero verified bytes of the contract being released — entered from the key side instead
+of the value side. It is not only theoretical: a contract that MOVES leaves exactly this artifact
+behind, since the old path is still on disk, still hashes correctly, and now holds something else.
+Three such stale shells already exist in the sibling `out/` (test stubs, outside `MUST_VERIFY`).
+
+- `scripts/upstream-abi-pin.json` now pins the **canonical source** of every must-verify contract:
+  `contracts[<name>].repo` + `contracts[<name>].sourcePath` — `Registry` →
+  `contracts/src/core/Registry.sol`, `BLSAggregator` /`DVTValidator` →
+  `contracts/src/modules/monitoring/…`, `SuperPaymaster` →
+  `contracts/src/paymasters/superpaymaster/v3/SuperPaymaster.sol`.
+- `--strict` requires the artifact's single compilation target to be **byte-exact** that path, its
+  value to be the contract name, and the path to be in the **verified source set of that repo's
+  clean, pinned checkout**. A missing pin, a pin that is absolute or can escape its repo (`..`), a
+  pin whose repo declares no reviewed revision, and a pin belonging to a different checkout than the
+  artifact came from all fail closed (`NO PINNED SOURCE PATH` / `PINNED SOURCE PATH INVALID` /
+  `MAIN SOURCE PATH NOT PINNED` / `MAIN SOURCE REPO MISMATCH`).
+- **Deliberately not** a basename match, not `sourceName`, and not a `contract <Name>` regex over
+  the file: the first two are the guesses round seven removed, and a regex reads bytes the artifact
+  itself chose — a comment or a string literal satisfies it. It is fine as a sanity check (the real
+  positive test does run it) and unfit as the thing a release stands on. A human-reviewed constant
+  has no such failure mode, and it turns moving a contract into a reviewable diff in THIS repo.
+- **Seven new regressions (25 total).** Six synthetic: the right name on a wrong (but perfectly
+  hashed) path; a missing pin; a wrong pin over a correct artifact; a traversal pin; an absolute pin;
+  a pin belonging to another repo. Each keeps the whole rest of the chain intact, so the pin binding
+  is provably the only thing that fails. One **real**: the four shipped pins are held against the
+  actual sibling artifacts — same single target, byte-exact path, recorded source hash, and the file
+  on disk really declaring that contract (4/4 measured). Mutation-verified: disabling the byte-exact
+  compare turns exactly the three path cases red and restores the reported `--strict` exit 0 +
+  unconditional PASS; dropping the pin-shape check turns exactly the missing/traversal/absolute
+  cases red; dropping the repo check turns exactly that one red.
+- Re-measured on the current sibling `out/` (SuperPaymaster `fc0ca825` + airaccount `29caffc7`):
+  **996 of 996** artifacts carrying an object `compilationTarget` have exactly one entry, and the
+  four must-verify pins bind with **zero** false positives (`✅ 8 / 7 / 17 / 31 source(s) verified`,
+  no `MAIN SOURCE …` line on any of the 30 checked rows). The round-7 note's *915* was the count at
+  that time; the total moves with every upstream rebuild, the distribution does not.
+
+**Two report-honesty fixes.**
+
+- A `checked` row whose next line reads `MAIN SOURCE UNDECLARED` used to still print `✅ N source(s)
+  verified` — a green at war with its own report, the shape round-7 MEDIUM-2 removed from the PASS
+  sentence. It now degrades to `⚠️  N source(s) verified, main source NOT attributed` (LOW-2).
+- The `expectedMissing` lenient PASS — a run that already knows it verified less than it looks — was
+  the one green path that did not print the `NOT RELEASE-SCOPE CAVEAT` line. All three PASS paths now
+  name the non-must-verify gaps (LOW-3), pinned by its own regression.
+
 ### Seventh round (CC-50 `[from:docs]` on b2399ebf) — the artifact must DECLARE its own source; the PASS may only speak for what it enforced
 
 **The main source was still guessable (MEDIUM-1).** Round six required a must-verify artifact to

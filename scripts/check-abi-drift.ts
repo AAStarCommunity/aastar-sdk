@@ -153,7 +153,14 @@ const PIN_FILE = path.join(SDK_ROOT, 'scripts/upstream-abi-pin.json');
 
 type Pin = {
   repos?: Record<string, { revision: string; why?: string }>;
-  contracts?: Record<string, { abiSha256: string; why?: string }>;
+  contracts?: Record<string, {
+    abiSha256: string;
+    /** which pinned upstream repo owns this contract's canonical source (must-verify only) */
+    repo?: string;
+    /** the canonical, repo-relative source file that declares this contract (must-verify only) */
+    sourcePath?: string;
+    why?: string;
+  }>;
 };
 
 function loadPin(): Pin {
@@ -162,6 +169,76 @@ function loadPin(): Pin {
 }
 
 const PIN = loadPin();
+
+/**
+ * The REVIEWED source file for a must-verify contract: `contracts[<name>].{repo,sourcePath}`.
+ *
+ * CC-50 round-8 MEDIUM. Round-7 made the artifact's own `compilationTarget` the only accepted
+ * answer to "which file declares this contract", and forced its single entry's VALUE to be the
+ * contract name — but nothing ever checked the KEY. An independent reviewer measured
+ * `{ "contracts/src/Unrelated.sol": "Registry" }` exiting 0 under `--strict` with the
+ * unconditional PASS while `contracts/src/Registry.sol` appeared nowhere in the output and zero of
+ * its bytes were hashed. A stale artifact left behind by a rename/move produces exactly that shape
+ * on its own: the old path is still on disk, still hashes correctly, and now holds something else.
+ *
+ * So the release basis is a path this repo REVIEWED and committed, not something derived from the
+ * artifact. Deliberately NOT a basename match, NOT `sourceName`, and NOT a `contract <Name>` regex
+ * over the file: the first two are the guesses round-7 removed, and a regex reads bytes the artifact
+ * itself chose and can be satisfied by a comment or a string literal — useful as a sanity check,
+ * never as the thing a release stands on. A byte-exact comparison against a human-reviewed pin has
+ * no such failure mode, and it makes moving a contract a REVIEWABLE diff in this repo.
+ *
+ * A missing or malformed pin is a hard failure for a must-verify contract, not a skip: "we have no
+ * reviewed answer" must never read as "the artifact's answer is fine".
+ */
+type PinnedSource = { repo: string; sourcePath: string };
+
+function pinnedSourceFor(name: string): { pin: PinnedSource | null; problem: string | null; label: string } {
+  const bad = (problem: string, label: string) => ({ pin: null, problem, label });
+  const entry = PIN.contracts?.[name];
+  if (!entry) {
+    return bad(
+      `scripts/upstream-abi-pin.json declares no entry for ${name}, so no reviewed source path exists ` +
+        `for a must-verify contract`,
+      'NO PINNED SOURCE PATH',
+    );
+  }
+  const { repo, sourcePath } = entry;
+  if (typeof sourcePath !== 'string' || !sourcePath.length || typeof repo !== 'string' || !repo.length) {
+    return bad(
+      `scripts/upstream-abi-pin.json declares no contracts.${name}.repo + contracts.${name}.sourcePath — ` +
+        `a must-verify contract must pin the canonical source file that declares it`,
+      'NO PINNED SOURCE PATH',
+    );
+  }
+  // The pin is compared byte-exact against the artifact's declaration and then resolved under the
+  // upstream repo root, so it must be an unambiguous repo-relative POSIX path. `..` would let a pin
+  // point outside the very repo whose clean, pinned revision is the evidence.
+  const segments = sourcePath.split('/');
+  const shape =
+    sourcePath.includes('\\')
+      ? 'contains a backslash (POSIX, repo-relative paths only)'
+      : /^[A-Za-z]:/.test(sourcePath) || sourcePath.startsWith('/')
+        ? 'is absolute — a pinned source must be relative to the upstream repo root'
+        : segments.some((s) => s === '' || s === '.' || s === '..')
+          ? 'contains an empty, "." or ".." segment — it must not be able to escape the repo it is pinned to'
+          : path.posix.normalize(sourcePath) !== sourcePath
+            ? 'is not a normalised path'
+            : !sourcePath.endsWith('.sol')
+              ? 'does not name a .sol file'
+              : null;
+  if (shape) {
+    return bad(`the pinned contracts.${name}.sourcePath "${sourcePath}" ${shape}`, 'PINNED SOURCE PATH INVALID');
+  }
+  if (!PIN.repos?.[repo]?.revision) {
+    return bad(
+      `contracts.${name}.repo is "${repo}", which declares no repos["${repo}"].revision — a pinned source ` +
+        `path is only evidence when the repo it lives in is itself pinned to a reviewed revision`,
+      'PINNED SOURCE PATH INVALID',
+    );
+  }
+  return { pin: { repo, sourcePath }, problem: null, label: '' };
+}
 
 function git(root: string, args: string[]): string {
   return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
@@ -251,6 +328,10 @@ type SourceVerification = {
  * The guesses survive for contracts OUTSIDE `MUST_VERIFY` (non-foundry artifact shapes still get a
  * best-effort main source in the report), where they cannot reach the release gate: only
  * must-verify contracts are fed to `provenanceGaps`.
+ *
+ * This function settles WHETHER the artifact declares exactly one target and whether that target
+ * claims this contract. WHICH file it may name is not its business: that is compared against the
+ * reviewed pin in `verifyArtifactSources` (CC-50 round-8, `pinnedSourceFor`).
  */
 function mainSourceOf(
   artifact: any,
@@ -328,6 +409,8 @@ function verifyArtifactSources(
   name: string,
   /** must-verify contracts get NO main-source guessing — see `mainSourceOf` */
   declaredOnly: boolean,
+  /** the upstream repo label this artifact is attributed to, matched against the pinned `repo` */
+  repoLabel: string | null,
 ): SourceVerification {
   // `git status --porcelain` lines are "XY <path>" (and "R  old -> new"); we only need the paths.
   const dirtySet = new Set(
@@ -403,7 +486,14 @@ function verifyArtifactSources(
   let mainSourceProblem: string | null = null;
   let mainSourceGapLabel = 'MAIN SOURCE NOT VERIFIED';
   const verifiedSet = new Set(verified);
-  if (declared.declarationProblem) {
+  // The reviewed answer comes first: with no usable pin there is nothing to compare the artifact's
+  // declaration against, and a well-formed artifact must not paper over a gate that lost its
+  // reviewed input (CC-50 round-8).
+  const pinned = declaredOnly ? pinnedSourceFor(name) : null;
+  if (pinned?.problem) {
+    mainSourceProblem = pinned.problem;
+    mainSourceGapLabel = pinned.label;
+  } else if (declared.declarationProblem) {
     // The artifact never claimed this contract. Reported as its own gap kind so a reader can tell
     // "the chain broke" from "the artifact refuses to say which file this contract came from".
     mainSourceProblem = declared.declarationProblem;
@@ -412,6 +502,24 @@ function verifyArtifactSources(
     mainSourceProblem =
       `the artifact does not name its own contract source (no metadata.settings.compilationTarget ` +
       `entry for ${name}, no sourceName, no unambiguous ${name}.sol)`;
+  } else if (pinned?.pin && mainSource !== pinned.pin.sourcePath) {
+    // RIGHT NAME, WRONG PATH (CC-50 round-8 MEDIUM). The declaration is well-formed — exactly one
+    // target, and its value IS this contract — so every round-7 check is satisfied while the file
+    // it points at is not the reviewed source of this contract. That artifact's green says nothing
+    // about the contract being released, however perfectly the file it names hashes.
+    mainSourceProblem =
+      `the artifact declares ${mainSource} => ${name}, but scripts/upstream-abi-pin.json pins ${name} to ` +
+      `${pinned.pin.sourcePath} (${pinned.pin.repo}) — a must-verify artifact's ONE compilation target must ` +
+      `be BYTE-EXACT the reviewed path; the right contract name on a different file is not evidence about ` +
+      `${name}. If the contract really moved, review the move and update the pin in the same commit`;
+    mainSourceGapLabel = 'MAIN SOURCE PATH NOT PINNED';
+  } else if (pinned?.pin && repoLabel !== pinned.pin.repo) {
+    // The path only means something inside the repo it was reviewed in: `contracts/src/core/
+    // Registry.sol` exists, or could be made to exist, in more than one checkout.
+    mainSourceProblem =
+      `${mainSource} is pinned to the ${pinned.pin.repo} checkout, but this artifact is attributed to ` +
+      `${repoLabel ?? 'no repo'} — a pinned source path is evidence only inside its own pinned repo`;
+    mainSourceGapLabel = 'MAIN SOURCE REPO MISMATCH';
   } else if (!verifiedSet.has(mainSource)) {
     const why = mismatched.includes(mainSource)
       ? 'its on-disk bytes do NOT hash to the keccak256 the artifact records'
@@ -586,7 +694,7 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     abiSha256: createHash('sha256').update(JSON.stringify(ups)).digest('hex'),
     repo,
     sources: repo
-      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths, name, MUST_VERIFY.has(name))
+      ? verifyArtifactSources(up, repo.root, repo.dirtyPaths, name, MUST_VERIFY.has(name), repo.label)
       : {
           sourceCount: 0,
           verified: [],
@@ -657,11 +765,17 @@ for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b
   // Say what was COMPARED, never how many entries were seen: `N source(s)` used to include
   // entries that carried no comparable hash at all (CC-50 round-6 MEDIUM).
   const uncovered = src.unresolved.length + src.unverifiable.length + src.external.length;
+  // A green tick on the same row whose next line reads "MAIN SOURCE UNDECLARED" is a report at war
+  // with itself — the same shape round-7 MEDIUM-2 removed from the PASS sentence (CC-50 round-8
+  // LOW-2). Strict already exits 1 on these, but the row must not read as verified either.
+  const parts = [`${src.verified.length} source(s) verified`];
+  if (uncovered) parts.push(`${uncovered} not covered`);
+  if (src.mainSourceProblem) parts.push('main source NOT attributed');
   const binding = src.mismatched.length
     ? `❌ ${src.mismatched.length}/${src.sourceCount} source(s) DIFFER from the artifact`
-    : uncovered
-      ? `⚠️  ${src.verified.length} source(s) verified, ${uncovered} not covered`
-      : `✅ ${src.verified.length} source(s) verified`;
+    : uncovered || src.mainSourceProblem
+      ? `⚠️  ${parts.join(', ')}`
+      : `✅ ${parts.join(', ')}`;
   console.log(`  ${entry.name}  ${entry.abiSha256.slice(0, 16)}  ${binding}  ${entry.artifact}`);
   for (const file of src.mismatched) console.log(`       ✗ ${file}`);
   for (const file of src.unresolved) console.log(`       ? ${file} (named by the artifact, not on disk)`);
@@ -814,6 +928,15 @@ let vendoredPinHolds = true;
 // external) and only `verified` counts, and a must-verify artifact must additionally prove that
 // the source solc names as ITS OWN (metadata.settings.compilationTarget, sourceName) is in that
 // verified set. Verifying *a* source and verifying *this contract* are different claims.
+//
+// ROUND-8 (CC-50): round-7 forced the declaration's VALUE (the contract name) and never looked at
+// its KEY. `{ "contracts/src/Unrelated.sol": "Registry" }` — exactly one entry, value correct, that
+// file in-repo and hashing perfectly — exited 0 under `--strict` with the unconditional PASS while
+// `contracts/src/Registry.sol` was not hashed and did not appear in the output at all. A rename or
+// move leaves precisely that artifact behind. So the KEY is now compared byte-exact against a path
+// this repo reviewed and committed (`contracts[<name>].sourcePath`, in `contracts[<name>].repo`),
+// and a missing or malformed pin fails just as hard — see `pinnedSourceFor`. The chain's last link
+// is a reviewed constant, not something the artifact gets to choose.
 // ---------------------------------------------------------------------------------------------
 function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   const gaps: string[] = [];
@@ -941,6 +1064,22 @@ if (mustVerifyMissing.length) {
 }
 if (failed) process.exit(1);
 
+/**
+ * Name every checked artifact OUTSIDE the enforced set whose binding was not established.
+ *
+ * Printed by EVERY path that ends in a PASS (CC-50 round-8 LOW-3): the caveat used to hang off the
+ * two branches under `else`, so the `expectedMissing` lenient PASS — a run that already knows it
+ * verified less than it looks — was the one green that stayed silent about it.
+ */
+function printNonMustCaveat(): void {
+  if (!nonMustSourceCaveats.length) return;
+  console.log(
+    `      NOT RELEASE-SCOPE CAVEAT: ${nonMustSourceCaveats.length} further checked artifact(s) are outside the ` +
+      'must-verify set and their artifact⇄source binding is NOT established — they were compared by ABI only: ' +
+      `${nonMustSourceCaveats.join(', ')}.`,
+  );
+}
+
 if (expectedMissing.length) {
   // Reachable in lenient mode only — strict already failed on it above.
   console.log(
@@ -953,6 +1092,7 @@ if (expectedMissing.length) {
         'here establishes that their artifacts match the sources they record.',
     );
   }
+  printNonMustCaveat();
   console.log('      LENIENT MODE: none of the above is enforced. `--strict` (the release gate) fails on all of it.');
 } else {
   const pinned = usedRepos
@@ -990,13 +1130,7 @@ if (expectedMissing.length) {
   // Never let the green sentence contradict the `checked` table above it: source coverage is only
   // ENFORCED for the must-verify set, so every other artifact with a gap is named right here rather
   // than folded into a blanket "every artifact" (CC-50 round-7 MEDIUM-2).
-  if (nonMustSourceCaveats.length) {
-    console.log(
-      `      NOT RELEASE-SCOPE CAVEAT: ${nonMustSourceCaveats.length} further checked artifact(s) are outside the ` +
-        'must-verify set and their artifact⇄source binding is NOT established — they were compared by ABI only: ' +
-        `${nonMustSourceCaveats.join(', ')}.`,
-    );
-  }
+  printNonMustCaveat();
   console.log(
     STRICT
       ? `      Attributed to committed upstream revision(s): ${pinned || '(none pinned)'}.`

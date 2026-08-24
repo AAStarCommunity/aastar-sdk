@@ -1,5 +1,5 @@
 {
-  "$comment": "Upstream ABI provenance pin (CC-50 round-4 MEDIUM-1). `check:abi-drift --strict` binds every must-verify ABI to a CLEAN, NAMED upstream revision: repos[].revision must match the sibling checkout's HEAD, that checkout must have no uncommitted changes, and each artifact must still hash-match the sources it records in its solc metadata. contracts[].abiSha256 pins the SDK's own vendored copy, so re-syncing an ABI without updating this file is a hard failure rather than a silent swap. Update it in the SAME commit that re-syncs an ABI.",
+  "$comment": "Upstream ABI provenance pin (CC-50 round-4 MEDIUM-1). `check:abi-drift --strict` binds every must-verify ABI to a CLEAN, NAMED upstream revision: repos[].revision must match the sibling checkout's HEAD, that checkout must have no uncommitted changes, and each artifact must still hash-match the sources it records in its solc metadata. contracts[].abiSha256 pins the SDK's own vendored copy, so re-syncing an ABI without updating this file is a hard failure rather than a silent swap. contracts[].repo + contracts[].sourcePath pin the CANONICAL source file that declares the contract (CC-50 round-8 MEDIUM): a must-verify artifact's single metadata.settings.compilationTarget key must be BYTE-EXACT this path and its value the contract name, and that path must be in the verified source set of that repo's clean, pinned checkout. Without it, an artifact declaring {SomeOtherFile.sol: \"Registry\"} passed strict with zero bytes of the real Registry.sol hashed. sourcePath is repo-relative, POSIX, no \"..\"/\".\"/absolute segments. Update all of this in the SAME commit that re-syncs an ABI.",
   "repos": {
     "SuperPaymaster": {
       "revision": "03713febef863a7e3bafe13b0f955fa1f0d85683",
@@ -13,18 +13,26 @@
   "contracts": {
     "Registry": {
       "abiSha256": "21b4dc5c8c45d35ac1a4c3db4be550c77e3884d8d20f4bd774107a879648ebb4",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/core/Registry.sol",
       "why": "credit policy + reputation quorum entry point"
     },
     "BLSAggregator": {
       "abiSha256": "ff0a2736826a05616266338533bab93e47a7e2e956753aa127059ad93d7715aa",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/modules/monitoring/BLSAggregator.sol",
       "why": "domain/tag schema, slash + reputation quorum, guardian exit"
     },
     "DVTValidator": {
       "abiSha256": "f5861b0563a82cf8cd6bd04528ee747bca7604bde8b97ae2486a7f63f903ab8c",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/modules/monitoring/DVTValidator.sol",
       "why": "executeWithProof path. Vendored from SuperPaymaster's out/DVTValidator.sol/DVTValidator.json (the compiler's own output), NOT from its abis/DVTValidator.json: as of SP 03713feb/ebc05663 that hand-maintained copy is STALE — 16 functions vs 18 in out/, missing createProposal(address,uint8,string,bytes32) and queueSlashWithProof(address,uint8,uint256,bytes); it was last touched in 050f56b3 (2026-06-15). Reported upstream as CC-50 round-4 LOW-2; any downstream reading SP's abis/ gets the short interface."
     },
     "SuperPaymaster": {
       "abiSha256": "4f5216110a509492983c0f89ce1cbac562cee43ab3f9b8c1c924d3f29c287928",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/paymasters/superpaymaster/v3/SuperPaymaster.sol",
       "why": "gasless lifecycle sponsor"
     }
   },
