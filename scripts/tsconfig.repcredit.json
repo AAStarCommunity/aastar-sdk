@@ -3,7 +3,8 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["vitest/globals", "node"],
     "noEmit": true
   },
-  "include": ["./repcredit-e2e.ts"]
+  "include": ["./repcredit-e2e.ts", "./repcredit/**/*.ts"]
 }

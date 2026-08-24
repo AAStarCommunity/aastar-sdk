@@ -2,6 +2,98 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] — targeting SDK 0.46.0 (minor)
+
+> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.** CC-50 blocker **B2** is still open: the
+> `Registry` / `BLSAggregator` ABIs on this branch were copied from an **unmerged** SuperPaymaster
+> experiment branch (`daa1d1ec`). Those interfaces exist on **no SuperPaymaster main commit and no
+> deployed chain**, so this version has no valid ABI provenance yet. It may only be published after
+> repo:sp lands its fix and returns a final commit/version/artifact hash.
+
+**RepCredit evidence orchestrator, and the retirement of the three Paper7 scripts.**
+
+### Added
+
+- **`scripts/repcredit-e2e.ts`** — the RepCredit paper evidence orchestrator. Deploys a fresh
+  Prague Anvil chain or an isolated Sepolia stack, starts real YAAA validators, and runs the true
+  cross-repository path (YAAA structured BLS co-signing → DVT → Registry → AirAccount
+  UserOperation → EntryPoint → SuperPaymaster → xPNTs burn or debt/auto-repayment), freezing the
+  evidence with a per-file `materialPassport` (bytes + sha256).
+  **Not a production API**, not exported from any package, and not in the npm bundle.
+- **`scripts/repcredit/negative-control.ts`** + reverse tests — falsifiable negative controls
+  (see Fixed/H1). New CI step `pnpm run repcredit:test`.
+- **`scripts/repcredit/sync-fixture-abis.ts`** + `pnpm run repcredit:abi:sync` /
+  `repcredit:abi:check` — generates the experiment ABI fixtures from the sibling foundry artifacts
+  and pins each by sha256 + upstream commit, with an `upstreamMerged` flag. The runner verifies the
+  pins before it touches a chain.
+
+### Fixed — the negative controls could not fail (CC-50 H1)
+
+Four "this attack must be rejected" controls wrote their sentinel `throw` **inside** the `try` that
+was meant to catch the attack's failure. When an attack actually succeeded, the sentinel was caught
+by its own `catch`, stringified, and written into the evidence file as if it were the rejection
+reason — and the run still reported `status: "passed"`. The controls verified nothing.
+
+- All four sites now decide **outside** the try (`expectCallRejected`): aggregate-uplift cap,
+  tampered-score on-chain simulation, guardian-exit-while-slash-pending.
+- **Post-slash BLS liveness** was the worst of the four: it read `BLSAggregator.verify(...)`, a
+  **bool-returning view**. A slashed guardian set that stayed BLS-eligible returns `true` and never
+  throws, so the control could not detect the failure it existed to detect. `expectViewRejected`
+  now demands a revert **or an explicit `false`**.
+- A rejection is no longer accepted if it was an out-of-gas, transport, nonce or timeout failure —
+  those prove nothing about the security property. Reverted receipts must also show refunded gas
+  (`assertRevertedNotOutOfGas`), since an out-of-gas tx also lands as `status: "reverted"`.
+- Node-side HTTP controls now require a **4xx**: a node that 500s on everything used to make all
+  five negative controls "pass".
+- `scripts/repcredit/negative-control.test.ts` (19 tests) breaks each guarded property and asserts
+  the control throws, including a test that pins the original swallowing pattern as the baseline.
+
+### Fixed — experiment mock ABIs were published to npm (CC-50 H2) and broke the drift gate (B1)
+
+`RepCreditCounterABI` and `MockAgentIdentityRegistryABI` were exported from `@aastar/core` and so
+shipped inside `@aastar/sdk/dist`. `MockAgentIdentityRegistry.json` was additionally a hand-written
+3-entry subset of a 15-entry upstream artifact, which turned `pnpm run check:abi-drift` from
+**exit 0 to exit 1** — a CI hard-gate regression.
+
+- Both ABIs moved to `scripts/repcredit/abis/`, outside every published package, and removed from
+  the `@aastar/core` public surface. Verified against the actual `npm pack` tarball: 0 occurrences.
+- Both are now **generated** from the upstream foundry artifacts rather than hand-vendored, and
+  pinned by content hash. `check:abi-drift` is back to **exit 0**.
+
+### Fixed — cleanup was not fail-safe (CC-50 M2 / M3)
+
+- The staged Sepolia deployment config inside the SuperPaymaster checkout was removed by a
+  statement that any earlier throw skipped. A stale file left behind could be silently read as the
+  current deployment on the next run, pointing the evidence at the wrong addresses. It is now
+  cleared from a shared `cleanup()` reached by every exit path, and pre-deleted before deploying.
+- **No signal handling existed.** Ctrl-C bypassed the top-level `finally` entirely, leaving the
+  ephemeral BLS node keys in `/tmp` and orphaning anvil plus every YAAA child holding ports
+  18547 / 29301+. `SIGINT` / `SIGTERM` / `SIGHUP` now run the same idempotent cleanup.
+- `git()` no longer inherits the full `process.env` (i.e. `REPCREDIT_PRIVATE_KEY` and the
+  API-keyed RPC URL); it uses the same minimal env as every other child process.
+
+### Changed — [BREAKING-INTERNAL] three Paper7 evidence scripts retired
+
+`packages/analytics/scripts/paper7-exclusive-data.ts`, `paper7_credit_loop.ts` and
+`paper7_reputation_credit.ts` now throw on invocation. Each produced invalid evidence: the
+coordinator launched a non-Prague Anvil and mixed simulated output with contract results; the
+credit loop impersonated contracts and called `recordDebt` directly, bypassing `handleOps`/`postOp`;
+the reputation script used a random, non-Registry-bound BLS proof.
+
+- **Replacement**: `REPCREDIT_OUTPUT_DIR=/absolute/new/directory pnpm repcredit:e2e`.
+- **Migration guide + output-schema mapping**: `packages/analytics/README.md` ("退役与迁移").
+- **Semver: minor, not major.** These are repo-internal scripts; `@aastar/sdk` publishes
+  `files: ["dist"]`, so no npm consumer can reach them. Nothing in CI called them either —
+  `run_paper7_exclusive_data.sh` invokes `scripts/l4-setup.ts` and
+  `scripts/06_local_test_v3_reputation.ts` and never touched the retired three.
+
+### Note — the two evidence pins are semantically identical
+
+Local evidence was frozen at `401552ab`, the Sepolia run at `4077f110`. The only commits between
+them (`54bfed13`, `4077f110`) change **where the Sepolia deployment config is written**; the local
+path (`deployments/config.anvil.json`) is untouched. The experiment semantics are the same at both
+pins — the difference is staging location, not measured behaviour.
+
 ## [0.45.0] - 2026-08-18
 **SDK Code Integrity Hash**: `691e896e7f57c01bec14ced14aaecda7dad7031e2952389db5df9ad044e403fe`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

@@ -52,6 +52,18 @@ jobs:
       - name: Run unit tests
         run: pnpm -r test
 
+      # Hard gate: the RepCredit evidence runner's negative controls must be falsifiable.
+      # These tests break each guarded security property and assert the control throws — the
+      # regression they lock down is CC-50 H1, where every control had its sentinel throw inside
+      # its own try/catch, so an attack that SUCCEEDED was recorded as evidence and the run
+      # still reported "passed". `pnpm -r test` does not reach scripts/, hence a separate step.
+      - name: RepCredit negative-control reverse tests
+        run: pnpm run repcredit:test
+
+      # Type-checks the evidence runner and its fixtures. It is not part of any package build.
+      - name: RepCredit runner typecheck
+        run: pnpm run repcredit:typecheck
+
       # ---------------------------------------------------------------------------------
       # DELIBERATELY NOT IN CI: abi:sync / check:abi / check:abi-drift
       #

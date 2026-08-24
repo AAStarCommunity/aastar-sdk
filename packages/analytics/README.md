@@ -71,9 +71,9 @@ packages/analytics/
 │   ├── collect_industry_baseline.ts     # Alchemy/Pimlico baselines
 │   ├── compute_cost_summary.ts          # Aggregated cost breakdown table
 │   ├── gasless-collect.ts               # Gasless data collector (OP mainnet)
-│   ├── paper7-exclusive-data.ts         # Paper7 closed-loop data (anvil)
-│   ├── paper7_credit_loop.ts            # Credit→Debt→Repay cycle runner
-│   ├── paper7_reputation_credit.ts      # Reputation→Credit mapping runner
+│   ├── paper7-exclusive-data.ts         # RETIRED 0.46.0 → pnpm repcredit:e2e
+│   ├── paper7_credit_loop.ts            # RETIRED 0.46.0 → pnpm repcredit:e2e
+│   ├── paper7_reputation_credit.ts      # RETIRED 0.46.0 → pnpm repcredit:e2e
 │   ├── run_analytics_coordinator.ts     # Full pipeline coordinator
 │   ├── run_paper7_exclusive_data.sh     # Paper7 shell wrapper (CI-friendly)
 │   ├── fetch-tx-hashes.ts               # TX hash fetcher utility
@@ -152,11 +152,15 @@ Paper7 requires a distinct set of evidence to prove **CommunityFi closed-loop se
 
 ### Running
 
-```bash
-# Unified entry (Anvil auto-start, deploy, sync, run all subtasks)
-pnpm exec tsx packages/analytics/scripts/paper7-exclusive-data.ts --network anvil --cycles 5
+> ⚠️ The three `paper7_*` scripts were RETIRED in SDK 0.46.0 (breaking-internal) and now throw.
+> See "退役与迁移" below for the replacement command and the output-schema mapping.
 
-# Shell wrapper (CI-friendly)
+```bash
+# Current entry point — run from the SDK root. The output dir must not already exist.
+REPCREDIT_OUTPUT_DIR=/absolute/new/directory pnpm repcredit:e2e
+
+# Shell wrapper (CI-friendly) — still valid; it calls scripts/l4-setup.ts and
+# scripts/06_local_test_v3_reputation.ts, NOT the retired scripts.
 bash packages/analytics/scripts/run_paper7_exclusive_data.sh --network anvil --cycles 5
 ```
 
@@ -367,29 +371,44 @@ Paper7 需要一组**与通用 gasless 基线不同**的专属证据，用来证
 
 ### 1) 如何运行（推荐）
 
-统一入口脚本（负责启动 Anvil、必要时自动部署并同步配置，然后跑各子任务）：
+> ⚠️ **三个 Paper7 脚本已于 SDK 0.46.0 退役（breaking-internal）**，直接运行会 throw。
+> 迁移到仓库根目录的 RepCredit 证据编排器，见下方「退役与迁移」。
 
 ```bash
-pnpm exec tsx scripts/paper7-exclusive-data.ts --network anvil --cycles 5
+# 从 SDK 根目录运行。输出目录必须不存在（防止串场覆盖既有证据）。
+REPCREDIT_OUTPUT_DIR=/absolute/new/directory pnpm repcredit:e2e
 ```
 
-等价的 shell 包装（更适合 CI/重复跑批）：
+等价的 shell 包装（更适合 CI/重复跑批）仍然可用——它调用的是 `scripts/l4-setup.ts` 与
+`scripts/06_local_test_v3_reputation.ts`，**不经过**这三个退役脚本：
 
 ```bash
 ./packages/analytics/run_paper7_exclusive_data.sh --network anvil --cycles 5
 ```
 
+#### 退役与迁移（Retirement & migration）
+
+| 退役脚本 | 退役原因 | 替代命令 | 输出 schema 变化 |
+|---|---|---|---|
+| `scripts/paper7-exclusive-data.ts` | 启动的是非 Prague Anvil，且把仿真数据与合约结果混在一起当证据 | `REPCREDIT_OUTPUT_DIR=<dir> pnpm repcredit:e2e` | 不再写 `packages/analytics/data/paper7_exclusive/<timestamp>/`；改写 `$REPCREDIT_OUTPUT_DIR/{manifest.json,raw/,derived/,logs/}`，并附 `materialPassport`（每个证据文件的 bytes + sha256） |
+| `scripts/paper7_credit_loop.ts` | impersonate 合约后直接调 `recordDebt`，绕过 `handleOps`/`postOp`，证明不了 ERC-4337 结算 | 同上（credit→debt→repay 由 `raw/e2e.json` 的 Arm A/B 覆盖） | `credit_cycle_*.json` → `raw/e2e.json` |
+| `scripts/paper7_reputation_credit.ts` | 使用随机、未与 Registry 绑定的 BLS proof | 同上（reputation→credit 由 `raw/e2e.json` 的 `contribution` 段覆盖） | `reputation_credit.json` → `raw/e2e.json` |
+
+三个脚本仍以文件形式保留，运行时抛出指向替代命令的错误——比直接删文件更容易定位。它们
+**不在 `@aastar/sdk` 的发布面内**（`files: ["dist"]`），因此对 npm consumer 不构成 breaking change。
+`liquidity_velocity_simulation.csv` 是纯仿真产物，与本次退役无关，继续按原方式使用。
+
 ### 2) 脚本目标与流程定位
 
-- `scripts/paper7-exclusive-data.ts`
-  - **目标**：生成 Paper7 专属闭环数据（credit cycles + reputation→credit + liquidity simulation）。
-  - **作用位置**：属于“可重复的受控实验层”，用 gas units 固定地刻画合约路径开销与状态变化，避免 ETH/USD 等市场变量污染结论。
-- `scripts/paper7_credit_loop.ts`
-  - **目标**：跑一次完整 **credit→debt→repay** 闭环（Anvil-only，依赖 `anvil_*` RPC）。
-  - **产出**：每次运行写一个 `credit_cycle_*.json`。
-- `scripts/paper7_reputation_credit.ts`
-  - **目标**：跑一次 **reputation sync → registry credit update**，并记录关键读数与每笔交易 gasUsed。
-  - **产出**：写 `reputation_credit.json`。
+- `scripts/repcredit-e2e.ts`（SDK 根目录，**当前唯一的证据入口**）
+  - **目标**：在全新的 Prague Anvil 链或隔离的 Sepolia 部署上，跑真实的跨仓路径——YAAA 结构化 BLS
+    联签 → DVT → Registry → AirAccount UserOperation → EntryPoint → SuperPaymaster → xPNTs 燃烧
+    或债务/自动还款，并冻结 evidence。
+  - **作用位置**：取代下面三个退役脚本的全部证据职责；本地模式另外测量
+    s={3,7,13} × B={1,10,50,100} × {Registry,DVT}，同一 EVM 快照重复 10 次。
+- ~~`scripts/paper7-exclusive-data.ts`~~ — **已退役**，见上方迁移表。
+- ~~`scripts/paper7_credit_loop.ts`~~ — **已退役**，见上方迁移表。
+- ~~`scripts/paper7_reputation_credit.ts`~~ — **已退役**，见上方迁移表。
 - `liquidity_velocity_simulation.csv`
   - **目标**：给论文提供“Baseline Liquidity 机制”的直观趋势证据（对比可用于 gas 清算 vs 不可清算时，积分存量随时间的衰减/累积差异）。
 

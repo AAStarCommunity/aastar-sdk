@@ -21,12 +21,20 @@ import {
   EntryPointABI,
   GTokenABI,
   GTokenStakingABI,
-  MockAgentIdentityRegistryABI,
   RegistryABI,
-  RepCreditCounterABI,
   SuperPaymasterABI,
   xPNTsTokenABI,
 } from "@aastar/core";
+// Experiment-only mocks. These deliberately do NOT come from @aastar/core: anything exported there
+// ships in the published @aastar/sdk bundle and is drift-checked as a production interface (CC-50 B1/H2).
+import { MockAgentIdentityRegistryABI, RepCreditCounterABI } from "./repcredit/abis/index.js";
+import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
+import {
+  assertHttpRejections,
+  assertRevertedNotOutOfGas,
+  expectCallRejected,
+  expectViewRejected,
+} from "./repcredit/negative-control.js";
 import { bls12_381 } from "@noble/curves/bls12-381";
 import {
   concat,
@@ -194,6 +202,13 @@ const publicClient = createPublicClient({ chain: experimentChain, transport: htt
 const deployerWallet = createWalletClient({ account: deployerAccount, chain: experimentChain, transport: http(rpcUrl) });
 const children: ChildProcess[] = [];
 const tempRoot = mkdtempSync(join(tmpdir(), "repcredit-e2e-"));
+/**
+ * Deployment config this run staged OUTSIDE the SDK, inside the SuperPaymaster checkout. It must be
+ * removed on EVERY exit path (CC-50 M2): if it survives a failure, the next run can read stale
+ * addresses whenever forge does not overwrite it, and the evidence then points at the wrong
+ * deployment. Module-level so the top-level finally and the signal handlers can both reach it.
+ */
+let stagedDeploymentConfig: string | null = null;
 const fraudVerifierAbi = [
   {
     type: "function",
@@ -252,7 +267,9 @@ function runLogged(label: string, command: string, args: string[], cwd: string, 
 }
 
 function git(cwd: string, ...args: string[]): string {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  // safeEnv for the same reason every other child process gets it: git has no business inheriting
+  // REPCREDIT_PRIVATE_KEY or the API-keyed RPC URL.
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", env: safeEnv({}) });
   if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}`);
   return result.stdout.trim();
 }
@@ -307,13 +324,15 @@ async function sendExpectedRevert(
   wallet: ReturnType<typeof createWalletClient>,
   address: Address,
   data: Hex,
+  label = "expected revert",
 ): Promise<TransactionReceipt> {
-  const hash = await (wallet as any).sendTransaction({
-    to: address,
-    data,
-    gas: isSepolia ? 4_000_000n : 8_000_000n,
-  });
-  return waitReceipt(hash, "reverted");
+  const gas = isSepolia ? 4_000_000n : 8_000_000n;
+  const hash = await (wallet as any).sendTransaction({ to: address, data, gas });
+  const receipt = await waitReceipt(hash, "reverted");
+  // `status: "reverted"` alone is not evidence: an out-of-gas transaction lands the same way.
+  // Require that the revert refunded gas, i.e. a rule stopped it rather than the gas limit (CC-50).
+  assertRevertedNotOutOfGas(label, { status: receipt.status, gasUsed: receipt.gasUsed }, gas);
+  return receipt;
 }
 
 async function rpc(method: string, params: unknown[] = []): Promise<any> {
@@ -692,14 +711,12 @@ async function runAggregateUpliftCapAttack(
     functionName: "executeWithProof",
     args: [created.id, users, [100n, 100n], 701n, signed.aggregate.proof],
   });
-  let simulationError = "";
-  try {
-    await publicClient.call({ account: validator.address, to: deployment.dvtValidator, data: executeData });
-    throw new Error("aggregate uplift attack unexpectedly simulated successfully");
-  } catch (error) {
-    simulationError = sanitizeError(error);
-  }
-  const rejected = await sendExpectedRevert(wallet, deployment.dvtValidator, executeData);
+  const simulationError = await expectCallRejected(
+    "aggregate uplift cap (simulation)",
+    () => publicClient.call({ account: validator.address, to: deployment.dvtValidator, data: executeData }),
+    sanitizeError,
+  );
+  const rejected = await sendExpectedRevert(wallet, deployment.dvtValidator, executeData, "aggregate uplift cap (tx)");
   const cap = await publicClient.readContract({
     address: deployment.registry,
     abi: RegistryABI,
@@ -778,7 +795,7 @@ async function runE2E(
     functionName: "handleOps",
     args: [[userOp], DEPLOYER],
   });
-  const rejectedReceipt = await sendExpectedRevert(deployerWallet, deployment.entryPoint, handleOpsData);
+  const rejectedReceipt = await sendExpectedRevert(deployerWallet, deployment.entryPoint, handleOpsData, "over-limit UserOperation (tx)");
   e2e.beforeContribution = {
     userOpHash,
     creditLimit: (await publicClient.readContract({
@@ -820,24 +837,20 @@ async function runE2E(
     responses: corrupted,
     threshold: 3,
   });
-  for (const [label, result] of Object.entries({
+  assertHttpRejections({
     wrongChainResult, tamperedMessageResult, belowThresholdResult, duplicateSlotResult, badSignatureResult,
-  })) {
-    if ((result as { ok: boolean }).ok) throw new Error(`${label} unexpectedly succeeded`);
-  }
+  });
 
   const tamperedCall = encodeFunctionData({
     abi: DVTValidatorABI,
     functionName: "executeWithProof",
     args: [created.id, contribution.users, [101n], 1n, signed.aggregate.proof],
   });
-  let tamperedOnChain: string;
-  try {
-    await publicClient.call({ account: validators[0].address, to: deployment.dvtValidator, data: tamperedCall });
-    throw new Error("tampered score unexpectedly passed on-chain");
-  } catch (error) {
-    tamperedOnChain = sanitizeError(error);
-  }
+  const tamperedOnChain = await expectCallRejected(
+    "tampered score (on-chain simulation)",
+    () => publicClient.call({ account: validators[0].address, to: deployment.dvtValidator, data: tamperedCall }),
+    sanitizeError,
+  );
 
   const reputationReceipt = await sendContract(
     validator0,
@@ -851,7 +864,7 @@ async function runE2E(
     functionName: "executeWithProof",
     args: [created.id, contribution.users, [100n], 1n, signed.aggregate.proof],
   });
-  const replayReceipt = await sendExpectedRevert(validator0, deployment.dvtValidator, replayData);
+  const replayReceipt = await sendExpectedRevert(validator0, deployment.dvtValidator, replayData, "proposal replay (tx)");
 
   const postDryRun = await publicClient.readContract({
     address: deployment.superPaymaster,
@@ -984,7 +997,7 @@ async function runE2E(
       functionName: "executeWithProof",
       args: [exitCreated.id, exitProposal.users, [100n], 99n, exitSigned.aggregate.proof],
     });
-    const exitedReceipt = await sendExpectedRevert(validator1, deployment.dvtValidator, exitData);
+    const exitedReceipt = await sendExpectedRevert(validator1, deployment.dvtValidator, exitData, "post-slash ejected signer (tx)");
     e2e.exitedValidatorNegative = {
       exitNotice: receiptRecord(exitNotice),
       rejectedExecution: receiptRecord(exitedReceipt),
@@ -1342,14 +1355,12 @@ async function runGuardianExitSlashCompetition(
     functionName: "exitRole",
     args: [ROLE_DVT],
   });
-  let exitSimulationError = "";
-  try {
-    await publicClient.call({ account: exitingGuardian.address, to: deployment.registry, data: exitData });
-    throw new Error("guardian exit unexpectedly simulated while slash was pending");
-  } catch (error) {
-    exitSimulationError = sanitizeError(error);
-  }
-  const blockedExit = await sendExpectedRevert(exitingWallet, deployment.registry, exitData);
+  const exitSimulationError = await expectCallRejected(
+    "guardian exit while slash pending (simulation)",
+    () => publicClient.call({ account: exitingGuardian.address, to: deployment.registry, data: exitData }),
+    sanitizeError,
+  );
+  const blockedExit = await sendExpectedRevert(exitingWallet, deployment.registry, exitData, "guardian exit while slash pending (tx)");
   const locksBefore = await Promise.all(guiltyGuardians.map(guardian =>
     publicClient.readContract({
       address: deployment.staking,
@@ -1399,18 +1410,19 @@ async function runGuardianExitSlashCompetition(
     [],
   );
 
-  let postSlashLivenessError = "";
-  try {
-    await publicClient.readContract({
+  // `verify` RETURNS a bool: a slashed set that stayed eligible returns true without throwing, so a
+  // try/catch cannot see it. expectViewRejected demands a revert or an explicit `false` (CC-50 H1).
+  const postSlashLiveness = await expectViewRejected(
+    "post-slash BLS liveness",
+    () => publicClient.readContract({
       address: deployment.blsAggregator,
       abi: BLSAggregatorABI,
       functionName: "verify",
       args: [value.messageHash, signerMask, 3n, signed.aggregate.sigG2],
-    });
-    throw new Error("slashed guardian set unexpectedly remained BLS-eligible");
-  } catch (error) {
-    postSlashLivenessError = sanitizeError(error);
-  }
+    }),
+    sanitizeError,
+  );
+  const postSlashLivenessError = postSlashLiveness.reason;
 
   const evidence = {
     verifier,
@@ -1439,6 +1451,7 @@ async function runGuardianExitSlashCompetition(
     locksAfter,
     cancelExitAfterSlash: receiptRecord(cancelExitAfterSlash),
     postSlashLivenessError,
+    postSlashLivenessOutcome: postSlashLiveness.outcome,
   };
   writeJsonExclusive(join(rawDir, "security-controls.json"), evidence);
   return evidence;
@@ -1516,6 +1529,16 @@ function redactEvidenceSecrets(root: string, secrets: string[]): void {
 }
 
 async function main(): Promise<void> {
+  // Fail before touching a chain if the experiment ABI fixtures no longer match their recorded
+  // hash / upstream artifact — a hand-edited or silently drifted mock ABI invalidates the run.
+  const abiProblems = verifyFixtures();
+  if (abiProblems.length) {
+    throw new Error(
+      `RepCredit experiment ABI fixtures are not trustworthy:\n  ${abiProblems.join("\n  ")}\n` +
+        "Run `pnpm run repcredit:abi:sync` against the pinned upstream checkouts.",
+    );
+  }
+
   assertRepo(superPaymasterDir, "foundry.toml");
   assertRepo(yaaaDir, "package.json");
   assertRepo(airDir, "foundry.toml");
@@ -1584,6 +1607,10 @@ async function main(): Promise<void> {
     ? join(superPaymasterDir, "broadcast/repcredit-e2e-sepolia-deployment.json")
     : join(superPaymasterDir, "deployments/config.anvil.json");
   if (isSepolia) {
+    // Delete any leftover from an earlier aborted run BEFORE deploying. Without this, a forge run
+    // that fails to write the file leaves loadDeployment() silently reading last run's addresses.
+    rmSync(superPaymasterConfig, { force: true });
+    stagedDeploymentConfig = superPaymasterConfig;
     const entryPoint = process.env.REPCREDIT_ENTRYPOINT ?? "";
     const ethUsdFeed = process.env.REPCREDIT_ETH_USD_FEED ?? "";
     if (!isAddress(entryPoint) || !isAddress(ethUsdFeed)) {
@@ -1608,9 +1635,11 @@ async function main(): Promise<void> {
       DEPLOY_TIME: "2026-08-23T23:35:00+07:00",
     });
   }
+  // loadDeployment / copyFileSync can both throw; the staged file is cleared by the top-level
+  // finally (and by the signal handlers) rather than by a statement that a throw can skip.
   const deployment = loadDeployment(superPaymasterConfig);
   copyFileSync(superPaymasterConfig, join(rawDir, "superpaymaster-deployment.json"));
-  if (isSepolia) rmSync(superPaymasterConfig, { force: true });
+  clearStagedDeploymentConfig();
   if (isSepolia) {
     const broadcastPath = join(superPaymasterDir, "broadcast/DeployRepCreditSepolia.s.sol/11155111/run-latest.json");
     if (!existsSync(broadcastPath)) throw new Error("Sepolia Forge broadcast receipt file is missing");
@@ -1673,6 +1702,65 @@ async function main(): Promise<void> {
   process.stdout.write(`${JSON.stringify({ status: "passed", outputDir, files: completed.materialPassport }, null, 2)}\n`);
 }
 
+function clearStagedDeploymentConfig(): void {
+  if (!stagedDeploymentConfig) return;
+  const path = stagedDeploymentConfig;
+  stagedDeploymentConfig = null;
+  rmSync(path, { force: true });
+}
+
+let cleanedUp = false;
+
+/**
+ * The single cleanup path, shared by normal exit and by SIGINT/SIGTERM (CC-50 M2/M3).
+ *
+ * Before this existed, cleanup lived only in the top-level `finally`, which a signal never runs:
+ * Ctrl-C left the ephemeral BLS node keys in /tmp, orphaned anvil plus every YAAA child holding
+ * ports 18547 / 29301+, and left the staged deployment config inside the SuperPaymaster checkout.
+ * Idempotent, so running it from a handler and then again from `finally` is harmless.
+ */
+async function cleanup(): Promise<void> {
+  if (cleanedUp) return;
+  cleanedUp = true;
+  await Promise.all(children.reverse().map(child => new Promise<void>(resolveExit => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolveExit();
+    const timer = setTimeout(resolveExit, 2_000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolveExit();
+    });
+    child.kill("SIGTERM");
+  })));
+  // Ephemeral validator keys live here; they must not outlive the run.
+  rmSync(tempRoot, { recursive: true, force: true });
+  clearStagedDeploymentConfig();
+}
+
+/**
+ * Redact on the signal path too. The success and failure paths both redact, but an interrupted
+ * Sepolia run would otherwise leave the live RPC URL and experiment key in the partial evidence —
+ * the one exit path that used to skip it entirely, because a signal never reaches `finally`.
+ */
+function redactOnExit(): void {
+  if (!isSepolia || !existsSync(outputDir)) return;
+  redactEvidenceSecrets(outputDir, [rpcUrl, livePrivateKey!]);
+}
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.once(signal, () => {
+    // 128 + signal number, the conventional shell encoding of "killed by <signal>".
+    let code = signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 129;
+    try {
+      redactOnExit();
+    } catch (error) {
+      // Loud and distinct: partial evidence may still hold a secret, so the operator must know.
+      process.stderr.write(`redaction failed on ${signal}: ${sanitizeError(error)}\n`);
+      code = 1;
+    }
+    void cleanup().finally(() => process.exit(code));
+  });
+}
+
 try {
   await main();
 } catch (error) {
@@ -1684,14 +1772,5 @@ try {
   });
   throw new Error(sanitized);
 } finally {
-  await Promise.all(children.reverse().map(child => new Promise<void>(resolveExit => {
-    if (child.exitCode !== null || child.signalCode !== null) return resolveExit();
-    const timer = setTimeout(resolveExit, 2_000);
-    child.once("exit", () => {
-      clearTimeout(timer);
-      resolveExit();
-    });
-    child.kill("SIGTERM");
-  })));
-  rmSync(tempRoot, { recursive: true, force: true });
+  await cleanup();
 }

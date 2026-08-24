@@ -205,8 +205,6 @@ import AAStarCommitteeValidatorABIData from './AAStarCommitteeValidator.json' wi
 import AAStarBLSAggregatorABIData from './AAStarBLSAggregator.json' with { type: 'json' };
 import CalldataParserRegistryABIData from './CalldataParserRegistry.json' with { type: 'json' };
 import AirAccountExtensionABIData from './AirAccountExtension.json' with { type: 'json' };
-import RepCreditCounterABIData from './RepCreditCounter.json' with { type: 'json' };
-import MockAgentIdentityRegistryABIData from './MockAgentIdentityRegistry.json' with { type: 'json' };
 
 // Generic ERC-20 (payment tokens: USDC / USDT) + MushroomDAO launch token-sale stack
 // (aPoints + governance-token sale). Source: MushroomDAO/launch contracts/out/*.json.
@@ -217,12 +215,6 @@ import BuyHelperABIData from './BuyHelper.json' with { type: 'json' };
 
 export const AAStarAirAccountFactoryV7ABI = (AAStarAirAccountFactoryV7ABIData as any).abi || AAStarAirAccountFactoryV7ABIData;
 export const AAStarAirAccountFactoryV7Artifact = AAStarAirAccountFactoryV7ABIData;
-
-// Local-only RepCredit evidence contracts. These live in core so experiment
-// orchestration never falls back to hand-written parseAbi declarations.
-export const RepCreditCounterABI = (RepCreditCounterABIData as any).abi || RepCreditCounterABIData;
-export const MockAgentIdentityRegistryABI =
-  (MockAgentIdentityRegistryABIData as any).abi || MockAgentIdentityRegistryABIData;
 
 export const AgentRegistryABI = (AgentRegistryABIData as any).abi || AgentRegistryABIData;
 export const AgentRegistryArtifact = AgentRegistryABIData;

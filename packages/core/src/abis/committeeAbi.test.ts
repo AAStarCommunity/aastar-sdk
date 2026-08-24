@@ -81,7 +81,23 @@ describe('AAStarAirAccountV7 ABI — the KNOWN_DRIFT blind spot', () => {
     });
 });
 
-describe('guardian-slash surface (SuperPaymaster CC-89 4.4.0)', () => {
+/**
+ * ⚠️ PROVENANCE WARNING — CC-50 B2, UNRESOLVED.
+ *
+ * The `queueGuardianSlash` / `requestGuardianExit` / `guardianExitRequests` / `guardianSlashCases`
+ * / `pendingGuardianSlashCount` and `maxAggregateCreditUpliftPerProposal` assertions below were
+ * written against an UNMERGED SuperPaymaster experiment branch (`daa1d1ec`). Those functions exist
+ * on NO SuperPaymaster main commit and on NO deployed chain. "Registry 5.5.0 / BLSAggregator 4.4.0"
+ * are experiment labels, NOT released upstream versions.
+ *
+ * This means the block below currently asserts the SDK matches an experiment branch — so real
+ * drift against the eventual official surface is invisible to it. That is a known, accepted,
+ * TEMPORARY state: repo:sp owes CC-50 a final commit/version/artifact hash, after which these
+ * ABIs must be re-copied from the released tag's `out/` and these assertions realigned.
+ *
+ * Do NOT publish a release that contains this surface until that happens.
+ */
+describe('guardian-slash surface (SuperPaymaster CC-89 4.4.0 — EXPERIMENT BRANCH, see warning above)', () => {
     it('BLSAggregator carries the bounded exit and two-phase fraud-proof additions', () => {
         for (const f of [
             'executeGuardianSlash',

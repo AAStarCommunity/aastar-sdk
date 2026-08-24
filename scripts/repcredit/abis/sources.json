@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "Declarative source map for the RepCredit experiment ABI fixtures (CC-50 B1/H2).",
+    "These are LOCAL EXPERIMENT MOCKS. They are deliberately NOT in packages/core/src/abis:",
+    "they must never reach the @aastar/core / @aastar/sdk public surface or the npm bundle,",
+    "and they must never be drift-checked against production upstream tags.",
+    "Regenerate with `pnpm run repcredit:abi:sync`; verify with `pnpm run repcredit:abi:check`."
+  ],
+  "fixtures": [
+    {
+      "name": "MockAgentIdentityRegistry",
+      "repo": "SuperPaymaster",
+      "repoDir": "../SuperPaymaster",
+      "sourcePath": "contracts/src/mocks/MockAgentIdentityRegistry.sol",
+      "artifactPath": "out/MockAgentIdentityRegistry.sol/MockAgentIdentityRegistry.json",
+      "note": "ERC-8004 agent-identity test mock. The isRegisteredAgent() eligibility view exists ONLY on the unmerged SuperPaymaster experiment branch; treat this fixture as experiment-scoped, not as an official upstream interface."
+    },
+    {
+      "name": "RepCreditCounter",
+      "repo": "airaccount-contract",
+      "repoDir": "../airaccount-contract",
+      "sourcePath": "test/mocks/RepCreditCounter.sol",
+      "artifactPath": "out/RepCreditCounter.sol/RepCreditCounter.json",
+      "note": "Trivial application target for the UserOperation arms (increment/number). Test-only contract; it has no production deployment."
+    }
+  ]
+}
