@@ -1391,6 +1391,14 @@ async function runGuardianExitSlashCompetition(
     throw new Error("executed fraud case did not release pending counts and slash every DVT lock");
   }
 
+  const cancelExitAfterSlash = await sendContract(
+    exitingWallet,
+    deployment.blsAggregator,
+    BLSAggregatorABI as Abi,
+    "cancelGuardianExit",
+    [],
+  );
+
   let postSlashLivenessError = "";
   try {
     await publicClient.readContract({
@@ -1429,6 +1437,7 @@ async function runGuardianExitSlashCompetition(
     slashCase,
     pendingAfter,
     locksAfter,
+    cancelExitAfterSlash: receiptRecord(cancelExitAfterSlash),
     postSlashLivenessError,
   };
   writeJsonExclusive(join(rawDir, "security-controls.json"), evidence);
