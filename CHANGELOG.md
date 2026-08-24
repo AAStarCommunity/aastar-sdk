@@ -159,6 +159,69 @@ Smaller items from the same round:
   `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
   There is no acceptable state in which those four go unverified.
 
+### Fifth round (CC-50 `[from:docs]` on 249be89e) — strict provenance can no longer pass on MISSING provenance
+
+**The chain was enforced only where it was BROKEN, not where it was ABSENT.** An independent
+reviewer measured two states in which `check:abi-drift --strict` exited 0, ticked all four
+`MUST_VERIFY` contracts, and printed the unqualified sentence *"every artifact hash-matches the
+sources it records"* — after hashing **zero** source bytes:
+
+1. an artifact carrying no `metadata.sources` (what a tarball, a `solc --abi` dump or a
+   non-foundry build produces). `verifyArtifactSources` returned it as `unresolved`, which was
+   printed and never set `failed`;
+2. an `out/` that belongs to no git checkout at all (a `git archive`, a downloaded CI artifact).
+   `repoProvenanceFor` returns `null` for those, and the `NO UPSTREAM PIN` gate filtered on
+   `e.repo && …`, so it dropped exactly the entries with no provenance and reported
+   `--- upstream revisions (0) ---`.
+
+Dirty and stale were already red; *missing* was the one state left green — the same class as the
+`forge clean` → silent skip → vacuous PASS this gate was added to remove, one layer down.
+
+- A `MUST_VERIFY` contract must now satisfy the WHOLE chain — repo → declared pin → clean revision
+  matching that pin → artifact → a **non-empty, fully resolved** set of source hashes the artifact
+  matches → the vendored ABI sha256 this repo committed. Any missing link is named individually and
+  fails strict/release mode (`MUST-VERIFY PROVENANCE INCOMPLETE`). `sourceCount === 0` is a failure
+  in its own right: an artifact that records no in-repo source was never verified against anything.
+- The unqualified PASS sentence is now **gated on that same condition**, so a run can no longer
+  claim a verification it did not perform. Anything less prints `PASS (with caveats)` naming what
+  was not established.
+- Lenient mode says what it is: it reports the provenance gates instead of enforcing them, and
+  every run now ends with an explicit `LENIENT MODE:` line pointing at `--strict` as the release
+  gate. Its exit code means "no drift I can attribute", never "release-grade".
+- **`scripts/repcredit/abi-drift-provenance.test.ts`** — a synthetic upstream repo + synthetic SDK
+  root per case, running the REAL script. Both bypasses are covered precisely, and each case
+  asserts BOTH halves: that the fixture reproduces the bypassed state (`✅ 0 source(s)`,
+  `--- upstream revisions (0) ---`) and that the run now fails on it. The links that already
+  worked — stale artifact on a clean pinned checkout, missing must-verify artifact, real drift —
+  are pinned in the same file so a later edit cannot trade one gate away for another.
+
+**The reviewed YAAA revision moved into the repo (LOW-1).** It lived only in
+`REPCREDIT_YAAA_REV`, so a local run with the variable unset verified against whatever was checked
+out: the local DVT checkout had moved several commits past the revision the report named, all
+assertions passed, and nothing said so. It is now
+`scripts/upstream-abi-pin.json` → `services["YetAnotherAA-Validator"].revision`, and in
+required/release mode (`REPCREDIT_YAAA_HTTP_TEST=1`) that pin is **authoritative** — an env var
+that disagrees with it is a hard failure rather than a silent redirect, which also makes a drift
+between the pin and the ref CI checks out impossible to miss. A local run may still narrow with
+`REPCREDIT_YAAA_REV`, and now prints the resolved revision **and its origin**. The rule lives in
+`scripts/repcredit/upstream-pin.ts` as a pure function with its own unit tests, because a guard
+resolved once at import cannot exercise both modes.
+
+**`writeContract` joined the real-anvil revert regression (round-4 INFO).** It is the path the
+evidence runner actually submits through, it fails inside viem's pre-flight gas estimation — a
+different error graph from every read path already covered — and that graph renders the
+transaction CALLDATA, which is exactly the bait the old string-scraping extractor took. The case
+asserts the extracted bytes are the revert data, are not the calldata or the contract address, and
+that both traps really are present in the error (otherwise the assertion is vacuous).
+`estimateContractGas` is covered alongside it.
+
+**Recorded upstream staleness (LOW-2, for @repo:sp).** SuperPaymaster's hand-maintained
+`abis/DVTValidator.json` is behind its own compiler output: 16 functions vs 18 in
+`out/DVTValidator.sol/DVTValidator.json`, missing `createProposal(address,uint8,string,bytes32)`
+and `queueSlashWithProof(address,uint8,uint256,bytes)`; last touched in `050f56b3` (2026-06-15).
+The SDK vendors from `out/` (verified 18/18 identical), so it is unaffected — but any downstream
+reading `abis/` gets the short interface. Noted in the pin file next to the contract.
+
 ### Fixed — the negative controls could not fail (CC-50 H1)
 
 Four "this attack must be rejected" controls wrote their sentinel `throw` **inside** the `try` that

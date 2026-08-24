@@ -19,7 +19,13 @@
  *   - `Error(string)`                          (0x08c379a0)
  *   - `Panic(uint256)`                         (0x4e487b71)
  *   - an EMPTY revert                          (must extract nothing, not "something nearby")
- *   - the same revert through `call` (no ABI), `simulateContract` and `estimateGas`
+ *   - the same revert through `call` (no ABI), `simulateContract`, `estimateGas` and
+ *     `writeContract` — the WRITE path is the one the evidence runner actually submits through,
+ *     and it was the one call shape the first version of this suite did not cover (CC-50 round-4
+ *     INFO). It fails inside viem's pre-flight gas estimation, i.e. a different error graph
+ *     (`TransactionExecutionError`/`EstimateGasExecutionError`) from the read paths, and that graph
+ *     carries the transaction CALLDATA in its rendered prose — the exact bait the old
+ *     string-scraping extractor took.
  *
  * and, for each one, that the extracted value is NOT the contract address, NOT any decoded
  * argument and NOT the transaction calldata.
@@ -33,6 +39,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import {
   concatHex,
   createPublicClient,
+  createWalletClient,
   encodeAbiParameters,
   http,
   numberToHex,
@@ -41,6 +48,7 @@ import {
   type Address,
   type Hex,
   type PublicClient,
+  type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
@@ -77,10 +85,16 @@ const PANIC_SELECTOR: Hex = '0x4e487b71';
 const KEY_NOT_ACTIVE_ARG: Address = '0x1111111111111111111111111111111111111111';
 const PROBE_ABI = [
   { type: 'function', name: 'probe', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  // A NON-view function, so `writeContract` is reachable through the same ABI. The argument is a
+  // second calldata trap: 0x2222… appears in the encoded call and must never be mistaken for
+  // revert data.
+  { type: 'function', name: 'poke', stateMutability: 'nonpayable', inputs: [{ name: 'who', type: 'address' }], outputs: [] },
   { type: 'error', name: 'KeyNotActive', inputs: [{ name: 'key', type: 'address' }] },
 ] as const satisfies Abi;
 /** Same functions, but WITHOUT the error declaration: the "ABI cannot decode this revert" case. */
 const PROBE_ABI_NO_ERROR = [PROBE_ABI[0]] as unknown as Abi;
+/** Distinct from KEY_NOT_ACTIVE_ARG: if the extractor ever reads calldata, this is what shows up. */
+const POKE_ARG: Address = '0x2222222222222222222222222222222222222222';
 
 const KEY_NOT_ACTIVE_SELECTOR = errorSelector(PROBE_ABI as unknown as Abi, 'KeyNotActive');
 const KEY_NOT_ACTIVE_DATA = concatHex([
@@ -134,6 +148,7 @@ describe('extractRevertData against a real viem error graph (real anvil)', () =>
   let booted = false;
   let unavailable = '';
   let publicClient: PublicClient;
+  let walletClient: WalletClient;
 
   beforeAll(async () => {
     anvil = spawn('anvil', ['--port', String(PORT), '--chain-id', '31337', '--silent'], { stdio: 'ignore' });
@@ -156,6 +171,7 @@ describe('extractRevertData against a real viem error graph (real anvil)', () =>
     await rpc('anvil_setCode', [ADDR.panic, reverterRuntime(PANIC_DATA)]);
     await rpc('anvil_setCode', [ADDR.empty, EMPTY_REVERTER]);
     publicClient = createPublicClient({ chain: foundry, transport: http(RPC) }) as PublicClient;
+    walletClient = createWalletClient({ account: SENDER, chain: foundry, transport: http(RPC) });
     booted = true;
   }, 60_000);
 
@@ -252,6 +268,59 @@ describe('extractRevertData against a real viem error graph (real anvil)', () =>
     expect(data).toBe(KEY_NOT_ACTIVE_DATA.toLowerCase());
     expect(data).not.toContain('cdcdcdcd');
   });
+
+  /**
+   * THE WRITE PATH (CC-50 round-4 INFO). `writeContract` never reaches `eth_sendRawTransaction`
+   * here: viem estimates gas first, the estimate reverts, and the resulting error graph is a
+   * different one from every read path above — including a rendered `data: 0x…` line holding the
+   * CALLDATA. Asserting the extracted bytes are the revert data AND not that calldata is what
+   * makes the write path a real case rather than a duplicate of `estimateContractGas`.
+   */
+  it('writeContract (the path the runner submits through) extracts the revert bytes, not the calldata', async ctx => {
+    if (!requireChain(ctx)) return;
+    let caught: unknown;
+    try {
+      await walletClient.writeContract({
+        address: ADDR.customDecodable,
+        abi: PROBE_ABI as unknown as Abi,
+        functionName: 'poke',
+        args: [POKE_ARG],
+        account: SENDER,
+        chain: foundry,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught, 'writeContract against an always-reverting contract must throw').toBeTruthy();
+    const data = extractRevertData(caught);
+    expect(data).toBe(KEY_NOT_ACTIVE_DATA.toLowerCase());
+    expect(data?.slice(0, 10)).toBe(KEY_NOT_ACTIVE_SELECTOR);
+    // The three wrong answers available in this error graph:
+    expect(data).not.toBe(ADDR.customDecodable.toLowerCase());
+    expect(data).not.toContain(POKE_ARG.slice(2).toLowerCase());
+    expect(data?.startsWith(KEY_NOT_ACTIVE_ARG.toLowerCase())).toBe(false);
+    // ...and the traps really are in the error, otherwise the assertions above are vacuous.
+    const rendered = String((caught as Error)?.message ?? '');
+    expect(rendered.toLowerCase()).toContain(POKE_ARG.slice(2).toLowerCase());
+    expect(rendered.toLowerCase()).toContain(ADDR.customDecodable.toLowerCase());
+  }, 30_000);
+
+  it('estimateContractGas (the write path\'s pre-flight, on its own) extracts the same bytes', async ctx => {
+    if (!requireChain(ctx)) return;
+    let caught: unknown;
+    try {
+      await publicClient.estimateContractGas({
+        address: ADDR.customDecodable,
+        abi: PROBE_ABI as unknown as Abi,
+        functionName: 'poke',
+        args: [POKE_ARG],
+        account: SENDER,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(extractRevertData(caught)).toBe(KEY_NOT_ACTIVE_DATA.toLowerCase());
+  }, 30_000);
 
   it('simulateContract and estimateGas produce the same bytes', async ctx => {
     if (!requireChain(ctx)) return;

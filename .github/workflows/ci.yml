@@ -133,6 +133,12 @@ jobs:
       # Pinned by ref on purpose: the suite verifies the SDK against a DECLARED upstream
       # revision, and REPCREDIT_YAAA_REV below makes a silent ref move a hard failure
       # rather than a quietly-different verification.
+      #
+      # BOTH literals must equal scripts/upstream-abi-pin.json ->
+      # services["YetAnotherAA-Validator"].revision. In required mode that in-repo pin is
+      # authoritative (CC-50 round-5 LOW-1), so any drift between the three fails this job:
+      # move `ref` alone and the pin test reports "the checkout is at <other>"; move the env
+      # alone and it reports the same; move both and it refuses the env override outright.
       - name: Check out the pinned YetAnotherAA-Validator revision
         uses: actions/checkout@v5
         with:

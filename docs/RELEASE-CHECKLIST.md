@@ -76,13 +76,24 @@ consumer path**.
 
       Break any link and `--strict` exits 1. **Re-syncing an ABI and updating the pin file are the
       same commit** — that is what makes an ABI swap a reviewable diff instead of a silent one.
+
+      Round-5 closed the remaining hole: a link that is MISSING rather than broken. An artifact with
+      no `metadata.sources`, a source the artifact names but that is not on disk, an artifact that
+      records no in-repo source at all, or an `out/` that belongs to no git checkout (a tarball,
+      a `git archive`, a downloaded CI artifact) each used to be *printed* and never failed — so
+      `--strict` could exit 0 having hashed zero source bytes, print `--- upstream revisions (0) ---`,
+      tick all four MUST_VERIFY, and still claim *"every artifact hash-matches the sources it
+      records"*. Every one of those is now a hard failure for a MUST_VERIFY contract
+      (`MUST-VERIFY PROVENANCE INCOMPLETE`), and the unqualified PASS sentence is only printed when
+      the whole chain held for all of them. `scripts/repcredit/abi-drift-provenance.test.ts` builds
+      a synthetic upstream repo per case and pins both halves: that the fixture reproduces the
+      bypassed state, and that the run now fails on it.
 - [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
       ```bash
       pnpm run repcredit:typecheck && \
       pnpm run repcredit:abi:check && \
       REPCREDIT_YAAA_HTTP_TEST=1 \
         REPCREDIT_YAAA_DIR=../YetAnotherAA-Validator \
-        REPCREDIT_YAAA_REV=<the upstream commit under test> \
         pnpm run repcredit:test
       ```
       **The flag is not optional here.** Without it, a missing YAAA checkout, a missing/stale
@@ -92,10 +103,19 @@ consumer path**.
       one of those into a failure. The same job runs in CI (`repcredit-yaaa-http`) against a pinned
       upstream ref; run it here too, because the release is cut from a local checkout.
 
-      `REPCREDIT_YAAA_REV` declares which upstream commit the run verified against, and fails if
-      the checkout is at a different one. The upstream checkout must also be **clean**: the guard
-      pin reads the committed blob via `git show`, and a dirty tree makes the built `dist/`
-      unattributable, so both are refused rather than silently accepted (CC-50).
+      **The reviewed YAAA revision lives in this repo**, not in your shell:
+      `scripts/upstream-abi-pin.json` → `services["YetAnotherAA-Validator"].revision`. In required
+      mode that pin is authoritative and `REPCREDIT_YAAA_REV` **cannot** redirect the run at another
+      commit — disagreeing with the pin is a hard failure, which also makes a drift between the pin
+      and the ref `.github/workflows/ci.yml` checks out impossible to miss. (Round-5 LOW-1: with the
+      expected revision living only in the environment, a local run with the variable unset verified
+      against whatever happened to be checked out — measurably several DVT commits past the revision
+      the report named — and reported green.) A local run may still set `REPCREDIT_YAAA_REV` to
+      narrow to another commit while a cross-repo round is in flight; the run prints the resolved
+      revision **and where it came from**. Moving the reviewed revision means editing the pin in the
+      commit that reviews it. The upstream checkout must also be **clean**: the guard pin reads the
+      committed blob via `git show`, and a dirty tree makes the built `dist/` unattributable, so
+      both are refused rather than silently accepted (CC-50).
 
       Set `REPCREDIT_ANVIL_TEST=1` as well. It makes the real-anvil `extractRevertData` regression
       a failure rather than a skip when `anvil` is not on PATH. That suite drives REAL viem against

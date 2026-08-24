@@ -37,6 +37,7 @@ import {
   requestTargetOf,
 } from './experiment-auth.js';
 import { REJECTION_CODES, assertHttpRejections, classifyHttpRejection } from './negative-control.js';
+import { readPinnedServiceRevision, resolveDeclaredRevision, type RevisionOrigin } from './upstream-pin.js';
 
 /**
  * Independent reimplementation of the guard's v2 preimage; never calls the code under test.
@@ -254,8 +255,16 @@ describe('experiment auth client', () => {
  *   - the guard source comes from `git show <rev>:<path>`, never from the working tree;
  *   - a dirty upstream checkout makes the real-HTTP suite unusable (the built `dist/` cannot be
  *     attributed to any revision), and REPCREDIT_YAAA_HTTP_TEST=1 turns that into a failure;
- *   - REPCREDIT_YAAA_REV declares the expected commit; a mismatch always fails.
+ *   - the REVIEWED revision lives IN THIS REPO (`scripts/upstream-abi-pin.json` -> services), so a
+ *     local run states which commit it was supposed to verify against instead of silently verifying
+ *     whatever happens to be checked out (CC-50 round-5 LOW-1: the local checkout had moved on to a
+ *     newer DVT commit and every assertion still passed, green, against the wrong revision);
+ *   - REPCREDIT_YAAA_REV may still narrow a LOCAL run to a different commit while a cross-repo
+ *     round is in flight, but it CANNOT override the in-repo pin in required/release mode
+ *     (REPCREDIT_YAAA_HTTP_TEST=1): there, disagreeing with the pin is a hard failure, which also
+ *     makes a drift between the pin and the ref CI checks out impossible to miss.
  */
+const REVIEWED_YAAA_REV = readPinnedServiceRevision('YetAnotherAA-Validator');
 const yaaaDir = resolve(
   process.env.REPCREDIT_YAAA_DIR ?? join(process.cwd(), '..', 'YetAnotherAA-Validator'),
 );
@@ -268,13 +277,29 @@ type UpstreamPin = {
   dirty: boolean;
   dirtyPaths: string[];
   declaredRev: string | null;
+  /** Where `declaredRev` came from — printed, so a run says what authority it verified against. */
+  declaredFrom: RevisionOrigin;
   /** Why the upstream cannot be used as a pinned reference, or null when it can. */
   unusable: string | null;
 };
 
 function resolveUpstreamPin(): UpstreamPin {
-  const declaredRev = process.env.REPCREDIT_YAAA_REV ?? null;
-  const base: UpstreamPin = { present: false, rev: null, dirty: false, dirtyPaths: [], declaredRev, unusable: null };
+  const declared = resolveDeclaredRevision({
+    required: forceHttp,
+    envRev: process.env.REPCREDIT_YAAA_REV ?? null,
+    pinnedRev: REVIEWED_YAAA_REV,
+  });
+  const declaredRev = declared.rev;
+  const base: UpstreamPin = {
+    present: false,
+    rev: null,
+    dirty: false,
+    dirtyPaths: [],
+    declaredRev,
+    declaredFrom: declared.from,
+    unusable: null,
+  };
+  if (declared.conflict) return { ...base, unusable: declared.conflict };
   if (!existsSync(join(yaaaDir, GUARD_PATH))) {
     return { ...base, unusable: `no YAAA checkout at ${yaaaDir} (set REPCREDIT_YAAA_DIR)` };
   }
@@ -287,9 +312,20 @@ function resolveUpstreamPin(): UpstreamPin {
     return { ...base, present: true, unusable: `${yaaaDir} is not a usable git checkout: ${String(error)}` };
   }
   const dirtyPaths = porcelain.split('\n').map(line => line.trim()).filter(Boolean);
-  const pin: UpstreamPin = { present: true, rev, dirty: dirtyPaths.length > 0, dirtyPaths, declaredRev, unusable: null };
+  const pin: UpstreamPin = {
+    present: true,
+    rev,
+    dirty: dirtyPaths.length > 0,
+    dirtyPaths,
+    declaredRev,
+    declaredFrom: declared.from,
+    unusable: null,
+  };
   if (declaredRev && !rev.startsWith(declaredRev)) {
-    return { ...pin, unusable: `REPCREDIT_YAAA_REV=${declaredRev} but the checkout is at ${rev}` };
+    return {
+      ...pin,
+      unusable: `the reviewed revision is ${declaredRev} (${declared.from}) but the checkout is at ${rev}`,
+    };
   }
   if (pin.dirty) {
     return { ...pin, unusable: `the YAAA checkout at ${rev.slice(0, 8)} has ${dirtyPaths.length} uncommitted change(s)` };
@@ -307,15 +343,75 @@ function committedGuardSource(): string {
   });
 }
 
+/**
+ * The authority rule itself, tested as a pure function (CC-50 round-5 LOW-1).
+ *
+ * The module-level `pin` above is resolved once at import from the real environment, so it cannot
+ * exercise both modes in one process. These cases do — and a guard nobody can make fire is not a
+ * guard: each one below FAILS if the env var is ever allowed to redirect a release-grade run.
+ */
+describe('reviewed-revision authority', () => {
+  const PINNED = 'e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9';
+
+  it('release mode takes the revision from the repo, not the environment', () => {
+    const resolved = resolveDeclaredRevision({ required: true, envRev: null, pinnedRev: PINNED });
+    expect(resolved).toEqual({ rev: PINNED, from: 'scripts/upstream-abi-pin.json', conflict: null });
+  });
+
+  it('release mode REFUSES an env var that points somewhere else', () => {
+    const resolved = resolveDeclaredRevision({
+      required: true,
+      envRev: '664ec92185249f231b9e0d276570cedde93c429b',
+      pinnedRev: PINNED,
+    });
+    expect(resolved.conflict).toContain('disagrees with the reviewed revision');
+    // ...and it still reports the PIN as the revision, so nothing downstream silently follows the env.
+    expect(resolved.rev).toBe(PINNED);
+  });
+
+  it('release mode accepts an env var that merely abbreviates the pin', () => {
+    expect(resolveDeclaredRevision({ required: true, envRev: PINNED.slice(0, 8), pinnedRev: PINNED }).conflict).toBeNull();
+  });
+
+  it('release mode refuses to run at all when the repo declares no reviewed revision', () => {
+    const resolved = resolveDeclaredRevision({ required: true, envRev: PINNED, pinnedRev: null });
+    expect(resolved.rev).toBeNull();
+    expect(resolved.conflict).toContain('cannot authorise a release-grade verification');
+  });
+
+  it('local mode may narrow to another commit, and says where that came from', () => {
+    const resolved = resolveDeclaredRevision({ required: false, envRev: 'deadbeef', pinnedRev: PINNED });
+    expect(resolved).toEqual({ rev: 'deadbeef', from: 'REPCREDIT_YAAA_REV', conflict: null });
+  });
+
+  it('local mode with no env var falls back to the in-repo pin instead of "whatever is checked out"', () => {
+    expect(resolveDeclaredRevision({ required: false, envRev: null, pinnedRev: PINNED })).toEqual({
+      rev: PINNED,
+      from: 'scripts/upstream-abi-pin.json',
+      conflict: null,
+    });
+  });
+
+  it('the repo really does declare one (the file, not just the helper)', () => {
+    expect(REVIEWED_YAAA_REV).toMatch(/^[0-9a-f]{40}$/);
+  });
+});
+
 describe('YAAA guard contract pin', () => {
   it('states the upstream revision it is pinned against', () => {
     const where = pin.rev ? `${pin.rev} (${pin.dirty ? `DIRTY: ${pin.dirtyPaths.length} change(s)` : 'clean'})` : 'absent';
-    console.info(`[pin] YAAA ${yaaaDir} @ ${where}`);
+    // Print the DECLARED revision next to the checked-out one: "green" only means something if the
+    // reader can see the two agreed (CC-50 round-5 LOW-1).
+    console.info(
+      `[pin] YAAA ${yaaaDir} @ ${where}; reviewed revision ${pin.declaredRev ?? '(none declared)'} ` +
+        `[${pin.declaredFrom}]${forceHttp ? ' (required mode: the in-repo pin is authoritative)' : ''}`,
+    );
     if (pin.unusable && forceHttp) {
       throw new Error(
-        `REPCREDIT_YAAA_HTTP_TEST=1 requires a clean, pinned YAAA checkout, but ${pin.unusable}. ` +
-          'Run this gate against a clean checkout/worktree (CI checks one out) or declare ' +
-          'REPCREDIT_YAAA_REV for the revision under test.',
+        `REPCREDIT_YAAA_HTTP_TEST=1 requires a clean YAAA checkout at the REVIEWED revision, but ${pin.unusable}. ` +
+          'Check out the revision pinned in scripts/upstream-abi-pin.json (CI checks it out by ref), or — ' +
+          'if the reviewed revision is meant to move — update that pin in the commit that reviews the new ' +
+          'one. In required mode REPCREDIT_YAAA_REV cannot redirect this at another commit.',
       );
     }
     if (!pin.rev) {

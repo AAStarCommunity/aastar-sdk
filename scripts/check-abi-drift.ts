@@ -551,6 +551,8 @@ if (unattributableDrift.length) {
 // Self-consistency of the SDK's OWN committed copy against its OWN committed pin. Deliberately
 // NOT gated on strict: it needs no upstream checkout at all, and "the vendored ABI is still the
 // one that was reviewed" must hold on every run, including one where the sibling repos are absent.
+/** Did every pinned contract's vendored ABI match its pinned sha256? Required by the final PASS. */
+let vendoredPinHolds = true;
 {
   const pinnedContracts = Object.entries(PIN.contracts ?? {});
   const contractPinMismatch = pinnedContracts.flatMap(([name, expected]) => {
@@ -562,6 +564,7 @@ if (unattributableDrift.length) {
       : [`${name}: vendored ABI sha256 ${actual.slice(0, 16)} != pinned ${expected.abiSha256.slice(0, 16)}`];
   });
   if (contractPinMismatch.length) {
+    vendoredPinHolds = false;
     console.error(`\nVENDORED ABI PIN MISMATCH: ${contractPinMismatch.length} contract(s):`);
     for (const line of contractPinMismatch) console.error(`  - ${line}`);
     console.error('  Update scripts/upstream-abi-pin.json in the same commit that re-syncs the ABI.');
@@ -571,22 +574,97 @@ if (unattributableDrift.length) {
   }
 }
 
-// A MUST_VERIFY contract whose repo declares no pin is unattributable by construction: it would
-// pass today and pass again tomorrow against a different, unreviewed revision.
-if (STRICT) {
-  const unpinnedMustVerify = checkedProvenance.filter(
-    (e) => MUST_VERIFY.has(e.name) && e.repo && !PIN.repos?.[e.repo.label]?.revision,
-  );
-  if (unpinnedMustVerify.length) {
-    console.error(
-      `\nNO UPSTREAM PIN: ${unpinnedMustVerify.length} must-verify contract(s) come from a repo with no ` +
-        `declared revision in scripts/upstream-abi-pin.json:`,
+// ---------------------------------------------------------------------------------------------
+// MUST-VERIFY PROVENANCE, END TO END (CC-50 round-5 MEDIUM-1)
+//
+// The gates above each catch ONE broken link. Two ways of having NO link at all still exited 0
+// under --strict, and both printed the unqualified PASS:
+//
+//   1. an artifact carrying no `metadata.sources` (or sources that do not resolve on disk):
+//      `verifyArtifactSources` reported them as `unresolved`, which was PRINTED and never set
+//      `failed`, so strict mode passed having hashed ZERO source bytes;
+//   2. an `out/` that belongs to no git checkout at all — a tarball, a `git archive`, a CI
+//      artifact download. `repoProvenanceFor` returns null for those, and the NO UPSTREAM PIN
+//      filter dropped exactly those entries (`e.repo && …`), so strict mode passed and printed
+//      "--- upstream revisions (0) ---" with all four must-verify contracts ticked.
+//
+// Both are the same class as the vacuous PASS this gate exists to remove: dirty and stale were
+// already red, and MISSING — no provenance whatsoever — was the one state left green. So a
+// must-verify contract must now satisfy the WHOLE chain, and every missing link is named:
+//
+//   repo  ->  declared pin  ->  clean revision matching that pin  ->  artifact
+//         ->  a non-empty, fully resolved set of source hashes that the artifact matches
+//         ->  the vendored ABI sha256 this repo committed
+//
+// Anything less and strict/release fails, and the final PASS line is not allowed to claim the
+// artifacts hash-match their sources.
+// ---------------------------------------------------------------------------------------------
+function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
+  const gaps: string[] = [];
+  const repo = entry.repo;
+  if (!repo) {
+    gaps.push(
+      'NO UPSTREAM PROVENANCE: the artifact resolves to no git checkout (tarball / git archive / ' +
+        'downloaded CI artifact), so it cannot be attributed to any revision',
     );
-    for (const entry of unpinnedMustVerify) console.error(`  - ${entry.name} (${entry.repo!.label})`);
-    failed = true;
+  } else {
+    if (!repo.revision) gaps.push(`NO UPSTREAM REVISION: ${repo.label} is not a usable git checkout`);
+    if (repo.unusable) gaps.push(`UNUSABLE CHECKOUT: ${repo.unusable}`);
+    if (!PIN.repos?.[repo.label]?.revision) {
+      gaps.push(`NO UPSTREAM PIN: ${repo.label} declares no revision in scripts/upstream-abi-pin.json`);
+    }
   }
-
+  const src = entry.sources;
+  if (src.unresolved.length) {
+    gaps.push(`SOURCE HASHES INCOMPLETE: ${src.unresolved.length} unresolved — ${src.unresolved.join(', ')}`);
+  }
+  if (src.sourceCount === 0) {
+    gaps.push(
+      'NO SOURCE HASHES: the artifact records no in-repo source this run could hash, so ' +
+        '"the artifact matches the sources it records" was never established',
+    );
+  }
+  if (src.mismatched.length) gaps.push(`ARTIFACT ⇄ SOURCE MISMATCH: ${src.mismatched.join(', ')}`);
+  if (!PIN.contracts?.[entry.name]?.abiSha256) {
+    gaps.push(`NO VENDORED ABI PIN: scripts/upstream-abi-pin.json declares no abiSha256 for ${entry.name}`);
+  }
+  return gaps;
 }
+
+const mustVerifyGaps = checkedProvenance
+  .filter((e) => MUST_VERIFY.has(e.name))
+  .map((e) => ({ name: e.name, gaps: provenanceGaps(e) }))
+  .filter((e) => e.gaps.length > 0);
+
+if (mustVerifyGaps.length) {
+  const message =
+    `MUST-VERIFY PROVENANCE INCOMPLETE: ${mustVerifyGaps.length} contract(s) cannot be attributed end to ` +
+    `end (repo -> committed pinned revision -> artifact -> every source hash -> vendored ABI):`;
+  const emit = STRICT ? console.error : console.log;
+  emit(STRICT ? `\n${message}` : `\n⚠️  ${message}`);
+  for (const entry of mustVerifyGaps) {
+    emit(`  - ${entry.name}`);
+    for (const gap of entry.gaps) emit(`      ${gap}`);
+  }
+  if (STRICT) {
+    console.error(
+      '  A must-verify ABI that was not attributed is a FAILURE, not a caveat. Build the artifact from a ' +
+        'clean, committed upstream checkout that scripts/upstream-abi-pin.json names.',
+    );
+    failed = true;
+  } else {
+    console.log('    Not failing the lenient run. `--strict` (release) requires the full chain.');
+  }
+}
+
+/**
+ * May the final PASS claim the artifacts were verified against their sources?
+ *
+ * Only when EVERY must-verify contract has the entire chain intact. Anything else and the run
+ * says what it actually established.
+ */
+const mustVerifyFullyAttributed =
+  mustVerifyGaps.length === 0 && mustVerifyMissing.length === 0 && vendoredPinHolds;
 
 if (STRICT && expectedMissing.length) {
   console.error(`\nMISSING ARTIFACTS: ${expectedMissing.length} contract(s) are declared in an upstream src/ tree but have no out/ artifact:`);
@@ -606,10 +684,18 @@ if (mustVerifyMissing.length) {
 if (failed) process.exit(1);
 
 if (expectedMissing.length) {
+  // Reachable in lenient mode only — strict already failed on it above.
   console.log(
     `\n⚠️  PASS, but ${expectedMissing.length} expected artifact(s) were missing and therefore NOT verified ` +
       `(see the skipped list). Re-run with --strict to make that a failure.`,
   );
+  if (!mustVerifyFullyAttributed) {
+    console.log(
+      `      ...and ${mustVerifyGaps.length} must-verify contract(s) have INCOMPLETE PROVENANCE, so nothing ` +
+        'here establishes that their artifacts match the sources they record.',
+    );
+  }
+  console.log('      LENIENT MODE: none of the above is enforced. `--strict` (the release gate) fails on all of it.');
 } else {
   const pinned = usedRepos
     .filter((repo) => PIN.repos?.[repo.label]?.revision)
@@ -624,10 +710,22 @@ if (expectedMissing.length) {
   if (artifactSourceMismatch.length) {
     caveats.push(`${artifactSourceMismatch.length} artifact(s) did not hash-match their sources`);
   }
+  // The claim "every artifact hash-matches the sources it records" is only true when the source
+  // hashes were actually computed. With no provenance at all (no metadata.sources, unresolved
+  // sources, or an out/ outside any git checkout) that sentence asserts a verification this run
+  // never performed — the same overstatement in a different place.
+  if (mustVerifyGaps.length) {
+    caveats.push(
+      `${mustVerifyGaps.length} must-verify contract(s) have INCOMPLETE PROVENANCE, so their artifact⇄source ` +
+        'binding is not established (see above)',
+    );
+  } else if (!mustVerifyFullyAttributed) {
+    caveats.push('must-verify provenance was not fully established (see above)');
+  }
   console.log(
     caveats.length
       ? `\nPASS (with caveats): ${checkedNames.length - unattributableDrift.length}/${checkedNames.length} ` +
-        `checked SDK ABI(s) match a hash-verified upstream artifact; ${caveats.join('; ')}.`
+        `checked SDK ABI(s) match an upstream artifact; ${caveats.join('; ')}.`
       : '\nPASS: every checked SDK ABI matches its upstream out/ artifact, every expected artifact was present, ' +
         'and every artifact hash-matches the sources it records.',
   );
@@ -636,6 +734,16 @@ if (expectedMissing.length) {
       ? `      Attributed to committed upstream revision(s): ${pinned || '(none pinned)'}.`
       : `      Upstream revision(s) seen: ${
           usedRepos.map((r) => `${r.label}@${(r.revision ?? 'unknown').slice(0, 8)}${r.dirtyPaths.length ? '(DIRTY)' : ''}`).join(', ') || '(none)'
-        }. Run --strict to require a clean, pinned checkout.`,
+        }.`,
   );
+  // LENIENT SEMANTICS, stated rather than implied (CC-50 round-4 LOW-3): this mode reports the
+  // provenance gates instead of enforcing them, so its exit code says "no drift I can attribute",
+  // never "release-grade". `--strict` is the only mode whose green means the full chain held.
+  if (!STRICT) {
+    console.log(
+      caveats.length
+        ? '      LENIENT MODE: the caveats above are NOT enforced here. `--strict` (the release gate) fails on them.'
+        : '      LENIENT MODE: no caveat was raised, but only `--strict` enforces the pin/clean-checkout chain.',
+    );
+  }
 }

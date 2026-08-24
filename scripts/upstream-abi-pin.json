@@ -3,7 +3,7 @@
   "repos": {
     "SuperPaymaster": {
       "revision": "03713febef863a7e3bafe13b0f955fa1f0d85683",
-      "why": "Registry 5.7.0 / BLSAggregator 4.6.0 \u2014 the CC-48 protocol candidate (versioned BLS domain separation, PoP validator binding, combined-path removal) the RepCredit evidence run encodes against."
+      "why": "Registry 5.7.0 / BLSAggregator 4.6.0 — the CC-48 protocol candidate (versioned BLS domain separation, PoP validator binding, combined-path removal) the RepCredit evidence run encodes against."
     },
     "airaccount-contract": {
       "revision": "29caffc78fbfcfb1d6675886fcc09654898c747b",
@@ -21,11 +21,18 @@
     },
     "DVTValidator": {
       "abiSha256": "f5861b0563a82cf8cd6bd04528ee747bca7604bde8b97ae2486a7f63f903ab8c",
-      "why": "executeWithProof path"
+      "why": "executeWithProof path. Vendored from SuperPaymaster's out/DVTValidator.sol/DVTValidator.json (the compiler's own output), NOT from its abis/DVTValidator.json: as of SP 03713feb/ebc05663 that hand-maintained copy is STALE — 16 functions vs 18 in out/, missing createProposal(address,uint8,string,bytes32) and queueSlashWithProof(address,uint8,uint256,bytes); it was last touched in 050f56b3 (2026-06-15). Reported upstream as CC-50 round-4 LOW-2; any downstream reading SP's abis/ gets the short interface."
     },
     "SuperPaymaster": {
       "abiSha256": "4f5216110a509492983c0f89ce1cbac562cee43ab3f9b8c1c924d3f29c287928",
       "why": "gasless lifecycle sponsor"
+    }
+  },
+  "services": {
+    "$comment": "Non-foundry upstreams that are pinned by REVIEWED revision rather than by ABI. Read by scripts/repcredit/experiment-auth.test.ts: in required/release mode (REPCREDIT_YAAA_HTTP_TEST=1) this pin is authoritative and REPCREDIT_YAAA_REV may not contradict it; a local run may still narrow to another commit while a cross-repo round is in flight, and says so. Keep it equal to the ref .github/workflows/ci.yml checks out.",
+    "YetAnotherAA-Validator": {
+      "revision": "e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9",
+      "why": "The reviewed DVT revision for the RepCredit experiment guard: versioned v2 HMAC preimage (scheme/method/requestTarget/timestamp/rawBody) plus the structured REPCREDIT_AUTH_* error-code table. Later DVT commits exist locally but have NOT been reviewed here — CC-50 round-5 LOW-1."
     }
   }
 }
