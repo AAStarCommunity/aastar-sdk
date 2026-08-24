@@ -1581,7 +1581,7 @@ async function main(): Promise<void> {
   }
 
   const superPaymasterConfig = isSepolia
-    ? join(tempRoot, "superpaymaster-sepolia-deployment.json")
+    ? join(superPaymasterDir, "broadcast/repcredit-e2e-sepolia-deployment.json")
     : join(superPaymasterDir, "deployments/config.anvil.json");
   if (isSepolia) {
     const entryPoint = process.env.REPCREDIT_ENTRYPOINT ?? "";
@@ -1610,6 +1610,7 @@ async function main(): Promise<void> {
   }
   const deployment = loadDeployment(superPaymasterConfig);
   copyFileSync(superPaymasterConfig, join(rawDir, "superpaymaster-deployment.json"));
+  if (isSepolia) rmSync(superPaymasterConfig, { force: true });
   if (isSepolia) {
     const broadcastPath = join(superPaymasterDir, "broadcast/DeployRepCreditSepolia.s.sol/11155111/run-latest.json");
     if (!existsSync(broadcastPath)) throw new Error("Sepolia Forge broadcast receipt file is missing");
