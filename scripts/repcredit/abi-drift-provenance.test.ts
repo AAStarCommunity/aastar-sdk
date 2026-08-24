@@ -27,8 +27,9 @@
  * Round six added the two COVERAGE cases (a counted entry that carries no comparable hash; a count
  * that came from an unrelated file), and round seven the five DECLARATION cases plus the PASS-SCOPE
  * case: an artifact whose `settings.compilationTarget` is missing / malformed / claims another
- * contract / claims this one twice must not have a main source guessed for it, and the green
- * sentence may only speak for the MUST_VERIFY set it actually enforces.
+ * contract / claims this one twice / declares an extra target beside the correct one must not have
+ * a main source guessed for it, and the green sentence may only speak for the MUST_VERIFY set it
+ * actually enforces.
  *
  * The already-working links (stale artifact, missing artifact, drift) are pinned here too, so a
  * later edit cannot trade one gate away for another.
@@ -99,6 +100,8 @@ type Bypass =
   | 'target-malformed'
   /** two compilationTarget entries both claim this contract — the artifact identifies no ONE source */
   | 'target-claims-twice'
+  /** compilationTarget claims this contract correctly AND declares an extra, unrelated target */
+  | 'target-claims-plus-extra'
   /** a CHECKED but non-must-verify contract with zero source coverage (PASS-scope wording) */
   | 'non-must-source-gap'
   /** out/ belongs to no git checkout */
@@ -200,6 +203,16 @@ function buildFixture(bypass: Bypass): Fixture {
         // straight through to `sourceName`, so a malformed declaration was WEAKER than none.
         metadata = { sources: { [sibling]: siblingSource }, settings: { compilationTarget: rel } };
         sourceName = sibling;
+      }
+      if (bypass === 'target-claims-plus-extra') {
+        // ONE entry claims Registry correctly and hashes correctly; the artifact just declares a
+        // second, unrelated target. Picking the matching entry out of several is still a guess, and
+        // a multi-target artifact is not the single-contract artifact this attribution is about
+        // ([from:docs] round-7 boundary correction).
+        metadata = {
+          sources: { [rel]: { keccak256: keccak256(toBytes(sourceFor(name))) }, [sibling]: siblingSource },
+          settings: { compilationTarget: { [rel]: name, [sibling]: 'BLSAggregator' } },
+        };
       }
       if (bypass === 'target-claims-twice') {
         // Both entries are in-repo and hash correctly, so nothing else in the chain complains —
@@ -459,14 +472,14 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       what: 'a single-key compilationTarget naming a DIFFERENT contract',
       label: 'MAIN SOURCE UNDECLARED',
       expectRow: /Registry\s+\w{16}\s+✅ 1 source\(s\) verified/,
-      because: 'NONE of them is Registry',
+      because: 'declares 1 target',
     },
     {
       bypass: 'target-claims-nothing',
       what: 'a compilationTarget that claims other contracts, with sourceName decoying',
-      label: 'MAIN SOURCE UNDECLARED',
+      label: 'MAIN SOURCE AMBIGUOUS',
       expectRow: /Registry\s+\w{16}\s+✅ 2 source\(s\) verified/,
-      because: 'names 2 target(s) and NONE of them is Registry',
+      because: 'declares 2 targets',
     },
     {
       bypass: 'target-missing-sourcename-decoy',
@@ -487,7 +500,16 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       what: 'a compilationTarget that claims this contract TWICE',
       label: 'MAIN SOURCE AMBIGUOUS',
       expectRow: /Registry\s+\w{16}\s+✅ 2 source\(s\) verified/,
-      because: 'claims Registry 2 times',
+      because: '2 of them claim Registry',
+    },
+    {
+      // The declaration must be the artifact's WHOLE answer: one correct claim next to an extra,
+      // unrelated target is still a set this gate would have to choose from.
+      bypass: 'target-claims-plus-extra',
+      what: 'a correct claim alongside an EXTRA unrelated compilation target',
+      label: 'MAIN SOURCE AMBIGUOUS',
+      expectRow: /Registry\s+\w{16}\s+✅ 2 source\(s\) verified/,
+      because: '1 of them claim Registry',
     },
   ];
 

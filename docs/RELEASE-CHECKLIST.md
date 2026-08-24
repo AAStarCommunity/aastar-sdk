@@ -90,10 +90,12 @@ consumer path**.
       bypassed state, and that the run now fails on it.
 
       Round-7 removed the last guess and the last overclaim. A MUST_VERIFY artifact must **declare**
-      its own source — `metadata.settings.compilationTarget` must be a non-empty object with exactly
-      one entry whose value is the contract name; missing / malformed / claiming nothing / claiming
-      it twice all fail closed (`MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`), with no
-      `sourceName` or `<Name>.sol` fallback to land on an unrelated but correctly-hashed sibling.
+      its own source — `metadata.settings.compilationTarget` must be an object with **exactly one
+      entry** whose value is the contract name; missing / malformed / empty / naming another
+      contract / declaring extra targets / claiming it twice all fail closed
+      (`MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`), with no `sourceName` or `<Name>.sol`
+      fallback to land on an unrelated but correctly-hashed sibling. One correct claim beside an
+      extra target fails too: choosing the matching entry out of several is still a guess.
       And because source coverage is enforced for MUST_VERIFY only, the green sentence now reads
       *"all N must-verify artifacts hash-match every source they record"* and any other checked
       artifact with an unestablished binding is printed as an explicit

@@ -179,18 +179,24 @@ but **unrelated** in-repo sibling:
 An artifact that declares a compilation target and does not claim this contract has told us it is
 not the artifact for it; guessing past that statement is the bypass.
 
-- For a `MUST_VERIFY` contract the declaration is now the **only** accepted answer: `metadata.
-  settings.compilationTarget` must be a non-empty object with **exactly one** entry whose value
-  equals the contract name. Missing, malformed, claiming nothing, or claiming it **more than once**
-  each fail closed as `MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`. The `sourceName` and
-  `<Name>.sol` guesses are gone from that path — they survive only for contracts outside
-  `MUST_VERIFY`, which never reach the release gate.
-- **Five new synthetic regressions** (16 cases total), one per shape plus the double-claim. Each
-  keeps the rest of the chain intact — clean, committed, pinned upstream; every recorded source
-  in-repo, on disk and correctly hashed — and asserts the run still prints `✅ N source(s) verified`
-  with **no** `SOURCE HASHES INCOMPLETE` / `NO SOURCE HASHES` / mismatch, so the declaration gate is
-  provably the only thing that fails. Mutation-verified: restoring the fallback chain turns exactly
-  those five red and nothing else.
+- For a `MUST_VERIFY` contract the declaration is now the **only** accepted answer:
+  `metadata.settings.compilationTarget` must be an object with **exactly one entry**, and that
+  entry's value must equal the contract name. Missing, malformed, empty, a single entry naming a
+  different contract, several entries, or the contract claimed twice each fail closed as
+  `MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`. Not "at least one entry that claims it":
+  picking the matching entry out of several is the same guess in a smaller disguise, so **one
+  correct claim beside an extra unrelated target also fails** (`[from:docs]` round-7 boundary
+  correction). Measured across all **915** sibling artifacts on disk, every one has exactly one
+  entry — this rejects nothing solc actually emits. The `sourceName` and `<Name>.sol` guesses are
+  gone from that path; they survive only for contracts outside `MUST_VERIFY`, which never reach the
+  release gate.
+- **Six new synthetic regressions** (17 cases total), one per shape. Each keeps the rest of the
+  chain intact — clean, committed, pinned upstream; every recorded source in-repo, on disk and
+  correctly hashed — and asserts the run still prints `✅ N source(s) verified` with **no**
+  `SOURCE HASHES INCOMPLETE` / `NO SOURCE HASHES` / mismatch, so the declaration gate is provably
+  the only thing that fails. Mutation-verified: restoring the fallback chain turns exactly the five
+  original declaration cases red and nothing else; relaxing "exactly one entry" back to "one
+  matching claim" turns exactly the extra-target case red.
 
 **The green sentence contradicted its own report (MEDIUM-2).** Source coverage is enforced for the
 `MUST_VERIFY` set only — 26 of the 30 currently checked contracts are outside it — yet the
@@ -203,7 +209,7 @@ its own `checked` table and then that sentence, exiting 0.
 - Any **checked but non-must-verify** artifact with an unestablished artifact⇄source binding is
   named on its own line: `NOT RELEASE-SCOPE CAVEAT: N further checked artifact(s) … compared by ABI
   only`. It does not fail the gate (it never did), it is no longer swallowed by a blanket claim.
-- Pinned by a sixteenth regression, and the retired sentence is asserted **absent** from every case
+- Pinned by its own regression, and the retired sentence is asserted **absent** from every case
   including the baseline, so it cannot come back. Mutation-verified in both halves: restoring the
   old wording turns the baseline red, dropping only the caveat line turns the scope case red.
 

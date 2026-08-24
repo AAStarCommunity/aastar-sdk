@@ -233,8 +233,12 @@ type SourceVerification = {
  *
  * solc writes `settings.compilationTarget = { "<path>": "<ContractName>" }` — its own answer to
  * "which file declares this contract". For a MUST-VERIFY contract that declaration is the ONLY
- * accepted answer (`declaredOnly`): it must be a non-empty object with EXACTLY ONE entry whose
- * value is this contract's name.
+ * accepted answer (`declaredOnly`): it must be an object with EXACTLY ONE entry, and that entry's
+ * value must be this contract's name. Not "at least one entry that claims it" — an artifact that
+ * declares extra compilation targets is not the single-contract artifact this gate attributes, and
+ * picking the matching entry out of several is the same guess in a smaller disguise
+ * ([from:docs] round-7 boundary correction). Measured against all 915 sibling artifacts on disk:
+ * every one has exactly one entry, so this rejects nothing solc actually emits.
  *
  * Round-6 kept three guesses behind it — a single-key target naming a DIFFERENT contract,
  * `sourceName`, and an unambiguous `<Name>.sol` basename — and an independent reviewer measured
@@ -257,16 +261,24 @@ function mainSourceOf(
 ): { source: string | null; declarationProblem: string | null; declarationLabel: string } {
   const target = metadata?.settings?.compilationTarget;
   const isTargetObject = Boolean(target) && typeof target === 'object' && !Array.isArray(target);
-  const claims = isTargetObject ? Object.entries<any>(target).filter(([, contract]) => contract === name) : [];
-  if (claims.length === 1) return { source: claims[0][0], declarationProblem: null, declarationLabel: '' };
+  const entries = isTargetObject ? Object.entries<any>(target) : [];
+  if (entries.length === 1 && entries[0][1] === name) {
+    return { source: entries[0][0], declarationProblem: null, declarationLabel: '' };
+  }
 
   if (declaredOnly) {
-    if (claims.length > 1) {
+    const render = (): string => entries.map(([rel, contract]) => `${rel} => ${String(contract)}`).join(', ');
+    if (entries.length > 1) {
+      // Extra targets are a hard failure even when one of them claims this contract: choosing the
+      // matching entry out of several is a guess, and a multi-target artifact is not the
+      // single-contract artifact this attribution is about.
+      const claims = entries.filter(([, contract]) => contract === name).length;
       return {
         source: null,
         declarationProblem:
-          `metadata.settings.compilationTarget claims ${name} ${claims.length} times ` +
-          `(${claims.map(([rel]) => rel).join(', ')}), so the artifact does not identify ONE source for it`,
+          `metadata.settings.compilationTarget declares ${entries.length} targets (${render()}) — ` +
+          `${claims} of them claim ${name}; a must-verify artifact must declare EXACTLY ONE compilation ` +
+          `target and it must be ${name}`,
         declarationLabel: 'MAIN SOURCE AMBIGUOUS',
       };
     }
@@ -275,10 +287,9 @@ function mainSourceOf(
         ? 'the artifact declares no metadata.settings.compilationTarget'
         : `metadata.settings.compilationTarget is ${Array.isArray(target) ? 'an array' : typeof target}, ` +
           'not the { "<path>": "<ContractName>" } object solc writes'
-      : !Object.keys(target).length
+      : !entries.length
         ? 'metadata.settings.compilationTarget is empty'
-        : `metadata.settings.compilationTarget names ${Object.keys(target).length} target(s) and NONE of them ` +
-          `is ${name} (${Object.entries<any>(target).map(([rel, c]) => `${rel} => ${String(c)}`).join(', ')})`;
+        : `metadata.settings.compilationTarget declares 1 target (${render()}) and it is NOT ${name}`;
     return {
       source: null,
       // No sourceName / basename fallback: a must-verify artifact that will not name its own
