@@ -1581,7 +1581,7 @@ async function main(): Promise<void> {
   }
 
   const superPaymasterConfig = isSepolia
-    ? join(superPaymasterDir, "deployments/repcredit-e2e/sepolia-20260824.json")
+    ? join(tempRoot, "superpaymaster-sepolia-deployment.json")
     : join(superPaymasterDir, "deployments/config.anvil.json");
   if (isSepolia) {
     const entryPoint = process.env.REPCREDIT_ENTRYPOINT ?? "";
