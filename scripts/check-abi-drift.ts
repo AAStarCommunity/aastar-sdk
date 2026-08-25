@@ -893,6 +893,30 @@ const STRICT =
   process.env.STRICT_ABI_DRIFT === '1' ||
   process.env.REQUIRE_UPSTREAM === '1';
 
+/**
+ * `REPCREDIT_UPSTREAM_ARTIFACTS=absent` and `--strict` are MUTUALLY EXCLUSIVE (CC-50 round-10 LOW).
+ *
+ * That variable is how an environment DECLARES it has no sibling upstream checkouts, so that the
+ * REAL must-verify pin test in `scripts/repcredit/abi-drift-provenance.test.ts` becomes a visible
+ * SKIP instead of a failure. Strict mode asserts the exact opposite: that every must-verify ABI was
+ * compared against a real artifact from a clean, pinned upstream checkout.
+ *
+ * An independent reviewer measured that setting it could not actually produce a false green here —
+ * strict already fails on the missing `out/` dirs — but that made the exclusion a property of the
+ * current control flow, enforced for release only by a line of prose in docs/RELEASE-CHECKLIST.md.
+ * Making the combination an immediate, named failure turns it into an impossible state instead of a
+ * reminder, and keeps holding if the code below is ever reorganised.
+ */
+if (STRICT && process.env.REPCREDIT_UPSTREAM_ARTIFACTS === 'absent') {
+  console.error('FAIL: --strict was requested with REPCREDIT_UPSTREAM_ARTIFACTS=absent.');
+  console.error('      Those two assert opposite things: the variable DECLARES that this environment');
+  console.error('      has no sibling upstream checkouts, while strict mode requires every must-verify');
+  console.error('      ABI to be compared against an artifact from a clean, pinned one.');
+  console.error('      A release run (docs/RELEASE-CHECKLIST.md) must not set it. Drop the variable, or');
+  console.error('      drop --strict and accept that this run verifies nothing against upstream.');
+  process.exit(1);
+}
+
 /** contract name -> upstream repo label, from the upstream SOURCE trees. */
 function upstreamSourceIndex(): Map<string, string> {
   const index = new Map<string, string>();

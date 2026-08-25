@@ -188,6 +188,8 @@ type Bypass =
   | 'worktree-source-symlink-inside'
   /** the pinned source is a regular file on disk that the pinned revision does not track at all */
   | 'source-untracked-gitignored'
+  /** the pinned path is a DIRECTORY in the working tree, while the pinned revision holds a blob */
+  | 'worktree-source-is-directory'
   /** worktree has a regular file; the PINNED revision has that path as a symlink */
   | 'pinned-entry-symlink'
   /** worktree has a regular file; the PINNED revision has that path as a submodule gitlink */
@@ -332,12 +334,25 @@ function buildFixture(bypass: Bypass): Fixture {
   if (
     bypass === 'pinned-entry-symlink' ||
     bypass === 'pinned-entry-submodule' ||
-    bypass === 'worktree-bytes-differ-from-pinned-blob'
+    bypass === 'worktree-bytes-differ-from-pinned-blob' ||
+    bypass === 'worktree-source-is-directory'
   ) {
     pinnedRevisionOverride = git(upstreamRoot, ['rev-parse', 'HEAD']).trim();
     if (bypass === 'worktree-bytes-differ-from-pinned-blob') {
       registryContent = `${sourceFor('Registry')}// the revision the artifact was actually built from\n`;
       writeFileSync(registrySol, registryContent);
+    } else if (bypass === 'worktree-source-is-directory') {
+      // CC-50 round-10. The pinned revision holds a perfectly ordinary blob at the pinned path;
+      // the WORKING TREE has a directory there. This is the one shape in which `!stat.isFile()`
+      // is the check that fires — a symlink is caught one line earlier, and a regular file never
+      // reaches it — so it is the only way to keep that link falsifiable.
+      //
+      // Found the hard way: an earlier round-10 working tree carried `if (false && !stat.isFile())`,
+      // a mutation probe that was never reverted, and the ENTIRE 34-case provenance suite still
+      // passed. A guard no test can turn red is a guard nobody can tell is gone.
+      rmSync(registrySol, { recursive: true, force: true });
+      mkdirSync(registrySol, { recursive: true });
+      writeFileSync(join(registrySol, 'inner.sol'), sourceFor('Registry'));
     } else {
       rmSync(registrySol, { recursive: true, force: true });
       writeFileSync(registrySol, registryContent);
@@ -574,7 +589,7 @@ function buildFixture(bypass: Bypass): Fixture {
 
 type Run = { status: number; output: string };
 
-function runGate(fixture: Fixture, strict: boolean): Run {
+function runGate(fixture: Fixture, strict: boolean, extraEnv: Record<string, string> = {}): Run {
   const args = strict ? [SCRIPT, '--strict'] : [SCRIPT];
   try {
     const output = execFileSync(TSX, args, {
@@ -582,7 +597,20 @@ function runGate(fixture: Fixture, strict: boolean): Run {
       encoding: 'utf8',
       // Stop git's upward discovery at the fixture root so the `no-git-repo` case cannot be
       // accidentally satisfied by some ancestor repository of the temp dir.
-      env: { ...process.env, GIT_CEILING_DIRECTORIES: fixture.root, STRICT_ABI_DRIFT: '', REQUIRE_UPSTREAM: '' },
+      //
+      // REPCREDIT_UPSTREAM_ARTIFACTS is CLEARED, not forwarded. It is a statement about SIBLING
+      // checkouts — CI sets it because a GitHub runner has none — and `--strict` now refuses to
+      // run alongside it (round-10 LOW). These fixtures build their OWN upstream repo and out/
+      // dir inside the temp root, so the statement is simply false here and forwarding it would
+      // make every strict case fail on the wrong assertion under CI's environment.
+      env: {
+        ...process.env,
+        GIT_CEILING_DIRECTORIES: fixture.root,
+        STRICT_ABI_DRIFT: '',
+        REQUIRE_UPSTREAM: '',
+        REPCREDIT_UPSTREAM_ARTIFACTS: '',
+        ...extraEnv,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     return { status: 0, output };
@@ -602,6 +630,56 @@ function withFixture(bypass: Bypass, assertions: (lenient: Run, strict: Run) => 
   }
 }
 
+/**
+ * CC-50 round-10 LOW: the required `abi-provenance` CI job checks SuperPaymaster out at a REVISION
+ * LITERAL, and the YAAA job at another. Both must equal what `scripts/upstream-abi-pin.json` says
+ * this repo reviewed.
+ *
+ * The strict gate already enforces the SuperPaymaster one at job runtime — it refuses a checkout
+ * whose HEAD is not the pinned revision — so a drift cannot produce a false green. What it CANNOT
+ * do is tell you before you push: a bumped pin with a stale workflow literal only shows up as a
+ * red job several minutes later, and the natural "fix" under that pressure is to edit whichever of
+ * the two is easier to reach. These assertions make the disagreement local and immediate, and they
+ * are deliberately literal string comparisons against the workflow TEXT rather than a YAML parse,
+ * so a value moved into an expression or a matrix reads as a failure to be reviewed, not as a pass.
+ */
+describe('the CI workflow checks out exactly the reviewed revisions', () => {
+  const workflow = readFileSync(join(SDK_REPO, '.github/workflows/ci.yml'), 'utf8');
+  const pin = JSON.parse(readFileSync(join(SDK_REPO, 'scripts/upstream-abi-pin.json'), 'utf8')) as {
+    repos: Record<string, { revision: string }>;
+    services: Record<string, { revision: string }>;
+  };
+
+  it('the abi-provenance job checks out repos.SuperPaymaster.revision', () => {
+    const revision = pin.repos.SuperPaymaster.revision;
+    expect(revision).toMatch(/^[0-9a-f]{40}$/);
+    expect(workflow).toContain('repository: AAStarCommunity/SuperPaymaster');
+    expect(workflow).toContain(`ref: ${revision}`);
+    // The gate's own clean/pinned assertion in the job re-states the sha; both must agree, or the
+    // job would fail on a shape nobody reading this file would expect.
+    expect(workflow).toContain(`test "$(git rev-parse HEAD)" = "${revision}"`);
+  });
+
+  it('the YAAA job checks out services["YetAnotherAA-Validator"].revision', () => {
+    const revision = pin.services['YetAnotherAA-Validator'].revision;
+    expect(revision).toMatch(/^[0-9a-f]{40}$/);
+    expect(workflow).toContain(`ref: ${revision}`);
+  });
+
+  it('the abi-provenance job runs the STRICT gate and does not declare the upstream absent', () => {
+    // The two failure modes that would make this job green-but-empty: running the lenient gate
+    // (which compares nothing it cannot find and exits 0), or carrying the `absent` declaration
+    // copied from the other jobs — which the gate now refuses outright, but a reviewer reading the
+    // workflow should not have to derive that.
+    const job = workflow.slice(workflow.indexOf('  abi-provenance:'));
+    expect(job).toContain('pnpm run check:abi-drift:strict');
+    // Matched as a YAML KEY, not as a substring: the job carries a comment explaining why the
+    // variable is absent, and a check that the explanation itself trips would be a check nobody
+    // could leave in place.
+    expect(job).not.toMatch(/^\s*REPCREDIT_UPSTREAM_ARTIFACTS\s*:/m);
+  });
+});
+
 describe('check-abi-drift provenance chain (synthetic upstream)', () => {
   it('BASELINE: a clean, committed, pinned upstream with real source hashes passes strict', () => {
     withFixture('none', (lenient, strict) => {
@@ -617,6 +695,41 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       // Sanity: it really did hash the sources rather than skipping them.
       expect(strict.output).toMatch(/Registry\s+\w{16}\s+✅ 1 source\(s\) verified/);
     });
+  }, 120_000);
+
+  it('--strict and REPCREDIT_UPSTREAM_ARTIFACTS=absent are MUTUALLY EXCLUSIVE', () => {
+    // Round-10 LOW. The variable DECLARES that an environment has no sibling upstream checkouts
+    // (CI sets it so the REAL must-verify pin test becomes a visible SKIP); --strict REQUIRES that
+    // every must-verify ABI was compared against an artifact from a clean pinned one. A reviewer
+    // measured that the pair could not produce a false green TODAY — strict already fails on the
+    // missing out/ dirs — which is exactly why it was worth turning into an impossible state
+    // rather than a line of prose in the release checklist.
+    //
+    // This fixture is the strongest possible form of the case: a BASELINE upstream that strict
+    // otherwise PASSES. So the exit 1 below can only come from the mutual exclusion, and removing
+    // that check turns this test red on its own.
+    const fixture = buildFixture('none');
+    try {
+      const clean = runGate(fixture, true);
+      expect(clean.status, clean.output).toBe(0);
+
+      const conflicted = runGate(fixture, true, { REPCREDIT_UPSTREAM_ARTIFACTS: 'absent' });
+      expect(conflicted.status, conflicted.output).toBe(1);
+      expect(conflicted.output).toContain('--strict was requested with REPCREDIT_UPSTREAM_ARTIFACTS=absent');
+      // It refuses BEFORE doing any work, so it must not also emit an attribution claim.
+      expect(conflicted.output).not.toContain(ATTRIBUTED_SENTENCE);
+
+      // Only strict is affected: a lenient run makes no upstream claim, so the variable is
+      // consistent with it and must not change the outcome.
+      const lenientWithVar = runGate(fixture, false, { REPCREDIT_UPSTREAM_ARTIFACTS: 'absent' });
+      expect(lenientWithVar.status, lenientWithVar.output).toBe(0);
+
+      // Any other value is not the declaration, and must not trip the guard.
+      const otherValue = runGate(fixture, true, { REPCREDIT_UPSTREAM_ARTIFACTS: 'present' });
+      expect(otherValue.status, otherValue.output).toBe(0);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
   }, 120_000);
 
   it('BYPASS 1a: an artifact with NO metadata.sources fails strict instead of passing green', () => {
@@ -939,6 +1052,21 @@ describe('check-abi-drift provenance chain (synthetic upstream)', () => {
       what: 'a regular, correctly-hashing file the pinned revision does not track at all',
       label: 'SOURCE ABSENT FROM PINNED REVISION',
       because: 'contracts/src/Registry.sol does not exist in',
+    },
+    {
+      bypass: 'worktree-source-is-directory',
+      what: 'a DIRECTORY in the working tree where the pinned revision holds a regular blob',
+      label: 'WORKTREE SOURCE NOT A REGULAR FILE',
+      because: 'is not a regular file',
+      pinBehindHead: true,
+      // The point of this case. Without the `!stat.isFile()` link the run STILL exits 1 — the
+      // byte comparison below reaches `readFileSync` on a directory, fails with EISDIR and reports
+      // WORKTREE SOURCE MISSING ("could not be read"). So that link is redundant for the VERDICT
+      // and load-bearing for the DIAGNOSIS, and asserting the label rather than the exit code is
+      // what makes it falsifiable. Measured: reverting it to `if (false && !stat.isFile())` — the
+      // exact mutation an interrupted round-10 session left in the working tree — turns this case,
+      // and only this case, red.
+      notLabel: 'WORKTREE SOURCE MISSING',
     },
     {
       bypass: 'pinned-entry-symlink',

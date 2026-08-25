@@ -149,6 +149,11 @@ consumer path**.
       a visible SKIP, never into a pass, and using it here would hide the one assertion in that file
       made against real data.
 
+      This is no longer only a checklist instruction: `check-abi-drift.ts` **exits 1 immediately**
+      when `--strict` and `REPCREDIT_UPSTREAM_ARTIFACTS=absent` are set together (round-10 LOW).
+      They assert opposite things, so the combination is now an impossible state rather than a
+      reminder someone has to read.
+
       `repcredit:typecheck` now also covers `scripts/check-abi-drift.ts` — the release gate itself,
       with this repo's `target/lib: ESNext`. Do not report a typecheck result for it from ad-hoc
       `tsc` flags; that claim was not reproducible in round 8.
@@ -157,7 +162,8 @@ consumer path**.
       which is a **no-op** (`None of the selected packages has a "lint" script`) — do not report it
       as an effective gate. `lint:repcredit` currently enables exactly two rules
       (`no-restricted-imports`, `@typescript-eslint/no-unused-vars`), so a green here carries
-      correspondingly little information.
+      correspondingly little information. It now also covers `scripts/repcredit-e2e.ts` itself
+      (16 files), and CI calls it directly rather than through the no-op wrapper (round-10 LOW).
 
       **The reviewed YAAA revision lives in this repo**, not in your shell:
       `scripts/upstream-abi-pin.json` → `services["YetAnotherAA-Validator"].revision`. In required

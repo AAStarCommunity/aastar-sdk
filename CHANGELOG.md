@@ -4,11 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] — targeting SDK 0.46.0 (minor)
 
-> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.** CC-50 blocker **B2** is still open: the
-> `Registry` / `BLSAggregator` ABIs on this branch were copied from an **unmerged** SuperPaymaster
-> experiment branch (`daa1d1ec`). Those interfaces exist on **no SuperPaymaster main commit and no
-> deployed chain**, so this version has no valid ABI provenance yet. It may only be published after
-> repo:sp lands its fix and returns a final commit/version/artifact hash.
+> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.** CC-50 blocker **B2** is still open. The
+> `Registry` / `BLSAggregator` ABIs on this branch come from an **unmerged** SuperPaymaster branch:
+> `scripts/upstream-abi-pin.json` pins `03713feb` (`Registry` 5.7.0 / `BLSAggregator` 4.6.0), which
+> is reachable only from `codex/repcredit-e2e-evidence-20260823` and from **no `main` commit and no
+> deployed chain**. (Earlier revisions of this note named `daa1d1ec`, an ancestor of that pin, and
+> were not updated when the pin moved — round-10 LOW.)
+>
+> Upstream has since moved further: repo:sp's current candidate `e8a8ac5b` is `BLSAggregator`
+> **4.10.0**, which reshapes `guardianSlashCases` from 5 outputs to 7 (`fraudProofHash` inserted at
+> index 1, `verifier` appended). The BLS **domain** is unchanged — `DOMAIN_NAME` and every
+> `TAG_*` still carry the `.v1` suffix and `domainSeparator()` is still
+> `keccak256(abi.encode(DOMAIN_NAME, chainid, aggregator, registry))` — so
+> `scripts/repcredit/bls-domain.ts` needs no change. The **struct** does, and until the three-way
+> re-vendor lands the evidence runner fails closed on that pairing rather than recording it (see the
+> tenth-round entry). This version may only be published after repo:sp lands its fix and returns a
+> final commit/version/artifact hash.
 
 **RepCredit evidence orchestrator, and the retirement of the three Paper7 scripts.**
 
@@ -159,6 +170,150 @@ Smaller items from the same round:
   `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
   There is no acceptable state in which those four go unverified.
 
+### Tenth round (CC-50 `[from:docs]` on a73c8ec7) — measure the returndata, do not ask the ABI
+
+**The named decode could not see the hazard it documented (HIGH).** Round nine replaced the bare
+array in `security-controls.json` with a named object, but it still obtained the value through
+`publicClient.readContract(<old vendored ABI>)` and then checked what viem had *already* decoded.
+An independent reviewer measured that this is structurally blind to the 5 → 7 reshape it was
+written for:
+
+* the ABI-shape check compares the OLD vendored ABI against the OLD reviewed names — and they
+  match, because the ABI is exactly what this repo reviewed. It is the *contract* that changed;
+* the arity check compares viem's already-truncated 5-member result against 5 — and that matches
+  too, because viem decodes seven static words as five without erroring.
+
+Both guards passed, and the evidence file received `fraudProofHash`'s bytes under the name
+`deadline`, `deadline`'s under `status`, and so on — worse than the bare array, because the wrong
+values now carry authoritative names. Not hypothetical either: the runner deploys with
+`forge script` from the sibling `../SuperPaymaster` working tree, which already carries the
+7-output struct.
+
+`scripts/repcredit/evidence-structs.ts` (replacing `guardian-slash-case.ts`) stops asking the ABI
+what shape the answer was and measures the answer instead — `encodeFunctionData` +
+`publicClient.call` for RAW returndata, then, **before any decoding**:
+
+1. the returndata must be a whole number of 32-byte words;
+2. the vendored ABI's outputs must still be exactly the reviewed **names AND types**, in order
+   (round nine compared names only, so a `uint64 deadline` → `uint256 deadline` widening was
+   invisible to it);
+3. when every reviewed output is statically sized, the word count must **exactly equal** the
+   declared output count. Five declared against seven received aborts the whole runner;
+4. only then `decodeFunctionResult`, mapped by name, with every member checked against its
+   declared type and value domain.
+
+Step 3 is the load-bearing one, and it is the only claim that holds with certainty: the ABI
+encoding of N static outputs *is* N words. For a tuple with a dynamic member no such equality
+exists, so `roleLocks` (whose `metadata` is `bytes`) is covered by steps 2 and 4 only — stated
+here rather than implied.
+
+**The same treatment for the two neighbours in that evidence section (LOW).**
+`guardianExitRequests` and `roleLocks` no longer land in the JSON as positional arrays, and the
+post-slash negative control reads `lock.amount` instead of `lock[0]` — a positional read of a
+*negative control* silently checks the wrong member the moment the struct is reordered.
+`roleLocks.amount` is asserted to be a `uint128`-domain bigint and `metadata` even-length hex.
+
+**Regressions, including a real-chain one (26 tests in 2 new files; the provenance suite grows
+33 -> 38).** The round-9 decoder shipped broken
+precisely because it was only ever exercised with hand-built JS values, and the bug lives in what
+*viem* does with returndata the ABI does not describe. So `evidence-structs.anvil.test.ts` installs,
+via `anvil_setCode` on a real chain, a contract that always returns the seven static words of the
+4.8.0 struct, and drives real viem at it:
+
+* `readContract` with this repo's 5-output ABI is **shown to succeed** and to hand back
+  `fraudProofHash` in the `deadline` slot — the bypass, measured rather than described. If viem ever
+  starts rejecting it, that assertion fails and this paragraph stops being true;
+* `readNamedStruct` on the same address with the same ABI **throws** before decoding;
+* a matched 7-output ABI + 7-field reviewed constant reads the right values off that same contract,
+  so the refusal is about the mismatch and not about strictness — that is the positive case B2's
+  re-vendor will land, proved now rather than promised;
+* the shipped ABI still reads a real 5-word contract correctly (no false positive), and a codeless
+  address is a failure rather than an all-zero struct.
+
+**Mutation-verified** (repo file restored byte-identical, sha256 re-checked): disabling the word
+count turns 6 tests red including the real-chain one; disabling the name/type comparison turns
+exactly 3 red; disabling the per-member domain check turns exactly 1 red. Each is independently
+load-bearing. Note that the domain check *also* happens to catch this particular 5 → 7 payload (a
+`bytes32` landing in a `uint64` slot overflows), so the test that pins the failure asserts the
+word-count message specifically — a shifted value that still fits its slot would sail past the
+domain check.
+
+**Three gate-honesty fixes (LOW / INFO).**
+
+- `--strict` together with `REPCREDIT_UPSTREAM_ARTIFACTS=absent` now **exits 1 immediately**. Those
+  two assert opposite things — the variable *declares* that an environment has no sibling upstream
+  checkouts, strict mode *requires* every must-verify ABI to be compared against one from a clean
+  pinned checkout. A reviewer measured that the combination could not produce a false green today
+  (strict already fails on the missing `out/` dirs), which is exactly why it was worth fixing: the
+  exclusion was a property of the current control flow, enforced for release by one line of prose.
+  It is now an impossible state.
+- **CI runs `lint:repcredit` directly** as a required step. `pnpm run lint` wraps `pnpm -r lint`
+  first, which is a **no-op** in this monorepo, so wiring the wrapper in would have added a green
+  step that ran no linter. The scope now also includes `scripts/repcredit-e2e.ts` itself (16 files,
+  0/0). Two rules are enabled, so read the green as "these two rules hold".
+- The **realpath escape check** and the `mustVerifyFullyAttributed` guard are recorded as redundant
+  defense-in-depth, not as load-bearing links. A reviewer's mutation matrix showed neither is ever
+  the *only* failing check in any constructible shape — reverting the round-9 `lstat` fix back to
+  `stat` still leaves both symlink shapes fail-closed. The chain that carries the guarantee is:
+  pinned-and-clean checkout → the path is a regular blob in that revision → the working-tree bytes
+  equal that blob → the artifact's sole compilation target is that path.
+
+**CI now runs the strict provenance gate against a real pinned upstream.** The right fix was not to
+add `check:abi-drift` to the existing job — with no sibling checkouts it compares nothing and exits
+0, the misleading green the gate exists to remove — but to give it its inputs. The new
+`abi-provenance` job checks `AAStarCommunity/SuperPaymaster` out at the reviewed revision
+`03713feb`, initialises the `contracts/lib` submodules, `forge build`s it, asserts the checkout is
+clean and at that exact sha, and runs `pnpm run check:abi-drift:strict` with the SDK as a sibling.
+All four `MUST_VERIFY` contracts come from that one repo, so the must-verify chain is fully
+exercised. It is a separate job for the same reason as `repcredit-yaaa-http`: an upstream outage
+must read as "the upstream gate failed", never as "everything is green".
+
+**What that job has and has not been measured to do.** An earlier, interrupted round-10 session
+left a paragraph here claiming the job's steps had been reproduced locally against a fresh clone at
+`03713feb` with a quoted exit code and output. That claim is **not carried forward**: it could not
+be re-verified in this session, and reproducing it would have meant moving the sibling
+`../SuperPaymaster` checkout off its current revision, which this round is not permitted to do. So,
+precisely:
+
+* the **gate** is exercised hard — `scripts/repcredit/abi-drift-provenance.test.ts` builds real git
+  repos with real solc-shaped metadata and runs the real script against them, including a
+  clean-and-pinned baseline that passes `--strict`;
+* the **`ref` literal** is now bound to `scripts/upstream-abi-pin.json` by unit tests (below), in
+  both the SuperPaymaster and the YAAA job;
+* the **job itself has never run** — no `forge build` of `03713feb`, no GitHub-hosted execution. Its
+  first run may well need fixing (toolchain versions, submodule paths, build time). A red first run
+  should be read as this job being wrong, not as the pin being unattributable.
+
+What *is* observable about B2 from here: the strict gate is red on a developer's machine because the
+sibling working tree has moved ahead of the pin — `fc0ca825` in round 8, `fcc205ee` in round 9,
+`e8a8ac5b` now, all within a day — and not because of anything this round added.
+
+**Three unit tests bind the workflow to the pin file.** The `ref` literals in both checkout jobs
+must equal `repos.SuperPaymaster.revision` and `services["YetAnotherAA-Validator"].revision`, and
+the `abi-provenance` job must run the **strict** variant with no `REPCREDIT_UPSTREAM_ARTIFACTS` key.
+The strict gate already refuses a checkout whose HEAD is not the pinned revision, so a drift could
+never produce a false *green* — but it could only say so several minutes into a CI run, and the
+natural fix under that pressure is to edit whichever of the two literals is easier to reach. These
+make the disagreement local and immediate. Falsifiable, measured: pointing the workflow at
+`e8a8ac5b` while the pin says `03713feb` turns the first red; downgrading `check:abi-drift:strict`
+to the lenient script turns the third red.
+
+**A disabled guard was found in the inherited working tree, restored, and given the regression it
+never had.** `scripts/check-abi-drift.ts` carried `if (false && !stat.isFile())` — a mutation probe
+from the interrupted session that was never reverted. It is restored byte-identical to the committed
+form. The reason it survived is the part worth recording: **the entire 34-case provenance suite
+still passed with that link disabled.** A symlink is refused one line earlier and a regular file
+never reaches it, so no existing fixture could tell the guard was gone.
+
+`worktree-source-is-directory` is the shape that reaches it: the pinned revision holds an ordinary
+blob at the pinned path, and the working tree has a directory there. Note what the case actually
+shows — with the link removed the run *still* exits 1, because the byte comparison further down
+calls `readFileSync` on a directory, gets `EISDIR`, and reports `WORKTREE SOURCE MISSING`. So this
+link is **redundant for the verdict and load-bearing for the diagnosis**, and the test asserts the
+*label*, not the exit code. Measured: restoring the `false &&` turns that case, and only that case,
+red. It belongs in the same honest category as the realpath check below — a fourth guard that
+sharpens the message rather than a fourth independent way to fail closed.
+
 ### Ninth round (CC-50 `[from:docs]` on ed662994) — the pinned revision must actually CONTAIN those bytes
 
 **"In the repo" was a string prefix, and the read followed symlinks (MEDIUM).** Round eight settled
@@ -212,10 +367,18 @@ sentence is not printed (`SOURCE NOT ATTRIBUTED TO PINNED REVISION: <label>`).
   check turns exactly the symlink-in-tree and gitlink-in-tree cases red; dropping the byte
   comparison turns exactly the differing-bytes case red; making an absent path resolve turns exactly
   the untracked case red; restoring the old green tick in `--- must-verify ---` turns all six red.
-  The `mustVerifyFullyAttributed` guard on the attribution sentence changes no test — `--strict`
-  already exits before reaching it. It is kept as a property of the sentence rather than of the
-  control flow above it, and is reported here as redundant, not as a checked control.
-- **Measured on the real siblings** (SuperPaymaster `fc0ca825`, pinned `03713feb`; airaccount
+- **Two of the guards are redundant defense-in-depth, not load-bearing links** — recorded as such
+  rather than counted (round-10 INFO, from an independent reviewer's mutation matrix):
+  * the `mustVerifyFullyAttributed` guard on the attribution sentence changes no test, because
+    `--strict` already exits before reaching it. It is kept as a property of the sentence rather
+    than of the control flow above it;
+  * the **realpath escape check** was never the ONLY failing link in any shape either side could
+    construct — including a directory-symlink in the middle of the path, which the byte/pin
+    comparison catches anyway. Reverting the round-9 `lstat` fix back to `stat` still leaves both
+    symlink shapes failing closed. That redundancy is welcome, but the chain that actually carries
+    the guarantee is: pinned-and-clean checkout → the path is a regular blob in that revision →
+    the working-tree bytes equal that blob → the artifact's sole compilation target is that path.
+- **Measured on the real siblings** (SuperPaymaster `fcc205ee`, pinned `03713feb`; airaccount
   `29caffc7`): `SuperPaymaster` now attributes **31/31** sources (the chainlink submodule source was
   the 1 previously uncovered), `Registry` **17/17** and `DVTValidator` **7/7** — all against the
   pinned revision, not merely against the working tree. `BLSAggregator` reports
@@ -253,6 +416,14 @@ object and fails closed on both the ABI shape (the vendored outputs must still b
 in the reviewed order) and the returned arity, with five regressions including the exact 4.8.0
 layout. This does not pre-empt B2 — no upstream ABI was synced — it makes the re-vendor a reviewed
 edit in one file instead of a silent mislabelling.
+
+> **Correction (round 10).** The "fails closed on the 5 → 7 pairing" claim above was **wrong**, and
+> an independent reviewer measured it: both of those guards inspect the value viem has *already*
+> decoded with the old ABI, so neither can observe that the chain sent seven words. What round nine
+> actually delivered was the named object and a forced human review at re-vendor time — real, but
+> not the fail-closed property claimed. The file was replaced by
+> `scripts/repcredit/evidence-structs.ts`, which measures the raw returndata; see the tenth-round
+> entry above.
 
 **Honest note on `lint`.** `pnpm run lint` still runs `pnpm -r lint` first, which is a **no-op**
 (`None of the selected packages has a "lint" script`). The real lint is `lint:repcredit`: 12 files,

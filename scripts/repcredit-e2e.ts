@@ -37,7 +37,12 @@ import {
   executeSlashMessageHash,
   reputationMessageHash,
 } from "./repcredit/bls-domain.js";
-import { decodeGuardianSlashCase } from "./repcredit/guardian-slash-case.js";
+import {
+  GUARDIAN_EXIT_REQUEST,
+  GUARDIAN_SLASH_CASE,
+  ROLE_LOCK,
+  readNamedStruct,
+} from "./repcredit/evidence-structs.js";
 import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
 import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.js";
 import {
@@ -1747,10 +1752,14 @@ async function runGuardianExitSlashCompetition(
     "requestGuardianExit",
     [],
   );
-  const exitRequest = await publicClient.readContract({
+  // Raw eth_call + reviewed-shape validation + NAMED decode, like every struct getter this
+  // evidence bundle records (CC-50 round-10). Never a positional array in the JSON, and never a
+  // decode performed before the returndata length has been measured against the vendored ABI.
+  const exitRequest = await readNamedStruct({
+    client: publicClient,
     address: deployment.blsAggregator,
-    abi: BLSAggregatorABI,
-    functionName: "guardianExitRequests",
+    abi: BLSAggregatorABI as Abi,
+    spec: GUARDIAN_EXIT_REQUEST,
     args: [exitingGuardian.address],
   });
   const queueSlash = await sendContract(
@@ -1783,10 +1792,11 @@ async function runGuardianExitSlashCompetition(
   );
   const blockedExit = await sendExpectedRevert(exitingWallet, deployment.registry, exitData, "guardian exit while slash pending (tx)");
   const locksBefore = await Promise.all(guiltyGuardians.map(guardian =>
-    publicClient.readContract({
+    readNamedStruct({
+      client: publicClient,
       address: deployment.staking,
-      abi: GTokenStakingABI,
-      functionName: "roleLocks",
+      abi: GTokenStakingABI as Abi,
+      spec: ROLE_LOCK,
       args: [guardian, ROLE_DVT],
     })
   ));
@@ -1806,29 +1816,31 @@ async function runGuardianExitSlashCompetition(
     }) as Promise<bigint>
   ));
   const locksAfter = await Promise.all(guiltyGuardians.map(guardian =>
-    publicClient.readContract({
+    readNamedStruct({
+      client: publicClient,
       address: deployment.staking,
-      abi: GTokenStakingABI,
-      functionName: "roleLocks",
+      abi: GTokenStakingABI as Abi,
+      spec: ROLE_LOCK,
       args: [guardian, ROLE_DVT],
     })
   ));
-  // Decoded BY NAME, never written to evidence as a positional array (CC-50 round-9 / B2). Upstream
-  // reshapes this struct from 5 outputs to 7 in BLSAggregator 4.8.0 — fraudProofHash inserted at
-  // index 1, verifier appended — and every member is statically sized, so calling the new contract
-  // with the old vendored ABI decodes without reverting and writes mislabelled fields into
-  // security-controls.json. `decodeGuardianSlashCase` fails closed on both the ABI shape and the
-  // returned arity instead.
-  const slashCase = decodeGuardianSlashCase(
-    BLSAggregatorABI as Abi,
-    await publicClient.readContract({
-      address: deployment.blsAggregator,
-      abi: BLSAggregatorABI,
-      functionName: "guardianSlashCases",
-      args: [fraudProofId],
-    }),
-  );
-  if (pendingAfter.some(count => count !== 0n) || locksAfter.some(lock => (lock as readonly unknown[])[0] !== 0n)) {
+  // Read RAW and length-checked before anything is decoded (CC-50 round-10 HIGH). Upstream reshapes
+  // this struct from 5 outputs to 7 in BLSAggregator 4.8.0 — fraudProofHash inserted at index 1,
+  // verifier appended — and every member is statically sized, so `readContract` with the old
+  // vendored ABI would decode seven words as five WITHOUT reverting and write mislabelled fields
+  // into security-controls.json. `readNamedStruct` measures the returndata word count against the
+  // vendored ABI's static output count first, so that contract/ABI pairing aborts this whole run.
+  const slashCase = await readNamedStruct({
+    client: publicClient,
+    address: deployment.blsAggregator,
+    abi: BLSAggregatorABI as Abi,
+    spec: GUARDIAN_SLASH_CASE,
+    args: [fraudProofId],
+  });
+  // `lock.amount`, not `lock[0]`: a positional read of a negative control silently checks the wrong
+  // member the moment the struct is reordered (CC-50 round-10 LOW). The name is validated against
+  // the vendored ABI, and the value against uint128's domain, by readNamedStruct above.
+  if (pendingAfter.some(count => count !== 0n) || locksAfter.some(lock => lock.amount !== 0n)) {
     throw new Error("executed fraud case did not release pending counts and slash every DVT lock");
   }
 
