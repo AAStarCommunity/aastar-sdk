@@ -61,11 +61,14 @@ describe('checkDvtConnectivity', () => {
   const okFetch = (overrides: Record<string, any> = {}) =>
     vi.fn(async (url: string) => {
       const body =
-        url.endsWith('/health') ? { status: 'ok', capabilities: [{ name: 'relay', enabled: true }, { name: 'keeper', enabled: true }] }
+        // `dvtSigning` was missing from this fixture until FU-35, and nothing noticed — the config
+        // declares it, but only `relay` was ever compared against what the node reports. A healthy
+        // Sepolia node offers all three, so the fixture now says so.
+        url.endsWith('/health') ? { status: 'ok', capabilities: [{ name: 'dvtSigning', enabled: true }, { name: 'relay', enabled: true }, { name: 'keeper', enabled: true }] }
         : url.endsWith('/node/info') ? { nodeId: node.nodeId }
         : url.endsWith('/relay/health') ? { status: 'ok', operator: '0xabc' }
         : {};
-      return { json: async () => ({ ...body, ...(overrides[url.split('/').pop()!] ?? {}) }) } as any;
+      return { json: async () => ({ ...body, ...(overrides[url.split('/').slice(-2).join('/')] ?? overrides[url.split('/').pop()!] ?? {}) }) } as any;
     });
 
   it('reports ok when health/node-info/relay all pass and nodeId matches', async () => {
@@ -75,7 +78,87 @@ describe('checkDvtConnectivity', () => {
     );
     expect(r.ok).toBe(true);
     expect(r.errors).toEqual([]);
-    expect(r.capabilities).toMatchObject({ relay: true, keeper: true });
+    expect(r.capabilities).toMatchObject({ dvtSigning: true, relay: true, keeper: true });
+  });
+
+  it.each(['dvtSigning', 'relay', 'keeper'] as const)(
+    'a declared %s capability that the node reports as disabled is an error',
+    async (cap) => {
+      // Enumerated rather than exampled: before FU-35 only `relay` was compared, so a config
+      // declaring dvtSigning against a node that had it off looked healthy, and the failure surfaced
+      // later as a co-signature that never arrived. A new capability added without a comparison
+      // fails here instead of quietly opening the same gap again.
+      const disabled = [
+        { name: 'dvtSigning', enabled: cap !== 'dvtSigning' },
+        { name: 'relay', enabled: cap !== 'relay' },
+        { name: 'keeper', enabled: cap !== 'keeper' },
+      ];
+      const [r] = await checkDvtConnectivity(
+        { ...DVT_CONFIG.environments.sepolia!, dvtNodes: [node] },
+        okFetch({ health: { status: 'ok', capabilities: disabled } }) as any,
+      );
+      expect(r.errors.join(' ')).toContain(`${cap} capability declared in config but disabled`);
+      expect(r.ok).toBe(false);
+    },
+  );
+
+
+  it('an environment that DOES declare relay is NOT ok when /relay/health fails', async () => {
+    // The mirror of the case above, and the one that makes the exemption safe rather than merely
+    // convenient. Everything the exemption buys rests on the word "only" in "only when the
+    // environment does not declare relay" — and until this case existed, nothing held that word:
+    // review measured that making relay failures never count left all 17 tests green, so a later
+    // edit widening the exemption to every environment (to quiet relay flakiness, say) would pass.
+    //
+    // Same shape as the gap this PR fixes, one level up: I wrote the assertion for the acceptable
+    // half and not for the unacceptable one.
+    const env = { ...DVT_CONFIG.environments.sepolia!, dvtNodes: [node] };
+    const [r] = await checkDvtConnectivity(env, okFetch({ 'relay/health': { status: 'down' } }) as any);
+
+    expect(env.capabilities.relay, 'this environment must declare relay for the case to mean anything').toBe(true);
+    expect(r.relayOk).toBe(false);
+    expect(r.errors.join(' ')).toContain('/relay/health status=down');
+    expect(r.ok).toBe(false);
+  });
+
+  it('a declared relay that is UNREACHABLE is also not ok', async () => {
+    // The throwing path is a separate branch from the status-not-ok path, and the review mutation
+    // had to disable both — so both are pinned.
+    const env = { ...DVT_CONFIG.environments.sepolia!, dvtNodes: [node] };
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/relay/health')) throw new Error('ECONNREFUSED');
+      const body = url.endsWith('/health')
+        ? { status: 'ok', capabilities: [{ name: 'dvtSigning', enabled: true }, { name: 'relay', enabled: true }, { name: 'keeper', enabled: true }] }
+        : url.endsWith('/node/info') ? { nodeId: node.nodeId } : {};
+      return { json: async () => body } as any;
+    });
+    const [r] = await checkDvtConnectivity(env, fetchImpl as any);
+
+    expect(r.errors.join(' ')).toContain('/relay/health: ECONNREFUSED');
+    expect(r.ok).toBe(false);
+  });
+
+  it('an environment that does NOT declare relay is ok without /relay/health', async () => {
+    // The mirror of the case above. `r.ok` used to require relayOk unconditionally, so an
+    // environment legitimately running without relay could never be reported ok — the check demanded
+    // a capability the config does not ask for. `testnet-local` is exactly that shape (relay:false,
+    // so localhost cannot leak into the gasless relay pool).
+    const env = { ...DVT_CONFIG.environments['testnet-local']!, dvtNodes: [node] };
+    const [r] = await checkDvtConnectivity(
+      env,
+      // /relay/health is made to FAIL on purpose. A stub where it succeeds cannot tell the two
+      // implementations apart — measured: with relay errors recorded unconditionally, that version
+      // of this test stayed green. The distinction only exists when the undeclared capability is
+      // actually broken, which is precisely the situation being claimed as acceptable.
+      okFetch({
+        health: { status: 'ok', capabilities: [{ name: 'dvtSigning', enabled: true }] },
+        'relay/health': { status: 'down' },
+      }) as any,
+    );
+    expect(env.capabilities.relay).toBe(false);
+    expect(r.relayOk, 'the probe still ran and still reports the truth').toBe(false);
+    expect(r.ok, `errors: ${r.errors.join(' | ')}`).toBe(true);
+    expect(r.errors, 'an undeclared capability being down is not an error for this environment').toEqual([]);
   });
 
   it('flags a nodeId mismatch (fail closed, not ok)', async () => {

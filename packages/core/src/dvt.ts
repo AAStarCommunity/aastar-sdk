@@ -183,7 +183,19 @@ export async function checkDvtConnectivity(
         r.capabilities = Object.fromEntries((h.capabilities ?? []).map((c: any) => [c.name, !!c.enabled]));
         r.healthOk = h.status === "ok";
         if (!r.healthOk) r.errors.push(`/health status=${h.status}`);
-        if (e.capabilities.relay && !r.capabilities.relay) r.errors.push("/health: relay capability disabled");
+        // FU-35. The config DECLARES capabilities; /health REPORTS them. Every declared capability
+        // is checked against what the node says about itself — previously only `relay` was, so a
+        // config claiming `dvtSigning` against a node that had it turned off looked healthy, and the
+        // failure surfaced later as a co-signature that never arrived.
+        //
+        // Only the declared→reported direction is an error. A node offering MORE than the config
+        // claims is not a fault: capabilities are a floor on what this environment needs, not an
+        // inventory of the node.
+        for (const cap of ["dvtSigning", "relay", "keeper"] as const) {
+          if (e.capabilities[cap] && !r.capabilities[cap]) {
+            r.errors.push(`/health: ${cap} capability declared in config but disabled on the node`);
+          }
+        }
       } catch (err: any) {
         r.errors.push(`/health unreachable: ${err?.message ?? err}`);
         return r; // node down — skip the rest
@@ -196,13 +208,25 @@ export async function checkDvtConnectivity(
         r.errors.push(`/node/info: ${err?.message ?? err}`);
       }
       try {
+        // Probed regardless — knowing an undeclared relay is broken is useful — but it is only an
+        // ERROR when this environment claims relay. `testnet-local` deliberately runs without it.
         const rh = await getJson(`${base}/relay/health`);
         r.relayOk = rh.status === "ok";
-        if (!r.relayOk) r.errors.push(`/relay/health status=${rh.status}`);
+        if (!r.relayOk && e.capabilities.relay) r.errors.push(`/relay/health status=${rh.status}`);
       } catch (err: any) {
-        r.errors.push(`/relay/health: ${err?.message ?? err}`);
+        if (e.capabilities.relay) r.errors.push(`/relay/health: ${err?.message ?? err}`);
       }
-      r.ok = r.healthOk && r.relayOk && r.nodeIdMatch;
+      // `ok` now means "no recorded problem", which is what every caller already assumed it meant.
+      //
+      // It did not. `errors` and `ok` were computed independently: a node whose declared capability
+      // was reported disabled collected an error and was still `ok === true`. Nothing consumed the
+      // errors, so the mismatch was invisible — a status field and a diagnosis field that can
+      // contradict each other, where the summary is the one people read.
+      //
+      // `relayOk` is folded in through the same route rather than as a separate term: it counts only
+      // when the environment claims relay (`testnet-local` runs without it by design), and when it
+      // does claim relay a failure is already in `errors`.
+      r.ok = r.healthOk && r.nodeIdMatch && r.errors.length === 0;
       return r;
     }),
   );
