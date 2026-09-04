@@ -42,9 +42,9 @@
 
 立项依据与实测缺口见 [`research.md`](research.md)；不可破的技术边界见 [`architecture.md`](architecture.md)；精确坐标见 [`spec.md`](spec.md)。
 
-- **F5.1 SP 栈地址与 ABI**（先做，风险最高）— canonical `blsAggregator` 仍是 `0xF51c…8B13`(4.1.0)，而 `Registry`/`SuperPaymaster`/`DVTValidator` 三腿链上均已指向 `0xEaeC2F51…2E5D`(**4.11.0**)。SDK 公共面的 `BLSAggregator` ABI 连 `guardianSlashCases` 都没有。
+- **F5.1 SP 栈地址**（先做，风险最高）— canonical `blsAggregator` 仍是 `0xF51c…8B13`(4.1.0)，而 `Registry`/`SuperPaymaster`/`DVTValidator` 三腿链上均已指向 `0xEaeC2F51…2E5D`(**4.11.0**)。**ABI 那一半已由 #329 完成**（实测对称差 `set()`），本 Feature 只做地址 + 三腿断言。
 - **F5.2 AirAccount v0.31.0 → v0.33.0** — 上游又出新栈并已部署 Sepolia（`FACTORY_VERSION="0.33.0"` 链上实测），canonical 停在 v0.31.0 的 12 地址（CC-106 当时确已逐字段一致，这不是欠账，是上游前进了）。
-- **F5.3 DVT 对齐核验** — `dvtValidator` 疑似未变（`0x568b1486…`），但必须出**证据**而不是假设；顺带把 DVT 侧 ABI/节点接口纳入同一套门禁。
+- **F5.3 DVT 对齐核验** — `dvtValidator` 已核验**无变更**（`aggregator.DVT_VALIDATOR()` == canonical，block 11634451）。剩余工作是把这条读数纳入门禁，让它以后自动核而不是靠人跑一次。
 - **F5.4 KMS 面扫描** — CC-2 / CC-19 / CC-25 三条变更通知从未处理；KMS 是 address-agnostic，风险在 **API surface 与安全加固**（fail-closed API key、XSS 修复）而非地址。
 
 **为什么现在做**：B4（PR #329，已合并 `e4439dda`）在 evidence 分支上把「部署版 vs 源码版」的双轴 pin 与可证伪门禁跑通了。M5 是把同一套方法从 evidence 分支推到 **main 的公共面**——模式已验证，剩下的是逐个上游套用。

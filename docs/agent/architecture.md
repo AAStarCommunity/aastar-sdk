@@ -73,6 +73,6 @@ canonical 地址与 ABI 是下游的事实来源。函数集变化必须是**新
 
 | 风险 | 触发条件 | 处置 |
 |---|---|---|
-| 公共面 ABI 70→72 | T5.1.2 合并 | 只增不减（已实测），release note 标注 |
+| ~~公共面 ABI 70→72~~ | ~~T5.1.2~~ | **本轮不触发** —— #329 已完成该切换（实测函数名对称差 `set()`）。边界 #6「只增不减」保留，对下次同步仍成立 |
 | v0.33.0 新 committee validator `requireStake=true` 且三 operator 卡在 minStake | 他仓罚没/退出 | SDK 只读不改；已报 CC-115 |
 | 上游又前进（如 4.12.0 上链） | 随时 | 双轴设计已容纳；`sourceRevision != abi.revision` 断言会提示复审 |

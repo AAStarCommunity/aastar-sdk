@@ -91,7 +91,7 @@ per-signer wire 结构 **未变**：`[nodeId(32) | slot(32) | proof(14×32)]` = 
 
 | 项 | canonical | 链上 | 状态 |
 |---|---|---|---|
-| `dvtValidator` | `0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e` | 同 | 疑似未变，**待出证据** |
+| `dvtValidator` | `0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e` | `aggregator.DVT_VALIDATOR()` 返回同值 @ block 11634451 | ✅ 已核验无变更 |
 
 DVT nodeId（三个，`keccak256` 的是**整个 128 字节 EIP-2537 G1 blob**，剥填充按 96B 算会对不上）：
 

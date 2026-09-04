@@ -104,17 +104,21 @@
 - **风险/回滚**：改的是**公共面地址**。旧地址 `0xF51c…` 保留为注释（历史可读），不删。回滚 = 单文件 revert。
 - **待人拍板**：无——旧地址已不被 SP 认可，留着比切更危险。
 
-### T5.1.2 把部署版 4.11.0 ABI 引入 main 的公共面  `READY`
-- **优先级**：critical
-- **目标**：`packages/core/src/abis/BLSAggregator.json` 目前是 4.1.0 时代的 70 函数版，**连 `guardianSlashCases` 都没有**。换成链上实际运行的 4.11.0（72 函数），并复用 B4 已验证的「重定向而非跳过」机制，让它继续受 `check:abi-drift` 管辖。
-- **开发范围**：把 `abis/BLSAggregator-4.11.0.deployed.json`（SP@`d651646a`，sha256 `df667b4d…06ce`）按字节引入；`scripts/check-abi-drift.ts` 的 `DEPLOYED_ABI_REDIRECT` 已存在，确认它对 main 的路径同样生效；`scripts/upstream-abi-pin.json` 补 main 侧 pin。
-- **明确不做**：**不得**用 SP `main` 的 4.12.0 ABI 配 4.11.0 地址（见 `architecture.md` 不可破边界 #1）。
-- **依赖**：T5.1.1（地址先对，ABI 才有意义）
-- **交付物**：新 ABI + pin + 一条断言 `guardianSlashCases` 返回 7 字的形状门禁
-- **验收命令**：`pnpm run check:abi-drift:strict && pnpm exec vitest run packages/core/src/abis/`
-- **涉及文件**：`packages/core/src/abis/BLSAggregator.json`、`scripts/upstream-abi-pin.json`
-- **风险/回滚**：**breaking 面变更**（70 → 72 函数）。属于新增，无函数消失（B4 已实测），但仍需在 release note 标注。
-- **待人拍板**：发版时是否算 minor bump——不阻塞开发，发布前问。
+### T5.1.2 ~~把部署版 4.11.0 ABI 引入 main 的公共面~~  `DONE`（由 #329 提前完成）
+- **原目标**：把公共面 `BLSAggregator.json` 从 4.1.0（70 函数）换成链上运行的 4.11.0（72 函数）。
+- **实际状态**：**本 Task 在写下的时候就已经完成了，我没发现。** #329（`e4439dda`，本规划的 merge-base）改的正是这个文件。评审方 pr-daemon 指出，我复核确认：
+
+  ```
+  packages/core/src/abis/BLSAggregator.json vs scripts/repcredit/abis/BLSAggregator-4.11.0.deployed.json
+    函数名集合 72 / 72，对称差 set()
+    guardianSlashCases 存在，返回 7 字（4.11.0 形状）
+    4.12.0 独有的四个未混入
+  git log -1 -- packages/core/src/abis/BLSAggregator.json  →  e4439dda (#329)
+  ```
+
+- **为什么会写错**：我在合并 #329 **之前**读了一次 main，合并之后写规划时沿用那次读数。**自己改变了被测系统，然后引用改变之前的观测。**
+- **留下的判据**（写进 `research.md` §2b）：断言「仓库现在是什么样」之前，先 `git log -1 -- <file>` 看那个文件最后一次是被谁改的。
+- **对 F5.1 的影响**：范围缩小成**只做地址那一半**（T5.1.1），ABI 无需再动。`architecture.md` 边界 #6「公共面只增不减」保留——本轮不触发，下次同步仍适用。
 
 ### T5.1.3 SP 侧回归 + 证据回写  `READY`
 - **优先级**：high
@@ -152,7 +156,15 @@
 
 ### T5.3.1 dvtValidator 与 DVT 接口对齐出证据  `READY`
 - **优先级**：mid
-- **目标**：`dvtValidator` 疑似未变，但「疑似」不是交付。出一条可复跑的读数证据；若确实未变，本 task 的交付物就是**那条证据本身**加进门禁。
+- **目标**：~~疑似未变，待核~~ → **已核验无变更**（评审方顺手跑了一条，我复核确认）：
+
+  ```
+  aggregator(0xEaeC2F51…).DVT_VALIDATOR()  = 0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e   ← 证明 canonical 是现役
+  DVTValidator(0x568b1486…).BLS_AGGREGATOR() = 0xEaeC2F51…2E5D                            ← 三腿之一
+  block 11634451
+  ```
+
+  所以本 task 的剩余工作**不是去核**，而是**把这条读数变成门禁**——让它以后每次 CI 自动核，而不是靠某个人想起来跑一次。注意两条读数管的是不同的事：前者证明 `dvtValidator` 地址仍是现役，后者只是三腿之一。
 - **验收命令**：`pnpm run check:addresses && pnpm exec vitest run packages/core/src/dvt.test.ts`
 - **依赖**：T5.1.1（三腿断言里已含 DVTValidator 一腿）
 - **交付物**：证据记录 + 若无变更则明确写「已核验无变更 @ block N」

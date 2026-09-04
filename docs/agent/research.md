@@ -12,10 +12,27 @@ SDK 的 canonical 地址簿与 vendored ABI 是**下游所有集成方的唯一�
 | 上游 | SDK canonical | 链上真值 | 性质 |
 |---|---|---|---|
 | SP `blsAggregator` | `0xF51c…8B13`（BLSAggregator-4.1.0） | `0xEaeC2F51…2E5D`（**4.11.0**），`Registry`/`SuperPaymaster`/`DVTValidator` 三腿一致 | **死地址** —— SP 已不认 |
-| SP `BLSAggregator` ABI | 4.1.0 面，70 函数，**无 `guardianSlashCases`** | 4.11.0，72 函数 | 公共面落后两代 |
+| ~~SP `BLSAggregator` ABI~~ | ~~4.1.0 面，70 函数~~ | 4.11.0，72 函数 | ✅ **已由 #329 解决** —— 见下方勘误 |
 | AirAccount 全栈 | v0.31.0 的 12 地址 | v0.33.0 已部署且验活 | 落后一版 |
-| DVT `dvtValidator` | `0x568b1486…` | 疑似同值，**未出证据** | 待核 |
+| DVT `dvtValidator` | `0x568b1486…` | `aggregator.DVT_VALIDATOR()` == `0x568b1486…`（block 11634451） | ✅ 已核，无变更 |
 | KMS | 未处理 CC-2 / CC-19 / CC-25 | — | 从未扫描 |
+
+### 2b. 勘误（2026-09-04，评审方 pr-daemon 指出）
+
+上表原有一行写「SDK 公共面 `BLSAggregator` ABI 是 4.1.0 的 70 函数、没有 `guardianSlashCases`」。**这条在本规划的 merge-base 上已经不成立**，实测：
+
+```
+packages/core/src/abis/BLSAggregator.json  vs  scripts/repcredit/abis/BLSAggregator-4.11.0.deployed.json
+函数名集合:  72  72  对称差 set()          # 完全一致
+guardianSlashCases: 存在，返回 7 字         # 4.11.0 形状
+4.12.0 独有的四个: 未混入
+```
+
+**改它的正是 #329（`e4439dda`），也就是本规划的 merge-base。** 我在合并 #329 **之前**读了一次 main，合并之后写文档时沿用了那次读数，没有重读。
+
+**根因值得记**：我自己改变了被测系统，然后引用改变之前的观测。判据 `git log -1 -- <file>` 一条命令就能戳穿——**凡是断言「仓库现在是什么样」，先看那个文件最后一次是被谁改的。**
+
+由此 F5.1 的范围缩小：**ABI 那一半已完成，只剩地址那一半**（canonical `blsAggregator` 仍是 `0xF51c…8B13`，链上三腿均已是 `0xEaeC2F51…2E5D`，评审方独立复核确认）。
 
 ## 3. 为什么是现在
 
