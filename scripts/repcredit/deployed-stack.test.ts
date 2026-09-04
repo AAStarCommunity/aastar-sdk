@@ -127,6 +127,8 @@ type Answers = {
   bpsAnswers: boolean;
   slashCaseWords: number;
   verifierAnswers: boolean;
+  /** force one slashThresholds index to a different value, for the paired-red test */
+  slashThresholdOverride?: { level: number; value: bigint };
 };
 
 function baseAnswers(): Answers {
@@ -186,8 +188,9 @@ function stubClient(a: Answers) {
     },
     readContract: async ({ functionName, args }: { functionName: string; args?: unknown[] }) => {
       if (functionName === 'slashThresholds') {
-        const level = String(args?.[0] ?? '');
-        const v = PIN.aggregator.slashThresholds[level];
+        const level = Number(args?.[0]);
+        if (a.slashThresholdOverride && a.slashThresholdOverride.level === level) return a.slashThresholdOverride.value;
+        const v = PIN.aggregator.slashThresholds[String(level)];
         if (v === undefined) throw new Error(`stub has no slashThresholds[${level}]`);
         return BigInt(v);
       }
@@ -245,17 +248,10 @@ describe('on-chain checks — each one has a mutated chain answer that reddens i
     // Pinned since B4 but read by nothing until pr-daemon pointed it out; a pinned value that
     // nothing compares is documentation wearing a gate's clothes.
     const a = baseAnswers();
-    const client = stubClient(a);
-    const patched = {
-      ...client,
-      readContract: async (req: { functionName: string; args?: unknown[] }) => {
-        if (req.functionName === 'slashThresholds' && Number(req.args?.[0]) === 1) return 99n;
-        return (client as never as { readContract: (r: unknown) => Promise<unknown> }).readContract(req);
-      },
-    } as never;
-    const checks = await checkDeployedStackOnChain(PIN, patched);
-    expect(verdict(checks, 'aggregator:slashThresholds[1]')).toBe(false);
-    expect(verdict(checks, 'aggregator:slashThresholds[0]')).toBe(true);
+    a.slashThresholdOverride = { level: 1, value: 99n };
+    const patchedChecks = await checkDeployedStackOnChain(PIN, stubClient(a));
+    expect(verdict(patchedChecks, 'aggregator:slashThresholds[1]')).toBe(false);
+    expect(verdict(patchedChecks, 'aggregator:slashThresholds[0]')).toBe(true);
   });
 
   it('no-pending-verifier goes red while a rotation is in flight', async () => {
