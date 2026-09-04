@@ -136,6 +136,13 @@ function currentBranchPr(): number | undefined {
   const fromEnv = process.env.PR_NUMBER || /^refs\/pull\/(\d+)\//.exec(process.env.GITHUB_REF ?? '')?.[1];
   if (fromEnv && Number.isFinite(Number(fromEnv))) return Number(fromEnv);
 
+  // A `push` run belongs to no PR, and that is knowable directly. Raised in review on #354 as a
+  // prediction rather than a reading: on push-to-main `PR_NUMBER` renders empty, so control reaches
+  // the branch check below — and if that checkout happens to be detached, this would throw and
+  // redden main. Whether HEAD is attached is an INCIDENTAL fact about how the runner checked the
+  // repo out; the event name is the direct answer to the question actually being asked.
+  if (process.env.GITHUB_EVENT_NAME === 'push') return undefined;
+
   // A DETACHED HEAD cannot answer this question, and `gh` does not say so — it reports "no pull
   // requests found for branch", which reads like "there is no PR" and is really "there is no branch
   // to ask about". Measured in a detached worktree: the run reported a false problem about its own

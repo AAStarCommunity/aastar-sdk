@@ -121,6 +121,9 @@ describe('determining WHICH pr this run is', () => {
     const source = readFileSync('scripts/check-task-ledger.ts', 'utf8');
     expect(source, 'the event must be consulted before git').toContain('process.env.PR_NUMBER');
     expect(source, 'a detached HEAD must be refused, not guessed at').toContain('HEAD is detached');
+    // A push run belongs to no PR by definition; answering that from whether HEAD happens to be
+    // attached would make the gate depend on how the runner checked the repo out.
+    expect(source, 'a push run must be recognised directly').toContain("GITHUB_EVENT_NAME === 'push'");
     // stderr must be captured on BOTH gh calls — discarding it is what made the two bugs possible.
     expect(source.match(/stdio: \['ignore', 'pipe', 'pipe'\]/g) ?? []).toHaveLength(3);
     expect(source).not.toContain("stdio: ['ignore', 'pipe', 'ignore']");
