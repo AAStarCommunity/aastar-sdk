@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { decodeFunctionData } from 'viem';
-import { BLSAggregatorABI } from '@aastar/core';
+import { BLSAggregatorABI, CANONICAL_ADDRESSES } from '@aastar/core';
 import { SlashGovernance } from '../src/SlashGovernance.js';
 
-const BLS = '0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13';
+// Canonical pin, not a literal — see the note in core's aggregator.slashPolicy.test.ts.
+const BLS = CANONICAL_ADDRESSES[11155111].blsAggregator;
 const TIMELOCK = '0x1111111111111111111111111111111111111111';
 const ADMIN = '0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e';
 const MIN_DELAY = 172800n; // 2 days

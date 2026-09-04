@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { aggregatorActions, SlashLevel } from './aggregator.js';
+import { CANONICAL_ADDRESSES } from '../addresses.js';
 
-const ADDR = '0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13';
+// Read the canonical pin rather than a literal. A hardcoded address survives a canonical bump
+// silently — the test keeps passing against an address the protocol has moved off (CC-45 shipped
+// exactly that). T5.1.1 moved this one from 0xF51c…(4.1.0) to 0xEaeC2F51…(4.11.0).
+const ADDR = CANONICAL_ADDRESSES[11155111].blsAggregator;
 
 // Minimal mock PublicClient that records every readContract call and returns a
 // caller-supplied value. Lets us assert the exact target/functionName/args/ABI the
