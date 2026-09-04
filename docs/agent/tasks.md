@@ -161,7 +161,7 @@
 
 ## F5.3 — DVT 对齐核验
 
-### T5.3.1 dvtValidator 与 DVT 接口对齐出证据  `READY`
+### T5.3.1 dvtValidator 与 DVT 接口对齐出证据  `PR_OPEN`
 - **优先级**：mid
 - **目标**：~~疑似未变，待核~~ → **已核验无变更**（评审方顺手跑了一条，我复核确认）：
 
@@ -175,6 +175,9 @@
 - **验收命令**：`pnpm run check:addresses && pnpm exec vitest run packages/core/src/dvt.test.ts`
 - **依赖**：T5.1.1（三腿断言里已含 DVTValidator 一腿）
 - **交付物**：证据记录 + 若无变更则明确写「已核验无变更 @ block N」
+- **证据**：PR #335。交付的不是「又核了一次」，是**把它变成门禁**——`addresses.dvt.test.ts` 三条。
+- **设计要点**：三腿测试只覆盖 DVT→aggregator 方向；反向（aggregator 认不认 canonical 的 dvtValidator）此前无断言。而单读 pin 的聚合器零区分度（三个聚合器返回同值），所以必须**从 Registry 起链**：`Registry.blsAggregator()` → 那个聚合器的 `DVT_VALIDATOR()` → 必须等于 canonical。第一跳确立「哪个是现役」，第二跳才有意义。
+- **一条自我记录的测试**：显式断言「捷径版本对被取代的聚合器也会通过」——它不是在测 SDK，是在**测这个测试本身的设计**，让未来想「简化掉第一跳」的人看见代价。
 
 ---
 
