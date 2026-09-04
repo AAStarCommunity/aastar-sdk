@@ -11,7 +11,7 @@
 | F5.1 SP 栈地址 | T5.1.1 `DONE` (#331) · T5.1.2 `DONE`(#329) · T5.1.3 `PR_OPEN` (#333) | F5.1 三个 task 全部收口中 |
 | F5.2 AirAccount v0.33.0 | T5.2.1 `DONE` (#332 → `a71106c2`) · T5.2.2 `READY` | 6 键已切并链上核验 |
 | F5.3 DVT 对齐核验 | `READY` ×1 | 大概率 no-op，但要出证据 |
-| F5.4 KMS 面扫描 | `BLOCKED` ×1 | 待探测仓库位置与权威版本（run 第一步即可解除） |
+| F5.4 KMS 面扫描 | T5.4.1 `PR_OPEN` (#336) · T5.4.2/T5.4.3 `READY` | 阻塞已解除：仓库=`~/Dev/aastar/AirAccount` @ v0.30.0-beta.1；37 端点/2165 行，已拆成两个可做完的 task |
 
 **刚完成**：CC-115 B4 = PR #329，4 轮 pr-daemon 评审，approved `ecd4343d` → 合并 `e4439dda`。
 B4 建立的双轴 pin + 可证伪门禁方法，是 M5 逐个上游套用的模板。
