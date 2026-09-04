@@ -70,7 +70,7 @@ function verifyRedirectedBlob(name: string, vendoredPath: string): { ok: boolean
   }
   const root = OUT_DIRS.map((d) => path.resolve(d, '../')).find((r) => path.basename(r) === stack.repo);
   if (!root) return { ok: false, detail: `no checkout of ${stack.repo} among the scanned upstreams` };
-  const local = createHash('sha256').update(fs.readFileSync(vendoredPath)).digest('hex');
+  const local = createHash('sha256').update(new Uint8Array(fs.readFileSync(vendoredPath))).digest('hex');
   if (local !== stack.sha256) {
     return { ok: false, detail: `${path.relative(SDK_ROOT, vendoredPath)} hashes ${local.slice(0, 16)} but the pin says ${stack.sha256.slice(0, 16)}` };
   }
@@ -78,7 +78,7 @@ function verifyRedirectedBlob(name: string, vendoredPath: string): { ok: boolean
     const blob = execFileSync('git', ['-C', root, 'show', `${stack.revision}:${stack.path}`], {
       maxBuffer: 64 * 1024 * 1024,
     });
-    const blobHash = createHash('sha256').update(blob).digest('hex');
+    const blobHash = createHash('sha256').update(new Uint8Array(blob as unknown as ArrayBufferLike as never)).digest('hex');
     if (blobHash !== stack.sha256) {
       return { ok: false, detail: `${stack.repo}@${stack.revision.slice(0, 12)}:${stack.path} hashes ${blobHash.slice(0, 16)}, pin says ${stack.sha256.slice(0, 16)}` };
     }
@@ -1075,7 +1075,7 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
   // repo already documented: an exemption that reads like coverage.
   const redirected = redirectTargetFor(name);
   const up = redirected ? path.join(SDK_ROOT, redirected) : findUpstreamArtifact(name);
-  if (redirected && !fs.existsSync(up)) {
+  if (redirected && (up === null || !fs.existsSync(up))) {
     skippedEntries.push({ name, reason: `deployed-ABI redirect target missing: ${redirected}`, expected: true });
     continue;
   }

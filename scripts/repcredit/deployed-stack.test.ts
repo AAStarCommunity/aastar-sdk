@@ -126,6 +126,7 @@ type Answers = {
   domain: string;
   bpsAnswers: boolean;
   slashCaseWords: number;
+  verifierAnswers: boolean;
 };
 
 function baseAnswers(): Answers {
@@ -152,6 +153,7 @@ function baseAnswers(): Answers {
     domain: PIN.aggregator.domainSeparator,
     bpsAnswers: false,
     slashCaseWords: PIN.shapeGates['guardianSlashCases(uint256)'].deployedWords,
+    verifierAnswers: true,
   };
 }
 
@@ -171,6 +173,10 @@ function stubClient(a: Answers) {
       // guardianSlashCases(uint256)
       if (sel === PIN.shapeGates['guardianSlashCases(uint256)'].selector) {
         return { data: `0x${'0'.repeat(64 * a.slashCaseWords)}` };
+      }
+      if (sel === PIN.selectors.fraudProofVerify) {
+        if (!a.verifierAnswers) throw new Error('execution reverted');
+        return { data: `0x${'0'.repeat(64)}` };
       }
       if (sel === SEL_PENDING) return { data: pad(a.pending) };
       if (sel === SEL_VERIFIER) return { data: pad(a.verifier) };
@@ -256,6 +262,13 @@ describe('on-chain checks — each one has a mutated chain answer that reddens i
     a.slashCaseWords = PIN.shapeGates['guardianSlashCases(uint256)'].sourceWords;
     const checks = await checkDeployedStackOnChain(PIN, stubClient(a));
     expect(verdict(checks, 'aggregator:guardianSlashCases-returns-deployed-shape')).toBe(false);
+  });
+
+  it('verifier:answers-domain-bound-selector reddens when the armed verifier does not answer it', async () => {
+    const a = baseAnswers();
+    a.verifierAnswers = false;
+    const checks = await checkDeployedStackOnChain(PIN, stubClient(a));
+    expect(verdict(checks, 'verifier:answers-domain-bound-selector')).toBe(false);
   });
 
   it('rejected predecessors redden when the pin names one of them', async () => {

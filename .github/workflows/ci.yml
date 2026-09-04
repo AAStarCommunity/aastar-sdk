@@ -170,7 +170,11 @@ jobs:
           repository: AAStarCommunity/YetAnotherAA-Validator
           ref: 941f0d06dec76a469adbbb9306e1e84d4e6bf5fa
           path: YetAnotherAA-Validator
-          token: ${{ secrets.YAAA_CHECKOUT_TOKEN }}
+          # No `token:`. This job had never run before CC-115 B4, and its first run failed with
+          # "Input required and not supplied: token" — `secrets.YAAA_CHECKOUT_TOKEN` is not set on
+          # this repository (the secret list is empty). It is also not needed: the validator repo
+          # is public, so the default GITHUB_TOKEN can read it. Restoring a token input would mean
+          # provisioning a credential to fetch something already world-readable.
 
       - uses: pnpm/action-setup@v5
         with:

@@ -89,11 +89,13 @@ export function readDeployedStackPin(network: string, sdkRoot: string = process.
   return stack as DeployedStackPin;
 }
 
-function sha256(buf: Buffer | string): string {
+function sha256(buf: Uint8Array | string): string {
   return createHash('sha256').update(buf).digest('hex');
 }
 
 const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 
 /**
  * Read a blob out of the git OBJECT store rather than the sibling worktree.
@@ -104,11 +106,15 @@ const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
  * edit cannot move this hash — and if the revision does not contain the path, that is a failure
  * rather than a fallback.
  */
-export function readBlobAtRevision(repoRoot: string, revision: string, path: string): Buffer {
-  return execFileSync('git', ['-C', repoRoot, 'show', `${revision}:${path}`], {
-    maxBuffer: 64 * 1024 * 1024,
-    encoding: 'buffer',
-  }) as unknown as Buffer;
+export function readBlobAtRevision(repoRoot: string, revision: string, path: string): Uint8Array {
+  // Uint8Array, not Buffer: the two are not assignable to each other under the Node types this
+  // repo pins, and every consumer here only needs bytes.
+  return new Uint8Array(
+    execFileSync('git', ['-C', repoRoot, 'show', `${revision}:${path}`], {
+      maxBuffer: 64 * 1024 * 1024,
+      encoding: 'buffer',
+    }) as unknown as ArrayBufferLike as never,
+  );
 }
 
 /* ------------------------------------------------------------------ offline checks */
@@ -128,7 +134,7 @@ export function checkDeployedAbiPin(pin: DeployedStackPin, sdkRoot: string, upst
     out.push({ name: 'deployed-abi:vendored-present', ok: false, detail: `missing ${abiPin.vendoredAt}` });
     return out;
   }
-  const vendoredRaw = readFileSync(vendoredPath);
+  const vendoredRaw = new Uint8Array(readFileSync(vendoredPath));
   const vendoredHash = sha256(vendoredRaw);
   out.push({
     name: 'deployed-abi:vendored-sha256',
@@ -154,9 +160,9 @@ export function checkDeployedAbiPin(pin: DeployedStackPin, sdkRoot: string, upst
       });
       out.push({
         name: 'deployed-abi:vendored-is-upstream-bytes',
-        ok: Buffer.compare(blob, vendoredRaw) === 0,
+        ok: sameBytes(blob, vendoredRaw),
         detail:
-          Buffer.compare(blob, vendoredRaw) === 0
+          sameBytes(blob, vendoredRaw)
             ? 'vendored copy is byte-identical to the pinned upstream blob'
             : 'vendored copy differs BYTE-WISE from the pinned upstream blob (same hash would be impossible; this means the hash check above is stale)',
       });
@@ -169,8 +175,8 @@ export function checkDeployedAbiPin(pin: DeployedStackPin, sdkRoot: string, upst
     }
   }
 
-  const doc = JSON.parse(vendoredRaw.toString('utf8')) as { abi: Abi; version?: string; address?: Record<string, string> };
-  const fns = (doc.abi as { type?: string; name?: string }[]).filter((e) => e.type === 'function');
+  const doc = JSON.parse(new TextDecoder().decode(vendoredRaw)) as { abi: Abi; version?: string; address?: Record<string, string> };
+  const fns = (doc.abi as unknown as { type?: string; name?: string }[]).filter((e) => e.type === 'function');
   out.push({
     name: 'deployed-abi:shape',
     ok: fns.length === abiPin.functionCount && doc.abi.length === abiPin.entryCount,
@@ -193,8 +199,12 @@ export function checkDeployedAbiPin(pin: DeployedStackPin, sdkRoot: string, upst
       }
     }),
   );
-  const want = pin.selectors.fraudProofVerify;
-  const reject = pin.selectors.rejectedLegacyVerify;
+  // Only the NEGATIVE half belongs here. `fraudProofVerify` (0x61077735) is the FRAUD-PROOF
+  // VERIFIER's entry point, not the aggregator's — measured: the aggregator's own `verify` is
+  // verify(bytes32,uint256,uint256,bytes), while 0xa1346F16… answers the 4-arg domain-bound form.
+  // Asserting it against the aggregator ABI would have been a check that could never pass, i.e. a
+  // gate that fails for the wrong reason. The positive half is asserted on chain instead.
+  const reject = pin.selectors.rejectedLegacyVerify as Hex;
   out.push({
     name: 'deployed-abi:legacy-verify-selector-absent',
     ok: !selectors.has(reject),
@@ -202,7 +212,6 @@ export function checkDeployedAbiPin(pin: DeployedStackPin, sdkRoot: string, upst
       ? `${reject} (${pin.selectors.$rejectedLegacyVerifySig}) is PRESENT — this stack must reject the pre-domain-bound form`
       : `${reject} absent, as required`,
   });
-  void want;
 
   const shape = pin.shapeGates['guardianSlashCases(uint256)'];
   const getter = fns.find((f) => f.name === 'guardianSlashCases') as { outputs?: { type: string }[] } | undefined;
@@ -354,6 +363,27 @@ export async function checkDeployedStackOnChain(pin: DeployedStackPin, client: P
     detail: eq(recomputed, onChainDomain)
       ? 'SDK recomputes the chain value from (name, chainId, aggregator, registry)'
       : `SDK computes ${recomputed} from the pinned addresses but the chain says ${onChainDomain} — an address in the pin is not the one the contract hashed`,
+  });
+
+  // The POSITIVE half of the selector pair, on the contract that actually owns it. A verifier that
+  // does not answer the domain-bound form is a verifier the slash path cannot drive, and the pin
+  // would otherwise only ever have said what is ABSENT from the aggregator.
+  let verifierAnswers = false;
+  try {
+    await client.call({
+      to: pin.addresses.fraudProofVerifier,
+      data: `${pin.selectors.fraudProofVerify}${'0'.repeat(64 * 4)}` as Hex,
+    });
+    verifierAnswers = true;
+  } catch {
+    verifierAnswers = false;
+  }
+  out.push({
+    name: 'verifier:answers-domain-bound-selector',
+    ok: verifierAnswers,
+    detail: verifierAnswers
+      ? `${pin.addresses.fraudProofVerifier} answers ${pin.selectors.fraudProofVerify} (${pin.selectors.$fraudProofVerifySig})`
+      : `${pin.addresses.fraudProofVerifier} does NOT answer ${pin.selectors.fraudProofVerify} — the armed verifier cannot serve the domain-bound fraud proof`,
   });
 
   // A function that only 4.12.0 has must revert here. Positive controls above (version, window)
