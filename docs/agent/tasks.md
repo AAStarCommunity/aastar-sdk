@@ -121,12 +121,14 @@
 - **留下的判据**（写进 `research.md` §2b）：断言「仓库现在是什么样」之前，先 `git log -1 -- <file>` 看那个文件最后一次是被谁改的。
 - **对 F5.1 的影响**：范围缩小成**只做地址那一半**（T5.1.1），ABI 无需再动。`architecture.md` 边界 #6「公共面只增不减」保留——本轮不触发，下次同步仍适用。
 
-### T5.1.3 SP 侧回归 + 证据回写  `READY`
+### T5.1.3 SP 侧回归 + 证据回写  `PR_OPEN`
 - **优先级**：high
 - **目标**：证明 T5.1.1/T5.1.2 之后 SP 相关业务路径没坏，并把读数写进证据索引。
 - **验收命令**：`pnpm -r build && pnpm -r test && pnpm run check:addresses && pnpm run check:abi-drift:strict`
 - **依赖**：T5.1.1、T5.1.2
 - **交付物**：`docs/onchain-evidence.md` 一条含 block 号的读数记录
+- **证据**：PR #333。读数 @ block 11634683，三腿一致 + `pendingBLSAgg=0` + codehash 与 B4 冻结的 `deployedStack` pin 逐字一致。
+- **一个本地环境陷阱（已记 FU-20）**：`check:abi-drift:strict` 在本地红、CI 绿。判据两条：本分支与 main **零代码差异**（红不可能由本 Feature 引入）；CI 最新 main run success，其中 `abi-provenance` job 正是跑这道 gate 的。真因是 `~/Dev/aastar/SuperPaymaster/out` 产物名带 profile 后缀（`<C>.default.json`），而 gate 找 `<C>.json`——`rm -rf out && forge build` 重建后仍如此，根 `foundry.toml` 与另一份产出无后缀名的 checkout 逐字相同。
 
 ---
 

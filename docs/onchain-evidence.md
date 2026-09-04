@@ -260,3 +260,72 @@ On-chain read assertions (all passed): `getAgentAddress` predicted == deployed (
 valid AirAccount (`CallerNotAirAccount` otherwise) — routed via the agent account's owner-signed
 `execute(registry, 0, calldata)`. Signature schemes (EIP-191): `ACCEPT_AGENT_KEY` (agentKey),
 `ACCEPT_AGENT_GUARDIAN` (guardian2), `REGISTER_AGENT` (agentWallet).
+
+---
+
+## T5.1.1 / T5.1.3 — BLS aggregator 三腿对齐（Sepolia，2026-09-04）
+
+`canonical.blsAggregator` 从 `0xF51c…8B13`(BLSAggregator-4.1.0) 切到链上现役的
+`0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D`(**4.11.0**)。这里记的是**切换后的复核读数**，
+不是切换时那次——两者可能不同，能被引用的必须是后者。
+
+**读数 @ block 11634683**（全部 `cast call`，非转述）：
+
+| 项 | 值 |
+|---|---|
+| `Registry(0xf5Bf37ca…).blsAggregator()` | `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D` |
+| `SuperPaymaster(0x09DF0d2e…).BLS_AGGREGATOR()` | `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D` |
+| `DVTValidator(0x568b1486…).BLS_AGGREGATOR()` | `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D` |
+| `SuperPaymaster.pendingBLSAgg()` | `0x0000…0000`（无轮换在途） |
+| `version()` | `"BLSAggregator-4.11.0"` |
+| `keccak(code)` | `0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c` |
+
+codehash 与 CC-115 B4 冻结的 `deployedStack` pin 逐字一致（`scripts/upstream-abi-pin.json`）。
+
+### 为什么三条腿要分别读
+
+2026-08-26 → 09-01 期间它们**不一致**：`Registry` 被单独重指到新聚合器，而
+`SuperPaymaster` 和 `DVTValidator` 还留在 4.3.0，且 `pendingBLSAgg == 0` —— 不是时间锁
+窗口，是**落定的分歧**，所以没有任何东西提示它没做完。reputation 路径与 slash 路径在验
+两个不同的合约。持续断言见 `packages/core/src/addresses.threeLegs.test.ts`。
+
+### 起点必须是 Registry
+
+从 pin 的聚合器反向读 `DVT_VALIDATOR()` 分不清现役与被取代 —— 三个聚合器返回同一个值：
+
+```
+0xEaeC2F51…  4.11.0   DVT_VALIDATOR() = 0x568b1486…   ← 现役
+0x174b60bB…  4.3.0    DVT_VALIDATOR() = 0x568b1486…   ← 已被取代
+0xF51c0298…  4.1.0    DVT_VALIDATOR() = 0x568b1486…   ← 更早
+```
+
+反向读预设了「你已经拿对了聚合器」，而那正是要被证明的东西之一。
+
+### 阈值变化（论文相关）
+
+`defaultThreshold` 在 4.11.0 上是 **2**（4.1.0/4.3.0 时代是 7），`minThreshold` 2（原 3），
+而 N 仍是 3。reputation 路径读的就是 `Registry.blsAggregator.defaultThreshold()`。已报 CC-115。
+
+复跑：`CI=1 AASTAR_ONCHAIN_TEST=1 pnpm exec vitest run packages/core/src/addresses.threeLegs.test.ts`
+
+### T5.1.3 回归结论 + 一个本地环境陷阱
+
+四条验收命令：
+
+| 命令 | 结果 |
+|---|---|
+| `pnpm -r build` | rc=0 |
+| `pnpm -r test`（`CI=1 AASTAR_ONCHAIN_TEST=1`） | 零 FAIL |
+| `pnpm run check:addresses` | PASS |
+| `pnpm run check:abi-drift:strict` | **本地红、CI 绿** —— 见下 |
+
+**这道 gate 在本地红与本次改动无关**，判据有两条而不是一条：
+
+1. 跑它的分支与 `main` **零代码差异**（`git diff origin/main -- packages/ scripts/ config.sepolia.json` 为空），所以红不可能由 T5.1.1/T5.1.2 引入；
+2. CI 最新 main run **success**，其中 `abi-provenance` job 正是跑这道 strict gate 的——它自己 clone 上游并 `forge build`。
+
+真因：`~/Dev/aastar/SuperPaymaster/out/` 里产物名是 `SuperPaymaster.default.json`，而 gate 找 `SuperPaymaster.json`。同 revision（`d651646a`）、**根 `foundry.toml` 逐字相同**（都是 `[profile.default]`、`out = "out"`）的另一份 checkout 产出的却是无后缀名。`rm -rf out && forge build` 重建后仍是 `.default.json`，所以不是增量残留。
+
+⚠️ **gate 的报错文案在这个失效模式下会误导**：它说 `the upstream needs 'forge build'`，而 `forge build` 已经跑过两次（含 clean 重建）。真正缺的不是构建，是**构建产出的文件名**。已记入跟进账本。
+
+**排查时我自己踩的坑**（记下来因为它比结论有用）：中途我 diff 两份 `contracts/foundry.toml` 得到「完全相同」，据此排除了配置差异——**但那两个文件都不存在**（配置在仓库根），`diff` 比的是两个空集。全空、全相同、全红，都是量具坏了的信号，第一反应该是怀疑判据而不是采信结论。
