@@ -87,3 +87,83 @@
 - **交付物**：`.pilot.yml`、`docs/agent/{roadmap,tasks,progress,followups}.md`、`.gitignore` 忽略 `.codegraph/`
 - **验收命令**：`test -f .pilot.yml && test -f docs/agent/tasks.md && bash ~/.claude/skills/pilot/scripts/followups.sh count-open --docs-dir docs/agent`
 - **证据**：branch `chore/pilot-scaffold` / PR #315
+
+---
+
+## F5.1 — SP 栈地址与 ABI（canonical → 4.11.0）
+
+### T5.1.1 canonical `blsAggregator` 切到 4.11.0 + 三腿一致性断言  `READY`
+- **优先级**：critical
+- **目标**：SDK 公共面的 sepolia `blsAggregator` 现在指向一个 SuperPaymaster 已经不认的合约。切到链上三腿一致指向的 `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D`(BLSAggregator-4.11.0)，并让「三腿不一致」变成 CI 会红的断言，而不是靠人隔几周读一次链。
+- **开发范围**：`packages/core/src/addresses.ts` sepolia 块 `blsAggregator`；`config.sepolia.json` 同字段；新增 `packages/core/src/addresses.threeLegs.test.ts`（对链读 `Registry.blsAggregator` / `SuperPaymaster.BLS_AGGREGATOR` / `DVTValidator.BLS_AGGREGATOR`，三者必须彼此相等且等于 canonical）。
+- **明确不做**：不动 `dvtValidator`（另见 T5.3.1）；不动 op-sepolia / op-mainnet 块（那是旧 V3 栈，M3/F3.2 的事）。
+- **依赖**：无。B4 已在 evidence 分支验证过同一组读数。
+- **交付物**：canonical + config 一致；三腿断言测试；`docs/onchain-evidence.md` 追加一条读数记录。
+- **验收命令**：`pnpm run check:addresses && pnpm --filter @aastar/core test`
+- **涉及文件**：`packages/core/src/addresses.ts`、`config.sepolia.json`、`packages/core/src/addresses.threeLegs.test.ts`
+- **风险/回滚**：改的是**公共面地址**。旧地址 `0xF51c…` 保留为注释（历史可读），不删。回滚 = 单文件 revert。
+- **待人拍板**：无——旧地址已不被 SP 认可，留着比切更危险。
+
+### T5.1.2 把部署版 4.11.0 ABI 引入 main 的公共面  `READY`
+- **优先级**：critical
+- **目标**：`packages/core/src/abis/BLSAggregator.json` 目前是 4.1.0 时代的 70 函数版，**连 `guardianSlashCases` 都没有**。换成链上实际运行的 4.11.0（72 函数），并复用 B4 已验证的「重定向而非跳过」机制，让它继续受 `check:abi-drift` 管辖。
+- **开发范围**：把 `abis/BLSAggregator-4.11.0.deployed.json`（SP@`d651646a`，sha256 `df667b4d…06ce`）按字节引入；`scripts/check-abi-drift.ts` 的 `DEPLOYED_ABI_REDIRECT` 已存在，确认它对 main 的路径同样生效；`scripts/upstream-abi-pin.json` 补 main 侧 pin。
+- **明确不做**：**不得**用 SP `main` 的 4.12.0 ABI 配 4.11.0 地址（见 `architecture.md` 不可破边界 #1）。
+- **依赖**：T5.1.1（地址先对，ABI 才有意义）
+- **交付物**：新 ABI + pin + 一条断言 `guardianSlashCases` 返回 7 字的形状门禁
+- **验收命令**：`pnpm run check:abi-drift:strict && pnpm exec vitest run packages/core/src/abis/`
+- **涉及文件**：`packages/core/src/abis/BLSAggregator.json`、`scripts/upstream-abi-pin.json`
+- **风险/回滚**：**breaking 面变更**（70 → 72 函数）。属于新增，无函数消失（B4 已实测），但仍需在 release note 标注。
+- **待人拍板**：发版时是否算 minor bump——不阻塞开发，发布前问。
+
+### T5.1.3 SP 侧回归 + 证据回写  `READY`
+- **优先级**：high
+- **目标**：证明 T5.1.1/T5.1.2 之后 SP 相关业务路径没坏，并把读数写进证据索引。
+- **验收命令**：`pnpm -r build && pnpm -r test && pnpm run check:addresses && pnpm run check:abi-drift:strict`
+- **依赖**：T5.1.1、T5.1.2
+- **交付物**：`docs/onchain-evidence.md` 一条含 block 号的读数记录
+
+---
+
+## F5.2 — AirAccount v0.31.0 → v0.33.0
+
+### T5.2.1 canonical 12 地址切到 v0.33.0  `READY`
+- **优先级**：high
+- **目标**：上游 v0.33.0 已部署 Sepolia 并验活（`FACTORY_VERSION="0.33.0"` / `ACCOUNT_VERSION="0.33.0"` 链上实测），canonical 停在 v0.31.0。整栈切换。
+- **开发范围**：`packages/core/src/addresses.ts` 的 AirAccount 12 地址；权威来源 = airaccount-contract `.env.sepolia` 的 `V0330` 块（精确值见 `spec.md`，**不得由截断地址补全**）。
+- **明确不做**：不动 v0.31.0 的历史注释；不改 committee framing 逻辑（0.45.0 已修）。
+- **依赖**：无
+- **交付物**：12 地址 + 每个地址一条链上存在性/版本断言
+- **验收命令**：`pnpm run check:addresses && pnpm exec vitest run packages/core/src/addresses.test.ts`
+- **涉及文件**：`packages/core/src/addresses.ts`、`packages/core/src/addresses.test.ts`、`config.sepolia.json`
+- **风险/回滚**：v0.31.0 栈仍在链上，现有账户不受影响（CC-106 明载）。切的是**新账户默认走哪一套**。
+- **待人拍板**：无——上游已明确 v0.33.0 是新栈。
+
+### T5.2.2 committee framing 回归（v0.33.0 validator）  `READY`
+- **优先级**：high
+- **目标**：v0.33.0 的 router `algorithm 1` 指向**新的** committee validator `0x7ac7E9d4…96a9`（v0.31.0 时是 `0x1A8Db639…`）。必须确认 SDK 的 per-signer 打包对新 validator 仍然成立——**读 `committeeActive()` 而不是猜**。
+- **验收命令**：`pnpm exec vitest run packages/core/src/actions/committee.test.ts packages/core/src/abis/committeeAbi.test.ts`
+- **依赖**：T5.2.1
+- **风险**：`requireStake=true` 在新 validator 上已开启，且三个 operator 恰好卡在 `minStake`。属他仓风险，SDK 侧只需读、不改。
+
+---
+
+## F5.3 — DVT 对齐核验
+
+### T5.3.1 dvtValidator 与 DVT 接口对齐出证据  `READY`
+- **优先级**：mid
+- **目标**：`dvtValidator` 疑似未变，但「疑似」不是交付。出一条可复跑的读数证据；若确实未变，本 task 的交付物就是**那条证据本身**加进门禁。
+- **验收命令**：`pnpm run check:addresses && pnpm exec vitest run packages/core/src/dvt.test.ts`
+- **依赖**：T5.1.1（三腿断言里已含 DVTValidator 一腿）
+- **交付物**：证据记录 + 若无变更则明确写「已核验无变更 @ block N」
+
+---
+
+## F5.4 — KMS 面扫描
+
+### T5.4.1 KMS API surface 与安全加固对齐（CC-2 / CC-19 / CC-25）  `BLOCKED`
+- **优先级**：mid
+- **目标**：三条 KMS 变更通知从未处理。KMS 是 address-agnostic，风险在 API surface 与安全加固（fail-closed API key、XSS 修复）。
+- **阻塞原因**：**需要先确定本地有没有 KMS 仓库 checkout 及其权威版本**；`upstream_radar` 记的 KMS 锚点需重新解析。这不是产品决策，是探测，`run` 时第一步就能解除。
+- **验收命令**：（解除阻塞后补）`pnpm exec vitest run packages/core/src/kms/`
+- **待澄清**：KMS 当前权威版本号 / 仓库位置

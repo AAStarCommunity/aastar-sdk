@@ -1,3 +1,37 @@
+# 进展 — 此刻真实状态
+
+> 由 pilot `run` 持续更新。规划见 [`roadmap.md`](roadmap.md)，台账见 [`tasks.md`](tasks.md)。
+
+## 当前聚焦：M5 上游全面同步
+
+**更新于 2026-09-04 · main = `e4439dda`**
+
+| Feature | 状态 | 说明 |
+|---|---|---|
+| F5.1 SP 栈地址与 ABI | `READY` ×3 | 先做，canonical 当前指向 SP 已不认的死地址 |
+| F5.2 AirAccount v0.33.0 | `READY` ×2 | 上游已部署并验活 |
+| F5.3 DVT 对齐核验 | `READY` ×1 | 大概率 no-op，但要出证据 |
+| F5.4 KMS 面扫描 | `BLOCKED` ×1 | 待探测仓库位置与权威版本（run 第一步即可解除） |
+
+**刚完成**：CC-115 B4 = PR #329，4 轮 pr-daemon 评审，approved `ecd4343d` → 合并 `e4439dda`。
+B4 建立的双轴 pin + 可证伪门禁方法，是 M5 逐个上游套用的模板。
+
+**等他仓**（不阻塞 M5）：
+- CC-115 双轴 pin 裁决 —— 已两次问 @repo:dsr（`bd2be1ec` / `dc08ec2b`），未回
+- DVT `fix/cc49-round5-…` 是否合入 master
+
+## 分支 / PR
+
+| 分支 | 用途 | 状态 |
+|---|---|---|
+| `docs/pilot-plan-upstream-sync` | 本次规划文档 | 待 PR |
+| `codex/repcredit-e2e-evidence-20260823` | B4 evidence | 已合并（`e4439dda`） |
+
+
+---
+
+<details><summary>历史状态（2026-08-18 之前）</summary>
+
 # AAStar SDK 实时状态 — progress
 
 > 「此刻仓库真实发生了什么」。由 `pilot run` / `pilot status` 每一步更新。
@@ -33,3 +67,5 @@
 ## 下一个 READY
 1. **T1.2.1** CLI/mjs → API 缺口盘点（T1.1.1 已合并，依赖已满足）
 2. **T2.1.1** slash 只读查询 API（CC-13 批A，依赖已解除）
+
+</details>
