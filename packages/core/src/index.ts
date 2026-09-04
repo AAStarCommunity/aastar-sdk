@@ -5,6 +5,7 @@
  */
 
 export * from './branding.js';
+export * from './crossCheckedClient.js'; // multi-endpoint cross-reading client (FU-21)
 export * from './crypto/dvtSignerIdentity.js'; // DVT co-signature identity classifier (pure)
 export * from './actions/committeeTree.js'; // frozen-root committee proofs rebuilt from events
 export * from './utils/eip2335-password.js'; // EIP-2335 keystore password pre-processing (pure; no node:crypto)
