@@ -4,12 +4,12 @@
 > 主线 task 全部完成后，由 `pilot run` 批量合成一个 cleanup PR 做掉，逐条标 [x] done=PR#n。
 > `- [ ]`=OPEN，`- [x]`=DONE。GitHub PR comment 是永久兜底。
 
-> **编号说明**：FU-23 是**空号**，不是丢失的条目。2026-09-05 两个分支并行各自生成了一个 FU-22（语义不同），合并前手工让号到 FU-24/25，FU-23 因此跳过。所以 **最大编号 ≠ 条目数**；机制风险见 FU-26。
+> **编号说明**：编号只增不复用。FU-23 是**空号**，不是丢失的条目。2026-09-05 两个分支并行各自生成了一个 FU-22（语义不同），合并前手工让号到 FU-24/25，FU-23 因此跳过。所以 **最大编号 ≠ 条目数**；机制风险见 FU-26。
 
 - [ ] FU-1 · B · src=dvt3-register.ts:65 · 2026-08-01 · Sepolia canonical.gToken (0x8d6Fe002…) 与 live validator registry 实际质押的 GToken (0x4c09aE57…) 不一致，dvt3-register.ts 里硬 pin 绕过；需查清哪个才是权威并收敛（涉及 CANONICAL_ADDRESSES / config.sepolia.json）
 - [ ] FU-2 · B · src=PR#15 · 2026-08-01 · PR #15 已 APPROVE 但标题仍是 [WIP] feat(m14)，且 checks=none：确认它是要拆分合并、改标题后合并、还是关掉
-- [ ] FU-3 · B · src=pilot status 2026-08-01 · 2026-08-01 · core.hooksPath 指向另一个 clone 的空 hooks 目录 (/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/.git/hooks) → 本工作副本的 pre-commit security-scan 实际未生效；应改回 .githooks
-- [ ] FU-4 · B · src=security-scan.ts · 2026-08-01 · security-scan.ts 有 4 处历史误报（docs/onchain-evidence*.md 里的 P-256 公钥/tx hash、tests/.p256-*.last.md），全仓扫描恒红 → 启用 pre-commit 前需先降噪（收窄正则或加白名单），否则钩子一开就永远 BLOCKED
+- [ ] FU-3 · B · src=pilot status 2026-08-01 · **前置已解除（FU-4 已修，PR#339：全仓扫描现在干净，且有 10 条配对测试证明降噪没变成绕过）。剩下的 rewire 是人工动作** —— pilot 明写「只报告，不擅自 rewire」。· 2026-08-01 · core.hooksPath 指向另一个 clone 的空 hooks 目录 (/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/.git/hooks) → 本工作副本的 pre-commit security-scan 实际未生效；应改回 .githooks
+- [x] FU-4 · B · src=security-scan.ts · 2026-08-01 · security-scan.ts 有 4 处历史误报（docs/onchain-evidence*.md 里的 P-256 公钥/tx hash、tests/.p256-*.last.md），全仓扫描恒红 → 启用 pre-commit 前需先降噪（收窄正则或加白名单），否则钩子一开就永远 BLOCKED · done=PR#339
 - [ ] FU-5 · B · src=PR#316 review (Codex PK) · 2026-08-02 · dvt3-register.ts 的 decryptEip2335 只做 NFKD normalize，没按 EIP-2335 全谱剥离 C0/C1/Delete 控制字符 → 密码含控制字符的合规 keystore 会 checksum mismatch。失败是 fail-closed（报错拒绝，不会用错密钥注册），故不阻塞；补一个 stripped 候选即可
 - [ ] FU-6 · B · src=T3.1.1 · 2026-08-02 · 若要让三道 ABI 门禁真正进 CI：runner 需 checkout SuperPaymaster/airaccount-contract/mycelium-launch 并 forge build 出 out/，再置 REQUIRE_UPSTREAM=1。成本与私有仓访问权待评估，属独立 task 不属 T3.1.1
 - [ ] FU-7 · B · src=CC-103 sync · 2026-08-18 · abi-sync 的 KNOWN_DRIFT 白名单（AAStarAirAccountV7 intentional-merge）掩盖了真实的上游新函数：enrollInCommitteeValidator/proposeGuardianAddition 缺失而门禁全绿。需要让 KNOWN_DRIFT 只跳过 SDK-extra 条目、仍报 upstream-only 缺失（与 #301/#302 name-collision 同类盲点）
@@ -27,8 +27,9 @@
 - [x] FU-19 · A · src=FU-18 自查 2026-08-18 · 2026-08-18 · 生产 server 层 `bls-signature-service.ts` 只会发 legacy framing —— FU-18 修的是 packer，这一层没跟上（同形缺口上移一层）。**2026-08-18 已完整实现**：`assertNotCommitteeMode` 改为 `resolveCommitteeFraming`，返回 legacy | {committee, validator, treeDepth}，两条 tiered 路径（raw-P256 0x04/0x05 与 WebAuthn 0x09/0x0a）都按结果选 framing。committee 时 `fetchCommitteeSignersFor` 取 slot+proof 传 committeeSigners / packCommitteeBlsPayload。**enroll 问题的解法**：`enrollInCommitteeValidator()` 是 owner-only tx，服务端确实签不了，但不该因此整个搁置 —— 新增 core `encodeEnrollInCommitteeValidator()`，未 enroll 时抛错并附上 `to:` 与 `data:`，让持有 owner 钱包的一方（应用自己的流程/UserOp/Safe）去发，而不是死路或发出无法验证的字节。两道 payload 安全检查：proof 长度与 validator 自报 TREE_DEPTH 不符则拒绝（否则链上 _verifyMerkle 必拒）；set 在读 proof 之后发生变更则拒绝（getMerkleProof 证明的是 CURRENT root，合约验的是 FROZEN setRoot[e-1] —— FU-9 的风险在这里显式暴露而非静默发出陈旧 proof）。framing 解析在 DVT 往返**之前**完成，未 enroll/validator 读不到不会白烧三次节点调用。全链上推导的 fail-closed 语义（不信静态地址表、不信 storage 记录、只有 ABI 层空返回+getCode 佐证才放行 legacy、revert 不算）见 FU-18 条目。守卫+FU-19 共 40 个单测（含 FU-9 root 比较、成员资格、quorum 三组变异验证）
 - [x] FU-20 · B · src=T5.1.3 · 2026-09-04 · check-abi-drift 的 'NO ARTIFACT ... needs forge build' 文案在产物名带 profile 后缀（<C>.default.json）时会误导：构建已跑过，缺的是文件名。应识别 <C>.<profile>.json 并给出准确提示 · done=PR#339
 - [ ] FU-21 · B · src=PR#332-review · 2026-09-04 · 从不可信 RPC 取读数的链上门禁可被该 RPC 欺骗；当这套断言要支撑对外证据链时，收紧方式应是多端点交叉读或 keyed endpoint，而不是校验 URL scheme
+- [ ] FU-22 · B · src=PR#335-review · 2026-09-05 · addresses.dvt.test.ts 第二条断言(捷径版本会通过)用 canonical.dvtValidator 当参照，把 pin 拖进了一个关于「聚合器之间是否同值」的事实；pin 写错时它也红且打印答非所问的消息。改成用现役聚合器当场读到的值当 expected —— pin 错只第一条红，聚合器不再同值只第二条红
 - [ ] FU-24 · B · src=T5.4.3 · 2026-09-05 · 产品决策待拍板：KMS 客户端在 kmsEnabled=true 且无 apiKey 时是否应 fail-closed。当前 fail-open（不带 x-api-key 照发，enabled 仍 true）。改成必填会破坏无认证部署（本地 TEE 模拟器/测试夹具/网络层认证内网端点），需人决定
 - [ ] FU-25 · B · src=PR#336-review · 2026-09-05 · tasks.md 任务状态与 GitHub 实况会漂且两份台账各错各的（互相对账查不出来）。应加一道以 gh pr view <N> --json state 为权威源的对账；条目标题带上 PR 号以便解析
-- [ ] FU-26 · B · src=T5.4.3 · 2026-09-05 · followups.sh 的 FU 编号按文件内容递增，两个分支并行加条目会撞号（实测：#337 分支与 T5.4.3 分支各生成了一个 FU-22，语义完全不同）。合并时 append-only 不会冲突，所以撞号会静默活下来。需要一个不依赖单分支视图的编号方式
+- [ ] FU-26 · B · src=T5.4.3 · 2026-09-05 · followups.sh 的 FU 编号按文件内容递增，两个分支并行加条目会撞号（实测：#337 分支与 T5.4.3 分支各生成了一个 FU-22，语义完全不同）。**描述已修正（2026-09-05 实测）**：两分支都在文件末尾追加时 git **会**冲突（本次 #337 合 main 就冲突了），所以不是「合并静默通过」。真正的静默点在**解冲突那一步**——解法是人工取并集，而两个同号条目取并集后就并排活着，git 不会有意见。需要一个不依赖单分支视图的编号方式
 - [ ] FU-27 · B · src=PR#337-review · 2026-09-05 · kms-endpoint-audit 的 EXPECTED_SDK_PATHS 是把独立性外包给了人的记忆（改数字就能让红变绿）。真正独立的版本是再写一个独立实现的提取器比集合。成本较高，但那才是唯一不依赖人记得的形式
 - [ ] FU-28 · B · src=PR#338-review · 2026-09-05 · kms-http-client-auth.test.ts 的 headersOf() 用私有字段 cast，把测试绑在字段名 http 上：将来改名会以「读不到 headers」而不是「凭据行为变了」的形态红。要收得让客户端暴露只读的 hasCredential——但那是产品面变更，与 FU-24 同批决定

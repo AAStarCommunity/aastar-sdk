@@ -52,6 +52,42 @@ const WHITELISTED_KEYS = new Set([
 // Improved regex with capture group for the hex part
 const SECRET_REGEX = /(key|secret|pk|private).{0,15}(0x[a-fA-F0-9]{64})/gi;
 
+/**
+ * FU-4. Markers that make a 64-hex value PUBLIC BY DEFINITION, so a `key`-adjacent match is not a
+ * leak: P-256 public-key coordinates and transaction hashes.
+ *
+ * Why this shape and not a file allowlist. The scanner was blocking on six files — every finding a
+ * P-256 *public* key coordinate or a tx hash sitting next to the word "Key" (`keyX = 0x…`,
+ * `getGuardianP256Key(0).x = 0x…`, `setP256Key tx 0x…`). Exempting those files would have muted the
+ * scanner over whole directories that also carry real evidence, which is the "exemption that reads
+ * like coverage" failure this repo keeps finding. Keying on the marker instead means a genuine
+ * private key dropped into the very same file is still caught.
+ *
+ * A private key never legitimately carries these markers, so this narrows the rule without
+ * weakening it — and `hasSecretWord` below refuses the exemption outright when the line also says
+ * private/secret/mnemonic/seed, so `privateKeyX = 0x…` cannot buy its way out.
+ */
+const PUBLIC_BY_DEFINITION = [
+  /pub(lic)?[-_ ]?key/i,          // pubkey / publicKey / public-key
+  /key[XY]\b/,                    // keyX / keyY — P-256 coordinates
+  /\.\s*[xy]\s*=/i,               // .x = / .y =  (coordinate accessors)
+  /\b[xy]\s*[=|]\s*`?0x/i,        // x=`0x…` and markdown-table form `| passkey x | \`0x…\``
+  /passkey/i,                     // a passkey is a public credential by definition
+  /\btx\b|txhash|transaction hash/i,
+];
+
+/** Words that mean "this really is a secret" — they veto any public-marker exemption. */
+const SECRET_WORDS = /private[-_ ]?key|secret|mnemonic|seed[-_ ]?phrase|privkey/i;
+
+/**
+ * True when the line is public data by definition AND says nothing that implies a secret.
+ * The veto is the load-bearing half: without it the exemption is a bypass.
+ */
+function isPublicByDefinition(line: string): boolean {
+  if (SECRET_WORDS.test(line)) return false;
+  return PUBLIC_BY_DEFINITION.some((re) => re.test(line));
+}
+
 function scanFile(filePath: string): boolean {
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split('\n');
@@ -65,7 +101,7 @@ function scanFile(filePath: string): boolean {
         const lineRegex = new RegExp(SECRET_REGEX.source, 'gi');
         while ((match = lineRegex.exec(line)) !== null) {
             const hex = match[2].toLowerCase();
-            if (!WHITELISTED_KEYS.has(hex)) {
+            if (!WHITELISTED_KEYS.has(hex) && !isPublicByDefinition(line)) {
                 if (!fileHasLeak) {
                     console.log(`${RED}❌ [CRITICAL] Potential Secret detected in: ${filePath}${NC}`);
                     fileHasLeak = true;
@@ -104,7 +140,11 @@ function walkDir(dir: string, callback: (file: string) => void) {
 
 function main() {
     console.log(`${BLUE}🔒 Local Security Scan: Checking for private keys...${NC}\n`);
-    const rootDir = process.cwd();
+    // Optional directory argument. The pre-commit hook and CI both call this with no args and get
+    // the old behaviour (scan the repo). It exists so the exemption in isPublicByDefinition() can
+    // be tested against throwaway fixtures — an exemption whose bypass-resistance is never executed
+    // is the same as no exemption at all, and this one was added precisely to let a hook be enabled.
+    const rootDir = process.argv[2] ?? process.cwd();
     let totalFilesWithFindings = 0;
     let fileCount = 0;
 
