@@ -77,14 +77,21 @@ async function main() {
   const publicClient = createPublicClient({ chain: sepolia, transport });
   const c = CANONICAL_ADDRESSES[11155111];
   const validator = c.aaStarBLSAlgorithm as Address;
-  // ⚠️ Sepolia canonical.gToken drifted (now 0x8d6Fe002…, JASON balance 0) away from the token this
-  // LIVE validator's registry actually stakes (0x4c09aE57…, JASON=owner+1523, dvt1 staked in it).
-  // Pin onboardDvtNode to the SAME on-chain setup dvt1 used: validator.registry() + the real GToken.
-  const STAKE_GTOKEN = '0x4c09aE57503Aa1E2A43b05621A38DbdD43b0Aa08' as Address;
+  // FU-1. This used to pin the stake token to a literal, above a comment saying Sepolia
+  // `canonical.gToken` had drifted to `0x8d6Fe002…`. Measured on chain: `canonical.gToken` IS the
+  // pinned address, byte for byte, and `0x8d6Fe002…` is **op-mainnet's** gToken — the comment stated
+  // a false fact about this chain, which is worse than the stale pin it justified, because nothing
+  // distinguishes it from a true one.
+  //
+  // The pin is gone; the address book is the source again. What the pin was silently answering —
+  // "does the live staking contract agree?" — is now asked properly, and rooted at Registry rather
+  // than at the book being tested: `addresses.gToken.test.ts` walks
+  // Registry.GTOKEN_STAKING() → GTOKEN() and requires it to equal canonical.gToken.
+  const STAKE_GTOKEN = c.gToken as Address;
   const validatorRegistry = await publicClient.readContract({
     address: validator, abi: [{ type: 'function', name: 'registry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }], functionName: 'registry',
   }) as Address;
-  log(`stake token (pinned) = ${STAKE_GTOKEN}   validator.registry() = ${validatorRegistry}`);
+  log(`stake token (canonical) = ${STAKE_GTOKEN}   validator.registry() = ${validatorRegistry}`);
 
   // --- load dvt3 node state + decrypt BLS secret (RAM) ---
   const ns = JSON.parse(fs.readFileSync(requireEnv('DVT3_KEYSTORE_JSON'), 'utf8'));

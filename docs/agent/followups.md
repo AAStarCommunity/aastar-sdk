@@ -6,7 +6,7 @@
 
 > **编号说明**：编号只增不复用。FU-23 是**空号**，不是丢失的条目。2026-09-05 两个分支并行各自生成了一个 FU-22（语义不同），合并前手工让号到 FU-24/25，FU-23 因此跳过。所以 **最大编号 ≠ 条目数**；机制风险见 FU-26。
 
-- [ ] FU-1 · B · src=dvt3-register.ts:65 · 2026-08-01 · Sepolia canonical.gToken (0x8d6Fe002…) 与 live validator registry 实际质押的 GToken (0x4c09aE57…) 不一致，dvt3-register.ts 里硬 pin 绕过；需查清哪个才是权威并收敛（涉及 CANONICAL_ADDRESSES / config.sepolia.json）
+- [x] FU-1 · B · src=dvt3-register.ts:65 · 2026-08-01 · Sepolia canonical.gToken (0x8d6Fe002…) 与 live validator registry 实际质押的 GToken (0x4c09aE57…) 不一致，dvt3-register.ts 里硬 pin 绕过；需查清哪个才是权威并收敛（涉及 CANONICAL_ADDRESSES / config.sepolia.json）。**PR#342 已查清并收敛**：链上实测 `canonical.gToken` **就是** `0x4c09aE57…`（与硬 pin 逐字节相同），不存在漂移；而 `0x8d6Fe002…` 是 **chain 10（Optimism 主网）** 的 gToken（`addresses.ts:21`、`config.op-mainnet.json`）——当初那条诊断把另一条链的地址当成了 Sepolia 的。已删硬 pin 改用地址簿，并把它默默回答的那个问题正式提出来：`Registry.GTOKEN_STAKING() → GTOKEN() == canonical.gToken`（根植于 Registry，不从被测的地址簿起步）。 · done=PR#342
 - [ ] FU-2 · B · src=PR#15 · 2026-08-01 · PR #15 已 APPROVE 但标题仍是 [WIP] feat(m14)，且 checks=none：确认它是要拆分合并、改标题后合并、还是关掉
 - [ ] FU-3 · B · src=pilot status 2026-08-01 · **前置已解除（FU-4 已修，PR#339：全仓扫描现在干净，且有 10 条配对测试证明降噪没变成绕过）。剩下的 rewire 是人工动作** —— pilot 明写「只报告，不擅自 rewire」。· 2026-08-01 · core.hooksPath 指向另一个 clone 的空 hooks 目录 (/Users/jason/Dev/mycelium/my-exploration/projects/aastar-sdk/.git/hooks) → 本工作副本的 pre-commit security-scan 实际未生效；应改回 .githooks
 - [x] FU-4 · B · src=security-scan.ts · 2026-08-01 · security-scan.ts 有 4 处历史误报（docs/onchain-evidence*.md 里的 P-256 公钥/tx hash、tests/.p256-*.last.md），全仓扫描恒红 → 启用 pre-commit 前需先降噪（收窄正则或加白名单），否则钩子一开就永远 BLOCKED · done=PR#339
