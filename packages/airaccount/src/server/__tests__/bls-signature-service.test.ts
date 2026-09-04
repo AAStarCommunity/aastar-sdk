@@ -114,13 +114,18 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     );
   }
   const NODES = [{ apiEndpoint: "https://dvt1.example" }, { apiEndpoint: "https://dvt2.example" }];
+  // Real-shaped ids. They used to be "0xn1"/"0xn2", which no encoder in this repo would accept — so
+  // the transport tests were exercising a value the rest of the pipeline rejects, and could not have
+  // noticed a shape check being added or removed anywhere.
+  const N1 = `0x${"11".repeat(32)}`;
+  const N2 = `0x${"22".repeat(32)}`;
   const DVT_REQ = { userOp: { sender: "0xacc", nonce: "0x0" }, ownerAuth: "0x" + "ab".repeat(65) };
 
   it("POSTs { userOp, ownerAuth } (NOT { message }) to every node, then aggregates the collected sigs", async () => {
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: "0xn1", signature: "0xsig1" } }) // dvt1 /signature/sign
-      .mockResolvedValueOnce({ data: { nodeId: "0xn2", signature: "0xsig2" } }) // dvt2 /signature/sign
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsig1" } }) // dvt1 /signature/sign
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: "0xsig2" } }) // dvt2 /signature/sign
       .mockResolvedValueOnce({ data: { signature: "0xAGG" } }); // /signature/aggregate
 
     const svc = makeService();
@@ -136,23 +141,98 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     const aggCall = mockPost.mock.calls[2];
     expect(String(aggCall[0])).toContain("/signature/aggregate");
     expect(aggCall[1]).toEqual({ signatures: ["0xsig1", "0xsig2"] });
-    // result: nodeIds come from the sign RESPONSES (authoritative), signature is the aggregate.
-    expect(out.nodeIds).toEqual(["0xn1", "0xn2"]);
+    // result: nodeIds come from the sign RESPONSES, signature is the aggregate.
+    //
+    // "authoritative" is what this line used to say, and it was not true in the sense a reader would
+    // take it: the node asserts its own id and nothing here corroborated it against the registry.
+    // What IS now true is narrower — the id is checked for SHAPE and for not colliding with another
+    // node in the same round. Neither makes it authoritative; see the method doc for the identity
+    // question this layer structurally cannot answer.
+    expect(out.nodeIds).toEqual([N1, N2]);
     expect(out.signature).toBe("0xAGG");
   });
 
   it("a single co-signer's signature IS the aggregate (no /signature/aggregate call)", async () => {
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: "0xn1", signature: "0xsolo" } }) // dvt1 signs
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsolo" } }) // dvt1 signs
       .mockRejectedValueOnce(new Error("dvt2 down")); // dvt2 unreachable
 
     const svc = makeService();
     const out = await (svc as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
 
-    expect(out.nodeIds).toEqual(["0xn1"]);
+    expect(out.nodeIds).toEqual([N1]);
     expect(out.signature).toBe("0xsolo");
     expect(mockPost).toHaveBeenCalledTimes(2); // 2 sign attempts, NO aggregate call
+  });
+
+
+
+  it("a node that answers with no nodeId is dropped, and the round survives on the rest", async () => {
+    // The point of the FU-16 change. Before it, this node's SIGNATURE went into the aggregate and the
+    // whole operation died later inside the encoder — even though dvt2 answered perfectly well.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { signature: "0xsig1" } }) // dvt1: no nodeId
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: "0xsig2" } });
+
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+
+    expect(out.nodeIds).toEqual([N2]);
+    expect(out.signature).toBe("0xsig2"); // single surviving co-signer ⇒ no aggregate call
+    // and dvt1's signature is NOT in the result — dropping the id without the signature would leave
+    // an aggregate that cannot verify against the ids it is paired with.
+    expect(mockPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("a malformed nodeId (right type, wrong length) is dropped too", async () => {
+    // Distinct from the missing case: a string that looks like hex still fails bytes32.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: "0xabcd", signature: "0xsig1" } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: "0xsig2" } });
+
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    expect(out.nodeIds).toEqual([N2]);
+  });
+
+  it("a second node claiming an id already seen this round is dropped", async () => {
+    // Not caught by shape. The encoder would reject the duplicate later; dropping it here keeps the
+    // round alive on the honest node instead of failing an operation that had a valid co-signature.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsig1" } })
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsig2" } }); // dvt2 claims dvt1's id
+
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    expect(out.nodeIds).toEqual([N1]);
+    expect(out.signature).toBe("0xsig1"); // the FIRST claimant's signature, paired with its own id
+  });
+
+  it("case-different duplicates are still duplicates", async () => {
+    // bytes32 comparison is not case-sensitive; a naive === would let this through and produce two
+    // ids that the encoder sorts into a collision anyway.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: `0x${"ab".repeat(32)}`, signature: "0xsig1" } })
+      .mockResolvedValueOnce({ data: { nodeId: `0x${"AB".repeat(32)}`, signature: "0xsig2" } });
+
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    expect(out.nodeIds).toEqual([`0x${"ab".repeat(32)}`]);
+  });
+
+  it("all nodes answering incoherently is indistinguishable from all nodes being down", async () => {
+    // Deliberate: both mean "no usable co-signature". The per-node reason is lost by design — the
+    // loop swallows it the same way it swallows an unreachable node — so this pins the OUTCOME, and
+    // the follow-up ledger carries the diagnosability gap rather than a comment claiming there is none.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: "0xnope", signature: "0xsig1" } })
+      .mockResolvedValueOnce({ data: { signature: "0xsig2" } });
+
+    await expect(
+      (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ)
+    ).rejects.toThrow(/Failed to get signatures from any BLS signer nodes/);
   });
 
   it("throws when a dvtRequest is missing (DVT v1.7 requires owner authorization)", async () => {
