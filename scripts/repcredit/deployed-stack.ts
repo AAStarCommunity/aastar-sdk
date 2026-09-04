@@ -328,6 +328,31 @@ export async function checkDeployedStackOnChain(pin: DeployedStackPin, client: P
     });
   }
 
+  // slashThresholds were pinned and never read (pr-daemon, PR #329). A pinned value nothing
+  // compares is documentation wearing a gate's clothes.
+  for (const [levelStr, expected] of Object.entries(pin.aggregator.slashThresholds)) {
+    const level = Number(levelStr);
+    const got = (await client.readContract({
+      address: agg,
+      abi: [
+        {
+          type: 'function',
+          name: 'slashThresholds',
+          inputs: [{ type: 'uint8' }],
+          outputs: [{ type: 'uint256' }],
+          stateMutability: 'view',
+        },
+      ],
+      functionName: 'slashThresholds',
+      args: [level],
+    })) as bigint;
+    out.push({
+      name: `aggregator:slashThresholds[${level}]`,
+      ok: got === BigInt(expected),
+      detail: `chain ${got}; pin ${expected}`,
+    });
+  }
+
   const verifier = await readAddress(client, agg, 'fraudProofVerifier');
   out.push({
     name: 'aggregator:fraudProofVerifier',
@@ -368,22 +393,29 @@ export async function checkDeployedStackOnChain(pin: DeployedStackPin, client: P
   // The POSITIVE half of the selector pair, on the contract that actually owns it. A verifier that
   // does not answer the domain-bound form is a verifier the slash path cannot drive, and the pin
   // would otherwise only ever have said what is ABSENT from the aggregator.
-  let verifierAnswers = false;
+  // NOT just "did it revert". eth_call against an address with NO CODE succeeds and returns 0x —
+  // measured on 0x…dEaD — so a revert-only test is green for an address that implements nothing at
+  // all, which is the opposite of what this check claims (pr-daemon, PR #329 [Medium]). Require
+  // returndata: an implementation must produce a bool.
+  let verifierReturn: string | null = null;
   try {
-    await client.call({
+    const res = (await client.call({
       to: pin.addresses.fraudProofVerifier,
       data: `${pin.selectors.fraudProofVerify}${'0'.repeat(64 * 4)}` as Hex,
-    });
-    verifierAnswers = true;
+    })) as { data?: Hex };
+    verifierReturn = res?.data ?? null;
   } catch {
-    verifierAnswers = false;
+    verifierReturn = null;
   }
+  const verifierAnswers = verifierReturn !== null && verifierReturn !== '0x' && verifierReturn.length > 2;
   out.push({
     name: 'verifier:answers-domain-bound-selector',
     ok: verifierAnswers,
     detail: verifierAnswers
-      ? `${pin.addresses.fraudProofVerifier} answers ${pin.selectors.fraudProofVerify} (${pin.selectors.$fraudProofVerifySig})`
-      : `${pin.addresses.fraudProofVerifier} does NOT answer ${pin.selectors.fraudProofVerify} — the armed verifier cannot serve the domain-bound fraud proof`,
+      ? `${pin.addresses.fraudProofVerifier} answers ${pin.selectors.fraudProofVerify} (${pin.selectors.$fraudProofVerifySig}) with ${(verifierReturn!.length - 2) / 2} byte(s)`
+      : verifierReturn === '0x'
+        ? `${pin.addresses.fraudProofVerifier} returned EMPTY data for ${pin.selectors.fraudProofVerify} — that address implements nothing (an eth_call to a codeless address succeeds with 0x)`
+        : `${pin.addresses.fraudProofVerifier} does NOT answer ${pin.selectors.fraudProofVerify} — the armed verifier cannot serve the domain-bound fraud proof`,
   });
 
   // A function that only 4.12.0 has must revert here. Positive controls above (version, window)

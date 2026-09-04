@@ -259,6 +259,48 @@ describe('guardianSlashCases: the 5 -> 7 -> 8 hazard', () => {
   });
 });
 
+describe('roleLocks: the DYNAMIC-member arity gate (pr-daemon, PR #329)', () => {
+  // staticReturnWords returns null the moment a member is dynamic, so before this gate roleLocks
+  // had NO arity check at all. Measured then: the reviewed 5-output spec decoded a 6-output
+  // payload, returned five members, and dropped the appended word in silence.
+  const vendoredRoleLocksAbi = [
+    {
+      type: 'function',
+      name: 'roleLocks',
+      stateMutability: 'view',
+      inputs: [{ type: 'address' }, { type: 'bytes32' }],
+      outputs: ROLE_LOCK.outputs.map(o => ({ name: o.name, type: o.type })),
+    },
+  ] as unknown as Abi;
+  const ROLE_VALUES = [30n * 10n ** 18n, 3n * 10n ** 18n, 1_700_000_000n, `0x${'ab'.repeat(32)}` as Hex, '0xdeadbeef' as Hex];
+
+  it('POSITIVE: a genuine 5-output payload still decodes', () => {
+    const payload = encodeAbiParameters(ROLE_LOCK.outputs.map(o => ({ type: o.type })), ROLE_VALUES as never);
+    const decoded = decodeNamedStruct(vendoredRoleLocksAbi, ROLE_LOCK, payload) as Record<string, unknown>;
+    expect(Object.keys(decoded)).toEqual(ROLE_LOCK.outputs.map(o => o.name));
+  });
+
+  it('REFUSES a contract that appended an output, which the word-count gate cannot see', () => {
+    const contractOutputs = [...ROLE_LOCK.outputs.map(o => ({ name: o.name, type: o.type })), { name: 'added', type: 'uint256' }];
+    const payload = encodeAbiParameters(contractOutputs.map(o => ({ type: o.type })), [...ROLE_VALUES, 999n] as never);
+    // staticReturnWords is null here — the total-words gate is silent by construction.
+    expect(staticReturnWords(ROLE_LOCK.outputs)).toBeNull();
+    expect(() => decodeNamedStruct(vendoredRoleLocksAbi, ROLE_LOCK, payload)).toThrow(
+      /the head is 6 word\(s\) but the vendored ABI declares 5 output\(s\)/,
+    );
+  });
+
+  it('REFUSES a contract that dropped an output too (the other direction)', () => {
+    const shorter = ROLE_LOCK.outputs.slice(1).map(o => ({ name: o.name, type: o.type }));
+    const payload = encodeAbiParameters(shorter.map(o => ({ type: o.type })), ROLE_VALUES.slice(1) as never);
+    // Dropping a member shifts the reviewed spec's dynamic slot onto DATA, so the word we read is
+    // not an offset at all — the gate says exactly that rather than reporting a fractional word.
+    expect(() => decodeNamedStruct(vendoredRoleLocksAbi, ROLE_LOCK, payload)).toThrow(
+      /not a 32-byte boundary, so that slot is not an offset at all/,
+    );
+  });
+});
+
 describe('guardianExitRequests and roleLocks are named objects with checked domains', () => {
   it('guardianExitRequests decodes by name and rejects a third word', () => {
     const two = encodeAbiParameters([{ type: 'uint64' }, { type: 'uint64' }], [1n, 2n]);

@@ -184,7 +184,13 @@ function stubClient(a: Answers) {
       if (to.toLowerCase() in a.legs) return { data: pad(a.legs[to.toLowerCase()]) };
       throw new Error(`stub has no answer for ${sel} at ${to}`);
     },
-    readContract: async ({ functionName }: { functionName: string }) => {
+    readContract: async ({ functionName, args }: { functionName: string; args?: unknown[] }) => {
+      if (functionName === 'slashThresholds') {
+        const level = String(args?.[0] ?? '');
+        const v = PIN.aggregator.slashThresholds[level];
+        if (v === undefined) throw new Error(`stub has no slashThresholds[${level}]`);
+        return BigInt(v);
+      }
       if (functionName === 'version') return a.version;
       if (functionName === 'domainSeparator') return a.domain;
       if (functionName === 'guardianSlashBps') {
@@ -233,6 +239,23 @@ describe('on-chain checks — each one has a mutated chain answer that reddens i
     a.nums.defaultThreshold = 7n;
     const checks = await checkDeployedStackOnChain(PIN, stubClient(a));
     expect(verdict(checks, 'aggregator:defaultThreshold')).toBe(false);
+  });
+
+  it('slashThresholds redden per index when the chain disagrees', async () => {
+    // Pinned since B4 but read by nothing until pr-daemon pointed it out; a pinned value that
+    // nothing compares is documentation wearing a gate's clothes.
+    const a = baseAnswers();
+    const client = stubClient(a);
+    const patched = {
+      ...client,
+      readContract: async (req: { functionName: string; args?: unknown[] }) => {
+        if (req.functionName === 'slashThresholds' && Number(req.args?.[0]) === 1) return 99n;
+        return (client as never as { readContract: (r: unknown) => Promise<unknown> }).readContract(req);
+      },
+    } as never;
+    const checks = await checkDeployedStackOnChain(PIN, patched);
+    expect(verdict(checks, 'aggregator:slashThresholds[1]')).toBe(false);
+    expect(verdict(checks, 'aggregator:slashThresholds[0]')).toBe(true);
   });
 
   it('no-pending-verifier goes red while a rotation is in flight', async () => {

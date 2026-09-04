@@ -35,11 +35,22 @@
  *   5. only then `decodeFunctionResult`, mapped into a named object, with each member checked
  *      against its declared type and value domain.
  *
- * Step 4 is the load-bearing one for the 5 -> 7 hazard, and it is the only check that can be
- * stated with certainty for an all-static tuple: the ABI encoding of N static outputs is exactly
- * N words, so any other length means the contract is not the one this ABI describes. For a tuple
- * containing a dynamic member (`roleLocks.metadata`) no such equality exists, so that getter is
- * covered by steps 3 and 5 only — and this file says so rather than implying otherwise.
+ * Step 4 is the load-bearing one for the arity hazard, and for an all-static tuple it is exact: the
+ * ABI encoding of N static outputs is exactly N words, so any other length means the contract is not
+ * the one this ABI describes.
+ *
+ * A tuple containing a dynamic member (`roleLocks.metadata`) has no such total-length equality, and
+ * this file used to stop there — leaving that getter with NO arity gate at all. Measured (pr-daemon,
+ * PR #329): the reviewed 5-output spec decoded a 6-output payload, returned five members, and
+ * dropped the appended word in silence. "There is no exact word count" was true; "so nothing can be
+ * checked" was not.
+ *
+ * 4b covers it. The ABI head is exactly one word per top-level output — static members inline,
+ * dynamic members an offset — and the dynamic section follows the head in order, so the FIRST
+ * dynamic member's offset MUST equal `outputs.length * 32`. Append an output and the head grows a
+ * word and the offset moves with it; drop one and the slot stops being a 32-byte boundary at all.
+ * Both are equalities on values the encoder is required to produce, not heuristics, and both have
+ * paired red tests. Nested/array dynamic members are refused outright rather than under-checked.
  */
 import {
   decodeFunctionResult,
@@ -329,6 +340,55 @@ export function decodeNamedStruct(abi: Abi, spec: ReviewedStruct, returnData: He
   // THE 5 -> 7 GATE. Only stated when every reviewed output is statically sized, where the ABI
   // encoding is exactly one word per output and the equality is a fact, not a heuristic.
   const expectedWords = staticReturnWords(spec.outputs);
+
+  // THE SAME GATE, FOR STRUCTS WITH A DYNAMIC MEMBER (pr-daemon, PR #329 [Medium]).
+  //
+  // `staticReturnWords` returns null as soon as any member is dynamic, and the check above then
+  // did nothing at all — so `GTokenStaking.roleLocks` (metadata: bytes) had NO arity gate. Measured
+  // on the reviewed 5-output spec against a 6-output payload: it decoded, returned five members,
+  // and dropped the appended word silently. Exactly the failure this file exists to stop, in the
+  // one struct the original gate could not speak for.
+  //
+  // What CAN be stated without a total word count: the ABI head is exactly one word per top-level
+  // output — static members inline, dynamic members an offset — and Solidity lays the dynamic
+  // section out immediately after that head, in order. So the FIRST dynamic member's offset word
+  // must equal `outputs.length * 32`. Append an output and the head grows by a word; the offset
+  // moves with it and this comparison fails. It is an equality on a value the encoder must produce,
+  // not a heuristic.
+  if (expectedWords === null) {
+    const firstDynamic = spec.outputs.findIndex(o => staticWordCount(o.type) === null);
+    const nested = spec.outputs.filter(o => staticWordCount(o.type) === null && o.type !== 'bytes' && o.type !== 'string');
+    if (nested.length) {
+      // Offsets for nested/array types are still one head word each, but this file has never
+      // reviewed such a member and will not guess at one rather than silently under-checking it.
+      throw new Error(
+        `${spec.label}: reviewed output(s) [${nested.map(o => `${o.name}:${o.type}`).join(', ')}] are dynamic ` +
+          'types this gate has not been extended to, so no arity statement can be made. Extend ' +
+          'staticWordCount/this branch in the same commit that reviews such a member.',
+      );
+    }
+    const expectedHeadOffset = BigInt(spec.outputs.length * 32);
+    const actualOffset = BigInt(`0x${returnData.slice(2 + firstDynamic * 64, 2 + (firstDynamic + 1) * 64)}`);
+    if (actualOffset !== expectedHeadOffset) {
+      // Report bytes when the offset is not word-aligned: a fractional "word" count reads like a
+      // rounding bug in this gate rather than what it is — an offset that is not a head boundary at
+      // all, which happens when the deployed struct dropped a member and the slot we read holds
+      // data instead of an offset.
+      const headDesc =
+        actualOffset % 32n === 0n
+          ? `${actualOffset / 32n} word(s)`
+          : `${actualOffset} byte(s) — not a 32-byte boundary, so that slot is not an offset at all`;
+      throw new Error(
+        `${spec.label}: the head is ${headDesc} but the vendored ABI declares ` +
+          `${spec.outputs.length} output(s) [${render(spec.outputs)}]. The dynamic member ` +
+          `'${spec.outputs[firstDynamic].name}' points at byte ${actualOffset}, and a struct with ` +
+          `${spec.outputs.length} outputs must point at ${expectedHeadOffset}. The deployed contract returns a ` +
+          'DIFFERENT number of outputs than this ABI describes — decoding would succeed and drop, or ' +
+          'mislabel, whatever the head gained. Re-vendor the ABI and the reviewed constant together.',
+      );
+    }
+  }
+
   if (expectedWords !== null && words !== expectedWords) {
     throw new Error(
       `${spec.label}: the chain returned ${words} word(s) but the vendored ABI declares ` +

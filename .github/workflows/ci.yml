@@ -310,3 +310,26 @@ jobs:
       - name: Strict ABI drift + provenance gate
         working-directory: aastar-sdk
         run: pnpm run check:abi-drift:strict
+
+      # CC-115 B4. The step above proves the vendored ABIs match the PINNED UPSTREAM. It says
+      # nothing about whether that pin still matches the CHAIN — and "the pin and the chain quietly
+      # disagree" is precisely the failure this PR was written about: for six days Registry pointed
+      # at a new aggregator while SuperPaymaster and DVTValidator pointed at the old one, with no
+      # pending rotation to hint that anything was unfinished.
+      #
+      # The mutation tests for these checks run under `repcredit:test`, so the gate is proved
+      # falsifiable there. THIS step is the other half: does the frozen stack still read the way the
+      # pin says. Without it, nothing in CI would ever have executed the comparison (measured:
+      # `grep -rn 'deployed-stack' .github/ package.json` returned zero, while the same grep for
+      # check-abi-drift returned four).
+      #
+      # REPCREDIT_REQUIRE_ONCHAIN=1 on purpose: "the RPC was unreachable" must read as a failed
+      # gate, never as a silent pass. A public endpoint is used because the values being read are
+      # public reads on a public testnet; if it proves flaky, the fix is a keyed endpoint in the
+      # secret store, not dropping the requirement.
+      - name: Deployed-stack pin gate (does the frozen stack still read this way?)
+        working-directory: aastar-sdk
+        env:
+          REPCREDIT_REQUIRE_ONCHAIN: '1'
+          SEPOLIA_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
+        run: pnpm run check:deployed-stack
