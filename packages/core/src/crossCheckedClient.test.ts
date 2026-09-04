@@ -119,3 +119,31 @@ describe('degenerate configurations are explicit, not silently blessed', () => {
     expect(JSON.stringify(built?.sources)).not.toContain('SECRET_KEY');
   });
 });
+
+describe('the boundary is in the type, not in a comment (review on #350)', () => {
+  it('reaching for an uncorroborated method does not type-check', () => {
+    // Measured in review: with two endpoints disagreeing, `getChainId` threw while `getBalance` and
+    // `getLogs` silently returned the first endpoint's answer. Nothing was broken at the call sites
+    // then — but this is exported API, and the next caller picks it by its type and its name.
+    //
+    // `@ts-expect-error` IS the assertion: it fails the build if the error stops happening, i.e. if
+    // someone widens the return type back to PublicClient. A runtime check could not express this.
+    const c = crossCheckedClient([stub({}), stub({})], ['a', 'b']);
+    // @ts-expect-error getBalance is not corroborated, so it is not on this type
+    void c.getBalance;
+    // @ts-expect-error getLogs likewise
+    void c.getLogs;
+    expect(typeof c.getChainId).toBe('function');
+  });
+
+  it('flags endpoints that share a registrable domain', () => {
+    // Half of the "three hats, one party" limit is mechanically visible. It does not stop anyone who
+    // wants around it — a custom domain suffices — but it stops the accidental version.
+    expect(crossCheckedClientFromUrls('https://a.alchemy.com,https://b.alchemy.com')?.sameProvider).toBe(true);
+    expect(crossCheckedClientFromUrls('https://a.alchemy.com,https://x.publicnode.com')?.sameProvider).toBe(false);
+  });
+
+  it('does not flag a single endpoint as sharing a provider with itself', () => {
+    expect(crossCheckedClientFromUrls('https://a.alchemy.com')?.sameProvider).toBe(false);
+  });
+});

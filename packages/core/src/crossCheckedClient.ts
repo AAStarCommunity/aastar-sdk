@@ -31,8 +31,24 @@
  */
 import { createPublicClient, http, type PublicClient } from 'viem';
 
-/** The read methods a gate is expected to use. Anything else falls through to the first client. */
+/** The read methods this client corroborates. */
 const CROSS_CHECKED_METHODS = ['getChainId', 'getCode', 'getBlockNumber', 'readContract', 'call', 'getStorageAt'] as const;
+
+/**
+ * What a cross-checked client offers — deliberately NOT `PublicClient`.
+ *
+ * Raised in review on #350, and measured there: with two endpoints answering differently,
+ * `getChainId` (listed above) threw, while `getBalance` and `getLogs` (not listed) returned the
+ * first endpoint's answer in silence. Nothing was broken at today's call sites — the gate uses only
+ * the six — but this is exported API, and the next caller picks it by its TYPE and its NAME, then
+ * reaches for `getLogs` and gets an uncorroborated reading from something called "cross-checked".
+ *
+ * That is the exact failure FU-21 exists to remove: not a wrong reading, an unmarked one. So the
+ * boundary lives in the type, where reaching past it does not compile, rather than in a comment that
+ * has to be read first. (Note what this cannot survive: a `client as never` at the call site erases
+ * the whole thing — a guard that exists only in types is undone by one cast.)
+ */
+export type CrossCheckedClient = Pick<PublicClient, (typeof CROSS_CHECKED_METHODS)[number]>;
 
 export interface CrossCheckOptions {
     /**
@@ -74,7 +90,7 @@ export function crossCheckedClient(
     clients: readonly PublicClient[],
     sources: readonly string[],
     options: CrossCheckOptions = {},
-): PublicClient {
+): CrossCheckedClient {
     if (clients.length === 0) throw new Error('crossCheckedClient: no clients supplied');
     if (clients.length !== sources.length) {
         throw new Error(`crossCheckedClient: ${clients.length} clients but ${sources.length} source labels`);
@@ -110,7 +126,7 @@ export function crossCheckedClient(
                 return ok[0].value;
             };
         },
-    }) as PublicClient;
+    }) as CrossCheckedClient;
 }
 
 /**
@@ -119,7 +135,7 @@ export function crossCheckedClient(
  * Returns `null` for an empty list so a caller can distinguish "no endpoints configured" from "one
  * endpoint configured" — those are different situations and only the second can produce a reading.
  */
-export function crossCheckedClientFromUrls(urls: string, options: CrossCheckOptions = {}): { client: PublicClient; sources: string[] } | null {
+export function crossCheckedClientFromUrls(urls: string, options: CrossCheckOptions = {}): { client: CrossCheckedClient; sources: string[]; sameProvider: boolean } | null {
     const list = urls.split(',').map((u) => u.trim()).filter(Boolean);
     if (list.length === 0) return null;
     // Endpoints are labelled by host, not by full URL: these strings end up in error messages and in
@@ -132,5 +148,11 @@ export function crossCheckedClientFromUrls(urls: string, options: CrossCheckOpti
         }
     });
     const clients = list.map((u) => createPublicClient({ transport: http(u) }));
-    return { client: crossCheckedClient(clients, sources, options), sources };
+    // Half of the "three hats, one party" limit is mechanically visible: `a.alchemy.com` and
+    // `b.alchemy.com` are two strings and one registrable domain. This does not stop anyone who
+    // wants around it — a custom domain suffices — but it stops the accidental version, and the
+    // accidental version is what this gate meets day to day.
+    const registrable = sources.map((h) => h.split('.').slice(-2).join('.'));
+    const sameProvider = new Set(registrable).size < registrable.length;
+    return { client: crossCheckedClient(clients, sources, options), sources, sameProvider };
 }

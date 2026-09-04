@@ -55,6 +55,12 @@ async function main() {
         : `   sources: ${cross ? cross.sources[0] : new URL(rpc).host} — SINGLE ENDPOINT, not corroborated. ` +
           'Set REPCREDIT_RPC_URLS=<url,url> to cross-check (FU-21).',
     );
+    if (cross?.sameProvider) {
+      console.log(
+        '   ⚠️  two of those hosts share a registrable domain — probably one provider, so agreement ' +
+        'between them is weaker evidence than the count suggests.',
+      );
+    }
     const live = await checkDeployedStackOnChain(pin, client as never);
     checks.push(...live);
     onChainRan = true;
