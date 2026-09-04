@@ -34,7 +34,11 @@ import { readFileSync, existsSync } from 'node:fs';
 const LEDGER = process.argv[2] ?? 'docs/agent/followups.md';
 
 export interface LedgerProblem {
-  kind: 'duplicate-id' | 'conflict-marker' | 'malformed-entry' | 'non-monotonic-gap';
+  // No 'gap' kind, deliberately. Ids are names, not a sequence, and a `check-followups.test.ts`
+  // case asserts that gaps are NOT reported — an earlier draft declared the kind here anyway, and a
+  // declared-but-unreachable member is worse than nothing: it tells a reader the gate watches
+  // something it does not, and it contradicts the test that says it must not. (Raised in review.)
+  kind: 'duplicate-id' | 'conflict-marker' | 'malformed-entry';
   detail: string;
 }
 
@@ -86,11 +90,13 @@ if (process.argv[1]?.endsWith('check-followups.ts')) {
     process.exit(1);
   }
   const problems = checkLedger(readFileSync(LEDGER, 'utf8'));
-  const entries = readFileSync(LEDGER, 'utf8').split('\n').filter((l) => l.startsWith('- [')).length;
+  // Entry-SHAPED lines, which is not the same as entries that parsed — a malformed one is counted
+  // here and reported below. Naming it accurately because the number is printed as evidence.
+  const entryShapedLines = readFileSync(LEDGER, 'utf8').split('\n').filter((l) => l.startsWith('- [')).length;
   // The count is printed unconditionally. A gate that says only "OK" cannot be told apart from one
   // that parsed nothing — the failure this repo keeps rediscovering.
-  console.log(`check-followups: ${LEDGER} — ${entries} entries parsed`);
-  if (entries === 0) {
+  console.log(`check-followups: ${LEDGER} — ${entryShapedLines} entry-shaped lines`);
+  if (entryShapedLines === 0) {
     console.error('check-followups: parsed 0 entries. The ledger is empty or the entry format changed.');
     process.exit(1);
   }
