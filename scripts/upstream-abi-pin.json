@@ -137,8 +137,9 @@
   "services": {
     "$comment": "Non-foundry upstreams that are pinned by REVIEWED revision rather than by ABI. Read by scripts/repcredit/experiment-auth.test.ts: in required/release mode (REPCREDIT_YAAA_HTTP_TEST=1) this pin is authoritative and REPCREDIT_YAAA_REV may not contradict it; a local run may still narrow to another commit while a cross-repo round is in flight, and says so. Keep it equal to the ref .github/workflows/ci.yml checks out.",
     "YetAnotherAA-Validator": {
-      "revision": "941f0d06dec76a469adbbb9306e1e84d4e6bf5fa",
-      "why": "CC-115 B3 reviewed merge (#313, `docs(CC-115 B3): freeze the arming evidence`). This is the DVT revision the frozen B3 manifest names; the fraud-proof verifier 0xa1346F16…1cd3 armed from it on 2026-09-04 (VERIFIER_ROTATION_DELAY = 345600s)."
+      "revision": "e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9",
+      "why": "The reviewed DVT revision for the RepCredit experiment HTTP guard: versioned v2 HMAC preimage (scheme/method/requestTarget/timestamp/rawBody) plus the structured REPCREDIT_AUTH_* error-code table.",
+      "$whyNotTheB3Revision": "CC-115 B4 pins the DVT CONTRACT/arming axis to 941f0d06 (master, the B3 manifest's revision) — see deployedStack — but this SERVICES pin deliberately stays on e0b5efe3, and the two are NOT interchangeable. Measured 2026-09-04: src/modules/repcredit/repcredit-experiment.guard.ts EXISTS at e0b5efe3 and is ABSENT at 941f0d06. The guard was added in 840bfdc and has NEVER been on master; it lives only on origin/fix/cc49-round5-node-admin-netmode-throttle and origin/codex/repcredit-e2e-evidence-20260823, and the two revisions are on different lines (neither is an ancestor of the other). Pinning this axis to 941f0d06 does not make the guard newer — it removes it, and the required-mode HTTP suite then has nothing to test. Raised with @repo:dsr on CC-115: if the intent is that the guard should be on master, that is a DVT merge, not an SDK pin change."
     }
   }
 }
