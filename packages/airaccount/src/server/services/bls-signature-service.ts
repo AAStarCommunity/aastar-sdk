@@ -24,6 +24,9 @@ import {
   getMountedDvtValidator,
   isAccountEnrolled,
   type CommitteeSigner,
+  classifyDvtSigner,
+  recordDvtSigner,
+  newDvtIdentitySeen,
 } from "@aastar/core";
 import {
   AbiDecodingZeroDataError,
@@ -544,12 +547,16 @@ export class BLSSignatureService {
    * (`ownerAuth` = the owner's EIP-191 sig over userOpHash, produced by the submit flow — this layer
    * only transports it).
    *
-   * WHAT THIS LAYER CANNOT CHECK: two nodes holding the SAME BLS key but registered under two
-   * different nodeIds. Both ids are well-formed and distinct, so nothing here or in the encoder sees
-   * a problem, and the on-chain strictly-ascending rule is satisfied too — yet the aggregate carries
-   * one key twice and the threshold it appears to meet is not the threshold it actually met. Catching
-   * that needs the registered public keys, which this transport does not hold. It is named here so
-   * the checks above are not mistaken for a complete identity guarantee.
+   * TWO NODES, ONE KEY: an earlier version of this doc said that case was out of reach here because
+   * it "needs the registered public keys". It is not. BLS is deterministic over (key, message), so
+   * one key behind two ids returns byte-identical partials, and this loop already holds them — the
+   * duplicate-signature check below catches it with no extra data. The claim was corrected in FU-15
+   * after the evidence gate turned out to have been doing exactly this for weeks.
+   *
+   * WHAT REMAINS OUT OF REACH: a node that holds a duplicate key and PERTURBS its partial to evade
+   * the byte comparison. That does not buy anything — the aggregate then fails verification — so the
+   * check is fail-closed either way; but it means "no duplicate bytes" is evidence of distinct
+   * signers, not proof of them.
    *
    * This is the ONLY place that talks to the DVT nodes. A future P2P deployment (nodes self-discover +
    * self-organize) provides an alternative implementation of this single method — a submit-once-to-the-
@@ -572,6 +579,7 @@ export class BLSSignatureService {
 
     const signerNodeSignatures: string[] = [];
     const signerNodeIds: string[] = [];
+    const seenSigners = newDvtIdentitySeen();
     for (const node of selectedNodes) {
       try {
         const response = await axios.post(`${node.apiEndpoint}/signature/sign`, body);
@@ -582,36 +590,32 @@ export class BLSSignatureService {
         const sig = response.data.signatureCompact || response.data.signature;
         const nodeId = response.data.nodeId;
 
-        // FU-16. The id a node reports about ITSELF is checked here rather than taken on trust.
+        // FU-16/FU-15. The id a node reports about ITSELF is checked here rather than taken on trust,
+        // and a malformed or repeated answer is treated exactly like an unreachable node: skip it,
+        // keep going, let the quorum check downstream decide whether enough honest nodes answered.
         //
-        // It was already being caught — `encodeBLSAccountSignature` rejects a non-bytes32 id and
-        // `sortNodeIdsAscending` rejects a duplicate, both with clear messages. What it was NOT doing
-        // is failing at the right TIME, and the difference is not cosmetic:
+        // Timing is the point. These faults were already caught — the encoder rejects a non-bytes32
+        // id and a duplicate — but only after this node's SIGNATURE was already inside the aggregate,
+        // so one node answering badly killed an operation the remaining nodes could have carried,
+        // while the same node simply not answering was survivable. The gradient was backwards.
         //
-        //   · by encode time this node's SIGNATURE is already inside the aggregate, so one node
-        //     answering badly kills an operation the remaining nodes could still have carried —
-        //     while the identical failure from a node that simply did not answer is survivable;
-        //   · the encoder reports `nodeId[2]`, an index into an array assembled here. Which of five
-        //     endpoints produced it is not recoverable from that message.
+        // The signature check is the correction FU-15 forced. #343 shipped a comment here saying
+        // same-key-two-ids "needs the registered public keys, which this transport does not hold".
+        // That was wrong: BLS is deterministic over (key, message), so one key behind two ids
+        // produces byte-identical partials, and this loop is already holding them. The evidence
+        // script had been catching it that way for weeks. The claim was reasoned about what we know
+        // of KEYS when the decisive property belonged to the SIGNATURES already in hand.
         //
-        // So a malformed or repeated id is treated exactly like an unreachable node: skip it, keep
-        // going, and let the quorum check downstream decide whether enough honest nodes answered.
-        // The signature is dropped WITH the id — the two arrays are positional, and keeping a
-        // signature whose id was dropped would silently produce an aggregate that cannot verify.
-        if (typeof nodeId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(nodeId)) {
-          throw new Error(
-            `node ${node.apiEndpoint} returned a nodeId that is not a 32-byte hex value ` +
-              `(${JSON.stringify(nodeId)}) — dropping this co-signature`
-          );
-        }
-        if (signerNodeIds.some((seen) => seen.toLowerCase() === nodeId.toLowerCase())) {
-          throw new Error(
-            `node ${node.apiEndpoint} reported nodeId ${nodeId}, which another node in this round ` +
-              `already claimed — dropping this co-signature (a valid M-of-N aggregate has distinct signers)`
-          );
-        }
-        signerNodeSignatures.push(sig.startsWith("0x") ? sig : `0x${sig}`);
-        signerNodeIds.push(nodeId);
+        // Classification lives in @aastar/core so this transport and the evidence gates cannot drift
+        // apart about what "the same signer twice" means; what they do about it stays different on
+        // purpose — a release gate aborts, a live transport skips.
+        const normalisedSig = sig?.startsWith("0x") ? sig : `0x${sig}`;
+        const fault = classifyDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: normalisedSig }, seenSigners);
+        if (fault) throw new Error(`${fault.message} — dropping this co-signature`);
+        recordDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: normalisedSig }, seenSigners);
+
+        signerNodeSignatures.push(normalisedSig);
+        signerNodeIds.push(nodeId as string);
       } catch (err) {
         if (err instanceof DvtPendingConfirmationError) throw err;
         // Node unreachable / rejected / answered incoherently — continue with the others.

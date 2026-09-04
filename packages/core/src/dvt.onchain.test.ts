@@ -20,6 +20,30 @@
  *
  * No code read the field, which is why it could go stale in silence. A field nothing consumes is
  * not a field nothing will ever consume; it is a wrong answer waiting for its first caller.
+ *
+ * WHICH ASSERTION IS ACTUALLY LOAD-BEARING
+ * ----------------------------------------
+ * Mutating `validator` back to `0x539B9681…` reds two cases — but that does not show the on-chain
+ * anchor is doing the work, because the offline case hardcodes `0x539B9681…` and would have caught
+ * it alone. And the fault this file exists to prevent is the NEXT one: the router moving to an
+ * address no literal here mentions, which the offline case would sail straight through.
+ *
+ * Measured, three mutations of increasing honesty:
+ *
+ *   validator → 0x539B (the old value)          4 red — but the offline case hardcodes 0x539B, so
+ *                                               this shows nothing about the on-chain anchor.
+ *   validator → 0xEaeC (a third address)         4 red — the offline case still catches it, because
+ *                                               its second assertion anchors to the address book.
+ *   validator AND canonical.aaStarBLSAlgorithm   OFFLINE GREEN, router assertion RED. ← the proof.
+ *     → 0xEaeC
+ *
+ * The third is the one that settles it: every cheap, offline check is satisfied — the config and the
+ * address book agree with each other perfectly — and only the read from the router says otherwise.
+ * That is the shape the next staleness will actually have, since whoever moves one pin moves both.
+ *
+ * (Two other cases also red in that run — the superseded-validator and requireStake ones — because
+ * `0xEaeC2F51…` is the aggregator and has neither function. Instrument side effects of the address
+ * chosen, not evidence; reported so the count is not mistaken for four independent detections.)
  */
 import { describe, expect, it } from 'vitest';
 import { createPublicClient, http, type Address } from 'viem';
@@ -108,7 +132,10 @@ describe('DVT_CONFIG.validator is what the router mounts', () => {
     // Hence this test watches the flag rather than the code: flipping it leaves every source file
     // in this repo untouched, so a code-level check could never notice.
     const requireStake = await client().readContract({
-      address: addrs.aaStarBLSAlgorithm as Address,
+      // Read off the field under test, not off the address book. The two are pinned equal by the
+      // first case in this file, so the old form was correct — but only provably so two hops away,
+      // and a reader at this line could not tell. (Raised in review on #345.)
+      address: sepoliaEnv.validator as Address,
       abi: [{ type: 'function' as const, name: 'requireStake', inputs: [], outputs: [{ type: 'bool' as const }], stateMutability: 'view' as const }],
       functionName: 'requireStake',
     });

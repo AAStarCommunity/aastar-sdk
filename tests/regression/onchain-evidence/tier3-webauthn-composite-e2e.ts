@@ -56,6 +56,10 @@ import {
     airAccountActions,
     airAccountFactoryActions,
     entryPointActions,
+    classifyDvtSigner,
+    recordDvtSigner,
+    newDvtIdentitySeen,
+    getDvtConfig,
 } from '@aastar/core';
 // SDK packers UNDER TEST (WebAuthn cumulative, algId 0x0a; #261 tagged owner-auth 0x02).
 import {
@@ -136,19 +140,42 @@ function eip2537ToG2(sig256: Hex) {
 }
 
 /** POST {userOp, tag-0x02 ownerAuth} to the 3 live DVT nodes → aggregate their BLS co-signatures. */
+// FU-15. Signer identity is classified by @aastar/core's `classifyDvtSigner`, the same code the
+// SDK transport uses, so this gate and production cannot drift apart about what "the same signer
+// twice" means. What they DO differs on purpose: a release gate aborts on any fault, because
+// routing around an impostor would let the gate pass while exercising a signer set other than the
+// one it claims; the live transport skips the node and carries on.
+//
+// The signature-byte comparison is the one that earns its place: two nodes sharing a BLS key
+// return byte-identical partials (deterministic over (key, message)), and nothing about their
+// nodeIds looks wrong. An aggregate of k partials from fewer than k distinct signers still pairs.
+//
+// The endpoint list also came from three hardcoded literals here; it now comes from DVT_CONFIG,
+// which is what AASTAR_DVT_ENV switches — so this gate could not be pointed at the local mirror.
 async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Promise<Hex> {
     const signed: { nodeId: Hex; signature: Hex }[] = [];
-    for (const url of ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io']) {
+    const seen = newDvtIdentitySeen();
+    const faults: string[] = [];
+    for (const node of getDvtConfig().dvtNodes) {
+        const url = node.url;
         try {
             const res = await fetch(`${url}/signature/sign`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userOp: userOpRpc, ownerAuth }) });
             const body = await res.json().catch(() => ({}));
             if (!res.ok || !body.nodeId || !body.signature) { console.warn(`    ! ${url} -> ${res.status}`); continue; }
+            // Identity faults are COLLECTED, not thrown: this try/catch turns throws into a per-node
+            // warning, which would quietly demote "a node is impersonating another" to a skipped
+            // endpoint. Asserted after the loop so the gate aborts loudly.
+            const candidate = { endpoint: url, nodeId: norm(body.nodeId), signature: norm(body.signature), expectedNodeId: node.nodeId };
+            const fault = classifyDvtSigner(candidate, seen);
+            if (fault) { faults.push(fault.message); continue; }
             const registered = (await withRpcFallback((c) => c.readContract({ address: BLS_VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [norm(body.nodeId)] }))) as boolean;
             if (!registered) { console.warn(`    ! ${url} not registered`); continue; }
+            recordDvtSigner(candidate, seen);
             signed.push({ nodeId: norm(body.nodeId), signature: norm(body.signature) });
             console.log(`    ${url.replace('https://', '')}  co-signed (isValidOwnerAuth ✓)`);
         } catch (e) { console.warn(`    ! ${url} ${(e as Error).message.slice(0, 70)}`); }
     }
+    if (faults.length) throw new Error(`DVT signer identity fault(s), refusing to aggregate:\n  - ${faults.join('\n  - ')}`);
     if (signed.length < 2) throw new Error(`need >= 2 node co-signatures, got ${signed.length}`);
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
     return packBlsPayload(signed.map((s) => s.nodeId), encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex));
@@ -232,7 +259,7 @@ async function main() {
     console.log(`[2b] tag-0x02 device-passkey ownerAuth = ${(ownerAuth.length - 2) / 2} bytes (tag=0x${ownerAuth.slice(2, 4)})`);
     const userOpRpc = { sender: userOp.sender, nonce: numberToHex(userOp.nonce), initCode: userOp.initCode, callData: userOp.callData, accountGasLimits: userOp.accountGasLimits, preVerificationGas: numberToHex(userOp.preVerificationGas), gasFees: userOp.gasFees, paymasterAndData: userOp.paymasterAndData, signature: userOp.signature };
     const signed: { nodeId: Hex; signature: Hex }[] = [];
-    for (const url of ['https://dvt1.aastar.io', 'https://dvt2.aastar.io', 'https://dvt3.aastar.io']) {
+    for (const url of getDvtConfig().dvtNodes.map((n) => n.url)) {
         try {
             const res = await fetch(`${url}/signature/sign`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userOp: userOpRpc, ownerAuth }) });
             const body = await res.json().catch(() => ({}));
