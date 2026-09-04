@@ -100,12 +100,20 @@ export const CANONICAL_ADDRESSES = {
     aPNTsPaymasterV4: "0xf3948753ff21D33f6A5f516621FFF245B23efa0e",  // AAStar community → aPNTs (0x696A7370)
     PNTsPaymasterV4: "0xC827747674ab6397c319e284f650D07d8c2a4a46",   // Mycelium (Anni) → pnts; on-chain verified 2026-06-28 (version PMV4-Deposit-4.5.0, isTokenSupported(pnts)==true, owner 0xEcAACb91…)
     xPNTsFactory: "0x67422d2e44a33c8dA99b3b776841bF316bD209a2",  // v5.4.1-rc.1 2026-06-27 redeploy
-    // #285/CC-18 (SuperPaymaster #329 slash-consensus unify): switched to the NEW BLSAggregator/DVTValidator
-    // deployment. SP executed `applyBLSAggregator()` (tx 0x691db4175bcce842beb1e93481573b4e843ea3e4d86793a2f07230cc611bfd26,
-    // block 11216728); SP.BLS_AGGREGATOR now == 0xF51c…8B13 (pendingBLSAgg cleared), so SP recognises the new
-    // aggregator on-chain. DVTValidator 0x568b1486… has addValidator×3 + registerBLSPublicKey×3 (slot 1/2/3).
-    //   OLD (deprecated): blsAggregator 0x893b8fb7B3d203C288b481400fE05Ade5edD6d11 · dvtValidator 0x9946953af7aAA8F56e8dF4E46F68FFFA0c4F593D
-    blsAggregator: "0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13",  // NEW/active — SP applied (#285/CC-18)
+    // T5.1.1 (CC-115 B3 successor stack, 2026-09-04): the aggregator moved to BLSAggregator-4.11.0.
+    // All THREE pointers now agree on it — read from their own contracts, at block 11634451:
+    //   Registry(0xf5Bf37ca…).blsAggregator()        = 0xEaeC2F51…2E5D
+    //   SuperPaymaster(0x09DF0d2e…).BLS_AGGREGATOR() = 0xEaeC2F51…2E5D
+    //   DVTValidator(0x568b1486…).BLS_AGGREGATOR()   = 0xEaeC2F51…2E5D
+    // Between 2026-08-26 and 09-01 they did NOT agree: Registry had been repointed alone while the
+    // other two still named 4.3.0, with SP.pendingBLSAgg == 0 — a settled disagreement, not a
+    // timelock window, so nothing surfaced it. `addresses.threeLegs.test.ts` now asserts all three
+    // every run, starting from Registry (see that file for why the starting point matters).
+    //   SUPERSEDED: 0x174b60bB462b00550F0EC7Bc35Fe39dDB6310158 (4.3.0, CC-89 production)
+    //   SUPERSEDED: 0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13 (4.1.0, #285/CC-18) — has no
+    //               fraudProofVerifier() at all; was this field's value until T5.1.1
+    //   OLD:        0x893b8fb7B3d203C288b481400fE05Ade5edD6d11 · dvtValidator 0x9946953af7aAA8F56e8dF4E46F68FFFA0c4F593D
+    blsAggregator: "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D",  // BLSAggregator-4.11.0 — three legs agree
     blsValidator: "0x0A71C5a32b8CBC517523D2C88b539Ab22AeF0654",  // deprecated; aggregator verifies BLS inline
     dvtValidator: "0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e",  // NEW/active — SP applied (#285/CC-18)
     entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",

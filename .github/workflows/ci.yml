@@ -59,7 +59,20 @@ jobs:
       - name: Lint the RepCredit runner and the ABI-provenance gate
         run: pnpm run lint:repcredit
 
+      # AASTAR_ONCHAIN_TEST=1 turns on the address-book assertions that read the CHAIN
+      # (packages/core/src/addresses.threeLegs.test.ts). Without it those four tests SKIP, and the
+      # suite still reports green off the one remaining offline assertion — measured: 2 passed,
+      # 4 skipped. The whole point of that file is the four that were skipping, so the flag being
+      # absent here made it decorative. (T5.1.1; caught in review after the file's own comment
+      # claimed CI set a flag that nothing set.)
+      #
+      # A public endpoint is used because these are public reads on a public testnet. If it proves
+      # flaky the fix is a keyed endpoint in the secret store — not dropping the flag, which would
+      # silently restore the skipping.
       - name: Run unit tests
+        env:
+          AASTAR_ONCHAIN_TEST: '1'
+          SEPOLIA_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
         run: pnpm -r test
 
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove

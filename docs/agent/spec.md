@@ -15,7 +15,7 @@
 
 | 项 | 值 | 来源 |
 |---|---|---|
-| `blsAggregator`（**要切成这个**） | `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D` | 三腿链上一致 |
+| `blsAggregator` | `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D` | 三腿链上一致；T5.1.1 已切，由 `addresses.threeLegs.test.ts` 持续断言 |
 | version | `BLSAggregator-4.11.0` | `version()` |
 | extcodehash | `0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c` | `keccak(code)` |
 | domainSeparator | `0x79613488655ebee89c98f43ad96de45806de7cdcb182783efc2219f006e1ee2b` | `domainSeparator()`，且 SDK 本地可由 (name, chainId, aggregator, registry) 重算得到 |
@@ -39,7 +39,7 @@ DVTValidator(0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e).BLS_AGGREGATOR()
 | 地址 | version | 为什么必须拒 |
 |---|---|---|
 | `0x174b60bB462b00550F0EC7Bc35Fe39dDB6310158` | 4.3.0 | CC-89 生产前任，slasher 授权已撤 |
-| `0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13` | 4.1.0 | **canonical 当前值**，无 `fraudProofVerifier()` |
+| `0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13` | 4.1.0 | canonical 在 T5.1.1 之前的值，无 `fraudProofVerifier()`。留在拒绝名单里正是因为它曾是 canonical —— 再被 pin 回去必须响 |
 
 ### 1.4 ABI 产物
 
