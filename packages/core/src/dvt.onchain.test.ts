@@ -186,3 +186,42 @@ describe('there is ONE node list (FU-12)', () => {
     }
   });
 });
+
+describe('entryPoint is anchored, not just written twice (FU-35)', () => {
+  it.runIf(RUN_ONCHAIN)('the factory names the same EntryPoint the config does', async () => {
+    // The factory is what deploys accounts, so the EntryPoint it was built with is the one every
+    // account ends up talking to — that makes it the rooted answer rather than a second literal.
+    //
+    // Measured while writing this, and worth recording: `airAccountV7Impl.entryPoint()` and
+    // `airAccountExtension.entryPoint()` both return address(0). That is NOT "no EntryPoint
+    // configured" — they are implementation contracts, so their storage was never initialised.
+    // Reading the field off either would have produced a confident zero and an anchor pointing at
+    // nothing.
+    const fromFactory = String(
+      await client().readContract({
+        address: addrs.airAccountFactoryV7 as Address,
+        abi: [{ type: 'function' as const, name: 'entryPoint', inputs: [], outputs: [{ type: 'address' as const }], stateMutability: 'view' as const }],
+        functionName: 'entryPoint',
+      }),
+    ).toLowerCase();
+    expect(fromFactory).toBe(sepoliaEnv.entryPoint.toLowerCase());
+  });
+
+  it('DVT_CONFIG and the address book agree about the EntryPoint (offline)', () => {
+    // They are two literals with no derivation between them — the same duplicated-truth shape FU-12
+    // removed from the node lists. Deriving one from the other is not available here: `addresses.ts`
+    // already imports `dvt.ts`, so the reverse import would close a cycle. Detection is what is
+    // left, which is exactly the argument FU-26 settled for the ledger ids.
+    expect(sepoliaEnv.entryPoint.toLowerCase()).toBe(String(addrs.entryPoint).toLowerCase());
+  });
+
+  it('every environment targets the same EntryPoint (offline)', () => {
+    // `testnet-local` changes WHERE the nodes are reached, never what validates or settles. An
+    // environment that quietly pointed at another EntryPoint would produce userOpHashes that no
+    // account in this stack recognises.
+    for (const [name, env] of Object.entries(DVT_CONFIG.environments)) {
+      if (!env) continue;
+      expect(env.entryPoint.toLowerCase(), `${name} targets a different EntryPoint`).toBe(sepoliaEnv.entryPoint.toLowerCase());
+    }
+  });
+});
