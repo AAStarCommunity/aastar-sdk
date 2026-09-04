@@ -40,9 +40,13 @@ const SEPOLIA = 11155111;
 const addrs = CANONICAL_ADDRESSES[SEPOLIA];
 
 /**
- * `1` runs the chain reads; unset skips them. Kept opt-in because unit runs must not depend on a
- * public RPC being reachable — but a skip prints why, and CI sets the flag (see ci.yml), so a
- * missing endpoint reads as "not checked here", never as "checked and fine".
+ * `1` runs the chain reads; unset skips them. Kept opt-in because a local unit run must not depend
+ * on a public RPC being reachable.
+ *
+ * CI sets it — `.github/workflows/ci.yml`, the `Run unit tests` step. That is asserted below rather
+ * than stated here: an earlier version of this comment claimed CI set the flag when nothing did,
+ * and the four on-chain tests skipped in CI while the suite stayed green off the one offline
+ * assertion (2 passed, 4 skipped). A comment cannot hold that guarantee; a test can.
  */
 const RUN_ONCHAIN = process.env.AASTAR_ONCHAIN_TEST === '1';
 const RPC = process.env.SEPOLIA_RPC_URL ?? 'https://ethereum-sepolia-rpc.publicnode.com';
@@ -127,15 +131,28 @@ describe('BLS aggregator: the three legs agree with each other and with the pin'
     }
   });
 
-  it('skipping the chain reads is loud, not silent', () => {
-    // The point of this assertion is the message: a reader scanning output sees either the four
-    // on-chain checks or this line, never an unexplained absence.
+  it('CI must run the chain reads; locally, skipping is at least loud', () => {
+    // The first draft of this test asserted `typeof RUN_ONCHAIN === 'boolean'` — vacuously true,
+    // so it could not fail, and it sat next to a comment claiming CI set the flag while nothing
+    // did. Both halves of that mistake are fixed here: the flag IS set in ci.yml, and this
+    // assertion fails if it is ever removed.
+    //
+    // Honest about the limit: locally (CI unset) there is still no assertion, only the warning.
+    // That is acceptable because CI is the one environment where the guarantee has to hold — but
+    // it does mean a green local run says nothing about whether the flag survived.
+    if (process.env.CI) {
+      expect(
+        RUN_ONCHAIN,
+        'CI must set AASTAR_ONCHAIN_TEST=1 (see .github/workflows/ci.yml, "Run unit tests"). ' +
+          'Without it the four on-chain assertions in this file SKIP and the suite still reports green.',
+      ).toBe(true);
+      return;
+    }
     if (!RUN_ONCHAIN) {
       console.warn(
         '[three-legs] on-chain assertions SKIPPED — set AASTAR_ONCHAIN_TEST=1 (and SEPOLIA_RPC_URL) to run them. ' +
           'The offline superseded-address check above still ran.',
       );
     }
-    expect(typeof RUN_ONCHAIN).toBe('boolean');
   });
 });

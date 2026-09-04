@@ -130,7 +130,7 @@
         {
           "address": "0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13",
           "version": "BLSAggregator-4.1.0",
-          "why": "The address the SDK's canonical addresses.ts still pins on main (CC-18 residue). It has no fraudProofVerifier() at all. Present here so re-pinning it fails loudly instead of half-working."
+          "why": "The address the SDK's canonical addresses.ts pinned on main until T5.1.1 (CC-18 residue). It has no fraudProofVerifier() at all. Present here so re-pinning it fails loudly instead of half-working — it is listed BECAUSE it was once canonical, not because it still is."
         }
       ]
     }
