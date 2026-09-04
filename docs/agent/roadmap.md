@@ -37,7 +37,20 @@
 - **F4.1 pilot 规划层** — `.pilot.yml` + `docs/agent/`（roadmap / tasks / progress / followups）
 - **F4.2 分支与 PR 卫生** — 已合并分支定期清理、PR 有 daemon 评审回执、跟进账本不积压
 
+## M5 — 上游全面同步（SP / AirAccount / DVT / KMS）
+目标：让 SDK 的 **canonical 地址簿与 ABI** 与四个上游的**链上真实部署**一致，并把「一致」变成一道每次 CI 都跑、且能红的门禁——而不是一次性对齐后继续漂。
+
+立项依据与实测缺口见 [`research.md`](research.md)；不可破的技术边界见 [`architecture.md`](architecture.md)；精确坐标见 [`spec.md`](spec.md)。
+
+- **F5.1 SP 栈地址**（先做，风险最高）— canonical `blsAggregator` 仍是 `0xF51c…8B13`(4.1.0)，而 `Registry`/`SuperPaymaster`/`DVTValidator` 三腿链上均已指向 `0xEaeC2F51…2E5D`(**4.11.0**)。**ABI 那一半已由 #329 完成**（实测对称差 `set()`），本 Feature 只做地址 + 三腿断言。
+- **F5.2 AirAccount v0.31.0 → v0.33.0** — 上游又出新栈并已部署 Sepolia（`FACTORY_VERSION="0.33.0"` 链上实测），canonical 停在 v0.31.0 的 12 地址（CC-106 当时确已逐字段一致，这不是欠账，是上游前进了）。
+- **F5.3 DVT 对齐核验** — `dvtValidator` 已核验**无变更**（`aggregator.DVT_VALIDATOR()` == canonical，block 11634451）。剩余工作是把这条读数纳入门禁，让它以后自动核而不是靠人跑一次。
+- **F5.4 KMS 面扫描** — CC-2 / CC-19 / CC-25 三条变更通知从未处理；KMS 是 address-agnostic，风险在 **API surface 与安全加固**（fail-closed API key、XSS 修复）而非地址。
+
+**为什么现在做**：B4（PR #329，已合并 `e4439dda`）在 evidence 分支上把「部署版 vs 源码版」的双轴 pin 与可证伪门禁跑通了。M5 是把同一套方法从 evidence 分支推到 **main 的公共面**——模式已验证，剩下的是逐个上游套用。
+
 ---
 
-> 当前聚焦：**M1 / F1.1**（DVT 上链证据）与 **M4 / F4.1**（pilot 规划层，本次建立）。
+> 当前聚焦：**M5**（上游全面同步，F5.1 → F5.4 顺序执行）。
+> M1 / F1.1（DVT 上链证据）与 M4 / F4.1（pilot 规划层）已建立，M2 / M3 待 M5 收口后重排。
 > 每个 Feature 的 Task 拆分与状态见 [`tasks.md`](tasks.md)。
