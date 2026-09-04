@@ -84,6 +84,12 @@ jobs:
       - name: Run root-level tests (scripts/, excluding repcredit)
         run: pnpm run test:scripts
 
+      # The ledger is the only record of work deferred rather than done, and its ids are referenced
+      # from PR bodies and task comments. A duplicate id makes every one of those references
+      # ambiguous, and nothing else in the repo has an opinion about it — see FU-26.
+      - name: Check the follow-up ledger (unique ids, no conflict markers)
+        run: pnpm run check:followups
+
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
       # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
       # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the
