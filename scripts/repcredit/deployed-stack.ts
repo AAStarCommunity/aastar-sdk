@@ -221,8 +221,6 @@ export function checkDeployedAbiPin(pin: DeployedStackPin, sdkRoot: string, upst
 
 /* ------------------------------------------------------------------ on-chain checks */
 
-const ADDR_OUT = [{ type: 'address' }] as const;
-
 async function readAddress(client: PublicClient, to: Address, fn: string): Promise<string> {
   const data = (await client.call({
     to,
