@@ -60,24 +60,32 @@ describe('canonical address resolution', () => {
   });
 });
 
-describe('Sepolia canonical is the airaccount-contract v0.31.0 stack (CC-48)', () => {
+describe('Sepolia canonical is the airaccount-contract v0.33.0 stack (T5.2.1)', () => {
   const s = CANONICAL_ADDRESSES[11155111];
 
-  it('points at the v0.31.0 factory / router / impl / extension', () => {
-    expect(s.airAccountFactoryV7).toBe('0x25C1E9F9120a406581f93bA82f7Cfd6805512791');
-    expect(s.aaStarValidator).toBe('0xA15127e8601e77De7C655bf04ca75cccD8C968f0');
-    expect(s.airAccountV7Impl).toBe('0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad');
-    expect(s.airAccountExtension).toBe('0x79b90Ed6CB97ec48cfDA86399752C58Bbc59D90a');
+  // T5.2.1 (2026-09-04): re-reviewed from v0.31.0 to v0.33.0. Values come from the upstream
+  // .env.sepolia V0330 block at tag v0.33.0 (0ac628ec) and were read back on chain at block
+  // 11634556 — never completed from a truncated hand-off string. The v0.31.0 stack stays deployed
+  // and existing accounts on it are unaffected (CC-106); what moved is which stack NEW accounts get.
+  it('points at the v0.33.0 factory / router / impl / extension', () => {
+    expect(s.airAccountFactoryV7).toBe('0x2A5cf40c24B8D27B8A039DE2b628fb4C9C66dAb9');
+    expect(s.aaStarValidator).toBe('0xA97A752779ebfDA58612F6727Ec7C8366c39f897');
+    expect(s.airAccountV7Impl).toBe('0x63a6D78A7B7e443D4d15EDCf950aE567e0F80a3b');
+    expect(s.airAccountExtension).toBe('0x4ad5C1EFa95deaadEF3d3Ab02CB96504DEa0fCC2');
+    expect(s.agentRegistry).toBe('0x734625F68aA9f9dD7DBA2e1f8DE883FD12801Be9');
   });
 
-  it('algId 0x01 is the CC-98 COMMITTEE validator, not the legacy whole-set one', () => {
-    // The v0.31.0 router mounts dvt #237 at 0x01 (on-chain verified). Anything still expecting the
-    // legacy 0x539B whole-set validator here is reading a superseded stack.
-    expect(s.aaStarBLSAlgorithm).toBe('0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64');
-    expect(s.aaStarBLSAlgorithm).not.toBe('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC');
+  it('algId 0x01 is the v0.33.0 COMMITTEE validator, not the legacy or the v0.31.0 one', () => {
+    // The v0.33.0 router mounts a NEW committee validator at 0x01 (on-chain verified). Two negatives
+    // rather than one: the legacy whole-set validator has no committeeActive() at all, while the
+    // v0.31.0 committee validator DOES — so a stale pin there would keep answering plausibly and
+    // only fail later, on chain, at validateUserOp.
+    expect(s.aaStarBLSAlgorithm).toBe('0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9');
+    expect(s.aaStarBLSAlgorithm).not.toBe('0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64'); // v0.31.0
+    expect(s.aaStarBLSAlgorithm).not.toBe('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC'); // legacy whole-set
   });
 
-  it('keeps the components v0.31.0 explicitly REUSES from v0.29.0', () => {
+  it('keeps the components v0.33.0 explicitly REUSES from earlier stacks', () => {
     expect(s.sessionKeyValidator).toBe('0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f');
     expect(s.forceExitModule).toBe('0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc');
     expect(s.airAccountDelegate).toBe('0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0');

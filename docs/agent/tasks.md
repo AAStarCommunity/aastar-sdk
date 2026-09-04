@@ -92,7 +92,7 @@
 
 ## F5.1 — SP 栈地址与 ABI（canonical → 4.11.0）
 
-### T5.1.1 canonical `blsAggregator` 切到 4.11.0 + 三腿一致性断言  `PR_OPEN`
+### T5.1.1 canonical `blsAggregator` 切到 4.11.0 + 三腿一致性断言  `DONE`
 - **优先级**：critical
 - **目标**：SDK 公共面的 sepolia `blsAggregator` 现在指向一个 SuperPaymaster 已经不认的合约。切到链上三腿一致指向的 `0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D`(BLSAggregator-4.11.0)，并让「三腿不一致」变成 CI 会红的断言，而不是靠人隔几周读一次链。
 - **开发范围**：`packages/core/src/addresses.ts` sepolia 块 `blsAggregator`；`config.sepolia.json` 同字段；新增 `packages/core/src/addresses.threeLegs.test.ts`（对链读 `Registry.blsAggregator` / `SuperPaymaster.BLS_AGGREGATOR` / `DVTValidator.BLS_AGGREGATOR`，三者必须彼此相等且等于 canonical）。
@@ -103,7 +103,7 @@
 - **涉及文件**：`packages/core/src/addresses.ts`、`config.sepolia.json`、`packages/core/src/addresses.threeLegs.test.ts`
 - **风险/回滚**：改的是**公共面地址**。旧地址 `0xF51c…` 保留为注释（历史可读），不删。回滚 = 单文件 revert。
 - **待人拍板**：无——旧地址已不被 SP 认可，留着比切更危险。
-- **证据**：PR #331。链上读数 @ block 11634451。三腿断言的**起点定为 Registry**：实测三个聚合器（4.11.0 / 4.3.0 / 4.1.0）的 `DVT_VALIDATOR()` 返回值完全相同，反向读区分度为零，从 pin 出发等于预设结论。变异验证：pin 改回 4.3.0 → 4 条红且 `no rotation in flight` 保持绿（它不承重）；改回 4.1.0 且不开链上 → 离线负对照单独红。
+- **证据**：PR #331 **已合并 `099a2023`**（2 轮评审）。链上读数 @ block 11634451。第 2 轮打回的是「CI 从没设 `AASTAR_ONCHAIN_TEST`，四条链上断言在 CI 里一条都没跑，而文件注释却声称 CI 设了」——**注释担不住这种保证，改由 CI-only 断言担保**。三腿断言的**起点定为 Registry**：实测三个聚合器（4.11.0 / 4.3.0 / 4.1.0）的 `DVT_VALIDATOR()` 返回值完全相同，反向读区分度为零，从 pin 出发等于预设结论。变异验证：pin 改回 4.3.0 → 4 条红且 `no rotation in flight` 保持绿（它不承重）；改回 4.1.0 且不开链上 → 离线负对照单独红。
 
 ### T5.1.2 ~~把部署版 4.11.0 ABI 引入 main 的公共面~~  `DONE`（由 #329 提前完成）
 - **原目标**：把公共面 `BLSAggregator.json` 从 4.1.0（70 函数）换成链上运行的 4.11.0（72 函数）。
@@ -132,7 +132,7 @@
 
 ## F5.2 — AirAccount v0.31.0 → v0.33.0
 
-### T5.2.1 canonical 12 地址切到 v0.33.0  `READY`
+### T5.2.1 canonical 12 地址切到 v0.33.0  `PR_OPEN`
 - **优先级**：high
 - **目标**：上游 v0.33.0 已部署 Sepolia 并验活（`FACTORY_VERSION="0.33.0"` / `ACCOUNT_VERSION="0.33.0"` 链上实测），canonical 停在 v0.31.0。整栈切换。
 - **开发范围**：`packages/core/src/addresses.ts` 的 AirAccount 12 地址；权威来源 = airaccount-contract `.env.sepolia` 的 `V0330` 块（精确值见 `spec.md`，**不得由截断地址补全**）。
@@ -143,6 +143,8 @@
 - **涉及文件**：`packages/core/src/addresses.ts`、`packages/core/src/addresses.test.ts`、`config.sepolia.json`
 - **风险/回滚**：v0.31.0 栈仍在链上，现有账户不受影响（CC-106 明载）。切的是**新账户默认走哪一套**。
 - **待人拍板**：无——上游已明确 v0.33.0 是新栈。
+- **实际是 6 个键不是 5 个**：初稿漏了 `agentRegistry`（v0.31.0 `0x37fc74Ea…` → v0.33.0 `0x734625F6…`）。canonical 只跟踪 12 地址里的 9 个（`webAuthnLib`/`committeeBLSLib` 是链接库、不在册），其中 6 个变、3 个复用。
+- **证据**：PR #332。12/12 有 code、`FACTORY_VERSION`/`ACCOUNT_VERSION` 均 `"0.33.0"`、`factory.implementation()` == impl、`router.getAlgorithm(0x01/0x08)` 指向两个 validator、`committeeActive()==true` —— 全部 @ block 11634556。归因变异：钉 stale v0.31.0 committee validator 时「validator is armed」**保持绿**（v0.31.0 那个也 armed，对陈旧零区分度），红的是离线六键检查与**边**检查。
 
 ### T5.2.2 committee framing 回归（v0.33.0 validator）  `READY`
 - **优先级**：high

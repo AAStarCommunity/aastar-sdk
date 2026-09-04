@@ -144,17 +144,26 @@ export const CANONICAL_ADDRESSES = {
     // v0.27.0 DVT-unification (CC-10 Phase 1 / #274): the algId-0x01 verifier is now the unified DVT
     // validator (router.getAlgorithm(0x01)==0x539B, on-chain verified). It enforces strictly-ascending
     // nodeIds (SDK sorts them — #274) and operator registration via registerWithProof (nodeId=keccak256(pubkey)).
-    aaStarBLSAlgorithm: "0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64",  // v0.31.0 algId 0x01 = the CC-98 COMMITTEE validator (dvt #237), NOT the legacy whole-set 0x539B. committeeActive()==true since 2026-08-18 (dvt set epochLength=64 + snapshotEpoch, requiredQuorum=2) → it decodes COMMITTEE framing; encode with committeeSigners, never bare nodeIds. Read committeeActive() rather than trusting this note.
-    aaStarValidator: "0xA15127e8601e77De7C655bf04ca75cccD8C968f0",  // v0.31.0 ValidatorRouter. getAlgorithm(0x01)=committee validator 0x1A8Db639, (0x08)=0x6b04 — both on-chain verified.
+    // --- AirAccount v0.33.0 (T5.2.1, 2026-09-04) ---
+    // A NEW non-upgradeable stack, deployed and live on Sepolia; the v0.31.0 stack stays on chain
+    // and existing accounts on it are unaffected (CC-106). What changes here is which stack NEW
+    // accounts get. All twelve v0.33.0 addresses have code; FACTORY_VERSION/ACCOUNT_VERSION both
+    // read "0.33.0"; factory.implementation() == the impl below; router.getAlgorithm(0x01)/(0x08)
+    // resolve to the committee/session validators below — all read at block 11634556.
+    //   Authoritative source: airaccount-contract .env.sepolia V0330 block @ tag v0.33.0 (0ac628ec).
+    //   NEVER complete a truncated address from a hand-off note — a guess at "0xA97A7527…f897"
+    //   produced an address with code = 0x.
+    aaStarBLSAlgorithm: "0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9",  // v0.33.0 algId 0x01 COMMITTEE validator (was v0.31.0 0x1A8Db639…). committeeActive()==true, requireStake=true, minCommittee=3, TREE_DEPTH=14 — read committeeActive() rather than trusting this note; per-signer wire [nodeId|slot|proof×14] = 512B, unchanged.
+    aaStarValidator: "0xA97A752779ebfDA58612F6727Ec7C8366c39f897",  // v0.33.0 ValidatorRouter (was 0xA15127e8…). getAlgorithm(0x01)=0x7ac7E9d4…, (0x08)=0x6b044fB2… — both on-chain verified at block 11634556.
     aaStarBLSAggregator: "0x35775df9a4f4dB42Ea0C46118a12dDd0cEc70609",  // v0.20.0 (SP-side aggregator; unchanged by DVT-unification)
     sessionKeyValidator: "0x6b044fB27B4763Fd30D02e41EDF2c62af4Aa946f",  // v0.24.0 (algId 0x08; NEW — security fix d #164 block self-call escalation)
     forceExitModule: "0x3fDe77868b74a7979A40a2293a1CD265fbe66EEc",  // v0.20.0
     airAccountDelegate: "0xd2735E54C5f5f2BF523b8a9ddd0E183624c3f2c0",  // v0.20.0
     calldataParserRegistry: "0x7dEea4544446826601014bD94d0F6432A67496F5",  // v0.20.0
-    airAccountFactoryV7: "0x25C1E9F9120a406581f93bA82f7Cfd6805512791",  // v0.31.0 (FACTORY_VERSION 0.31.0 on-chain verified; CC-48 -> b72c8868). #161 InitConfig carries tier1Limit/tier2Limit.
-    airAccountV7Impl: "0x4873b7C1c07BE1b52d6583A64F5E902e593BDdad",  // v0.31.0 (ACCOUNT_VERSION 0.31.0; factory.implementation() matches — on-chain verified)
-    airAccountExtension: "0x79b90Ed6CB97ec48cfDA86399752C58Bbc59D90a",  // v0.31.0 (isValidOwnerAuth host; selector/magic 0xa0cf00cf unchanged since v0.23.0)
-    agentRegistry: "0x37fc74EaeC81fEdD92876c8713405118Ebc0306e",  // v0.31.0
+    airAccountFactoryV7: "0x2A5cf40c24B8D27B8A039DE2b628fb4C9C66dAb9",  // v0.33.0 (was 0x25C1E9F9…). FACTORY_VERSION "0.33.0" on-chain verified. #161 InitConfig still carries tier1Limit/tier2Limit.
+    airAccountV7Impl: "0x63a6D78A7B7e443D4d15EDCf950aE567e0F80a3b",  // v0.33.0 (was 0x4873b7C1…). ACCOUNT_VERSION "0.33.0"; factory.implementation() matches — on-chain verified.
+    airAccountExtension: "0x4ad5C1EFa95deaadEF3d3Ab02CB96504DEa0fCC2",  // v0.33.0 (was 0x79b90Ed6…). isValidOwnerAuth host; selector/magic 0xa0cf00cf unchanged since v0.23.0.
+    agentRegistry: "0x734625F68aA9f9dD7DBA2e1f8DE883FD12801Be9",  // v0.33.0 (was 0x37fc74Ea…). Distinct from agentIdentityRegistry (the ERC-8004 vanity address) — different contract, different purpose.
     // SP v5.4 PolicyRegistry (DVT layer-1), deployed on Sepolia.
     // Source of truth: SuperPaymaster repo deployments/config.sepolia.json (v5.4.0-beta.1).
     policyRegistry: "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",
