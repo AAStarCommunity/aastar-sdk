@@ -164,27 +164,51 @@ function main() {
       `${specOnly.length} spec-only · ${KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path)).length} known-missing`,
   );
 
-  // A cross-check on the instrument, not on the SDK. Every path the SDK calls must land in exactly
-  // one of the first two buckets, so their sum must equal the SDK path count — and that count was
-  // arrived at independently (37, counted by hand and by a reviewer's separate script before this
-  // tool existed).
+  // ── two checks on the INSTRUMENT, with very different power ────────────────────────────────
   //
-  // This exists because the two filters in sdkPaths() have already been wrong in both directions:
-  // comment-stripping was missing (invented "/60" from a BIP-44 path) and the extension blacklist
-  // was too broad (hid two real .well-known endpoints by filing them under "SDK never calls it").
-  // Neither showed up as an error — each produced a confident, plausible, wrong report, and the
-  // second one was only caught because 34+1 did not match a 37 living in a different document.
-  // Numbers that must agree should be made to agree HERE, where disagreeing is loud.
-  const bucketed = documented.length + notInSpec.length;
-  if (bucketed !== sdk.size) {
+  // (1) The externally-derived count. This is the one that can actually catch a broken extractor.
+  //
+  // 37 did not come from this file. It was counted by hand and, independently, by a reviewer's own
+  // script, before this tool existed — and the only reason the `.json` bug was ever found is that
+  // this tool said 35 while that 37 sat in a different document. Pinning it here moves that
+  // cross-document disagreement into the one place where disagreeing is loud.
+  //
+  // Changing this number is allowed and will happen — but it must be a deliberate edit in the same
+  // commit that adds or removes an endpoint, with the endpoint named. Bumping it to make a red run
+  // green is the exact move this guard exists to make visible.
+  const EXPECTED_SDK_PATHS = 37;
+  if (sdk.size !== EXPECTED_SDK_PATHS) {
     console.error(
-      `\n❌ instrument check: ${documented.length} + ${notInSpec.length} = ${bucketed}, but sdkPaths() ` +
-        `found ${sdk.size}. Every SDK path must be in exactly one bucket — a mismatch means the ` +
-        'classification dropped or duplicated something, so no other number in this report is trustworthy.',
+      `\n❌ instrument check: sdkPaths() found ${sdk.size} paths, but ${EXPECTED_SDK_PATHS} are expected.\n` +
+        '   This number is derived OUTSIDE this file (hand count + an independent reviewer script).\n' +
+        '   Either an endpoint was added/removed in the SDK — in which case update EXPECTED_SDK_PATHS\n' +
+        '   in the same commit and name the endpoint — or the extractor in sdkPaths() is wrong again.\n' +
+        '   It has been wrong twice: too loose (invented "/60" from a BIP-44 path in a comment) and\n' +
+        '   too tight (hid two real .well-known endpoints). Neither raised an error on its own.',
     );
     process.exit(1);
   }
-  console.log(`   (instrument check: ${documented.length} + ${notInSpec.length} = ${sdk.size} SDK paths ✅)`);
+
+  // (2) The bipartition identity. Cheap, and STRUCTURALLY TAUTOLOGICAL as the code stands today:
+  // `documented` and `notInSpec` are a strict two-way split of `sdk.keys()`, so this can only fail
+  // if someone later inserts a filter between the split and this line. It is kept for exactly that
+  // — and for nothing else.
+  //
+  // It is NOT a check on the extractor, and an earlier version of this comment claimed it was.
+  // Measured, by the reviewer: reintroducing the `.json` bug produced a wrong report (34·1·10·1)
+  // that this identity happily passed, and the `/60` bug likewise (38 = 37+1, passed). Hit rate on
+  // the two failure modes named in its own comment: 0 of 2. The mistake was choosing the wrong
+  // subject — both bugs live INSIDE sdkPaths(), and `sdk.size` is that function's own output, so
+  // the loss was already absorbed into both sides of the comparison.
+  const bucketed = documented.length + notInSpec.length;
+  if (bucketed !== sdk.size) {
+    console.error(
+      `\n❌ bipartition broken: ${documented.length} + ${notInSpec.length} = ${bucketed}, but sdkPaths() ` +
+        `returned ${sdk.size}. Something now drops or duplicates a path between the split and here.`,
+    );
+    process.exit(1);
+  }
+  console.log(`   (instrument: ${sdk.size} SDK paths == expected ${EXPECTED_SDK_PATHS} ✅ · bipartition ${documented.length}+${notInSpec.length} ✅)`);
 
   // Exit non-zero only for the thing a human must act on: a documented addition the SDK never calls.
   const missing = KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path));
