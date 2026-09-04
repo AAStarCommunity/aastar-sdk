@@ -202,3 +202,87 @@ describe('event replay ordering (offline — the chain cannot exercise this yet)
     expect(replaySlotEvents([ev(9, ID('1'), false, 1n, 0)]).size).toBe(0);
   });
 });
+
+describe('the frozen root is what proofs target (offline — the chain cannot show this)', () => {
+  // WHY THIS IS OFFLINE, AND WHY IT HAD TO BE ADDED
+  // ----------------------------------------------
+  // The on-chain case above is named "…verify against epochSetRoot(e-1), not runningRoot", and it
+  // passed with `frozenRoot` swapped for `runningRoot()` — measured, 13/13 green. On Sepolia today:
+  //
+  //   runningRoot()        = 0x7092af7b…
+  //   epochSetRoot(181811) = 0x7092af7b…
+  //   epochSetRoot(181810) = 0x7092af7b…
+  //
+  // all identical, for the same reason the ordering tests had to move offline: the active set has
+  // never changed. The test asserted a distinction in its NAME that the chain cannot currently
+  // exhibit — a third category alongside "the tests are blind" and "the mutation was equivalent":
+  // the chain cannot produce the distinction right now.
+  //
+  // So the two roots are forced apart with a stub, and the first assertion below exists to keep
+  // them apart: if a future edit made the fixtures equal again, everything here would pass while
+  // testing nothing, which is exactly the state this block was written to escape.
+  const SNAPSHOT_BLOCK = 900n;
+  const FROZEN_LEAVES = new Map<number, Hex>([[0, ID('a')], [1, ID('b')]]);
+  const LATER_LEAVES = new Map<number, Hex>([[0, ID('a')], [1, ID('b')], [2, ID('c')]]);
+
+  function stubClient() {
+    const frozenRoot = committeeRoot(FROZEN_LEAVES);
+    const runningRoot = committeeRoot(LATER_LEAVES);
+    return {
+      frozenRoot,
+      runningRoot,
+      client: {
+        getBlockNumber: async () => 1000n,
+        readContract: async ({ functionName, args }: { functionName: string; args?: readonly unknown[] }) => {
+          if (functionName === 'currentEpoch') return 5n;
+          if (functionName === 'epochSetRoot') return args?.[0] === 4n ? frozenRoot : ZERO;
+          if (functionName === 'runningRoot') return runningRoot;
+          throw new Error(`stub: unexpected read ${functionName}`);
+        },
+        getLogs: async ({ event, toBlock }: { event: { name: string }; toBlock: bigint }) => {
+          if (event.name === 'EpochSnapshotted') {
+            return toBlock >= SNAPSHOT_BLOCK
+              ? [{ args: { epoch: 4n }, blockNumber: SNAPSHOT_BLOCK, logIndex: 0 }]
+              : [];
+          }
+          if (event.name !== 'SlotAssigned') return [];
+          // The third node joins AFTER the snapshot: that is what makes the two roots differ, and
+          // it is the ordinary event (a node enrolling) rather than a contrived one.
+          const all = [
+            { args: { nodeId: ID('a'), slot: 0n }, blockNumber: 800n, logIndex: 0 },
+            { args: { nodeId: ID('b'), slot: 1n }, blockNumber: 801n, logIndex: 0 },
+            { args: { nodeId: ID('c'), slot: 2n }, blockNumber: 950n, logIndex: 0 },
+          ];
+          return all.filter((l) => l.blockNumber <= toBlock);
+        },
+      } as never,
+    };
+  }
+  const ZERO = `0x${'00'.repeat(32)}` as Hex;
+
+  it('the fixture actually distinguishes the two roots', () => {
+    const { frozenRoot, runningRoot } = stubClient();
+    expect(frozenRoot).not.toBe(runningRoot);
+  });
+
+  it('proofs fold to the FROZEN root, and do NOT fold to the running one', async () => {
+    const { client, frozenRoot, runningRoot } = stubClient();
+    const out = await fetchCommitteeSignersFrozen(client, '0xval' as Address, [ID('a'), ID('b')], 0n);
+
+    expect(out.frozenRoot).toBe(frozenRoot);
+    expect(out.snapshotBlock).toBe(SNAPSHOT_BLOCK);
+    for (const signer of out.signers) {
+      const folded = committeeRootFromProof(signer.nodeId, Number(signer.slot), signer.merkleProof);
+      expect(folded).toBe(frozenRoot);
+      expect(folded).not.toBe(runningRoot);
+    }
+  });
+
+  it('a node that joined AFTER the snapshot is refused, not silently proved', async () => {
+    // It has a slot and a valid proof against the CURRENT tree, and none against the frozen one.
+    const { client } = stubClient();
+    await expect(
+      fetchCommitteeSignersFrozen(client, '0xval' as Address, [ID('c')], 0n),
+    ).rejects.toThrow(/was not in the active set at the epoch-4 snapshot/);
+  });
+});

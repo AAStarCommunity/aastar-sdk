@@ -19,6 +19,17 @@
  *   parent(l, r) = keccak256(abi.encode(l, r))         // abi.encode, NOT abi.encodePacked
  *   an absent node at level d reads as zeros[d]        // "unset ⇒ empty subtree"
  *
+ * A THIRD REASON A MUTATION CAN STAY GREEN
+ * ----------------------------------------
+ * Besides "the tests are blind" and "the change made no difference", there is: THE CHAIN CANNOT
+ * PRODUCE THE DISTINCTION RIGHT NOW. Both were hit while writing this file. The event-ordering rule
+ * could not be exercised because the live set has three assignments and no clears; and the frozen-vs-
+ * running distinction could not be exercised because every snapshot root currently equals
+ * `runningRoot` — for the same underlying reason, the set has never changed. In both cases a test
+ * named after the distinction passed with the distinction removed. The fix is the same: move the
+ * case offline and construct the state the chain has not reached, keeping the on-chain case for what
+ * only it can settle (that the transcription matches the contract).
+ *
  * `abi.encode` of two bytes32 is the same 64 bytes as `abi.encodePacked` here — measured, by
  * mutating this file to plain concatenation and watching all nine tests stay green. That is an
  * EQUIVALENT transformation, not a hole in the tests, and it is worth saying which of the two it is:
@@ -251,7 +262,13 @@ export async function fetchCommitteeSignersFrozen(
     if (frozenRoot === ZERO_BYTES32) {
         throw new Error(
             `fetchCommitteeSignersFrozen: epochSetRoot(${epoch}) is unset — epoch ${epoch} was never snapshotted, so ` +
-            'committee validation cannot succeed for this epoch regardless of the proofs. Someone must call snapshotEpoch().',
+            'committee validation cannot succeed for this epoch regardless of the proofs, and no proof this SDK ' +
+            'can build will change that. This is an operational state on the DVT side. ' +
+            'NOTE: an earlier version of this message told the reader to "call snapshotEpoch()". Measured on the ' +
+            'deployed validator, that function is not there — snapshotEpoch()/snapshotEpoch(uint256)/snapshot()/' +
+            'advanceEpoch()/pinEpoch() are all absent from the bytecode while EpochSnapshotted is emitted, so the ' +
+            'entry point has another name or another caller. An error that names an action nobody can perform is ' +
+            'worse than one that names none: it sends the operator looking for a function instead of a person.',
         );
     }
 
