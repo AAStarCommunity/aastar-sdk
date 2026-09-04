@@ -155,7 +155,7 @@
 - **依赖**：T5.2.1
 - **风险**：`requireStake=true` 在新 validator 上已开启，且三个 operator 恰好卡在 `minStake`。属他仓风险，SDK 侧只需读、不改。
 - **证据**：PR #334。编码器本就 validator-agnostic（`perSignerBytes` 从链读 `TREE_DEPTH` 推导），所以无需改代码——但「无需改」是对活合约的断言，只能靠读活合约来兑现。新增 `committee.onchain.test.ts` 5 条。
-- **⚠️ 实测发现**：`requiredQuorum` 当前是 **fail-closed 哨兵** `type(uint256).max`（epoch 滚动后未 pin 上一轮快照）→ `quorumUsable=false`，**此刻提交 committee payload 必被拒**。属 DVT 侧运维状态，非 SDK 缺陷。我第一版断言 `quorumUsable === true`，15 分钟后在未改动的树上变红——那是在钉一个瞬时状态。改成断言 SDK 自己的推导关系（`quorumUsable === (requiredQuorum !== sentinel)`），时间无关且真承重。
+- **⚠️ 观测到过（非常态）**：`requiredQuorum` 在 2026-09-04 某次采样是 **fail-closed 哨兵** `type(uint256).max` → `quorumUsable=false`；评审方在 block 11634795 采样则读到 **2**。**这个值随 epoch 摆**，所以任何「当前是 X」的写法被读到时多半已经是假的——正确的说法是「观测到过」加采样点。属 DVT 侧运维状态，非 SDK 缺陷。我第一版断言 `quorumUsable === true`，15 分钟后在未改动的树上变红——那是在钉一个瞬时状态。改成断言 SDK 自己的推导关系（`quorumUsable === (requiredQuorum !== sentinel)`），时间无关且真承重。
 
 ---
 
@@ -183,9 +183,28 @@
 
 ## F5.4 — KMS 面扫描
 
-### T5.4.1 KMS API surface 与安全加固对齐（CC-2 / CC-19 / CC-25）  `BLOCKED`
+### T5.4.1 KMS 探测：定位仓库与接口面  `PR_OPEN`
 - **优先级**：mid
-- **目标**：三条 KMS 变更通知从未处理。KMS 是 address-agnostic，风险在 API surface 与安全加固（fail-closed API key、XSS 修复）。
-- **阻塞原因**：**需要先确定本地有没有 KMS 仓库 checkout 及其权威版本**；`upstream_radar` 记的 KMS 锚点需重新解析。这不是产品决策，是探测，`run` 时第一步就能解除。
-- **验收命令**：（解除阻塞后补）`pnpm exec vitest run packages/core/src/kms/`
-- **待澄清**：KMS 当前权威版本号 / 仓库位置
+- **目标**：解除原 T5.4.1 的阻塞——原任务标 BLOCKED 的理由是「不知道 KMS 仓库在哪、权威版本是什么」。那是**探测不是产品决策**，本 task 就做这一件事。
+- **探测结果**（2026-09-05）：
+  - **服务端仓** = `~/Dev/aastar/AirAccount`（airaccount-node），本机 HEAD `4de82e4`，最新 tag **`airaccount-node-v0.30.0-beta.1`**
+  - **SDK 侧客户端面** = `packages/airaccount/src/server/services/kms-*.ts` —— **6 个文件、2165 行、37 个不同端点路径**
+  - **⚠️ 版本落差**：`kms-http-client.ts:6` 的注释写 `v0.20.0 (Beta2)`，而服务端已到 v0.30.0-beta.1。注释是否等于实际接口面**未验证**。
+  - CC-2(v0.26.1) / CC-19(v0.26.1→v0.27.4) / CC-25(v0.28.0) 三条通知的目标版本**全部已被 v0.30.0-beta.1 取代**，所以不能照着那三条逐条对——要对的是**当前**服务端。
+- **为什么拆**：37 个端点 / 2165 行，一个 PR 做不完也审不动。硬塞会做成半吊子。
+- **交付物**：本条台账记录 + T5.4.2 / T5.4.3 的拆分
+- **验收命令**：`test -d ~/Dev/aastar/AirAccount && ls packages/airaccount/src/server/services/kms-*.ts | wc -l`
+
+### T5.4.2 KMS 端点面对账（37 条 vs 服务端当前路由）  `READY`
+- **优先级**：mid
+- **目标**：把 SDK 打的 37 个端点逐条对上服务端 v0.30.0-beta.1 的实际路由，产出「仍存在 / 已改名 / 已移除 / 服务端新增但 SDK 未用」四类清单。
+- **明确不做**：不改客户端实现；只出对账结果与证据。每类差异各自成为独立 task。
+- **依赖**：T5.4.1
+- **验收命令**：对账脚本退出码 + 四类清单齐全
+- **风险**：服务端是 Rust/TEE 栈，路由可能不在 TS 里。抓不到权威路由表就标 BLOCKED 说明缺什么，**不猜**。
+
+### T5.4.3 CC-19 安全加固在 SDK 侧的对应面  `READY`
+- **优先级**：mid
+- **目标**：CC-19 是 fail-closed API key + XSS 修复。确认 SDK 客户端在 API key 缺失/无效时 fail-closed（不是静默降级），并给出配对红。
+- **依赖**：T5.4.1
+- **验收命令**：`pnpm exec vitest run packages/airaccount/src/server/__tests__/kms-*.test.ts`
