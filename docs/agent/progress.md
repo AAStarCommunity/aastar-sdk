@@ -9,7 +9,7 @@
 | Feature | 状态 | 说明 |
 |---|---|---|
 | F5.1 SP 栈地址与 ABI | `READY` ×3 | 先做，canonical 当前指向 SP 已不认的死地址 |
-| F5.2 AirAccount v0.33.0 | `READY` ×2 | 上游已部署并验活 |
+| F5.2 AirAccount v0.33.0 | T5.2.1 `PR_OPEN` (#332) · T5.2.2 `READY` | 6 键已切并链上核验 |
 | F5.3 DVT 对齐核验 | `READY` ×1 | 大概率 no-op，但要出证据 |
 | F5.4 KMS 面扫描 | `BLOCKED` ×1 | 待探测仓库位置与权威版本（run 第一步即可解除） |
 

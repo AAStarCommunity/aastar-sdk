@@ -131,7 +131,7 @@
 
 ## F5.2 — AirAccount v0.31.0 → v0.33.0
 
-### T5.2.1 canonical 12 地址切到 v0.33.0  `READY`
+### T5.2.1 canonical 12 地址切到 v0.33.0  `PR_OPEN`
 - **优先级**：high
 - **目标**：上游 v0.33.0 已部署 Sepolia 并验活（`FACTORY_VERSION="0.33.0"` / `ACCOUNT_VERSION="0.33.0"` 链上实测），canonical 停在 v0.31.0。整栈切换。
 - **开发范围**：`packages/core/src/addresses.ts` 的 AirAccount 12 地址；权威来源 = airaccount-contract `.env.sepolia` 的 `V0330` 块（精确值见 `spec.md`，**不得由截断地址补全**）。
@@ -142,6 +142,8 @@
 - **涉及文件**：`packages/core/src/addresses.ts`、`packages/core/src/addresses.test.ts`、`config.sepolia.json`
 - **风险/回滚**：v0.31.0 栈仍在链上，现有账户不受影响（CC-106 明载）。切的是**新账户默认走哪一套**。
 - **待人拍板**：无——上游已明确 v0.33.0 是新栈。
+- **实际是 6 个键不是 5 个**：初稿漏了 `agentRegistry`（v0.31.0 `0x37fc74Ea…` → v0.33.0 `0x734625F6…`）。canonical 只跟踪 12 地址里的 9 个（`webAuthnLib`/`committeeBLSLib` 是链接库、不在册），其中 6 个变、3 个复用。
+- **证据**：PR #332。12/12 有 code、`FACTORY_VERSION`/`ACCOUNT_VERSION` 均 `"0.33.0"`、`factory.implementation()` == impl、`router.getAlgorithm(0x01/0x08)` 指向两个 validator、`committeeActive()==true` —— 全部 @ block 11634556。归因变异：钉 stale v0.31.0 committee validator 时「validator is armed」**保持绿**（v0.31.0 那个也 armed，对陈旧零区分度），红的是离线六键检查与**边**检查。
 
 ### T5.2.2 committee framing 回归（v0.33.0 validator）  `READY`
 - **优先级**：high
