@@ -127,6 +127,13 @@
     },
     {
       "type": "function",
+      "name": "enrollInCommitteeValidator",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "entryPoint",
       "inputs": [],
       "outputs": [
@@ -511,6 +518,16 @@
                   "internalType": "uint256"
                 }
               ]
+            },
+            {
+              "name": "tier1Limit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "tier2Limit",
+              "type": "uint256",
+              "internalType": "uint256"
             }
           ]
         },
@@ -608,6 +625,16 @@
                   "internalType": "uint256"
                 }
               ]
+            },
+            {
+              "name": "tier1Limit",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "tier2Limit",
+              "type": "uint256",
+              "internalType": "uint256"
             }
           ]
         },
@@ -874,6 +901,19 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "proposeGuardianAddition",
+      "inputs": [
+        {
+          "name": "_guardian",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -1369,6 +1409,25 @@
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "GuardianAdditionProposed",
+      "inputs": [
+        {
+          "name": "guardian",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "executeAfter",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -2021,6 +2080,16 @@
     },
     {
       "type": "error",
+      "name": "GuardianAdditionNotProposed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "GuardianAdditionTimelockNotExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "GuardianAlreadySet",
       "inputs": []
     },
@@ -2215,6 +2284,11 @@
     },
     {
       "type": "error",
+      "name": "P256KeyAlreadySet",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "RecoveryAlreadyActive",
       "inputs": []
     },
@@ -2240,6 +2314,11 @@
     },
     {
       "type": "error",
+      "name": "SelfCallForbidden",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "SessionScopeViolation",
       "inputs": []
     },
@@ -2255,6 +2334,17 @@
     },
     {
       "type": "error",
+      "name": "UnparseableGuardedCall",
+      "inputs": [
+        {
+          "name": "dest",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "UnsupportedInnerSelector",
       "inputs": []
     },
@@ -2266,6 +2356,11 @@
     {
       "type": "error",
       "name": "ValidatorAlreadySet",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ValidatorNotSet",
       "inputs": []
     },
     {
@@ -3067,81 +3162,6 @@
         }
       ],
       "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "enrollInCommitteeValidator",
-      "inputs": [],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "proposeGuardianAddition",
-      "inputs": [
-        {
-          "name": "_guardian",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "event",
-      "name": "GuardianAdditionProposed",
-      "inputs": [
-        {
-          "name": "guardian",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "executeAfter",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "error",
-      "name": "GuardianAdditionNotProposed",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "GuardianAdditionTimelockNotExpired",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "P256KeyAlreadySet",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "SelfCallForbidden",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "UnparseableGuardedCall",
-      "inputs": [
-        {
-          "name": "dest",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "ValidatorNotSet",
-      "inputs": []
     }
   ]
 }
