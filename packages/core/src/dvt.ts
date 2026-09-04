@@ -39,13 +39,26 @@ export const DVT_CONFIG: DvtConfig = {
   environments: {
     sepolia: {
       chainId: 11155111,
-      // v0.27.0 DVT-unification validator (algId 0x01; router.getAlgorithm(0x01) on-chain verified). #274/CC-12.
-      validator: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",
+      // The validator the ROUTER mounts at algId 0x01, measured — not the one that merely still answers.
+      //
+      // FU-12. This said `0x539B9681…` and called it "router.getAlgorithm(0x01) on-chain verified",
+      // which had stopped being true: measured on Sepolia, `router.getAlgorithm(0x01)` returns
+      // `0x7ac7E9d4…` (= `CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm`, v0.33.0). `0x539B…` is
+      // still deployed (13610 bytes of code, same `registry()`), and all three nodeIds below report
+      // `isRegistered = true` on BOTH — so neither "it has code" nor "it knows my node" distinguishes
+      // the live validator from the superseded one. Only the router does. `dvt.onchain.test.ts` now
+      // holds this field to that reading rather than to a literal that can quietly go stale again.
+      validator: "0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9",
       entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
-      // NOTE: these are v0.20 fallback nodeIds. Under v0.27.0 operators re-register on 0x539B with
-      // nodeId=keccak256(EIP-2537 G1 pubkey); the live co-sign path reads nodeIds DYNAMICALLY, so these
-      // fallbacks refresh once operator re-registration completes (tracked in CC-12; DVT sign endpoint
-      // was mid-migration / 403 at sync time). Do NOT hand-guess the new ids — read them from the nodes.
+      // Fallback nodeIds only — the live co-sign path reads nodeIds DYNAMICALLY from each node's
+      // `/signature/sign` response. Do NOT hand-guess them; read them from the nodes.
+      //
+      // On how these ids come about, measured rather than inferred from the ABI. `registerPublicKey`
+      // does take the nodeId as an ARGUMENT — but on this validator that path is closed:
+      // `requireStake()` is `true`, and a 128-byte key reverts with "Staking on: use
+      // registerWithProof", which derives `nodeId = keccak256(pubkey)`. So the ids ARE derived today.
+      // The argument-shaped door exists and is bolted by a governance flag, not by the signature —
+      // which is why FU-34 tracks the READING of `requireStake()`, not the shape of the ABI.
       dvtNodes: [
         { url: "https://dvt1.aastar.io", nodeId: "0x1f5e41c69465733eeb19341d95853ee6d9295a9e6698f5398d70e509be8f326d" },
         { url: "https://dvt2.aastar.io", nodeId: "0xe3a4a3af3973b65bc95dd962e767e17592dfb331f3544209676271b188fd9f80" },
@@ -76,7 +89,9 @@ export const DVT_CONFIG: DvtConfig = {
      */
     "testnet-local": {
       chainId: 11155111,
-      validator: "0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC",
+      // Same validator as `sepolia` — this environment changes WHERE the nodes are reached, never
+      // what verifies them (see the nodeId note above: the keys are the already-registered ones).
+      validator: "0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9",
       entryPoint: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
       dvtNodes: [
         { url: "http://127.0.0.1:3001", nodeId: "0x1f5e41c69465733eeb19341d95853ee6d9295a9e6698f5398d70e509be8f326d" },
